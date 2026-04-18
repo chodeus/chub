@@ -1590,21 +1590,33 @@ async def analyze_poster_directory(
     try:
         logger.debug(f"Serving GET /api/posters/analyze for location: {location}")
 
+        # Load config once — needed for default location + allow-list check
+        from backend.util.config import load_config
+        from backend.util.path_safety import is_path_allowed
+
+        try:
+            config = load_config()
+        except Exception:  # noqa: S110 — config may not be loaded at boot
+            config = None
+
         if not location:
             # Default to poster destination from config
-            try:
-                from backend.util.config import load_config
-
-                config = load_config()
+            if config is not None:
                 location = getattr(config.poster_renamerr, "destination", None)
-            except Exception:  # noqa: S110 -- fallback; config may not be loaded
-                pass
             if not location:
                 return error(
                     "Location parameter is required and no default destination configured",
                     code="LOCATION_REQUIRED",
                     status_code=400,
                 )
+
+        # Restrict to configured allowed roots
+        if config is not None and not is_path_allowed(location, config):
+            return error(
+                "Access denied — path outside allowed directories",
+                code="PATH_NOT_ALLOWED",
+                status_code=403,
+            )
 
         if not os.path.isdir(location):
             return error(
@@ -1690,22 +1702,50 @@ async def preview_poster_file(
             f"Serving GET /api/posters/preview for location: {location}, path: {path}"
         )
 
-        if location and path:
-            base_dir = Path(location).resolve()
-            file_path = (base_dir / path).resolve()
-
-            # Security check: ensure resolved path is within base directory
-            if not str(file_path).startswith(str(base_dir)):
-                return error(
-                    "Access denied - path outside allowed directory",
-                    code="PATH_TRAVERSAL_DENIED",
-                    status_code=403,
-                )
-        else:
+        if not location or not path:
             return error(
                 "Both location and path parameters are required",
                 code="MISSING_FILE_PATH",
                 status_code=400,
+            )
+
+        # Reject null bytes anywhere (path-injection vector)
+        if "\x00" in location or "\x00" in path:
+            return error(
+                "Invalid path",
+                code="INVALID_PATH",
+                status_code=400,
+            )
+
+        # Restrict `location` to configured allowed roots — otherwise an
+        # authenticated caller could point at arbitrary dirs (/etc, /root).
+        from backend.util.config import load_config
+        from backend.util.path_safety import is_path_allowed
+
+        try:
+            config = load_config()
+        except Exception:  # noqa: S110 — fail closed below
+            config = None
+
+        if config is None or not is_path_allowed(location, config):
+            return error(
+                "Access denied - path outside allowed directory",
+                code="PATH_TRAVERSAL_DENIED",
+                status_code=403,
+            )
+
+        base_dir = Path(location).resolve()
+        file_path = (base_dir / path).resolve()
+
+        # Path-containment check (is_relative_to avoids the `str.startswith`
+        # bypass where `/posters_evil/x` slipped past a `/posters` prefix).
+        try:
+            file_path.relative_to(base_dir)
+        except ValueError:
+            return error(
+                "Access denied - path outside allowed directory",
+                code="PATH_TRAVERSAL_DENIED",
+                status_code=403,
             )
 
         if not file_path.exists() or not file_path.is_file():

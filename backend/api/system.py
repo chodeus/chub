@@ -474,7 +474,7 @@ async def list_backups(logger: Any = Depends(get_logger)) -> JSONResponse:
         return ok(f"Found {len(backups)} backups", {"backups": backups})
     except Exception as e:
         logger.error(f"Error listing backups: {e}")
-        return error(f"Error listing backups: {str(e)}", code="BACKUP_LIST_ERROR", status_code=500)
+        return error("Error listing backups", code="BACKUP_LIST_ERROR", status_code=500)
 
 
 @router.post(
@@ -556,7 +556,7 @@ async def restore_backup(
 
     except Exception as e:
         logger.error(f"Restore failed: {e}")
-        return error(f"Restore failed: {str(e)}", code="RESTORE_ERROR", status_code=500)
+        return error("Restore failed", code="RESTORE_ERROR", status_code=500)
 
 
 @router.get(

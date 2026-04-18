@@ -166,7 +166,7 @@ async def get_instance_types(
         return ok("Supported instance types", {"types": types})
     except Exception as e:
         logger.error(f"Error retrieving instance types: {e}")
-        return error(f"Error: {str(e)}", code="TYPES_ERROR", status_code=500)
+        return error("Failed to retrieve instance types", code="TYPES_ERROR", status_code=500)
 
 
 @router.get(
@@ -292,7 +292,7 @@ async def get_instance_type_schema(
         return ok(f"Schema for {instance_type}", {"schema": schemas[instance_type]})
     except Exception as e:
         logger.error(f"Error retrieving schema: {e}")
-        return error(f"Error: {str(e)}", code="SCHEMA_ERROR", status_code=500)
+        return error("Failed to retrieve instance schema", code="SCHEMA_ERROR", status_code=500)
 
 
 @router.get(
@@ -397,7 +397,7 @@ async def check_all_health(
         return ok(f"Health checked for {len(results)} instances", {"health": results})
     except Exception as e:
         logger.error(f"Error checking instance health: {e}")
-        return error(f"Error: {str(e)}", code="HEALTH_CHECK_ERROR", status_code=500)
+        return error("Health check failed", code="HEALTH_CHECK_ERROR", status_code=500)
 
 
 # --- Existing endpoints below ---
@@ -650,6 +650,16 @@ async def test_instance(
             test_url = f"{url}/api/{api_ver}/system/status"
 
         logger.debug(f"Testing connection to: {test_url}")
+
+        from backend.util.ssrf_guard import is_safe_url
+
+        safe, reason = is_safe_url(test_url)
+        if not safe:
+            return error(
+                f"URL refused: {reason}",
+                code="URL_BLOCKED",
+                status_code=400,
+            )
 
         resp = requests.get(test_url, headers=headers, timeout=5)
 
@@ -1054,7 +1064,7 @@ async def get_single_instance(
         return ok(f"Instance '{instance_id}' retrieved", data)
     except Exception as e:
         logger.error(f"Error retrieving instance {instance_id}: {e}")
-        return error(f"Error: {str(e)}", code="INSTANCE_GET_ERROR", status_code=500)
+        return error("Failed to retrieve instance", code="INSTANCE_GET_ERROR", status_code=500)
 
 
 @router.post(
@@ -1120,6 +1130,16 @@ async def test_existing_instance(
             api_ver = "v1" if service == "lidarr" else "v3"
             test_url = f"{url}/api/{api_ver}/system/status"
 
+        from backend.util.ssrf_guard import is_safe_url
+
+        safe, reason = is_safe_url(test_url)
+        if not safe:
+            return error(
+                f"URL refused: {reason}",
+                code="URL_BLOCKED",
+                status_code=400,
+            )
+
         start = time.time()
         resp = requests.get(test_url, headers=headers, timeout=5)
         elapsed = round((time.time() - start) * 1000)
@@ -1140,7 +1160,7 @@ async def test_existing_instance(
         return error("Connection failed", code="CONNECTION_FAILED", status_code=502)
     except Exception as e:
         logger.error(f"Error testing instance {instance_id}: {e}")
-        return error(f"Error: {str(e)}", code="TEST_ERROR", status_code=500)
+        return error("Connection test failed", code="TEST_ERROR", status_code=500)
 
 
 @router.get(
@@ -1224,7 +1244,7 @@ async def get_instance_stats(
             )
     except Exception as e:
         logger.error(f"Error retrieving stats for {instance_id}: {e}")
-        return error(f"Error: {str(e)}", code="INSTANCE_STATS_ERROR", status_code=500)
+        return error("Failed to retrieve instance stats", code="INSTANCE_STATS_ERROR", status_code=500)
 
 
 def _build_instance_payload(instance_id: str, config: ChubConfig) -> Optional[dict]:
@@ -1290,7 +1310,7 @@ async def refresh_instance(
         return error("Error enqueuing refresh", code="REFRESH_ERROR", status_code=500)
     except Exception as e:
         logger.error(f"Error refreshing instance {instance_id}: {e}")
-        return error(f"Error: {str(e)}", code="INSTANCE_REFRESH_ERROR", status_code=500)
+        return error("Failed to refresh instance", code="INSTANCE_REFRESH_ERROR", status_code=500)
 
 
 @router.post(
@@ -1347,7 +1367,7 @@ async def sync_instance(
         return error("Error enqueuing sync", code="SYNC_ERROR", status_code=500)
     except Exception as e:
         logger.error(f"Error syncing instance {instance_id}: {e}")
-        return error(f"Error: {str(e)}", code="INSTANCE_SYNC_ERROR", status_code=500)
+        return error("Failed to sync instance", code="INSTANCE_SYNC_ERROR", status_code=500)
 
 
 @router.patch(
@@ -1607,6 +1627,16 @@ async def check_instance_health(
             api_ver = "v1" if service == "lidarr" else "v3"
             test_url = f"{url}/api/{api_ver}/system/status"
 
+        from backend.util.ssrf_guard import is_safe_url
+
+        safe, reason = is_safe_url(test_url)
+        if not safe:
+            return error(
+                f"URL refused: {reason}",
+                code="URL_BLOCKED",
+                status_code=400,
+            )
+
         start = time.time()
         try:
             resp = requests.get(test_url, headers=headers, timeout=2)
@@ -1643,4 +1673,4 @@ async def check_instance_health(
         return ok(f"Health check for '{instance_id}'", health_data)
     except Exception as e:
         logger.error(f"Error checking health for {instance_id}: {e}")
-        return error(f"Error: {str(e)}", code="INSTANCE_HEALTH_ERROR", status_code=500)
+        return error("Failed to retrieve instance health", code="INSTANCE_HEALTH_ERROR", status_code=500)

@@ -812,7 +812,7 @@ def simple_job_processor(job: Dict[str, Any], logger) -> Dict[str, Any]:
 
 
 def _process_labelarr_sync_job(
-    payload: Dict[str, Any], logger, job_id: int
+    payload: Dict[str, Any], logger, job_id: int, db: Any = None
 ) -> Dict[str, Any]:
     """
     Process labelarr sync job using the existing labelarr module.

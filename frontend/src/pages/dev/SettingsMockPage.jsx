@@ -59,8 +59,13 @@ const SettingsMockPage = () => {
         // In real implementation, this would register with SearchCoordinatorProvider
         console.log('Mock: Registering settings search handler with header search system');
 
-        // Simulate search integration with window message for demo
+        // Simulate search integration with window message for demo.
+        // Only accept messages from the same origin — required defence
+        // against cross-origin postMessage injection.
         const handleSearchMessage = event => {
+            if (event.origin !== window.location.origin) {
+                return;
+            }
             if (event.data?.type === 'settings-search') {
                 handleSettingsSearch(event.data.query);
             }
