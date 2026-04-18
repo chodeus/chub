@@ -9,6 +9,8 @@ All modules share:
 - Cancellation via `DELETE /api/modules/{name}/execution/{job_id}` (see status per module below).
 - Run history visible in the UI (**Settings → Jobs**) and at `GET /api/jobs`.
 
+> **CHUB-era additions.** Cooperative cancellation, argument-smuggling / path-safety guards, full Lidarr support in `upgradinatorr`, webhook origin tracking, and the path-injection guard on `poster_cleanarr`'s `set-active` endpoint were all added in the CHUB audit pass on top of the original DAPS module set. Each module's section below flags its CHUB additions explicitly; see [Credits](Credits) for the full list.
+
 ---
 
 ## `poster_renamerr`
@@ -32,6 +34,8 @@ Removes stale / orphaned posters from Plex's internal metadata and optional phot
 **Required config:** `plex_path` (path to the Plex metadata directory on disk), at least one `plex` instance.
 
 **Cancellation:** ❌ not yet wired.
+
+**CHUB additions:** path-injection guard on `POST /api/posters/{poster_id}/set-active`; `set-active` endpoint moved above the `/{poster_id}` catch-all so explicit metadata routes resolve correctly.
 
 ---
 
@@ -57,6 +61,8 @@ Syncs tags from Radarr/Sonarr → labels in Plex.
 
 **Cancellation:** ❌ not yet wired.
 
+**CHUB additions:** bulk sync endpoint `POST /api/labelarr/bulk-sync` accepts up to 1000 media IDs per request; **Label Sync** page in the UI wraps it.
+
 ---
 
 ## `jduparr`
@@ -69,6 +75,8 @@ Finds and reports duplicate files across your media tree using content hashing.
 
 **Cancellation:** ✅ cooperatively cancellable.
 
+**CHUB additions:** cooperative cancellation wired; `hash_database` path validation (rejects null bytes and values starting with `-`) to prevent arg-smuggling.
+
 ---
 
 ## `nohl`
@@ -79,6 +87,8 @@ Finds media files on your library volumes that aren't hardlinked (i.e. not share
 
 **Cancellation:** ✅ cooperatively cancellable.
 
+**CHUB additions:** cooperative cancellation wired.
+
 ---
 
 ## `unmatched_assets`
@@ -88,6 +98,8 @@ Reports media items that have no matching poster asset in your renamed tree.
 **Does:** walks `destination_dir` of `poster_renamerr`, cross-references against configured ARR instances, logs anything unmatched. Useful as a companion to `poster_renamerr` (set `report_unmatched_assets: true` on poster_renamerr to chain them).
 
 **Cancellation:** ✅ cooperatively cancellable.
+
+**CHUB additions:** cooperative cancellation wired.
 
 ---
 
@@ -104,6 +116,8 @@ Picks N items per ARR instance that haven't been searched recently and triggers 
 Tags items with `tag_name` after searching so they aren't picked again immediately; ignores anything carrying `ignore_tag`. Full Lidarr support (album search + artist grouping).
 
 **Cancellation:** ✅ cooperatively cancellable.
+
+**CHUB additions:** cooperative cancellation wired; full Lidarr support (album search, artist grouping, wanted/missing/cutoff modes).
 
 ---
 
@@ -146,6 +160,8 @@ Pulls poster assets from Google Drive folders into a local directory using `rclo
 **Required config:** either `client_id` + `client_secret` + `token`, or `gdrive_sa_location` (service account JSON), plus at least one `gdrive_list` entry.
 
 **Cancellation:** ✅ cooperatively cancellable.
+
+**CHUB additions:** cooperative cancellation wired; path validation on `sync_location`, `gdrive_sa_location`, and folder IDs (rejects null bytes and values starting with `-`) to prevent arg-smuggling into rclone.
 
 ---
 
