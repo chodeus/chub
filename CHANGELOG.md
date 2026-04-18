@@ -2,9 +2,9 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased] — CHUB rebrand
+## [1.0.0] — 2026-04-18
 
-First cut of the CHUB identity fork from [DAPS](https://github.com/Drazzilb08/daps). Clean break — no data migration from DAPS.
+First release of CHUB. Identity fork from [DAPS](https://github.com/Drazzilb08/daps). Clean break — no data migration from DAPS.
 
 ### Changed (breaking)
 
