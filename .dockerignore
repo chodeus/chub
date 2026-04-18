@@ -1,0 +1,33 @@
+# Ignore everything by default
+*
+
+# Allow these files/directories (for building the app)
+!/main.py
+!/requirements.txt
+!/backend/
+!/frontend/
+!/VERSION
+!/scripts/
+!/deploy/
+
+# Exclude these (don't ship local build/test/editor files)
+**/*~
+**/*.log
+**/.DS_Store
+**/Thumbs.db
+**/config.yml
+**/Dockerfile
+node_modules/
+frontend/node_modules/
+frontend/dist/
+logs/
+tests/
+.vscode/
+.idea/
+.DS_Store
+*.swp
+*.swo
+*.swn
+*.bak
+Thumbs.db
+*~

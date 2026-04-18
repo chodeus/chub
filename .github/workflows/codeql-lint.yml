@@ -1,0 +1,245 @@
+name: "CodeQL & Lint"
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - '*'
+    paths:
+      - '**.py'
+      - '**.js'
+      - '**.jsx'
+      - 'frontend/**'
+      - 'backend/**'
+      - 'main.py'
+      - 'requirements.txt'
+      - 'frontend/package-lock.json'
+      - 'deploy/docker/Dockerfile'
+      - 'scripts/start.sh'
+      - 'VERSION'
+      - '.github/workflows/codeql-lint.yml'
+  pull_request:
+    branches:
+      - '*'
+    paths:
+      - '**.py'
+      - '**.js'
+      - '**.jsx'
+      - 'frontend/**'
+      - 'backend/**'
+      - 'main.py'
+      - 'requirements.txt'
+      - 'frontend/package-lock.json'
+      - 'deploy/docker/Dockerfile'
+      - 'scripts/start.sh'
+      - 'VERSION'
+      - '.github/workflows/codeql-lint.yml'
+  schedule:
+    - cron: '25 4 * * 1'  # Weekly on Monday at 04:25 UTC
+
+permissions:
+  security-events: write
+  contents: read
+  packages: write
+
+jobs:
+  # ---- CodeQL Analysis ----
+  codeql-python:
+    name: CodeQL - Python
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: python
+          queries: +security-and-quality
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: '/language:python'
+
+  codeql-javascript:
+    name: CodeQL - JavaScript
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+          queries: +security-and-quality
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: '/language:javascript-typescript'
+
+  # ---- Backend Lint ----
+  backend-lint:
+    name: Backend Lint (Ruff)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install linting tools
+        run: pip install ruff
+
+      - name: Run Ruff linter
+        run: ruff check .
+
+  # ---- Backend Smoke Test & Tests ----
+  backend-smoke:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Verify FastAPI app imports cleanly
+        run: |
+          mkdir -p templates/assets templates/icons templates/img templates/posters
+          python -c "from backend.api.main import app; print('OK: ' + str(len(app.routes)) + ' routes loaded')"
+
+      - name: Run tests
+        run: python -m pytest tests/ -v
+
+  # ---- Frontend Lint ----
+  frontend-lint:
+    name: Frontend Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Run ESLint
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Run Stylelint
+        working-directory: frontend
+        run: npx stylelint 'src/**/*.css'
+
+      - name: Check Prettier formatting
+        working-directory: frontend
+        run: npx prettier --check "src/**/*.{js,jsx,css,json,md}"
+
+  # ---- Docker Build (gated by all quality checks) ----
+  docker-validate:
+    name: Docker Validate (PR)
+    if: github.event_name == 'pull_request'
+    needs: [codeql-python, codeql-javascript, backend-lint, backend-smoke, frontend-lint]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Get branch name
+        id: get_branch
+        run: echo "BRANCH_NAME=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_OUTPUT
+
+      - name: Set build number
+        run: echo "BUILD_NUMBER=$(git rev-list --count HEAD)" >> $GITHUB_ENV
+
+      - name: Build Docker image (validation only)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./deploy/docker/Dockerfile
+          platforms: linux/amd64
+          build-args: |
+            BRANCH=${{ steps.get_branch.outputs.BRANCH_NAME }}
+            BUILD_NUMBER=${{ env.BUILD_NUMBER }}
+          push: false
+          tags: chub:ci-${{ github.sha }}
+
+  docker-push:
+    name: Docker Build & Push
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    needs: [codeql-python, codeql-javascript, backend-lint, backend-smoke, frontend-lint]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Get the current branch name
+        id: get_branch
+        run: echo "BRANCH_NAME=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
+
+      - name: Set build number
+        run: echo "BUILD_NUMBER=$(git rev-list --count HEAD)" >> $GITHUB_ENV
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./deploy/docker/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          build-args: |
+            BRANCH=${{ steps.get_branch.outputs.BRANCH_NAME }}
+            BUILD_NUMBER=${{ env.BUILD_NUMBER }}
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/chub:${{ steps.get_branch.outputs.BRANCH_NAME }}

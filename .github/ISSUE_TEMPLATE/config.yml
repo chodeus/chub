@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: FAQ
+    url: https://github.com/chodeus/chub/wiki/FAQ
+    about: Setup and capability questions — check here first.
+  - name: Troubleshooting
+    url: https://github.com/chodeus/chub/wiki/Troubleshooting
+    about: Common issues (container won't start, Plex/ARR failures, SSE disconnects, etc.).
+  - name: Security advisory
+    url: https://github.com/chodeus/chub/security/advisories/new
+    about: Do NOT report vulnerabilities in public issues — use the security advisory flow instead.

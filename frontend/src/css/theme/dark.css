@@ -1,0 +1,91 @@
+/**
+ * CHUB Dark Theme
+ *
+ * Indigo-led cool palette (sl1ckbe3ts) tuned for low-light viewing. Brighter
+ * indigo primary on deep indigo surfaces; pastel badge accents reused
+ * (with darker foreground swapped where needed for contrast).
+ *
+ * Theme Application: Applied via data-theme="dark" attribute on <html> element
+ */
+
+:root,
+[data-theme='dark'] {
+    /* Brand & Semantic Colors */
+    --primary: #8767f7; /* Brighter indigo for dark bg */
+    --primary-hover: #a99eff;
+    --accent: #53e8f0; /* Cyan accent pops on dark */
+    --accent-2: #8767f7;
+    --success: #6cbc66;
+    --warning: #ffc944;
+    --error: #fd355c;
+    --info: #53e8f0;
+    --focus: #8767f7;
+
+    /* Surface & Background Colors */
+    --bg: #110b28; /* Deep indigo canvas */
+    --surface: #1a1838; /* Content panel */
+    --surface-alt: #2a3052; /* Hover / secondary areas */
+    --surface-elevated: #2a3052;
+
+    /* Border & Separation Colors */
+    --border: #2a3052;
+    --border-light: #1d237f;
+
+    /* Text & Content Colors */
+    --text-primary: #fff;
+    --text-secondary: #b2d1e8;
+    --text-tertiary: #6582ca;
+
+    /* Layout Specific Colors */
+    --sidebar-bg: #0a0618;
+    --sidebar-surface: #2a3052;
+    --sidebar-hover: #2a3052;
+    --sidebar-border: #1d237f;
+    --sidebar-text: #fff;
+    --sidebar-text-secondary: #6582ca;
+    --header-bg: #0a0618;
+
+    /* Overlay & Modal Colors */
+    --overlay: rgb(10 6 24 / 64%);
+    --overlay-strong: rgb(0 0 0 / 85%);
+
+    /* Text-on-Color Utilities */
+    --on-color-text: #fff;
+    --primary-text: #fff;
+
+    /* Link state colors */
+    --link-hover: #a99eff;
+    --link-visited: #a99eff;
+    --accent-hover: #7cf0f6;
+    --accent-visited: #7cf0f6;
+
+    /* Form Control Colors */
+    --input-bg: #1a1838;
+    --input-bg-hover: #2a3052;
+    --input-bg-disabled: #0a0618;
+    --input-bg-readonly: #1d237f;
+    --input-border-disabled: #2a3052;
+    --checkbox-indicator-bg: #fff;
+
+    /* Pastel badge accents — dashboard quick-start icons (shared with light) */
+    --badge-1-bg: #d9b8bc;
+    --badge-1-fg: #773c47;
+    --badge-2-bg: #b2d1e8;
+    --badge-2-fg: #20558a;
+    --badge-3-bg: #a99eff;
+    --badge-3-fg: #463fbc;
+    --badge-4-bg: #fddfb6;
+    --badge-4-fg: #a5624b;
+    --badge-5-bg: #bff266;
+    --badge-5-fg: #2e7364;
+}
+
+/* High Contrast Mode Support */
+@media (prefers-contrast: more) {
+    :root,
+    [data-theme='dark'] {
+        --border: #fff;
+        --text-primary: #fff;
+        --bg: #000;
+    }
+}

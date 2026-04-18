@@ -1,0 +1,368 @@
+"""
+Plex Metadata scanner — shared utilities for Poster Cleanarr workflows.
+
+Reads the local Plex SQLite database (copy) and walks the Metadata/
+directory tree to produce per-media-item poster variant listings and
+flat bloat lists. A thread-safe in-memory TTL cache avoids re-scanning
+the filesystem on every API request.
+
+Mounts assumed (see Unraid container volume mapping):
+    /plex/  →  Plex Media Server/
+    Structure:
+        /plex/Plug-in Support/Databases/com.plexapp.plugins.library.db
+        /plex/Metadata/{Movies,TV Shows}/<first_char>/<rest>.bundle/
+            Uploads/posters/<hash>   ← candidates (no file extension)
+            Contents/                ← Plex-managed, ignored
+
+A poster file is "in use" if its filename (the bytes between the last /
+and EOF) appears as the suffix of any `metadata_items.user_thumb_url`
+in the Plex DB (values look like `upload://posters/<hash>` or
+`metadata://posters/<hash>`). Anything else in Uploads/posters/ is bloat.
+
+Public surface:
+    get_plex_metadata_dir(plex_path) -> str
+    get_in_use_hashes(db_path) -> Set[str]
+    copy_plex_db(plex_path, dest) -> Optional[str]
+    scan_bundles(plex_path, *, force=False) -> Dict
+    get_bloat_flat(plex_path, *, force=False) -> List[Dict]
+    invalidate_cache()
+"""
+
+from __future__ import annotations
+
+import os
+import shutil
+import sqlite3
+import threading
+import time
+from typing import Any, Dict, List, Optional, Set
+from urllib.parse import urlparse
+
+PLEX_DB_NAME = "com.plexapp.plugins.library.db"
+_CACHE_TTL_SEC = 300  # 5 minutes
+_cache_lock = threading.Lock()
+_cache: Dict[str, Dict[str, Any]] = {}
+
+
+def get_plex_metadata_dir(plex_path: str) -> str:
+    """Return absolute path to Plex's Metadata/ directory."""
+    return os.path.join(plex_path, "Metadata")
+
+
+def _plex_is_running(plex_path: str) -> bool:
+    db_dir = os.path.join(plex_path, "Plug-in Support", "Databases")
+    return os.path.exists(os.path.join(db_dir, f"{PLEX_DB_NAME}-shm")) or os.path.exists(
+        os.path.join(db_dir, f"{PLEX_DB_NAME}-wal")
+    )
+
+
+def copy_plex_db(plex_path: str, dest: str) -> Optional[str]:
+    """
+    Copy Plex's live SQLite DB to `dest` for read-only querying.
+    Returns dest on success, None on failure. Safe when Plex is running —
+    SQLite's WAL mode allows concurrent reads, but we still copy to avoid
+    holding a lock for the duration of long queries.
+    """
+    src = os.path.join(plex_path, "Plug-in Support", "Databases", PLEX_DB_NAME)
+    if not os.path.exists(src):
+        return None
+    try:
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        shutil.copy2(src, dest)
+        return dest
+    except Exception:
+        return None
+
+
+def get_in_use_hashes(db_path: str) -> Set[str]:
+    """
+    Extract filenames currently referenced by any metadata_items.{user_thumb_url,
+    user_art_url, user_banner_url}. These are the files Plex is actively using.
+    """
+    in_use: Set[str] = set()
+    try:
+        conn = sqlite3.connect(db_path)
+        try:
+            cur = conn.cursor()
+            for col in ("user_thumb_url", "user_art_url", "user_banner_url"):
+                try:
+                    cur.execute(
+                        f"SELECT {col} FROM metadata_items "
+                        f"WHERE {col} LIKE 'upload://%' OR {col} LIKE 'metadata://%'"
+                    )
+                    for (value,) in cur.fetchall():
+                        if not value:
+                            continue
+                        parsed = urlparse(value)
+                        fname = parsed.path.rsplit("/", 1)[-1] if parsed.path else ""
+                        if fname:
+                            in_use.add(fname)
+                except sqlite3.OperationalError:
+                    continue
+        finally:
+            conn.close()
+    except Exception:
+        # Scanner is best-effort: a corrupt/missing DB returns an empty
+        # in-use set rather than crashing the API. Caller decides what to
+        # do with zero results.
+        pass
+    return in_use
+
+
+def _load_metadata_item_index(db_path: str) -> Dict[str, Dict[str, Any]]:
+    """
+    Build a map of in-use filename → {id, title, year, type}.
+
+    Walking the Metadata/ tree gives us every poster file on disk, but the
+    bundle directory names are hashes we can't easily reverse. Instead, we
+    use every item's active thumb/art/banner filename as an anchor: when
+    we find that file on disk, we know the bundle it's in belongs to the
+    matching metadata_item. All *other* files in the same bundle are that
+    item's extra variants (bloat candidates).
+    """
+    index: Dict[str, Dict[str, Any]] = {}
+    try:
+        conn = sqlite3.connect(db_path)
+        try:
+            cur = conn.cursor()
+            try:
+                cur.execute(
+                    "SELECT id, title, year, metadata_type, user_thumb_url, "
+                    "user_art_url, user_banner_url FROM metadata_items"
+                )
+                for row in cur.fetchall():
+                    item_id, title, year, mtype, thumb, art, banner = row
+                    for url in (thumb, art, banner):
+                        if not url:
+                            continue
+                        parsed = urlparse(url)
+                        fname = parsed.path.rsplit("/", 1)[-1] if parsed.path else ""
+                        if not fname:
+                            continue
+                        index[fname] = {
+                            "id": item_id,
+                            "title": title or "",
+                            "year": year,
+                            "metadata_type": mtype,
+                        }
+            except sqlite3.OperationalError:
+                # metadata_items may be missing some columns on older Plex
+                # schemas — swallow and return whatever we have so far.
+                pass
+        finally:
+            conn.close()
+    except Exception:
+        # Same tolerance as get_in_use_hashes: empty index on DB failure,
+        # which downstream treats as "titles unknown" not "error".
+        pass
+    return index
+
+
+def _cache_get(key: str) -> Optional[Dict[str, Any]]:
+    with _cache_lock:
+        entry = _cache.get(key)
+        if entry and (time.time() - entry.get("_ts", 0)) < _CACHE_TTL_SEC:
+            return entry
+    return None
+
+
+def _cache_put(key: str, value: Dict[str, Any]) -> None:
+    with _cache_lock:
+        value["_ts"] = time.time()
+        _cache[key] = value
+
+
+def invalidate_cache() -> None:
+    """Clear all cached scans. Call after a cleanup job mutates the filesystem."""
+    with _cache_lock:
+        _cache.clear()
+
+
+def scan_bundles(plex_path: str, *, force: bool = False) -> Dict[str, Any]:
+    """
+    Scan the Plex Metadata directory and group poster variants by media item.
+
+    Returns {
+        "bundles": [
+            {
+                "bundle_path": str,          # absolute path to .bundle dir
+                "rating_key": int | None,    # metadata_items.id, if known
+                "title": str,
+                "year": int | None,
+                "metadata_type": int | None, # 1=movie, 2=show
+                "variants": [
+                    {"filename": str, "path": str, "size": int, "active": bool},
+                    ...
+                ],
+            },
+            ...
+        ],
+        "stats": {
+            "bundle_count": int,
+            "variant_count": int,
+            "bloat_count": int,
+            "bloat_size": int,
+            "scanned_at": float,    # unix ts
+        }
+    }
+
+    Cached for _CACHE_TTL_SEC unless force=True.
+    """
+    cache_key = f"scan::{plex_path}"
+    if not force:
+        cached = _cache_get(cache_key)
+        if cached:
+            return cached
+
+    metadata_dir = get_plex_metadata_dir(plex_path)
+    if not os.path.isdir(metadata_dir):
+        return {"bundles": [], "stats": {"bundle_count": 0, "variant_count": 0, "bloat_count": 0, "bloat_size": 0, "scanned_at": time.time()}}
+
+    # Take a quick copy of the DB so we don't contend with Plex.
+    working_dir = os.path.join(os.path.dirname(plex_path.rstrip("/")), ".chub_plex_db")
+    os.makedirs(working_dir, exist_ok=True)
+    db_copy = os.path.join(working_dir, "plex_scan.db")
+    db_path = copy_plex_db(plex_path, db_copy) or None
+
+    in_use: Set[str] = get_in_use_hashes(db_path) if db_path else set()
+    anchor_index = _load_metadata_item_index(db_path) if db_path else {}
+
+    # Walk metadata_dir, grouping files by their enclosing .bundle directory.
+    # bundle_files[bundle_path] = [{filename, path, size}, ...]
+    bundle_files: Dict[str, List[Dict[str, Any]]] = {}
+    for root, dirs, files in os.walk(metadata_dir):
+        if "Contents" in root.split(os.sep):
+            continue
+        bundle_root = root
+        while bundle_root and not bundle_root.endswith(".bundle"):
+            parent = os.path.dirname(bundle_root)
+            if parent == bundle_root or len(parent) < len(metadata_dir):
+                bundle_root = None
+                break
+            bundle_root = parent
+        if not bundle_root:
+            continue
+        for fname in files:
+            # Plex stores custom variants as extension-less hash names.
+            if "." in fname:
+                continue
+            fpath = os.path.join(root, fname)
+            try:
+                size = os.path.getsize(fpath)
+            except OSError:
+                size = 0
+            bundle_files.setdefault(bundle_root, []).append(
+                {"filename": fname, "path": fpath, "size": size}
+            )
+
+    # Resolve each bundle's owning metadata_item by matching any of its files
+    # against the anchor index (Plex's known active filenames).
+    bundles: List[Dict[str, Any]] = []
+    variant_count = 0
+    bloat_count = 0
+    bloat_size = 0
+
+    for bundle_path, files in bundle_files.items():
+        info: Dict[str, Any] = {
+            "rating_key": None,
+            "title": "",
+            "year": None,
+            "metadata_type": None,
+        }
+        for f in files:
+            hit = anchor_index.get(f["filename"])
+            if hit:
+                info = {
+                    "rating_key": hit["id"],
+                    "title": hit["title"],
+                    "year": hit["year"],
+                    "metadata_type": hit["metadata_type"],
+                }
+                break
+
+        variants = []
+        for f in files:
+            active = f["filename"] in in_use
+            variants.append({
+                "filename": f["filename"],
+                "path": f["path"],
+                "size": f["size"],
+                "active": active,
+            })
+            variant_count += 1
+            if not active:
+                bloat_count += 1
+                bloat_size += f["size"]
+
+        # Sort: active variants first, then largest bloat first.
+        variants.sort(key=lambda v: (not v["active"], -v["size"]))
+        bundles.append({
+            "bundle_path": bundle_path,
+            "rating_key": info["rating_key"],
+            "title": info["title"],
+            "year": info["year"],
+            "metadata_type": info["metadata_type"],
+            "variants": variants,
+        })
+
+    # Sort bundles: most bloat first, then by title.
+    bundles.sort(
+        key=lambda b: (
+            -sum(1 for v in b["variants"] if not v["active"]),
+            (b["title"] or "").lower(),
+        )
+    )
+
+    result = {
+        "bundles": bundles,
+        "stats": {
+            "bundle_count": len(bundles),
+            "variant_count": variant_count,
+            "bloat_count": bloat_count,
+            "bloat_size": bloat_size,
+            "scanned_at": time.time(),
+        },
+    }
+    _cache_put(cache_key, result)
+    return result
+
+
+def get_bloat_flat(plex_path: str, *, force: bool = False) -> List[Dict[str, Any]]:
+    """
+    Return a flat list of bloat variants across all bundles, sorted by size desc.
+    Each entry: {filename, path, size, bundle_path, rating_key, title, year}.
+    """
+    scan = scan_bundles(plex_path, force=force)
+    flat: List[Dict[str, Any]] = []
+    for b in scan["bundles"]:
+        for v in b["variants"]:
+            if v["active"]:
+                continue
+            flat.append({
+                "filename": v["filename"],
+                "path": v["path"],
+                "size": v["size"],
+                "bundle_path": b["bundle_path"],
+                "rating_key": b["rating_key"],
+                "title": b["title"],
+                "year": b["year"],
+            })
+    flat.sort(key=lambda e: -e["size"])
+    return flat
+
+
+def delete_variant(file_path: str, *, plex_path: str) -> bool:
+    """
+    Delete one variant file from disk. Refuses paths outside Plex's Metadata dir.
+    Returns True on success.
+    """
+    metadata_dir = os.path.realpath(get_plex_metadata_dir(plex_path))
+    real = os.path.realpath(file_path)
+    if not real.startswith(metadata_dir + os.sep):
+        return False
+    try:
+        os.remove(real)
+        invalidate_cache()
+        return True
+    except Exception:
+        return False

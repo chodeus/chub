@@ -1,0 +1,89 @@
+/**
+ * CHUB Light Theme
+ *
+ * Indigo-led cool palette (sl1ckbe3ts) designed for a bright, RoomSketch-style
+ * floating-panel dashboard. Deep indigo sidebar on a pale-indigo tinted canvas,
+ * pastel badge accents for dashboard icons.
+ *
+ * Theme Application: Applied via data-theme="light" attribute on <html> element
+ */
+
+[data-theme='light'] {
+    /* Brand & Semantic Colors */
+    --primary: #463fbc; /* Indigo primary */
+    --primary-hover: #3a339e;
+    --accent: #1992f3; /* Azure accent for links */
+    --accent-2: #53e8f0; /* Cyan secondary accent */
+    --success: #6cbc66;
+    --warning: #ffc944;
+    --error: #fd355c;
+    --info: #53e8f0;
+    --focus: #463fbc; /* Focus indicator matches primary */
+
+    /* Surface & Background Colors */
+    --bg: #eef0fb; /* Pale indigo tint — panel surround */
+    --surface: #fff; /* Main content panel */
+    --surface-alt: #f5f6ff; /* Subtle hover / secondary blocks */
+    --surface-elevated: #fff;
+
+    /* Border & Separation Colors */
+    --border: #e2e4f1;
+    --border-light: #eef0fb;
+
+    /* Text & Content Colors */
+    --text-primary: #110b28;
+    --text-secondary: #2a3052;
+    --text-tertiary: #5f446b;
+
+    /* Layout Specific Colors */
+    --sidebar-bg: #110b28; /* Deep indigo-black */
+    --sidebar-surface: #1d237f; /* Active pill / hover */
+    --sidebar-hover: #1d237f; /* Legacy alias for utilities */
+    --sidebar-border: #1d237f;
+    --sidebar-text: #fff;
+    --sidebar-text-secondary: #b2d1e8;
+    --header-bg: #110b28;
+
+    /* Overlay & Modal Colors */
+    --overlay: rgb(17 11 40 / 20%);
+    --overlay-strong: rgb(17 11 40 / 75%);
+
+    /* Text-on-Color Utilities */
+    --on-color-text: #fff;
+    --primary-text: #fff;
+
+    /* Link state colors */
+    --link-hover: #3a339e;
+    --link-visited: #3a339e;
+    --accent-hover: #1277cc;
+    --accent-visited: #1277cc;
+
+    /* Form Control Colors */
+    --input-bg: #fff;
+    --input-bg-hover: #f5f6ff;
+    --input-bg-disabled: #eef0fb;
+    --input-bg-readonly: #f5f6ff;
+    --input-border-disabled: #e2e4f1;
+    --checkbox-indicator-bg: #fff;
+
+    /* Pastel badge accents — dashboard quick-start icons */
+    --badge-1-bg: #d9b8bc; /* rose */
+    --badge-1-fg: #773c47;
+    --badge-2-bg: #b2d1e8; /* sky */
+    --badge-2-fg: #20558a;
+    --badge-3-bg: #a99eff; /* lavender */
+    --badge-3-fg: #463fbc;
+    --badge-4-bg: #fddfb6; /* peach */
+    --badge-4-fg: #a5624b;
+    --badge-5-bg: #bff266; /* lime */
+    --badge-5-fg: #2e7364;
+}
+
+/* High Contrast Mode Support */
+@media (prefers-contrast: more) {
+    [data-theme='light'] {
+        --border: #000;
+        --text-primary: #000;
+        --bg: #fff;
+    }
+}

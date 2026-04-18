@@ -1,0 +1,38 @@
+services:
+  chub:
+    image: ghcr.io/chodeus/chub:latest
+    container_name: chub
+    restart: unless-stopped
+
+    ports:
+      - "8000:8000"
+
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: "America/Los_Angeles"
+      CONFIG_DIR: "/config"
+      LOG_DIR: "/config/logs"
+      HOST: "0.0.0.0"
+      PORT: "8000"
+      DOCKER_ENV: "true"
+
+    volumes:
+      - /path/to/config:/config
+      - /path/to/posters:/posters
+      - /path/to/media:/media
+      - /path/to/kometa/assets:/kometa:ro
+      - /etc/localtime:/etc/localtime:ro
+
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/api/health >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 45s
+
+    security_opt:
+      - no-new-privileges:true
+
+    tmpfs:
+      - /tmp

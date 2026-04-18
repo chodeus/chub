@@ -1,0 +1,58 @@
+# Node and frontend build
+*/node_modules/*
+*/dist/*
+*/.vite/*
+*/.cache/*
+*/coverage/*
+
+# Backend build output (static assets)
+templates/*
+
+# Python artifacts and test output
+__pycache__/
+*.py[cod]
+*.so
+.venv/
+env/
+ENV/
+.venv/
+.archives/
+/logs/
+tests/
+screenshots/
+.extra_scripts/
+*.log
+*.ruff_cache
+*.pytest_cache
+/config/
+/.claude
+/.playwright-mcp
+
+# Files
+test.*
+TODO.*
+*.db
+*.db-journal
+CLAUDE.md
+
+
+# Misc editor junk
+.vscode/
+.idea/
+.DS_Store
+*.swp
+*.swo
+*.swn
+*.bak
+
+# OS/IDE and temp files
+Thumbs.db
+*~
+/.local
+*.backup*
+transformation/
+.env
+**/.DS_Store
+
+# Local-only dev files
+jokes.txt

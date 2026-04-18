@@ -1,0 +1,42 @@
+name: Delete GHCR Docker Tag for Deleted Branch
+
+on:
+  delete:
+
+permissions:
+  packages: write
+
+jobs:
+  ghcr-delete-tag:
+    runs-on: ubuntu-latest
+    if: github.event.ref_type == 'branch'
+
+    steps:
+      - name: Get the deleted branch name
+        id: get_branch
+        run: echo "BRANCH_NAME=${{ github.event.ref }}" >> $GITHUB_OUTPUT
+
+      - name: Skip protected branches
+        run: |
+          BRANCH="${{ steps.get_branch.outputs.BRANCH_NAME }}"
+          if [[ "$BRANCH" == "main" || "$BRANCH" == "master" || "$BRANCH" == "experimental" ]]; then
+            echo "Skipping deletion for protected branch: $BRANCH"
+            exit 0
+          fi
+
+      - name: Delete tag from GHCR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ steps.get_branch.outputs.BRANCH_NAME }}
+        run: |
+          REPO="${{ github.repository_owner }}/chub"
+          DIGEST=$(curl -s -H "Authorization: Bearer $GH_TOKEN" \
+            "https://ghcr.io/v2/${REPO}/manifests/${TAG_NAME}" \
+            -I | grep -i 'docker-content-digest:' | awk '{print $2}' | tr -d '\r')
+          if [[ -z "$DIGEST" ]]; then
+            echo "Tag not found on GHCR"
+            exit 0
+          fi
+          curl -s -X DELETE -H "Authorization: Bearer $GH_TOKEN" \
+            "https://ghcr.io/v2/${REPO}/manifests/${DIGEST}" \
+            && echo "Deleted GHCR tag: ${TAG_NAME}" || echo "Failed to delete GHCR tag: ${TAG_NAME}"

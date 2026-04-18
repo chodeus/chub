@@ -1,0 +1,39 @@
+@layer components {
+    /* ===========================================
+     CHUB pastel badge bubbles (dashboard quick-start icons)
+     Five variants map to --badge-1..5-bg/fg theme tokens.
+     =========================================== */
+
+    .badge-bubble {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--badge-1-fg);
+        background: var(--badge-1-bg);
+    }
+
+    .badge-bubble--1 {
+        background: var(--badge-1-bg);
+        color: var(--badge-1-fg);
+    }
+
+    .badge-bubble--2 {
+        background: var(--badge-2-bg);
+        color: var(--badge-2-fg);
+    }
+
+    .badge-bubble--3 {
+        background: var(--badge-3-bg);
+        color: var(--badge-3-fg);
+    }
+
+    .badge-bubble--4 {
+        background: var(--badge-4-bg);
+        color: var(--badge-4-fg);
+    }
+
+    .badge-bubble--5 {
+        background: var(--badge-5-bg);
+        color: var(--badge-5-fg);
+    }
+}
