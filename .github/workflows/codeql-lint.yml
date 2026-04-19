@@ -89,10 +89,22 @@ jobs:
         working-directory: frontend
         run: npx prettier --check "src/**/*.{js,jsx,css,json,md}"
 
+  # ---- Build metadata (monotonic commit count for BUILD_NUMBER) ----
+  build-number:
+    runs-on: ubuntu-latest
+    outputs:
+      number: ${{ steps.compute.outputs.number }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+      - id: compute
+        run: echo "number=$(git rev-list --count HEAD)" >> "$GITHUB_OUTPUT"
+
   # ---- Docker: validate on PR, publish on push/dispatch. Both gated on all checks. ----
   docker-validate:
     if: github.event_name == 'pull_request'
-    needs: [codeql-python, codeql-javascript, backend, frontend-lint]
+    needs: [codeql-python, codeql-javascript, backend, frontend-lint, build-number]
     uses: chodeus/chodeus-ops/.github/workflows/docker-build.yml@main
     with:
       dockerfile_path: deploy/docker/Dockerfile
@@ -101,11 +113,11 @@ jobs:
       platforms: linux/amd64
       build_args: |
         BRANCH=${{ github.head_ref }}
-        BUILD_NUMBER=${{ github.run_number }}
+        BUILD_NUMBER=${{ needs.build-number.outputs.number }}
 
   docker-publish:
     if: github.event_name != 'pull_request'
-    needs: [codeql-python, codeql-javascript, backend, frontend-lint]
+    needs: [codeql-python, codeql-javascript, backend, frontend-lint, build-number]
     uses: chodeus/chodeus-ops/.github/workflows/docker-build.yml@main
     with:
       dockerfile_path: deploy/docker/Dockerfile
@@ -114,7 +126,7 @@ jobs:
       platforms: linux/amd64,linux/arm64
       build_args: |
         BRANCH=${{ github.ref_name }}
-        BUILD_NUMBER=${{ github.run_number }}
+        BUILD_NUMBER=${{ needs.build-number.outputs.number }}
     secrets: inherit
 
   notify:
