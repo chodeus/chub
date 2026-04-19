@@ -1,4 +1,4 @@
-import { useId, useCallback, useState, useEffect } from 'react';
+import { useId, useCallback, useState } from 'react';
 import { FieldWrapper } from '../primitives/FieldWrapper';
 import { FieldLabel } from '../primitives/FieldLabel';
 import { FieldDescription } from '../primitives/FieldDescription';
@@ -34,10 +34,14 @@ export const JsonField = ({
 
     const [textValue, setTextValue] = useState(() => getStringValue());
 
-    // Update text value when prop value changes
-    useEffect(() => {
+    // Sync textValue when the prop `value` changes (external update). Uses the
+    // "adjusting state while rendering" pattern (React docs) rather than a
+    // setState-in-effect.
+    const [prevPropValue, setPrevPropValue] = useState(value);
+    if (prevPropValue !== value) {
+        setPrevPropValue(value);
         setTextValue(getStringValue());
-    }, [getStringValue]);
+    }
 
     // Validate JSON and update parent
     const handleChange = useCallback(

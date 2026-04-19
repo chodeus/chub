@@ -88,29 +88,25 @@ export const UIStateProvider = ({
     persistUIState = true,
 }) => {
     const [viewport, setViewport] = useState(() => getViewportInfo());
-    const [sidebarCollapsed, setSidebarCollapsed] = useState(defaultSidebarCollapsed);
-    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-    const [loadingStates, setLoadingStates] = useState({});
-    const [modals, setModals] = useState([]);
-
-    /**
-     * Initialize UI state from localStorage
-     */
-    useEffect(() => {
-        if (!persistUIState || typeof window === 'undefined') return;
-
+    // Lazy-init from localStorage so we don't need a setState-in-effect bootstrap.
+    const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+        if (!persistUIState || typeof window === 'undefined') return defaultSidebarCollapsed;
         try {
             const stored = localStorage.getItem('chub-ui-state');
             if (stored) {
                 const parsedState = JSON.parse(stored);
                 if (typeof parsedState.sidebarCollapsed === 'boolean') {
-                    setSidebarCollapsed(parsedState.sidebarCollapsed);
+                    return parsedState.sidebarCollapsed;
                 }
             }
         } catch (error) {
             console.warn('Failed to load UI state from localStorage:', error);
         }
-    }, [persistUIState]);
+        return defaultSidebarCollapsed;
+    });
+    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+    const [loadingStates, setLoadingStates] = useState({});
+    const [modals, setModals] = useState([]);
 
     /**
      * Persist UI state to localStorage
