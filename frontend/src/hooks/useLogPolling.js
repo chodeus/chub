@@ -5,13 +5,21 @@ import { useEffect, useRef } from 'react';
  *
  * Polls the refresh callback every 5 seconds when both module and file
  * are selected. Clears interval on unmount or when selections change.
+ * Skips ticks while a fetch is already in flight so slow log reads don't
+ * stack up.
  *
  * @param {string} selectedModule - Currently selected module
  * @param {string} selectedLogFile - Currently selected log file
  * @param {Function} refreshCallback - Function to call every interval
+ * @param {{current: boolean}} [inFlightRef] - Optional ref to skip overlapping polls
  * @returns {void}
  */
-export function useLogPolling(selectedModule, selectedLogFile, refreshCallback) {
+export function useLogPolling(
+    selectedModule,
+    selectedLogFile,
+    refreshCallback,
+    inFlightRef
+) {
     const intervalRef = useRef(null);
 
     useEffect(() => {
@@ -31,6 +39,7 @@ export function useLogPolling(selectedModule, selectedLogFile, refreshCallback) 
 
         // Start polling every 5 seconds
         intervalRef.current = setInterval(() => {
+            if (inFlightRef?.current) return;
             refreshCallback();
         }, 5000);
 
@@ -41,5 +50,5 @@ export function useLogPolling(selectedModule, selectedLogFile, refreshCallback) 
                 intervalRef.current = null;
             }
         };
-    }, [selectedModule, selectedLogFile, refreshCallback]);
+    }, [selectedModule, selectedLogFile, refreshCallback, inFlightRef]);
 }

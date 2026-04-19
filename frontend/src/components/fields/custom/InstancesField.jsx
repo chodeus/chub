@@ -17,7 +17,7 @@
  * - Plex with full options: { name: "instance_name", upload_posters: true/false, libraries: ["lib1", "lib2"] }
  */
 
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useId } from 'react';
 import {
     FieldWrapper,
     FieldLabel,
@@ -34,7 +34,7 @@ import { humanize } from '../../../utils/tools';
  * Basic checkbox selection for simple string values
  */
 const SimpleInstanceSelector = React.memo(
-    ({ instances, selectedInstances, onSelectionChange, serviceType, disabled }) => {
+    ({ instances, selectedInstances, onSelectionChange, serviceType, disabled, scopeId = '' }) => {
         const serviceInstances = useMemo(() => {
             if (!instances || !Array.isArray(instances)) {
                 return [];
@@ -71,7 +71,7 @@ const SimpleInstanceSelector = React.memo(
             <div className="flex flex-col gap-2">
                 {serviceInstances.map(instance => {
                     const isSelected = (selectedInstances || []).includes(instance.name);
-                    const inputId = `instance-${serviceType}-${instance.name}`;
+                    const inputId = `${scopeId}instance-${serviceType}-${instance.name}`;
 
                     return (
                         <div key={instance.name}>
@@ -133,7 +133,7 @@ SimpleInstanceSelector.displayName = 'SimpleInstanceSelector';
  * Handles library loading and selection for Plex instances
  */
 const PlexLibrarySelector = React.memo(
-    ({ instanceName, selectedLibraries = [], onLibrariesChange, disabled }) => {
+    ({ instanceName, selectedLibraries = [], onLibrariesChange, disabled, scopeId = '' }) => {
         // Load libraries for this specific Plex instance
         const {
             data: librariesResponse,
@@ -340,13 +340,13 @@ const PlexLibrarySelector = React.memo(
                 <div className="max-md:hidden">
                     {movieLibraries.length > 0 && (
                         <div className="mb-6">
-                            <div className="text-sm font-semibold text-primary mb-3 pb-1 border-b border-border-subtle">
+                            <div className="text-sm font-semibold text-primary mb-3 pb-1 border-b border-border">
                                 Movies
                             </div>
                             <div className="grid gap-3 grid-cols-2">
                                 {movieLibraries.map(library => {
                                     const isSelected = selectedLibraries.includes(library);
-                                    const libraryId = `library-${instanceName}-${library}`;
+                                    const libraryId = `${scopeId}library-${instanceName}-${library}`;
 
                                     return (
                                         <div key={library}>
@@ -406,13 +406,13 @@ const PlexLibrarySelector = React.memo(
 
                     {tvLibraries.length > 0 && (
                         <div className="mb-6">
-                            <div className="text-sm font-semibold text-primary mb-3 pb-1 border-b border-border-subtle">
+                            <div className="text-sm font-semibold text-primary mb-3 pb-1 border-b border-border">
                                 TV Shows
                             </div>
                             <div className="grid gap-3 grid-cols-2">
                                 {tvLibraries.map(library => {
                                     const isSelected = selectedLibraries.includes(library);
-                                    const libraryId = `library-${instanceName}-${library}`;
+                                    const libraryId = `${scopeId}library-${instanceName}-${library}`;
 
                                     return (
                                         <div key={library}>
@@ -472,13 +472,13 @@ const PlexLibrarySelector = React.memo(
 
                     {uncategorizedLibraries.length > 0 && (
                         <div>
-                            <div className="text-sm font-semibold text-primary mb-3 pb-1 border-b border-border-subtle">
+                            <div className="text-sm font-semibold text-primary mb-3 pb-1 border-b border-border">
                                 Other
                             </div>
                             <div className="grid gap-3 grid-cols-2">
                                 {uncategorizedLibraries.map(library => {
                                     const isSelected = selectedLibraries.includes(library);
-                                    const libraryId = `library-${instanceName}-${library}`;
+                                    const libraryId = `${scopeId}library-${instanceName}-${library}`;
 
                                     return (
                                         <div key={library}>
@@ -548,13 +548,26 @@ PlexLibrarySelector.displayName = 'PlexLibrarySelector';
  * Handles complex object values with upload_posters boolean and libraries array
  */
 const PlexInstanceSelector = React.memo(
-    ({ instances, selectedInstances, onSelectionChange, showPosterOption, disabled }) => {
+    ({
+        instances,
+        selectedInstances,
+        onSelectionChange,
+        showPosterOption,
+        disabled,
+        valueFormat = 'object',
+        scopeId = '',
+    }) => {
         const plexInstances = useMemo(() => {
             if (!instances || !Array.isArray(instances)) {
                 return [];
             }
             return instances.filter(instance => instance.type === 'plex');
         }, [instances]);
+
+        // Modules whose backend stores `instances: List[str]` (poster_cleanarr,
+        // unmatched_assets, etc.) need plain strings; the library/add_posters UI
+        // doesn't apply. valueFormat='string' disables both.
+        const emitAsString = valueFormat === 'string';
 
         // Parse selected instances to handle both string and object formats
         // Normalizes to backend-compatible format: { instance, add_posters, library_names }
@@ -592,10 +605,13 @@ const PlexInstanceSelector = React.memo(
         const handleInstanceToggle = useCallback(
             (instanceName, checked) => {
                 if (checked) {
-                    // Add new instance with backend-compatible structure
-                    const newInstance = showPosterOption
-                        ? { instance: instanceName, add_posters: false, library_names: [] }
-                        : { instance: instanceName, library_names: [] };
+                    // For simple-list modules, emit a plain string so the backend's
+                    // List[str] pydantic model accepts the payload.
+                    const newInstance = emitAsString
+                        ? instanceName
+                        : showPosterOption
+                          ? { instance: instanceName, add_posters: false, library_names: [] }
+                          : { instance: instanceName, library_names: [] };
                     onSelectionChange([...(selectedInstances || []), newInstance]);
                 } else {
                     // Remove instance
@@ -607,7 +623,7 @@ const PlexInstanceSelector = React.memo(
                     onSelectionChange(newSelection);
                 }
             },
-            [selectedInstances, onSelectionChange, showPosterOption]
+            [selectedInstances, onSelectionChange, showPosterOption, emitAsString]
         );
 
         const handlePosterUploadToggle = useCallback(
@@ -680,8 +696,8 @@ const PlexInstanceSelector = React.memo(
                     const isSelected = Boolean(selectedItem);
                     const uploadPosters = selectedItem?.add_posters || false;
                     const selectedLibraries = selectedItem?.library_names || [];
-                    const instanceId = `instance-plex-${instance.name}`;
-                    const uploadId = `upload-${instance.name}`;
+                    const instanceId = `${scopeId}instance-plex-${instance.name}`;
+                    const uploadId = `${scopeId}upload-${instance.name}`;
 
                     return (
                         <div key={instance.name}>
@@ -729,7 +745,7 @@ const PlexInstanceSelector = React.memo(
                                 </div>
                             </div>
 
-                            {isSelected && (
+                            {isSelected && !emitAsString && (
                                 <div className="flex flex-col gap-4 border-l-2 border-border-subtle">
                                     {/* Poster upload option */}
                                     {showPosterOption && (
@@ -797,6 +813,7 @@ const PlexInstanceSelector = React.memo(
                                             handleLibrariesChange(instance.name, libraries)
                                         }
                                         disabled={disabled}
+                                        scopeId={scopeId}
                                     />
                                 </div>
                             )}
@@ -834,6 +851,17 @@ export const InstancesField = React.memo(
         const instanceTypes = useMemo(() => field.instance_types || [], [field.instance_types]);
         const showPosterOption = field.add_posters_option === true;
         const isRequired = field.required === true;
+        // When the backend model is `List[str]` (e.g. poster_cleanarr,
+        // unmatched_assets), set valueFormat='string' on the schema so we emit
+        // plain instance names instead of the full {instance, library_names} dict
+        // that would fail pydantic validation.
+        const valueFormat = field.valueFormat === 'string' ? 'string' : 'object';
+
+        // Per-mount ID prefix so instance/library checkbox IDs don't collide
+        // across multiple `instances` fields rendered on the same page
+        // (the Modules page mounts every module's accordion at once).
+        const rawId = useId();
+        const scopeId = `${rawId.replace(/[^A-Za-z0-9_-]/g, '')}-`;
 
         // Load instances data using proper CHUB pattern
         const {
@@ -991,6 +1019,8 @@ export const InstancesField = React.memo(
                         }
                         showPosterOption={showPosterOption}
                         disabled={disabled}
+                        valueFormat={valueFormat}
+                        scopeId={scopeId}
                     />
                 );
             } else {
@@ -1004,6 +1034,7 @@ export const InstancesField = React.memo(
                         }
                         serviceType={serviceType}
                         disabled={disabled}
+                        scopeId={scopeId}
                     />
                 );
             }

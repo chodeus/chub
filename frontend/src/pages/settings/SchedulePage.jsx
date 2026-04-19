@@ -74,7 +74,7 @@ export const SchedulePage = () => {
     const availableModules = useMemo(
         () =>
             moduleOrder
-                .filter(k => k !== 'main')
+                .filter(k => k !== 'main' && k !== 'general')
                 .map(moduleKey => ({
                     key: moduleKey,
                     label: humanize(moduleKey),

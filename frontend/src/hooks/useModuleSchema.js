@@ -8,6 +8,7 @@ import { SETTINGS_SCHEMA } from '../utils/constants/settings_schema.js';
  * Matches the fields in ChubConfig (backend/util/config.py).
  */
 const CONFIG_MODULE_KEYS = [
+    'general',
     'sync_gdrive',
     'poster_renamerr',
     'border_replacerr',

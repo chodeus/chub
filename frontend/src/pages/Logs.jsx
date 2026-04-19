@@ -28,8 +28,11 @@ export default function Logs() {
     const { modules } = useLogModules();
     const [selectedModule, setSelectedModule] = useState('');
     const { logFiles, selectedLogFile, setSelectedLogFile } = useLogFiles(selectedModule);
-    const { logText, refresh } = useLogContent(selectedModule, selectedLogFile);
-    useLogPolling(selectedModule, selectedLogFile, refresh);
+    const { logText, refresh, inFlightRef } = useLogContent(
+        selectedModule,
+        selectedLogFile
+    );
+    useLogPolling(selectedModule, selectedLogFile, refresh, inFlightRef);
 
     // Search state
     const [searchTerm, setSearchTerm] = useState('');

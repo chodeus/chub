@@ -12,12 +12,14 @@ const PERIOD_OPTIONS = [
     { value: '90d', label: 'Last 90 Days' },
 ];
 
-/** Reusable stat card */
+/** Reusable stat card — always reserves the subtext row so sibling cards align */
 const StatCard = ({ label, value, subtext, color = 'text-primary' }) => (
-    <div className="p-5 rounded-xl bg-surface border border-border">
+    <div className="p-5 rounded-xl bg-surface border border-border flex flex-col">
         <p className="text-sm text-secondary mb-1">{label}</p>
         <p className={`text-3xl font-bold ${color}`}>{value}</p>
-        {subtext && <p className="text-xs text-tertiary mt-1">{subtext}</p>}
+        <p className="text-xs text-tertiary mt-1 min-h-[1rem]">
+            {subtext || '\u00a0'}
+        </p>
     </div>
 );
 

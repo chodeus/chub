@@ -93,7 +93,7 @@ export const WebhooksPage = () => {
                 {/* Unmatched Assets */}
                 <Card variant="bordered">
                     <Card.Body>
-                        <div className="flex flex-col gap-4">
+                        <div className="flex flex-col gap-4 h-full">
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
                                     <span className="material-symbols-outlined text-warning">
@@ -141,6 +141,7 @@ export const WebhooksPage = () => {
                                 variant="primary"
                                 icon="play_arrow"
                                 onClick={handleProcessUnmatched}
+                                className="mt-auto"
                             >
                                 Process Unmatched
                             </LoadingButton>
@@ -151,7 +152,7 @@ export const WebhooksPage = () => {
                 {/* Cleanarr */}
                 <Card variant="bordered">
                     <Card.Body>
-                        <div className="flex flex-col gap-4">
+                        <div className="flex flex-col gap-4 h-full">
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
                                     <span className="material-symbols-outlined text-brand-primary">
@@ -208,6 +209,7 @@ export const WebhooksPage = () => {
                                 variant="warning"
                                 icon="cleaning_services"
                                 onClick={handleProcessCleanarr}
+                                className="mt-auto"
                             >
                                 Run Cleanup
                             </LoadingButton>
