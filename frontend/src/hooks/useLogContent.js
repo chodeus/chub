@@ -23,7 +23,8 @@ export function useLogContent(selectedModule, selectedLogFile) {
     // Reset loading/error state at render time when the key changes. This is
     // the "adjusting state when a prop changes" pattern from the React docs —
     // conditional setState during render, not a setState-in-effect.
-    const currentKey = selectedModule && selectedLogFile ? `${selectedModule}|${selectedLogFile}` : '';
+    const currentKey =
+        selectedModule && selectedLogFile ? `${selectedModule}|${selectedLogFile}` : '';
     const [lastKey, setLastKey] = useState(currentKey);
     if (lastKey !== currentKey) {
         setLastKey(currentKey);
