@@ -713,8 +713,16 @@ class PosterRenamerr(ChubModule):
 
                 if self.config.run_cleanarr:
                     cleanarr_logger = Logger(self.config.log_level, "cleanarr")
+                    allowed_roots = [
+                        r for r in (
+                            [self.config.destination_dir]
+                            + list(self.config.source_dirs or [])
+                        ) if r
+                    ]
                     db.orphaned.handle_orphaned_posters(
-                        cleanarr_logger, self.config.dry_run
+                        cleanarr_logger,
+                        self.config.dry_run,
+                        allowed_roots=allowed_roots,
                     )
 
                 if self.config.run_border_replacerr:
