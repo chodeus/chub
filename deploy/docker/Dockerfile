@@ -1,7 +1,7 @@
 # -------------------------
 # Stage 1: Builder
 # -------------------------
-FROM python:3.11-slim@sha256:233de06753d30d120b1a3ce359d8d3be8bda78524cd8f520c99883bfe33964cf AS builder
+FROM python:3.14-slim@sha256:bc389f7dfcb21413e72a28f491985326994795e34d2b86c8ae2f417b4e7818aa AS builder
 
 # Install build dependencies (including Node.js and build tools)
 RUN set -eux; \
@@ -36,7 +36,7 @@ RUN cd frontend && npm install && npm run build
 # -------------------------
 # Stage 2: Final runtime image
 # -------------------------
-FROM python:3.11-slim@sha256:233de06753d30d120b1a3ce359d8d3be8bda78524cd8f520c99883bfe33964cf
+FROM python:3.14-slim@sha256:bc389f7dfcb21413e72a28f491985326994795e34d2b86c8ae2f417b4e7818aa
 
 WORKDIR /app
 
