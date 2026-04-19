@@ -18,8 +18,8 @@
     "cron-validator": "^1.4.0",
     "cronstrue": "^3.3.0",
     "prop-types": "15.8.1",
-    "react": "19.1.6",
-    "react-dom": "19.1.6",
+    "react": "19.1.1",
+    "react-dom": "19.1.1",
     "react-router-dom": "7.12.0"
   },
   "devDependencies": {
@@ -31,8 +31,8 @@
     "eslint-plugin-react-hooks": "^5.2.0",
     "globals": "^16.3.0",
     "prettier": "^3.6.2",
-    "stylelint": "^16.23.1",
-    "stylelint-config-standard": "^39.0.1",
+    "stylelint": "^16.23.0",
+    "stylelint-config-standard": "^39.0.0",
     "stylelint-selector-bem-pattern": "^4.0.1",
     "vite": "^6.4.2"
   },
