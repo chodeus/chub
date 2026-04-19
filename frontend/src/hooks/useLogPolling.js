@@ -14,12 +14,7 @@ import { useEffect, useRef } from 'react';
  * @param {{current: boolean}} [inFlightRef] - Optional ref to skip overlapping polls
  * @returns {void}
  */
-export function useLogPolling(
-    selectedModule,
-    selectedLogFile,
-    refreshCallback,
-    inFlightRef
-) {
+export function useLogPolling(selectedModule, selectedLogFile, refreshCallback, inFlightRef) {
     const intervalRef = useRef(null);
 
     useEffect(() => {
