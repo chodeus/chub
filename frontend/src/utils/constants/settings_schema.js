@@ -728,7 +728,7 @@ export const SETTINGS_SCHEMA = [
                     "Path inside the CHUB container that points at your Plex Media Server's data dir " +
                     "— the folder that directly contains 'Metadata/', 'Cache/', 'Plug-in Support/', etc. " +
                     "Typical Docker setup: mount the host's 'Library/Application Support/Plex Media Server/' " +
-                    "to /plex and enter /plex here.",
+                    'to /plex and enter /plex here.',
             },
             {
                 key: 'local_db',
