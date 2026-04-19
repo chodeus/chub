@@ -131,37 +131,16 @@ jobs:
       - name: Run tests
         run: python -m pytest tests/ -v
 
-  # ---- Frontend Lint ----
+  # ---- Frontend Lint (reusable) ----
   frontend-lint:
     name: Frontend Lint
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: frontend/package-lock.json
-
-      - name: Install dependencies
-        working-directory: frontend
-        run: npm ci
-
-      - name: Run ESLint
-        working-directory: frontend
-        run: npm run lint
-
-      - name: Run Stylelint
-        working-directory: frontend
-        run: npx stylelint 'src/**/*.css'
-
-      - name: Check Prettier formatting
-        working-directory: frontend
-        run: npx prettier --check "src/**/*.{js,jsx,css,json,md}"
+    uses: chodeus/chodeus-ops/.github/workflows/node-ci.yml@3f45de2e4563b8d1ec8e385d9b0cdc5508657ce8 # main
+    with:
+      node_version: '20'
+      package_json_dir: frontend
+      run_lint: true
+      run_stylelint: true
+      run_prettier_check: true
 
   # ---- Docker Build (gated by all quality checks) ----
   docker-validate:
