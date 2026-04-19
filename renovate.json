@@ -1,4 +1,11 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["github>chodeus/chodeus-ops"]
+  "extends": ["github>chodeus/chodeus-ops"],
+  "packageRules": [
+    {
+      "matchPackageNames": ["@vitejs/plugin-react"],
+      "enabled": false,
+      "description": "Pinned until vite is bumped to v8 — plugin-react 6+ requires vite 8 peer"
+    }
+  ]
 }
