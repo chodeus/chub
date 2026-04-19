@@ -235,15 +235,17 @@ const AnimationPerformanceTest = React.memo(() => {
 AnimationPerformanceTest.displayName = 'AnimationPerformanceTest';
 
 const AccessibilityTest = React.memo(() => {
-    const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+    // Lazy init avoids a setState-in-effect for the initial value.
+    const [prefersReducedMotion, setPrefersReducedMotion] = useState(() =>
+        typeof window !== 'undefined'
+            ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
+            : false
+    );
 
     useEffect(() => {
         const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
-        setPrefersReducedMotion(mediaQuery.matches);
-
         const handleChange = e => setPrefersReducedMotion(e.matches);
         mediaQuery.addEventListener('change', handleChange);
-
         return () => mediaQuery.removeEventListener('change', handleChange);
     }, []);
 

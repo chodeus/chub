@@ -280,174 +280,10 @@ const FieldTester = React.memo(
         const [showError, setShowError] = useState(false);
         const toast = useToast();
 
-        // Update test configuration when field type changes
-        useEffect(() => {
-            const baseConfig = {
-                label: `Test ${fieldType} Field`,
-                required: false,
-                disabled: false,
-                placeholder: `Enter ${fieldType} value...`,
-                description: `Testing ${fieldType} field implementation`,
-            };
-
-            // Add sample options for dropdown fields
-            if (fieldType === 'dropdown') {
-                baseConfig.options = [
-                    { value: 'option1', label: 'First Option' },
-                    { value: 'option2', label: 'Second Option' },
-                    { value: 'option3', label: 'Third Option' },
-                    { value: 'group1', label: 'Group Item 1' },
-                    { value: 'group2', label: 'Group Item 2' },
-                    'Simple String Option',
-                    'Another String Option',
-                ];
-                baseConfig.placeholder = 'Select an option from the dropdown...';
-                baseConfig.description =
-                    'Testing dropdown field with sample options (mix of objects and strings)';
-            }
-
-            // Add sample mode options for dirlist_options fields
-            if (fieldType === 'dirlist_options') {
-                baseConfig.mode_options = [
-                    { value: 'copy', label: 'Copy' },
-                    { value: 'move', label: 'Move' },
-                    { value: 'link', label: 'Link' },
-                    { value: 'hardlink', label: 'Hard Link' },
-                    { value: 'symlink', label: 'Symbolic Link' },
-                ];
-                baseConfig.placeholder = 'Click to select directory...';
-                baseConfig.description =
-                    'Testing directory list field with mode selection dropdowns';
-                baseConfig.add_button_text = 'Add Directory';
-                baseConfig.remove_button_text = 'Remove';
-                baseConfig.max_directories = 10;
-                baseConfig.min_directories = 1;
-            }
-
-            // Add schema configuration for instances fields
-            if (fieldType === 'instances') {
-                baseConfig.instance_types = ['radarr', 'sonarr', 'plex'];
-                baseConfig.add_posters_option = true;
-                baseConfig.placeholder = 'Select instances for this module...';
-                baseConfig.description =
-                    'Testing instances field with multiple service types and poster upload options';
-            }
-
-            // Add configuration for tag fields
-            if (fieldType === 'tag_input') {
-                baseConfig.suggestions = [
-                    'action',
-                    'adventure',
-                    'animation',
-                    'comedy',
-                    'drama',
-                    'documentary',
-                    'family',
-                    'fantasy',
-                    'horror',
-                    'kids',
-                    'mystery',
-                    'romance',
-                    'sci-fi',
-                    'thriller',
-                    'western',
-                ];
-
-                // Custom filter function for "starts with" behavior
-                baseConfig.filterFunction = (suggestion, input) => {
-                    const suggestionText = suggestion.toLowerCase();
-                    const inputText = input.toLowerCase();
-                    return suggestionText.startsWith(inputText); // Type "r" → shows "romance"
-                };
-                baseConfig.allowCustom = true;
-                baseConfig.placeholder = 'Type "r" to see romance, "a" for action...';
-                baseConfig.description =
-                    'Testing "starts with" filtering - type "r" and only items beginning with "r" appear';
-            }
-
-            if (fieldType === 'tag_display') {
-                baseConfig.disabled = true;
-                baseConfig.placeholder = 'Read-only tag display';
-                baseConfig.description = 'Testing tag display field in read-only mode';
-            }
-
-            // Add configuration for presets fields
-            if (fieldType === 'presets') {
-                baseConfig.presetType = 'holiday'; // Default to holiday presets for testing
-                baseConfig.identifierField = 'name';
-                baseConfig.moduleConfigKey = 'holidays';
-                baseConfig.targetFields = ['name', 'schedule', 'colors'];
-                baseConfig.placeholder = 'Select a preset...';
-                baseConfig.description =
-                    'Testing unified PresetsField with holiday preset configuration (schema-driven)';
-            }
-
-            // Add configuration for object_array fields
-            if (fieldType === 'object_array') {
-                baseConfig.displayType = 'replacerr'; // Use holiday mapping display for testing
-                baseConfig.fields = [
-                    {
-                        key: 'name',
-                        type: 'text',
-                        label: 'Holiday Name',
-                        required: true,
-                        placeholder: 'Enter holiday name...',
-                    },
-                    {
-                        key: 'colors',
-                        type: 'color_list',
-                        label: 'Color Palette',
-                        description: 'Colors to use for this holiday mapping',
-                    },
-                    {
-                        key: 'schedule',
-                        type: 'text',
-                        label: 'Schedule Period',
-                        placeholder: 'e.g., 2024-12-20 to 2024-12-26',
-                    },
-                ];
-                baseConfig.description =
-                    'Testing ArrayObjectField with holiday mapping display template and color swatches';
-            }
-
-            setTestConfig(baseConfig);
-
-            // Reset test value based on field type
-            if (fieldType === 'instances') {
-                setTestValue([]); // Array for instances field
-            } else if (fieldType === 'color_list' || fieldType === 'color_list_poster') {
-                setTestValue([]); // Array for color list fields
-            } else if (
-                fieldType === 'dirlist' ||
-                fieldType === 'dirlist_dragdrop' ||
-                fieldType === 'dirlist_options'
-            ) {
-                setTestValue([]); // Array for directory list fields
-            } else if (fieldType === 'check_box') {
-                setTestValue(false); // Boolean for checkbox
-            } else if (fieldType === 'tag_input') {
-                setTestValue([]); // Array for tag input field
-            } else if (fieldType === 'tag_display') {
-                setTestValue(['action', 'comedy', 'kids']); // Array with sample tags for display
-            } else if (fieldType === 'presets') {
-                setTestValue(''); // String for preset selection
-            } else if (fieldType === 'object_array') {
-                setTestValue([
-                    {
-                        name: 'Christmas',
-                        colors: ['#ff0000', '#00ff00', '#ffffff'],
-                        schedule: '2024-12-20 to 2024-12-26',
-                    },
-                    {
-                        name: 'Halloween',
-                        colors: ['#ff8c00', '#000000', '#8b4513'],
-                        schedule: '2024-10-25 to 2024-10-31',
-                    },
-                ]); // Array with sample holiday mapping objects
-            } else {
-                setTestValue(''); // String for most fields
-            }
-        }, [fieldType]);
+        // Note: when `fieldType` changes the parent rekeys this component
+        // (<FieldTester key={selectedFieldType} .../>), so both testConfig and
+        // testValue above are re-initialized from scratch — no effect is needed
+        // to "resync" them.
 
         // Create test field configuration
         const testField = useMemo(
@@ -814,20 +650,22 @@ const FieldTestPage = () => {
         }
     }, [allFieldTypes, workingFieldTypes, filter, approvedFields]);
 
-    // Auto-handle field selection when filtered list changes
-    useEffect(() => {
-        if (filteredFieldTypes.length === 0) {
-            // No fields match filter - keep current selection for now
-            // The UI will show a "no fields" message
-            return;
-        } else if (filteredFieldTypes.length === 1) {
-            // Exactly one field - auto-select it
-            setSelectedFieldType(filteredFieldTypes[0]);
-        } else if (!filteredFieldTypes.includes(selectedFieldType)) {
-            // Current selection not in filtered list - select first valid option
+    // Auto-handle field selection when filtered list changes. Uses render-time
+    // setState ("adjusting state when a prop changes") instead of an effect.
+    const [prevFilteredList, setPrevFilteredList] = useState(filteredFieldTypes);
+    if (prevFilteredList !== filteredFieldTypes) {
+        setPrevFilteredList(filteredFieldTypes);
+        if (filteredFieldTypes.length === 1) {
+            if (selectedFieldType !== filteredFieldTypes[0]) {
+                setSelectedFieldType(filteredFieldTypes[0]);
+            }
+        } else if (
+            filteredFieldTypes.length > 0 &&
+            !filteredFieldTypes.includes(selectedFieldType)
+        ) {
             setSelectedFieldType(filteredFieldTypes[0]);
         }
-    }, [filteredFieldTypes, selectedFieldType]);
+    }
 
     const handleApproveField = useCallback(fieldType => {
         setApprovedFields(prev => new Set([...prev, fieldType]));

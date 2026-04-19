@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react';
 
 const VALIDATION_RULES = {
     // Basic required validation
@@ -269,17 +269,26 @@ export const FormValidator = React.memo(
             [schema.fields, validateField, validateOnChange]
         );
 
-        // Update validation state when form data or schema changes
-        useEffect(() => {
-            if (validateOnChange && Object.keys(touchedFields).length > 0) {
-                const validation = validateForm();
-                setErrors(validation.errors);
+        // Derive validation whenever inputs change, then propagate:
+        //  - errors state is updated at render time (guarded by identity) so the
+        //    react-hooks/set-state-in-effect rule is satisfied.
+        //  - onValidationChange (external callback) fires from an effect.
+        const currentValidation = useMemo(() => {
+            if (!validateOnChange || Object.keys(touchedFields).length === 0) return null;
+            return validateForm();
+        }, [validateForm, validateOnChange, touchedFields]);
 
-                if (onValidationChange) {
-                    onValidationChange(validation);
-                }
+        const [lastPropagatedValidation, setLastPropagatedValidation] = useState(null);
+        if (currentValidation && currentValidation !== lastPropagatedValidation) {
+            setLastPropagatedValidation(currentValidation);
+            setErrors(currentValidation.errors);
+        }
+
+        useEffect(() => {
+            if (currentValidation && onValidationChange) {
+                onValidationChange(currentValidation);
             }
-        }, [formData, schema, validateForm, validateOnChange, touchedFields, onValidationChange]);
+        }, [currentValidation, onValidationChange]);
 
         const contextValue = {
             errors,

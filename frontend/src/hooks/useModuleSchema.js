@@ -33,40 +33,47 @@ export function useModuleSchema() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    const fetchSchemas = useCallback(async () => {
-        try {
-            const results = await Promise.allSettled(
+    // Core fetch logic returned as a promise so all setState happens in .then/.catch
+    // callbacks (not synchronously in any effect body).
+    const fetchSchemas = useCallback(
+        () =>
+            Promise.allSettled(
                 CONFIG_MODULE_KEYS.map(key =>
                     modulesAPI
                         .getModuleSchema(key)
                         .then(res => ({ key, schema: res?.data?.schema }))
                 )
-            );
+            )
+                .then(results => {
+                    const backendSchemas = results
+                        .filter(r => r.status === 'fulfilled' && r.value.schema)
+                        .map(r => adaptModuleSchema(r.value.key, r.value.schema));
 
-            const backendSchemas = results
-                .filter(r => r.status === 'fulfilled' && r.value.schema)
-                .map(r => adaptModuleSchema(r.value.key, r.value.schema));
+                    // Re-sort to match CONFIG_MODULE_KEYS order (Promise.allSettled
+                    // resolves in arbitrary order which causes modules to jump around)
+                    const keyOrder = new Map(CONFIG_MODULE_KEYS.map((k, i) => [k, i]));
+                    backendSchemas.sort((a, b) => {
+                        const idxA = keyOrder.get(a.key) ?? Infinity;
+                        const idxB = keyOrder.get(b.key) ?? Infinity;
+                        return idxA - idxB;
+                    });
 
-            // Re-sort to match CONFIG_MODULE_KEYS order (Promise.allSettled
-            // resolves in arbitrary order which causes modules to jump around)
-            const keyOrder = new Map(CONFIG_MODULE_KEYS.map((k, i) => [k, i]));
-            backendSchemas.sort((a, b) => {
-                const idxA = keyOrder.get(a.key) ?? Infinity;
-                const idxB = keyOrder.get(b.key) ?? Infinity;
-                return idxA - idxB;
-            });
-
-            if (backendSchemas.length > 0) {
-                setSchemas(mergeSchemas(backendSchemas, SETTINGS_SCHEMA, CONFIG_MODULE_KEYS));
-            }
-            // If all fetches failed, we keep the static fallback
-        } catch (e) {
-            setError(e.message);
-            // Keep static schemas as fallback
-        } finally {
-            setLoading(false);
-        }
-    }, []);
+                    if (backendSchemas.length > 0) {
+                        setSchemas(
+                            mergeSchemas(backendSchemas, SETTINGS_SCHEMA, CONFIG_MODULE_KEYS)
+                        );
+                    }
+                    // If all fetches failed, we keep the static fallback
+                })
+                .catch(e => {
+                    setError(e.message);
+                    // Keep static schemas as fallback
+                })
+                .finally(() => {
+                    setLoading(false);
+                }),
+        []
+    );
 
     useEffect(() => {
         fetchSchemas();
