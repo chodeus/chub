@@ -440,7 +440,21 @@ async def process_cleanarr_webhook(
         logger.debug("Serving POST /api/webhooks/cleanarr/process")
 
         cleanarr_logger = logger.get_adapter("CLEANARR")
-        db.orphaned.handle_orphaned_posters(cleanarr_logger, dry_run=False)
+        try:
+            pr_cfg = getattr(load_config(), "poster_renamerr", None)
+            allowed_roots = []
+            if pr_cfg is not None:
+                allowed_roots = [
+                    r for r in (
+                        [getattr(pr_cfg, "destination_dir", "")]
+                        + list(getattr(pr_cfg, "source_dirs", []) or [])
+                    ) if r
+                ]
+        except ConfigError:
+            allowed_roots = []
+        db.orphaned.handle_orphaned_posters(
+            cleanarr_logger, dry_run=False, allowed_roots=allowed_roots
+        )
 
         return ok("Cleanarr processing completed", {"status": "completed"})
     except Exception as e:

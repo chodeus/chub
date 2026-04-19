@@ -669,7 +669,18 @@ class PosterCleanarr(ChubModule):
             return {"count": 0}
 
         self.logger.info(f"Found {count} CHUB orphaned posters.")
-        db.orphaned.handle_orphaned_posters(self.logger, dry_run)
+        pr_cfg = getattr(self.full_config, "poster_renamerr", None)
+        allowed_roots = []
+        if pr_cfg is not None:
+            allowed_roots = [
+                r for r in (
+                    [getattr(pr_cfg, "destination_dir", "")]
+                    + list(getattr(pr_cfg, "source_dirs", []) or [])
+                ) if r
+            ]
+        db.orphaned.handle_orphaned_posters(
+            self.logger, dry_run, allowed_roots=allowed_roots
+        )
         return {"count": count}
 
     # =========================================================================
