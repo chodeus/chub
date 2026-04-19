@@ -1,202 +1,118 @@
 # Modules
 
-CHUB ships 12 scheduled / on-demand modules. Each one extends `ChubModule` (`backend/util/base_module.py`) and is registered in `backend/modules/__init__.py`.
+CHUB ships twelve modules. Each one is a scheduled chore you can also run on demand. Every module has its own section in `config.yml` and its own page under **Settings → Modules** in the UI.
 
-All modules share:
+Every module supports:
 
-- A `dry_run` flag — when `true`, the module logs what it *would* do without making changes.
-- A `log_level` — per-module override (`debug` / `info` / `warning` / `error`).
-- Cancellation via `DELETE /api/modules/{name}/execution/{job_id}` (see status per module below).
-- Run history visible in the UI (**Settings → Jobs**) and at `GET /api/jobs`.
+- **Dry run** — when `dry_run: true`, the module logs what it *would* do without making changes. Turn this on the first time you try a module.
+- **Log level** — `debug` / `info` / `warning` / `error`, per module. Default is `info`. Flip to `debug` while you're diagnosing a problem, then back.
+- **Cancel from the UI** — Settings → Jobs → click the running job → **Cancel**. Eleven of the twelve modules stop cleanly on the next iteration (see each module below). `border_replacerr` is the exception — it runs to completion today; restart the container if you truly need to interrupt it.
+- **Run history** — visible in **Settings → Jobs** with full log output.
 
-> **CHUB-era additions.** Cooperative cancellation, argument-smuggling / path-safety guards, full Lidarr support in `upgradinatorr`, webhook origin tracking, and the path-injection guard on `poster_cleanarr`'s `set-active` endpoint were all added in the CHUB audit pass on top of the original DAPS module set. Each module's section below flags its CHUB additions explicitly; see [Credits](Credits) for the full list.
-
----
+Below, each module has four quick sections: what it does, what to configure, whether it can be cancelled mid-run, and a gotcha or two.
 
 ## `poster_renamerr`
 
-Renames posters in your source tree to match Plex/ARR item filenames and copies/moves/hardlinks them into a destination tree.
+**What it does.** Walks your Kometa (or other) asset folders, matches each image against your Radarr/Sonarr/Plex libraries, renames the files to match, and copies/moves/hardlinks them into your destination tree. Can optionally chain into `border_replacerr` and `poster_cleanarr` as a post-hook.
 
-**Does:** walks `source_dirs` (typically Kometa assets), matches each image against your Radarr/Sonarr/Plex libraries, and writes a normalized filename into `destination_dir`. Can run `border_replacerr` and `poster_cleanarr` as post-hooks.
+**Configure:** `source_dirs`, `destination_dir`, and at least one entry in `instances` (Radarr/Sonarr/Plex). Set `action_type` to `copy`, `move`, or `hardlink` depending on how you want files placed. `hardlink` only works when source and destination are on the same filesystem.
 
-**Required config:** `source_dirs`, `destination_dir`, at least one entry in `instances`.
+**Cancellable:** yes.
 
-**Cancellation:** ❌ not yet wired.
-
----
-
-## `poster_cleanarr`
-
-Removes stale / orphaned posters from Plex's internal metadata and optional photo-transcoder cache.
-
-**Does:** connects to Plex, compares `Metadata/` entries against your current library, deletes anything orphaned. Optional `empty_trash`, `clean_bundles`, `optimize_db` steps. Supports `mode: report` for a dry-run summary.
-
-**Required config:** `plex_path` (path to the Plex metadata directory on disk), at least one `plex` instance.
-
-**Cancellation:** ❌ not yet wired.
-
-**CHUB additions:** path-injection guard on `POST /api/posters/{poster_id}/set-active`; `set-active` endpoint moved above the `/{poster_id}` catch-all so explicit metadata routes resolve correctly.
-
----
+**Gotcha:** if nothing seems to be moving, check that `dry_run` is off, that `destination_dir` is writable by your `PUID`/`PGID`, and that `action_type: hardlink` isn't crossing filesystems.
 
 ## `border_replacerr`
 
-Re-applies a brand/holiday border to every poster in your tree.
+**What it does.** Re-applies a brand or holiday border to every poster in your tree. Strips any existing border and paints a new one of `border_width` pixels using a random color from `border_colors` — or a holiday palette if today falls within a holiday window.
 
-**Does:** reads `source_dirs`, for each image strips any existing border and paints a new border of `border_width` using a random color from `border_colors` (or a holiday palette if a matching `holidays` entry's schedule window is active today). Writes to `destination_dir`.
+**Configure:** `source_dirs`, `destination_dir`, `border_width`, `border_colors`, optional `holidays` entries. Each holiday's `schedule` takes `MM-DD:MM-DD` (year-agnostic), e.g. `"10-01:10-31"` for Halloween.
 
-**Holidays:** the `schedule` field takes `MM-DD:MM-DD` (year-agnostic). During the window, `holidays[N].colors` replaces the default palette.
+**Cancellable:** not yet. If you start a big run and need to stop it, you'll need to restart the container.
 
-**Cancellation:** ❌ not yet wired.
+**Gotcha:** if two holidays overlap, whichever is listed first wins.
 
----
+## `poster_cleanarr`
+
+**What it does.** Removes stale / orphaned poster metadata from Plex's internal folder — optionally empties the trash, cleans bundles, and optimizes the Plex database.
+
+**Configure:** `plex_path` (the Plex `Metadata/` directory as seen from inside the CHUB container), at least one `plex` instance, and a `mode`. The valid modes are `report` (dry run — lists orphaned images without touching them), `move` (relocates them into a `Poster Cleanarr Restore` folder so you can sanity-check before deleting), `remove` (deletes outright), `restore` (moves anything in the restore folder back), `clear` (deletes the restore folder), and `nothing` (skips image work but still runs `empty_trash` / `clean_bundles` / `optimize_db` if those are enabled). Start with `report`, move to `move`, then `remove` once you trust it.
+
+**Cancellable:** yes.
+
+**Gotcha:** `plex_path` must be a filesystem path (e.g. `/plex-config/Library/Application Support/Plex Media Server/Metadata`), not a URL.
 
 ## `labelarr`
 
-Syncs tags from Radarr/Sonarr → labels in Plex.
+**What it does.** Mirrors tags in Radarr/Sonarr into Plex labels. If you tag an item `favorite` in Sonarr, it shows up with the `favorite` label in the Plex library you've mapped.
 
-**Does:** for each mapping, reads items from the ARR instance with one of the configured tags, finds the matching Plex item, and calls `addLabel(label)` / `removeLabel(label)` so Plex labels mirror the ARR tag state.
+**Configure:** one or more `mappings`, each linking an ARR instance and a list of tag names to one or more Plex libraries.
 
-**Gotcha:** labelarr uses batched updates — it searches Plex once per item and applies every add/remove to the same object (sequential searches can return stale state).
+**Cancellable:** yes.
 
-**Cancellation:** ❌ not yet wired.
-
-**CHUB additions:** bulk sync endpoint `POST /api/labelarr/bulk-sync` accepts up to 1000 media IDs per request; **Label Sync** page in the UI wraps it.
-
----
+**Gotcha:** label updates are applied in batch — if you untag a large number of items in the ARR, expect the corresponding Plex labels to update on the next run, not instantly.
 
 ## `jduparr`
 
-Finds and reports duplicate files across your media tree using content hashing.
+**What it does.** Finds duplicate files across your media tree by content hash. Persists hashes to a database so repeat runs are incremental instead of re-hashing everything.
 
-**Does:** hashes files in `source_dirs` (SHA-based), persists hashes to `hash_database` for incremental runs, and reports duplicates via module logs + notifications.
+**Configure:** `source_dirs`, `hash_database` (a path you want CHUB to write the hash index to).
 
-**Required config:** `hash_database` (safe path — no null bytes, no leading `-`), `source_dirs`.
+**Cancellable:** yes.
 
-**Cancellation:** ✅ cooperatively cancellable.
-
-**CHUB additions:** cooperative cancellation wired; `hash_database` path validation (rejects null bytes and values starting with `-`) to prevent arg-smuggling.
-
----
+**Gotcha:** the first run on a large library takes hours. Subsequent runs are fast because only new/changed files are rehashed. `hash_database` can't contain null bytes or start with `-` (this is a safety check — see [Troubleshooting](Troubleshooting) if you hit it).
 
 ## `nohl`
 
-Finds media files on your library volumes that aren't hardlinked (i.e. not shared with the ARR's "completed downloads" source), then optionally triggers a re-search in the ARR to fix them.
+**What it does.** Finds media files that aren't hardlinked to your downloader's completed directory, which typically means a broken rename or a file that was re-imported without a hardlink. Optionally re-queues an upgrade search in the ARR to fix them.
 
-**Does:** for each path in `source_dirs`, walks the tree, skips files whose inode count > 1, and calls out to the configured ARR instance to re-queue. Honors `exclude_profiles`, `exclude_movies`, `exclude_series`.
+**Configure:** `source_dirs` (your library roots), at least one ARR instance. `exclude_profiles`, `exclude_movies`, `exclude_series` let you skip things you don't care about.
 
-**Cancellation:** ✅ cooperatively cancellable.
-
-**CHUB additions:** cooperative cancellation wired.
-
----
+**Cancellable:** yes.
 
 ## `unmatched_assets`
 
-Reports media items that have no matching poster asset in your renamed tree.
+**What it does.** Reports media items that don't have a matching poster in your renamed tree. Runs standalone or as a post-hook on `poster_renamerr` (set `report_unmatched_assets: true` on `poster_renamerr` to chain them).
 
-**Does:** walks `destination_dir` of `poster_renamerr`, cross-references against configured ARR instances, logs anything unmatched. Useful as a companion to `poster_renamerr` (set `report_unmatched_assets: true` on poster_renamerr to chain them).
-
-**Cancellation:** ✅ cooperatively cancellable.
-
-**CHUB additions:** cooperative cancellation wired.
-
----
+**Cancellable:** yes.
 
 ## `upgradinatorr`
 
-Picks N items per ARR instance that haven't been searched recently and triggers an upgrade search.
+**What it does.** Picks a fixed number of items per ARR instance that haven't been searched recently, and fires an upgrade search on them. Tags items after searching so it doesn't pick the same ones again right away.
 
-**Does:** for each entry in `instances_list`, selects `count` items matching `search_mode`:
+**Configure:** one entry per ARR instance in `instances_list`, each with a `count`, a `tag_name`, an `ignore_tag`, and a `search_mode` (`upgrade`, `missing`, or `cutoff`).
 
-- `upgrade` — items below cutoff
-- `missing` — unmonitored-but-wanted / missing-only
-- `cutoff` — items already at cutoff but eligible for a different release
+**Cancellable:** yes.
 
-Tags items with `tag_name` after searching so they aren't picked again immediately; ignores anything carrying `ignore_tag`. Full Lidarr support (album search + artist grouping).
-
-**Cancellation:** ✅ cooperatively cancellable.
-
-**CHUB additions:** cooperative cancellation wired; full Lidarr support (album search, artist grouping, wanted/missing/cutoff modes).
-
----
+**Gotcha:** Lidarr is fully supported — album search, artist grouping, all three search modes.
 
 ## `renameinatorr`
 
-Walks Radarr/Sonarr and applies the ARR's own naming scheme to existing files (useful after changing your naming profile without wanting to re-import).
+**What it does.** Walks Radarr/Sonarr and applies the ARR's own naming scheme to existing files — useful after you change your naming template and don't want to re-import everything.
 
-**Does:** for each instance, selects up to `count` items, calls the ARR's rename endpoint, optionally renames folders too. `enable_batching` batches API calls.
+**Configure:** one or more ARR instances, a `count` per run, optionally `rename_folders: true` and `enable_batching: true`.
 
-**Cancellation:** ❌ not yet wired.
-
----
+**Cancellable:** yes.
 
 ## `health_checkarr`
 
-Walks each ARR's built-in health / queue / missing lists and surfaces problems.
+**What it does.** Polls each ARR's built-in health / queue / missing lists and surfaces problems via notification. `report_only: true` turns it into a pure notifier (no remediation).
 
-**Does:** polls every instance in `instances`, aggregates health warnings, sends a notification on any changes. `report_only: true` suppresses remediation and just reports.
-
-**Cancellation:** ❌ not yet wired.
-
----
+**Cancellable:** yes.
 
 ## `nestarr`
 
-Moves Plex items between libraries based on ARR path mappings (useful for "4K" / "SD" split libraries).
+**What it does.** Moves items between split Plex libraries (e.g. a "Movies" and a "Movies 4K" library) based on ARR path mappings. Reads an item's path from the ARR, translates it into its Plex path, and tells Plex which library it belongs in.
 
-**Does:** for each mapping, reads items from the ARR instance, uses `path_mapping` to translate ARR paths → Plex paths, and moves items between `plex_instances.library_names` accordingly.
+**Configure:** `mappings`, each with a `path_mapping` (`arr_prefix` → `plex_prefix`) and a list of Plex libraries.
 
-**Cancellation:** ❌ not yet wired.
-
----
+**Cancellable:** yes.
 
 ## `sync_gdrive`
 
-Pulls poster assets from Google Drive folders into a local directory using `rclone` under the hood.
+**What it does.** Pulls poster assets from Google Drive folders into a local directory, using `rclone` under the hood. Supports OAuth tokens or a service-account JSON file.
 
-**Does:** for each entry in `gdrive_list`, syncs `<folder_id>` → `<location>` via rclone with OAuth or a service-account file. Validates paths (no null bytes, no leading `-`) to prevent arg-smuggling into rclone.
+**Configure:** either (`client_id` + `client_secret` + `token`) or (`gdrive_sa_location`), plus at least one entry in `gdrive_list` (folder ID → local path).
 
-**Required config:** either `client_id` + `client_secret` + `token`, or `gdrive_sa_location` (service account JSON), plus at least one `gdrive_list` entry.
+**Cancellable:** yes.
 
-**Cancellation:** ✅ cooperatively cancellable.
-
-**CHUB additions:** cooperative cancellation wired; path validation on `sync_location`, `gdrive_sa_location`, and folder IDs (rejects null bytes and values starting with `-`) to prevent arg-smuggling into rclone.
-
----
-
-## Writing a new module
-
-1. Create `backend/modules/my_module.py`:
-   ```python
-   from backend.util.base_module import ChubModule
-
-   class MyModule(ChubModule):
-       def run(self):
-           self.logger.info("starting")
-           for item in self.work():
-               if self.is_cancelled():
-                   self.logger.info("cancelled")
-                   return
-               self.process(item)
-   ```
-
-2. Add a Pydantic config model to `backend/util/config.py` and attach it to `ChubConfig`:
-   ```python
-   class MyModuleConfig(BaseModel):
-       log_level: str = "info"
-       dry_run: bool = False
-       # ...
-
-   class ChubConfig(BaseModel):
-       ...
-       my_module: MyModuleConfig = Field(default_factory=MyModuleConfig)
-   ```
-
-3. Register the class in `backend/modules/__init__.py`:
-   ```python
-   from backend.modules.my_module import MyModule
-   MODULES["my_module"] = MyModule
-   ```
-
-4. Rebuild the container. The scheduler, job processor, and UI pick up the new module automatically.
+**Gotcha:** `sync_location`, `gdrive_sa_location`, and folder IDs can't contain null bytes or start with `-` (a safety check to keep user input from being interpreted as rclone flags).

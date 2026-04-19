@@ -1,22 +1,25 @@
 # Configuration
 
-CHUB reads `${CONFIG_DIR}/config.yml` on startup (default `/config/config.yml` in the container). The schema is defined by Pydantic models in `backend/util/config.py` (`ChubConfig`).
+CHUB reads a single YAML file on startup: `config.yml`, kept in `${CONFIG_DIR}` (in Docker, that's `/config/config.yml` — i.e. the host folder you mounted as `/config`).
 
-You can edit `config.yml` directly, but the web UI (**Settings** pages) is the easier path — it writes back through `POST /api/config` with schema validation.
+You can edit `config.yml` by hand, but the **Settings** pages in the web UI are the easier path — every Settings page writes back through a validated API. If you do hand-edit the file:
 
----
+- Keep permissions at `0600` — it contains API keys.
+- CHUB revalidates the whole file on startup. If validation fails, CHUB won't start and the container log tells you which field is wrong.
 
-## Top-level layout
+## What the file looks like
+
+At the top level, `config.yml` has these sections:
 
 ```yaml
-schedule:          {}   # per-module cron or interval rules
-instances:         {}   # Radarr / Sonarr / Lidarr / Plex connections
-notifications:     {}   # per-module notification configs
-general:           {}   # global knobs
-user_interface:    {}   # theme preference
-auth:              {}   # username + bcrypt hash + JWT secret
+schedule:          {}   # when each module runs
+instances:         {}   # your Radarr / Sonarr / Lidarr / Plex connections
+notifications:     {}   # Discord / Email / Apprise per module
+general:           {}   # global toggles
+user_interface:    {}   # theme
+auth:              {}   # your admin user (managed by the UI)
 
-# Module sections (see Modules page for usage details)
+# One section per module
 sync_gdrive:       {}
 unmatched_assets:  {}
 poster_renamerr:   {}
@@ -31,45 +34,43 @@ nestarr:           {}
 poster_cleanarr:   {}
 ```
 
----
+Unused module sections can be omitted entirely — CHUB uses safe defaults for anything missing.
 
 ## `general`
+
+Global toggles, shown in **Settings → General**:
 
 ```yaml
 general:
   log_level: info              # debug | info | warning | error
-  update_notifications: false  # surface new-release banner in UI
-  max_logs: 9                  # rotate module log files at this count
-  webhook_initial_delay: 30    # sec — delay before processing inbound webhook
-  webhook_retry_delay: 60      # sec — between retry attempts
+  update_notifications: false  # show a banner when a new CHUB release is out
+  max_logs: 9                  # how many rotated log files to keep per module
+  webhook_initial_delay: 30    # seconds to wait after an inbound webhook before acting
+  webhook_retry_delay: 60      # seconds between retries
   webhook_max_retries: 3
-  webhook_secret: ""           # empty = webhooks unauthenticated; set to require HMAC
-  duplicate_exclude_groups: [] # group IDs the duplicates UI should ignore
+  webhook_secret: ""           # empty = webhooks unauthenticated; set to require a shared secret
+  duplicate_exclude_groups: [] # duplicate group IDs the UI should hide
 ```
 
-If `webhook_secret` is non-empty, every call to `/api/webhooks/*` must include `X-Webhook-Secret: <secret>` or `?secret=<secret>`. See [Webhooks](Webhooks).
-
----
+If `webhook_secret` is set, every inbound webhook must send `X-Webhook-Secret: <secret>` (or `?secret=<secret>` in the URL). See [Webhooks](Webhooks).
 
 ## `auth`
 
-Managed by the web UI — do not hand-edit unless you know what you're doing.
+Managed by the web UI. Don't edit unless you're trying to reset things.
 
 ```yaml
 auth:
   username: admin
-  password_hash: "$2b$12$..."   # bcrypt
-  jwt_secret: "<random>"        # rotated on first launch
+  password_hash: "$2b$12$..."
+  jwt_secret: "<random>"
   token_expiry_hours: 24
 ```
 
-To reset auth: stop CHUB, delete the `auth` section from `config.yml`, start it back up — you'll be prompted to create a new admin user.
-
----
+To reset the admin password, see [Installation → Resetting the admin password](Installation#resetting-the-admin-password).
 
 ## `instances`
 
-Keys under `radarr`, `sonarr`, `lidarr`, and `plex` are the instance names you'll reference elsewhere in `config.yml`.
+Your Radarr, Sonarr, Lidarr, and Plex connections. The key under each service is the name you'll reference elsewhere in `config.yml` (`radarr_main`, `sonarr_4k`, etc.).
 
 ```yaml
 instances:
@@ -96,35 +97,36 @@ instances:
       api: <x_plex_token>
 ```
 
-**SSRF guard**: outbound probes reject `169.254.169.254`, `metadata.google.internal`, reserved/link-local/multicast ranges, and non-`http(s)` schemes. Use routable IPs or hostnames.
+For Plex, the `api` field is the `X-Plex-Token`, not your Plex Pass login. Plex has a [short guide](https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/) for finding your token.
 
----
+**About URLs**: CHUB blocks outbound calls to reserved / cloud-metadata / link-local ranges (this is the SSRF guard — it prevents a misconfigured URL from probing sensitive internal endpoints). Use a routable IP or a hostname your container can resolve. `http://radarr:7878` works if CHUB and Radarr share a Docker network.
+
+**Testing**: in **Settings → Instances**, each instance has a **Test** button. Run it after adding or editing an entry.
 
 ## `schedule`
 
-Every module can run on a cron expression, a fixed interval, or on demand only.
+One entry per module that should run on a schedule. Anything not listed here is manual-only (triggered by you from the dashboard, or by a webhook).
 
 ```yaml
 schedule:
   poster_renamerr:
     type: cron
-    expression: "0 */4 * * *"   # every 4h
+    expression: "0 */4 * * *"   # every 4 hours
   jduparr:
     type: interval
-    minutes: 720                # every 12h
+    minutes: 720                # every 12 hours
   upgradinatorr:
     type: cron
     expression: "15 3 * * *"    # daily at 03:15
-  # Omit a module to leave it manual-only.
 ```
 
-Independently, CHUB runs a built-in 6-hour **system tick** that writes `system_health_snapshots`. You don't configure it.
+`type` is either `cron` (with `expression`) or `interval` (with `minutes`). The **Settings → Schedule** page has a form that writes this for you.
 
----
+CHUB also runs a built-in system-health probe every 6 hours. You don't configure it.
 
 ## `notifications`
 
-One entry per module that supports notifications. Each entry is a free-form dict consumed by `backend/util/notification.py` — shape depends on the channel. Example Discord config:
+One entry per module that should send notifications, plus an optional `main` entry for global notifications.
 
 ```yaml
 notifications:
@@ -152,59 +154,38 @@ notifications:
       password: <smtp_password>
 ```
 
----
+Discord, Email, and Apprise are supported. Apprise's URL format covers dozens of other services — see the [Apprise README](https://github.com/caronc/apprise#supported-notifications) for the catalog.
 
 ## `user_interface`
 
 ```yaml
 user_interface:
-  theme: dark    # light | dark — persists across sessions
+  theme: dark    # light | dark
 ```
 
-The **Settings → Interface** page writes this. Browser localStorage stores the active theme for the current device; `config.yml` is the server default.
-
----
+This is the server-wide default. Each browser also remembers its own choice, so toggling the theme in the header sticks on that device.
 
 ## Module sections
 
-Every module has its own section. Only common shapes are listed here — the full walkthrough is on [Modules](Modules).
+Every module has its own section. See [Modules](Modules) for what each one does and the full set of fields; a few common shapes:
 
 ### `poster_renamerr`
 
 ```yaml
 poster_renamerr:
-  log_level: info
   dry_run: false
-  sync_posters: false
   action_type: copy                     # copy | move | hardlink
-  asset_folders: false
-  print_only_renames: false
-  run_border_replacerr: false
-  incremental_border_replacerr: false
-  run_cleanarr: false
-  report_unmatched_assets: false
   source_dirs: [/kometa]
   destination_dir: /posters
+  run_border_replacerr: false
+  run_cleanarr: false
+  report_unmatched_assets: false
   instances:
     - radarr_main
     - sonarr_main
     - plex_main:
         library_names: ["Movies", "TV Shows"]
         add_posters: true
-```
-
-### `border_replacerr`
-
-```yaml
-border_replacerr:
-  source_dirs: [/posters]
-  destination_dir: /posters
-  border_width: 26
-  border_colors: ["#ff7300"]
-  holidays:
-    - name: halloween
-      schedule: "10-01:10-31"
-      colors: ["#FF6600", "#000000"]
 ```
 
 ### `upgradinatorr`
@@ -221,6 +202,20 @@ upgradinatorr:
       search_mode: upgrade       # upgrade | missing | cutoff
 ```
 
+### `border_replacerr`
+
+```yaml
+border_replacerr:
+  source_dirs: [/posters]
+  destination_dir: /posters
+  border_width: 26
+  border_colors: ["#ff7300"]
+  holidays:
+    - name: halloween
+      schedule: "10-01:10-31"
+      colors: ["#FF6600", "#000000"]
+```
+
 ### `labelarr`
 
 ```yaml
@@ -233,32 +228,22 @@ labelarr:
           library_names: ["TV Shows"]
 ```
 
-### Other modules
+## How secrets are handled
 
-See [Modules](Modules) for `nohl`, `jduparr`, `nestarr`, `unmatched_assets`, `renameinatorr`, `health_checkarr`, `poster_cleanarr`, `sync_gdrive`.
-
----
-
-## Secret handling
-
-Responses from `GET /api/config` **redact** these fields to `********` before returning JSON:
+When CHUB returns your config to the UI, it replaces these fields with `********` so they don't leak into browser storage or screenshots:
 
 - `api`, `api_key`
 - `access_token`, `refresh_token`, `token`, `client_secret`
 - `password_hash`, `jwt_secret`, `webhook_secret`
 
-When the UI saves config back, any field still equal to `********` is replaced with the current on-disk value. This means you can edit non-sensitive fields in the UI without re-entering API keys.
+When you save the config back through the UI, any field still equal to `********` is kept as-is — so editing non-sensitive fields in the UI won't wipe your API keys.
 
-If you hand-edit `config.yml`, keep the file at `0600` — it contains real secrets.
+## If CHUB won't start because of a bad config
 
----
-
-## Validating changes
-
-CHUB validates the whole file on startup; an invalid config refuses to load. You can also dry-run validation:
+The container log prints which field failed validation. Either fix the field or remove the bad section and restart — CHUB will fall back to defaults for anything missing.
 
 ```bash
-docker compose run --rm chub python3 -c "from backend.util.config import load_config_cli; load_config_cli()"
+docker compose logs chub
 ```
 
-The UI validates per-page before saving (`POST /api/config` returns 400 on schema failure, with the offending field path).
+See [Troubleshooting](Troubleshooting) for more.

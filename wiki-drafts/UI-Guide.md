@@ -1,24 +1,20 @@
 # UI Guide
 
-A guided tour of every CHUB page. Screenshots reference `images/<name>.png` placeholders — swap in real captures after Phase 7 lands.
-
----
+A page-by-page tour of CHUB's web interface. Open http://localhost:8000 and follow along.
 
 ## Dashboard
 
 ![Dashboard](images/dashboard-light.png)
 
-The landing page shows an at-a-glance summary:
+The landing page at `/dashboard`. It's designed to answer three questions at a glance: *is anything running right now, what ran recently, and what's due to run next?*
 
-- **Greeting row** — "Hello, {user}!" + live/polling indicator + **New run** CTA
-- **Quick Start cards** — 5 pastel-badged shortcuts: Run module, Browse media, Browse posters, Find duplicates, Inspect logs
-- **Recent jobs** — 4 cards with the latest successful runs from `GET /api/jobs?status=success&limit=4`
-- **Scheduler callout** — shows which module fires next and when
-- **Module status grid** — running / idle / error indicators per module, pulled from SSE (`/api/modules/events`) with polling fallback
+At the top you'll see a friendly greeting, a live status dot (green when CHUB is receiving live updates, amber if it's polling), and a **New run** button that opens a picker for any module.
 
-Any card clicking through to a module view carries its context (module, job_id) in the URL.
+Below that there's a row of five pastel quick-start cards — Run module, Browse media, Browse posters, Find duplicates, and Inspect logs. Each one deep-links into the relevant page.
 
----
+Under the cards, a **Recent jobs** strip shows the four most recent runs and whether they succeeded or failed. Click any card to open the full job log.
+
+A **Scheduler callout** tells you which module is due to fire next and when. Finally, a **Module status grid** gives you one tile per installed module showing its current state (idle, running, queued, error).
 
 ## Media
 
@@ -26,136 +22,105 @@ Any card clicking through to a module view carries its context (module, job_id) 
 
 ![Media search](images/media-search.png)
 
-- Unified search across every configured Radarr/Sonarr/Lidarr
-- Filters: type (movie / series / album), sort, order — persisted per-device in `localStorage['chub_media_search_filters']`
-- Recent search history dropdown surfaces from `localStorage['chub_recent_searches']`
-- Click any result to open the detail drawer
+One search box across every Radarr, Sonarr, and Lidarr you've configured. Filters on the right let you narrow by type (movie, series, album), sort, and order; your choice is remembered per browser. The recent-search dropdown under the box pulls from the last ten queries you ran on this device. Clicking any result opens its detail drawer.
 
-### `/media/manage` — Detail + editing
+### `/media/manage` — Details and editing
 
-Per-item view. Inline **Edit** button opens `EditMediaModal` with fields for title, year, status, rating, studio, language, edition, genre. Saving writes through `PUT /api/media/{id}` and creates a `media_edit_history` row per changed field.
+The full page for a single item. You can edit title, year, status, rating, studio, language, edition, and genre inline; every save records a row in the edit history so you can see what changed and when. A **Delete** button in the header opens a confirm dialog with an optional "also delete files from disk" checkbox.
 
-- **Delete** — confirmation modal with "Also delete files from disk" checkbox
-- **Duplicates** — if the item is part of a duplicate group, a resolution panel appears with a side-by-side radio picker (keep this copy → remove others, optionally delete files, optionally add import-list exclusion)
-- **History** — `GET /api/media/{id}/history` tab shows every edit
+If the item is part of a duplicate group, you'll see a resolution panel with a side-by-side picker — choose the copy to keep, optionally delete files from the others, and optionally add an import-list exclusion so CHUB doesn't re-download them.
 
-### `/media/stats` — Library statistics
+A **History** tab shows every edit made to this item.
 
-Time-windowed counters (`?period=7d|30d|90d|all`). Shows additions, edits, duplicates resolved, low-rating / incomplete-metadata counts.
+### `/media/statistics` — Library stats
+
+Time-windowed counters: additions, edits, duplicates resolved, low-rating and incomplete-metadata counts. Pick a period with `?period=7d|30d|90d|all` in the URL or the selector on the page.
 
 ### `/media/labelarr` — Labelarr management
 
-- Sync status per Plex library mapped in `labelarr.mappings`
-- Per-item tag → label state
-- Manual "Sync now" button queues a `labelarr` job
-
----
+Shows the current sync state between your ARR tags and your Plex labels for every mapping configured in `labelarr.mappings`. There's a **Sync now** button that queues a labelarr job immediately rather than waiting for the schedule.
 
 ## Posters
 
-### `/poster/search` (GDrive) and `/poster/assets` (local)
+### `/poster/search/gdrive` — GDrive search
 
-![Poster search](images/poster-search.png)
+Browse everything CHUB has indexed from your configured `sync_gdrive` sources. Filter across indexes by title, type, or path.
 
-- GDrive search: loads all configured `sync_gdrive` sources on mount, filters across their indexes
-- Local assets: browse what's already in `destination_dir`, filter by low-resolution / added-since / type
+### `/poster/search/assets` — Local asset search
+
+Browse what's already landed in your `destination_dir`. Filter by low-resolution, recently-added, or type.
 
 ### `/poster/manage` — Per-poster view
 
-- Preview at native size plus a thumbnail strip (`GET /api/posters/{id}/thumbnail`)
-- **Download** dropdown supports size / format / quality overrides (`POST /api/posters/{id}/download`)
-- **Optimize** button queues a `posters/optimize` run for just this poster
+Preview at native size plus a thumbnail strip. Use the **Download** dropdown to grab the poster at a custom size, format, or quality. The **Optimize** button queues a one-off rewrite for just this poster.
 
-### `/poster/stats`
+### `/poster/statistics`
 
-Total count, storage used, orphan count, duplicate count, low-resolution count. A "Backfill dimensions" action triggers `POST /api/posters/backfill-dimensions` incrementally.
-
----
+Total count, storage used, orphan count, duplicate count, and how many posters are below your resolution threshold. A **Backfill dimensions** button populates width/height for older posters so the low-resolution filter works on them.
 
 ## Settings
 
-The sidebar's Settings section has eight children.
+The Settings section of the sidebar has eight pages.
 
 ### `/settings/general`
 
-`general.*` fields from `config.yml` — log level, update notifications, max logs, webhook delay/retries/secret, duplicate exclude groups.
+The `general` block from `config.yml` — log level, update notifications, max log files, webhook delay and retries, webhook secret, and duplicate exclude groups. Saving writes the file back immediately.
 
 ### `/settings/interface`
 
-Theme toggle (light / dark). Saves to `user_interface.theme` as the server default; the active session also persists to `localStorage` so your preference travels with you.
+Theme picker (light / dark). This sets the server-wide default; your current browser also remembers its own choice, so switching the theme in the header sticks on that device.
 
 ### `/settings/modules`
 
-Sidebar nav for every registered module. Each page renders from the module's JSON schema (`GET /api/modules/{name}/schema`) and writes through `PUT /api/modules/{name}/config`.
+One page per module, with a sidebar nav. Each page is generated from the module's config schema, so every field is validated and documented. Per-module pages include:
 
-Per-module pages include:
-- A **Run now** button (queues a manual job)
-- A **Test** button where applicable (connectivity test)
-- Live run state indicator (SSE-driven)
+- A **Run now** button to queue a manual job
+- A **Test** button for modules that talk to external services (Plex / ARR / GDrive)
+- A live run-state indicator
 
 ### `/settings/schedule`
 
-Cron/interval scheduler UI. Each module row shows current rule + next-run time. Saving writes `config.yml.schedule` and updates the scheduler in-process (no restart required).
+Each scheduled module shows its current cron or interval rule plus the next-run time. Saving writes `config.yml.schedule` and updates the in-process scheduler — no restart required.
 
 ### `/settings/instances`
 
-Manage Radarr / Sonarr / Lidarr / Plex connections. Per-instance:
-- Test connectivity (`POST /api/instances/{type}/{name}/test`)
-- Inspect libraries / quality profiles / root folders / tags
-- Enable / disable without deleting
-
-Most-recent health probe per instance also shown — populated by the 6-hour system tick.
+Manage your Radarr, Sonarr, Lidarr, and Plex connections. Per-instance controls: **Test** connectivity, view status, enable or disable without deleting. For Plex instances, the libraries list is fetched live so you can confirm CHUB sees what you expect. The most-recent health-probe result is shown per instance.
 
 ### `/settings/notifications`
 
-Discord / Email / Apprise config per module. Supports template previews.
+Discord, Email, and Apprise configuration per module, plus an optional `main` entry for global notifications. A template preview shows what your Discord/Email will actually look like before you save.
 
 ### `/settings/jobs`
 
-Queue view. Filters: status, module, type. Per-row actions: retry, view log tail, open full log.
-
-Bulk action: **Purge completed jobs older than N days** → `DELETE /api/jobs/old?days=30`.
+Queue view with filters for status, module, and type. Per-row actions: retry, view log tail, open full log. A bulk action purges completed jobs older than N days.
 
 ### `/settings/webhooks`
 
-- Generated webhook URLs for Sonarr / Radarr / Tautulli with the shared secret appended (or a copy-button that adds the header)
-- "Recent origins" panel from `GET /api/jobs/webhook-origins?days=7`
-
----
+Generated webhook URLs for Sonarr / Radarr / Tautulli — if you set a webhook secret, the URLs have it pre-applied. A **Recent origins** panel shows which hosts and endpoints have fired webhooks in the last 7 days.
 
 ## Logs
 
 ### `/logs`
 
-Combined log viewer. Left rail lists modules; right panel tails the selected module's latest log. Controls:
+Combined log viewer. The left rail lists modules; the right panel tails the selected module's latest file. Controls include:
 
-- Level filter (debug / info / warn / error)
-- Search in buffer
+- Level filter (debug / info / warning / error)
+- Search within the current buffer
 - Auto-scroll toggle
-- Download full file
+- Download the full file
 
-Log output is scrubbed by `SmartRedactionFilter` server-side — JWTs, Bearer tokens, `X-Api-Key`, `X-Plex-Token`, OAuth/webhook secrets, Discord webhook URLs, AWS keys, and GitHub tokens are replaced before they hit disk.
+All output is scrubbed server-side: JWTs, Bearer tokens, API keys, Plex tokens, OAuth and webhook secrets, Discord webhook URLs, AWS keys, and GitHub tokens are replaced with placeholders before they hit disk.
 
----
+## Conventions
 
-## Keyboard / URL conventions
+**Deep links.** Every page is URL-addressable. Filters on media and poster search persist to your browser so they survive reloads and tab switches.
 
-- **Deep links** — every page is URL-addressable; state is serialised into query strings where useful (search terms, filters)
-- **Filter persistence** — type / sort / order filters on media & poster search persist to `localStorage`
-- **Theme** — toggle in the header; applies the `[data-theme]` attribute on `<html>`, driving all CSS variables
-- **Responsive** — at <768px the sidebar collapses to a drawer, the dashboard quick-start row wraps, and the media / poster grids reduce to 1–2 columns
+**Theme.** Toggle in the header; applies instantly, remembered per device.
 
----
+**Responsive.** Below 768px the sidebar collapses to a drawer and grids reduce to one or two columns.
 
-## Design tokens
+**Navigation shortcuts.** `/` redirects to `/dashboard`; `/media` redirects to `/media/search`; `/poster` redirects to `/poster/search/gdrive`. Unknown URLs bounce to the dashboard.
 
-CHUB's visual system is indigo-led, RoomSketch-inspired:
+## Theme notes
 
-- **Primary**: `#463fbc` (light) / `#8767f7` (dark)
-- **Surfaces**: floating rounded panel (`--radius-xl = 24px`) on a tinted background
-- **Sidebar**: flush-left, deep indigo-black, small-caps section dividers
-- **Dashboard accents**: 5 pastel badge palettes (rose / sky / lavender / peach / lime)
-- **Typography**: Manrope (display) + Inter (body)
-- **Shadows**: minimal — design leans on borders and surface contrast, not elevation
-
-Full palette spec lives in `frontend/src/css/theme/{light,dark,tokens}.css`.
+CHUB's visual system is indigo-led and RoomSketch-inspired. The light theme leads with `#463fbc`; the dark theme shifts to `#8767f7`. Display type is Manrope, body type is Inter. The sidebar uses a deep indigo-black with small-caps section dividers. Dashboard accents use five pastel badge palettes (rose, sky, lavender, peach, lime).

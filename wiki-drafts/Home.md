@@ -10,51 +10,42 @@
 
 # CHUB — Chodeus' Media Script Hub
 
-A self-hosted, all-in-one media asset manager for your Plex/ARR stack. CHUB bundles a React UI, a FastAPI backend, and a set of scheduled modules that keep movie/TV libraries tidy.
+CHUB is a self-hosted web app that keeps a Plex library tidy. Point it at your Radarr, Sonarr, Lidarr, and Plex, and it takes care of the boring chores: renaming posters, finding duplicates, re-applying borders, searching for quality upgrades, cleaning up orphaned files, and more.
 
----
+You run it in Docker, open it in a browser, configure it once, and then let it work on a schedule.
 
-## Quick links
+## Where to start
 
-- **[Installation](Installation)** — Docker Compose, CLI, bare-metal
-- **[Configuration](Configuration)** — `config.yml` walkthrough
-- **[Modules](Modules)** — what each module does
-- **[API](API)** — REST endpoint reference
-- **[UI Guide](UI-Guide)** — per-page tour
-- **[Webhooks](Webhooks)** — wiring Sonarr/Radarr/Tautulli
-- **[Troubleshooting](Troubleshooting)** — common issues
-- **[FAQ](FAQ)** — setup and capability Q&A
-- **[Credits](Credits)** — DAPS lineage + third-party thanks
+If you're installing for the first time, follow these three pages in order:
 
----
+1. **[Installation](Installation)** — get CHUB running in Docker (10 minutes).
+2. **[Configuration](Configuration)** — connect Radarr / Sonarr / Plex and pick the modules you want.
+3. **[Modules](Modules)** — read the one-line summary for each module and decide which ones to turn on.
 
-## Feature matrix
+If CHUB is already running, jump to:
 
-| Area | Capability | Status |
-|---|---|---|
-| Posters | Rename, optimize, border-replace, cleanup, GDrive sync | ✅ |
-| Posters | Low-resolution filter, thumbnail gen, on-the-fly resize/convert | ✅ |
-| Media | Inline metadata edit with audit trail (`media_edit_history`) | ✅ |
-| Media | Fuzzy duplicate detection + side-by-side resolution | ✅ |
-| Media | Import movies/series into Radarr/Sonarr (batch + pre-lookup) | ✅ |
-| Media | Time-windowed stats, low-rating, incomplete-metadata queries | ✅ |
-| Media | Smart collections from media-cache tags | ✅ |
-| Modules | 12 scheduled modules (see [Modules](Modules)) | ✅ |
-| Modules | Cooperative cancellation via `threading.Event` | partial |
-| Live | SSE channel at `/api/modules/events` (auto-reconnect) | ✅ |
-| Live | Per-job cancel endpoint | ✅ |
-| Live | Webhook ingest with optional HMAC shared secret | ✅ |
-| System | 6-hour system-health tick with 30-day retention | ✅ |
-| System | Activity digest + cleanup candidates endpoints | ✅ |
-| Security | bcrypt + JWT auth, token-bucket login rate limiter | ✅ |
-| Security | SSRF guard on outbound probes | ✅ |
-| Security | Log redaction for JWT / API keys / OAuth secrets | ✅ |
-| UI | Indigo-led light + dark themes, Manrope/Inter typography | ✅ |
-| UI | Lidarr dedicated pages | ❌ *(music covered in upgradinatorr only)* |
+- **[UI Guide](UI-Guide)** — what every page in the app does.
+- **[Webhooks](Webhooks)** — wire Sonarr/Radarr/Tautulli to trigger CHUB automatically.
+- **[Troubleshooting](Troubleshooting)** — fixes for the things that usually go wrong.
+- **[FAQ](FAQ)** — short answers to common questions.
+- **[API](API)** — REST endpoints if you want to automate from scripts.
+- **[Credits](Credits)** — DAPS lineage and third-party thanks.
 
-Cancellation-unwired modules (tracked in `CLAUDE.md`): `poster_renamerr`, `labelarr`, `nestarr`, `renameinatorr`, `health_checkarr`, `border_replacerr`, `poster_cleanarr`.
+## What CHUB does for you
 
----
+**Keeps posters tidy.** Renames them to match your ARR/Plex naming, batch-optimizes file size, re-applies brand or holiday borders, pulls new ones from Google Drive, and cleans up orphans.
+
+**Keeps media tidy.** Finds duplicates with fuzzy title matching, flags low-rated or incomplete items, lets you edit metadata inline with a full audit trail, and batch-imports into Radarr or Sonarr.
+
+**Runs chores on a schedule.** Twelve built-in modules (upgrade searches, rename sweeps, health checks, hardlink audits, Google Drive sync, etc.) run on cron or interval — or on demand from the dashboard.
+
+**Reacts to your ARR stack.** Webhooks from Sonarr/Radarr/Tautulli trigger poster rename and cleanup jobs the moment a new item lands, so you don't wait for the next scheduled run.
+
+## What CHUB is not
+
+- **Not a replacement for Kometa.** Kometa manages Plex metadata and collections; CHUB manages poster files and media chores. They complement each other.
+- **Not for public internet exposure.** CHUB has built-in login, rate limiting, and SSRF protection, but no WAF or DDoS protection. Keep it on a LAN or behind a VPN / reverse proxy.
+- **Not a DAPS upgrade.** CHUB is a fork of [DAPS](https://github.com/Drazzilb08/daps) with a refreshed UI and extra audit work. There's no data migration — it's a clean install. See [Credits](Credits).
 
 ## Screenshots
 
@@ -62,8 +53,6 @@ Cancellation-unwired modules (tracked in `CLAUDE.md`): `poster_renamerr`, `label
 | :---: | :---: | :---: |
 | ![Dashboard](images/dashboard-light.png) | ![Media](images/media-search.png) | ![Posters](images/poster-manage.png) |
 
----
+## Need help?
 
-## Origin
-
-CHUB is a fork of [DAPS](https://github.com/Drazzilb08/daps) by Drazzilb08, rebranded with a refreshed identity, indigo-led palette, and a dedicated audit pass that added SSE, cancellation, audit trails, and security hardening. Read [Credits](Credits) for the full acknowledgements.
+Open an issue at [chodeus/chub/issues](https://github.com/chodeus/chub/issues). Include the CHUB version (shown in Settings → Interface, or `GET /api/version`), your install method, and the relevant log excerpt.
