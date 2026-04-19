@@ -1,20 +1,20 @@
 # Installation
 
-CHUB ships as a prebuilt container image at `ghcr.io/chodeus/chub:latest`. Docker Compose is the recommended path; a single-run `docker run`, a bare-metal Python setup, and notes for Unraid follow.
+CHUB runs as a Docker container. The image is published at `ghcr.io/chodeus/chub:latest`.
 
----
+This page covers three install paths. **Docker Compose is the recommended one** — if you're unsure, pick that.
 
-## Prerequisites
+## What you need
 
-- Docker 24+ (or Python 3.8+ and Node 20+ for bare metal)
-- A writable config directory for `chub.db`, `config.yml`, and logs
-- Optional: paths to existing poster + media libraries
+- A Linux host with Docker 24 or newer (or Docker Desktop on macOS/Windows).
+- A folder on the host for CHUB's config, database, and logs (roughly 50–200 MB over time).
+- Optional: the folders that already hold your posters, media, and Kometa assets (CHUB will read or write them).
 
----
+Python 3.8+ and Node.js 20+ are only needed if you're doing a bare-metal install (see below).
 
-## Docker Compose (recommended)
+## Option 1 — Docker Compose (recommended)
 
-Drop this `compose.yaml` into `/opt/stacks/chub/`:
+Create a folder for the stack, for example `/opt/stacks/chub/`, and save this as `compose.yaml` inside it:
 
 ```yaml
 services:
@@ -22,44 +22,38 @@ services:
     image: ghcr.io/chodeus/chub:latest
     container_name: chub
     restart: unless-stopped
-
     ports:
       - "8000:8000"
-
     environment:
       PUID: "1000"
       PGID: "1000"
       TZ: "America/Los_Angeles"
-      DOCKER_ENV: "true"
-
     volumes:
       - /srv/apps/chub/config:/config
       - /srv/apps/chub/posters:/posters
       - /srv/media:/media
       - /srv/kometa/assets:/kometa:ro
-
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/api/health >/dev/null || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 5
       start_period: 45s
-
     security_opt:
       - no-new-privileges:true
     tmpfs:
       - /tmp
 ```
 
-Start and confirm it's up:
+Replace the four host paths on the left side of the volume mounts to match your setup. Set `PUID` / `PGID` to the user that owns those paths (on most Linux systems, `1000:1000`; on Unraid, `99:100`). Adjust `TZ` to your [timezone](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones).
+
+Start it:
 
 ```bash
 docker compose up -d
-docker compose logs -f chub
-curl http://localhost:8000/api/health
 ```
 
-Open [http://localhost:8000](http://localhost:8000) and complete first-run auth setup (creates an admin user in `chub.db`).
+Then open **http://localhost:8000** (or `http://<your-host>:8000` from another machine) and finish the first-run setup (see [First run](#first-run) below).
 
 ### Updating
 
@@ -68,9 +62,11 @@ docker compose pull
 docker compose up -d
 ```
 
----
+Upgrades don't require manual migrations — CHUB updates its database schema automatically on startup.
 
-## Docker CLI (single run)
+## Option 2 — Docker (single `docker run`)
+
+If you don't use Compose:
 
 ```bash
 docker run -d \
@@ -85,11 +81,28 @@ docker run -d \
   ghcr.io/chodeus/chub:latest
 ```
 
----
+## Option 3 — Unraid
 
-## Bare-metal Python
+No Community Applications template yet. Add CHUB through Unraid's **Docker → Add Container** screen:
 
-Useful for development or hosts without Docker.
+| Field | Value |
+| --- | --- |
+| Name | `chub` |
+| Repository | `ghcr.io/chodeus/chub:latest` |
+| Network Type | `bridge` |
+| Port | `8000:8000` |
+| Path `/config` | `/mnt/user/appdata/chub/` |
+| Path `/posters` | your poster tree |
+| Path `/media` | `/mnt/user/Media/` |
+| Path `/kometa` | your Kometa asset folder (read-only) |
+| Variable `PUID` | `99` |
+| Variable `PGID` | `100` |
+| Variable `UMASK` | `002` |
+| Variable `TZ` | your timezone |
+
+## Option 4 — Bare metal (development or Docker-free hosts)
+
+Only pick this if you need to modify the code or Docker isn't available.
 
 ```bash
 git clone https://github.com/chodeus/chub.git
@@ -99,61 +112,58 @@ cd chub
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-# Frontend build (served by FastAPI as static files)
+# Frontend (built into static files served by the backend)
 cd frontend
 npm install
 npm run build
 cd ..
 
 # Run
-export CONFIG_DIR=$(pwd)/config
+export CONFIG_DIR="$(pwd)/config"
 python3 main.py
 ```
 
-Visit [http://localhost:8000](http://localhost:8000).
+Open http://localhost:8000.
 
-### Dev mode (hot-reload frontend)
+For hot-reload development, run the frontend dev server in a second terminal:
 
 ```bash
-# Terminal 1 — backend
-source .venv/bin/activate && python3 main.py
-
-# Terminal 2 — frontend dev server (proxies /api to :8000)
 cd frontend && npm run dev
-# open http://localhost:5174
+# now open http://localhost:5174 — /api calls proxy to :8000
 ```
 
----
+## First run
 
-## Unraid
+When CHUB is up:
 
-No official template yet. You can run CHUB via the stock `ghcr.io/chodeus/chub:latest` image using the Community Applications **Docker** tab:
+1. Visit **http://localhost:8000**. You'll be prompted to create an admin user (minimum 8-character password).
+2. Go to **Settings → Instances** and add your Radarr / Sonarr / Lidarr / Plex connections. Click **Test** on each to confirm CHUB can reach them.
+3. Go to **Settings → General** to set the log level and — if you plan to expose webhook URLs beyond your LAN — a `webhook_secret`.
+4. Go to **Settings → Modules**, pick a module you want to use, and fill in its config. See [Modules](Modules) for what each one does.
+5. Go to **Settings → Schedule** and attach a cron or interval to modules you want to run automatically. Modules without a schedule stay manual-only.
+6. Optional: **Settings → Notifications** for Discord / Email / Apprise; **Settings → Webhooks** for inbound Sonarr/Radarr/Tautulli hooks.
+7. From the dashboard, click **New run** and trigger a module to confirm everything works before letting the scheduler take over.
 
-1. **Name**: `chub`
-2. **Repository**: `ghcr.io/chodeus/chub:latest`
-3. **Network Type**: `bridge`
-4. **Port**: `8000:8000` (host:container)
-5. **Paths**:
-   - `/config` → `/mnt/user/appdata/chub/`
-   - `/posters` → wherever your poster tree lives
-   - `/media` → `/mnt/user/Media/`
-   - `/kometa` → your Kometa asset dir (read-only)
-6. **Variables**: `PUID=99`, `PGID=100`, `UMASK=002`, `TZ=...`
+## Resetting the admin password
 
-A template XML will be published to `chodeus/chub` once the repo is live.
+There is no "forgot password" link in the UI. You have two ways to reset:
 
----
+**From the command line (Docker):**
 
-## First-run checklist
+```bash
+docker compose run --rm chub python3 main.py --reset-auth
+```
 
-Once CHUB is up:
+Then restart CHUB and set up a new admin user on the first-run page.
 
-1. Register an admin user on the login page.
-2. **Settings → Instances** — add your Radarr / Sonarr / Lidarr / Plex connections, test each.
-3. **Settings → General** — set log level, max logs, webhook retry behavior, optional `webhook_secret`.
-4. **Settings → Modules** — enable and configure the modules you want (see [Modules](Modules)).
-5. **Settings → Schedule** — attach cron/interval schedules to the modules you want to run unattended.
-6. **Settings → Notifications** — wire Discord / Email / Apprise if desired.
-7. Trigger a manual run from the Dashboard (**New run** → pick a module) to confirm everything works before letting the scheduler take over.
+**By editing config:** stop CHUB, open `config/config.yml`, delete the entire `auth:` block, and start CHUB again.
 
-See [Configuration](Configuration) for the `config.yml` schema.
+## Troubleshooting a failed install
+
+If CHUB won't start, the container logs usually say why:
+
+```bash
+docker compose logs chub
+```
+
+Common issues and fixes are in [Troubleshooting](Troubleshooting).
