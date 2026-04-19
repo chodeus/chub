@@ -1,0 +1,14 @@
+name: Release Please
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release:
+    uses: chodeus/chodeus-ops/.github/workflows/release-please.yml@main
