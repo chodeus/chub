@@ -724,7 +724,11 @@ export const SETTINGS_SCHEMA = [
                 label: 'Plex Path',
                 type: 'text',
                 required: true,
-                description: 'Path to your Plex Media Server configuration directory.',
+                description:
+                    "Path inside the CHUB container that points at your Plex Media Server's data dir " +
+                    "— the folder that directly contains 'Metadata/', 'Cache/', 'Plug-in Support/', etc. " +
+                    "Typical Docker setup: mount the host's 'Library/Application Support/Plex Media Server/' " +
+                    "to /plex and enter /plex here.",
             },
             {
                 key: 'local_db',
@@ -787,6 +791,9 @@ export const SETTINGS_SCHEMA = [
                 type: 'instances',
                 required: true,
                 instance_types: ['plex'],
+                // Backend: PosterCleanarrConfig.instances is List[str], so emit
+                // plain instance names and hide the library/add_posters UI.
+                valueFormat: 'string',
                 description: 'Plex instance to use for database download and maintenance tasks.',
             },
         ],

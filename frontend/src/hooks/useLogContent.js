@@ -1,11 +1,13 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { logsAPI } from '../utils/api/logs.js';
 
 /**
  * useLogContent - Fetch log file content
  *
  * Fetches log content when module and file are selected, and provides
- * a manual refresh function for polling.
+ * a manual refresh function for polling. In-flight fetches are cancelled
+ * on unmount or when the selected module/file changes, and overlapping
+ * refresh calls are skipped so slow fetches don't pile up.
  *
  * @param {string} selectedModule - Currently selected module
  * @param {string} selectedLogFile - Currently selected log file
@@ -13,12 +15,18 @@ import { logsAPI } from '../utils/api/logs.js';
  * @property {string} logText - Log file content
  * @property {boolean} loading - Loading state
  * @property {Error|null} error - Error state
- * @property {Function} refresh - Manual refresh function
+ * @property {Function} refresh - Manual refresh function (returns Promise)
+ * @property {{current: boolean}} inFlightRef - Ref that's true while a fetch is running
  */
 export function useLogContent(selectedModule, selectedLogFile) {
     const [logText, setLogText] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
+
+    // Tracks whether a fetch is currently in flight. The polling hook reads
+    // this to skip ticks that would overlap with an ongoing request.
+    const inFlightRef = useRef(false);
+    const abortRef = useRef(null);
 
     // Reset loading/error state at render time when the key changes. This is
     // the "adjusting state when a prop changes" pattern from the React docs —
@@ -39,38 +47,65 @@ export function useLogContent(selectedModule, selectedLogFile) {
 
     useEffect(() => {
         if (!selectedModule || !selectedLogFile) return;
-        let cancelled = false;
+
+        const controller = new AbortController();
+        abortRef.current = controller;
+        inFlightRef.current = true;
 
         logsAPI
-            .fetchLogContent(selectedModule, selectedLogFile)
+            .fetchLogContent(selectedModule, selectedLogFile, controller.signal)
             .then(content => {
-                if (!cancelled) setLogText(content);
+                if (!controller.signal.aborted) setLogText(content);
             })
             .catch(err => {
-                if (cancelled) return;
+                if (err?.name === 'AbortError') return;
                 console.error('Failed to load log content:', err);
                 setError(err);
                 setLogText('');
             })
             .finally(() => {
-                if (!cancelled) setLoading(false);
+                if (!controller.signal.aborted) setLoading(false);
+                if (abortRef.current === controller) {
+                    abortRef.current = null;
+                    inFlightRef.current = false;
+                }
             });
 
         return () => {
-            cancelled = true;
+            controller.abort();
+            if (abortRef.current === controller) {
+                abortRef.current = null;
+                inFlightRef.current = false;
+            }
         };
     }, [selectedModule, selectedLogFile]);
 
-    // Manual refresh function for polling
+    // Manual refresh function for polling. Skips if a fetch is already running
+    // so slow log reads don't stack up when the poll interval fires repeatedly.
     const refresh = useCallback(async () => {
         if (!selectedModule || !selectedLogFile) return;
+        if (inFlightRef.current) return;
+
+        const controller = new AbortController();
+        abortRef.current = controller;
+        inFlightRef.current = true;
 
         try {
-            const content = await logsAPI.fetchLogContent(selectedModule, selectedLogFile);
-            setLogText(content);
+            const content = await logsAPI.fetchLogContent(
+                selectedModule,
+                selectedLogFile,
+                controller.signal
+            );
+            if (!controller.signal.aborted) setLogText(content);
         } catch (err) {
+            if (err?.name === 'AbortError') return;
             // Silent failure during polling - don't show toast spam
             console.error('Failed to refresh log content:', err);
+        } finally {
+            if (abortRef.current === controller) {
+                abortRef.current = null;
+                inFlightRef.current = false;
+            }
         }
     }, [selectedModule, selectedLogFile]);
 
@@ -79,5 +114,6 @@ export function useLogContent(selectedModule, selectedLogFile) {
         loading,
         error,
         refresh,
+        inFlightRef,
     };
 }

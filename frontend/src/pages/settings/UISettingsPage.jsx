@@ -232,7 +232,7 @@ export const UISettingsPage = () => {
     }
 
     return (
-        <div className="p-4 md:p-6 max-w-4xl mx-auto">
+        <div className="p-4 md:p-6 max-w-xl mx-auto">
             {/* Header */}
             <PageHeader
                 title="Interface"
@@ -257,9 +257,14 @@ export const UISettingsPage = () => {
                     key={`module-${module.key}-${moduleIndex}`}
                     className="bg-surface border border-border-subtle rounded-lg p-4 md:p-6"
                 >
-                    <h2 className="text-lg md:text-xl font-semibold mb-4 text-primary">
-                        {module.label}
-                    </h2>
+                    {/* Suppress the module label when there's only one section —
+                        it duplicates the page header. Re-show it if/when the
+                        schema grows to multiple modules. */}
+                    {UI_SETTINGS_SCHEMA.length > 1 && (
+                        <h2 className="text-lg md:text-xl font-semibold mb-4 text-primary">
+                            {module.label}
+                        </h2>
+                    )}
 
                     {module.fields && module.fields.length > 0 ? (
                         <form

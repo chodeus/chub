@@ -123,9 +123,10 @@ const LoginPage = () => {
                     margin-bottom: 1.5rem;
                 }
                 .login-logo {
+                    display: block;
                     width: 64px;
                     height: 64px;
-                    margin-bottom: 0.75rem;
+                    margin: 0 auto 0.75rem;
                 }
                 .login-header h1 {
                     font-family: var(--font-display);

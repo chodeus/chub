@@ -53,9 +53,10 @@ export const logsAPI = {
      * Fetch log file content
      * @param {string} moduleName - Module name
      * @param {string} fileName - Log file name
+     * @param {AbortSignal} [signal] - Optional AbortSignal to cancel the request
      * @returns {Promise<string>} Log file content as text
      */
-    fetchLogContent: async (moduleName, fileName) => {
+    fetchLogContent: async (moduleName, fileName, signal) => {
         if (!moduleName || !fileName) return '';
 
         try {
@@ -70,10 +71,14 @@ export const logsAPI = {
             } catch {
                 /* localStorage unavailable */
             }
-            const res = await fetch(`/api/logs/${moduleName}/${fileName}`, { headers });
+            const res = await fetch(`/api/logs/${moduleName}/${fileName}`, {
+                headers,
+                signal,
+            });
             if (!res.ok) return '';
             return await res.text();
         } catch (error) {
+            if (error?.name === 'AbortError') throw error;
             console.error('Failed to fetch log content:', error);
             return '';
         }
