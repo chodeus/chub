@@ -1,7 +1,7 @@
 # -------------------------
 # Stage 1: Builder
 # -------------------------
-FROM python:3.11-slim@sha256:233de06753d30d120b1a3ce359d8d3be8bda78524cd8f520c99883bfe33964cf AS builder
+FROM python:3.13-slim AS builder
 
 # Install build dependencies (including Node.js and build tools)
 RUN set -eux; \
@@ -36,7 +36,7 @@ RUN cd frontend && npm install && npm run build
 # -------------------------
 # Stage 2: Final runtime image
 # -------------------------
-FROM python:3.11-slim@sha256:233de06753d30d120b1a3ce359d8d3be8bda78524cd8f520c99883bfe33964cf
+FROM python:3.13-slim
 
 WORKDIR /app
 
@@ -46,7 +46,7 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy only Python runtime and site-packages from builder
-COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
 # Copy rclone binary (installed to /usr/bin by rclone install script)
