@@ -1,15 +1,16 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["github>chodeus/chodeus-ops"],
+  "extends": [
+    "github>chodeus/chodeus-ops"
+  ],
   "packageRules": [
     {
-      "matchPackageNames": ["@vitejs/plugin-react"],
-      "enabled": false,
-      "description": "Pinned until vite is bumped to v8 — plugin-react 6+ requires vite 8 peer"
-    },
-    {
-      "matchDatasources": ["docker"],
-      "matchPackageNames": ["python"],
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "python"
+      ],
       "allowedVersions": "<3.14",
       "description": "Python 3.14 breaks ruamel.yaml.clib + other backend deps (ImportError ast.Str). Keep on 3.11-3.13 for now."
     }

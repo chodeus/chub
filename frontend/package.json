@@ -24,7 +24,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",
-    "@vitejs/plugin-react": "^4.7.0",
+    "@vitejs/plugin-react": "^6.0.1",
     "eslint": "^9.32.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-react": "^7.37.5",
@@ -34,7 +34,7 @@
     "stylelint": "^16.23.1",
     "stylelint-config-standard": "^39.0.1",
     "stylelint-selector-bem-pattern": "^4.0.1",
-    "vite": "^6.4.2"
+    "vite": "^8.0.0"
   },
   "engines": {
     "node": ">=18.0.0"
