@@ -11,14 +11,6 @@ const PosterGDriveSearchPage = () => {
     const [syncingFolders, setSyncingFolders] = useState(new Set());
     const initialLoadDone = useRef(false);
 
-    const { execute: syncAll, isLoading: isSyncingAll } = useApiMutation(
-        () => {
-            const allNames = sources.map(s => s.name);
-            return postersAPI.syncGDriveFolders(allNames);
-        },
-        { successMessage: 'All folders synced' }
-    );
-
     const searchFunction = useCallback(term => postersAPI.searchGoogleDrive({ query: term }), []);
 
     const { term, results, isSearching, hasResults, search } = useSearch(
@@ -35,6 +27,15 @@ const PosterGDriveSearchPage = () => {
     }, [search]);
 
     const sources = useMemo(() => results?.data?.sources || [], [results]);
+
+    // Declared after `sources` so the sync-all closure references a bound value.
+    const { execute: syncAll, isLoading: isSyncingAll } = useApiMutation(
+        () => {
+            const allNames = sources.map(s => s.name);
+            return postersAPI.syncGDriveFolders(allNames);
+        },
+        { successMessage: 'All folders synced' }
+    );
 
     const handleSyncFolder = async folderName => {
         setSyncingFolders(prev => new Set([...prev, folderName]));

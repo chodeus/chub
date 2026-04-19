@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useApiData, useApiMutation } from '../../hooks/useApiData.js';
 import { useModuleEvents } from '../../hooks/useModuleEvents.js';
 import { useToast } from '../../contexts/ToastContext.jsx';
@@ -140,10 +140,18 @@ export const JobsPage = () => {
 
     const jobs = useMemo(() => jobsData?.data?.jobs || [], [jobsData]);
 
+    // Tick every second so running-job durations update live. Keeps Date.now()
+    // out of render (react-hooks/impure-function-during-render).
+    const [now, setNow] = useState(() => Date.now());
+    useEffect(() => {
+        const id = setInterval(() => setNow(Date.now()), 1000);
+        return () => clearInterval(id);
+    }, []);
+
     const formatDuration = (start, end) => {
         if (!start) return '-';
         const startMs = new Date(start).getTime();
-        const endMs = end ? new Date(end).getTime() : Date.now();
+        const endMs = end ? new Date(end).getTime() : now;
         const seconds = Math.round((endMs - startMs) / 1000);
         if (seconds < 60) return `${seconds}s`;
         const minutes = Math.floor(seconds / 60);

@@ -99,28 +99,22 @@ const applyTheme = theme => {
  * Theme Provider component
  */
 export const ThemeProvider = ({ children, defaultTheme = THEMES.SYSTEM }) => {
-    const [themePreference, setThemePreference] = useState(defaultTheme);
-    const [systemTheme, setSystemTheme] = useState(THEMES.DARK);
-    const [actualTheme, setActualTheme] = useState(THEMES.DARK);
+    // Lazy initialization reads localStorage / prefers-color-scheme once at mount.
+    // Avoids a setState-in-effect on first render.
+    const [themePreference, setThemePreference] = useState(() => getStoredTheme() || defaultTheme);
+    const [systemTheme, setSystemTheme] = useState(() => getSystemTheme());
+    const [actualTheme, setActualTheme] = useState(() => {
+        const stored = getStoredTheme() || defaultTheme;
+        return stored === THEMES.SYSTEM ? getSystemTheme() : stored;
+    });
 
     /**
-     * Initialize theme on mount
+     * Apply the resolved theme to the document after mount. This is a pure
+     * side-effect onto an external system (the DOM) — no setState.
      */
     useEffect(() => {
-        // Get system theme
-        const currentSystemTheme = getSystemTheme();
-        setSystemTheme(currentSystemTheme);
-
-        // Get stored preference
-        const storedTheme = getStoredTheme();
-        setThemePreference(storedTheme);
-
-        // Determine actual theme to apply
-        const themeToApply = storedTheme === THEMES.SYSTEM ? currentSystemTheme : storedTheme;
-
-        setActualTheme(themeToApply);
-        applyTheme(themeToApply);
-    }, []);
+        applyTheme(actualTheme);
+    }, [actualTheme]);
 
     /**
      * Listen for system theme changes
@@ -134,10 +128,10 @@ export const ThemeProvider = ({ children, defaultTheme = THEMES.SYSTEM }) => {
             const newSystemTheme = e.matches ? THEMES.DARK : THEMES.LIGHT;
             setSystemTheme(newSystemTheme);
 
-            // If user prefers system theme, update actual theme
+            // If user prefers system theme, update actual theme.
+            // applyTheme runs automatically via the actualTheme effect.
             if (themePreference === THEMES.SYSTEM) {
                 setActualTheme(newSystemTheme);
-                applyTheme(newSystemTheme);
             }
         };
 
@@ -167,10 +161,10 @@ export const ThemeProvider = ({ children, defaultTheme = THEMES.SYSTEM }) => {
             setThemePreference(theme);
             storeTheme(theme);
 
-            // Determine actual theme to apply
+            // Determine actual theme to apply. applyTheme runs via the
+            // actualTheme effect — no manual call needed here.
             const themeToApply = theme === THEMES.SYSTEM ? systemTheme : theme;
             setActualTheme(themeToApply);
-            applyTheme(themeToApply);
         },
         [systemTheme]
     );

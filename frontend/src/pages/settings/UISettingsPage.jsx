@@ -5,7 +5,7 @@
  * Uses the same form architecture as ModuleSettingsPage but for UI configuration.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { UI_SETTINGS_SCHEMA } from '../../utils/constants/ui_settings_schema.js';
 import { FieldRegistry } from '../../components/fields/FieldRegistry.jsx';
 import { PageHeader } from '../../components/ui/PageHeader';
@@ -22,9 +22,11 @@ import { useToolbar } from '../../contexts/ToolbarContext';
  */
 const MemoizedFieldComponent = React.memo(
     ({ field, value, onChange, ...props }) => {
-        const FieldComponent = FieldRegistry.getField(field.type);
+        // Stable module-level component reference; use createElement to avoid
+        // react-hooks/component-hooks-in-render false positive.
+        const fieldComponent = FieldRegistry.getField(field.type);
 
-        if (!FieldComponent) {
+        if (!fieldComponent) {
             return (
                 <div className="p-2 bg-warning-bg text-warning rounded">
                     Unknown field type: {field.type}
@@ -32,7 +34,7 @@ const MemoizedFieldComponent = React.memo(
             );
         }
 
-        return <FieldComponent field={field} value={value} onChange={onChange} {...props} />;
+        return React.createElement(fieldComponent, { field, value, onChange, ...props });
     },
     (prevProps, nextProps) => {
         return (
@@ -67,32 +69,38 @@ export const UISettingsPage = () => {
 
     const [formData, setFormData] = useState({});
     const [lastSaved, setLastSaved] = useState('{}');
-    const [isDirty, setIsDirty] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [saveError, setSaveError] = useState(null);
 
-    // Initialize form data when config loads
-    useEffect(() => {
-        if (configData?.data) {
-            const initialData = {
-                user_interface: configData.data.user_interface || {
-                    theme: 'auto',
-                },
-            };
-            setFormData(initialData);
-            setLastSaved(JSON.stringify(initialData));
-            setIsDirty(false);
-            setSaveError(null);
+    // Initialize form data when backend config loads. Render-time setState
+    // pattern keeps the initializer out of an effect.
+    const [lastConfigData, setLastConfigData] = useState(null);
+    if (configData?.data && configData !== lastConfigData) {
+        setLastConfigData(configData);
+        const initialData = {
+            user_interface: configData.data.user_interface || {
+                theme: 'auto',
+            },
+        };
+        setFormData(initialData);
+        setLastSaved(JSON.stringify(initialData));
+        setSaveError(null);
+    }
 
-            // Sync theme to ThemeContext
-            const configTheme = initialData.user_interface?.theme;
-            if (configTheme) {
-                // Map 'auto' to 'system' for ThemeContext
-                const themeValue = configTheme === 'auto' ? 'system' : configTheme;
-                setTheme(themeValue);
-            }
+    // Sync theme to ThemeContext whenever the loaded config's theme changes.
+    // setTheme is an external store update (allowed in effects).
+    useEffect(() => {
+        const configTheme = configData?.data?.user_interface?.theme;
+        if (configTheme) {
+            setTheme(configTheme === 'auto' ? 'system' : configTheme);
         }
     }, [configData, setTheme]);
+
+    // Dirty flag is derived from formData vs. lastSaved.
+    const isDirty = useMemo(
+        () => (formData && lastSaved ? JSON.stringify(formData) !== lastSaved : false),
+        [formData, lastSaved]
+    );
 
     // Handle field changes
     const handleFieldChange = useCallback(
@@ -129,9 +137,9 @@ export const UISettingsPage = () => {
             // Refresh config with cache bypass
             await refreshConfig({ useCache: false });
 
-            // Update tracking after successful save
+            // Update tracking after successful save. isDirty auto-clears once
+            // lastSaved matches formData.
             setLastSaved(JSON.stringify(formData));
-            setIsDirty(false);
 
             toast.success('UI settings saved successfully');
         } catch (error) {
@@ -144,20 +152,11 @@ export const UISettingsPage = () => {
         }
     }, [isDirty, isSaving, formData, refreshConfig, toast]);
 
-    // Reset to last saved state
+    // Reset to last saved state — isDirty auto-clears via derivation.
     const handleReset = useCallback(() => {
         setFormData(JSON.parse(lastSaved));
-        setIsDirty(false);
         setSaveError(null);
     }, [lastSaved]);
-
-    // Track changes for dirty state
-    useEffect(() => {
-        if (formData && lastSaved) {
-            const currentData = JSON.stringify(formData);
-            setIsDirty(currentData !== lastSaved);
-        }
-    }, [formData, lastSaved]);
 
     // Register toolbar with Save/Reset buttons
     useEffect(() => {

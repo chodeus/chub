@@ -17,7 +17,9 @@ import { modulesAPI } from '../utils/api/modules.js';
 export const useModuleExecution = () => {
     const [runningModules, setRunningModules] = useState(new Set());
     const [runStates, setRunStates] = useState({});
-    const [polling, setPolling] = useState(false);
+
+    // `polling` is derived: we poll iff at least one module is running.
+    const polling = runningModules.size > 0;
 
     const toast = useToast();
     const pollingIntervalRef = useRef(null);
@@ -46,65 +48,74 @@ export const useModuleExecution = () => {
     }, []);
 
     /**
-     * Load run states from API with error backoff
+     * Load run states from API with error backoff.
+     * Uses explicit promise chains (not async/await) so all setState calls live
+     * inside .then/.catch callbacks — satisfies react-hooks/set-state-in-effect
+     * when this is invoked from an effect body.
      */
-    const loadRunStates = useCallback(async () => {
-        try {
-            const data = await modulesAPI.fetchRunStates({ useCache: false });
+    const loadRunStates = useCallback(
+        () =>
+            modulesAPI
+                .fetchRunStates({ useCache: false })
+                .then(data => {
+                    if (!isMountedRef.current) return;
+                    const newStates = data?.data || {};
+                    setRunStates(newStates);
 
-            if (isMountedRef.current) {
-                const newStates = data?.data || {};
-                setRunStates(newStates);
-
-                // Detect modules that finished running
-                const currentRunning = runningModulesRef.current;
-                if (currentRunning.size > 0) {
-                    const finished = [];
-                    for (const modKey of currentRunning) {
-                        const modState = newStates[modKey];
-                        if (!modState || modState.status !== 'running') {
-                            finished.push(modKey);
-                            if (modState?.status === 'success') {
-                                toast.success(`${modKey} completed successfully`);
-                            } else if (modState?.status === 'error') {
-                                toast.error(`${modKey} failed`);
+                    // Detect modules that finished running
+                    const currentRunning = runningModulesRef.current;
+                    if (currentRunning.size > 0) {
+                        const finished = [];
+                        for (const modKey of currentRunning) {
+                            const modState = newStates[modKey];
+                            if (!modState || modState.status !== 'running') {
+                                finished.push(modKey);
+                                if (modState?.status === 'success') {
+                                    toast.success(`${modKey} completed successfully`);
+                                } else if (modState?.status === 'error') {
+                                    toast.error(`${modKey} failed`);
+                                }
                             }
                         }
+                        if (finished.length > 0) {
+                            setRunningModules(prev => {
+                                const newSet = new Set(prev);
+                                finished.forEach(k => newSet.delete(k));
+                                return newSet;
+                            });
+                        }
                     }
-                    if (finished.length > 0) {
-                        setRunningModules(prev => {
-                            const newSet = new Set(prev);
-                            finished.forEach(k => newSet.delete(k));
-                            return newSet;
-                        });
+
+                    // Reset backoff on success
+                    if (consecutiveErrorsRef.current > 0) {
+                        consecutiveErrorsRef.current = 0;
+                        restartPollingWithInterval(BASE_INTERVAL);
                     }
-                }
+                })
+                .catch(error => {
+                    if (isMountedRef.current) {
+                        consecutiveErrorsRef.current += 1;
+                        // Exponential backoff: 2s, 4s, 8s, 16s, 30s max
+                        const newInterval = Math.min(
+                            BASE_INTERVAL * Math.pow(2, consecutiveErrorsRef.current),
+                            MAX_INTERVAL
+                        );
+                        if (newInterval !== currentIntervalRef.current) {
+                            restartPollingWithInterval(newInterval);
+                        }
+                    }
+                    console.error('Failed to load run states:', error);
+                }),
+        [restartPollingWithInterval, toast]
+    );
 
-                // Reset backoff on success
-                if (consecutiveErrorsRef.current > 0) {
-                    consecutiveErrorsRef.current = 0;
-                    restartPollingWithInterval(BASE_INTERVAL);
-                }
-            }
-        } catch (error) {
-            if (isMountedRef.current) {
-                consecutiveErrorsRef.current += 1;
-                // Exponential backoff: 2s, 4s, 8s, 16s, 30s max
-                const newInterval = Math.min(
-                    BASE_INTERVAL * Math.pow(2, consecutiveErrorsRef.current),
-                    MAX_INTERVAL
-                );
-                if (newInterval !== currentIntervalRef.current) {
-                    restartPollingWithInterval(newInterval);
-                }
-            }
-            console.error('Failed to load run states:', error);
-        }
-    }, [restartPollingWithInterval, toast]);
-
-    // Keep refs in sync for interval callbacks
-    loadRunStatesRef.current = loadRunStates;
-    runningModulesRef.current = runningModules;
+    // Keep refs in sync for interval callbacks (in effects to avoid writes during render)
+    useEffect(() => {
+        loadRunStatesRef.current = loadRunStates;
+    }, [loadRunStates]);
+    useEffect(() => {
+        runningModulesRef.current = runningModules;
+    }, [runningModules]);
 
     /**
      * Start polling for status updates
@@ -112,7 +123,6 @@ export const useModuleExecution = () => {
     const startPolling = useCallback(() => {
         if (pollingIntervalRef.current) return;
 
-        setPolling(true);
         consecutiveErrorsRef.current = 0;
         currentIntervalRef.current = BASE_INTERVAL;
         pollingIntervalRef.current = setInterval(() => {
@@ -130,7 +140,6 @@ export const useModuleExecution = () => {
             clearInterval(pollingIntervalRef.current);
             pollingIntervalRef.current = null;
         }
-        setPolling(false);
         consecutiveErrorsRef.current = 0;
         currentIntervalRef.current = BASE_INTERVAL;
     }, []);

@@ -104,19 +104,14 @@ export const SearchCoordinatorProvider = ({
     const debounceTimeouts = useRef({});
     const searchCallbacks = useRef({});
     const searchStatesRef = useRef(searchStates);
-    searchStatesRef.current = searchStates;
 
-    /**
-     * Initialize search history
-     */
+    // Mirror latest searchStates into a ref for stable access inside async callbacks.
     useEffect(() => {
-        if (persistHistory && searchHistory.length === 0) {
-            const history = loadSearchHistory();
-            if (history.length > 0) {
-                setSearchHistory(history);
-            }
-        }
-    }, [persistHistory, searchHistory.length]);
+        searchStatesRef.current = searchStates;
+    }, [searchStates]);
+
+    // Note: searchHistory is already lazily initialized from localStorage via useState
+    // initializer, so no separate init effect is needed.
 
     /**
      * Save search history when it changes
