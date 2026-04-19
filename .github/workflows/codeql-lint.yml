@@ -241,7 +241,7 @@ jobs:
   notify-failure:
     needs: [codeql-python, codeql-javascript, backend-lint, backend-smoke, frontend-lint, docker-push]
     if: failure() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-    uses: chodeus/chodeus-ops/.github/workflows/notify-discord.yml@f52074df42a4c2b88ff3b26d5ce94af69d2d3aa7 # main
+    uses: chodeus/chodeus-ops/.github/workflows/notify-discord.yml@3f45de2e4563b8d1ec8e385d9b0cdc5508657ce8 # main
     with:
       event_type: build
       status: failure
