@@ -123,44 +123,54 @@ const BundleCard = ({ bundle, selectedPaths, onToggleSelect, onToggleBundle, onP
     );
 };
 
+// Module-level so reference is stable across renders (fixes exhaustive-deps warning).
+const TERMINAL_STATUSES = ['success', 'error', 'cancelled'];
+
 /** Modal shown while a cleanup job runs — polls log-tail every 1.5s. */
 const LiveLogModal = ({ jobId, onClose }) => {
     const [text, setText] = useState('');
     const [status, setStatus] = useState('running');
     const offsetRef = useRef(0);
     const preRef = useRef(null);
-    const terminalStatuses = ['success', 'error', 'cancelled'];
+
+    // Reset text/status when jobId changes (render-time, not in an effect).
+    const [prevJobId, setPrevJobId] = useState(jobId);
+    if (prevJobId !== jobId) {
+        setPrevJobId(jobId);
+        setText('');
+        setStatus('running');
+    }
 
     useEffect(() => {
         if (!jobId) return undefined;
         let cancelled = false;
         let timer = null;
+        // Reset log offset at the start of each new poll lifecycle.
         offsetRef.current = 0;
-        setText('');
-        setStatus('running');
 
-        const poll = async () => {
-            try {
-                const res = await postersAPI.tailJobLog(jobId, offsetRef.current);
-                if (cancelled) return;
-                const data = res?.data || {};
-                if (data.lines) {
-                    setText(prev => prev + data.lines);
-                    offsetRef.current = data.next_offset ?? offsetRef.current;
-                    // Auto-scroll to bottom
-                    setTimeout(() => {
-                        if (preRef.current) {
-                            preRef.current.scrollTop = preRef.current.scrollHeight;
-                        }
-                    }, 0);
-                }
-                if (data.status) setStatus(data.status);
-                if (terminalStatuses.includes(data.status)) return; // stop polling
-                timer = setTimeout(poll, 1500);
-            } catch {
-                if (!cancelled) timer = setTimeout(poll, 3000);
-            }
-        };
+        const poll = () =>
+            postersAPI
+                .tailJobLog(jobId, offsetRef.current)
+                .then(res => {
+                    if (cancelled) return;
+                    const data = res?.data || {};
+                    if (data.lines) {
+                        setText(prev => prev + data.lines);
+                        offsetRef.current = data.next_offset ?? offsetRef.current;
+                        // Auto-scroll to bottom
+                        setTimeout(() => {
+                            if (preRef.current) {
+                                preRef.current.scrollTop = preRef.current.scrollHeight;
+                            }
+                        }, 0);
+                    }
+                    if (data.status) setStatus(data.status);
+                    if (TERMINAL_STATUSES.includes(data.status)) return; // stop polling
+                    timer = setTimeout(poll, 1500);
+                })
+                .catch(() => {
+                    if (!cancelled) timer = setTimeout(poll, 3000);
+                });
         poll();
         return () => {
             cancelled = true;
@@ -168,7 +178,7 @@ const LiveLogModal = ({ jobId, onClose }) => {
         };
     }, [jobId]);
 
-    const terminal = terminalStatuses.includes(status);
+    const terminal = TERMINAL_STATUSES.includes(status);
 
     return (
         <Modal isOpen={!!jobId} onClose={onClose} size="large">

@@ -18,10 +18,15 @@ const TOKEN_STORAGE_KEY = 'chub-auth-token';
  */
 export function useModuleEvents({ onStatusChange, enabled = true } = {}) {
     const [states, setStates] = useState({});
-    const [isConnected, setIsConnected] = useState(false);
+    // Internal "socket is live" flag. Exposed `isConnected` is derived
+    // (false whenever disabled) so we never need to setState-in-effect on disable.
+    const [hasOpenSocket, setHasOpenSocket] = useState(false);
+    const isConnected = enabled && hasOpenSocket;
+
     const eventSourceRef = useRef(null);
     const reconnectTimeoutRef = useRef(null);
     const onStatusChangeRef = useRef(onStatusChange);
+    const connectRef = useRef(null);
 
     // Keep callback ref current without re-triggering effect
     useEffect(() => {
@@ -48,7 +53,7 @@ export function useModuleEvents({ onStatusChange, enabled = true } = {}) {
         eventSourceRef.current = es;
 
         es.onopen = () => {
-            setIsConnected(true);
+            setHasOpenSocket(true);
             // Clear any pending reconnect
             if (reconnectTimeoutRef.current) {
                 clearTimeout(reconnectTimeoutRef.current);
@@ -74,16 +79,22 @@ export function useModuleEvents({ onStatusChange, enabled = true } = {}) {
         };
 
         es.onerror = () => {
-            setIsConnected(false);
+            setHasOpenSocket(false);
             es.close();
             eventSourceRef.current = null;
 
-            // Reconnect after 5 seconds
+            // Reconnect after 5 seconds via ref — avoids use-before-define.
             reconnectTimeoutRef.current = setTimeout(() => {
-                if (enabled) connect();
+                if (enabled && connectRef.current) connectRef.current();
             }, 5000);
         };
     }, [enabled]);
+
+    // Mirror connect into a ref so the reconnect timer can call it without
+    // forward-referencing the binding.
+    useEffect(() => {
+        connectRef.current = connect;
+    }, [connect]);
 
     useEffect(() => {
         if (!enabled) {
@@ -91,7 +102,7 @@ export function useModuleEvents({ onStatusChange, enabled = true } = {}) {
                 eventSourceRef.current.close();
                 eventSourceRef.current = null;
             }
-            setIsConnected(false);
+            // isConnected is already false via derivation; no setState needed.
             return;
         }
 
@@ -105,7 +116,6 @@ export function useModuleEvents({ onStatusChange, enabled = true } = {}) {
             if (reconnectTimeoutRef.current) {
                 clearTimeout(reconnectTimeoutRef.current);
             }
-            setIsConnected(false);
         };
     }, [enabled, connect]);
 

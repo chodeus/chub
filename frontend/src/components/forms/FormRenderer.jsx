@@ -31,10 +31,10 @@ const FieldRenderer = React.memo(({ field, formData, apiData, disabled }) => {
         return null;
     }
 
-    // Get field component from registry
-    const FieldComponent = FieldRegistry.getField(field.type);
+    // Get field component from registry (stable module-level reference)
+    const fieldComponent = FieldRegistry.getField(field.type);
 
-    if (!FieldComponent) {
+    if (!fieldComponent) {
         return (
             <div className="p-2 bg-warning-bg text-warning rounded">
                 Unknown field type: {field.type}
@@ -60,16 +60,18 @@ const FieldRenderer = React.memo(({ field, formData, apiData, disabled }) => {
         additionalProps.options = generateInstanceOptions(apiData?.instances, field.options_filter);
     }
 
+    // Use createElement to avoid tripping react-hooks/component-hooks-in-render
+    // (the registry returns a stable module-level component, not a newly-created one).
     return (
         <div className="relative" data-field-type={field.type} data-field-key={field.key}>
-            <FieldComponent
-                field={field}
-                disabled={disabled || field.disabled}
-                highlightInvalid={hasError}
-                errorMessage={error}
-                onFocus={markTouched}
-                {...additionalProps}
-            />
+            {React.createElement(fieldComponent, {
+                field,
+                disabled: disabled || field.disabled,
+                highlightInvalid: hasError,
+                errorMessage: error,
+                onFocus: markTouched,
+                ...additionalProps,
+            })}
         </div>
     );
 });

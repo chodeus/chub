@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Modal } from './Modal';
 import { Button } from '../ui/index.js';
 
@@ -15,23 +15,26 @@ import { Button } from '../ui/index.js';
  * @param {Function} props.onSave - Called with (id, metadata) on save
  * @param {boolean} props.isSaving - Whether save is in progress
  */
-const EditMediaModal = ({ isOpen, onClose, item, onSave, isSaving = false }) => {
-    const [formData, setFormData] = useState({});
+const buildFormDataFromItem = item => ({
+    title: item?.title || '',
+    year: item?.year || '',
+    status: item?.status || '',
+    rating: item?.rating || '',
+    studio: item?.studio || '',
+    language: item?.language || '',
+    edition: item?.edition || '',
+    genre: item?.genre || '',
+});
 
-    useEffect(() => {
-        if (item) {
-            setFormData({
-                title: item.title || '',
-                year: item.year || '',
-                status: item.status || '',
-                rating: item.rating || '',
-                studio: item.studio || '',
-                language: item.language || '',
-                edition: item.edition || '',
-                genre: item.genre || '',
-            });
-        }
-    }, [item]);
+const EditMediaModal = ({ isOpen, onClose, item, onSave, isSaving = false }) => {
+    const [formData, setFormData] = useState(() => buildFormDataFromItem(item));
+    // Reset form when the edited item changes. Using the "store info from previous
+    // render" pattern (React docs) rather than a setState-in-effect.
+    const [prevItemId, setPrevItemId] = useState(item?.id ?? null);
+    if ((item?.id ?? null) !== prevItemId) {
+        setPrevItemId(item?.id ?? null);
+        setFormData(buildFormDataFromItem(item));
+    }
 
     const handleChange = (field, value) => {
         setFormData(prev => ({ ...prev, [field]: value }));

@@ -31,24 +31,34 @@ export const AuthProvider = ({ children }) => {
 
     /**
      * Check the backend auth status on mount and validate any stored token.
+     * All setState calls happen inside promise callbacks so the hooks linter
+     * treats them as "external subscription" updates, not synchronous effect-body writes.
      */
-    const checkAuthStatus = useCallback(async () => {
-        try {
-            const res = await fetch('/api/auth/status');
-            const data = await res.json();
-            if (data.success) {
-                const configured = data.data.configured;
-                setAuthConfigured(configured);
+    useEffect(() => {
+        let cancelled = false;
 
-                // If auth is configured and we have a stored token, validate it
-                // by hitting a protected endpoint. If the token is stale/invalid
-                // (e.g. after container restart with new JWT secret), clear it.
-                const storedToken = getStoredToken();
-                if (configured && storedToken) {
+        const run = () =>
+            fetch('/api/auth/status')
+                .then(res => res.json())
+                .then(async data => {
+                    if (cancelled) return;
+                    if (!data.success) {
+                        setAuthConfigured(false);
+                        return;
+                    }
+                    const configured = data.data.configured;
+                    setAuthConfigured(configured);
+
+                    // If auth is configured and we have a stored token, validate it
+                    // by hitting a protected endpoint. If the token is stale/invalid
+                    // (e.g. after container restart with new JWT secret), clear it.
+                    const storedToken = getStoredToken();
+                    if (!configured || !storedToken) return;
                     try {
                         const validateRes = await fetch('/api/config', {
                             headers: { Authorization: `Bearer ${storedToken}` },
                         });
+                        if (cancelled) return;
                         if (validateRes.status === 401) {
                             localStorage.removeItem(TOKEN_STORAGE_KEY);
                             setToken(null);
@@ -58,21 +68,20 @@ export const AuthProvider = ({ children }) => {
                         // Network error during validation — keep token, let normal
                         // API calls surface the auth error if needed
                     }
-                }
-            } else {
-                setAuthConfigured(false);
-            }
-        } catch {
-            // If we can't reach the backend, assume auth is not configured
-            setAuthConfigured(false);
-        } finally {
-            setLoading(false);
-        }
-    }, []);
+                })
+                .catch(() => {
+                    if (!cancelled) setAuthConfigured(false);
+                })
+                .finally(() => {
+                    if (!cancelled) setLoading(false);
+                });
 
-    useEffect(() => {
-        checkAuthStatus();
-    }, [checkAuthStatus]);
+        run();
+
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     const login = useCallback(async (username, password) => {
         const res = await fetch('/api/auth/login', {

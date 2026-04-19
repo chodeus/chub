@@ -20,31 +20,46 @@ export function useLogContent(selectedModule, selectedLogFile) {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
 
-    const loadContent = useCallback(async () => {
-        if (!selectedModule || !selectedLogFile) {
+    // Reset loading/error state at render time when the key changes. This is
+    // the "adjusting state when a prop changes" pattern from the React docs —
+    // conditional setState during render, not a setState-in-effect.
+    const currentKey =
+        selectedModule && selectedLogFile ? `${selectedModule}|${selectedLogFile}` : '';
+    const [lastKey, setLastKey] = useState(currentKey);
+    if (lastKey !== currentKey) {
+        setLastKey(currentKey);
+        setError(null);
+        if (!currentKey) {
             setLogText('');
             setLoading(false);
-            return;
-        }
-
-        try {
+        } else {
             setLoading(true);
-            setError(null);
-
-            const content = await logsAPI.fetchLogContent(selectedModule, selectedLogFile);
-            setLogText(content);
-        } catch (err) {
-            console.error('Failed to load log content:', err);
-            setError(err);
-            setLogText('');
-        } finally {
-            setLoading(false);
         }
-    }, [selectedModule, selectedLogFile]);
+    }
 
     useEffect(() => {
-        loadContent();
-    }, [loadContent]);
+        if (!selectedModule || !selectedLogFile) return;
+        let cancelled = false;
+
+        logsAPI
+            .fetchLogContent(selectedModule, selectedLogFile)
+            .then(content => {
+                if (!cancelled) setLogText(content);
+            })
+            .catch(err => {
+                if (cancelled) return;
+                console.error('Failed to load log content:', err);
+                setError(err);
+                setLogText('');
+            })
+            .finally(() => {
+                if (!cancelled) setLoading(false);
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [selectedModule, selectedLogFile]);
 
     // Manual refresh function for polling
     const refresh = useCallback(async () => {

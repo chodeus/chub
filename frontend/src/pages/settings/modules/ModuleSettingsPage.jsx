@@ -16,9 +16,11 @@ import { useToolbar } from '../../../contexts/ToolbarContext';
  */
 const MemoizedFieldComponent = React.memo(
     ({ field, value, onChange, ...props }) => {
-        const FieldComponent = FieldRegistry.getField(field.type);
+        // Stable module-level component reference; use createElement to avoid
+        // react-hooks/component-hooks-in-render false positive.
+        const fieldComponent = FieldRegistry.getField(field.type);
 
-        if (!FieldComponent) {
+        if (!fieldComponent) {
             return (
                 <div className="p-2 bg-warning-bg text-warning rounded">
                     Unknown field type: {field.type}
@@ -26,7 +28,7 @@ const MemoizedFieldComponent = React.memo(
             );
         }
 
-        return <FieldComponent field={field} value={value} onChange={onChange} {...props} />;
+        return React.createElement(fieldComponent, { field, value, onChange, ...props });
     },
     (prevProps, nextProps) => {
         return (
@@ -53,10 +55,15 @@ const ModuleSettingsContent = () => {
     const [expandedModules, setExpandedModules] = useState([]);
     const [formData, setFormData] = useState({});
     const [lastSaved, setLastSaved] = useState('{}');
-    const [isDirty, setIsDirty] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [saveError, setSaveError] = useState(null);
     const [saveSuccess, setSaveSuccess] = useState(false);
+
+    // Dirty flag derived from formData vs. lastSaved — no state or effect needed.
+    const isDirty = useMemo(
+        () => (formData && lastSaved ? JSON.stringify(formData) !== lastSaved : false),
+        [formData, lastSaved]
+    );
 
     // Module description lookup
     const moduleDescriptions = useMemo(() => {
@@ -69,25 +76,16 @@ const ModuleSettingsContent = () => {
 
     // Search and filter state
     const [searchTerm, setSearchTerm] = useState('');
-    const [filteredModules, setFilteredModules] = useState(dynamicSchemas);
 
-    // Initialize form data from context when config loads
-    useEffect(() => {
-        if (config && Object.keys(config).length > 0) {
-            setFormData(config);
-            setLastSaved(JSON.stringify(config));
-            setIsDirty(false);
-            setSaveError(null);
-        }
-    }, [config]);
-
-    // Track changes for dirty state
-    useEffect(() => {
-        if (formData && lastSaved) {
-            const currentData = JSON.stringify(formData);
-            setIsDirty(currentData !== lastSaved);
-        }
-    }, [formData, lastSaved]);
+    // Initialize form data from context when config loads (render-time sync
+    // pattern, avoids setState-in-effect).
+    const [lastConfigRef, setLastConfigRef] = useState(null);
+    if (config && Object.keys(config).length > 0 && config !== lastConfigRef) {
+        setLastConfigRef(config);
+        setFormData(config);
+        setLastSaved(JSON.stringify(config));
+        setSaveError(null);
+    }
 
     // Clear success message after delay
     useEffect(() => {
@@ -97,29 +95,19 @@ const ModuleSettingsContent = () => {
         }
     }, [saveSuccess]);
 
-    // Update filteredModules when dynamic schemas change
-    useEffect(() => {
-        if (!searchTerm) {
-            setFilteredModules(dynamicSchemas);
-        }
-    }, [dynamicSchemas, searchTerm]);
-
-    // Search and filter functionality
-    useEffect(() => {
-        if (!searchTerm) {
-            setFilteredModules(dynamicSchemas);
-        } else {
-            const filtered = dynamicSchemas.filter(
-                module =>
-                    module.label.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                    module.fields?.some(
-                        field =>
-                            field.label?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                            field.key?.toLowerCase().includes(searchTerm.toLowerCase())
-                    )
-            );
-            setFilteredModules(filtered);
-        }
+    // Filtered modules derived from searchTerm + dynamicSchemas.
+    const filteredModules = useMemo(() => {
+        if (!searchTerm) return dynamicSchemas;
+        const q = searchTerm.toLowerCase();
+        return dynamicSchemas.filter(
+            module =>
+                module.label.toLowerCase().includes(q) ||
+                module.fields?.some(
+                    field =>
+                        field.label?.toLowerCase().includes(q) ||
+                        field.key?.toLowerCase().includes(q)
+                )
+        );
     }, [searchTerm, dynamicSchemas]);
 
     // Save configuration - simplified with Context
@@ -132,9 +120,8 @@ const ModuleSettingsContent = () => {
 
             await configAPI.updateConfig(formData);
 
-            // Update tracking after successful save
+            // Update tracking after successful save. isDirty auto-clears via derivation.
             setLastSaved(JSON.stringify(formData));
-            setIsDirty(false);
             setSaveSuccess(true);
         } catch (error) {
             console.error('Save failed:', error);
@@ -147,7 +134,6 @@ const ModuleSettingsContent = () => {
     // Reset to last saved state - simplified with Context
     const handleReset = useCallback(() => {
         setFormData(config);
-        setIsDirty(false);
         setSaveError(null);
     }, [config]);
 

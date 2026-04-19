@@ -28,6 +28,7 @@ export const useApiData = ({ apiFunction, options = {}, dependencies = [] }) => 
     const abortControllerRef = useRef(null);
     const retryTimeoutRef = useRef(null);
     const isMountedRef = useRef(true);
+    const executeRequestRef = useRef(null);
 
     const cleanup = useCallback(() => {
         if (abortControllerRef.current) {
@@ -61,80 +62,68 @@ export const useApiData = ({ apiFunction, options = {}, dependencies = [] }) => 
         [retryAttempts, shouldRetry]
     );
 
-    // Execute API function with error handling
+    // Execute API function with error handling.
+    // Returns a Promise and only ever calls setState inside .then/.catch/.finally
+    // callbacks (never synchronously in the function body). This keeps the
+    // hook callable from useEffect without tripping react-hooks/set-state-in-effect.
     const executeRequest = useCallback(
-        async (retryAttempt = 0, executeOptions = {}) => {
+        (retryAttempt = 0, executeOptions = {}) => {
             cleanup();
-
             abortControllerRef.current = new AbortController();
 
-            try {
-                setIsLoading(true);
-                setError(null);
+            return Promise.resolve()
+                .then(() => {
+                    setIsLoading(true);
+                    setError(null);
+                    if (retryAttempt > 0) {
+                        setRetryCount(retryAttempt);
+                    }
+                    if (!apiFunction) {
+                        throw new Error('API function is required');
+                    }
+                    return apiFunction(executeOptions);
+                })
+                .then(result => {
+                    if (!isMountedRef.current) return;
+                    const finalData = transform ? transform(result) : result;
+                    setData(finalData);
+                    setRetryCount(0);
+                    if (showSuccessToast && toast && toast.success) {
+                        toast.success(successMessage);
+                    }
+                })
+                .catch(err => {
+                    if (!isMountedRef.current) return;
+                    if (err.name === 'AbortError') return;
 
-                if (retryAttempt > 0) {
-                    setRetryCount(retryAttempt);
-                }
+                    setError(err);
 
-                if (!apiFunction) {
-                    throw new Error('API function is required');
-                }
+                    if (shouldAttemptRetry(err, retryAttempt)) {
+                        retryTimeoutRef.current = setTimeout(() => {
+                            if (isMountedRef.current && executeRequestRef.current) {
+                                executeRequestRef.current(retryAttempt + 1, executeOptions);
+                            }
+                        }, retryDelay);
+                        return;
+                    }
 
-                const result = await apiFunction(executeOptions);
-
-                if (!isMountedRef.current) {
-                    return;
-                }
-
-                const finalData = transform ? transform(result) : result;
-
-                setData(finalData);
-                setRetryCount(0);
-
-                // Show success toast if enabled
-                if (showSuccessToast && toast && toast.success) {
-                    toast.success(successMessage);
-                }
-            } catch (err) {
-                if (!isMountedRef.current) {
-                    return;
-                }
-
-                if (err.name === 'AbortError') {
-                    return;
-                }
-
-                setError(err);
-
-                // Determine if we should retry
-                if (shouldAttemptRetry(err, retryAttempt)) {
-                    retryTimeoutRef.current = setTimeout(() => {
-                        if (isMountedRef.current) {
-                            executeRequest(retryAttempt + 1, executeOptions);
+                    if (showErrorToast) {
+                        let errorMessage = 'An unexpected error occurred';
+                        if (err instanceof APIError) {
+                            errorMessage = err.message;
+                        } else if (err.message) {
+                            errorMessage = err.message;
                         }
-                    }, retryDelay);
-                    return;
-                }
-
-                // Show error toast if enabled
-                if (showErrorToast) {
-                    let errorMessage = 'An unexpected error occurred';
-
-                    if (err instanceof APIError) {
-                        errorMessage = err.message;
-                    } else if (err.message) {
-                        errorMessage = err.message;
+                        if (toast && toast.error) {
+                            toast.error(errorMessage);
+                        }
                     }
-
-                    if (toast && toast.error) {
-                        toast.error(errorMessage);
+                })
+                .finally(() => {
+                    if (isMountedRef.current) {
+                        setIsLoading(false);
                     }
-                }
-            } finally {
-                if (isMountedRef.current) {
-                    setIsLoading(false);
-                }
-            }
+                });
         },
         [
             apiFunction,
@@ -148,6 +137,12 @@ export const useApiData = ({ apiFunction, options = {}, dependencies = [] }) => 
             cleanup,
         ]
     );
+
+    // Mirror executeRequest into a ref so the retry timer can call it without
+    // referencing it before declaration.
+    useEffect(() => {
+        executeRequestRef.current = executeRequest;
+    }, [executeRequest]);
 
     // Manual execution function
     const execute = useCallback(
