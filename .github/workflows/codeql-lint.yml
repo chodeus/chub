@@ -258,3 +258,14 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+  notify-failure:
+    needs: [codeql-python, codeql-javascript, backend-lint, backend-smoke, frontend-lint, docker-push]
+    if: failure() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    uses: chodeus/chodeus-ops/.github/workflows/notify-discord.yml@main
+    with:
+      event_type: build
+      status: failure
+      title: "❌ Pipeline failed: ${{ github.ref_name }}"
+      commit_sha: ${{ github.sha }}
+    secrets: inherit
