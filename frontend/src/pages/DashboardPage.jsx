@@ -206,8 +206,7 @@ const DashboardPage = () => {
         [refreshRunStates, refreshJobStats, toast]
     );
 
-    const isLoading =
-        runStatesLoading || jobsLoading || modulesLoading || scheduleLoading;
+    const isLoading = runStatesLoading || jobsLoading || modulesLoading || scheduleLoading;
 
     const version = useMemo(() => {
         if (!versionData) return null;
