@@ -105,6 +105,22 @@ jobs:
       - name: Run Ruff linter
         run: ruff check .
 
+      - name: Check VERSION matches release-please manifest
+        # release-please-config.json lists VERSION in extra-files so the file
+        # is supposed to track every cut release. It drifted once already
+        # (VERSION stuck at 1.0.0 while the manifest was at 1.0.4); this
+        # guard fails CI so the drift gets caught before the next build.
+        run: |
+          set -e
+          manifest=$(python -c "import json; print(json.load(open('.release-please-manifest.json'))['.'])")
+          version=$(cat VERSION | tr -d '[:space:]')
+          if [ "$manifest" != "$version" ]; then
+            echo "::error::VERSION ($version) does not match release-please manifest ($manifest)."
+            echo "::error::Bump VERSION to $manifest or let release-please PR the update."
+            exit 1
+          fi
+          echo "VERSION and release-please manifest agree: $version"
+
   # ---- Backend Smoke Test & Tests ----
   backend-smoke:
     name: Backend Tests

@@ -7,7 +7,9 @@ import { jobsAPI } from '../utils/api/jobs';
 import { systemAPI } from '../utils/api/system';
 import { scheduleAPI } from '../utils/api/schedule';
 import { instancesAPI } from '../utils/api/instances';
-import { IconButton } from '../components/ui';
+import { postersAPI } from '../utils/api/posters';
+import { Button, IconButton } from '../components/ui';
+import { Modal } from '../components/modals/Modal';
 import Spinner from '../components/ui/Spinner';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import { useToast } from '../contexts/ToastContext.jsx';
@@ -92,6 +94,9 @@ const DashboardPage = () => {
     const toast = useToast();
     const { user } = useAuth();
     const [tick, setTick] = useState(() => Date.now());
+    // Module name awaiting confirmation before Run-now fires. Prevents
+    // misclicks on tiny inline "Run now" links from launching a module.
+    const [runNowTarget, setRunNowTarget] = useState(null);
 
     useEffect(() => {
         const id = setInterval(() => setTick(Date.now()), 30000);
@@ -146,6 +151,21 @@ const DashboardPage = () => {
 
     const { data: instancesRaw } = useApiData({
         apiFunction: instancesAPI.fetchInstances,
+        options: { showErrorToast: false },
+    });
+
+    // Most-recent errored job — drives the "Last failure" health card. A
+    // single-row fetch so it stays cheap; surfaces a usable signal instead of
+    // the all-time "failed count" which grows monotonically and tells you
+    // nothing about current health.
+    const { data: lastFailureData } = useApiData({
+        apiFunction: useCallback(() => jobsAPI.listJobs({ status: 'error', limit: 1 }), []),
+        options: { showErrorToast: false },
+    });
+
+    // Poster stats feed the orphan-count + cached-posters health cards.
+    const { data: posterStatsData } = useApiData({
+        apiFunction: postersAPI.fetchStatistics,
         options: { showErrorToast: false },
     });
 
@@ -266,6 +286,23 @@ const DashboardPage = () => {
         }
         return orderless.map(k => byDevice.get(k));
     }, [diskData]);
+
+    const posterStats = useMemo(() => {
+        const s = posterStatsData?.data || {};
+        return {
+            cached: s.poster_cache_count ?? 0,
+            orphaned: s.orphaned_count ?? 0,
+        };
+    }, [posterStatsData]);
+
+    const lastFailure = useMemo(() => {
+        const list = lastFailureData?.data?.jobs || lastFailureData?.data || [];
+        const job = Array.isArray(list) ? list[0] : null;
+        if (!job) return null;
+        const moduleName = job.module_name || job.module || job.job_type || 'job';
+        const ts = job.completed_at || job.updated_at || job.received_at || job.created_at;
+        return { moduleName, ts };
+    }, [lastFailureData]);
 
     const instanceHealth = useMemo(() => {
         // Backend returns data shaped as { radarr: { name: {enabled}, ... },
@@ -428,7 +465,7 @@ const DashboardPage = () => {
                                                     type="button"
                                                     onClick={e => {
                                                         stopNav(e);
-                                                        handleRunNow(mod.name);
+                                                        setRunNowTarget(mod.name);
                                                     }}
                                                     className="text-xs text-accent hover:underline bg-transparent border-0 p-0 cursor-pointer"
                                                 >
@@ -580,23 +617,64 @@ const DashboardPage = () => {
                             </Link>
                         )}
                         <Link
-                            to="/settings/jobs"
+                            to={
+                                lastFailure
+                                    ? `/logs?module=${encodeURIComponent(lastFailure.moduleName)}`
+                                    : '/settings/jobs'
+                            }
                             className={`no-underline bg-surface border border-border-light rounded-lg p-4 flex flex-col gap-1 hover:border-border ${
-                                jobStats.failed > 0 ? 'border-error/30' : ''
+                                lastFailure ? 'border-error/30' : ''
                             }`}
                         >
                             <div className="text-tertiary text-xs uppercase tracking-wider">
-                                Recent failures
+                                Last failure
                             </div>
                             <div
-                                className={`text-2xl font-bold ${jobStats.failed > 0 ? 'text-error' : 'text-primary'}`}
+                                className={`text-lg font-bold truncate ${lastFailure ? 'text-error' : 'text-primary'}`}
+                                title={
+                                    lastFailure?.ts
+                                        ? new Date(lastFailure.ts).toLocaleString()
+                                        : undefined
+                                }
                             >
-                                {jobStats.failed}
+                                {lastFailure
+                                    ? formatTimeAgo(lastFailure.ts, new Date(tick))
+                                    : 'None'}
                             </div>
-                            <div className="text-xs text-tertiary">
-                                {jobStats.failed === 0 ? 'No failed jobs' : 'Click to review'}
+                            <div className="text-xs text-tertiary truncate">
+                                {lastFailure ? humanize(lastFailure.moduleName) : 'No failed jobs'}
                             </div>
                         </Link>
+                        {posterStats.cached > 0 && (
+                            <Link
+                                to="/poster/search/assets"
+                                className="no-underline bg-surface border border-border-light rounded-lg p-4 flex flex-col gap-1 hover:border-border"
+                            >
+                                <div className="text-tertiary text-xs uppercase tracking-wider">
+                                    Cached posters
+                                </div>
+                                <div className="text-2xl font-bold text-primary">
+                                    {posterStats.cached.toLocaleString()}
+                                </div>
+                                <div className="text-xs text-tertiary">In local asset cache</div>
+                            </Link>
+                        )}
+                        {posterStats.orphaned > 0 && (
+                            <Link
+                                to="/poster/cleanarr"
+                                className="no-underline bg-surface border border-border-light rounded-lg p-4 flex flex-col gap-1 hover:border-border border-warning/30"
+                            >
+                                <div className="text-tertiary text-xs uppercase tracking-wider">
+                                    Orphaned posters
+                                </div>
+                                <div className="text-2xl font-bold text-warning">
+                                    {posterStats.orphaned.toLocaleString()}
+                                </div>
+                                <div className="text-xs text-tertiary">
+                                    Review in Poster Cleanarr
+                                </div>
+                            </Link>
+                        )}
                         {diskMounts.map(mount => {
                             const freeGb = (mount.free_bytes / 1024 ** 3).toFixed(1);
                             const totalGb = (mount.total_bytes / 1024 ** 3).toFixed(0);
@@ -675,6 +753,37 @@ const DashboardPage = () => {
                     CHUB {prettyVersion.display}
                 </footer>
             )}
+
+            {/* Run-now confirmation */}
+            <Modal isOpen={!!runNowTarget} onClose={() => setRunNowTarget(null)} size="small">
+                <Modal.Header>Run {runNowTarget ? humanize(runNowTarget) : ''}?</Modal.Header>
+                <Modal.Body>
+                    <p className="text-secondary">
+                        Queue{' '}
+                        <span className="font-semibold text-primary">
+                            {runNowTarget ? humanize(runNowTarget) : ''}
+                        </span>{' '}
+                        for an immediate run. The module will execute with its currently saved
+                        configuration. Progress shows up in Logs.
+                    </p>
+                </Modal.Body>
+                <Modal.Footer align="right">
+                    <Button variant="ghost" onClick={() => setRunNowTarget(null)}>
+                        Cancel
+                    </Button>
+                    <Button
+                        variant="primary"
+                        icon="play_arrow"
+                        onClick={() => {
+                            const name = runNowTarget;
+                            setRunNowTarget(null);
+                            if (name) handleRunNow(name);
+                        }}
+                    >
+                        Run now
+                    </Button>
+                </Modal.Footer>
+            </Modal>
         </div>
     );
 };

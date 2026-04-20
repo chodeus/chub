@@ -9,40 +9,31 @@ import { Link, useLocation } from 'react-router-dom';
  * Keys are exact pathnames. Values are ordered crumbs (leftmost first); the
  * last entry is always treated as "current" and rendered without a link.
  */
+// Category-level crumbs (Library / Assets / Settings) render as plain text,
+// not links. They were used to route to each category's default sub-page
+// (e.g. clicking "Library" from /media/manage sent you to /media/search),
+// which is surprising — the crumb label reads as "current section" but
+// jumping to a different route of the section just to click a label felt
+// like a navigation trap. They're context, not navigation.
 const ROUTE_CRUMBS = {
-    '/media/search': [{ label: 'Library', to: '/media/search' }, { label: 'Search' }],
-    '/media/manage': [{ label: 'Library', to: '/media/search' }, { label: 'Manage' }],
-    '/media/statistics': [{ label: 'Library', to: '/media/search' }, { label: 'Statistics' }],
-    '/media/labelarr': [{ label: 'Library', to: '/media/search' }, { label: 'Label Sync' }],
+    '/media/search': [{ label: 'Library' }, { label: 'Search' }],
+    '/media/manage': [{ label: 'Library' }, { label: 'Manage' }],
+    '/media/statistics': [{ label: 'Library' }, { label: 'Statistics' }],
+    '/media/labelarr': [{ label: 'Library' }, { label: 'Label Sync' }],
 
-    '/poster/search/assets': [
-        { label: 'Assets', to: '/poster/search/assets' },
-        { label: 'Assets Search' },
-    ],
-    '/poster/search/gdrive': [
-        { label: 'Assets', to: '/poster/search/assets' },
-        { label: 'GDrive Search' },
-    ],
-    '/poster/cleanarr': [
-        { label: 'Assets', to: '/poster/search/assets' },
-        { label: 'Poster Cleanarr' },
-    ],
-    '/poster/statistics': [
-        { label: 'Assets', to: '/poster/search/assets' },
-        { label: 'Statistics' },
-    ],
+    '/poster/search/assets': [{ label: 'Assets' }, { label: 'Assets Search' }],
+    '/poster/search/gdrive': [{ label: 'Assets' }, { label: 'GDrive Search' }],
+    '/poster/cleanarr': [{ label: 'Assets' }, { label: 'Poster Cleanarr' }],
+    '/poster/statistics': [{ label: 'Assets' }, { label: 'Statistics' }],
 
-    '/settings/general': [{ label: 'Settings', to: '/settings/general' }, { label: 'General' }],
-    '/settings/interface': [{ label: 'Settings', to: '/settings/general' }, { label: 'Interface' }],
-    '/settings/modules': [{ label: 'Settings', to: '/settings/general' }, { label: 'Modules' }],
-    '/settings/instances': [{ label: 'Settings', to: '/settings/general' }, { label: 'Instances' }],
-    '/settings/schedule': [{ label: 'Settings', to: '/settings/general' }, { label: 'Schedule' }],
-    '/settings/jobs': [{ label: 'Settings', to: '/settings/general' }, { label: 'Jobs' }],
-    '/settings/notifications': [
-        { label: 'Settings', to: '/settings/general' },
-        { label: 'Notifications' },
-    ],
-    '/settings/webhooks': [{ label: 'Settings', to: '/settings/general' }, { label: 'Webhooks' }],
+    '/settings/general': [{ label: 'Settings' }, { label: 'General' }],
+    '/settings/interface': [{ label: 'Settings' }, { label: 'Interface' }],
+    '/settings/modules': [{ label: 'Settings' }, { label: 'Modules' }],
+    '/settings/instances': [{ label: 'Settings' }, { label: 'Instances' }],
+    '/settings/schedule': [{ label: 'Settings' }, { label: 'Schedule' }],
+    '/settings/jobs': [{ label: 'Settings' }, { label: 'Jobs' }],
+    '/settings/notifications': [{ label: 'Settings' }, { label: 'Notifications' }],
+    '/settings/webhooks': [{ label: 'Settings' }, { label: 'Webhooks' }],
 };
 
 // Routes where breadcrumbs add no value (the PageHeader already names them
