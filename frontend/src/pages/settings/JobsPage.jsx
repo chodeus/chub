@@ -279,8 +279,8 @@ export const JobsPage = () => {
                                         </td>
                                         <td className="px-4 py-3 text-secondary text-xs">
                                             {formatDuration(
-                                                job.received_at || job.started_at,
-                                                job.scheduled_at || job.completed_at
+                                                job.started_at || job.received_at,
+                                                job.completed_at
                                             )}
                                         </td>
                                         <td className="px-4 py-3 text-right">

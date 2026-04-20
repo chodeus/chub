@@ -44,6 +44,7 @@ const PosterAssetsSearchPage = () => {
     const [addToCollectionTarget, setAddToCollectionTarget] = useState(null);
     const [selectedCollectionId, setSelectedCollectionId] = useState('');
     const [expandedCollection, setExpandedCollection] = useState(null);
+    const [lightboxItem, setLightboxItem] = useState(null);
 
     // Filter state — restore from localStorage if available
     const saved = useMemo(() => loadSavedFilters(), []);
@@ -508,18 +509,23 @@ const PosterAssetsSearchPage = () => {
                             </div>
                         )}
                     </div>
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-8 gap-3">
                         {items.map(item => (
                             <div
                                 key={item.id}
-                                className="rounded-lg bg-surface border border-border overflow-hidden group"
+                                className="rounded-lg bg-surface border border-border overflow-hidden group flex flex-col"
                             >
                                 {(item.folder || item.file) && (
-                                    <div className="aspect-[2/3] bg-surface-alt overflow-hidden">
+                                    <button
+                                        type="button"
+                                        onClick={() => setLightboxItem(item)}
+                                        className="aspect-[2/3] bg-surface-alt overflow-hidden block w-full p-0 border-0 cursor-zoom-in"
+                                        aria-label={`Enlarge ${item.title}`}
+                                    >
                                         <img
                                             src={
                                                 item.id
-                                                    ? postersAPI.getThumbnailUrl(item.id, 300)
+                                                    ? postersAPI.getThumbnailUrl(item.id, 200)
                                                     : postersAPI.getPreviewUrl(
                                                           item.folder,
                                                           item.file
@@ -531,56 +537,50 @@ const PosterAssetsSearchPage = () => {
                                             onError={e => {
                                                 e.target.style.display = 'none';
                                                 e.target.parentElement.innerHTML =
-                                                    '<div class="w-full h-full flex items-center justify-center text-tertiary"><span class="material-symbols-outlined text-4xl">image</span></div>';
+                                                    '<div class="w-full h-full flex items-center justify-center text-tertiary"><span class="material-symbols-outlined text-3xl">image</span></div>';
                                             }}
                                         />
-                                    </div>
+                                    </button>
                                 )}
-                                <div className="p-2">
-                                    <div className="flex items-start justify-between">
-                                        <div className="flex-1 min-w-0">
-                                            <h4 className="font-medium text-primary text-sm truncate">
-                                                {item.title}
-                                            </h4>
-                                            <div className="flex items-center gap-2 text-xs text-secondary mt-0.5">
-                                                {item.year && <span>{item.year}</span>}
-                                                {item.season_number != null && (
-                                                    <span>
-                                                        S
-                                                        {String(item.season_number).padStart(
-                                                            2,
-                                                            '0'
-                                                        )}
-                                                    </span>
-                                                )}
-                                            </div>
+                                <div className="p-1.5 flex items-start justify-between gap-1">
+                                    <div className="flex-1 min-w-0">
+                                        <h4 className="font-medium text-primary text-xs truncate leading-tight">
+                                            {item.title}
+                                        </h4>
+                                        <div className="flex items-center gap-1 text-[10px] text-secondary mt-0.5">
+                                            {item.year && <span>{item.year}</span>}
+                                            {item.season_number != null && (
+                                                <span>
+                                                    S{String(item.season_number).padStart(2, '0')}
+                                                </span>
+                                            )}
                                         </div>
-                                        <div className="flex items-center gap-1">
-                                            <IconButton
-                                                icon="playlist_add"
-                                                aria-label="Add to collection"
-                                                title="Add this poster to an existing or new collection"
-                                                variant="ghost"
-                                                className="opacity-0 group-hover:opacity-100 transition-fast"
-                                                onClick={() => setAddToCollectionTarget(item)}
-                                            />
-                                            <IconButton
-                                                icon="download"
-                                                aria-label="Download poster"
-                                                title="Download the poster image (choose size, format, and quality)"
-                                                variant="ghost"
-                                                className="opacity-0 group-hover:opacity-100 transition-fast"
-                                                onClick={() => setDownloadTarget(item)}
-                                            />
-                                            <IconButton
-                                                icon="delete"
-                                                aria-label="Delete poster"
-                                                title="Delete this poster file from the server"
-                                                variant="ghost"
-                                                className="opacity-0 group-hover:opacity-100 transition-fast"
-                                                onClick={() => setDeleteTarget(item)}
-                                            />
-                                        </div>
+                                    </div>
+                                    <div className="flex items-center opacity-0 group-hover:opacity-100 transition-fast shrink-0">
+                                        <IconButton
+                                            icon="playlist_add"
+                                            aria-label="Add to collection"
+                                            title="Add this poster to an existing or new collection"
+                                            variant="ghost"
+                                            size="small"
+                                            onClick={() => setAddToCollectionTarget(item)}
+                                        />
+                                        <IconButton
+                                            icon="download"
+                                            aria-label="Download poster"
+                                            title="Download the poster image"
+                                            variant="ghost"
+                                            size="small"
+                                            onClick={() => setDownloadTarget(item)}
+                                        />
+                                        <IconButton
+                                            icon="delete"
+                                            aria-label="Delete poster"
+                                            title="Delete this poster file from the server"
+                                            variant="ghost"
+                                            size="small"
+                                            onClick={() => setDeleteTarget(item)}
+                                        />
                                     </div>
                                 </div>
                             </div>
@@ -626,6 +626,51 @@ const PosterAssetsSearchPage = () => {
                     </p>
                 </div>
             )}
+
+            {/* Lightbox */}
+            <Modal isOpen={!!lightboxItem} onClose={() => setLightboxItem(null)} size="large">
+                <Modal.Header>
+                    {lightboxItem?.title}
+                    {lightboxItem?.year && ` (${lightboxItem.year})`}
+                    {lightboxItem?.season_number != null &&
+                        ` — S${String(lightboxItem.season_number).padStart(2, '0')}`}
+                </Modal.Header>
+                <Modal.Body>
+                    {lightboxItem && (
+                        <div className="flex items-center justify-center bg-surface-alt rounded-lg p-2">
+                            <img
+                                src={
+                                    lightboxItem.id
+                                        ? postersAPI.getThumbnailUrl(lightboxItem.id, 1200)
+                                        : postersAPI.getPreviewUrl(
+                                              lightboxItem.folder,
+                                              lightboxItem.file
+                                          )
+                                }
+                                alt={lightboxItem.title}
+                                className="max-h-[75vh] w-auto object-contain"
+                            />
+                        </div>
+                    )}
+                </Modal.Body>
+                <Modal.Footer align="right">
+                    <Button variant="ghost" onClick={() => setLightboxItem(null)}>
+                        Close
+                    </Button>
+                    {lightboxItem && (
+                        <Button
+                            variant="primary"
+                            icon="download"
+                            onClick={() => {
+                                setDownloadTarget(lightboxItem);
+                                setLightboxItem(null);
+                            }}
+                        >
+                            Download
+                        </Button>
+                    )}
+                </Modal.Footer>
+            </Modal>
 
             <Modal isOpen={!!deleteTarget} onClose={() => setDeleteTarget(null)} size="small">
                 <Modal.Header>Delete Poster</Modal.Header>

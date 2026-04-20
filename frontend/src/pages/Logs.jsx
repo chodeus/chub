@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useLogModules } from '../hooks/useLogModules.js';
 import { useLogFiles } from '../hooks/useLogFiles.js';
 import { useLogContent } from '../hooks/useLogContent.js';
@@ -26,7 +27,13 @@ const LOG_LEVELS = ['critical', 'error', 'warning', 'info', 'debug'];
 export default function Logs() {
     // Data hooks
     const { modules } = useLogModules();
-    const [selectedModule, setSelectedModule] = useState('');
+    const [searchParams] = useSearchParams();
+    // Seed selected module from ?module= so dashboard links deep-link into a
+    // specific module's logs. After mount the local state wins — query
+    // param is not re-read on subsequent param changes.
+    const [selectedModule, setSelectedModule] = useState(
+        () => searchParams.get('module') || ''
+    );
     const { logFiles, selectedLogFile, setSelectedLogFile } = useLogFiles(selectedModule);
     const { logText, refresh, inFlightRef } = useLogContent(selectedModule, selectedLogFile);
     useLogPolling(selectedModule, selectedLogFile, refresh, inFlightRef);

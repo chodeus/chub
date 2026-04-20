@@ -10,57 +10,63 @@ import * as ColorFields from './color';
 import * as DirFields from './dir';
 
 /**
- * Field type to component mapping
- * Each field component must implement the standard interface:
- * - field: Field configuration object
- * - value: Current field value
- * - onChange: Value change handler (value) => void
- * - disabled: Boolean disabled state
- * - highlightInvalid: Boolean validation error state
- * - errorMessage: String error message to display
+ * Field type to component mapping.
+ *
+ * Resolved lazily to survive the circular import between FieldRegistry and
+ * CustomFields.ArrayObjectField (which itself depends on FieldRegistry to
+ * render nested subfields). A const object literal evaluated at module-init
+ * would capture `CustomFields.ArrayObjectField` as `undefined` during the
+ * cycle, producing spurious "Unknown field type: object_array" warnings on
+ * first render of settings pages.
  */
-const FIELD_COMPONENTS = {
-    // Basic
-    text: BasicFields.TextField,
-    password: BasicFields.PasswordField,
-    number: BasicFields.NumberField,
-    textarea: BasicFields.TextareaField,
-    float: BasicFields.FloatField,
-    hidden: BasicFields.HiddenField,
-    check_box: SelectFields.CheckboxField,
-    toggle: SelectFields.CheckboxField,
-    dropdown: SelectFields.DropdownField,
-    json: CustomFields.JsonField,
+const FIELD_RESOLVERS = {
+    text: () => BasicFields.TextField,
+    password: () => BasicFields.PasswordField,
+    number: () => BasicFields.NumberField,
+    textarea: () => BasicFields.TextareaField,
+    float: () => BasicFields.FloatField,
+    hidden: () => BasicFields.HiddenField,
+    check_box: () => SelectFields.CheckboxField,
+    toggle: () => SelectFields.CheckboxField,
+    dropdown: () => SelectFields.DropdownField,
+    json: () => CustomFields.JsonField,
 
-    // Color
-    color: ColorFields.ColorField,
-    color_list: ColorFields.ColorListField,
-    color_list_poster: ColorFields.ColorListPosterField,
+    color: () => ColorFields.ColorField,
+    color_list: () => ColorFields.ColorListField,
+    color_list_poster: () => ColorFields.ColorListPosterField,
 
-    // Dir
-    dir: DirFields.DirField,
-    dirlist: DirFields.DirListField,
-    dirlist_dragdrop: DirFields.DirListDragDropField,
-    dirlist_options: DirFields.DirListOptionsField,
+    dir: () => DirFields.DirField,
+    dirlist: () => DirFields.DirListField,
+    dirlist_dragdrop: () => DirFields.DirListDragDropField,
+    dirlist_options: () => DirFields.DirListOptionsField,
 
-    // Date/Schedule fields
-    holiday_schedule: SelectFields.DateRangeField,
+    holiday_schedule: () => SelectFields.DateRangeField,
 
-    // New unified presets field
-    presets: CustomFields.PresetsField,
+    presets: () => CustomFields.PresetsField,
 
-    array: CustomFields.TagInputField,
-    object_array: CustomFields.ArrayObjectField,
-    'array-object': CustomFields.ArrayObjectField,
-    instances: CustomFields.InstancesField,
-    instance_dropdown: SelectFields.DropdownField, // Map to existing DropdownField
-    schedule: CustomFields.ScheduleField,
-    tag_input: CustomFields.TagInputField,
-    tag_display: CustomFields.TagInputField, // Same component, different config
-    media_info_display: CustomFields.MediaInfoDisplayField,
-    media_display: CustomFields.MediaDisplayField,
-    dir_picker: CustomFields.DirPickerField,
-    poster: CustomFields.PosterField,
+    array: () => CustomFields.TagInputField,
+    object_array: () => CustomFields.ArrayObjectField,
+    'array-object': () => CustomFields.ArrayObjectField,
+    instances: () => CustomFields.InstancesField,
+    instance_dropdown: () => SelectFields.DropdownField,
+    schedule: () => CustomFields.ScheduleField,
+    tag_input: () => CustomFields.TagInputField,
+    tag_display: () => CustomFields.TagInputField,
+    media_info_display: () => CustomFields.MediaInfoDisplayField,
+    media_display: () => CustomFields.MediaDisplayField,
+    dir_picker: () => CustomFields.DirPickerField,
+    poster: () => CustomFields.PosterField,
+};
+
+const FIELD_COMPONENTS = {};
+
+const resolveField = fieldType => {
+    if (FIELD_COMPONENTS[fieldType]) return FIELD_COMPONENTS[fieldType];
+    const resolver = FIELD_RESOLVERS[fieldType];
+    if (!resolver) return null;
+    const component = resolver();
+    if (component) FIELD_COMPONENTS[fieldType] = component;
+    return component || null;
 };
 
 /**
@@ -134,7 +140,7 @@ export class FieldRegistry {
      * @returns {React.Component} The field component or UnknownFieldType fallback
      */
     static getField(fieldType) {
-        const component = FIELD_COMPONENTS[fieldType];
+        const component = resolveField(fieldType);
         if (!component) {
             console.warn(`[FieldRegistry] Unknown field type: ${fieldType}`);
             return UnknownFieldType;
@@ -160,7 +166,7 @@ export class FieldRegistry {
      * @returns {boolean} True if field type exists
      */
     static hasField(fieldType) {
-        return fieldType in FIELD_COMPONENTS;
+        return fieldType in FIELD_RESOLVERS || fieldType in FIELD_COMPONENTS;
     }
 
     /**
@@ -168,7 +174,9 @@ export class FieldRegistry {
      * @returns {string[]} Array of all field type strings
      */
     static getFieldTypes() {
-        return Object.keys(FIELD_COMPONENTS);
+        return Array.from(
+            new Set([...Object.keys(FIELD_RESOLVERS), ...Object.keys(FIELD_COMPONENTS)])
+        );
     }
 
     /**

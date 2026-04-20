@@ -3,6 +3,7 @@ import json
 from typing import Any, List, Optional
 
 from .db_base import DatabaseBase
+from .orphaned_posters import _path_under_any_root
 
 
 class MediaCache(DatabaseBase):
@@ -264,27 +265,43 @@ class MediaCache(DatabaseBase):
         instance_name: str,
         asset_type: str,
         logger: Optional[Any] = None,
+        allowed_roots: Optional[List[str]] = None,
     ) -> None:
-        """Delete a single record by its identity key; records orphaned poster if applicable."""
+        """Delete a single record by its identity key; records orphaned poster if applicable.
+
+        When `allowed_roots` is provided, any `renamed_file` path that is not
+        under one of those roots is skipped — the media_cache row still gets
+        deleted, but we do not insert a stale orphaned_posters entry that the
+        orphan-cleanup pass would later ignore anyway.
+        """
         # Handle orphaned poster if applicable
         renamed_file = item.get("renamed_file")
         if renamed_file:
-            now = datetime.datetime.now(datetime.timezone.utc).isoformat()
-            self.execute_query(
-                """
-                INSERT OR IGNORE INTO orphaned_posters
-                    (asset_type, title, year, season, file_path, date_orphaned)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    item.get("asset_type"),
-                    item.get("title"),
-                    item.get("year"),
-                    item.get("season_number"),
-                    renamed_file,
-                    now,
-                ),
+            out_of_scope = bool(allowed_roots) and not _path_under_any_root(
+                renamed_file, allowed_roots
             )
+            if out_of_scope:
+                if logger:
+                    logger.debug(
+                        f"[SKIPPED out-of-scope orphan insert] {renamed_file}"
+                    )
+            else:
+                now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+                self.execute_query(
+                    """
+                    INSERT OR IGNORE INTO orphaned_posters
+                        (asset_type, title, year, season, file_path, date_orphaned)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        item.get("asset_type"),
+                        item.get("title"),
+                        item.get("year"),
+                        item.get("season_number"),
+                        renamed_file,
+                        now,
+                    ),
+                )
             identity_key = self._identity_key(item, asset_type, instance_name)
             self.execute_query(
                 "DELETE FROM media_cache WHERE identity_key = ?",

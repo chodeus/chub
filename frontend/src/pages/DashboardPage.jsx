@@ -1,4 +1,4 @@
-import React, { useMemo, useEffect, useRef, useCallback } from 'react';
+import React, { useMemo, useEffect, useRef, useCallback, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useApiData } from '../hooks/useApiData';
 import { useModuleEvents } from '../hooks/useModuleEvents';
@@ -11,8 +11,16 @@ import Spinner from '../components/ui/Spinner';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import { useToast } from '../contexts/ToastContext.jsx';
 import { humanize } from '../utils/tools.js';
+import {
+    scheduleToNextFire,
+    scheduleToHuman,
+    formatTimeUntil,
+    formatTimeAgo,
+} from '../utils/schedule.js';
 
 const POLL_INTERVAL = 30000;
+const UPCOMING_LIMIT = 5;
+const RECENT_JOB_LIMIT = 8;
 
 const QUICK_START = [
     {
@@ -55,13 +63,55 @@ const QUICK_START = [
         badge: 5,
         to: '/logs',
     },
+    {
+        id: 'webhooks',
+        title: 'Webhooks',
+        description: 'Trigger cleanup and unmatched asset flows.',
+        icon: 'webhook',
+        badge: 1,
+        to: '/settings/webhooks',
+    },
 ];
 
-const listRecentJobs = (options = {}) => jobsAPI.listJobs({ status: 'success', limit: 4 }, options);
+const listRecentJobs = (options = {}) => jobsAPI.listJobs({ limit: RECENT_JOB_LIMIT }, options);
+
+const statusPillClass = status => {
+    switch (status) {
+        case 'success':
+            return 'bg-success/20 text-success';
+        case 'error':
+            return 'bg-error/20 text-error';
+        case 'running':
+            return 'bg-primary/20 text-primary';
+        case 'pending':
+            return 'bg-warning/20 text-warning';
+        default:
+            return 'bg-surface-alt text-secondary';
+    }
+};
+
+const jobDuration = job => {
+    const start = job.started_at || job.received_at;
+    const end = job.completed_at;
+    if (!start || !end) return null;
+    const ms = new Date(end).getTime() - new Date(start).getTime();
+    if (ms < 0) return null;
+    const seconds = Math.round(ms / 1000);
+    if (seconds < 60) return `${seconds}s`;
+    const minutes = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${minutes}m ${secs}s`;
+};
 
 const DashboardPage = () => {
     const toast = useToast();
     const { user } = useAuth();
+    const [tick, setTick] = useState(() => Date.now());
+
+    useEffect(() => {
+        const id = setInterval(() => setTick(Date.now()), 30000);
+        return () => clearInterval(id);
+    }, []);
 
     const { data: versionData } = useApiData({
         apiFunction: systemAPI.getVersion,
@@ -159,6 +209,20 @@ const DashboardPage = () => {
         [refreshRunStates, toast]
     );
 
+    const handleRunNow = useCallback(
+        async moduleName => {
+            try {
+                await modulesAPI.executeModule(moduleName);
+                toast.info(`${humanize(moduleName)} queued`);
+                refreshRunStates();
+                refreshJobStats();
+            } catch (err) {
+                toast.error(`Failed to run: ${err.message}`);
+            }
+        },
+        [refreshRunStates, refreshJobStats, toast]
+    );
+
     const isLoading =
         runStatesLoading || jobsLoading || modulesLoading || scheduleLoading || recentJobsLoading;
 
@@ -187,17 +251,36 @@ const DashboardPage = () => {
         () => Object.values(schedules).filter(v => v && v.trim()).length,
         [schedules]
     );
-
     const runningCount = useMemo(() => moduleList.filter(m => m.running).length, [moduleList]);
+
+    const upcomingRuns = useMemo(() => {
+        const now = new Date(tick);
+        const entries = [];
+        for (const [moduleName, expr] of Object.entries(schedules)) {
+            if (!expr || !expr.trim()) continue;
+            const next = scheduleToNextFire(expr, now);
+            if (!next) continue;
+            entries.push({
+                module: moduleName,
+                schedule: expr,
+                next,
+            });
+        }
+        entries.sort((a, b) => a.next.getTime() - b.next.getTime());
+        return entries.slice(0, UPCOMING_LIMIT);
+    }, [schedules, tick]);
 
     const recentJobs = useMemo(() => {
         const jobs = recentJobsData?.data?.jobs || recentJobsData?.data || [];
-        return Array.isArray(jobs) ? jobs.slice(0, 4) : [];
+        return Array.isArray(jobs) ? jobs.slice(0, RECENT_JOB_LIMIT) : [];
     }, [recentJobsData]);
 
     if (isLoading && moduleList.length === 0) {
         return <Spinner size="large" text="Loading dashboard..." center />;
     }
+
+    const schedulerStateLabel =
+        runningCount > 0 ? `${runningCount} running` : scheduledCount > 0 ? 'Active' : 'Idle';
 
     return (
         <div className="flex flex-col gap-10">
@@ -239,7 +322,164 @@ const DashboardPage = () => {
                 </div>
             </section>
 
-            {/* Quick start */}
+            {/* Recent jobs — promoted to full width */}
+            <section>
+                <div className="flex items-end justify-between mb-4">
+                    <div>
+                        <h2 className="text-xl font-bold text-primary m-0">Recent jobs</h2>
+                        <p className="text-secondary text-sm mt-1 mb-0">
+                            The {RECENT_JOB_LIMIT} most recent module runs — click a card for logs.
+                        </p>
+                    </div>
+                    <Link
+                        to="/settings/jobs"
+                        className="text-sm text-accent no-underline hover:underline"
+                    >
+                        View all
+                    </Link>
+                </div>
+                {recentJobs.length === 0 ? (
+                    <div className="bg-surface-alt border border-border-light rounded-lg p-6 text-sm text-tertiary text-center">
+                        No jobs yet. They&apos;ll show up here once modules start running.
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        {recentJobs.map(job => {
+                            const moduleName = job.module || job.job_type || 'job';
+                            const ended = job.completed_at || job.updated_at || job.created_at;
+                            const status = job.status || 'success';
+                            const duration = jobDuration(job);
+                            return (
+                                <Link
+                                    key={job.id || `${moduleName}-${ended}`}
+                                    to={`/logs?module=${encodeURIComponent(moduleName)}`}
+                                    title={
+                                        ended
+                                            ? new Date(ended).toLocaleString()
+                                            : 'Pending completion'
+                                    }
+                                    className="no-underline bg-surface border border-border-light rounded-lg p-4 flex flex-col gap-2 min-w-0 transition-transform hover:-translate-y-0.5 hover:border-border"
+                                >
+                                    <div className="flex items-center justify-between gap-2 min-w-0">
+                                        <span className="font-semibold text-primary truncate min-w-0">
+                                            {humanize(moduleName)}
+                                        </span>
+                                        <span
+                                            className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${statusPillClass(status)}`}
+                                        >
+                                            {status}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center justify-between text-xs text-tertiary">
+                                        <span>
+                                            {ended ? formatTimeAgo(ended, new Date(tick)) : '—'}
+                                        </span>
+                                        {duration && <span>{duration}</span>}
+                                    </div>
+                                </Link>
+                            );
+                        })}
+                    </div>
+                )}
+            </section>
+
+            {/* Scheduler — full-width panel */}
+            <section className="bg-surface-alt border border-border-light rounded-lg p-6 flex flex-col gap-5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                        <span
+                            className="badge-bubble badge-bubble--3 w-11 h-11 rounded-full flex items-center justify-center shrink-0"
+                            aria-hidden="true"
+                        >
+                            <span className="material-symbols-outlined">schedule</span>
+                        </span>
+                        <div className="min-w-0">
+                            <div className="text-xs font-semibold uppercase tracking-wider text-tertiary">
+                                Scheduler
+                            </div>
+                            <div className="text-lg font-bold text-primary">
+                                {schedulerStateLabel}
+                            </div>
+                        </div>
+                    </div>
+                    <Link
+                        to="/settings/schedule"
+                        className="text-sm text-accent no-underline hover:underline"
+                    >
+                        Manage schedules
+                    </Link>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-sm">
+                    <div className="bg-surface rounded-lg px-3 py-2">
+                        <div className="text-tertiary text-xs">Modules</div>
+                        <div className="font-semibold text-primary">{moduleCount}</div>
+                    </div>
+                    <div className="bg-surface rounded-lg px-3 py-2">
+                        <div className="text-tertiary text-xs">Scheduled</div>
+                        <div className="font-semibold text-primary">{scheduledCount}</div>
+                    </div>
+                    <div className="bg-surface rounded-lg px-3 py-2">
+                        <div className="text-tertiary text-xs">Running</div>
+                        <div className="font-semibold text-primary">{runningCount}</div>
+                    </div>
+                    <div className="bg-surface rounded-lg px-3 py-2">
+                        <div className="text-tertiary text-xs">Pending</div>
+                        <div className="font-semibold text-primary">{jobStats.pending}</div>
+                    </div>
+                    <div className="bg-surface rounded-lg px-3 py-2">
+                        <div className="text-tertiary text-xs">Failed</div>
+                        <div
+                            className={`font-semibold ${jobStats.failed > 0 ? 'text-error' : 'text-primary'}`}
+                        >
+                            {jobStats.failed}
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <div className="text-xs font-semibold uppercase tracking-wider text-tertiary mb-2">
+                        Up next
+                    </div>
+                    {upcomingRuns.length === 0 ? (
+                        <div className="text-sm text-tertiary italic">
+                            No scheduled runs within the next day — cron-scheduled modules
+                            aren&apos;t shown here.
+                        </div>
+                    ) : (
+                        <ul className="flex flex-col gap-2 m-0 p-0 list-none">
+                            {upcomingRuns.map(entry => (
+                                <li
+                                    key={entry.module}
+                                    className="flex items-center justify-between gap-3 bg-surface rounded-lg px-3 py-2 text-sm"
+                                >
+                                    <div className="min-w-0">
+                                        <div className="font-semibold text-primary truncate">
+                                            {humanize(entry.module)}
+                                        </div>
+                                        <div className="text-xs text-tertiary truncate">
+                                            {scheduleToHuman(entry.schedule)}
+                                        </div>
+                                    </div>
+                                    <div className="text-right shrink-0">
+                                        <div className="text-xs text-tertiary">
+                                            {entry.next.toLocaleTimeString([], {
+                                                hour: '2-digit',
+                                                minute: '2-digit',
+                                            })}
+                                        </div>
+                                        <div className="text-xs font-semibold text-accent">
+                                            {formatTimeUntil(entry.next, new Date(tick))}
+                                        </div>
+                                    </div>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </div>
+            </section>
+
+            {/* Quick start — now below Recent jobs / Scheduler */}
             <section>
                 <div className="mb-4">
                     <h2 className="text-xl font-bold text-primary m-0">Quick start</h2>
@@ -247,7 +487,7 @@ const DashboardPage = () => {
                         Jump straight into the things you do most.
                     </p>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {QUICK_START.map(card => (
                         <Link
                             key={card.id}
@@ -271,111 +511,6 @@ const DashboardPage = () => {
                 </div>
             </section>
 
-            {/* Recent jobs + Scheduler callout */}
-            <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2">
-                    <div className="flex items-end justify-between mb-4">
-                        <div>
-                            <h2 className="text-xl font-bold text-primary m-0">Recent jobs</h2>
-                            <p className="text-secondary text-sm mt-1 mb-0">
-                                The last four successful module runs.
-                            </p>
-                        </div>
-                        <Link
-                            to="/settings/jobs"
-                            className="text-sm text-accent no-underline hover:underline"
-                        >
-                            View all
-                        </Link>
-                    </div>
-                    {recentJobs.length === 0 ? (
-                        <div className="bg-surface-alt border border-border-light rounded-lg p-6 text-sm text-tertiary text-center">
-                            No completed jobs yet. They&apos;ll show up here once modules start
-                            running.
-                        </div>
-                    ) : (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            {recentJobs.map(job => {
-                                const moduleName = job.module || job.job_type || 'job';
-                                const ended = job.completed_at || job.updated_at || job.created_at;
-                                return (
-                                    <div
-                                        key={job.id || `${moduleName}-${ended}`}
-                                        className="bg-surface border border-border-light rounded-lg p-4 flex items-start gap-3"
-                                    >
-                                        <span
-                                            className="badge-bubble badge-bubble--2 w-10 h-10 rounded-full flex items-center justify-center shrink-0"
-                                            aria-hidden="true"
-                                        >
-                                            <span className="material-symbols-outlined text-base">
-                                                check_circle
-                                            </span>
-                                        </span>
-                                        <div className="min-w-0 flex-1">
-                                            <div className="font-semibold text-primary truncate">
-                                                {humanize(moduleName)}
-                                            </div>
-                                            <div className="text-xs text-tertiary mt-1">
-                                                {ended
-                                                    ? new Date(ended).toLocaleString()
-                                                    : 'Completed'}
-                                            </div>
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    )}
-                </div>
-
-                {/* Scheduler / status callout */}
-                <div className="bg-surface-alt border border-border-light rounded-lg p-6 flex flex-col gap-4">
-                    <div className="flex items-center gap-3">
-                        <span
-                            className="badge-bubble badge-bubble--3 w-11 h-11 rounded-full flex items-center justify-center"
-                            aria-hidden="true"
-                        >
-                            <span className="material-symbols-outlined">schedule</span>
-                        </span>
-                        <div>
-                            <div className="text-xs font-semibold uppercase tracking-wider text-tertiary">
-                                Scheduler
-                            </div>
-                            <div className="text-lg font-bold text-primary">
-                                {runningCount > 0
-                                    ? `${runningCount} running`
-                                    : scheduledCount > 0
-                                      ? 'Active'
-                                      : 'Idle'}
-                            </div>
-                        </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3 text-sm">
-                        <div className="bg-surface rounded-lg px-3 py-2">
-                            <div className="text-tertiary text-xs">Modules</div>
-                            <div className="font-semibold text-primary">{moduleCount}</div>
-                        </div>
-                        <div className="bg-surface rounded-lg px-3 py-2">
-                            <div className="text-tertiary text-xs">Scheduled</div>
-                            <div className="font-semibold text-primary">{scheduledCount}</div>
-                        </div>
-                        <div className="bg-surface rounded-lg px-3 py-2">
-                            <div className="text-tertiary text-xs">Pending</div>
-                            <div className="font-semibold text-primary">{jobStats.pending}</div>
-                        </div>
-                        <div className="bg-surface rounded-lg px-3 py-2">
-                            <div className="text-tertiary text-xs">Failed</div>
-                            <div className="font-semibold text-error">{jobStats.failed}</div>
-                        </div>
-                    </div>
-                    {version && (
-                        <div className="text-xs text-tertiary mt-auto pt-2 border-t border-border-light">
-                            CHUB {typeof version === 'string' ? version : ''}
-                        </div>
-                    )}
-                </div>
-            </section>
-
             {/* Module status */}
             <section>
                 <div className="mb-4">
@@ -391,15 +526,7 @@ const DashboardPage = () => {
                         const lastStatus = mod.last_run_status || state?.status;
                         const schedule = mod.schedule;
                         const jobId = state?.job_id;
-
-                        const statusClass =
-                            lastStatus === 'success'
-                                ? 'bg-success/20 text-success'
-                                : lastStatus === 'error'
-                                  ? 'bg-error/20 text-error'
-                                  : lastStatus === 'running'
-                                    ? 'bg-primary/20 text-primary'
-                                    : 'bg-surface-alt text-secondary';
+                        const isRunning = lastStatus === 'running';
 
                         return (
                             <div
@@ -413,12 +540,12 @@ const DashboardPage = () => {
                                     <div className="flex items-center gap-1 shrink-0">
                                         {lastStatus && (
                                             <span
-                                                className={`text-xs px-2 py-1 rounded-full ${statusClass}`}
+                                                className={`text-xs px-2 py-1 rounded-full ${statusPillClass(lastStatus)}`}
                                             >
                                                 {lastStatus}
                                             </span>
                                         )}
-                                        {lastStatus === 'running' && jobId && (
+                                        {isRunning && jobId && (
                                             <IconButton
                                                 icon="cancel"
                                                 aria-label={`Cancel ${humanize(mod.name)}`}
@@ -430,14 +557,27 @@ const DashboardPage = () => {
                                 </div>
                                 <div className="text-sm text-secondary break-words">
                                     {schedule ? (
-                                        <span>Schedule: {schedule}</span>
+                                        <span>Schedule: {scheduleToHuman(schedule)}</span>
                                     ) : (
-                                        <span className="text-tertiary italic">Not scheduled</span>
+                                        <span className="inline-flex items-center gap-2">
+                                            <span className="text-xs px-2 py-0.5 rounded-full bg-surface-alt text-tertiary">
+                                                Manual only
+                                            </span>
+                                            {!isRunning && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleRunNow(mod.name)}
+                                                    className="text-xs text-accent hover:underline bg-transparent border-0 p-0 cursor-pointer"
+                                                >
+                                                    Run now
+                                                </button>
+                                            )}
+                                        </span>
                                     )}
                                 </div>
                                 {lastRun && (
                                     <div className="text-xs text-tertiary">
-                                        Last run: {new Date(lastRun).toLocaleString()}
+                                        Last run: {formatTimeAgo(lastRun, new Date(tick))}
                                     </div>
                                 )}
                             </div>
@@ -445,6 +585,13 @@ const DashboardPage = () => {
                     })}
                 </div>
             </section>
+
+            {/* Footer */}
+            {version && (
+                <footer className="text-xs text-tertiary text-center pt-4 border-t border-border-light">
+                    CHUB {typeof version === 'string' ? version : ''}
+                </footer>
+            )}
         </div>
     );
 };
