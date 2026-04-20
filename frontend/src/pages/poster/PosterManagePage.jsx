@@ -558,7 +558,19 @@ const PosterManagePage = () => {
                 <Spinner size="large" text="Scanning Plex metadata…" center />
             ) : view === 'by-media' ? (
                 <>
-                    {bundles.length === 0 ? (
+                    {byMedia.error ? (
+                        <div className="text-center py-16 px-6 rounded-lg border border-error/40 bg-error/10 text-error text-sm">
+                            <span className="material-symbols-outlined text-2xl mb-2 block">
+                                error
+                            </span>
+                            Couldn&apos;t read Plex metadata:{' '}
+                            {byMedia.error?.message || String(byMedia.error)}.
+                            <div className="text-xs text-secondary mt-2">
+                                Check that the <code>/plex</code> mount is configured and the CHUB
+                                user can write to <code>/config</code>.
+                            </div>
+                        </div>
+                    ) : bundles.length === 0 ? (
                         <div className="text-center py-16 text-tertiary">
                             No poster variants found. Plex metadata looks clean.
                         </div>

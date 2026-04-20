@@ -219,8 +219,18 @@ def scan_bundles(plex_path: str, *, force: bool = False) -> Dict[str, Any]:
         return {"bundles": [], "stats": {"bundle_count": 0, "variant_count": 0, "bloat_count": 0, "bloat_size": 0, "scanned_at": time.time()}}
 
     # Take a quick copy of the DB so we don't contend with Plex.
-    working_dir = os.path.join(os.path.dirname(plex_path.rstrip("/")), ".chub_plex_db")
-    os.makedirs(working_dir, exist_ok=True)
+    # The sibling-of-plex_path location used to live at `/.chub_plex_db` when
+    # plex_path was `/plex`, which is unwritable by the CHUB user. Prefer
+    # `$CONFIG_DIR/plex-cache` which is always on a writable mount.
+    config_dir = os.environ.get("CONFIG_DIR") or "/config"
+    working_dir = os.path.join(config_dir, "plex-cache")
+    try:
+        os.makedirs(working_dir, exist_ok=True)
+    except OSError:
+        # Fall back to a tempdir if /config isn't writable (dev/local runs).
+        import tempfile
+
+        working_dir = tempfile.mkdtemp(prefix="chub-plex-cache-")
     db_copy = os.path.join(working_dir, "plex_scan.db")
     db_path = copy_plex_db(plex_path, db_copy) or None
 
