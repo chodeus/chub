@@ -18,7 +18,7 @@ Markdown==3.10.2
 MarkupSafe==3.0.3
 mypy_extensions==1.1.0
 oauthlib==3.3.1
-packaging==24.2
+packaging==26.1
 pathspec==0.12.1
 pathvalidate==3.3.1
 pillow==12.2.0
