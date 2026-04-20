@@ -756,32 +756,78 @@ export const SETTINGS_SCHEMA = [
                 description: 'Bypass the Plex running detection when using local database mode.',
             },
             {
-                key: 'photo_transcoder',
-                label: 'Clean PhotoTranscoder',
-                type: 'check_box',
-                description: 'Delete cached transcoded images from the PhotoTranscoder directory.',
+                key: 'sleep',
+                label: 'Sleep Between Operations',
+                type: 'number',
+                description: 'Seconds to wait between operations (default: 60).',
+            },
+            {
+                key: 'timeout',
+                label: 'Connection Timeout',
+                type: 'number',
+                description: 'Plex connection timeout in seconds (default: 600).',
+            },
+            {
+                key: 'instances',
+                label: 'Plex Instances',
+                type: 'instances',
+                required: true,
+                instance_types: ['plex'],
+                valueFormat: 'string',
+                description: 'Plex instance used to retrieve the library database.',
+            },
+        ],
+    },
+
+    {
+        key: 'plex_maintenance',
+        label: 'Plex Maintenance',
+        fields: [
+            {
+                key: 'log_level',
+                label: 'Log Level',
+                type: 'dropdown',
+                options: ['debug', 'info'],
+                required: true,
+                description: 'Set the logging verbosity for Plex maintenance.',
+            },
+            {
+                key: 'plex_path',
+                label: 'Plex Path',
+                type: 'text',
+                required: true,
+                description:
+                    "Path inside the CHUB container that points at your Plex Media Server's data dir " +
+                    '(same value as poster_cleanarr). Required for the PhotoTranscoder cache cleanup.',
             },
             {
                 key: 'empty_trash',
                 label: 'Empty Trash',
                 type: 'check_box',
-                description: 'Run Plex Empty Trash after cleanup.',
+                description:
+                    "Purge Plex's internal trash. Permanently deletes items you've already removed.",
             },
             {
                 key: 'clean_bundles',
                 label: 'Clean Bundles',
                 type: 'check_box',
-                description: 'Run Plex Clean Bundles after cleanup.',
+                description: 'Remove orphaned .bundle folders for media that no longer exists.',
             },
             {
                 key: 'optimize_db',
                 label: 'Optimize Database',
                 type: 'check_box',
-                description: 'Run Plex Optimize Database after cleanup.',
+                description: "Run VACUUM on Plex's database. Reclaims space, rebuilds indexes.",
+            },
+            {
+                key: 'photo_transcoder',
+                label: 'Clear PhotoTranscoder Cache',
+                type: 'check_box',
+                description: "Clear Plex's transcoded-image cache. Plex regenerates on demand.",
             },
             {
                 key: 'sleep',
-                label: 'Sleep Between Operations',
+                label: 'Sleep Between Tasks',
                 type: 'number',
                 description: 'Seconds to wait between Plex maintenance operations (default: 60).',
             },
@@ -797,10 +843,8 @@ export const SETTINGS_SCHEMA = [
                 type: 'instances',
                 required: true,
                 instance_types: ['plex'],
-                // Backend: PosterCleanarrConfig.instances is List[str], so emit
-                // plain instance names and hide the library/add_posters UI.
                 valueFormat: 'string',
-                description: 'Plex instance to use for database download and maintenance tasks.',
+                description: 'Plex instance to run maintenance tasks against.',
             },
         ],
     },

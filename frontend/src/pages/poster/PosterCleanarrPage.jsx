@@ -6,7 +6,7 @@ import { Modal } from '../../components/modals/Modal';
 import { Button, LoadingButton, PageHeader } from '../../components/ui/index.js';
 import Spinner from '../../components/ui/Spinner.jsx';
 
-const PAGE_SIZE = 30;
+const PAGE_SIZE = 500; // master-detail needs the full bundle list client-side
 
 const MODE_LABELS = {
     report: 'Report',
@@ -14,7 +14,18 @@ const MODE_LABELS = {
     remove: 'Delete permanently',
 };
 
-function formatBytes(bytes) {
+// localStorage key for persisting scan/filter/tree state across navigations.
+const STATE_KEY = 'chub_cleanarr_state_v2';
+const loadPersistedState = () => {
+    try {
+        const raw = localStorage.getItem(STATE_KEY);
+        return raw ? JSON.parse(raw) : {};
+    } catch {
+        return {};
+    }
+};
+
+const formatBytes = bytes => {
     if (!bytes) return '0 B';
     const u = ['B', 'KB', 'MB', 'GB', 'TB'];
     let n = bytes;
@@ -24,56 +35,110 @@ function formatBytes(bytes) {
         i += 1;
     }
     return `${n.toFixed(1)} ${u[i]}`;
-}
-
-/** Single poster variant tile — shows active/bloat border and selection checkbox. */
-const VARIANT_KIND_LABELS = {
-    poster: 'Poster',
-    art: 'Art',
-    banner: 'Banner',
-    thumb: 'Thumb',
-    chapter: 'Chapter',
-    theme: 'Theme',
-    other: 'Other',
 };
 
-const formatRelativeTime = mtime => {
-    if (!mtime) return '';
-    const ms = Date.now() - mtime * 1000;
-    if (ms < 0) return '';
-    const days = Math.floor(ms / 86_400_000);
-    if (days < 1) return 'today';
-    if (days < 30) return `${days}d ago`;
-    const months = Math.floor(days / 30);
-    if (months < 12) return `${months}mo ago`;
-    return `${Math.floor(days / 365)}y ago`;
+// Module-level so reference is stable across renders (fixes exhaustive-deps warning).
+const TERMINAL_STATUSES = ['success', 'error', 'cancelled'];
+
+// ---------------------------------------------------------------------------
+// Variant path → (level, season, episode, context) classifier
+// ---------------------------------------------------------------------------
+// Plex stores all artwork under `<bundle>/Uploads/` or `<bundle>/Contents/`.
+// For TV shows, the nested path encodes `seasons/N/episodes/M/` so we can
+// classify a variant without a second API call.
+const classifyVariant = variant => {
+    const rel = (variant.path || '').split('.bundle/')[1] || '';
+    const source = variant.source || (rel.startsWith('Contents/') ? 'plex' : 'uploads');
+    // strip the source prefix so path-matching below is stable
+    const body = rel.replace(/^Uploads\//, '').replace(/^Contents\//, '');
+
+    const se = body.match(/posters\/seasons\/(\d+)\/episodes\/(\d+)/);
+    if (se) {
+        return {
+            source,
+            level: 'episode',
+            season: Number(se[1]),
+            episode: Number(se[2]),
+            context: `S${String(se[1]).padStart(2, '0')} · E${String(se[2]).padStart(2, '0')}`,
+        };
+    }
+    const s = body.match(/posters\/seasons\/(\d+)\//);
+    if (s) {
+        return {
+            source,
+            level: 'season',
+            season: Number(s[1]),
+            context: `Season ${Number(s[1])}`,
+        };
+    }
+    if (body.startsWith('art/') || body.startsWith('Art/')) {
+        return { source, level: 'show', context: 'Background art' };
+    }
+    if (body.startsWith('banners/') || body.startsWith('Banners/')) {
+        return { source, level: 'show', context: 'Banner' };
+    }
+    return { source, level: 'show', context: 'Show poster' };
 };
 
-const VariantTile = ({ variant, selected, onToggleSelect, onPreview, canSelect = true }) => {
-    const border = variant.active
-        ? 'border-success ring-2 ring-success/50'
-        : 'border-error/70 ring-1 ring-error/30';
-    const kindLabel = VARIANT_KIND_LABELS[variant.kind] || null;
-    const ageLabel = formatRelativeTime(variant.mtime);
+// Build a tree for a bundle: { show: [], seasons: Map(N -> { posters: [], episodes: Map(M -> { thumbs: [] }) }) }
+const buildBundleTree = bundle => {
+    const tree = { show: [], seasons: new Map() };
+    for (const raw of bundle.variants || []) {
+        const cls = classifyVariant(raw);
+        const v = { ...raw, cls };
+        if (cls.level === 'show') tree.show.push(v);
+        else if (cls.level === 'season') {
+            if (!tree.seasons.has(cls.season))
+                tree.seasons.set(cls.season, { n: cls.season, posters: [], episodes: new Map() });
+            tree.seasons.get(cls.season).posters.push(v);
+        } else if (cls.level === 'episode') {
+            if (!tree.seasons.has(cls.season))
+                tree.seasons.set(cls.season, { n: cls.season, posters: [], episodes: new Map() });
+            const season = tree.seasons.get(cls.season);
+            if (!season.episodes.has(cls.episode))
+                season.episodes.set(cls.episode, { n: cls.episode, thumbs: [] });
+            season.episodes.get(cls.episode).thumbs.push(v);
+        }
+    }
+    return tree;
+};
+
+// ---------------------------------------------------------------------------
+// Variant tile — green/red/grey border only, no pill badges.
+// ---------------------------------------------------------------------------
+const VariantTile = ({ variant, selected, onToggleSelect, onPreview }) => {
+    const source = variant.cls?.source || variant.source || 'uploads';
+    const isPlex = source === 'plex';
+    const isActive = !!variant.active;
+    const borderClass = isPlex
+        ? 'border-[rgba(150,150,160,0.55)]'
+        : isActive
+          ? 'border-success ring-2 ring-success/40'
+          : 'border-[rgba(253,53,92,0.85)]';
     return (
         <div
-            className={`relative rounded-md overflow-hidden border-2 ${border} bg-surface cursor-pointer group`}
+            className={`relative rounded-md overflow-hidden border-[3px] ${borderClass} bg-surface cursor-pointer group`}
             onClick={() => onPreview(variant)}
-            title={[
-                variant.active ? 'Active poster in Plex' : 'Unused (bloat) — candidate for cleanup',
-                kindLabel,
-                ageLabel && `modified ${ageLabel}`,
-            ]
-                .filter(Boolean)
-                .join(' · ')}
+            title={
+                isPlex
+                    ? 'Plex default — read-only, cannot be deleted'
+                    : isActive
+                      ? 'Active poster in Plex'
+                      : 'Unused (bloat) — candidate for cleanup'
+            }
         >
             <img
                 src={postersAPI.getPlexVariantUrl(variant.path)}
                 alt={variant.filename}
                 loading="lazy"
-                className="w-full h-40 object-cover"
+                className={`w-full h-40 object-cover ${isPlex ? 'grayscale-[30%]' : ''} ${
+                    !isActive && !isPlex ? 'opacity-75' : ''
+                }`}
+                onError={e => {
+                    e.target.style.display = 'none';
+                }}
             />
-            {canSelect && !variant.active && (
+            {!isActive && !isPlex && (
                 <label
                     className="absolute top-1 left-1 bg-black/70 rounded px-1 py-0.5 cursor-pointer"
                     onClick={e => e.stopPropagation()}
@@ -86,108 +151,19 @@ const VariantTile = ({ variant, selected, onToggleSelect, onPreview, canSelect =
                     />
                 </label>
             )}
-            {kindLabel && (
-                <span
-                    className={`absolute top-1 right-1 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded ${variant.active ? 'bg-success/80 text-white' : 'bg-black/70 text-white'}`}
-                >
-                    {kindLabel}
-                </span>
-            )}
-            <div className="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-xs px-2 py-1 flex items-center justify-between gap-2">
-                <span>{formatBytes(variant.size)}</span>
-                {ageLabel && <span className="text-white/70">{ageLabel}</span>}
-            </div>
         </div>
     );
 };
 
-const MEDIA_TYPE_BADGE_COLOR = {
-    movie: 'bg-blue-500/20 text-blue-300',
-    show: 'bg-purple-500/20 text-purple-300',
-    season: 'bg-indigo-500/20 text-indigo-300',
-    episode: 'bg-amber-500/20 text-amber-300',
-    collection: 'bg-emerald-500/20 text-emerald-300',
-    artist: 'bg-pink-500/20 text-pink-300',
-    album: 'bg-fuchsia-500/20 text-fuchsia-300',
-};
-
-/** One media-item bundle: title + grid of its variants. */
-const BundleCard = ({ bundle, selectedPaths, onToggleSelect, onToggleBundle, onPreview }) => {
-    const bloatCount = bundle.variants.filter(v => !v.active).length;
-    const selectedInBundle = bundle.variants.filter(
-        v => !v.active && selectedPaths.has(v.path)
-    ).length;
-    const allSelected = bloatCount > 0 && selectedInBundle === bloatCount;
-
-    const titleDisplay = bundle.title
-        ? `${bundle.title}${bundle.year ? ` (${bundle.year})` : ''}`
-        : bundle.bundle_path.split('/').slice(-2).join('/');
-
-    const typeLabel = bundle.metadata_type_label;
-    const typeBadgeClass = MEDIA_TYPE_BADGE_COLOR[typeLabel] || 'bg-surface text-secondary';
-
-    return (
-        <section className="rounded-lg border border-border bg-surface-alt p-3 flex flex-col gap-2">
-            <header className="flex items-center justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                    <h3
-                        className="text-sm font-semibold text-primary truncate flex items-center gap-2"
-                        title={titleDisplay}
-                    >
-                        <span className="truncate">{titleDisplay}</span>
-                        {typeLabel && (
-                            <span
-                                className={`text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded ${typeBadgeClass}`}
-                            >
-                                {typeLabel}
-                            </span>
-                        )}
-                    </h3>
-                    <p className="text-xs text-secondary">
-                        {bundle.library_name && (
-                            <span className="text-tertiary">{bundle.library_name} · </span>
-                        )}
-                        {bundle.variants.length} variant{bundle.variants.length !== 1 ? 's' : ''}
-                        {bloatCount > 0 && ` · ${bloatCount} bloat`}
-                    </p>
-                </div>
-                {bloatCount > 0 && (
-                    <label className="flex items-center gap-1 text-xs text-secondary cursor-pointer">
-                        <input
-                            type="checkbox"
-                            checked={allSelected}
-                            onChange={() => onToggleBundle(bundle, !allSelected)}
-                        />
-                        Select bloat
-                    </label>
-                )}
-            </header>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
-                {bundle.variants.map(v => (
-                    <VariantTile
-                        key={v.path}
-                        variant={v}
-                        selected={selectedPaths.has(v.path)}
-                        onToggleSelect={onToggleSelect}
-                        onPreview={p => onPreview(p, bundle)}
-                    />
-                ))}
-            </div>
-        </section>
-    );
-};
-
-// Module-level so reference is stable across renders (fixes exhaustive-deps warning).
-const TERMINAL_STATUSES = ['success', 'error', 'cancelled'];
-
-/** Modal shown while a cleanup job runs — polls log-tail every 1.5s. */
+// ---------------------------------------------------------------------------
+// Live cleanup log modal (polling)
+// ---------------------------------------------------------------------------
 const LiveLogModal = ({ jobId, onClose }) => {
     const [text, setText] = useState('');
     const [status, setStatus] = useState('running');
     const offsetRef = useRef(0);
     const preRef = useRef(null);
 
-    // Reset text/status when jobId changes (render-time, not in an effect).
     const [prevJobId, setPrevJobId] = useState(jobId);
     if (prevJobId !== jobId) {
         setPrevJobId(jobId);
@@ -199,9 +175,7 @@ const LiveLogModal = ({ jobId, onClose }) => {
         if (!jobId) return undefined;
         let cancelled = false;
         let timer = null;
-        // Reset log offset at the start of each new poll lifecycle.
         offsetRef.current = 0;
-
         const poll = () =>
             postersAPI
                 .tailJobLog(jobId, offsetRef.current)
@@ -211,15 +185,13 @@ const LiveLogModal = ({ jobId, onClose }) => {
                     if (data.lines) {
                         setText(prev => prev + data.lines);
                         offsetRef.current = data.next_offset ?? offsetRef.current;
-                        // Auto-scroll to bottom
                         setTimeout(() => {
-                            if (preRef.current) {
+                            if (preRef.current)
                                 preRef.current.scrollTop = preRef.current.scrollHeight;
-                            }
                         }, 0);
                     }
                     if (data.status) setStatus(data.status);
-                    if (TERMINAL_STATUSES.includes(data.status)) return; // stop polling
+                    if (TERMINAL_STATUSES.includes(data.status)) return;
                     timer = setTimeout(poll, 1500);
                 })
                 .catch(() => {
@@ -259,11 +231,22 @@ const LiveLogModal = ({ jobId, onClose }) => {
     );
 };
 
-/** Preview + per-variant actions modal. */
+// ---------------------------------------------------------------------------
+// Per-variant preview modal (full-size image + actions)
+// ---------------------------------------------------------------------------
 const VariantPreviewModal = ({ target, onClose, onDelete, onSetActive }) => {
     if (!target) return null;
     const { variant, bundle } = target;
+    const source = variant.cls?.source || variant.source || 'uploads';
+    const isPlex = source === 'plex';
     const isActive = variant.active;
+    const statusLabel = isPlex ? (
+        <span className="text-tertiary">Plex default (read-only)</span>
+    ) : isActive ? (
+        <span className="text-success">Active</span>
+    ) : (
+        <span className="text-error">Bloat</span>
+    );
     return (
         <Modal isOpen={!!target} onClose={onClose} size="large">
             <Modal.Header>{bundle?.title || variant.filename}</Modal.Header>
@@ -276,12 +259,8 @@ const VariantPreviewModal = ({ target, onClose, onDelete, onSetActive }) => {
                     />
                     <div className="text-xs text-secondary font-mono break-all">{variant.path}</div>
                     <div className="text-sm">
-                        {formatBytes(variant.size)} ·{' '}
-                        {isActive ? (
-                            <span className="text-success">Active</span>
-                        ) : (
-                            <span className="text-error">Bloat</span>
-                        )}
+                        {formatBytes(variant.size)} · {statusLabel}
+                        {variant.cls?.context ? ` · ${variant.cls.context}` : ''}
                     </div>
                 </div>
             </Modal.Body>
@@ -291,7 +270,7 @@ const VariantPreviewModal = ({ target, onClose, onDelete, onSetActive }) => {
                         Make active in Plex
                     </Button>
                 )}
-                {!isActive && (
+                {!isActive && !isPlex && (
                     <Button variant="danger" onClick={() => onDelete(variant)}>
                         Delete this variant
                     </Button>
@@ -304,160 +283,170 @@ const VariantPreviewModal = ({ target, onClose, onDelete, onSetActive }) => {
     );
 };
 
-// localStorage key for persisting scan/filter state across page navigations.
-// Backend caches the scan for 5 min, so auto-firing on remount is cheap.
-const STATE_KEY = 'chub_cleanarr_state_v1';
-const loadPersistedState = () => {
-    try {
-        const raw = localStorage.getItem(STATE_KEY);
-        return raw ? JSON.parse(raw) : {};
-    } catch {
-        return {};
-    }
-};
-
+// ---------------------------------------------------------------------------
+// Main page
+// ---------------------------------------------------------------------------
 const PosterCleanarrPage = () => {
     const toast = useToast();
     const persisted = useMemo(() => loadPersistedState(), []);
 
-    // View: by-media (grouped) | bloat (flat)
-    const [view, setView] = useState(persisted.view || 'by-media');
-    const [onlyBloat, setOnlyBloat] = useState(persisted.onlyBloat ?? false);
-    const [page, setPage] = useState(0);
+    // Action-bar state (global bulk cleanup flow — Report/Move/Remove).
+    const [mode, setMode] = useState('report');
+
+    // Scan state. `hasScanned` persists — once the user has triggered a
+    // scan in this browser, we auto-refresh on remount.
+    const [hasScanned, setHasScanned] = useState(persisted.hasScanned ?? false);
+
+    // Tab + search on the left pane.
+    const [tab, setTab] = useState(persisted.tab || 'all');
+    const [search, setSearch] = useState('');
+
+    // Tree expansion (persisted so the user's open branches survive a reload).
+    const [expandedShows, setExpandedShows] = useState(
+        () => new Set(persisted.expandedShows || [])
+    );
+    const [expandedSeasons, setExpandedSeasons] = useState(
+        () => new Set(persisted.expandedSeasons || [])
+    );
+
+    // Selected node in the left tree.
+    //   { kind: 'show' | 'season' | 'episode', ratingKey, season?, episode? }
+    const [selected, setSelected] = useState(persisted.selected || null);
+
+    // Per-variant bulk selection (checkbox on bloat tiles).
     const [selectedPaths, setSelectedPaths] = useState(new Set());
+
+    // Modals.
     const [previewTarget, setPreviewTarget] = useState(null);
     const [confirmSetActive, setConfirmSetActive] = useState(null);
     const [liveJobId, setLiveJobId] = useState(null);
     const [isEnqueuing, setIsEnqueuing] = useState(false);
-    // hasScanned is persisted: once the user has triggered a scan in this
-    // browser, subsequent visits auto-refresh on mount (the backend cache
-    // makes the call cheap). Avoids forcing a manual Refresh every time
-    // they navigate away and back.
-    const [hasScanned, setHasScanned] = useState(persisted.hasScanned ?? false);
 
-    // Mode + Plex-maintenance toggles
-    const [mode, setMode] = useState('report');
-    const [emptyTrash, setEmptyTrash] = useState(false);
-    const [cleanBundles, setCleanBundles] = useState(false);
-    const [optimizeDb, setOptimizeDb] = useState(false);
-
-    // ImageMaid-style filters (persisted so the user's last view is restored)
-    const [mediaType, setMediaType] = useState(persisted.mediaType || 'all'); // all | movie | show | season | episode | collection
-    const [libraryId, setLibraryId] = useState(persisted.libraryId ?? 0); // 0 = all
-    const [variantKind, setVariantKind] = useState(persisted.variantKind || 'all'); // all | poster | art | banner | thumb | chapter | theme | other
-
-    const byMediaParams = useMemo(
-        () => ({
-            limit: PAGE_SIZE,
-            offset: page * PAGE_SIZE,
-            only_bloat: onlyBloat,
-            media_type: mediaType,
-            library_id: libraryId,
-            variant_kind: variantKind,
-        }),
-        [page, onlyBloat, mediaType, libraryId, variantKind]
-    );
-
-    const bloatParams = useMemo(() => ({ limit: PAGE_SIZE, offset: page * PAGE_SIZE }), [page]);
-
-    // Scans don't auto-fire on mount — they walk the entire Plex metadata
-    // directory. The user triggers them by clicking Refresh, which calls
-    // `byMedia.refresh()` / `bloatFlat.refresh()` explicitly. We deliberately
-    // don't gate the apiFunction on `hasScanned` — useApiData's effect skips
-    // execution when `immediate: false`, so a dep-change-as-trigger pattern
-    // silently never fires. The explicit refresh() in handleRefresh is the
-    // only path that moves data.
+    // ---- Scan data ----
     const byMedia = useApiData({
         apiFunction: useCallback(
-            () =>
-                view === 'by-media'
-                    ? postersAPI.listPlexMetadataByMedia(byMediaParams)
-                    : Promise.resolve({ data: { bundles: [], total: 0, stats: null } }),
-            [byMediaParams, view]
+            () => postersAPI.listPlexMetadataByMedia({ limit: PAGE_SIZE, offset: 0 }),
+            []
         ),
-        dependencies: [byMediaParams, view],
-        options: { showErrorToast: false, immediate: false },
-    });
-
-    const bloatFlat = useApiData({
-        apiFunction: useCallback(
-            () =>
-                view === 'bloat'
-                    ? postersAPI.listPlexMetadataBloat(bloatParams)
-                    : Promise.resolve({ data: { items: [], total: 0, stats: null } }),
-            [bloatParams, view]
-        ),
-        dependencies: [bloatParams, view],
+        dependencies: [],
         options: { showErrorToast: false, immediate: false },
     });
 
     const bundles = useMemo(() => byMedia.data?.data?.bundles || [], [byMedia.data]);
-    const libraries = useMemo(() => byMedia.data?.data?.libraries || [], [byMedia.data]);
-    const presentMediaTypes = useMemo(
-        () => new Set(byMedia.data?.data?.media_types || []),
-        [byMedia.data]
-    );
-    const presentVariantKinds = useMemo(
-        () => new Set(byMedia.data?.data?.variant_kinds || []),
-        [byMedia.data]
-    );
-    const bloatItems = useMemo(() => bloatFlat.data?.data?.items || [], [bloatFlat.data]);
-    const stats = useMemo(
-        () => (view === 'by-media' ? byMedia.data?.data?.stats : bloatFlat.data?.data?.stats),
-        [view, byMedia.data, bloatFlat.data]
-    );
-    const total = useMemo(
-        () =>
-            view === 'by-media' ? byMedia.data?.data?.total || 0 : bloatFlat.data?.data?.total || 0,
-        [view, byMedia.data, bloatFlat.data]
-    );
-    const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-    const loading = view === 'by-media' ? byMedia.isLoading : bloatFlat.isLoading;
+    const stats = useMemo(() => byMedia.data?.data?.stats || null, [byMedia.data]);
+    const loading = byMedia.isLoading;
 
-    const refreshView = useCallback(() => {
-        // First click flips the opt-in flag for the UI empty state, and we
-        // always call refresh() explicitly — useApiData with immediate:false
-        // does not re-run on dep change, so relying on the flag alone leaves
-        // the fetch hanging.
-        if (!hasScanned) setHasScanned(true);
-        if (view === 'by-media') byMedia.refresh();
-        else bloatFlat.refresh();
-    }, [view, byMedia, bloatFlat, hasScanned]);
+    // Build all trees once per scan payload.
+    const bundleTrees = useMemo(() => {
+        const m = new Map();
+        for (const b of bundles) m.set(b.rating_key, buildBundleTree(b));
+        return m;
+    }, [bundles]);
 
-    // Persist view/filter/scan state so the page picks back up where the
-    // user left it after navigating away. Writes happen on every change.
+    // Persist view/tree state.
     useEffect(() => {
         try {
             localStorage.setItem(
                 STATE_KEY,
                 JSON.stringify({
                     hasScanned,
-                    view,
-                    onlyBloat,
-                    mediaType,
-                    libraryId,
-                    variantKind,
+                    tab,
+                    expandedShows: [...expandedShows],
+                    expandedSeasons: [...expandedSeasons],
+                    selected,
                 })
             );
         } catch {
-            // ignore quota / private-mode failures
+            // ignore quota / private mode failures
         }
-    }, [hasScanned, view, onlyBloat, mediaType, libraryId, variantKind]);
+    }, [hasScanned, tab, expandedShows, expandedSeasons, selected]);
 
-    // Auto-refresh on mount if the user has scanned in this browser before.
-    // Backend caches results for 5 minutes, so this is cheap on repeat visits
-    // and saves the user from hitting Refresh every time they come back.
+    // Auto-refresh on mount if the user has scanned before.
     const didMountRefreshRef = useRef(false);
     useEffect(() => {
         if (didMountRefreshRef.current) return;
         if (!hasScanned) return;
         didMountRefreshRef.current = true;
-        if (view === 'by-media') byMedia.refresh();
-        else bloatFlat.refresh();
-        // Intentional: run once on mount, not on every view flip.
+        byMedia.refresh();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    const refreshScan = useCallback(() => {
+        if (!hasScanned) setHasScanned(true);
+        byMedia.refresh();
+    }, [byMedia, hasScanned]);
+
+    // ---- Tab filtering ----
+    const filteredBundles = useMemo(() => {
+        return bundles.filter(b => {
+            if (tab !== 'all' && b.metadata_type_label !== tab) return false;
+            if (search && !(b.title || '').toLowerCase().includes(search.toLowerCase()))
+                return false;
+            return true;
+        });
+    }, [bundles, tab, search]);
+
+    // ---- Derived: variants visible in the right pane ----
+    const detail = useMemo(() => {
+        if (!selected) return null;
+        const bundle = bundles.find(b => b.rating_key === selected.ratingKey);
+        if (!bundle) return null;
+        const tree = bundleTrees.get(bundle.rating_key);
+        if (!tree) return null;
+        if (selected.kind === 'show') {
+            const variants = tree.show;
+            return { bundle, variants, breadcrumb: [bundle.title] };
+        }
+        if (selected.kind === 'season') {
+            const season = tree.seasons.get(selected.season);
+            return {
+                bundle,
+                variants: season?.posters || [],
+                breadcrumb: [bundle.title, `Season ${selected.season}`],
+            };
+        }
+        if (selected.kind === 'episode') {
+            const season = tree.seasons.get(selected.season);
+            const ep = season?.episodes.get(selected.episode);
+            return {
+                bundle,
+                variants: ep?.thumbs || [],
+                breadcrumb: [
+                    bundle.title,
+                    `Season ${selected.season}`,
+                    `Episode ${selected.episode}`,
+                ],
+            };
+        }
+        return null;
+    }, [selected, bundles, bundleTrees]);
+
+    // ---- Tree expansion / selection handlers ----
+    const toggleShow = useCallback(rk => {
+        setExpandedShows(prev => {
+            const next = new Set(prev);
+            if (next.has(rk)) next.delete(rk);
+            else next.add(rk);
+            return next;
+        });
+    }, []);
+
+    const toggleSeason = useCallback((rk, n) => {
+        const key = `${rk}:${n}`;
+        setExpandedSeasons(prev => {
+            const next = new Set(prev);
+            if (next.has(key)) next.delete(key);
+            else next.add(key);
+            return next;
+        });
+    }, []);
+
+    const selectNode = useCallback(node => {
+        setSelected(node);
+        setSelectedPaths(new Set());
+    }, []);
+
+    // ---- Variant actions ----
     const toggleSelect = useCallback(variant => {
         setSelectedPaths(prev => {
             const next = new Set(prev);
@@ -467,26 +456,11 @@ const PosterCleanarrPage = () => {
         });
     }, []);
 
-    const toggleBundle = useCallback((bundle, select) => {
-        setSelectedPaths(prev => {
-            const next = new Set(prev);
-            for (const v of bundle.variants) {
-                if (v.active) continue;
-                if (select) next.add(v.path);
-                else next.delete(v.path);
-            }
-            return next;
-        });
-    }, []);
-
-    const selectAllVisible = () => {
+    const selectAllBloat = () => {
+        if (!detail) return;
         const next = new Set(selectedPaths);
-        if (view === 'by-media') {
-            for (const b of bundles) {
-                for (const v of b.variants) if (!v.active) next.add(v.path);
-            }
-        } else {
-            for (const it of bloatItems) next.add(it.path);
+        for (const v of detail.variants) {
+            if (!v.active && (v.cls?.source || 'uploads') !== 'plex') next.add(v.path);
         }
         setSelectedPaths(next);
     };
@@ -496,15 +470,8 @@ const PosterCleanarrPage = () => {
     const runCleanup = async () => {
         setIsEnqueuing(true);
         try {
-            const body = {
-                mode,
-                empty_trash: emptyTrash,
-                clean_bundles: cleanBundles,
-                optimize_db: optimizeDb,
-            };
-            if (selectedPaths.size > 0) {
-                body.target_paths = Array.from(selectedPaths);
-            }
+            const body = { mode };
+            if (selectedPaths.size > 0) body.target_paths = Array.from(selectedPaths);
             const res = await postersAPI.runPlexMetadataCleanup(body);
             const jobId = res?.data?.job_id;
             if (!jobId) {
@@ -526,10 +493,14 @@ const PosterCleanarrPage = () => {
             await postersAPI.deletePlexMetadataVariant(variant.path);
             toast.success('Variant deleted');
             setPreviewTarget(null);
-            refreshView();
+            refreshScan();
         } catch {
             toast.error('Failed to delete variant');
         }
+    };
+
+    const handleSetActiveRequest = (variant, bundle) => {
+        setConfirmSetActive({ variant, bundle });
     };
 
     const handleSetActive = async () => {
@@ -540,401 +511,301 @@ const PosterCleanarrPage = () => {
             toast.success('Active poster updated in Plex');
             setConfirmSetActive(null);
             setPreviewTarget(null);
-            refreshView();
+            refreshScan();
         } catch {
             toast.error('Failed to update active poster');
         }
     };
 
+    // ---- Render ----
+    const bloatInDetail = detail
+        ? detail.variants.filter(v => !v.active && (v.cls?.source || 'uploads') !== 'plex').length
+        : 0;
+    const plexInDetail = detail
+        ? detail.variants.filter(v => (v.cls?.source || 'uploads') === 'plex').length
+        : 0;
+    const activeInDetail = detail ? detail.variants.filter(v => v.active).length : 0;
+    const reclaimableBytes = detail
+        ? detail.variants
+              .filter(v => !v.active && (v.cls?.source || 'uploads') !== 'plex')
+              .reduce((s, v) => s + (v.size || 0), 0)
+        : 0;
+
     return (
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-4">
             <PageHeader
+                icon="cleaning_services"
                 title="Poster Cleanarr"
                 description="Review Plex poster variants and clean up unused (bloat) images."
-                badge={3}
-                icon="cleaning_services"
-                actions={
-                    stats ? (
-                        <div className="text-xs text-secondary">
-                            {stats.bundle_count} items · {stats.variant_count} variants ·{' '}
-                            <span className="text-error">{stats.bloat_count} bloat</span> ·{' '}
-                            {formatBytes(stats.bloat_size)} reclaimable
-                        </div>
-                    ) : null
-                }
             />
 
-            {/* Action bar */}
-            <section className="rounded-lg border border-border bg-surface p-3 flex flex-col gap-3">
-                <div className="flex flex-wrap items-center gap-3">
-                    {/* View toggle */}
-                    <div className="flex items-center gap-1 border border-border rounded-md p-1">
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setView('by-media');
-                                setPage(0);
-                            }}
-                            className={`px-3 py-1 text-sm rounded ${
-                                view === 'by-media'
-                                    ? 'bg-primary/15 text-primary'
-                                    : 'text-secondary'
-                            }`}
-                        >
-                            By media item
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setView('bloat');
-                                setPage(0);
-                            }}
-                            className={`px-3 py-1 text-sm rounded ${
-                                view === 'bloat' ? 'bg-primary/15 text-primary' : 'text-secondary'
-                            }`}
-                        >
-                            Bloat only
-                        </button>
-                    </div>
-
-                    {view === 'by-media' && (
-                        <label className="flex items-center gap-2 text-sm">
-                            <input
-                                type="checkbox"
-                                checked={onlyBloat}
-                                onChange={e => {
-                                    setOnlyBloat(e.target.checked);
-                                    setPage(0);
-                                }}
-                            />
-                            Hide items with no bloat
-                        </label>
-                    )}
-
-                    <div className="ml-auto flex items-center gap-2">
-                        <Button variant="ghost" onClick={refreshView} disabled={loading}>
-                            <span className="material-symbols-outlined text-base">refresh</span>
-                            Refresh
-                        </Button>
-                    </div>
+            {/* Global summary stats (only when a scan exists). */}
+            {hasScanned && stats && (
+                <div className="text-sm text-secondary">
+                    {stats.bundle_count} items · {stats.variant_count} variants ·{' '}
+                    <span className="text-error">{stats.bloat_count} bloat</span> ·{' '}
+                    {formatBytes(stats.bloat_size)} reclaimable
                 </div>
+            )}
 
-                {/* Filters — library / media type / variant kind. The scan
-                    always fetches everything; these narrow the server-side
-                    response so the page doesn't get overwhelmed by episode
-                    thumbnails when you care about movie/show posters. */}
-                {view === 'by-media' && hasScanned && (
-                    <div className="flex flex-wrap items-center gap-3 border-t border-border pt-3 text-sm">
-                        <label className="flex items-center gap-2">
-                            <span className="text-tertiary">Library:</span>
-                            <select
-                                value={libraryId}
-                                onChange={e => {
-                                    setLibraryId(Number(e.target.value));
-                                    setPage(0);
-                                }}
-                                className="px-2 py-1 rounded bg-surface-alt border border-border"
-                            >
-                                <option value={0}>All libraries</option>
-                                {libraries.map(lib => (
-                                    <option key={lib.id} value={lib.id}>
-                                        {lib.name}
-                                    </option>
-                                ))}
-                            </select>
-                        </label>
-                        <label className="flex items-center gap-2">
-                            <span className="text-tertiary">Type:</span>
-                            <select
-                                value={mediaType}
-                                onChange={e => {
-                                    setMediaType(e.target.value);
-                                    setPage(0);
-                                }}
-                                className="px-2 py-1 rounded bg-surface-alt border border-border"
-                            >
-                                <option value="all">All</option>
-                                {[
-                                    ['movie', 'Movie'],
-                                    ['show', 'Show'],
-                                    ['season', 'Season'],
-                                    ['episode', 'Episode'],
-                                    ['collection', 'Collection'],
-                                    ['artist', 'Artist'],
-                                    ['album', 'Album'],
-                                ]
-                                    .filter(
-                                        ([value]) =>
-                                            presentMediaTypes.size === 0 ||
-                                            presentMediaTypes.has(value)
-                                    )
-                                    .map(([value, label]) => (
-                                        <option key={value} value={value}>
-                                            {label}
-                                        </option>
-                                    ))}
-                            </select>
-                        </label>
-                        <label className="flex items-center gap-2">
-                            <span className="text-tertiary">Kind:</span>
-                            <select
-                                value={variantKind}
-                                onChange={e => {
-                                    setVariantKind(e.target.value);
-                                    setPage(0);
-                                }}
-                                className="px-2 py-1 rounded bg-surface-alt border border-border"
-                            >
-                                <option value="all">All</option>
-                                {[
-                                    ['poster', 'Posters'],
-                                    ['art', 'Background art'],
-                                    ['banner', 'Banners'],
-                                    ['thumb', 'Thumbnails'],
-                                    ['chapter', 'Chapter images'],
-                                    ['theme', 'Themes'],
-                                    ['other', 'Other'],
-                                ]
-                                    .filter(
-                                        ([value]) =>
-                                            presentVariantKinds.size === 0 ||
-                                            presentVariantKinds.has(value)
-                                    )
-                                    .map(([value, label]) => (
-                                        <option key={value} value={value}>
-                                            {label}
-                                        </option>
-                                    ))}
-                            </select>
-                        </label>
-                        {(mediaType !== 'all' || libraryId !== 0 || variantKind !== 'all') && (
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setMediaType('all');
-                                    setLibraryId(0);
-                                    setVariantKind('all');
-                                    setPage(0);
-                                }}
-                                className="text-xs text-accent hover:underline bg-transparent border-0 cursor-pointer"
-                            >
-                                Clear filters
-                            </button>
-                        )}
-                    </div>
-                )}
-
-                <div className="flex flex-wrap items-center gap-3 border-t border-border pt-3">
-                    <label className="flex items-center gap-2 text-sm">
-                        Mode:
-                        <select
-                            value={mode}
-                            onChange={e => setMode(e.target.value)}
-                            className="bg-surface-alt border border-border rounded px-2 py-1 text-sm"
-                        >
-                            {Object.entries(MODE_LABELS).map(([k, v]) => (
-                                <option key={k} value={k}>
-                                    {v}
-                                </option>
-                            ))}
-                        </select>
-                    </label>
-                    <label className="flex items-center gap-1 text-sm">
-                        <input
-                            type="checkbox"
-                            checked={emptyTrash}
-                            onChange={e => setEmptyTrash(e.target.checked)}
-                        />
-                        Empty trash
-                    </label>
-                    <label className="flex items-center gap-1 text-sm">
-                        <input
-                            type="checkbox"
-                            checked={cleanBundles}
-                            onChange={e => setCleanBundles(e.target.checked)}
-                        />
-                        Clean bundles
-                    </label>
-                    <label className="flex items-center gap-1 text-sm">
-                        <input
-                            type="checkbox"
-                            checked={optimizeDb}
-                            onChange={e => setOptimizeDb(e.target.checked)}
-                        />
-                        Optimize DB
-                    </label>
-
-                    <div className="ml-auto flex items-center gap-2">
-                        <span className="text-xs text-secondary">
-                            {selectedPaths.size > 0
-                                ? `${selectedPaths.size} selected`
-                                : 'No selection → full library'}
-                        </span>
-                        <Button variant="ghost" onClick={selectAllVisible} disabled={loading}>
-                            Select visible bloat
+            {/* Global cleanup bar (Mode + Run) — for the "clean everything right now" path. */}
+            <section className="rounded-lg bg-surface border border-border p-3 flex flex-wrap items-center gap-3">
+                <Button variant="ghost" onClick={refreshScan} disabled={loading}>
+                    <span className="material-symbols-outlined text-base">refresh</span>
+                    Refresh scan
+                </Button>
+                <div className="h-6 w-px bg-border mx-1" aria-hidden="true" />
+                <label className="flex items-center gap-2 text-sm">
+                    Mode:
+                    <select
+                        value={mode}
+                        onChange={e => setMode(e.target.value)}
+                        className="bg-surface-alt border border-border rounded px-2 py-1 text-sm"
+                    >
+                        {Object.entries(MODE_LABELS).map(([k, v]) => (
+                            <option key={k} value={k}>
+                                {v}
+                            </option>
+                        ))}
+                    </select>
+                </label>
+                <div className="ml-auto flex items-center gap-2">
+                    <span className="text-xs text-secondary">
+                        {selectedPaths.size > 0
+                            ? `${selectedPaths.size} selected`
+                            : 'No selection → full library'}
+                    </span>
+                    {selectedPaths.size > 0 && (
+                        <Button variant="ghost" onClick={clearSelection}>
+                            Clear
                         </Button>
-                        {selectedPaths.size > 0 && (
-                            <Button variant="ghost" onClick={clearSelection}>
-                                Clear
-                            </Button>
-                        )}
-                        <LoadingButton
-                            loading={isEnqueuing}
-                            loadingText="Starting…"
-                            variant="primary"
-                            onClick={runCleanup}
-                        >
-                            Run Cleanup
-                        </LoadingButton>
-                    </div>
+                    )}
+                    <LoadingButton
+                        loading={isEnqueuing}
+                        loadingText="Starting…"
+                        variant="primary"
+                        onClick={runCleanup}
+                        disabled={!hasScanned}
+                    >
+                        Run Cleanup
+                    </LoadingButton>
                 </div>
             </section>
 
-            {/* Content */}
-            {loading ? (
-                <Spinner size="large" text="Scanning Plex metadata…" center />
-            ) : view === 'by-media' ? (
-                <>
-                    {!hasScanned ? (
-                        <div className="text-center py-16 px-6 rounded-lg border border-border-light bg-surface-alt text-sm text-tertiary">
-                            <span className="material-symbols-outlined text-3xl mb-2 block opacity-60">
-                                cleaning_services
-                            </span>
-                            <p className="text-primary font-medium mb-1">Ready to scan</p>
-                            <p>
-                                Click <span className="font-semibold">Refresh</span> above to scan
-                                Plex metadata for poster bloat. The scan walks every{' '}
-                                <code>.bundle</code> directory under <code>/plex</code> and can take
-                                a minute on large libraries.
-                            </p>
-                        </div>
-                    ) : byMedia.error ? (
-                        <div className="text-center py-16 px-6 rounded-lg border border-error/40 bg-error/10 text-error text-sm">
-                            <span className="material-symbols-outlined text-2xl mb-2 block">
-                                error
-                            </span>
-                            Couldn&apos;t read Plex metadata:{' '}
-                            {byMedia.error?.message || String(byMedia.error)}.
-                            <div className="text-xs text-secondary mt-2">
-                                Check that the <code>/plex</code> mount is configured and the CHUB
-                                user can write to <code>/config</code>.
+            {/* Scan empty / loading / loaded states */}
+            {!hasScanned ? (
+                <div className="text-center py-16 px-6 rounded-lg border border-border-light bg-surface-alt text-sm text-tertiary">
+                    <span className="material-symbols-outlined text-3xl mb-2 block opacity-60">
+                        cleaning_services
+                    </span>
+                    <p className="text-primary font-medium mb-1">Ready to scan</p>
+                    <p>
+                        Click <span className="font-semibold">Refresh scan</span> above to scan Plex
+                        metadata. Walks every <code>.bundle</code> under <code>/plex</code>; can
+                        take a minute on large libraries.
+                    </p>
+                </div>
+            ) : byMedia.error ? (
+                <div className="text-center py-16 px-6 rounded-lg border border-error/40 bg-error/10 text-error text-sm">
+                    Couldn&apos;t read Plex metadata:{' '}
+                    {byMedia.error?.message || String(byMedia.error)}.
+                </div>
+            ) : loading && bundles.length === 0 ? (
+                <Spinner size="medium" text="Scanning Plex metadata..." center />
+            ) : bundles.length === 0 ? (
+                <div className="text-center py-16 text-tertiary">
+                    No poster variants found. Plex metadata looks clean.
+                </div>
+            ) : (
+                // ---- Master-detail split ----
+                <section className="rounded-lg border border-border overflow-hidden bg-surface">
+                    <div className="grid grid-cols-1 md:grid-cols-[340px_1fr] min-h-[680px]">
+                        {/* Left pane */}
+                        <div className="flex flex-col border-r border-border">
+                            {/* Tabs */}
+                            <div className="flex gap-1 p-2 border-b border-border">
+                                {[
+                                    ['all', 'All'],
+                                    ['movie', 'Movies'],
+                                    ['show', 'Shows'],
+                                    ['collection', 'Collections'],
+                                ].map(([v, label]) => (
+                                    <button
+                                        key={v}
+                                        type="button"
+                                        onClick={() => setTab(v)}
+                                        className={`flex-1 px-2 py-1.5 text-xs rounded-md cursor-pointer border ${
+                                            tab === v
+                                                ? 'bg-primary/20 text-primary border-primary/40'
+                                                : 'bg-transparent text-secondary border-transparent hover:bg-surface-alt'
+                                        }`}
+                                    >
+                                        {label}
+                                    </button>
+                                ))}
+                            </div>
+                            <input
+                                type="search"
+                                value={search}
+                                onChange={e => setSearch(e.target.value)}
+                                placeholder="Search titles..."
+                                className="m-2 px-3 py-1.5 rounded bg-surface-alt border border-border text-sm"
+                            />
+                            {/* Tree list */}
+                            <div className="overflow-y-auto flex-1 max-h-[620px]">
+                                {filteredBundles.length === 0 ? (
+                                    <div className="text-center text-tertiary text-sm p-4">
+                                        No matches
+                                    </div>
+                                ) : (
+                                    filteredBundles.map(bundle => (
+                                        <BundleTreeRow
+                                            key={bundle.rating_key}
+                                            bundle={bundle}
+                                            tree={bundleTrees.get(bundle.rating_key)}
+                                            selected={selected}
+                                            expandedShows={expandedShows}
+                                            expandedSeasons={expandedSeasons}
+                                            onToggleShow={toggleShow}
+                                            onToggleSeason={toggleSeason}
+                                            onSelect={selectNode}
+                                        />
+                                    ))
+                                )}
                             </div>
                         </div>
-                    ) : byMedia.isLoading ? (
-                        <Spinner size="medium" text="Scanning Plex metadata..." center />
-                    ) : bundles.length === 0 ? (
-                        <div className="text-center py-16 text-tertiary">
-                            No poster variants found. Plex metadata looks clean.
+                        {/* Right pane */}
+                        <div className="flex flex-col min-w-0">
+                            {!detail ? (
+                                <div className="p-12 text-center text-tertiary">
+                                    Select an item on the left. Shows have chevrons to drill into
+                                    seasons and episodes.
+                                </div>
+                            ) : (
+                                <>
+                                    <header className="p-4 border-b border-border">
+                                        <div className="text-xs text-secondary mb-1 flex items-center gap-2">
+                                            {detail.breadcrumb.map((crumb, i) => (
+                                                <React.Fragment key={i}>
+                                                    {i > 0 && (
+                                                        <span className="text-tertiary">›</span>
+                                                    )}
+                                                    <span
+                                                        className={
+                                                            i < detail.breadcrumb.length - 1
+                                                                ? 'cursor-pointer hover:text-primary'
+                                                                : ''
+                                                        }
+                                                        onClick={() => {
+                                                            if (i >= detail.breadcrumb.length - 1)
+                                                                return;
+                                                            if (i === 0)
+                                                                selectNode({
+                                                                    kind: 'show',
+                                                                    ratingKey:
+                                                                        detail.bundle.rating_key,
+                                                                });
+                                                            else if (i === 1)
+                                                                selectNode({
+                                                                    kind: 'season',
+                                                                    ratingKey:
+                                                                        detail.bundle.rating_key,
+                                                                    season: selected.season,
+                                                                });
+                                                        }}
+                                                    >
+                                                        {crumb}
+                                                    </span>
+                                                </React.Fragment>
+                                            ))}
+                                        </div>
+                                        <h3 className="text-xl font-semibold text-primary m-0">
+                                            {detail.breadcrumb[detail.breadcrumb.length - 1]}
+                                        </h3>
+                                        <div className="text-xs text-secondary mt-1">
+                                            {detail.variants.length} variants ·{' '}
+                                            <span className="text-success">
+                                                {activeInDetail} active
+                                            </span>{' '}
+                                            ·{' '}
+                                            <span className="text-error">
+                                                {bloatInDetail} bloat
+                                            </span>
+                                            {plexInDetail > 0 && (
+                                                <>
+                                                    {' '}
+                                                    ·{' '}
+                                                    <span className="text-tertiary">
+                                                        {plexInDetail} plex
+                                                    </span>
+                                                </>
+                                            )}
+                                            {bloatInDetail > 0 && (
+                                                <> · {formatBytes(reclaimableBytes)} reclaimable</>
+                                            )}
+                                        </div>
+                                    </header>
+                                    <div className="flex-1 overflow-y-auto p-4">
+                                        {detail.variants.length === 0 ? (
+                                            <div className="text-center text-tertiary py-12">
+                                                No variants at this level.
+                                            </div>
+                                        ) : (
+                                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                                                {detail.variants.map(v => (
+                                                    <VariantTile
+                                                        key={v.path}
+                                                        variant={v}
+                                                        selected={selectedPaths.has(v.path)}
+                                                        onToggleSelect={toggleSelect}
+                                                        onPreview={variant =>
+                                                            setPreviewTarget({
+                                                                variant,
+                                                                bundle: detail.bundle,
+                                                            })
+                                                        }
+                                                    />
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                    {/* Per-item bulk action bar */}
+                                    {detail.variants.length > 0 && (
+                                        <div className="flex flex-wrap items-center gap-2 p-3 border-t border-border bg-surface-alt">
+                                            <span className="text-xs text-secondary mr-auto">
+                                                {selectedPaths.size > 0
+                                                    ? `${selectedPaths.size} selected`
+                                                    : `${bloatInDetail} bloat available`}
+                                            </span>
+                                            <Button
+                                                variant="ghost"
+                                                onClick={selectAllBloat}
+                                                disabled={bloatInDetail === 0}
+                                            >
+                                                Select all bloat
+                                            </Button>
+                                        </div>
+                                    )}
+                                </>
+                            )}
                         </div>
-                    ) : (
-                        <div className="flex flex-col gap-3">
-                            {bundles.map(b => (
-                                <BundleCard
-                                    key={b.bundle_path}
-                                    bundle={b}
-                                    selectedPaths={selectedPaths}
-                                    onToggleSelect={toggleSelect}
-                                    onToggleBundle={toggleBundle}
-                                    onPreview={(v, bundle) =>
-                                        setPreviewTarget({ variant: v, bundle })
-                                    }
-                                />
-                            ))}
-                        </div>
-                    )}
-                </>
-            ) : (
-                <>
-                    {!hasScanned ? (
-                        <div className="text-center py-16 px-6 rounded-lg border border-border-light bg-surface-alt text-sm text-tertiary">
-                            <span className="material-symbols-outlined text-3xl mb-2 block opacity-60">
-                                cleaning_services
-                            </span>
-                            <p className="text-primary font-medium mb-1">Ready to scan</p>
-                            <p>
-                                Click <span className="font-semibold">Refresh</span> above to scan
-                                Plex metadata for poster bloat.
-                            </p>
-                        </div>
-                    ) : bloatFlat.error ? (
-                        <div className="text-center py-16 px-6 rounded-lg border border-error/40 bg-error/10 text-error text-sm">
-                            <span className="material-symbols-outlined text-2xl mb-2 block">
-                                error
-                            </span>
-                            Couldn&apos;t read Plex metadata:{' '}
-                            {bloatFlat.error?.message || String(bloatFlat.error)}.
-                        </div>
-                    ) : bloatFlat.isLoading ? (
-                        <Spinner size="medium" text="Scanning Plex metadata..." center />
-                    ) : bloatItems.length === 0 ? (
-                        <div className="text-center py-16 text-tertiary">
-                            No bloat variants. Plex metadata is clean.
-                        </div>
-                    ) : (
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
-                            {bloatItems.map(item => (
-                                <VariantTile
-                                    key={item.path}
-                                    variant={{ ...item, active: false }}
-                                    selected={selectedPaths.has(item.path)}
-                                    onToggleSelect={toggleSelect}
-                                    onPreview={v =>
-                                        setPreviewTarget({
-                                            variant: { ...v, active: false },
-                                            bundle: {
-                                                bundle_path: item.bundle_path,
-                                                rating_key: item.rating_key,
-                                                title: item.title,
-                                                year: item.year,
-                                            },
-                                        })
-                                    }
-                                />
-                            ))}
-                        </div>
-                    )}
-                </>
-            )}
-
-            {/* Pagination */}
-            {totalPages > 1 && (
-                <div className="flex items-center justify-center gap-2">
-                    <Button
-                        variant="ghost"
-                        size="small"
-                        disabled={page === 0}
-                        onClick={() => setPage(p => Math.max(0, p - 1))}
-                    >
-                        Previous
-                    </Button>
-                    <span className="text-sm text-secondary">
-                        Page {page + 1} of {totalPages}
-                    </span>
-                    <Button
-                        variant="ghost"
-                        size="small"
-                        disabled={page + 1 >= totalPages}
-                        onClick={() => setPage(p => p + 1)}
-                    >
-                        Next
-                    </Button>
-                </div>
+                    </div>
+                </section>
             )}
 
             <VariantPreviewModal
                 target={previewTarget}
                 onClose={() => setPreviewTarget(null)}
                 onDelete={handleDeleteVariant}
-                onSetActive={(variant, bundle) => setConfirmSetActive({ variant, bundle })}
+                onSetActive={handleSetActiveRequest}
             />
-
             <Modal isOpen={!!confirmSetActive} onClose={() => setConfirmSetActive(null)}>
-                <Modal.Header>Make this poster active in Plex?</Modal.Header>
+                <Modal.Header>Make active in Plex?</Modal.Header>
                 <Modal.Body>
                     <p className="text-sm">
-                        This will upload the selected variant to Plex and set it as the active
-                        poster for <strong>{confirmSetActive?.bundle?.title || 'this item'}</strong>
-                        . The current active variant will become bloat (cleanable from here later).
+                        This will set the selected variant as the active poster for{' '}
+                        <strong>{confirmSetActive?.bundle?.title || 'this item'}</strong> in Plex.
+                        The currently-active variant becomes bloat.
                     </p>
                 </Modal.Body>
                 <Modal.Footer align="right">
@@ -946,9 +817,215 @@ const PosterCleanarrPage = () => {
                     </Button>
                 </Modal.Footer>
             </Modal>
-
             <LiveLogModal jobId={liveJobId} onClose={() => setLiveJobId(null)} />
         </div>
+    );
+};
+
+// ---------------------------------------------------------------------------
+// BundleTreeRow — render a bundle row + its expanded seasons/episodes
+// ---------------------------------------------------------------------------
+const Chevron = ({ open, visible, onClick }) => {
+    if (!visible) return <span className="w-6 h-6 shrink-0 inline-block" aria-hidden="true" />;
+    return (
+        <button
+            type="button"
+            aria-label={open ? 'Collapse' : 'Expand'}
+            aria-expanded={open}
+            onClick={e => {
+                e.stopPropagation();
+                onClick();
+            }}
+            className={`w-6 h-6 shrink-0 inline-flex items-center justify-center rounded-md border cursor-pointer transition-colors ${
+                open
+                    ? 'bg-primary text-on-color border-primary'
+                    : 'bg-primary/15 text-primary border-primary/40 hover:bg-primary/25'
+            }`}
+        >
+            <span
+                className="material-symbols-outlined text-[16px] leading-none"
+                style={{
+                    transform: open ? 'rotate(90deg)' : 'none',
+                    transition: 'transform 120ms',
+                }}
+            >
+                chevron_right
+            </span>
+        </button>
+    );
+};
+
+const BundleTreeRow = ({
+    bundle,
+    tree,
+    selected,
+    expandedShows,
+    expandedSeasons,
+    onToggleShow,
+    onToggleSeason,
+    onSelect,
+}) => {
+    const isShow = bundle.metadata_type_label === 'show';
+    const showExpanded = expandedShows.has(bundle.rating_key);
+    const bloatCount = (tree?.show || [])
+        .concat(
+            [...(tree?.seasons.values() || [])].flatMap(s =>
+                s.posters.concat([...s.episodes.values()].flatMap(e => e.thumbs))
+            )
+        )
+        .filter(v => !v.active && (v.cls?.source || 'uploads') !== 'plex').length;
+
+    const showSelected = selected?.kind === 'show' && selected.ratingKey === bundle.rating_key;
+
+    return (
+        <>
+            <div
+                className={`flex items-center gap-2 px-2 py-2 border-b border-border/40 cursor-pointer ${
+                    showSelected
+                        ? 'bg-primary/15 border-l-[3px] border-l-primary pl-[5px]'
+                        : 'hover:bg-surface-alt/60'
+                }`}
+                onClick={() => onSelect({ kind: 'show', ratingKey: bundle.rating_key })}
+            >
+                <Chevron
+                    open={showExpanded}
+                    visible={isShow}
+                    onClick={() => onToggleShow(bundle.rating_key)}
+                />
+                <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 text-sm font-medium text-primary">
+                        <span className="truncate">
+                            {bundle.title || '(unknown)'}
+                            {bundle.year ? ` (${bundle.year})` : ''}
+                        </span>
+                        <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-surface-alt text-tertiary">
+                            {bundle.metadata_type_label}
+                        </span>
+                    </div>
+                    <div className="text-[11px] text-secondary flex items-center gap-2">
+                        <span className="truncate">
+                            {bundle.library_name || ''} · {bundle.variants.length} variants
+                        </span>
+                        {bloatCount > 0 && (
+                            <span className="px-1.5 py-0.5 rounded-full bg-error/20 text-error text-[10px] font-semibold">
+                                ● {bloatCount}
+                            </span>
+                        )}
+                    </div>
+                </div>
+            </div>
+            {isShow && showExpanded && tree && (
+                <>
+                    {[...tree.seasons.values()]
+                        .sort((a, b) => a.n - b.n)
+                        .map(season => {
+                            const seasonKey = `${bundle.rating_key}:${season.n}`;
+                            const seasonExpanded = expandedSeasons.has(seasonKey);
+                            const seasonSelected =
+                                selected?.kind === 'season' &&
+                                selected.ratingKey === bundle.rating_key &&
+                                selected.season === season.n;
+                            const seasonBloat = season.posters
+                                .concat([...season.episodes.values()].flatMap(e => e.thumbs))
+                                .filter(
+                                    v => !v.active && (v.cls?.source || 'uploads') !== 'plex'
+                                ).length;
+                            return (
+                                <React.Fragment key={season.n}>
+                                    <div
+                                        className={`flex items-center gap-2 pl-6 pr-2 py-1.5 border-b border-border/40 cursor-pointer ${
+                                            seasonSelected
+                                                ? 'bg-primary/15 border-l-[3px] border-l-primary pl-[22px]'
+                                                : 'hover:bg-surface-alt/60'
+                                        }`}
+                                        onClick={() =>
+                                            onSelect({
+                                                kind: 'season',
+                                                ratingKey: bundle.rating_key,
+                                                season: season.n,
+                                            })
+                                        }
+                                    >
+                                        <Chevron
+                                            open={seasonExpanded}
+                                            visible={season.episodes.size > 0}
+                                            onClick={() =>
+                                                onToggleSeason(bundle.rating_key, season.n)
+                                            }
+                                        />
+                                        <div className="flex-1 min-w-0 text-[13px] text-primary">
+                                            Season {season.n}
+                                            <span className="text-[10px] text-secondary ml-2">
+                                                {season.posters.length} poster
+                                                {season.posters.length === 1 ? '' : 's'}
+                                                {season.episodes.size > 0
+                                                    ? ` · ${season.episodes.size} ep${
+                                                          season.episodes.size === 1 ? '' : 's'
+                                                      }`
+                                                    : ''}
+                                                {seasonBloat > 0 && (
+                                                    <span className="ml-2 px-1.5 py-0.5 rounded-full bg-error/20 text-error font-semibold">
+                                                        ● {seasonBloat}
+                                                    </span>
+                                                )}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    {seasonExpanded &&
+                                        [...season.episodes.values()]
+                                            .sort((a, b) => a.n - b.n)
+                                            .map(episode => {
+                                                const epSelected =
+                                                    selected?.kind === 'episode' &&
+                                                    selected.ratingKey === bundle.rating_key &&
+                                                    selected.season === season.n &&
+                                                    selected.episode === episode.n;
+                                                const epBloat = episode.thumbs.filter(
+                                                    v =>
+                                                        !v.active &&
+                                                        (v.cls?.source || 'uploads') !== 'plex'
+                                                ).length;
+                                                return (
+                                                    <div
+                                                        key={episode.n}
+                                                        className={`flex items-center gap-2 pl-12 pr-2 py-1.5 border-b border-border/40 cursor-pointer ${
+                                                            epSelected
+                                                                ? 'bg-primary/15 border-l-[3px] border-l-primary pl-[46px]'
+                                                                : 'hover:bg-surface-alt/60'
+                                                        }`}
+                                                        onClick={() =>
+                                                            onSelect({
+                                                                kind: 'episode',
+                                                                ratingKey: bundle.rating_key,
+                                                                season: season.n,
+                                                                episode: episode.n,
+                                                            })
+                                                        }
+                                                    >
+                                                        <span className="w-6 h-6 shrink-0" />
+                                                        <div className="flex-1 min-w-0 text-[12px] text-primary">
+                                                            Episode {episode.n}
+                                                            <span className="text-[10px] text-secondary ml-2">
+                                                                {episode.thumbs.length} thumb
+                                                                {episode.thumbs.length === 1
+                                                                    ? ''
+                                                                    : 's'}
+                                                                {epBloat > 0 && (
+                                                                    <span className="ml-2 px-1.5 py-0.5 rounded-full bg-error/20 text-error font-semibold">
+                                                                        ● {epBloat}
+                                                                    </span>
+                                                                )}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                </React.Fragment>
+                            );
+                        })}
+                </>
+            )}
+        </>
     );
 };
 
