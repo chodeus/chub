@@ -56,7 +56,3 @@ transformation/
 
 # Local-only dev files
 jokes.txt
-
-# Intentionally untracked: audit/session scratch files
-WEBUI_AUDIT_PLAN.md
-.DISCREPANCIES.local.md
