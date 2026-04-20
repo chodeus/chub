@@ -23,7 +23,7 @@ const ROUTE_CRUMBS = {
         { label: 'Assets', to: '/poster/search/assets' },
         { label: 'GDrive Search' },
     ],
-    '/poster/manage': [
+    '/poster/cleanarr': [
         { label: 'Assets', to: '/poster/search/assets' },
         { label: 'Poster Cleanarr' },
     ],

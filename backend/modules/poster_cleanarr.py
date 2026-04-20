@@ -543,6 +543,9 @@ class PosterCleanarr(ChubModule):
             elif mode == "move":
                 try:
                     self._move_file(filepath, metadata_dir, restore_dir)
+                    # Log per-file so the Logs tab shows a full audit trail of
+                    # what was touched — matches ImageMaid's MOVE: <path> output.
+                    self.logger.info(f"  [MOVE] {filepath} ({format_bytes(size)})")
                     count += 1
                     total_size += size
                 except Exception as e:
@@ -551,6 +554,7 @@ class PosterCleanarr(ChubModule):
             elif mode == "remove":
                 try:
                     os.remove(filepath)
+                    self.logger.info(f"  [REMOVE] {filepath} ({format_bytes(size)})")
                     count += 1
                     total_size += size
                 except Exception as e:
@@ -582,6 +586,7 @@ class PosterCleanarr(ChubModule):
             try:
                 size = os.path.getsize(filepath)
                 self._restore_file(filepath, restore_dir, metadata_dir)
+                self.logger.info(f"  [RESTORE] {filepath} ({format_bytes(size)})")
                 count += 1
                 total_size += size
             except Exception as e:

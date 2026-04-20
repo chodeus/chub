@@ -49,7 +49,7 @@ const NAV_SECTIONS = [
                 children: [
                     { id: 'gdrive-search', label: 'GDrive Search', path: '/poster/search/gdrive' },
                     { id: 'assets-search', label: 'Assets Search', path: '/poster/search/assets' },
-                    { id: 'poster-manage', label: 'Poster Cleanarr', path: '/poster/manage' },
+                    { id: 'poster-cleanarr', label: 'Poster Cleanarr', path: '/poster/cleanarr' },
                     { id: 'poster-statistics', label: 'Statistics', path: '/poster/statistics' },
                 ],
             },

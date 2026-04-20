@@ -53,7 +53,7 @@ const PosterGDriveSearchPage = React.lazy(
 const PosterAssetsSearchPage = React.lazy(
     () => import('./pages/poster/PosterAssetsSearchPage.jsx')
 );
-const PosterManagePage = React.lazy(() => import('./pages/poster/PosterManagePage.jsx'));
+const PosterCleanarrPage = React.lazy(() => import('./pages/poster/PosterCleanarrPage.jsx'));
 const PosterStatsPage = React.lazy(() => import('./pages/poster/PosterStatsPage.jsx'));
 
 // Lazy-loaded dev pages
@@ -268,14 +268,24 @@ const App = () => {
                                                         }
                                                     />
                                                     <Route
-                                                        path="poster/manage"
+                                                        path="poster/cleanarr"
                                                         element={
                                                             <PageErrorBoundary
-                                                                pageName="Poster Management"
-                                                                pageDescription="Manage poster collection"
+                                                                pageName="Poster Cleanarr"
+                                                                pageDescription="Review and clean up unused Plex poster variants"
                                                             >
-                                                                <PosterManagePage />
+                                                                <PosterCleanarrPage />
                                                             </PageErrorBoundary>
+                                                        }
+                                                    />
+                                                    {/* Back-compat redirect for any bookmarks still pointing at /poster/manage. */}
+                                                    <Route
+                                                        path="poster/manage"
+                                                        element={
+                                                            <Navigate
+                                                                to="/poster/cleanarr"
+                                                                replace
+                                                            />
                                                         }
                                                     />
                                                     <Route
