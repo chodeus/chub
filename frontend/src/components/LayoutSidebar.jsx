@@ -147,7 +147,7 @@ const LayoutSidebar = React.memo(() => {
             className={`bg-sidebar-bg overflow-y-auto transition-transform
                 ${
                     isMobile
-                        ? `fixed inset-y-0 left-0 min-w-sidebar z-50 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`
+                        ? `fixed top-20 bottom-0 left-0 min-w-sidebar z-40 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`
                         : 'flex-none min-w-sidebar translate-x-0'
                 } ${isMobile && mobileMenuOpen ? 'page-sidebar--mobile-open' : ''}`}
             role="navigation"
