@@ -35,7 +35,7 @@ python-multipart==0.0.26
 PyJWT==2.12.1
 pytz==2026.1.post1
 PyYAML==6.0.3
-qbittorrent-api==2024.12.71
+qbittorrent-api==2025.11.1
 ratelimit==2.2.1
 requests==2.33.1
 requests-oauthlib==2.0.0
