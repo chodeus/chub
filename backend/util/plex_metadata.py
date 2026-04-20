@@ -402,13 +402,9 @@ def scan_bundles(plex_path: str, *, force: bool = False) -> Dict[str, Any]:
             }
         )
 
-    # Sort bundles: most bloat first, then by title.
-    bundles.sort(
-        key=lambda b: (
-            -sum(1 for v in b["variants"] if not v["active"]),
-            (b["title"] or "").lower(),
-        )
-    )
+    # Sort bundles alphabetically by title (case-insensitive). Untitled
+    # bundles sort to the bottom so the list reads naturally in the UI.
+    bundles.sort(key=lambda b: ((b["title"] or "\uffff").lower(), b.get("year") or 0))
 
     # Include libraries referenced by at least one bundle — lets the frontend
     # populate a filter dropdown without a second call.

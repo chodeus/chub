@@ -304,21 +304,36 @@ const VariantPreviewModal = ({ target, onClose, onDelete, onSetActive }) => {
     );
 };
 
+// localStorage key for persisting scan/filter state across page navigations.
+// Backend caches the scan for 5 min, so auto-firing on remount is cheap.
+const STATE_KEY = 'chub_cleanarr_state_v1';
+const loadPersistedState = () => {
+    try {
+        const raw = localStorage.getItem(STATE_KEY);
+        return raw ? JSON.parse(raw) : {};
+    } catch {
+        return {};
+    }
+};
+
 const PosterCleanarrPage = () => {
     const toast = useToast();
+    const persisted = useMemo(() => loadPersistedState(), []);
 
     // View: by-media (grouped) | bloat (flat)
-    const [view, setView] = useState('by-media');
-    const [onlyBloat, setOnlyBloat] = useState(false);
+    const [view, setView] = useState(persisted.view || 'by-media');
+    const [onlyBloat, setOnlyBloat] = useState(persisted.onlyBloat ?? false);
     const [page, setPage] = useState(0);
     const [selectedPaths, setSelectedPaths] = useState(new Set());
     const [previewTarget, setPreviewTarget] = useState(null);
     const [confirmSetActive, setConfirmSetActive] = useState(null);
     const [liveJobId, setLiveJobId] = useState(null);
     const [isEnqueuing, setIsEnqueuing] = useState(false);
-    // Plex metadata scans are expensive (walks every .bundle dir), so the
-    // page stays idle until the user explicitly hits Refresh.
-    const [hasScanned, setHasScanned] = useState(false);
+    // hasScanned is persisted: once the user has triggered a scan in this
+    // browser, subsequent visits auto-refresh on mount (the backend cache
+    // makes the call cheap). Avoids forcing a manual Refresh every time
+    // they navigate away and back.
+    const [hasScanned, setHasScanned] = useState(persisted.hasScanned ?? false);
 
     // Mode + Plex-maintenance toggles
     const [mode, setMode] = useState('report');
@@ -326,10 +341,10 @@ const PosterCleanarrPage = () => {
     const [cleanBundles, setCleanBundles] = useState(false);
     const [optimizeDb, setOptimizeDb] = useState(false);
 
-    // ImageMaid-style filters
-    const [mediaType, setMediaType] = useState('all'); // all | movie | show | season | episode | collection
-    const [libraryId, setLibraryId] = useState(0); // 0 = all
-    const [variantKind, setVariantKind] = useState('all'); // all | poster | art | banner | thumb | chapter | theme | other
+    // ImageMaid-style filters (persisted so the user's last view is restored)
+    const [mediaType, setMediaType] = useState(persisted.mediaType || 'all'); // all | movie | show | season | episode | collection
+    const [libraryId, setLibraryId] = useState(persisted.libraryId ?? 0); // 0 = all
+    const [variantKind, setVariantKind] = useState(persisted.variantKind || 'all'); // all | poster | art | banner | thumb | chapter | theme | other
 
     const byMediaParams = useMemo(
         () => ({
@@ -408,6 +423,40 @@ const PosterCleanarrPage = () => {
         if (view === 'by-media') byMedia.refresh();
         else bloatFlat.refresh();
     }, [view, byMedia, bloatFlat, hasScanned]);
+
+    // Persist view/filter/scan state so the page picks back up where the
+    // user left it after navigating away. Writes happen on every change.
+    useEffect(() => {
+        try {
+            localStorage.setItem(
+                STATE_KEY,
+                JSON.stringify({
+                    hasScanned,
+                    view,
+                    onlyBloat,
+                    mediaType,
+                    libraryId,
+                    variantKind,
+                })
+            );
+        } catch {
+            // ignore quota / private-mode failures
+        }
+    }, [hasScanned, view, onlyBloat, mediaType, libraryId, variantKind]);
+
+    // Auto-refresh on mount if the user has scanned in this browser before.
+    // Backend caches results for 5 minutes, so this is cheap on repeat visits
+    // and saves the user from hitting Refresh every time they come back.
+    const didMountRefreshRef = useRef(false);
+    useEffect(() => {
+        if (didMountRefreshRef.current) return;
+        if (!hasScanned) return;
+        didMountRefreshRef.current = true;
+        if (view === 'by-media') byMedia.refresh();
+        else bloatFlat.refresh();
+        // Intentional: run once on mount, not on every view flip.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     const toggleSelect = useCallback(variant => {
         setSelectedPaths(prev => {
