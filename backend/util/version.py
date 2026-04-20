@@ -1,3 +1,4 @@
+import json
 import os
 import re
 import subprocess
@@ -9,12 +10,17 @@ import requests
 
 from backend.util.notification import NotificationManager
 
-BASE = Path(__file__).parents[2] / "VERSION"
+MANIFEST = Path(__file__).parents[2] / ".release-please-manifest.json"
+
+
+def _read_base_version() -> str:
+    """Read the current version from the release-please manifest."""
+    return json.loads(MANIFEST.read_text())["."].strip()
 
 
 def get_version() -> str:
     """Get the version string based on environment variables or git information."""
-    base_version = BASE.read_text().strip()
+    base_version = _read_base_version()
     ci_build = os.getenv("BUILD_NUMBER")
     ci_branch = os.getenv("BRANCH")
     if ci_build and ci_branch:
@@ -42,17 +48,17 @@ def get_version() -> str:
 
 def _check_remote_version(local_version, branch, logger):
 
-    raw_url = f"https://raw.githubusercontent.com/chodeus/chub/{branch}/VERSION"
+    raw_url = f"https://raw.githubusercontent.com/chodeus/chub/{branch}/.release-please-manifest.json"
     try:
-        remote_version = requests.get(raw_url, timeout=5)
-        if not remote_version.ok:
+        remote_manifest = requests.get(raw_url, timeout=5)
+        if not remote_manifest.ok:
             logger.debug(
-                f"Could not fetch remote VERSION: {remote_version.status_code}"
+                f"Could not fetch remote manifest: {remote_manifest.status_code}"
             )
             return None, None, False
-        remote_version_str = remote_version.text.strip()
+        remote_version_str = json.loads(remote_manifest.text)["."].strip()
     except Exception as e:
-        logger.debug(f"Exception fetching VERSION: {e}")
+        logger.debug(f"Exception fetching manifest: {e}")
         return None, None, False
 
     api_url = (
