@@ -768,6 +768,8 @@ const PosterCleanarrPage = () => {
                                 user can write to <code>/config</code>.
                             </div>
                         </div>
+                    ) : byMedia.isLoading ? (
+                        <Spinner size="medium" text="Scanning Plex metadata..." center />
                     ) : bundles.length === 0 ? (
                         <div className="text-center py-16 text-tertiary">
                             No poster variants found. Plex metadata looks clean.
@@ -810,6 +812,8 @@ const PosterCleanarrPage = () => {
                             Couldn&apos;t read Plex metadata:{' '}
                             {bloatFlat.error?.message || String(bloatFlat.error)}.
                         </div>
+                    ) : bloatFlat.isLoading ? (
+                        <Spinner size="medium" text="Scanning Plex metadata..." center />
                     ) : bloatItems.length === 0 ? (
                         <div className="text-center py-16 text-tertiary">
                             No bloat variants. Plex metadata is clean.
