@@ -1717,8 +1717,8 @@ async def preview_poster_file(
                 status_code=400,
             )
 
-        # Restrict `location` to configured allowed roots — otherwise an
-        # authenticated caller could point at arbitrary dirs (/etc, /root).
+        # Restrict the served file to configured allowed roots — otherwise
+        # an authenticated caller could point at arbitrary dirs (/etc, /root).
         from backend.util.config import load_config
         from backend.util.path_safety import is_path_allowed
 
@@ -1727,26 +1727,48 @@ async def preview_poster_file(
         except Exception:  # noqa: S110 — fail closed below
             config = None
 
-        if config is None or not is_path_allowed(location, config):
+        if config is None:
             return error(
                 "Access denied - path outside allowed directory",
                 code="PATH_TRAVERSAL_DENIED",
                 status_code=403,
             )
 
-        base_dir = Path(location).resolve()
-        file_path = (base_dir / path).resolve()
-
-        # Path-containment check (is_relative_to avoids the `str.startswith`
-        # bypass where `/posters_evil/x` slipped past a `/posters` prefix).
-        try:
-            file_path.relative_to(base_dir)
-        except ValueError:
-            return error(
-                "Access denied - path outside allowed directory",
-                code="PATH_TRAVERSAL_DENIED",
-                status_code=403,
-            )
+        path_obj = Path(path)
+        if path_obj.is_absolute():
+            # Frontend already gave us a concrete absolute path (e.g. the
+            # Assets Search grid passes item.file straight through, with
+            # item.folder in location as an owner label, not a root).
+            # Validate the file path itself against allowed roots instead
+            # of demanding that `location` is a root.
+            if not is_path_allowed(path, config):
+                return error(
+                    "Access denied - path outside allowed directory",
+                    code="PATH_TRAVERSAL_DENIED",
+                    status_code=403,
+                )
+            file_path = path_obj.resolve()
+        else:
+            # Relative path — `location` must be an allowed root and the
+            # resolved result must stay inside it (is_relative_to avoids
+            # the str.startswith bypass where `/posters_evil/x` slipped
+            # past a `/posters` prefix).
+            if not is_path_allowed(location, config):
+                return error(
+                    "Access denied - path outside allowed directory",
+                    code="PATH_TRAVERSAL_DENIED",
+                    status_code=403,
+                )
+            base_dir = Path(location).resolve()
+            file_path = (base_dir / path).resolve()
+            try:
+                file_path.relative_to(base_dir)
+            except ValueError:
+                return error(
+                    "Access denied - path outside allowed directory",
+                    code="PATH_TRAVERSAL_DENIED",
+                    status_code=403,
+                )
 
         if not file_path.exists() or not file_path.is_file():
             return error(
