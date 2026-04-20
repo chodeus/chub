@@ -6,7 +6,7 @@
 !/requirements.txt
 !/backend/
 !/frontend/
-!/VERSION
+!/.release-please-manifest.json
 !/scripts/
 !/deploy/
 
