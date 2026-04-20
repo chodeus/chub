@@ -405,8 +405,19 @@ def scan_bundles(plex_path: str, *, force: bool = False) -> Dict[str, Any]:
                 bloat_count += 1
                 bloat_size += f["size"]
 
-        # Sort: active variants first, then largest bloat first.
-        variants.sort(key=lambda v: (not v["active"], -v["size"]))
+        # Tile order in the UI:
+        #   1. Active variant(s)              — what Plex is currently using
+        #   2. Bloat (user uploads), newest first by mtime
+        #   3. Plex-sourced defaults          — read-only, pushed to the end
+        def _variant_rank(v: Dict[str, Any]) -> tuple:
+            if v["active"]:
+                return (0, 0.0)
+            if v.get("source") == "plex":
+                return (2, 0.0)
+            # Negate mtime so newest (largest mtime) comes first within bloat.
+            return (1, -float(v.get("mtime") or 0))
+
+        variants.sort(key=_variant_rank)
         mtype = info["metadata_type"]
         section_id = info["library_section_id"]
         section = sections_index.get(section_id) if section_id is not None else None
