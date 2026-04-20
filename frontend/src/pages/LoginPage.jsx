@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext.jsx';
+import { useDocumentTitle } from '../hooks/useDocumentTitle.js';
 
 const LoginPage = () => {
+    useDocumentTitle();
     const { authConfigured, login, setup } = useAuth();
     const isSetup = authConfigured === false;
 

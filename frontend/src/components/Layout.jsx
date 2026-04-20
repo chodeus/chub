@@ -8,10 +8,12 @@ import PageToolbar from './ToolBar/PageToolbar.jsx';
 import Breadcrumbs from './Breadcrumbs.jsx';
 import { ToolbarProvider } from '../contexts/ToolbarContext.jsx';
 import { useUIState } from '../contexts/UIStateContext.jsx';
+import { useDocumentTitle } from '../hooks/useDocumentTitle.js';
 
 const Layout = ({ children }) => {
     const { mobileMenuOpen, closeMobileMenu, isMobile } = useUIState();
     const location = useLocation();
+    useDocumentTitle();
 
     return (
         <ToolbarProvider>
