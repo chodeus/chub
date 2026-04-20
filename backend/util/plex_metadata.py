@@ -423,9 +423,19 @@ def scan_bundles(plex_path: str, *, force: bool = False) -> Dict[str, Any]:
         if lib_id in sections_index
     ]
 
+    # Distinct media types + variant kinds present in this scan. Frontend
+    # uses these to hide filter-dropdown options that would produce zero
+    # results (e.g. hide "artist" when the user has no Lidarr library).
+    present_media_types = sorted({b["metadata_type_label"] for b in bundles if b.get("metadata_type_label")})
+    present_variant_kinds = sorted(
+        {v["kind"] for b in bundles for v in b["variants"] if v.get("kind")}
+    )
+
     result = {
         "bundles": bundles,
         "libraries": libraries,
+        "media_types": present_media_types,
+        "variant_kinds": present_variant_kinds,
         "stats": {
             "bundle_count": len(bundles),
             "variant_count": variant_count,

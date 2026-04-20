@@ -374,6 +374,14 @@ const PosterCleanarrPage = () => {
 
     const bundles = useMemo(() => byMedia.data?.data?.bundles || [], [byMedia.data]);
     const libraries = useMemo(() => byMedia.data?.data?.libraries || [], [byMedia.data]);
+    const presentMediaTypes = useMemo(
+        () => new Set(byMedia.data?.data?.media_types || []),
+        [byMedia.data]
+    );
+    const presentVariantKinds = useMemo(
+        () => new Set(byMedia.data?.data?.variant_kinds || []),
+        [byMedia.data]
+    );
     const bloatItems = useMemo(() => bloatFlat.data?.data?.items || [], [bloatFlat.data]);
     const stats = useMemo(
         () => (view === 'by-media' ? byMedia.data?.data?.stats : bloatFlat.data?.data?.stats),
@@ -594,13 +602,25 @@ const PosterCleanarrPage = () => {
                                 className="px-2 py-1 rounded bg-surface-alt border border-border"
                             >
                                 <option value="all">All</option>
-                                <option value="movie">Movie</option>
-                                <option value="show">Show</option>
-                                <option value="season">Season</option>
-                                <option value="episode">Episode</option>
-                                <option value="collection">Collection</option>
-                                <option value="artist">Artist</option>
-                                <option value="album">Album</option>
+                                {[
+                                    ['movie', 'Movie'],
+                                    ['show', 'Show'],
+                                    ['season', 'Season'],
+                                    ['episode', 'Episode'],
+                                    ['collection', 'Collection'],
+                                    ['artist', 'Artist'],
+                                    ['album', 'Album'],
+                                ]
+                                    .filter(
+                                        ([value]) =>
+                                            presentMediaTypes.size === 0 ||
+                                            presentMediaTypes.has(value)
+                                    )
+                                    .map(([value, label]) => (
+                                        <option key={value} value={value}>
+                                            {label}
+                                        </option>
+                                    ))}
                             </select>
                         </label>
                         <label className="flex items-center gap-2">
@@ -614,13 +634,25 @@ const PosterCleanarrPage = () => {
                                 className="px-2 py-1 rounded bg-surface-alt border border-border"
                             >
                                 <option value="all">All</option>
-                                <option value="poster">Posters</option>
-                                <option value="art">Background art</option>
-                                <option value="banner">Banners</option>
-                                <option value="thumb">Thumbnails</option>
-                                <option value="chapter">Chapter images</option>
-                                <option value="theme">Themes</option>
-                                <option value="other">Other</option>
+                                {[
+                                    ['poster', 'Posters'],
+                                    ['art', 'Background art'],
+                                    ['banner', 'Banners'],
+                                    ['thumb', 'Thumbnails'],
+                                    ['chapter', 'Chapter images'],
+                                    ['theme', 'Themes'],
+                                    ['other', 'Other'],
+                                ]
+                                    .filter(
+                                        ([value]) =>
+                                            presentVariantKinds.size === 0 ||
+                                            presentVariantKinds.has(value)
+                                    )
+                                    .map(([value, label]) => (
+                                        <option key={value} value={value}>
+                                            {label}
+                                        </option>
+                                    ))}
                             </select>
                         </label>
                         {(mediaType !== 'all' || libraryId !== 0 || variantKind !== 'all') && (

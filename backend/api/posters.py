@@ -2107,6 +2107,8 @@ async def list_plex_metadata_by_media(
             {
                 "bundles": page,
                 "libraries": scan.get("libraries", []),
+                "media_types": scan.get("media_types", []),
+                "variant_kinds": scan.get("variant_kinds", []),
                 "total": total,
                 "limit": limit,
                 "offset": offset,
