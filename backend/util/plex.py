@@ -6,10 +6,10 @@ from typing import Any, Dict, List
 import plexapi
 from plexapi import utils as plexutils
 from plexapi.exceptions import NotFound
+from pathvalidate import sanitize_filename
 from plexapi.server import PlexServer
 from unidecode import unidecode
 
-from backend.util.constants import illegal_chars_regex
 from backend.util.helper import generate_title_variants, progress
 from backend.util.normalization import normalize_titles
 
@@ -111,7 +111,11 @@ class PlexClient:
                 title_unescaped = unidecode(html.unescape(collection.title))
                 normalized_title = normalize_titles(title_unescaped)
                 alternate_titles = generate_title_variants(title_unescaped)
-                folder = illegal_chars_regex.sub("", title_unescaped)
+                # Use pathvalidate rather than the bare regex so the folder name
+                # is safe across Linux + Windows + Samba shares (handles
+                # reserved names like CON/AUX, max-length truncation, and
+                # trailing dots/spaces on top of the illegal-char strip).
+                folder = sanitize_filename(title_unescaped, platform="universal") or title_unescaped
                 year = getattr(collection, "year", None)
                 tmdb_id = getattr(collection, "tmdb_id", None)
                 imdb_id = getattr(collection, "imdb_id", None)
