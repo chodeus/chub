@@ -6,6 +6,7 @@ import { modulesAPI } from '../utils/api/modules';
 import { jobsAPI } from '../utils/api/jobs';
 import { systemAPI } from '../utils/api/system';
 import { scheduleAPI } from '../utils/api/schedule';
+import { instancesAPI } from '../utils/api/instances';
 import { IconButton } from '../components/ui';
 import Spinner from '../components/ui/Spinner';
 import { useAuth } from '../contexts/AuthContext.jsx';
@@ -163,6 +164,16 @@ const DashboardPage = () => {
         options: { showErrorToast: false },
     });
 
+    const { data: diskData } = useApiData({
+        apiFunction: systemAPI.getDiskUsage,
+        options: { showErrorToast: false },
+    });
+
+    const { data: instancesRaw } = useApiData({
+        apiFunction: instancesAPI.fetchInstances,
+        options: { showErrorToast: false },
+    });
+
     const handleStatusChange = useCallback(() => {
         refreshRunStates();
         refreshJobStats();
@@ -252,6 +263,23 @@ const DashboardPage = () => {
         [schedules]
     );
     const runningCount = useMemo(() => moduleList.filter(m => m.running).length, [moduleList]);
+
+    const diskMounts = useMemo(() => {
+        const mounts = diskData?.data?.mounts || diskData?.mounts || [];
+        return Array.isArray(mounts) ? mounts.filter(m => m.exists) : [];
+    }, [diskData]);
+
+    const instanceHealth = useMemo(() => {
+        const list = Array.isArray(instancesRaw)
+            ? instancesRaw
+            : instancesRaw?.data || instancesRaw?.instances || [];
+        const items = Array.isArray(list) ? list : [];
+        const total = items.length;
+        const connected = items.filter(
+            i => (i.status || i.health || '').toLowerCase() === 'connected' || i.connected === true
+        ).length;
+        return { total, connected };
+    }, [instancesRaw]);
 
     const upcomingRuns = useMemo(() => {
         const now = new Date(tick);
@@ -478,6 +506,89 @@ const DashboardPage = () => {
                     )}
                 </div>
             </section>
+
+            {/* At-a-glance health — disk, instances, last error */}
+            {(diskMounts.length > 0 || instanceHealth.total > 0 || jobStats.failed > 0) && (
+                <section>
+                    <div className="mb-4">
+                        <h2 className="text-xl font-bold text-primary m-0">Health</h2>
+                        <p className="text-secondary text-sm mt-1 mb-0">
+                            Quick look at disk, instances, and recent failures.
+                        </p>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                        {instanceHealth.total > 0 && (
+                            <Link
+                                to="/settings/instances"
+                                className="no-underline bg-surface border border-border-light rounded-lg p-4 flex flex-col gap-1 hover:border-border"
+                            >
+                                <div className="text-tertiary text-xs uppercase tracking-wider">
+                                    Instances
+                                </div>
+                                <div className="text-2xl font-bold text-primary">
+                                    {instanceHealth.connected} / {instanceHealth.total}
+                                </div>
+                                <div
+                                    className={`text-xs ${
+                                        instanceHealth.connected === instanceHealth.total
+                                            ? 'text-success'
+                                            : 'text-warning'
+                                    }`}
+                                >
+                                    {instanceHealth.connected === instanceHealth.total
+                                        ? 'All connected'
+                                        : `${instanceHealth.total - instanceHealth.connected} disconnected`}
+                                </div>
+                            </Link>
+                        )}
+                        <Link
+                            to="/settings/jobs"
+                            className={`no-underline bg-surface border border-border-light rounded-lg p-4 flex flex-col gap-1 hover:border-border ${
+                                jobStats.failed > 0 ? 'border-error/30' : ''
+                            }`}
+                        >
+                            <div className="text-tertiary text-xs uppercase tracking-wider">
+                                Recent failures
+                            </div>
+                            <div
+                                className={`text-2xl font-bold ${jobStats.failed > 0 ? 'text-error' : 'text-primary'}`}
+                            >
+                                {jobStats.failed}
+                            </div>
+                            <div className="text-xs text-tertiary">
+                                {jobStats.failed === 0 ? 'No failed jobs' : 'Click to review'}
+                            </div>
+                        </Link>
+                        {diskMounts.map(mount => {
+                            const freeGb = (mount.free_bytes / 1024 ** 3).toFixed(1);
+                            const totalGb = (mount.total_bytes / 1024 ** 3).toFixed(0);
+                            const pct = mount.percent_used ?? 0;
+                            const tone =
+                                pct >= 90
+                                    ? 'text-error'
+                                    : pct >= 75
+                                      ? 'text-warning'
+                                      : 'text-success';
+                            return (
+                                <div
+                                    key={mount.path}
+                                    className="bg-surface border border-border-light rounded-lg p-4 flex flex-col gap-1"
+                                >
+                                    <div className="text-tertiary text-xs uppercase tracking-wider truncate">
+                                        {mount.path}
+                                    </div>
+                                    <div className="text-2xl font-bold text-primary">
+                                        {freeGb} GB
+                                    </div>
+                                    <div className={`text-xs ${tone}`}>
+                                        {pct}% used of {totalGb} GB
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </section>
+            )}
 
             {/* Quick start — now below Recent jobs / Scheduler */}
             <section>

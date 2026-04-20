@@ -868,10 +868,14 @@ class MediaCache(DatabaseBase):
         asset_type: str,
         fresh_media: list,
         logger: Optional[Any] = None,
+        allowed_roots: Optional[List[str]] = None,
     ) -> None:
         """
         Syncs the media_cache table for a specific instance and asset_type to match fresh_media.
         Adds/updates as needed, deletes stale records not present in fresh_media.
+
+        When `allowed_roots` is provided, stale rows whose `renamed_file` is
+        outside those roots won't produce an `orphaned_posters` insert.
         """
         db_rows = (
             self.execute_query(
@@ -907,7 +911,7 @@ class MediaCache(DatabaseBase):
         keys_to_remove = set(db_map.keys()) - set(fresh_map.keys())
         for key in keys_to_remove:
             row = db_map[key]
-            self.delete(row, instance_name, asset_type, logger)
+            self.delete(row, instance_name, asset_type, logger, allowed_roots=allowed_roots)
 
         if logger:
             logger.debug(

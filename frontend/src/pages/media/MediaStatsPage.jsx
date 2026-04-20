@@ -149,37 +149,52 @@ const MediaStatsPage = () => {
                 <section>
                     <h3 className="text-lg font-semibold text-primary mb-3">By Type</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                        {byType.map(row => (
-                            <div
-                                key={row.asset_type}
-                                className="p-4 rounded-lg bg-surface border border-border"
-                            >
-                                <p className="text-sm font-medium text-primary capitalize mb-2">
-                                    {row.asset_type}
-                                </p>
-                                <div className="flex items-baseline gap-3">
-                                    <span className="text-2xl font-bold text-primary">
-                                        {row.total}
-                                    </span>
-                                    <span className="text-sm text-success">
-                                        {row.matched} matched
-                                    </span>
-                                    <span className="text-sm text-secondary">
-                                        {row.instances} instance{row.instances !== 1 ? 's' : ''}
-                                    </span>
-                                </div>
-                                {row.total > 0 && (
-                                    <div className="mt-2 h-1.5 bg-surface-alt rounded-full overflow-hidden">
-                                        <div
-                                            className="h-full bg-success rounded-full transition-all"
-                                            style={{
-                                                width: `${Math.round((row.matched / row.total) * 100)}%`,
-                                            }}
-                                        />
+                        {byType.map(row => {
+                            const zeroMatch = row.total > 0 && row.matched === 0;
+                            return (
+                                <div
+                                    key={row.asset_type}
+                                    className={`p-4 rounded-lg bg-surface border ${zeroMatch ? 'border-error/40' : 'border-border'}`}
+                                    title={
+                                        zeroMatch
+                                            ? 'No matches found — check the configured sources for this type.'
+                                            : undefined
+                                    }
+                                >
+                                    <p className="text-sm font-medium text-primary capitalize mb-2 flex items-center gap-2">
+                                        {row.asset_type}
+                                        {zeroMatch && (
+                                            <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-error/20 text-error">
+                                                0% match
+                                            </span>
+                                        )}
+                                    </p>
+                                    <div className="flex items-baseline gap-3">
+                                        <span className="text-2xl font-bold text-primary">
+                                            {row.total}
+                                        </span>
+                                        <span
+                                            className={`text-sm ${zeroMatch ? 'text-error' : 'text-success'}`}
+                                        >
+                                            {row.matched} matched
+                                        </span>
+                                        <span className="text-sm text-secondary">
+                                            {row.instances} instance{row.instances !== 1 ? 's' : ''}
+                                        </span>
                                     </div>
-                                )}
-                            </div>
-                        ))}
+                                    {row.total > 0 && (
+                                        <div className="mt-2 h-1.5 bg-surface-alt rounded-full overflow-hidden">
+                                            <div
+                                                className={`h-full rounded-full transition-all ${zeroMatch ? 'bg-error/70' : 'bg-success'}`}
+                                                style={{
+                                                    width: `${Math.max(4, Math.round((row.matched / row.total) * 100))}%`,
+                                                }}
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
                     </div>
                 </section>
             )}
@@ -189,34 +204,49 @@ const MediaStatsPage = () => {
                 <section>
                     <h3 className="text-lg font-semibold text-primary mb-3">By Instance</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                        {stats.by_instance.map(row => (
-                            <div
-                                key={row.instance_name}
-                                className="p-4 rounded-lg bg-surface border border-border"
-                            >
-                                <p className="text-sm font-medium text-primary mb-2">
-                                    {row.instance_name}
-                                </p>
-                                <div className="flex items-baseline gap-3">
-                                    <span className="text-2xl font-bold text-primary">
-                                        {row.total}
-                                    </span>
-                                    <span className="text-sm text-success">
-                                        {row.matched} matched
-                                    </span>
-                                </div>
-                                {row.total > 0 && (
-                                    <div className="mt-2 h-1.5 bg-surface-alt rounded-full overflow-hidden">
-                                        <div
-                                            className="h-full bg-success rounded-full transition-all"
-                                            style={{
-                                                width: `${Math.round((row.matched / row.total) * 100)}%`,
-                                            }}
-                                        />
+                        {stats.by_instance.map(row => {
+                            const zeroMatch = row.total > 0 && row.matched === 0;
+                            return (
+                                <div
+                                    key={row.instance_name}
+                                    className={`p-4 rounded-lg bg-surface border ${zeroMatch ? 'border-error/40' : 'border-border'}`}
+                                    title={
+                                        zeroMatch
+                                            ? 'No matches found — the poster sources for this instance may be misconfigured.'
+                                            : undefined
+                                    }
+                                >
+                                    <p className="text-sm font-medium text-primary mb-2 flex items-center gap-2">
+                                        {row.instance_name}
+                                        {zeroMatch && (
+                                            <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-error/20 text-error">
+                                                0% match
+                                            </span>
+                                        )}
+                                    </p>
+                                    <div className="flex items-baseline gap-3">
+                                        <span className="text-2xl font-bold text-primary">
+                                            {row.total}
+                                        </span>
+                                        <span
+                                            className={`text-sm ${zeroMatch ? 'text-error' : 'text-success'}`}
+                                        >
+                                            {row.matched} matched
+                                        </span>
                                     </div>
-                                )}
-                            </div>
-                        ))}
+                                    {row.total > 0 && (
+                                        <div className="mt-2 h-1.5 bg-surface-alt rounded-full overflow-hidden">
+                                            <div
+                                                className={`h-full rounded-full transition-all ${zeroMatch ? 'bg-error/70' : 'bg-success'}`}
+                                                style={{
+                                                    width: `${Math.max(4, Math.round((row.matched / row.total) * 100))}%`,
+                                                }}
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
                     </div>
                 </section>
             )}

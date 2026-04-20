@@ -50,18 +50,19 @@ export const logsAPI = {
     },
 
     /**
-     * Fetch log file content
+     * Fetch log file content.
+     * Passes `tail=N` to the backend so multi-MB logs only ship the last N
+     * lines rather than the whole file each poll.
      * @param {string} moduleName - Module name
      * @param {string} fileName - Log file name
      * @param {AbortSignal} [signal] - Optional AbortSignal to cancel the request
+     * @param {number} [tail=5000] - Max lines to request from the tail; 0 = full file
      * @returns {Promise<string>} Log file content as text
      */
-    fetchLogContent: async (moduleName, fileName, signal) => {
+    fetchLogContent: async (moduleName, fileName, signal, tail = 5000) => {
         if (!moduleName || !fileName) return '';
 
         try {
-            // Direct fetch for text content (not using apiCore which expects JSON).
-            // Must include the auth token manually.
             const headers = {};
             try {
                 const token = localStorage.getItem('chub-auth-token');
@@ -71,7 +72,8 @@ export const logsAPI = {
             } catch {
                 /* localStorage unavailable */
             }
-            const res = await fetch(`/api/logs/${moduleName}/${fileName}`, {
+            const qs = tail > 0 ? `?tail=${tail}` : '';
+            const res = await fetch(`/api/logs/${moduleName}/${fileName}${qs}`, {
                 headers,
                 signal,
             });

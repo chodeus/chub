@@ -6,6 +6,7 @@ import { mediaAPI } from '../../utils/api/media.js';
 import { Modal } from '../../components/modals/Modal';
 import { Button, IconButton, PageHeader } from '../../components/ui/index.js';
 import Spinner from '../../components/ui/Spinner.jsx';
+import RecentQueries, { useRecentQueries } from '../../components/RecentQueries.jsx';
 
 const FILTER_STORAGE_KEY = 'chub_media_search_filters';
 
@@ -69,6 +70,12 @@ const MediaSearchPage = () => {
         searchFunction
     );
 
+    const recent = useRecentQueries('chub_media_search_recent');
+    useEffect(() => {
+        if (term && hasResults) recent.record(term);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [term, hasResults]);
+
     const items = useMemo(() => results?.data?.items || results?.items || [], [results]);
     const total = useMemo(
         () => results?.data?.total || results?.total || totalCount || 0,
@@ -98,43 +105,53 @@ const MediaSearchPage = () => {
                 description="Search and discover content in your media collection."
                 badge={2}
                 icon="search"
+                actions={
+                    <div className="flex flex-wrap items-center gap-2">
+                        <select
+                            className="px-3 py-2 rounded-lg bg-surface border border-border text-primary text-sm"
+                            value={filters.type}
+                            onChange={e =>
+                                setFilters(prev => ({ ...prev, type: e.target.value, offset: 0 }))
+                            }
+                        >
+                            <option value="all">All Types</option>
+                            <option value="movie">Movies</option>
+                            <option value="show">Shows</option>
+                        </select>
+                        <select
+                            className="px-3 py-2 rounded-lg bg-surface border border-border text-primary text-sm"
+                            value={filters.sort}
+                            onChange={e => setFilters(prev => ({ ...prev, sort: e.target.value }))}
+                        >
+                            <option value="title">Title</option>
+                            <option value="year">Year</option>
+                            <option value="rating">Rating</option>
+                        </select>
+                    </div>
+                }
             />
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-3">
-                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                    <select
-                        className="px-3 py-2 rounded-lg bg-surface border border-border text-primary text-sm"
-                        value={filters.type}
-                        onChange={e =>
-                            setFilters(prev => ({ ...prev, type: e.target.value, offset: 0 }))
-                        }
-                    >
-                        <option value="all">All Types</option>
-                        <option value="movie">Movies</option>
-                        <option value="show">Shows</option>
-                    </select>
-                    <select
-                        className="px-3 py-2 rounded-lg bg-surface border border-border text-primary text-sm"
-                        value={filters.sort}
-                        onChange={e => setFilters(prev => ({ ...prev, sort: e.target.value }))}
-                    >
-                        <option value="title">Title</option>
-                        <option value="year">Year</option>
-                        <option value="rating">Rating</option>
-                    </select>
-                </div>
-            </div>
 
             {isSearching && <Spinner size="large" text="Searching..." center />}
 
             {!isSearching && !term && (
-                <div className="text-center py-16 text-tertiary">
-                    <span className="material-symbols-outlined text-5xl mb-4 block opacity-40">
-                        search
-                    </span>
-                    <p className="text-lg">Use the search bar above to find media</p>
-                    <p className="text-sm mt-2">
-                        Search by title across all your configured instances
-                    </p>
+                <div className="flex flex-col items-center gap-6 py-10 text-tertiary">
+                    <div className="text-center">
+                        <span className="material-symbols-outlined text-5xl mb-4 block opacity-40">
+                            search
+                        </span>
+                        <p className="text-lg">Use the search bar above to find media</p>
+                        <p className="text-sm mt-2">
+                            Search by title across all your configured instances
+                        </p>
+                    </div>
+                    {recent.entries.length > 0 && (
+                        <RecentQueries
+                            entries={recent.entries}
+                            onSelect={q => search(q, { immediate: true })}
+                            onClear={recent.clear}
+                            label="Recent searches"
+                        />
+                    )}
                 </div>
             )}
 

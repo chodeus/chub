@@ -237,68 +237,68 @@ const PosterAssetsSearchPage = () => {
                 description={`Browse and manage posters in your local asset cache (${total} posters).`}
                 badge={2}
                 icon="folder"
+                actions={
+                    <div className="flex flex-wrap items-center gap-2">
+                        <LoadingButton
+                            loading={isRunning('poster_renamerr') || isAutoMatching}
+                            loadingText="Matching..."
+                            variant="ghost"
+                            icon="auto_fix_high"
+                            onClick={handleAutoMatch}
+                            title="Run Poster Renamerr to automatically match poster files to media items"
+                        >
+                            Auto-Match
+                        </LoadingButton>
+                        <LoadingButton
+                            loading={isAnalyzing}
+                            loadingText="Analyzing..."
+                            variant="ghost"
+                            icon="analytics"
+                            onClick={handleAnalyze}
+                            title="Scan the poster directory and report file count and total storage size"
+                        >
+                            Analyze
+                        </LoadingButton>
+                        <LoadingButton
+                            loading={isOptimizing}
+                            loadingText="Optimizing..."
+                            variant="ghost"
+                            icon="tune"
+                            onClick={() => runOptimize()}
+                            title="Resize oversized posters and compress images to save disk space"
+                        >
+                            Optimize
+                        </LoadingButton>
+                        <LoadingButton
+                            loading={isSyncingMetadata}
+                            loadingText="Syncing..."
+                            variant="ghost"
+                            icon="sync"
+                            onClick={() => runSyncMetadata()}
+                            title="Refresh poster metadata by running a full Poster Renamerr sync"
+                        >
+                            Sync Metadata
+                        </LoadingButton>
+                        <LoadingButton
+                            loading={isUploading}
+                            loadingText="Uploading..."
+                            variant="primary"
+                            icon="upload"
+                            onClick={() => fileInputRef.current?.click()}
+                            title="Upload a poster image file"
+                        >
+                            Upload
+                        </LoadingButton>
+                        <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={handleUpload}
+                        />
+                    </div>
+                }
             />
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-3">
-                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                    <LoadingButton
-                        loading={isRunning('poster_renamerr') || isAutoMatching}
-                        loadingText="Matching..."
-                        variant="ghost"
-                        icon="auto_fix_high"
-                        onClick={handleAutoMatch}
-                        title="Run Poster Renamerr to automatically match poster files to media items"
-                    >
-                        Auto-Match
-                    </LoadingButton>
-                    <LoadingButton
-                        loading={isAnalyzing}
-                        loadingText="Analyzing..."
-                        variant="ghost"
-                        icon="analytics"
-                        onClick={handleAnalyze}
-                        title="Scan the poster directory and report file count and total storage size"
-                    >
-                        Analyze
-                    </LoadingButton>
-                    <LoadingButton
-                        loading={isOptimizing}
-                        loadingText="Optimizing..."
-                        variant="ghost"
-                        icon="tune"
-                        onClick={() => runOptimize()}
-                        title="Resize oversized posters and compress images to save disk space"
-                    >
-                        Optimize
-                    </LoadingButton>
-                    <LoadingButton
-                        loading={isSyncingMetadata}
-                        loadingText="Syncing..."
-                        variant="ghost"
-                        icon="sync"
-                        onClick={() => runSyncMetadata()}
-                        title="Refresh poster metadata by running a full Poster Renamerr sync"
-                    >
-                        Sync Metadata
-                    </LoadingButton>
-                    <LoadingButton
-                        loading={isUploading}
-                        loadingText="Uploading..."
-                        variant="primary"
-                        icon="upload"
-                        onClick={() => fileInputRef.current?.click()}
-                        title="Upload a poster image file"
-                    >
-                        Upload
-                    </LoadingButton>
-                    <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={handleUpload}
-                    />
-                </div>
-            </div>
 
             {/* Filters */}
             <div className="flex items-center gap-3 flex-wrap">
