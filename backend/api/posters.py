@@ -2194,9 +2194,6 @@ async def run_plex_metadata_cleanup(
     Enqueue a `poster_cleanarr` job. Request body:
         {
           "mode": "report" | "move" | "remove",
-          "empty_trash": bool,
-          "clean_bundles": bool,
-          "optimize_db": bool,
           "target_paths": [str, ...]   # optional; if present, only these files are processed
         }
     """
@@ -2213,12 +2210,7 @@ async def run_plex_metadata_cleanup(
             )
         payload = {
             "module_name": "poster_cleanarr",
-            "overrides": {
-                "mode": mode,
-                "empty_trash": bool(body.get("empty_trash")),
-                "clean_bundles": bool(body.get("clean_bundles")),
-                "optimize_db": bool(body.get("optimize_db")),
-            },
+            "overrides": {"mode": mode},
         }
         target_paths = body.get("target_paths")
         if isinstance(target_paths, list) and target_paths:

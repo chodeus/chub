@@ -161,12 +161,6 @@ class PosterCleanarr(ChubModule):
                     db, self.mode in ("report", "nothing")
                 )
 
-            # PhotoTranscoder + server maintenance (empty_trash / clean_bundles
-            # / optimize_db) live in the plex_maintenance module now. Keep
-            # empty stats here so the existing report shape is preserved.
-            transcoder_stats = {"count": 0, "total_size": 0}
-            maintenance_results: Dict[str, Any] = {}
-
             # === Clean empty directories ===
             empty_dirs = 0
             if self.mode not in ("report", "nothing") and metadata_dir:
@@ -175,8 +169,7 @@ class PosterCleanarr(ChubModule):
             # === Report ===
             elapsed = time.time() - start_time
             output = self._build_output(
-                bloat_stats, orphaned_stats, transcoder_stats,
-                maintenance_results, empty_dirs, elapsed
+                bloat_stats, orphaned_stats, empty_dirs, elapsed
             )
             self._print_report(output)
 
@@ -721,8 +714,6 @@ class PosterCleanarr(ChubModule):
         self,
         bloat_stats: Dict[str, Any],
         orphaned_stats: Dict[str, Any],
-        transcoder_stats: Dict[str, Any],
-        maintenance_results: Dict[str, Any],
         empty_dirs: int,
         elapsed: float,
     ) -> Dict[str, Any]:
@@ -737,12 +728,6 @@ class PosterCleanarr(ChubModule):
             "orphaned": {
                 "count": orphaned_stats.get("count", 0),
             },
-            "photo_transcoder": {
-                "count": transcoder_stats.get("count", 0),
-                "size": transcoder_stats.get("total_size", 0),
-                "size_human": format_bytes(transcoder_stats.get("total_size", 0)),
-            },
-            "maintenance": maintenance_results,
             "empty_dirs": empty_dirs,
             "elapsed": round(elapsed, 1),
         }
@@ -765,13 +750,6 @@ class PosterCleanarr(ChubModule):
             ],
         ]
 
-        if self.config.photo_transcoder:
-            summary_rows.append([
-                "PhotoTranscoder Cache",
-                str(output["photo_transcoder"]["count"]),
-                output["photo_transcoder"]["size_human"],
-            ])
-
         if output["empty_dirs"] > 0:
             summary_rows.append([
                 "Empty Directories",
@@ -780,12 +758,5 @@ class PosterCleanarr(ChubModule):
             ])
 
         self.logger.info(create_table(summary_rows))
-
-        # Maintenance results
-        if output["maintenance"]:
-            self.logger.info("Plex Maintenance:")
-            for task_name, status in output["maintenance"].items():
-                icon = "✅" if status == "success" else "❌"
-                self.logger.info(f"  {icon} {task_name}: {status}")
 
         self.logger.info(f"\nCompleted in {output['elapsed']}s")

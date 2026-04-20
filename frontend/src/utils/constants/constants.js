@@ -4,6 +4,7 @@ export const moduleOrder = [
     'sync_gdrive',
     'poster_renamerr',
     'poster_cleanarr',
+    'plex_maintenance',
     'border_replacerr',
     'unmatched_assets',
     'renameinatorr',

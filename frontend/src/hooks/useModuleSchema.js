@@ -20,6 +20,7 @@ const CONFIG_MODULE_KEYS = [
     'jduparr',
     'nestarr',
     'poster_cleanarr',
+    'plex_maintenance',
     'unmatched_assets',
 ];
 
