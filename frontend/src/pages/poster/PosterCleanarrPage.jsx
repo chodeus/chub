@@ -354,9 +354,11 @@ const PosterCleanarrPage = () => {
     // Action-bar state (global bulk cleanup flow — Report/Move/Remove).
     const [mode, setMode] = useState('report');
 
-    // Scan state. `hasScanned` persists — once the user has triggered a
-    // scan in this browser, we auto-refresh on remount.
-    const [hasScanned, setHasScanned] = useState(persisted.hasScanned ?? false);
+    // Scan state. Session-only — scanning is an explicit user action, so we
+    // intentionally don't persist this. Navigating away and back resets the
+    // page to the "Ready to scan" empty state rather than firing a fresh
+    // walk-every-bundle on mount.
+    const [hasScanned, setHasScanned] = useState(false);
 
     // Tab + search on the left pane.
     const [tab, setTab] = useState(persisted.tab || 'all');
@@ -405,13 +407,13 @@ const PosterCleanarrPage = () => {
         return m;
     }, [bundles]);
 
-    // Persist view/tree state.
+    // Persist view/tree state (tab, expansion, selection). `hasScanned` is
+    // deliberately excluded — scans must be explicit (see state decl).
     useEffect(() => {
         try {
             localStorage.setItem(
                 STATE_KEY,
                 JSON.stringify({
-                    hasScanned,
                     tab,
                     expandedShows: [...expandedShows],
                     expandedSeasons: [...expandedSeasons],
@@ -421,17 +423,7 @@ const PosterCleanarrPage = () => {
         } catch {
             // ignore quota / private mode failures
         }
-    }, [hasScanned, tab, expandedShows, expandedSeasons, selected]);
-
-    // Auto-refresh on mount if the user has scanned before.
-    const didMountRefreshRef = useRef(false);
-    useEffect(() => {
-        if (didMountRefreshRef.current) return;
-        if (!hasScanned) return;
-        didMountRefreshRef.current = true;
-        byMedia.refresh();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [tab, expandedShows, expandedSeasons, selected]);
 
     const refreshScan = useCallback(() => {
         if (!hasScanned) setHasScanned(true);
@@ -768,7 +760,7 @@ const PosterCleanarrPage = () => {
                 <section className="rounded-lg border border-border overflow-hidden bg-surface">
                     <div
                         className="grid"
-                        style={{ gridTemplateColumns: '340px 1fr', minHeight: '680px' }}
+                        style={{ gridTemplateColumns: '560px 1fr', minHeight: '680px' }}
                     >
                         {/* Left pane */}
                         <div className="flex flex-col border-r border-border">

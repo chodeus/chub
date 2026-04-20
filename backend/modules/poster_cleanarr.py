@@ -234,28 +234,16 @@ class PosterCleanarr(ChubModule):
         plex_instances = self.full_config.instances.plex
 
         if not instances:
-            # UX fallback: if the user only has one Plex instance configured
-            # globally, auto-select it. Users commonly assume the global
-            # instance covers this module too because the scan already works
-            # off `plex_path` from disk. Only fall back when there's no
-            # ambiguity — if multiple instances exist, still require an
-            # explicit choice so we don't guess wrong.
-            if len(plex_instances) == 1:
-                instance_name = next(iter(plex_instances))
-                self.logger.info(
-                    f"No 'instances' configured for poster_cleanarr; "
-                    f"auto-selecting the single configured Plex instance "
-                    f"'{instance_name}'."
-                )
-            else:
-                self.logger.error(
-                    "No Plex instances configured for poster_cleanarr. "
-                    "Add instance names to the 'instances' list in config "
-                    f"(available: {sorted(plex_instances) or 'none'})."
-                )
-                return None
-        else:
-            instance_name = instances[0]
+            # Require an explicit instance selection — never auto-pick. Module
+            # wiring should be intentional, not inferred from "there's only
+            # one configured anyway."
+            self.logger.error(
+                "No Plex instances selected for poster_cleanarr. "
+                "Pick one in Settings → Modules → Poster Cleanarr → Plex Instances "
+                f"(available: {sorted(plex_instances) or 'none'})."
+            )
+            return None
+        instance_name = instances[0]
 
         if instance_name not in plex_instances:
             self.logger.error(f"Plex instance '{instance_name}' not found in CHUB instances config.")
@@ -536,16 +524,16 @@ class PosterCleanarr(ChubModule):
             size = item["size"]
 
             if mode == "report":
-                self.logger.info(f"  [REPORT] {filepath} ({format_bytes(size)})")
+                # Per-file audit at DEBUG only — at INFO this drowns the log
+                # (3k+ lines per run). INFO carries summary + errors.
+                self.logger.debug(f"  [REPORT] {filepath} ({format_bytes(size)})")
                 count += 1
                 total_size += size
 
             elif mode == "move":
                 try:
                     self._move_file(filepath, metadata_dir, restore_dir)
-                    # Log per-file so the Logs tab shows a full audit trail of
-                    # what was touched — matches ImageMaid's MOVE: <path> output.
-                    self.logger.info(f"  [MOVE] {filepath} ({format_bytes(size)})")
+                    self.logger.debug(f"  [MOVE] {filepath} ({format_bytes(size)})")
                     count += 1
                     total_size += size
                 except Exception as e:
@@ -554,7 +542,7 @@ class PosterCleanarr(ChubModule):
             elif mode == "remove":
                 try:
                     os.remove(filepath)
-                    self.logger.info(f"  [REMOVE] {filepath} ({format_bytes(size)})")
+                    self.logger.debug(f"  [REMOVE] {filepath} ({format_bytes(size)})")
                     count += 1
                     total_size += size
                 except Exception as e:
@@ -586,7 +574,7 @@ class PosterCleanarr(ChubModule):
             try:
                 size = os.path.getsize(filepath)
                 self._restore_file(filepath, restore_dir, metadata_dir)
-                self.logger.info(f"  [RESTORE] {filepath} ({format_bytes(size)})")
+                self.logger.debug(f"  [RESTORE] {filepath} ({format_bytes(size)})")
                 count += 1
                 total_size += size
             except Exception as e:
