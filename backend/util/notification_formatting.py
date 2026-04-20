@@ -480,6 +480,34 @@ def format_for_discord(
         fields.append({"name": "Duration", "value": f"{elapsed}s", "inline": True})
         return fields
 
+    def fmt_plex_maintenance(o: Any) -> List[Dict[str, Any]]:
+        """Format plex_maintenance output for Discord embeds."""
+        fields: List[Dict[str, Any]] = []
+
+        pt = o.get("photo_transcoder", {})
+        if pt.get("count", 0) > 0:
+            fields.append({
+                "name": "PhotoTranscoder",
+                "value": f"{pt['count']} files ({pt.get('size_human', '0 B')})",
+                "inline": True,
+            })
+
+        maintenance = o.get("maintenance", {})
+        if maintenance:
+            lines = []
+            for task, status in maintenance.items():
+                icon = "✅" if status == "success" else "❌"
+                lines.append(f"{icon} {task}: {status}")
+            fields.append({
+                "name": "Plex Maintenance",
+                "value": "\n".join(lines),
+            })
+
+        elapsed = o.get("elapsed", "")
+        if elapsed:
+            fields.append({"name": "Duration", "value": str(elapsed), "inline": True})
+        return fields
+
     def fmt_version_check(o: dict) -> list:
 
         fields = [
@@ -511,6 +539,7 @@ def format_for_discord(
         "labelarr": {"formatter": fmt_labelarr, "type": "embedded"},
         "jduparr": {"formatter": fmt_jduparr, "type": "flat"},
         "poster_cleanarr": {"formatter": fmt_poster_cleanarr, "type": "embedded"},
+        "plex_maintenance": {"formatter": fmt_plex_maintenance, "type": "embedded"},
         "version_check": {"formatter": fmt_version_check, "type": "embedded"},
         "error_notify": {"formatter": fmt_error_notify, "type": "embedded"},
     }
@@ -984,6 +1013,31 @@ def format_for_email(config: Any, output: Any) -> Tuple[str, bool]:
         sections.append(f"<p><em>Completed in {elapsed}s</em></p></div>")
         return "".join(sections)
 
+    def fmt_plex_maintenance(output: dict) -> str:
+        """Format plex_maintenance output for email (HTML)."""
+        sections: List[str] = ["<div class='section'><h3>Plex Maintenance</h3>"]
+
+        pt = output.get("photo_transcoder", {})
+        if pt.get("count", 0) > 0:
+            sections.append(
+                f"<p><strong>PhotoTranscoder:</strong> {pt['count']} files "
+                f"({pt.get('size_human', '0 B')})</p>"
+            )
+
+        maintenance = output.get("maintenance", {})
+        if maintenance:
+            sections.append("<p><strong>Tasks:</strong></p><ul>")
+            for task, status in maintenance.items():
+                icon = "&#x2705;" if status == "success" else "&#x274C;"
+                sections.append(f"<li>{icon} {task}: {status}</li>")
+            sections.append("</ul>")
+
+        elapsed = output.get("elapsed", "")
+        if elapsed:
+            sections.append(f"<p><em>Completed in {elapsed}</em></p>")
+        sections.append("</div>")
+        return "".join(sections)
+
     registry: Dict[str, Any] = {
         "poster_renamerr": fmt_poster_renamerr,
         "renameinatorr": fmt_renameinatorr,
@@ -994,6 +1048,7 @@ def format_for_email(config: Any, output: Any) -> Tuple[str, bool]:
         "labelarr": fmt_labelarr,
         "jduparr": fmt_jduparr,
         "poster_cleanarr": fmt_poster_cleanarr,
+        "plex_maintenance": fmt_plex_maintenance,
     }
     formatter = registry.get(config.module_name)
     if not formatter:

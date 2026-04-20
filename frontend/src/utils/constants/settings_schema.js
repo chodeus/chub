@@ -994,8 +994,13 @@ export const SETTINGS_MODULES = [
     {
         name: 'Poster Cleanarr',
         key: 'poster_cleanarr',
+        description: 'Clean bloat images from Plex metadata and manage orphaned posters.',
+    },
+    {
+        name: 'Plex Maintenance',
+        key: 'plex_maintenance',
         description:
-            'Clean bloat images from Plex metadata, manage orphaned posters, and run Plex maintenance tasks.',
+            'Server-level Plex hygiene: empty trash, clean bundles, optimize database, and clear the PhotoTranscoder cache.',
     },
     {
         name: 'Unmatched Assets',

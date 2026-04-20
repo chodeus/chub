@@ -319,6 +319,7 @@ const PosterCleanarrPage = () => {
     // Modals.
     const [previewTarget, setPreviewTarget] = useState(null);
     const [confirmSetActive, setConfirmSetActive] = useState(null);
+    const [confirmRemove, setConfirmRemove] = useState(false);
     const [liveJobId, setLiveJobId] = useState(null);
     const [isEnqueuing, setIsEnqueuing] = useState(false);
 
@@ -467,7 +468,7 @@ const PosterCleanarrPage = () => {
 
     const clearSelection = () => setSelectedPaths(new Set());
 
-    const runCleanup = async () => {
+    const executeCleanup = useCallback(async () => {
         setIsEnqueuing(true);
         try {
             const body = { mode };
@@ -486,6 +487,14 @@ const PosterCleanarrPage = () => {
         } finally {
             setIsEnqueuing(false);
         }
+    }, [mode, selectedPaths, toast]);
+
+    const runCleanup = () => {
+        if (mode === 'remove') {
+            setConfirmRemove(true);
+            return;
+        }
+        executeCleanup();
     };
 
     const handleDeleteVariant = async variant => {
@@ -814,6 +823,42 @@ const PosterCleanarrPage = () => {
                     </Button>
                     <Button variant="primary" onClick={handleSetActive}>
                         Make active
+                    </Button>
+                </Modal.Footer>
+            </Modal>
+            <Modal isOpen={confirmRemove} onClose={() => setConfirmRemove(false)}>
+                <Modal.Header>Permanently delete bloat variants?</Modal.Header>
+                <Modal.Body>
+                    <p className="text-sm">
+                        {selectedPaths.size > 0 ? (
+                            <>
+                                This will permanently delete <strong>{selectedPaths.size}</strong>{' '}
+                                selected variant
+                                {selectedPaths.size === 1 ? '' : 's'} from disk. This cannot be
+                                undone.
+                            </>
+                        ) : (
+                            <>
+                                This will permanently delete{' '}
+                                <strong>every bloat variant across your entire library</strong> from
+                                disk. This cannot be undone. Consider running <em>Move to trash</em>{' '}
+                                instead if you&apos;d like the option to restore.
+                            </>
+                        )}
+                    </p>
+                </Modal.Body>
+                <Modal.Footer align="right">
+                    <Button variant="secondary" onClick={() => setConfirmRemove(false)}>
+                        Cancel
+                    </Button>
+                    <Button
+                        variant="danger"
+                        onClick={() => {
+                            setConfirmRemove(false);
+                            executeCleanup();
+                        }}
+                    >
+                        Delete permanently
                     </Button>
                 </Modal.Footer>
             </Modal>
