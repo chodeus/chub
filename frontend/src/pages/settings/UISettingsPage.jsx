@@ -198,13 +198,9 @@ export const UISettingsPage = () => {
                 }
             }
 
-            // Ctrl/Cmd + R to reset
-            if ((e.ctrlKey || e.metaKey) && e.key === 'r') {
-                e.preventDefault();
-                if (isDirty) {
-                    handleReset();
-                }
-            }
+            // Ctrl/Cmd+R is intentionally not intercepted — that's the
+            // browser reload shortcut. Reset stays available via the Reset
+            // button in the toolbar.
         };
 
         window.addEventListener('keydown', handleKeyboard);

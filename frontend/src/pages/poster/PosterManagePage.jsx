@@ -262,6 +262,9 @@ const PosterManagePage = () => {
     const [confirmSetActive, setConfirmSetActive] = useState(null);
     const [liveJobId, setLiveJobId] = useState(null);
     const [isEnqueuing, setIsEnqueuing] = useState(false);
+    // Plex metadata scans are expensive (walks every .bundle dir), so the
+    // page stays idle until the user explicitly hits Refresh.
+    const [hasScanned, setHasScanned] = useState(false);
 
     // Mode + Plex-maintenance toggles
     const [mode, setMode] = useState('report');
@@ -280,31 +283,31 @@ const PosterManagePage = () => {
 
     const bloatParams = useMemo(() => ({ limit: PAGE_SIZE, offset: page * PAGE_SIZE }), [page]);
 
-    // useApiData doesn't natively support a `skip`/conditional fire, so we
-    // short-circuit the inactive view's apiFunction to a resolved-empty
-    // promise. Switching views triggers a re-run of the now-active one.
+    // Scans don't auto-fire on mount — they walk the entire Plex metadata
+    // directory. The user triggers them by clicking Refresh (which calls
+    // hasScanned=true) or by switching views after the first scan.
     const byMedia = useApiData({
         apiFunction: useCallback(
             () =>
-                view === 'by-media'
+                view === 'by-media' && hasScanned
                     ? postersAPI.listPlexMetadataByMedia(byMediaParams)
                     : Promise.resolve({ data: { bundles: [], total: 0, stats: null } }),
-            [byMediaParams, view]
+            [byMediaParams, view, hasScanned]
         ),
-        dependencies: [byMediaParams, view],
-        options: { showErrorToast: false, immediate: view === 'by-media' },
+        dependencies: [byMediaParams, view, hasScanned],
+        options: { showErrorToast: false, immediate: false },
     });
 
     const bloatFlat = useApiData({
         apiFunction: useCallback(
             () =>
-                view === 'bloat'
+                view === 'bloat' && hasScanned
                     ? postersAPI.listPlexMetadataBloat(bloatParams)
                     : Promise.resolve({ data: { items: [], total: 0, stats: null } }),
-            [bloatParams, view]
+            [bloatParams, view, hasScanned]
         ),
-        dependencies: [bloatParams, view],
-        options: { showErrorToast: false, immediate: view === 'bloat' },
+        dependencies: [bloatParams, view, hasScanned],
+        options: { showErrorToast: false, immediate: false },
     });
 
     const bundles = useMemo(() => byMedia.data?.data?.bundles || [], [byMedia.data]);
@@ -322,9 +325,15 @@ const PosterManagePage = () => {
     const loading = view === 'by-media' ? byMedia.isLoading : bloatFlat.isLoading;
 
     const refreshView = useCallback(() => {
+        // First click flips the opt-in flag, which drives the useApiData
+        // dep array and fires the scan via its normal path.
+        if (!hasScanned) {
+            setHasScanned(true);
+            return;
+        }
         if (view === 'by-media') byMedia.refresh();
         else bloatFlat.refresh();
-    }, [view, byMedia, bloatFlat]);
+    }, [view, byMedia, bloatFlat, hasScanned]);
 
     const toggleSelect = useCallback(variant => {
         setSelectedPaths(prev => {
@@ -558,7 +567,20 @@ const PosterManagePage = () => {
                 <Spinner size="large" text="Scanning Plex metadata…" center />
             ) : view === 'by-media' ? (
                 <>
-                    {byMedia.error ? (
+                    {!hasScanned ? (
+                        <div className="text-center py-16 px-6 rounded-lg border border-border-light bg-surface-alt text-sm text-tertiary">
+                            <span className="material-symbols-outlined text-3xl mb-2 block opacity-60">
+                                cleaning_services
+                            </span>
+                            <p className="text-primary font-medium mb-1">Ready to scan</p>
+                            <p>
+                                Click <span className="font-semibold">Refresh</span> above to scan
+                                Plex metadata for poster bloat. The scan walks every{' '}
+                                <code>.bundle</code> directory under <code>/plex</code> and can take
+                                a minute on large libraries.
+                            </p>
+                        </div>
+                    ) : byMedia.error ? (
                         <div className="text-center py-16 px-6 rounded-lg border border-error/40 bg-error/10 text-error text-sm">
                             <span className="material-symbols-outlined text-2xl mb-2 block">
                                 error
@@ -593,7 +615,26 @@ const PosterManagePage = () => {
                 </>
             ) : (
                 <>
-                    {bloatItems.length === 0 ? (
+                    {!hasScanned ? (
+                        <div className="text-center py-16 px-6 rounded-lg border border-border-light bg-surface-alt text-sm text-tertiary">
+                            <span className="material-symbols-outlined text-3xl mb-2 block opacity-60">
+                                cleaning_services
+                            </span>
+                            <p className="text-primary font-medium mb-1">Ready to scan</p>
+                            <p>
+                                Click <span className="font-semibold">Refresh</span> above to scan
+                                Plex metadata for poster bloat.
+                            </p>
+                        </div>
+                    ) : bloatFlat.error ? (
+                        <div className="text-center py-16 px-6 rounded-lg border border-error/40 bg-error/10 text-error text-sm">
+                            <span className="material-symbols-outlined text-2xl mb-2 block">
+                                error
+                            </span>
+                            Couldn&apos;t read Plex metadata:{' '}
+                            {bloatFlat.error?.message || String(bloatFlat.error)}.
+                        </div>
+                    ) : bloatItems.length === 0 ? (
                         <div className="text-center py-16 text-tertiary">
                             No bloat variants. Plex metadata is clean.
                         </div>

@@ -630,10 +630,23 @@ const PosterAssetsSearchPage = () => {
             {/* Lightbox */}
             <Modal isOpen={!!lightboxItem} onClose={() => setLightboxItem(null)} size="large">
                 <Modal.Header>
-                    {lightboxItem?.title}
-                    {lightboxItem?.year && ` (${lightboxItem.year})`}
-                    {lightboxItem?.season_number != null &&
-                        ` — S${String(lightboxItem.season_number).padStart(2, '0')}`}
+                    <span
+                        className="block text-base font-semibold text-primary break-words pr-2"
+                        title={[
+                            lightboxItem?.title,
+                            lightboxItem?.year ? `(${lightboxItem.year})` : '',
+                            lightboxItem?.season_number != null
+                                ? `— S${String(lightboxItem.season_number).padStart(2, '0')}`
+                                : '',
+                        ]
+                            .filter(Boolean)
+                            .join(' ')}
+                    >
+                        {lightboxItem?.title}
+                        {lightboxItem?.year && ` (${lightboxItem.year})`}
+                        {lightboxItem?.season_number != null &&
+                            ` — S${String(lightboxItem.season_number).padStart(2, '0')}`}
+                    </span>
                 </Modal.Header>
                 <Modal.Body>
                     {lightboxItem && (

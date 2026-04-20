@@ -21,7 +21,6 @@ import {
 
 const POLL_INTERVAL = 30000;
 const UPCOMING_LIMIT = 5;
-const RECENT_JOB_LIMIT = 8;
 
 const QUICK_START = [
     {
@@ -74,8 +73,6 @@ const QUICK_START = [
     },
 ];
 
-const listRecentJobs = (options = {}) => jobsAPI.listJobs({ limit: RECENT_JOB_LIMIT }, options);
-
 const statusPillClass = status => {
     switch (status) {
         case 'success':
@@ -90,28 +87,6 @@ const statusPillClass = status => {
             return 'bg-surface-alt text-secondary';
     }
 };
-
-const jobDuration = job => {
-    // Backend puts the real wall-clock duration in result.data.duration (seconds).
-    try {
-        const parsed = job.result ? JSON.parse(job.result) : null;
-        const d = parsed?.data?.duration;
-        if (typeof d === 'number' && d >= 0) {
-            const s = Math.round(d);
-            if (s < 60) return `${s}s`;
-            const minutes = Math.floor(s / 60);
-            const secs = s % 60;
-            return `${minutes}m ${secs}s`;
-        }
-    } catch {
-        /* malformed; skip */
-    }
-    return null;
-};
-
-const jobModuleName = job => job.module_name || job.module || job.job_type || 'job';
-
-const jobTimestamp = job => job.completed_at || job.updated_at || job.received_at || job.created_at;
 
 const DashboardPage = () => {
     const toast = useToast();
@@ -164,15 +139,6 @@ const DashboardPage = () => {
         options: { showErrorToast: false },
     });
 
-    const {
-        data: recentJobsData,
-        isLoading: recentJobsLoading,
-        refresh: refreshRecentJobs,
-    } = useApiData({
-        apiFunction: listRecentJobs,
-        options: { showErrorToast: false },
-    });
-
     const { data: diskData } = useApiData({
         apiFunction: systemAPI.getDiskUsage,
         options: { showErrorToast: false },
@@ -186,8 +152,7 @@ const DashboardPage = () => {
     const handleStatusChange = useCallback(() => {
         refreshRunStates();
         refreshJobStats();
-        refreshRecentJobs();
-    }, [refreshRunStates, refreshJobStats, refreshRecentJobs]);
+    }, [refreshRunStates, refreshJobStats]);
 
     const { isConnected } = useModuleEvents({ onStatusChange: handleStatusChange });
 
@@ -201,20 +166,18 @@ const DashboardPage = () => {
             refreshRunStates();
             refreshJobStats();
             refreshModules();
-            refreshRecentJobs();
         }, POLL_INTERVAL);
         return () => {
             if (pollRef.current) clearInterval(pollRef.current);
         };
-    }, [isConnected, refreshRunStates, refreshJobStats, refreshModules, refreshRecentJobs]);
+    }, [isConnected, refreshRunStates, refreshJobStats, refreshModules]);
 
     const handleRefreshAll = useCallback(() => {
         refreshRunStates();
         refreshJobStats();
         refreshModules();
         refreshSchedules();
-        refreshRecentJobs();
-    }, [refreshRunStates, refreshJobStats, refreshModules, refreshSchedules, refreshRecentJobs]);
+    }, [refreshRunStates, refreshJobStats, refreshModules, refreshSchedules]);
 
     const handleCancel = useCallback(
         async (moduleName, jobId) => {
@@ -244,7 +207,7 @@ const DashboardPage = () => {
     );
 
     const isLoading =
-        runStatesLoading || jobsLoading || modulesLoading || scheduleLoading || recentJobsLoading;
+        runStatesLoading || jobsLoading || modulesLoading || scheduleLoading;
 
     const version = useMemo(() => {
         if (!versionData) return null;
@@ -343,11 +306,6 @@ const DashboardPage = () => {
         return entries.slice(0, UPCOMING_LIMIT);
     }, [schedules, tick]);
 
-    const recentJobs = useMemo(() => {
-        const jobs = recentJobsData?.data?.jobs || recentJobsData?.data || [];
-        return Array.isArray(jobs) ? jobs.slice(0, RECENT_JOB_LIMIT) : [];
-    }, [recentJobsData]);
-
     if (isLoading && moduleList.length === 0) {
         return <Spinner size="large" text="Loading dashboard..." center />;
     }
@@ -395,65 +353,101 @@ const DashboardPage = () => {
                 </div>
             </section>
 
-            {/* Recent jobs — promoted to full width */}
+            {/* Modules — moved to top; each card deep-links to its log */}
             <section>
                 <div className="flex items-end justify-between mb-4">
                     <div>
-                        <h2 className="text-xl font-bold text-primary m-0">Recent jobs</h2>
+                        <h2 className="text-xl font-bold text-primary m-0">Modules</h2>
                         <p className="text-secondary text-sm mt-1 mb-0">
-                            The {RECENT_JOB_LIMIT} most recent module runs — click a card for logs.
+                            Live status of every configured module. Click a card to open its log.
                         </p>
                     </div>
-                    <Link
-                        to="/settings/jobs"
-                        className="text-sm text-accent no-underline hover:underline"
-                    >
-                        View all
+                    <Link to="/logs" className="text-sm text-accent no-underline hover:underline">
+                        All logs
                     </Link>
                 </div>
-                {recentJobs.length === 0 ? (
-                    <div className="bg-surface-alt border border-border-light rounded-lg p-6 text-sm text-tertiary text-center">
-                        No jobs yet. They&apos;ll show up here once modules start running.
-                    </div>
-                ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                        {recentJobs.map(job => {
-                            const moduleName = jobModuleName(job);
-                            const ended = jobTimestamp(job);
-                            const status = job.status || 'success';
-                            const duration = jobDuration(job);
-                            return (
-                                <Link
-                                    key={job.id || `${moduleName}-${ended}`}
-                                    to={`/logs?module=${encodeURIComponent(moduleName)}`}
-                                    title={
-                                        ended
-                                            ? new Date(ended).toLocaleString()
-                                            : 'Pending completion'
-                                    }
-                                    className="no-underline bg-surface border border-border-light rounded-lg p-4 flex flex-col gap-2 min-w-0 transition-transform hover:-translate-y-0.5 hover:border-border"
-                                >
-                                    <div className="flex items-center justify-between gap-2 min-w-0">
-                                        <span className="font-semibold text-primary truncate min-w-0">
-                                            {humanize(moduleName)}
-                                        </span>
-                                        <span
-                                            className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${statusPillClass(status)}`}
-                                        >
-                                            {status}
-                                        </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {moduleList.map(mod => {
+                        const state = runStates[mod.name];
+                        const lastRun = mod.last_run || state?.last_run;
+                        const lastStatus = mod.last_run_status || state?.status;
+                        const schedule = mod.schedule;
+                        const jobId = state?.job_id;
+                        const isRunning = lastStatus === 'running';
+                        const stopProp = e => e.stopPropagation();
+                        // Use preventDefault on inner buttons so Link doesn't
+                        // navigate when the user clicks Run now / Cancel.
+                        const stopNav = e => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                        };
+
+                        return (
+                            <Link
+                                key={mod.name}
+                                to={`/logs?module=${encodeURIComponent(mod.name)}`}
+                                className="no-underline bg-surface border border-border-light rounded-lg p-4 flex flex-col gap-2 min-w-0 transition-transform hover:-translate-y-0.5 hover:border-border"
+                            >
+                                <div className="flex items-center justify-between gap-2 min-w-0">
+                                    <span className="font-semibold text-primary truncate min-w-0">
+                                        {humanize(mod.name)}
+                                    </span>
+                                    <div
+                                        className="flex items-center gap-1 shrink-0"
+                                        onClick={stopProp}
+                                    >
+                                        {lastStatus && (
+                                            <span
+                                                className={`text-xs px-2 py-1 rounded-full ${statusPillClass(lastStatus)}`}
+                                            >
+                                                {lastStatus}
+                                            </span>
+                                        )}
+                                        {isRunning && jobId && (
+                                            <IconButton
+                                                icon="cancel"
+                                                aria-label={`Cancel ${humanize(mod.name)}`}
+                                                variant="ghost"
+                                                onClick={e => {
+                                                    stopNav(e);
+                                                    handleCancel(mod.name, jobId);
+                                                }}
+                                            />
+                                        )}
                                     </div>
-                                    <div className="flex items-center justify-between text-xs text-tertiary">
-                                        <span>
-                                            {ended ? formatTimeAgo(ended, new Date(tick)) : '—'}
+                                </div>
+                                <div className="text-sm text-secondary break-words">
+                                    {schedule ? (
+                                        <span>Schedule: {scheduleToHuman(schedule)}</span>
+                                    ) : (
+                                        <span className="inline-flex items-center gap-2">
+                                            <span className="text-xs px-2 py-0.5 rounded-full bg-surface-alt text-tertiary">
+                                                Manual only
+                                            </span>
+                                            {!isRunning && (
+                                                <button
+                                                    type="button"
+                                                    onClick={e => {
+                                                        stopNav(e);
+                                                        handleRunNow(mod.name);
+                                                    }}
+                                                    className="text-xs text-accent hover:underline bg-transparent border-0 p-0 cursor-pointer"
+                                                >
+                                                    Run now
+                                                </button>
+                                            )}
                                         </span>
-                                        {duration && <span>{duration}</span>}
+                                    )}
+                                </div>
+                                {lastRun && (
+                                    <div className="text-xs text-tertiary">
+                                        Last run: {formatTimeAgo(lastRun, new Date(tick))}
                                     </div>
-                                </Link>
-                            );
-                        })}
-                    </div>
-                )}
+                                )}
+                            </Link>
+                        );
+                    })}
+                </div>
             </section>
 
             {/* Scheduler — full-width panel */}
@@ -670,81 +664,6 @@ const DashboardPage = () => {
                             </div>
                         </Link>
                     ))}
-                </div>
-            </section>
-
-            {/* Module status */}
-            <section>
-                <div className="mb-4">
-                    <h2 className="text-xl font-bold text-primary m-0">Modules</h2>
-                    <p className="text-secondary text-sm mt-1 mb-0">
-                        Live status of every configured module.
-                    </p>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {moduleList.map(mod => {
-                        const state = runStates[mod.name];
-                        const lastRun = mod.last_run || state?.last_run;
-                        const lastStatus = mod.last_run_status || state?.status;
-                        const schedule = mod.schedule;
-                        const jobId = state?.job_id;
-                        const isRunning = lastStatus === 'running';
-
-                        return (
-                            <div
-                                key={mod.name}
-                                className="bg-surface border border-border-light rounded-lg p-4 flex flex-col gap-2 min-w-0"
-                            >
-                                <div className="flex items-center justify-between gap-2 min-w-0">
-                                    <span className="font-semibold text-primary truncate min-w-0">
-                                        {humanize(mod.name)}
-                                    </span>
-                                    <div className="flex items-center gap-1 shrink-0">
-                                        {lastStatus && (
-                                            <span
-                                                className={`text-xs px-2 py-1 rounded-full ${statusPillClass(lastStatus)}`}
-                                            >
-                                                {lastStatus}
-                                            </span>
-                                        )}
-                                        {isRunning && jobId && (
-                                            <IconButton
-                                                icon="cancel"
-                                                aria-label={`Cancel ${humanize(mod.name)}`}
-                                                variant="ghost"
-                                                onClick={() => handleCancel(mod.name, jobId)}
-                                            />
-                                        )}
-                                    </div>
-                                </div>
-                                <div className="text-sm text-secondary break-words">
-                                    {schedule ? (
-                                        <span>Schedule: {scheduleToHuman(schedule)}</span>
-                                    ) : (
-                                        <span className="inline-flex items-center gap-2">
-                                            <span className="text-xs px-2 py-0.5 rounded-full bg-surface-alt text-tertiary">
-                                                Manual only
-                                            </span>
-                                            {!isRunning && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleRunNow(mod.name)}
-                                                    className="text-xs text-accent hover:underline bg-transparent border-0 p-0 cursor-pointer"
-                                                >
-                                                    Run now
-                                                </button>
-                                            )}
-                                        </span>
-                                    )}
-                                </div>
-                                {lastRun && (
-                                    <div className="text-xs text-tertiary">
-                                        Last run: {formatTimeAgo(lastRun, new Date(tick))}
-                                    </div>
-                                )}
-                            </div>
-                        );
-                    })}
                 </div>
             </section>
 
