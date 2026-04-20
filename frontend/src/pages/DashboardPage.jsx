@@ -92,17 +92,26 @@ const statusPillClass = status => {
 };
 
 const jobDuration = job => {
-    const start = job.started_at || job.received_at;
-    const end = job.completed_at;
-    if (!start || !end) return null;
-    const ms = new Date(end).getTime() - new Date(start).getTime();
-    if (ms < 0) return null;
-    const seconds = Math.round(ms / 1000);
-    if (seconds < 60) return `${seconds}s`;
-    const minutes = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${minutes}m ${secs}s`;
+    // Backend puts the real wall-clock duration in result.data.duration (seconds).
+    try {
+        const parsed = job.result ? JSON.parse(job.result) : null;
+        const d = parsed?.data?.duration;
+        if (typeof d === 'number' && d >= 0) {
+            const s = Math.round(d);
+            if (s < 60) return `${s}s`;
+            const minutes = Math.floor(s / 60);
+            const secs = s % 60;
+            return `${minutes}m ${secs}s`;
+        }
+    } catch {
+        /* malformed; skip */
+    }
+    return null;
 };
+
+const jobModuleName = job => job.module_name || job.module || job.job_type || 'job';
+
+const jobTimestamp = job => job.completed_at || job.updated_at || job.received_at || job.created_at;
 
 const DashboardPage = () => {
     const toast = useToast();
@@ -243,6 +252,17 @@ const DashboardPage = () => {
         return versionData?.data?.version || versionData?.data || versionData;
     }, [versionData]);
 
+    // Backend returns `1.0.0.main51` (base + branch + commit count). Render
+    // as `1.0.0 · main #51` for end users; keeps the parseable raw string
+    // in the DOM title attr so anyone inspecting can still see the source.
+    const prettyVersion = useMemo(() => {
+        if (!version || typeof version !== 'string') return null;
+        const match = version.match(/^(\d+\.\d+\.\d+)\.([a-z][a-z0-9_-]*?)(\d+)$/i);
+        if (!match) return { display: version, raw: version };
+        const [, base, branch, count] = match;
+        return { display: `${base} · ${branch} #${count}`, raw: version };
+    }, [version]);
+
     const runStates = useMemo(() => runStatesData?.data || {}, [runStatesData]);
 
     const jobStats = useMemo(() => {
@@ -265,20 +285,45 @@ const DashboardPage = () => {
     const runningCount = useMemo(() => moduleList.filter(m => m.running).length, [moduleList]);
 
     const diskMounts = useMemo(() => {
+        // Unraid bind-mounts commonly share the same underlying device (e.g.
+        // /config, /kometa, /plex all on /mnt/cache). Collapse those into a
+        // single card that lists every path sharing the device so the user
+        // doesn't see the same 1060 GB repeated three times.
         const mounts = diskData?.data?.mounts || diskData?.mounts || [];
-        return Array.isArray(mounts) ? mounts.filter(m => m.exists) : [];
+        const existing = Array.isArray(mounts) ? mounts.filter(m => m.exists) : [];
+        const byDevice = new Map();
+        const orderless = [];
+        for (const m of existing) {
+            const key = m.device_id ?? `path:${m.path}`;
+            if (!byDevice.has(key)) {
+                byDevice.set(key, { ...m, paths: [m.path] });
+                orderless.push(key);
+            } else {
+                byDevice.get(key).paths.push(m.path);
+            }
+        }
+        return orderless.map(k => byDevice.get(k));
     }, [diskData]);
 
     const instanceHealth = useMemo(() => {
-        const list = Array.isArray(instancesRaw)
-            ? instancesRaw
-            : instancesRaw?.data || instancesRaw?.instances || [];
-        const items = Array.isArray(list) ? list : [];
-        const total = items.length;
-        const connected = items.filter(
-            i => (i.status || i.health || '').toLowerCase() === 'connected' || i.connected === true
-        ).length;
-        return { total, connected };
+        // Backend returns data shaped as { radarr: { name: {enabled}, ... },
+        // sonarr: {...}, lidarr: {...}, plex: {...} }. Flatten and count
+        // enabled entries. Live connection status requires per-instance
+        // testing; that would be N round-trips on every dashboard render, so
+        // the card reports "configured/enabled" instead.
+        const byType = instancesRaw?.data || instancesRaw || {};
+        let total = 0;
+        let enabled = 0;
+        for (const typeName of ['radarr', 'sonarr', 'lidarr', 'plex']) {
+            const bucket = byType[typeName] || {};
+            if (bucket && typeof bucket === 'object') {
+                for (const entry of Object.values(bucket)) {
+                    total += 1;
+                    if (entry && entry.enabled !== false) enabled += 1;
+                }
+            }
+        }
+        return { total, enabled };
     }, [instancesRaw]);
 
     const upcomingRuns = useMemo(() => {
@@ -373,8 +418,8 @@ const DashboardPage = () => {
                 ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                         {recentJobs.map(job => {
-                            const moduleName = job.module || job.job_type || 'job';
-                            const ended = job.completed_at || job.updated_at || job.created_at;
+                            const moduleName = jobModuleName(job);
+                            const ended = jobTimestamp(job);
                             const status = job.status || 'success';
                             const duration = jobDuration(job);
                             return (
@@ -526,18 +571,18 @@ const DashboardPage = () => {
                                     Instances
                                 </div>
                                 <div className="text-2xl font-bold text-primary">
-                                    {instanceHealth.connected} / {instanceHealth.total}
+                                    {instanceHealth.enabled} / {instanceHealth.total}
                                 </div>
                                 <div
                                     className={`text-xs ${
-                                        instanceHealth.connected === instanceHealth.total
+                                        instanceHealth.enabled === instanceHealth.total
                                             ? 'text-success'
                                             : 'text-warning'
                                     }`}
                                 >
-                                    {instanceHealth.connected === instanceHealth.total
-                                        ? 'All connected'
-                                        : `${instanceHealth.total - instanceHealth.connected} disconnected`}
+                                    {instanceHealth.enabled === instanceHealth.total
+                                        ? 'All enabled'
+                                        : `${instanceHealth.total - instanceHealth.enabled} disabled`}
                                 </div>
                             </Link>
                         )}
@@ -569,13 +614,19 @@ const DashboardPage = () => {
                                     : pct >= 75
                                       ? 'text-warning'
                                       : 'text-success';
+                            const paths = mount.paths || [mount.path];
                             return (
                                 <div
-                                    key={mount.path}
+                                    key={paths.join('|')}
                                     className="bg-surface border border-border-light rounded-lg p-4 flex flex-col gap-1"
+                                    title={
+                                        paths.length > 1
+                                            ? `Shared device: ${paths.join(', ')}`
+                                            : paths[0]
+                                    }
                                 >
                                     <div className="text-tertiary text-xs uppercase tracking-wider truncate">
-                                        {mount.path}
+                                        {paths.join(' · ')}
                                     </div>
                                     <div className="text-2xl font-bold text-primary">
                                         {freeGb} GB
@@ -698,9 +749,12 @@ const DashboardPage = () => {
             </section>
 
             {/* Footer */}
-            {version && (
-                <footer className="text-xs text-tertiary text-center pt-4 border-t border-border-light">
-                    CHUB {typeof version === 'string' ? version : ''}
+            {prettyVersion && (
+                <footer
+                    className="text-xs text-tertiary text-center pt-4 border-t border-border-light"
+                    title={prettyVersion.raw}
+                >
+                    CHUB {prettyVersion.display}
                 </footer>
             )}
         </div>

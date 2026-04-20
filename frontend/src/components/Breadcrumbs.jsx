@@ -1,47 +1,60 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
-const SEGMENT_LABELS = {
-    media: 'Library',
-    search: 'Search',
-    manage: 'Manage',
-    statistics: 'Statistics',
-    labelarr: 'Label Sync',
-    poster: 'Assets',
-    gdrive: 'GDrive Search',
-    assets: 'Assets Search',
-    cleanarr: 'Poster Cleanarr',
-    settings: 'Settings',
-    general: 'General',
-    interface: 'Interface',
-    modules: 'Modules',
-    instances: 'Instances',
-    schedule: 'Schedule',
-    jobs: 'Jobs',
-    notifications: 'Notifications',
-    webhooks: 'Webhooks',
-    logs: 'Logs',
-    dashboard: 'Dashboard',
+/**
+ * Per-route crumb chains so deep routes like /poster/search/assets render as
+ * "Home / Assets / Assets Search" rather than "Home / Poster / Search /
+ * Assets" which reveals internal URL structure users don't care about.
+ *
+ * Keys are exact pathnames. Values are ordered crumbs (leftmost first); the
+ * last entry is always treated as "current" and rendered without a link.
+ */
+const ROUTE_CRUMBS = {
+    '/media/search': [{ label: 'Library', to: '/media/search' }, { label: 'Search' }],
+    '/media/manage': [{ label: 'Library', to: '/media/search' }, { label: 'Manage' }],
+    '/media/statistics': [{ label: 'Library', to: '/media/search' }, { label: 'Statistics' }],
+    '/media/labelarr': [{ label: 'Library', to: '/media/search' }, { label: 'Label Sync' }],
+
+    '/poster/search/assets': [
+        { label: 'Assets', to: '/poster/search/assets' },
+        { label: 'Assets Search' },
+    ],
+    '/poster/search/gdrive': [
+        { label: 'Assets', to: '/poster/search/assets' },
+        { label: 'GDrive Search' },
+    ],
+    '/poster/manage': [
+        { label: 'Assets', to: '/poster/search/assets' },
+        { label: 'Poster Cleanarr' },
+    ],
+    '/poster/statistics': [
+        { label: 'Assets', to: '/poster/search/assets' },
+        { label: 'Statistics' },
+    ],
+
+    '/settings/general': [{ label: 'Settings', to: '/settings/general' }, { label: 'General' }],
+    '/settings/interface': [{ label: 'Settings', to: '/settings/general' }, { label: 'Interface' }],
+    '/settings/modules': [{ label: 'Settings', to: '/settings/general' }, { label: 'Modules' }],
+    '/settings/instances': [{ label: 'Settings', to: '/settings/general' }, { label: 'Instances' }],
+    '/settings/schedule': [{ label: 'Settings', to: '/settings/general' }, { label: 'Schedule' }],
+    '/settings/jobs': [{ label: 'Settings', to: '/settings/general' }, { label: 'Jobs' }],
+    '/settings/notifications': [
+        { label: 'Settings', to: '/settings/general' },
+        { label: 'Notifications' },
+    ],
+    '/settings/webhooks': [{ label: 'Settings', to: '/settings/general' }, { label: 'Webhooks' }],
 };
 
-const labelFor = segment =>
-    SEGMENT_LABELS[segment] || segment.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+// Routes where breadcrumbs add no value (the PageHeader already names them
+// and they're top-level sidebar entries).
+const SKIP_ROUTES = new Set(['/', '/dashboard', '/logs', '/login']);
 
-/**
- * Breadcrumb trail derived from the current URL.
- * Renders nothing for the root dashboard route.
- */
 export default function Breadcrumbs() {
     const { pathname } = useLocation();
-    const segments = pathname.split('/').filter(Boolean);
+    if (SKIP_ROUTES.has(pathname)) return null;
 
-    if (segments.length <= 1) return null;
-
-    const crumbs = segments.map((seg, idx) => ({
-        label: labelFor(seg),
-        to: '/' + segments.slice(0, idx + 1).join('/'),
-        isLast: idx === segments.length - 1,
-    }));
+    const crumbs = ROUTE_CRUMBS[pathname];
+    if (!crumbs || crumbs.length === 0) return null;
 
     return (
         <nav
@@ -51,25 +64,28 @@ export default function Breadcrumbs() {
             <Link to="/dashboard" className="no-underline hover:text-primary hover:underline">
                 Home
             </Link>
-            {crumbs.map(crumb => (
-                <React.Fragment key={crumb.to}>
-                    <span aria-hidden="true" className="text-tertiary/60">
-                        /
-                    </span>
-                    {crumb.isLast ? (
-                        <span aria-current="page" className="text-secondary">
-                            {crumb.label}
+            {crumbs.map((crumb, idx) => {
+                const isLast = idx === crumbs.length - 1;
+                return (
+                    <React.Fragment key={`${crumb.label}-${idx}`}>
+                        <span aria-hidden="true" className="text-tertiary/60">
+                            /
                         </span>
-                    ) : (
-                        <Link
-                            to={crumb.to}
-                            className="no-underline hover:text-primary hover:underline"
-                        >
-                            {crumb.label}
-                        </Link>
-                    )}
-                </React.Fragment>
-            ))}
+                        {isLast || !crumb.to ? (
+                            <span aria-current="page" className="text-secondary">
+                                {crumb.label}
+                            </span>
+                        ) : (
+                            <Link
+                                to={crumb.to}
+                                className="no-underline hover:text-primary hover:underline"
+                            >
+                                {crumb.label}
+                            </Link>
+                        )}
+                    </React.Fragment>
+                );
+            })}
         </nav>
     );
 }

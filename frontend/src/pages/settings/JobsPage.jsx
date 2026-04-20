@@ -148,15 +148,31 @@ export const JobsPage = () => {
         return () => clearInterval(id);
     }, []);
 
-    const formatDuration = (start, end) => {
-        if (!start) return '-';
-        const startMs = new Date(start).getTime();
-        const endMs = end ? new Date(end).getTime() : now;
-        const seconds = Math.round((endMs - startMs) / 1000);
-        if (seconds < 60) return `${seconds}s`;
-        const minutes = Math.floor(seconds / 60);
-        const secs = seconds % 60;
+    const formatSeconds = seconds => {
+        if (seconds == null || !Number.isFinite(seconds) || seconds < 0) return '-';
+        const s = Math.round(seconds);
+        if (s < 60) return `${s}s`;
+        const minutes = Math.floor(s / 60);
+        const secs = s % 60;
         return `${minutes}m ${secs}s`;
+    };
+
+    // Backend reports the real duration in `result.data.duration` (seconds).
+    // For running/pending jobs fall back to "time since received" so the column
+    // stays meaningful, but skip completed rows that lack the result payload.
+    const jobDuration = job => {
+        try {
+            const parsed = job.result ? JSON.parse(job.result) : null;
+            const d = parsed?.data?.duration;
+            if (typeof d === 'number') return formatSeconds(d);
+        } catch {
+            /* malformed result; fall through */
+        }
+        if (job.status === 'running' || job.status === 'pending') {
+            const start = job.started_at || job.received_at;
+            if (start) return formatSeconds((now - new Date(start).getTime()) / 1000);
+        }
+        return '-';
     };
 
     const formatTime = ts => {
@@ -278,10 +294,7 @@ export const JobsPage = () => {
                                             {formatTime(job.received_at || job.created_at)}
                                         </td>
                                         <td className="px-4 py-3 text-secondary text-xs">
-                                            {formatDuration(
-                                                job.started_at || job.received_at,
-                                                job.completed_at
-                                            )}
+                                            {jobDuration(job)}
                                         </td>
                                         <td className="px-4 py-3 text-right">
                                             <div className="flex items-center justify-end gap-1">
