@@ -212,16 +212,26 @@ class PosterCleanarrConfig(BaseModel):
     local_db: bool = False
     use_existing_db: bool = False
     ignore_running: bool = False
-    photo_transcoder: bool = False
-    empty_trash: bool = False
-    clean_bundles: bool = False
-    optimize_db: bool = False
     sleep: int = 60
     timeout: int = 600
     instances: List[str] = Field(default_factory=list)
     # Populated only by per-job overrides from the Poster Cleanarr UI when the
     # user selects specific tiles. None => full library. Never persisted.
     target_paths: Optional[List[str]] = None
+
+
+class PlexMaintenanceConfig(BaseModel):
+    """Plex server-level maintenance tasks (moved out of poster_cleanarr)."""
+
+    log_level: str = "info"
+    plex_path: str = ""
+    empty_trash: bool = False
+    clean_bundles: bool = False
+    optimize_db: bool = False
+    photo_transcoder: bool = False
+    sleep: int = 60
+    timeout: int = 600
+    instances: List[str] = Field(default_factory=list)
 
 
 class UnmatchedAssetsConfig(BaseModel):
@@ -248,6 +258,7 @@ class ConfigNotifications(BaseModel):
     jduparr: Optional[Dict[str, Any]] = Field(default_factory=dict)
     nestarr: Optional[Dict[str, Any]] = Field(default_factory=dict)
     poster_cleanarr: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    plex_maintenance: Optional[Dict[str, Any]] = Field(default_factory=dict)
     main: Optional[Dict[str, Any]] = Field(default_factory=dict)
 
 
@@ -274,6 +285,7 @@ class ChubConfig(BaseModel):
     jduparr: JduparrConfig = Field(default_factory=JduparrConfig)
     nestarr: NestarrConfig = Field(default_factory=NestarrConfig)
     poster_cleanarr: PosterCleanarrConfig = Field(default_factory=PosterCleanarrConfig)
+    plex_maintenance: PlexMaintenanceConfig = Field(default_factory=PlexMaintenanceConfig)
     user_interface: UserInterfaceConfig = Field(default_factory=UserInterfaceConfig)
     general: GeneralConfig = Field(default_factory=GeneralConfig)
     auth: AuthConfig = Field(default_factory=AuthConfig)

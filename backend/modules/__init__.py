@@ -6,6 +6,7 @@ from .jduparr import Jduparr
 from .labelarr import Labelarr
 from .nestarr import Nestarr
 from .nohl import Nohl
+from .plex_maintenance import PlexMaintenance
 from .poster_cleanarr import PosterCleanarr
 from .poster_renamerr import PosterRenamerr
 from .renameinatorr import Renameinatorr
@@ -25,5 +26,6 @@ MODULES = {
     "jduparr": Jduparr,
     "nestarr": Nestarr,
     "poster_cleanarr": PosterCleanarr,
+    "plex_maintenance": PlexMaintenance,
     "unmatched_assets": UnmatchedAssets,
 }
