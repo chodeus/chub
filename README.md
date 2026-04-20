@@ -62,7 +62,7 @@ services:
       - /srv/apps/chub/config:/config
       - /srv/apps/chub/posters:/posters
       - /srv/media:/media
-      - /srv/kometa/assets:/kometa:ro
+      - /srv/kometa/assets:/kometa
 ```
 
 Then:
@@ -88,9 +88,8 @@ Single-command Docker, Unraid, and bare-metal options: **[Wiki → Installation]
 1. **Use a strong admin password.** First-run enforces 8+ characters; use more. Lose it and you reset with `docker compose run --rm chub python3 main.py --reset-auth`.
 2. **If you want remote access, put CHUB behind a reverse proxy with TLS.** Add a second auth layer in front (Authelia, Authentik, Cloudflare Access). CHUB has built-in login and rate limiting, but no WAF or DDoS protection — it isn't meant to face the open internet alone.
 3. **Set a webhook secret if webhooks leave your LAN.** Configure `general.webhook_secret` in **Settings → General**. Any inbound Sonarr/Radarr/Tautulli webhook must then include it. Without it, webhook URLs are unauthenticated — fine inside a LAN, not fine on the public internet.
-4. **Use a read-only mount for Kometa assets.** Mount it as `/kometa:ro` (see the compose above) so CHUB can consume them but can't accidentally modify the source tree.
-5. **Pin the image tag for production.** Use a specific digest or date tag instead of `:latest` if you care about reproducible deploys.
-6. **Report vulnerabilities privately.** See [SECURITY.md](SECURITY.md) for the disclosure process.
+4. **Pin the image tag for production.** Use a specific digest or date tag instead of `:latest` if you care about reproducible deploys.
+5. **Report vulnerabilities privately.** See [SECURITY.md](SECURITY.md) for the disclosure process.
 
 ---
 
