@@ -302,11 +302,12 @@ def scan_bundles(plex_path: str, *, force: bool = False) -> Dict[str, Any]:
     sections_index = _load_library_sections(db_path) if db_path else {}
 
     # Walk metadata_dir, grouping files by their enclosing .bundle directory.
-    # bundle_files[bundle_path] = [{filename, path, size, mtime, kind}, ...]
+    # Both `Uploads/` (user-uploaded, deletable) and `Contents/` (Plex-sourced,
+    # read-only) are surfaced — the frontend uses the `source` tag to offer
+    # delete/selection only on uploads and the active swap on both.
+    # bundle_files[bundle_path] = [{filename, path, size, mtime, kind, source}, ...]
     bundle_files: Dict[str, List[Dict[str, Any]]] = {}
     for root, dirs, files in os.walk(metadata_dir):
-        if "Contents" in root.split(os.sep):
-            continue
         bundle_root = root
         while bundle_root and not bundle_root.endswith(".bundle"):
             parent = os.path.dirname(bundle_root)
@@ -316,9 +317,15 @@ def scan_bundles(plex_path: str, *, force: bool = False) -> Dict[str, Any]:
             bundle_root = parent
         if not bundle_root:
             continue
+        # source flag — anything under `<bundle>/Contents/` is Plex-managed
+        # and we refuse to let the API delete it; anything under `Uploads/`
+        # (or elsewhere inside the bundle) is user-uploaded bloat candidate.
+        is_contents = f"{os.sep}Contents{os.sep}" in (root + os.sep)
+        source = "plex" if is_contents else "uploads"
         for fname in files:
             # Plex stores custom variants as extension-less hash names.
-            if "." in fname:
+            # Contents/ files may carry extensions (jpg/png); accept both.
+            if not is_contents and "." in fname:
                 continue
             fpath = os.path.join(root, fname)
             try:
@@ -335,6 +342,7 @@ def scan_bundles(plex_path: str, *, force: bool = False) -> Dict[str, Any]:
                     "size": size,
                     "mtime": mtime,
                     "kind": _classify_variant_kind(fpath),
+                    "source": source,
                 }
             )
 
@@ -375,11 +383,14 @@ def scan_bundles(plex_path: str, *, force: bool = False) -> Dict[str, Any]:
                     "size": f["size"],
                     "mtime": f["mtime"],
                     "kind": f["kind"],
+                    "source": f["source"],
                     "active": active,
                 }
             )
             variant_count += 1
-            if not active:
+            # Plex-sourced variants are never bloat candidates — they're
+            # read-only and can't be deleted through the cleanup pipeline.
+            if not active and f["source"] != "plex":
                 bloat_count += 1
                 bloat_size += f["size"]
 
@@ -455,6 +466,10 @@ def get_bloat_flat(plex_path: str, *, force: bool = False) -> List[Dict[str, Any
         for v in b["variants"]:
             if v["active"]:
                 continue
+            # Plex-sourced variants are surfaced for display/swap only; they're
+            # not deletable and so don't belong in the bloat-cleanup list.
+            if v.get("source") == "plex":
+                continue
             flat.append({
                 "filename": v["filename"],
                 "path": v["path"],
@@ -470,12 +485,21 @@ def get_bloat_flat(plex_path: str, *, force: bool = False) -> List[Dict[str, Any
 
 def delete_variant(file_path: str, *, plex_path: str) -> bool:
     """
-    Delete one variant file from disk. Refuses paths outside Plex's Metadata dir.
+    Delete one variant file from disk.
+
+    Refuses paths that:
+    - resolve outside Plex's Metadata dir, or
+    - sit under any `.bundle/Contents/` subtree (Plex-managed — deleting
+      these would have no lasting effect because Plex re-downloads them
+      from its metadata agents, and would pollute the scan cache).
     Returns True on success.
     """
     metadata_dir = os.path.realpath(get_plex_metadata_dir(plex_path))
     real = os.path.realpath(file_path)
     if not real.startswith(metadata_dir + os.sep):
+        return False
+    # Plex-sourced variants sit under `<bundle>/Contents/…`. Refuse.
+    if f"{os.sep}Contents{os.sep}" in real:
         return False
     try:
         os.remove(real)
