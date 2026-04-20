@@ -33,7 +33,7 @@ python-dateutil==2.9.0.post0
 python-dotenv==1.2.2
 python-multipart==0.0.26
 PyJWT==2.12.1
-pytz==2025.2
+pytz==2026.1.post1
 PyYAML==6.0.3
 qbittorrent-api==2024.12.71
 ratelimit==2.2.1
