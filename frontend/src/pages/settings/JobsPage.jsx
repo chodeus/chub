@@ -221,7 +221,7 @@ export const JobsPage = () => {
             </StatGrid>
 
             {/* Filter buttons */}
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
                 {STATUS_FILTERS.map(filter => (
                     <button
                         key={filter}
@@ -248,25 +248,25 @@ export const JobsPage = () => {
                 </div>
             ) : (
                 <div className="border border-border rounded-lg overflow-hidden">
-                    <table className="w-full text-sm">
+                    <table className="w-full text-sm table-fixed sm:table-auto">
                         <thead>
                             <tr className="bg-surface-alt border-b border-border">
-                                <th className="text-left px-4 py-3 font-medium text-secondary">
+                                <th className="hidden sm:table-cell text-left px-4 py-3 font-medium text-secondary">
                                     ID
                                 </th>
-                                <th className="text-left px-4 py-3 font-medium text-secondary">
+                                <th className="text-left px-2 sm:px-4 py-3 font-medium text-secondary">
                                     Type
                                 </th>
-                                <th className="text-left px-4 py-3 font-medium text-secondary">
+                                <th className="text-left px-2 sm:px-4 py-3 font-medium text-secondary">
                                     Status
                                 </th>
-                                <th className="text-left px-4 py-3 font-medium text-secondary">
+                                <th className="text-left px-2 sm:px-4 py-3 font-medium text-secondary">
                                     Created
                                 </th>
-                                <th className="text-left px-4 py-3 font-medium text-secondary">
+                                <th className="hidden sm:table-cell text-left px-4 py-3 font-medium text-secondary">
                                     Duration
                                 </th>
-                                <th className="text-right px-4 py-3 font-medium text-secondary">
+                                <th className="text-right px-2 sm:px-4 py-3 font-medium text-secondary">
                                     Actions
                                 </th>
                             </tr>
@@ -275,28 +275,28 @@ export const JobsPage = () => {
                             {jobs.map(job => (
                                 <React.Fragment key={job.id}>
                                     <tr className="border-b border-border last:border-b-0 hover:bg-surface-alt/50">
-                                        <td className="px-4 py-3 font-mono text-xs text-tertiary">
+                                        <td className="hidden sm:table-cell px-4 py-3 font-mono text-xs text-tertiary">
                                             #{job.id}
                                         </td>
-                                        <td className="px-4 py-3">
-                                            <span className="px-2 py-0.5 rounded bg-surface-alt text-primary text-xs font-medium">
+                                        <td className="px-2 sm:px-4 py-3">
+                                            <span className="inline-block px-2 py-0.5 rounded bg-surface-alt text-primary text-xs font-medium break-all">
                                                 {job.module_name || job.job_type || job.type || '-'}
                                             </span>
                                         </td>
-                                        <td className="px-4 py-3">
+                                        <td className="px-2 sm:px-4 py-3">
                                             <span
                                                 className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${STATUS_COLORS[job.status] || 'bg-surface text-secondary'}`}
                                             >
                                                 {job.status}
                                             </span>
                                         </td>
-                                        <td className="px-4 py-3 text-secondary text-xs">
+                                        <td className="px-2 sm:px-4 py-3 text-secondary text-xs">
                                             {formatTime(job.received_at || job.created_at)}
                                         </td>
-                                        <td className="px-4 py-3 text-secondary text-xs">
+                                        <td className="hidden sm:table-cell px-4 py-3 text-secondary text-xs">
                                             {jobDuration(job)}
                                         </td>
-                                        <td className="px-4 py-3 text-right">
+                                        <td className="px-2 sm:px-4 py-3 text-right">
                                             <div className="flex items-center justify-end gap-1">
                                                 <IconButton
                                                     icon={
