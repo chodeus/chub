@@ -10,7 +10,7 @@ BRANCH=${BRANCH:-master}
 
 export RCLONE_CONFIG="${CONFIG_DIR}/rclone/rclone.conf"
 
-VERSION=$(cat "$(dirname "$0")/../VERSION")
+VERSION=$(python3 -c "import json, sys; print(json.load(open(sys.argv[1]))['.'])" "$(dirname "$0")/../.release-please-manifest.json")
 
 echo "
 ═════════════════════════════════════════════════════════
