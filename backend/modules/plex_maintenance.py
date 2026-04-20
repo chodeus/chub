@@ -133,24 +133,14 @@ class PlexMaintenance(ChubModule):
         plex_instances = self.full_config.instances.plex
 
         if not instances:
-            # Same auto-fallback as poster_cleanarr: one configured Plex
-            # instance with no per-module override → use it.
-            if len(plex_instances) == 1:
-                instance_name = next(iter(plex_instances))
-                self.logger.info(
-                    f"No 'instances' configured for plex_maintenance; "
-                    f"auto-selecting the single configured Plex instance "
-                    f"'{instance_name}'."
-                )
-            else:
-                self.logger.error(
-                    "No Plex instances configured for plex_maintenance. "
-                    "Add instance names to the 'instances' list in config "
-                    f"(available: {sorted(plex_instances) or 'none'})."
-                )
-                return None
-        else:
-            instance_name = instances[0]
+            # Require an explicit instance selection. No auto-pick.
+            self.logger.error(
+                "No Plex instances selected for plex_maintenance. "
+                "Pick one in Settings → Modules → Plex Maintenance → Plex Instances "
+                f"(available: {sorted(plex_instances) or 'none'})."
+            )
+            return None
+        instance_name = instances[0]
 
         if instance_name not in plex_instances:
             self.logger.error(

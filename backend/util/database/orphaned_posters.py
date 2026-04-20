@@ -51,15 +51,16 @@ class OrphanedPosters(DatabaseBase):
 
         header = ["ID", "Type", "Title", "Year", "Season", "File Path", "Date Orphaned"]
         if logger:
-            logger.info("Orphaned Posters:")
-            logger.info(" | ".join(header))
-            logger.info("-" * 80)
+            logger.info(f"Orphaned posters: {len(rows)} entries queued")
+            # Per-row table dump at DEBUG only; INFO carries the summary.
+            logger.debug("Orphaned Posters:")
+            logger.debug(" | ".join(header))
+            logger.debug("-" * 80)
             for row in rows:
-                logger.info(
+                logger.debug(
                     f"{row['id']:>3} | {row['asset_type']:<8} | {row['title']:<40} | {str(row['year'] or ''):<6} | "
                     f"{str(row['season'] or ''):<6} | {row['file_path']:<60} | {row['date_orphaned']}"
                 )
-            logger.info("")
 
         orphaned = []
         by_type = {}
@@ -110,15 +111,16 @@ class OrphanedPosters(DatabaseBase):
 
         header = ["ID", "Type", "Title", "Year", "Season", "File Path", "Date Orphaned"]
         if logger:
-            logger.info("Orphaned Posters:")
-            logger.info(" | ".join(header))
-            logger.info("-" * 80)
+            logger.info(f"Orphaned posters: {len(rows)} entries queued")
+            # Per-row table dump at DEBUG only; INFO carries the summary.
+            logger.debug("Orphaned Posters:")
+            logger.debug(" | ".join(header))
+            logger.debug("-" * 80)
             for row in rows:
-                logger.info(
+                logger.debug(
                     f"{row['id']:>3} | {row['asset_type']:<8} | {row['title']:<40} | {str(row['year'] or ''):<6} | "
                     f"{str(row['season'] or ''):<6} | {row['file_path']:<60} | {row['date_orphaned']}"
                 )
-            logger.info("")
 
         deleted = 0
         kept = 0
@@ -132,7 +134,7 @@ class OrphanedPosters(DatabaseBase):
 
             if dry_run:
                 if logger:
-                    logger.info(f"[DRY RUN] Would delete: {summary}")
+                    logger.debug(f"[DRY RUN] Would delete: {summary}")
                 kept += 1
                 continue
 
@@ -153,11 +155,11 @@ class OrphanedPosters(DatabaseBase):
                 if file_path and os.path.exists(file_path):
                     os.remove(file_path)
                     if logger:
-                        logger.info(f"Deleted orphaned poster: {summary}")
+                        logger.debug(f"Deleted orphaned poster: {summary}")
                     deleted += 1
                 else:
                     if logger:
-                        logger.info(f"File already missing: {summary}")
+                        logger.debug(f"File already missing: {summary}")
             except Exception as e:
                 if logger:
                     logger.error(f"Failed to delete {file_path}: {e}")

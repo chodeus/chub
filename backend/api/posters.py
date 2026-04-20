@@ -13,7 +13,7 @@ from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, File, Query, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 
-from backend.api.utils import error, get_database, get_logger, ok
+from backend.api.utils import error, get_database, get_logger, get_module_logger, ok
 from backend.modules.sync_gdrive import SyncGDrive
 from backend.modules.unmatched_assets import UnmatchedAssets
 from backend.util.database import ChubDB
@@ -26,6 +26,17 @@ router = APIRouter(
         404: {"description": "Poster or resource not found"},
     },
 )
+
+
+def get_cleanarr_logger(request: Request) -> Any:
+    """FastAPI dependency: module-dedicated logger for `/plex-metadata/*` calls.
+
+    Routes UI-triggered scans, deletes, and set-active into
+    `logs/poster_cleanarr/poster_cleanarr.log` so every user action the
+    Poster Cleanarr page takes leaves an audit trail in the module's log —
+    not just scheduled module runs.
+    """
+    return get_module_logger(request, "poster_cleanarr")
 
 
 # --- New endpoints: search, stats, browse, collections, duplicates ---
@@ -2083,7 +2094,7 @@ async def list_plex_metadata_by_media(
         description="Filter to variants of a single kind (poster/art/banner/thumb/chapter/theme/other). Bundles with no matching variants are hidden.",
     ),
     force: bool = Query(False, description="Bypass the 5-min scan cache"),
-    logger: Any = Depends(get_logger),
+    logger: Any = Depends(get_cleanarr_logger),
 ):
     """
     Group Plex Metadata poster variants by their owning media item.
@@ -2094,16 +2105,30 @@ async def list_plex_metadata_by_media(
     bundle in the unfiltered scan so the frontend can render a dropdown.
     """
     try:
+        import time as _time
+
         from backend.util.plex_metadata import scan_bundles
 
         plex_path = _get_plex_path(request)
         if not plex_path:
+            logger.error("Scan requested but plex_path is not configured")
             return error(
                 "Plex path is not configured",
                 code="PLEX_PATH_UNSET",
                 status_code=400,
             )
+        logger.info(
+            f"UI scan requested: media_type={media_type} library_id={library_id} "
+            f"variant_kind={variant_kind} only_bloat={only_bloat} force={force}"
+        )
+        _t0 = _time.time()
         scan = scan_bundles(plex_path, force=force)
+        logger.info(
+            f"UI scan complete in {_time.time() - _t0:.1f}s — "
+            f"{scan['stats']['bundle_count']} bundles, "
+            f"{scan['stats']['variant_count']} variants, "
+            f"{scan['stats']['bloat_count']} bloat"
+        )
         bundles = scan["bundles"]
 
         media_type = (media_type or "all").lower()
@@ -2152,7 +2177,7 @@ async def list_plex_metadata_bloat(
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
     force: bool = Query(False),
-    logger: Any = Depends(get_logger),
+    logger: Any = Depends(get_cleanarr_logger),
 ):
     """Flat list of bloat variants across all bundles, largest first."""
     try:
@@ -2188,7 +2213,7 @@ async def list_plex_metadata_bloat(
 async def run_plex_metadata_cleanup(
     request: Request,
     db: ChubDB = Depends(get_database),
-    logger: Any = Depends(get_logger),
+    logger: Any = Depends(get_cleanarr_logger),
 ):
     """
     Enqueue a `poster_cleanarr` job. Request body:
@@ -2234,7 +2259,7 @@ async def run_plex_metadata_cleanup(
 @router.delete("/plex-metadata/variant")
 async def delete_plex_metadata_variant(
     request: Request,
-    logger: Any = Depends(get_logger),
+    logger: Any = Depends(get_cleanarr_logger),
 ):
     """Delete a single variant file. Body: `{path: str}`."""
     try:
@@ -2249,11 +2274,13 @@ async def delete_plex_metadata_variant(
             return error("Plex path is not configured", code="PLEX_PATH_UNSET", status_code=400)
         ok_ = delete_variant(path, plex_path=plex_path)
         if not ok_:
+            logger.warning(f"UI delete rejected (outside metadata or I/O error): {path}")
             return error(
                 "Failed to delete variant (path outside Plex metadata or I/O error)",
                 code="VARIANT_DELETE_FAILED",
                 status_code=400,
             )
+        logger.info(f"UI delete: {path}")
         return ok("Variant deleted", {"path": path})
     except Exception as e:
         logger.error(f"Error deleting variant: {e}")
@@ -2267,7 +2294,7 @@ async def delete_plex_metadata_variant(
 @router.post("/plex-metadata/set-active")
 async def set_plex_metadata_active(
     request: Request,
-    logger: Any = Depends(get_logger),
+    logger: Any = Depends(get_cleanarr_logger),
 ):
     """
     Make a specific variant the active poster in Plex. Body:
@@ -2326,6 +2353,9 @@ async def set_plex_metadata_active(
             return error("Plex item not found", code="ITEM_NOT_FOUND", status_code=404)
         item.uploadPoster(filepath=safe_path)
         invalidate_cache()
+        logger.info(
+            f"UI set-active: rating_key={rating_key} path={safe_path}"
+        )
         return ok("Active poster updated", {"rating_key": rating_key, "path": safe_path})
     except Exception as e:
         logger.error(f"Error setting active poster: {e}")
