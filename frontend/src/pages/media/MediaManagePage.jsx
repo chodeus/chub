@@ -370,59 +370,59 @@ const MediaManagePage = () => {
                 description="Manage and organize your media library."
                 badge={3}
                 icon="tune"
+                actions={
+                    <div className="flex flex-wrap items-center gap-2">
+                        <LoadingButton
+                            loading={isRefreshing}
+                            loadingText="Refreshing..."
+                            variant="ghost"
+                            icon="refresh"
+                            onClick={handleRefreshCache}
+                            title="Re-sync all media from your Radarr and Sonarr instances into the local cache"
+                        >
+                            Refresh Cache
+                        </LoadingButton>
+                        <LoadingButton
+                            loading={isExporting}
+                            loadingText="Exporting..."
+                            variant="ghost"
+                            icon="download"
+                            onClick={handleExport}
+                            title="Download your media library data as a JSON file"
+                        >
+                            Export
+                        </LoadingButton>
+                        <LoadingButton
+                            loading={isScanning}
+                            loadingText="Scanning..."
+                            variant="ghost"
+                            icon="radar"
+                            onClick={handleScan}
+                            title="Scan for new media by refreshing the cache from all configured instances"
+                        >
+                            Scan
+                        </LoadingButton>
+                        <LoadingButton
+                            loading={isFixing}
+                            loadingText="Fixing..."
+                            variant="ghost"
+                            icon="build"
+                            onClick={handleFixMetadata}
+                            title="Re-fetch metadata from all instances and update Plex mappings"
+                        >
+                            Fix Metadata
+                        </LoadingButton>
+                        <Button
+                            variant="primary"
+                            icon="add"
+                            onClick={() => setShowImport(true)}
+                            title="Add media items manually by title or JSON data"
+                        >
+                            Import
+                        </Button>
+                    </div>
+                }
             />
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-3">
-                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                    <LoadingButton
-                        loading={isRefreshing}
-                        loadingText="Refreshing..."
-                        variant="ghost"
-                        icon="refresh"
-                        onClick={handleRefreshCache}
-                        title="Re-sync all media from your Radarr and Sonarr instances into the local cache"
-                    >
-                        Refresh Cache
-                    </LoadingButton>
-                    <LoadingButton
-                        loading={isExporting}
-                        loadingText="Exporting..."
-                        variant="ghost"
-                        icon="download"
-                        onClick={handleExport}
-                        title="Download your media library data as a JSON file"
-                    >
-                        Export
-                    </LoadingButton>
-                    <LoadingButton
-                        loading={isScanning}
-                        loadingText="Scanning..."
-                        variant="ghost"
-                        icon="radar"
-                        onClick={handleScan}
-                        title="Scan for new media by refreshing the cache from all configured instances"
-                    >
-                        Scan
-                    </LoadingButton>
-                    <LoadingButton
-                        loading={isFixing}
-                        loadingText="Fixing..."
-                        variant="ghost"
-                        icon="build"
-                        onClick={handleFixMetadata}
-                        title="Re-fetch metadata from all instances and update Plex mappings"
-                    >
-                        Fix Metadata
-                    </LoadingButton>
-                    <Button
-                        variant="primary"
-                        icon="add"
-                        onClick={() => setShowImport(true)}
-                        title="Add media items manually by title or JSON data"
-                    >
-                        Import
-                    </Button>
-                </div>
-            </div>
 
             {duplicates.length > 0 && (
                 <section className="mb-4">

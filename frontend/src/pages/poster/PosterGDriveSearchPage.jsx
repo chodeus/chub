@@ -5,6 +5,7 @@ import { useApiMutation } from '../../hooks/useApiData.js';
 import { postersAPI } from '../../utils/api/posters.js';
 import { LoadingButton, PageHeader } from '../../components/ui/index.js';
 import Spinner from '../../components/ui/Spinner.jsx';
+import RecentQueries, { useRecentQueries } from '../../components/RecentQueries.jsx';
 
 const PosterGDriveSearchPage = () => {
     const toast = useToast();
@@ -27,6 +28,12 @@ const PosterGDriveSearchPage = () => {
     }, [search]);
 
     const sources = useMemo(() => results?.data?.sources || [], [results]);
+
+    const recent = useRecentQueries('chub_gdrive_search_recent');
+    useEffect(() => {
+        if (term && hasResults) recent.record(term);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [term, hasResults]);
 
     // Declared after `sources` so the sync-all closure references a bound value.
     const { execute: syncAll, isLoading: isSyncingAll } = useApiMutation(
@@ -93,12 +100,22 @@ const PosterGDriveSearchPage = () => {
             {isSearching && <Spinner size="large" text="Searching GDrive..." center />}
 
             {!isSearching && !term && (
-                <div className="text-center py-16 text-tertiary">
-                    <span className="material-symbols-outlined text-5xl mb-4 block opacity-40">
-                        cloud_search
-                    </span>
-                    <p className="text-lg">Use the search bar above to search GDrive folders</p>
-                    <p className="text-sm mt-2">Search by folder name or location</p>
+                <div className="flex flex-col items-center gap-6 py-10 text-tertiary">
+                    <div className="text-center">
+                        <span className="material-symbols-outlined text-5xl mb-4 block opacity-40">
+                            cloud_search
+                        </span>
+                        <p className="text-lg">Use the search bar above to search GDrive folders</p>
+                        <p className="text-sm mt-2">Search by folder name or location</p>
+                    </div>
+                    {recent.entries.length > 0 && (
+                        <RecentQueries
+                            entries={recent.entries}
+                            onSelect={q => search(q, { immediate: true })}
+                            onClear={recent.clear}
+                            label="Recent searches"
+                        />
+                    )}
                 </div>
             )}
 

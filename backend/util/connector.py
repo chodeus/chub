@@ -369,12 +369,26 @@ class Connector:
                 # The sync_for_instance method will automatically use upsert_with_metadata
                 # when genres or cast_data are present in the media items
                 try:
+                    # Load allowed roots once so stale rows outside configured
+                    # roots don't accumulate orphaned_posters entries the
+                    # cleanup pass would later reject anyway.
+                    allowed_roots: Optional[List[str]] = None
+                    try:
+                        from backend.util.config import load_config
+                        from backend.util.path_safety import get_allowed_roots
+
+                        cfg = load_config()
+                        allowed_roots = [str(r) for r in get_allowed_roots(cfg)]
+                    except Exception as cfg_err:
+                        logger.debug(f"Could not resolve allowed_roots: {cfg_err}")
+
                     self.db.media.sync_for_instance(
                         instance_config.name,
                         client.instance_type,
                         asset_type,
                         fresh_media,
                         logger,
+                        allowed_roots=allowed_roots,
                     )
 
                     return SyncResult(

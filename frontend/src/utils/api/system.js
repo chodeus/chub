@@ -28,6 +28,19 @@ export const systemAPI = {
     },
 
     /**
+     * Disk usage snapshot for configured container mount points.
+     * @param {Object} options - Request options
+     * @returns {Promise<Object>} { mounts: [{ path, exists, total_bytes, free_bytes, percent_used }] }
+     */
+    getDiskUsage: (options = {}) => {
+        return apiCore.get('/system/disk', {
+            useCache: true,
+            cacheTTL: 60 * 1000, // 1 minute cache — cheap call but no point hammering
+            ...options,
+        });
+    },
+
+    /**
      * List directory contents
      * @param {string} path - Directory path to list
      * @param {Object} options - Request options

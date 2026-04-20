@@ -7,6 +7,7 @@ directory operations, and testing utilities.
 
 import io
 import os
+import shutil
 import sqlite3
 import time
 import zipfile
@@ -151,6 +152,38 @@ async def health_check(request: Request) -> JSONResponse:
             "checks": checks,
         },
     )
+
+
+@router.get(
+    "/system/disk",
+    summary="Disk usage for configured mount points",
+    description=(
+        "Reports free/used/total bytes for the container mount points "
+        "CHUB cares about (/config, /kometa, /media, /plex, /data). "
+        "Used by the dashboard for at-a-glance health."
+    ),
+)
+async def system_disk() -> JSONResponse:
+    """Return disk usage for the standard CHUB mount points.
+
+    Any mount that doesn't exist (i.e. not bind-mounted by the user) is
+    reported with `exists: false` so the frontend can hide it silently.
+    """
+    targets = ["/config", "/kometa", "/media", "/plex", "/data"]
+    out = []
+    for path in targets:
+        entry: dict[str, Any] = {"path": path, "exists": os.path.isdir(path)}
+        if entry["exists"]:
+            try:
+                usage = shutil.disk_usage(path)
+                entry["total_bytes"] = usage.total
+                entry["used_bytes"] = usage.used
+                entry["free_bytes"] = usage.free
+                entry["percent_used"] = round((usage.used / usage.total) * 100, 1)
+            except OSError as exc:
+                entry["error"] = str(exc)
+        out.append(entry)
+    return ok("Disk usage snapshot", {"mounts": out})
 
 
 @router.get(
