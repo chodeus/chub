@@ -2696,26 +2696,39 @@ async def delete_poster(
             os.remove(full_path)
             logger.info(f"Deleted poster file: {full_path}")
 
-        # Record as orphaned poster for tracking
+        # Record as orphaned poster for tracking (scoped to configured roots so
+        # the table doesn't accumulate rows that the cleanup pass would reject).
         import datetime
 
         now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        orphan_path = full_path or file_path
         try:
-            db.orphaned.execute_query(
-                """
-                INSERT OR IGNORE INTO orphaned_posters
-                    (asset_type, title, year, season, file_path, date_orphaned)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    "poster",
-                    record.get("title"),
-                    record.get("year"),
-                    record.get("season_number"),
-                    full_path or file_path,
-                    now,
-                ),
-            )
+            from backend.util.config import load_config
+            from backend.util.path_safety import get_allowed_roots
+            from backend.util.database.orphaned_posters import _path_under_any_root
+
+            cfg = load_config()
+            allowed_roots = [str(r) for r in get_allowed_roots(cfg)]
+            if allowed_roots and not _path_under_any_root(orphan_path, allowed_roots):
+                logger.debug(
+                    f"[SKIPPED out-of-scope orphan insert] {orphan_path}"
+                )
+            else:
+                db.orphaned.execute_query(
+                    """
+                    INSERT OR IGNORE INTO orphaned_posters
+                        (asset_type, title, year, season, file_path, date_orphaned)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        "poster",
+                        record.get("title"),
+                        record.get("year"),
+                        record.get("season_number"),
+                        orphan_path,
+                        now,
+                    ),
+                )
         except Exception as orphan_err:
             logger.debug(f"Could not record orphaned poster: {orphan_err}")
 

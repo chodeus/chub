@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 from typing import Any, Dict
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import PlainTextResponse
 
 from backend.api.utils import error, get_logger, ok
@@ -127,13 +127,24 @@ async def list_logs_for_module(
 
 @router.get("/logs/{module}/{filename}", response_class=PlainTextResponse)
 async def read_log(
-    module: str, filename: str, logger: Any = Depends(get_logger)
+    module: str,
+    filename: str,
+    tail: int = Query(
+        0,
+        ge=0,
+        le=200_000,
+        description="If > 0, return only the last N lines.",
+    ),
+    logger: Any = Depends(get_logger),
 ) -> PlainTextResponse:
     """
     Read and return the contents of a specific log file.
 
     Returns the raw log file content as plain text. Security measures prevent
     access to debug logs and directory traversal attacks.
+
+    When `tail` is > 0, only the last N lines are returned. Useful for
+    multi-MB logs where the frontend only needs the most recent chunk.
     """
     try:
         # Allow-list the module name (same guard as list_logs_for_module).
@@ -175,7 +186,13 @@ async def read_log(
             )
 
         with open(resolved_path, "r", encoding="utf-8", errors="ignore") as f:
-            content = f.read()
+            if tail > 0:
+                # Deque-based tail keeps memory bounded for multi-MB logs.
+                from collections import deque
+
+                content = "".join(deque(f, maxlen=tail))
+            else:
+                content = f.read()
 
         return PlainTextResponse(content)
 

@@ -431,6 +431,8 @@ export const SETTINGS_SCHEMA = [
                 type: 'instances',
                 required: true,
                 instance_types: ['radarr', 'sonarr'],
+                // Backend: RenameinatorrConfig.instances is List[str].
+                valueFormat: 'string',
                 description: 'List of Radarr and Sonarr instances to rename.',
             },
         ],
@@ -501,6 +503,8 @@ export const SETTINGS_SCHEMA = [
                 required: true,
                 add_posters_option: false,
                 instance_types: ['radarr', 'sonarr'],
+                // Backend: NohlConfig.instances is List[str].
+                valueFormat: 'string',
                 description: 'Instances to apply Nohl logic to.',
             },
         ],
@@ -587,6 +591,8 @@ export const SETTINGS_SCHEMA = [
                 required: true,
                 add_posters_option: false,
                 instance_types: ['radarr', 'sonarr'],
+                // Backend: HealthCheckarrConfig.instances is Optional[List[str]].
+                valueFormat: 'string',
                 // description: 'Instances to run health checks on.',
             },
         ],
@@ -830,6 +836,8 @@ export const SETTINGS_SCHEMA = [
                 required: true,
                 add_posters_option: false,
                 instance_types: ['radarr', 'sonarr', 'lidarr'],
+                // Backend: UnmatchedAssetsConfig.instances is List[str].
+                valueFormat: 'string',
                 description: 'Instances to scan for unmatched assets.',
             },
             {
