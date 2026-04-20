@@ -171,18 +171,30 @@ async def system_disk() -> JSONResponse:
     """
     targets = ["/config", "/kometa", "/media", "/plex", "/data"]
     out = []
+    seen_devices: dict[int, list[str]] = {}
     for path in targets:
         entry: dict[str, Any] = {"path": path, "exists": os.path.isdir(path)}
         if entry["exists"]:
             try:
+                st = os.stat(path)
+                entry["device_id"] = st.st_dev
                 usage = shutil.disk_usage(path)
                 entry["total_bytes"] = usage.total
                 entry["used_bytes"] = usage.used
                 entry["free_bytes"] = usage.free
                 entry["percent_used"] = round((usage.used / usage.total) * 100, 1)
+                # Track colocated paths on the same underlying device so the
+                # frontend can dedupe (Unraid bind-mounts often share /mnt/cache).
+                seen_devices.setdefault(st.st_dev, []).append(path)
             except OSError as exc:
                 entry["error"] = str(exc)
         out.append(entry)
+    # Annotate each entry with its "siblings" on the same device.
+    for entry in out:
+        dev = entry.get("device_id")
+        if dev is not None:
+            siblings = [p for p in seen_devices.get(dev, []) if p != entry["path"]]
+            entry["shared_with"] = siblings
     return ok("Disk usage snapshot", {"mounts": out})
 
 

@@ -639,13 +639,17 @@ const PosterAssetsSearchPage = () => {
                     {lightboxItem && (
                         <div className="flex items-center justify-center bg-surface-alt rounded-lg p-2">
                             <img
+                                // Full-resolution original. Backend thumbnail
+                                // endpoint caps width at 500 and 422s anything
+                                // larger, so the lightbox uses the preview path
+                                // (serves the raw file, no resize) instead.
                                 src={
-                                    lightboxItem.id
-                                        ? postersAPI.getThumbnailUrl(lightboxItem.id, 1200)
-                                        : postersAPI.getPreviewUrl(
+                                    lightboxItem.folder && lightboxItem.file
+                                        ? postersAPI.getPreviewUrl(
                                               lightboxItem.folder,
                                               lightboxItem.file
                                           )
+                                        : postersAPI.getThumbnailUrl(lightboxItem.id, 500)
                                 }
                                 alt={lightboxItem.title}
                                 className="max-h-[75vh] w-auto object-contain"
