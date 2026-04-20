@@ -90,13 +90,13 @@ class PosterCleanarr(ChubModule):
             table = [["Poster Cleanarr"], [f"Mode: {self.mode.capitalize()} — {label.get('ing', '')} bloat images"]]
             self.logger.info(create_table(table))
 
-            # Get Plex connection if needed
+            # Get Plex connection if needed (only for DB retrieval via API now;
+            # server-level maintenance tasks moved to the plex_maintenance module).
             plex_server = None
-            needs_plex = (
-                self.config.empty_trash
-                or self.config.clean_bundles
-                or self.config.optimize_db
-                or (not self.config.local_db and self.mode not in ("restore", "clear", "nothing"))
+            needs_plex = not self.config.local_db and self.mode not in (
+                "restore",
+                "clear",
+                "nothing",
             )
             if needs_plex:
                 plex_server = self._get_plex_server()
@@ -161,19 +161,11 @@ class PosterCleanarr(ChubModule):
                     db, self.mode in ("report", "nothing")
                 )
 
-            # === PhotoTranscoder cleanup ===
+            # PhotoTranscoder + server maintenance (empty_trash / clean_bundles
+            # / optimize_db) live in the plex_maintenance module now. Keep
+            # empty stats here so the existing report shape is preserved.
             transcoder_stats = {"count": 0, "total_size": 0}
-            if self.config.photo_transcoder and self.plex_path:
-                transcoder_stats = self._clean_photo_transcoder()
-
-            # === Plex maintenance tasks ===
-            maintenance_results = {}
-            if plex_server and any([
-                self.config.empty_trash,
-                self.config.clean_bundles,
-                self.config.optimize_db,
-            ]):
-                maintenance_results = self._run_plex_maintenance(plex_server)
+            maintenance_results: Dict[str, Any] = {}
 
             # === Clean empty directories ===
             empty_dirs = 0
@@ -192,8 +184,6 @@ class PosterCleanarr(ChubModule):
             has_activity = (
                 bloat_stats.get("count", 0) > 0
                 or orphaned_stats.get("count", 0) > 0
-                or transcoder_stats.get("count", 0) > 0
-                or maintenance_results
             )
             if has_activity:
                 try:
@@ -704,75 +694,6 @@ class PosterCleanarr(ChubModule):
             self.logger, dry_run, allowed_roots=allowed_roots
         )
         return {"count": count}
-
-    # =========================================================================
-    # PhotoTranscoder cleanup
-    # =========================================================================
-
-    def _clean_photo_transcoder(self) -> Dict[str, Any]:
-        """Clean Plex PhotoTranscoder cache."""
-        transcoder_dir = os.path.join(self.plex_path, "Cache", "PhotoTranscoder")
-
-        if not os.path.isdir(transcoder_dir):
-            self.logger.warning(f"PhotoTranscoder directory not found: {transcoder_dir}")
-            return {"count": 0, "total_size": 0}
-
-        count = 0
-        total_size = 0
-
-        self.logger.info("Cleaning PhotoTranscoder cache...")
-
-        for root, dirs, files in os.walk(transcoder_dir):
-            if self.is_cancelled():
-                break
-            for filename in files:
-                filepath = os.path.join(root, filename)
-                try:
-                    total_size += os.path.getsize(filepath)
-                    if self.mode not in ("report", "nothing"):
-                        os.remove(filepath)
-                    count += 1
-                except Exception as e:
-                    self.logger.error(f"Failed to remove {filepath}: {e}")
-
-        self.logger.info(
-            f"PhotoTranscoder: removed {count} files ({format_bytes(total_size)})"
-        )
-        return {"count": count, "total_size": total_size}
-
-    # =========================================================================
-    # Plex maintenance
-    # =========================================================================
-
-    def _run_plex_maintenance(self, plex_server) -> Dict[str, Any]:
-        """Run Plex maintenance tasks with sleep between operations."""
-        results: Dict[str, Any] = {}
-        sleep_seconds = self.config.sleep
-
-        tasks = []
-        if self.config.empty_trash:
-            tasks.append(("Empty Trash", lambda: plex_server.library.emptyTrash()))
-        if self.config.clean_bundles:
-            tasks.append(("Clean Bundles", lambda: plex_server.library.cleanBundles()))
-        if self.config.optimize_db:
-            tasks.append(("Optimize DB", lambda: plex_server.library.optimize()))
-
-        for i, (name, task_fn) in enumerate(tasks):
-            try:
-                self.logger.info(f"Running Plex maintenance: {name}...")
-                task_fn()
-                results[name] = "success"
-                self.logger.info(f"  {name} completed.")
-            except Exception as e:
-                results[name] = f"failed: {e}"
-                self.logger.error(f"  {name} failed: {e}")
-
-            # Sleep between tasks (not after the last one)
-            if i < len(tasks) - 1 and sleep_seconds > 0:
-                self.logger.info(f"  Sleeping {sleep_seconds}s before next task...")
-                time.sleep(sleep_seconds)
-
-        return results
 
     # =========================================================================
     # Empty directory cleanup
