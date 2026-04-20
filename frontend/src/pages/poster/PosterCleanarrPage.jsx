@@ -346,29 +346,33 @@ const PosterCleanarrPage = () => {
     const bloatParams = useMemo(() => ({ limit: PAGE_SIZE, offset: page * PAGE_SIZE }), [page]);
 
     // Scans don't auto-fire on mount — they walk the entire Plex metadata
-    // directory. The user triggers them by clicking Refresh (which calls
-    // hasScanned=true) or by switching views after the first scan.
+    // directory. The user triggers them by clicking Refresh, which calls
+    // `byMedia.refresh()` / `bloatFlat.refresh()` explicitly. We deliberately
+    // don't gate the apiFunction on `hasScanned` — useApiData's effect skips
+    // execution when `immediate: false`, so a dep-change-as-trigger pattern
+    // silently never fires. The explicit refresh() in handleRefresh is the
+    // only path that moves data.
     const byMedia = useApiData({
         apiFunction: useCallback(
             () =>
-                view === 'by-media' && hasScanned
+                view === 'by-media'
                     ? postersAPI.listPlexMetadataByMedia(byMediaParams)
                     : Promise.resolve({ data: { bundles: [], total: 0, stats: null } }),
-            [byMediaParams, view, hasScanned]
+            [byMediaParams, view]
         ),
-        dependencies: [byMediaParams, view, hasScanned],
+        dependencies: [byMediaParams, view],
         options: { showErrorToast: false, immediate: false },
     });
 
     const bloatFlat = useApiData({
         apiFunction: useCallback(
             () =>
-                view === 'bloat' && hasScanned
+                view === 'bloat'
                     ? postersAPI.listPlexMetadataBloat(bloatParams)
                     : Promise.resolve({ data: { items: [], total: 0, stats: null } }),
-            [bloatParams, view, hasScanned]
+            [bloatParams, view]
         ),
-        dependencies: [bloatParams, view, hasScanned],
+        dependencies: [bloatParams, view],
         options: { showErrorToast: false, immediate: false },
     });
 
@@ -396,12 +400,11 @@ const PosterCleanarrPage = () => {
     const loading = view === 'by-media' ? byMedia.isLoading : bloatFlat.isLoading;
 
     const refreshView = useCallback(() => {
-        // First click flips the opt-in flag, which drives the useApiData
-        // dep array and fires the scan via its normal path.
-        if (!hasScanned) {
-            setHasScanned(true);
-            return;
-        }
+        // First click flips the opt-in flag for the UI empty state, and we
+        // always call refresh() explicitly — useApiData with immediate:false
+        // does not re-run on dep change, so relying on the flag alone leaves
+        // the fetch hanging.
+        if (!hasScanned) setHasScanned(true);
         if (view === 'by-media') byMedia.refresh();
         else bloatFlat.refresh();
     }, [view, byMedia, bloatFlat, hasScanned]);
