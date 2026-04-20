@@ -17,8 +17,9 @@ on:
       - 'requirements.txt'
       - 'frontend/package-lock.json'
       - 'deploy/docker/Dockerfile'
+      - '.dockerignore'
       - 'scripts/start.sh'
-      - 'VERSION'
+      - '.release-please-manifest.json'
       - '.github/workflows/codeql-lint.yml'
   pull_request:
     branches:
@@ -33,8 +34,9 @@ on:
       - 'requirements.txt'
       - 'frontend/package-lock.json'
       - 'deploy/docker/Dockerfile'
+      - '.dockerignore'
       - 'scripts/start.sh'
-      - 'VERSION'
+      - '.release-please-manifest.json'
       - '.github/workflows/codeql-lint.yml'
   schedule:
     - cron: '25 4 * * 1'  # Weekly on Monday at 04:25 UTC
