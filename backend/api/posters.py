@@ -2051,14 +2051,25 @@ async def list_plex_metadata_by_media(
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
     only_bloat: bool = Query(False),
+    media_type: str = Query(
+        "all",
+        description="Filter by metadata_type label: movie, show, season, episode, artist, album, collection, all.",
+    ),
+    library_id: int = Query(0, description="Filter by Plex library_section_id. 0 = all."),
+    variant_kind: str = Query(
+        "all",
+        description="Filter to variants of a single kind (poster/art/banner/thumb/chapter/theme/other). Bundles with no matching variants are hidden.",
+    ),
     force: bool = Query(False, description="Bypass the 5-min scan cache"),
     logger: Any = Depends(get_logger),
 ):
     """
     Group Plex Metadata poster variants by their owning media item.
 
-    Returns `{bundles: [...], total, limit, offset, stats}`. When `only_bloat`
-    is true, bundles with zero bloat variants are filtered out.
+    Returns `{bundles, libraries, total, limit, offset, stats}`. Filters are
+    applied *after* the scan (so the scan + cache is reusable across filter
+    combinations). `libraries` lists every section that has at least one
+    bundle in the unfiltered scan so the frontend can render a dropdown.
     """
     try:
         from backend.util.plex_metadata import scan_bundles
@@ -2072,6 +2083,21 @@ async def list_plex_metadata_by_media(
             )
         scan = scan_bundles(plex_path, force=force)
         bundles = scan["bundles"]
+
+        media_type = (media_type or "all").lower()
+        variant_kind = (variant_kind or "all").lower()
+
+        if media_type != "all":
+            bundles = [b for b in bundles if (b.get("metadata_type_label") or "") == media_type]
+        if library_id:
+            bundles = [b for b in bundles if b.get("library_section_id") == library_id]
+        if variant_kind != "all":
+            trimmed = []
+            for b in bundles:
+                kept = [v for v in b["variants"] if v.get("kind") == variant_kind]
+                if kept:
+                    trimmed.append({**b, "variants": kept})
+            bundles = trimmed
         if only_bloat:
             bundles = [b for b in bundles if any(not v["active"] for v in b["variants"])]
         total = len(bundles)
@@ -2080,6 +2106,7 @@ async def list_plex_metadata_by_media(
             f"Retrieved {len(page)} of {total} bundles",
             {
                 "bundles": page,
+                "libraries": scan.get("libraries", []),
                 "total": total,
                 "limit": limit,
                 "offset": offset,

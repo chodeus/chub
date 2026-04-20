@@ -393,6 +393,11 @@ export const postersAPI = {
         if (params.offset) qs.set('offset', params.offset);
         if (params.only_bloat) qs.set('only_bloat', 'true');
         if (params.force) qs.set('force', 'true');
+        if (params.media_type && params.media_type !== 'all')
+            qs.set('media_type', params.media_type);
+        if (params.library_id) qs.set('library_id', params.library_id);
+        if (params.variant_kind && params.variant_kind !== 'all')
+            qs.set('variant_kind', params.variant_kind);
         return apiCore.get(`/posters/plex-metadata/by-media?${qs.toString()}`);
     },
 

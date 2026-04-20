@@ -111,7 +111,7 @@ def get_in_use_hashes(db_path: str) -> Set[str]:
 
 def _load_metadata_item_index(db_path: str) -> Dict[str, Dict[str, Any]]:
     """
-    Build a map of in-use filename → {id, title, year, type}.
+    Build a map of in-use filename → {id, title, year, type, library_section_id}.
 
     Walking the Metadata/ tree gives us every poster file on disk, but the
     bundle directory names are hashes we can't easily reverse. Instead, we
@@ -127,11 +127,11 @@ def _load_metadata_item_index(db_path: str) -> Dict[str, Dict[str, Any]]:
             cur = conn.cursor()
             try:
                 cur.execute(
-                    "SELECT id, title, year, metadata_type, user_thumb_url, "
-                    "user_art_url, user_banner_url FROM metadata_items"
+                    "SELECT id, title, year, metadata_type, library_section_id, "
+                    "user_thumb_url, user_art_url, user_banner_url FROM metadata_items"
                 )
                 for row in cur.fetchall():
-                    item_id, title, year, mtype, thumb, art, banner = row
+                    item_id, title, year, mtype, section_id, thumb, art, banner = row
                     for url in (thumb, art, banner):
                         if not url:
                             continue
@@ -144,6 +144,7 @@ def _load_metadata_item_index(db_path: str) -> Dict[str, Dict[str, Any]]:
                             "title": title or "",
                             "year": year,
                             "metadata_type": mtype,
+                            "library_section_id": section_id,
                         }
             except sqlite3.OperationalError:
                 # metadata_items may be missing some columns on older Plex
@@ -156,6 +157,68 @@ def _load_metadata_item_index(db_path: str) -> Dict[str, Dict[str, Any]]:
         # which downstream treats as "titles unknown" not "error".
         pass
     return index
+
+
+def _load_library_sections(db_path: str) -> Dict[int, Dict[str, Any]]:
+    """Map library_section_id → {name, section_type}.
+
+    Plex's `library_sections.section_type` is 1 (movie), 2 (show), 8 (artist),
+    18 (photo). We only care about the name for UI display and whether it's a
+    movie or show library for filtering.
+    """
+    sections: Dict[int, Dict[str, Any]] = {}
+    try:
+        conn = sqlite3.connect(db_path)
+        try:
+            cur = conn.cursor()
+            try:
+                cur.execute("SELECT id, name, section_type FROM library_sections")
+                for row in cur.fetchall():
+                    sid, name, stype = row
+                    sections[sid] = {"name": name or "", "section_type": stype}
+            except sqlite3.OperationalError:
+                pass
+        finally:
+            conn.close()
+    except Exception:
+        pass
+    return sections
+
+
+# Plex metadata_type enum (subset we care about).
+METADATA_TYPE_LABELS = {
+    1: "movie",
+    2: "show",
+    3: "season",
+    4: "episode",
+    8: "artist",
+    9: "album",
+    10: "track",
+    18: "collection",
+}
+
+
+def _classify_variant_kind(path: str) -> str:
+    """Heuristic classifier for a variant file path.
+
+    Plex organizes per-item artwork under subdirectories that correlate
+    with the kind: `Uploads/posters`, `Uploads/art`, `Uploads/banners`,
+    `Contents/Posters`, `Contents/Art`, `Contents/Thumbnails`, etc.
+    """
+    p = path.lower()
+    if "/posters/" in p or p.endswith("/posters"):
+        return "poster"
+    if "/art/" in p or p.endswith("/art"):
+        return "art"
+    if "/banners/" in p or "/banner/" in p or p.endswith("/banners"):
+        return "banner"
+    if "/thumbnails/" in p or "/thumbs/" in p:
+        return "thumb"
+    if "/chapterimages/" in p or "/chapterthumbs/" in p:
+        return "chapter"
+    if "/themes/" in p:
+        return "theme"
+    return "other"
 
 
 def _cache_get(key: str) -> Optional[Dict[str, Any]]:
@@ -236,9 +299,10 @@ def scan_bundles(plex_path: str, *, force: bool = False) -> Dict[str, Any]:
 
     in_use: Set[str] = get_in_use_hashes(db_path) if db_path else set()
     anchor_index = _load_metadata_item_index(db_path) if db_path else {}
+    sections_index = _load_library_sections(db_path) if db_path else {}
 
     # Walk metadata_dir, grouping files by their enclosing .bundle directory.
-    # bundle_files[bundle_path] = [{filename, path, size}, ...]
+    # bundle_files[bundle_path] = [{filename, path, size, mtime, kind}, ...]
     bundle_files: Dict[str, List[Dict[str, Any]]] = {}
     for root, dirs, files in os.walk(metadata_dir):
         if "Contents" in root.split(os.sep):
@@ -258,11 +322,20 @@ def scan_bundles(plex_path: str, *, force: bool = False) -> Dict[str, Any]:
                 continue
             fpath = os.path.join(root, fname)
             try:
-                size = os.path.getsize(fpath)
+                st = os.stat(fpath)
+                size = st.st_size
+                mtime = st.st_mtime
             except OSError:
                 size = 0
+                mtime = 0.0
             bundle_files.setdefault(bundle_root, []).append(
-                {"filename": fname, "path": fpath, "size": size}
+                {
+                    "filename": fname,
+                    "path": fpath,
+                    "size": size,
+                    "mtime": mtime,
+                    "kind": _classify_variant_kind(fpath),
+                }
             )
 
     # Resolve each bundle's owning metadata_item by matching any of its files
@@ -278,6 +351,7 @@ def scan_bundles(plex_path: str, *, force: bool = False) -> Dict[str, Any]:
             "title": "",
             "year": None,
             "metadata_type": None,
+            "library_section_id": None,
         }
         for f in files:
             hit = anchor_index.get(f["filename"])
@@ -287,18 +361,23 @@ def scan_bundles(plex_path: str, *, force: bool = False) -> Dict[str, Any]:
                     "title": hit["title"],
                     "year": hit["year"],
                     "metadata_type": hit["metadata_type"],
+                    "library_section_id": hit.get("library_section_id"),
                 }
                 break
 
         variants = []
         for f in files:
             active = f["filename"] in in_use
-            variants.append({
-                "filename": f["filename"],
-                "path": f["path"],
-                "size": f["size"],
-                "active": active,
-            })
+            variants.append(
+                {
+                    "filename": f["filename"],
+                    "path": f["path"],
+                    "size": f["size"],
+                    "mtime": f["mtime"],
+                    "kind": f["kind"],
+                    "active": active,
+                }
+            )
             variant_count += 1
             if not active:
                 bloat_count += 1
@@ -306,14 +385,22 @@ def scan_bundles(plex_path: str, *, force: bool = False) -> Dict[str, Any]:
 
         # Sort: active variants first, then largest bloat first.
         variants.sort(key=lambda v: (not v["active"], -v["size"]))
-        bundles.append({
-            "bundle_path": bundle_path,
-            "rating_key": info["rating_key"],
-            "title": info["title"],
-            "year": info["year"],
-            "metadata_type": info["metadata_type"],
-            "variants": variants,
-        })
+        mtype = info["metadata_type"]
+        section_id = info["library_section_id"]
+        section = sections_index.get(section_id) if section_id is not None else None
+        bundles.append(
+            {
+                "bundle_path": bundle_path,
+                "rating_key": info["rating_key"],
+                "title": info["title"],
+                "year": info["year"],
+                "metadata_type": mtype,
+                "metadata_type_label": METADATA_TYPE_LABELS.get(mtype) if mtype else None,
+                "library_section_id": section_id,
+                "library_name": section["name"] if section else None,
+                "variants": variants,
+            }
+        )
 
     # Sort bundles: most bloat first, then by title.
     bundles.sort(
@@ -323,8 +410,22 @@ def scan_bundles(plex_path: str, *, force: bool = False) -> Dict[str, Any]:
         )
     )
 
+    # Include libraries referenced by at least one bundle — lets the frontend
+    # populate a filter dropdown without a second call.
+    referenced_lib_ids = {b["library_section_id"] for b in bundles if b["library_section_id"]}
+    libraries = [
+        {
+            "id": lib_id,
+            "name": sections_index[lib_id]["name"],
+            "section_type": sections_index[lib_id]["section_type"],
+        }
+        for lib_id in sorted(referenced_lib_ids)
+        if lib_id in sections_index
+    ]
+
     result = {
         "bundles": bundles,
+        "libraries": libraries,
         "stats": {
             "bundle_count": len(bundles),
             "variant_count": variant_count,
