@@ -248,15 +248,32 @@ class PosterCleanarr(ChubModule):
         from plexapi.server import PlexServer
 
         instances = self.config.instances
-        if not instances:
-            self.logger.error(
-                "No Plex instances configured for poster_cleanarr. "
-                "Add instance names to the 'instances' list in config."
-            )
-            return None
-
-        instance_name = instances[0]
         plex_instances = self.full_config.instances.plex
+
+        if not instances:
+            # UX fallback: if the user only has one Plex instance configured
+            # globally, auto-select it. Users commonly assume the global
+            # instance covers this module too because the scan already works
+            # off `plex_path` from disk. Only fall back when there's no
+            # ambiguity — if multiple instances exist, still require an
+            # explicit choice so we don't guess wrong.
+            if len(plex_instances) == 1:
+                instance_name = next(iter(plex_instances))
+                self.logger.info(
+                    f"No 'instances' configured for poster_cleanarr; "
+                    f"auto-selecting the single configured Plex instance "
+                    f"'{instance_name}'."
+                )
+            else:
+                self.logger.error(
+                    "No Plex instances configured for poster_cleanarr. "
+                    "Add instance names to the 'instances' list in config "
+                    f"(available: {sorted(plex_instances) or 'none'})."
+                )
+                return None
+        else:
+            instance_name = instances[0]
+
         if instance_name not in plex_instances:
             self.logger.error(f"Plex instance '{instance_name}' not found in CHUB instances config.")
             return None
