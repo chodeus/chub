@@ -27,17 +27,45 @@ function formatBytes(bytes) {
 }
 
 /** Single poster variant tile — shows active/bloat border and selection checkbox. */
+const VARIANT_KIND_LABELS = {
+    poster: 'Poster',
+    art: 'Art',
+    banner: 'Banner',
+    thumb: 'Thumb',
+    chapter: 'Chapter',
+    theme: 'Theme',
+    other: 'Other',
+};
+
+const formatRelativeTime = mtime => {
+    if (!mtime) return '';
+    const ms = Date.now() - mtime * 1000;
+    if (ms < 0) return '';
+    const days = Math.floor(ms / 86_400_000);
+    if (days < 1) return 'today';
+    if (days < 30) return `${days}d ago`;
+    const months = Math.floor(days / 30);
+    if (months < 12) return `${months}mo ago`;
+    return `${Math.floor(days / 365)}y ago`;
+};
+
 const VariantTile = ({ variant, selected, onToggleSelect, onPreview, canSelect = true }) => {
     const border = variant.active
         ? 'border-success ring-2 ring-success/50'
         : 'border-error/70 ring-1 ring-error/30';
+    const kindLabel = VARIANT_KIND_LABELS[variant.kind] || null;
+    const ageLabel = formatRelativeTime(variant.mtime);
     return (
         <div
             className={`relative rounded-md overflow-hidden border-2 ${border} bg-surface cursor-pointer group`}
             onClick={() => onPreview(variant)}
-            title={
-                variant.active ? 'Active poster in Plex' : 'Unused (bloat) — candidate for cleanup'
-            }
+            title={[
+                variant.active ? 'Active poster in Plex' : 'Unused (bloat) — candidate for cleanup',
+                kindLabel,
+                ageLabel && `modified ${ageLabel}`,
+            ]
+                .filter(Boolean)
+                .join(' · ')}
         >
             <img
                 src={postersAPI.getPlexVariantUrl(variant.path)}
@@ -58,16 +86,29 @@ const VariantTile = ({ variant, selected, onToggleSelect, onPreview, canSelect =
                     />
                 </label>
             )}
-            {variant.active && (
-                <span className="absolute top-1 right-1 bg-success text-white text-xs px-1.5 py-0.5 rounded">
-                    Active
+            {kindLabel && (
+                <span
+                    className={`absolute top-1 right-1 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded ${variant.active ? 'bg-success/80 text-white' : 'bg-black/70 text-white'}`}
+                >
+                    {kindLabel}
                 </span>
             )}
-            <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-xs px-2 py-1 truncate">
-                {formatBytes(variant.size)}
+            <div className="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-xs px-2 py-1 flex items-center justify-between gap-2">
+                <span>{formatBytes(variant.size)}</span>
+                {ageLabel && <span className="text-white/70">{ageLabel}</span>}
             </div>
         </div>
     );
+};
+
+const MEDIA_TYPE_BADGE_COLOR = {
+    movie: 'bg-blue-500/20 text-blue-300',
+    show: 'bg-purple-500/20 text-purple-300',
+    season: 'bg-indigo-500/20 text-indigo-300',
+    episode: 'bg-amber-500/20 text-amber-300',
+    collection: 'bg-emerald-500/20 text-emerald-300',
+    artist: 'bg-pink-500/20 text-pink-300',
+    album: 'bg-fuchsia-500/20 text-fuchsia-300',
 };
 
 /** One media-item bundle: title + grid of its variants. */
@@ -82,17 +123,30 @@ const BundleCard = ({ bundle, selectedPaths, onToggleSelect, onToggleBundle, onP
         ? `${bundle.title}${bundle.year ? ` (${bundle.year})` : ''}`
         : bundle.bundle_path.split('/').slice(-2).join('/');
 
+    const typeLabel = bundle.metadata_type_label;
+    const typeBadgeClass = MEDIA_TYPE_BADGE_COLOR[typeLabel] || 'bg-surface text-secondary';
+
     return (
         <section className="rounded-lg border border-border bg-surface-alt p-3 flex flex-col gap-2">
             <header className="flex items-center justify-between gap-3">
                 <div className="flex-1 min-w-0">
                     <h3
-                        className="text-sm font-semibold text-primary truncate"
+                        className="text-sm font-semibold text-primary truncate flex items-center gap-2"
                         title={titleDisplay}
                     >
-                        {titleDisplay}
+                        <span className="truncate">{titleDisplay}</span>
+                        {typeLabel && (
+                            <span
+                                className={`text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded ${typeBadgeClass}`}
+                            >
+                                {typeLabel}
+                            </span>
+                        )}
                     </h3>
                     <p className="text-xs text-secondary">
+                        {bundle.library_name && (
+                            <span className="text-tertiary">{bundle.library_name} · </span>
+                        )}
                         {bundle.variants.length} variant{bundle.variants.length !== 1 ? 's' : ''}
                         {bloatCount > 0 && ` · ${bloatCount} bloat`}
                     </p>
@@ -272,13 +326,21 @@ const PosterManagePage = () => {
     const [cleanBundles, setCleanBundles] = useState(false);
     const [optimizeDb, setOptimizeDb] = useState(false);
 
+    // ImageMaid-style filters
+    const [mediaType, setMediaType] = useState('all'); // all | movie | show | season | episode | collection
+    const [libraryId, setLibraryId] = useState(0); // 0 = all
+    const [variantKind, setVariantKind] = useState('all'); // all | poster | art | banner | thumb | chapter | theme | other
+
     const byMediaParams = useMemo(
         () => ({
             limit: PAGE_SIZE,
             offset: page * PAGE_SIZE,
             only_bloat: onlyBloat,
+            media_type: mediaType,
+            library_id: libraryId,
+            variant_kind: variantKind,
         }),
-        [page, onlyBloat]
+        [page, onlyBloat, mediaType, libraryId, variantKind]
     );
 
     const bloatParams = useMemo(() => ({ limit: PAGE_SIZE, offset: page * PAGE_SIZE }), [page]);
@@ -311,6 +373,7 @@ const PosterManagePage = () => {
     });
 
     const bundles = useMemo(() => byMedia.data?.data?.bundles || [], [byMedia.data]);
+    const libraries = useMemo(() => byMedia.data?.data?.libraries || [], [byMedia.data]);
     const bloatItems = useMemo(() => bloatFlat.data?.data?.items || [], [bloatFlat.data]);
     const stats = useMemo(
         () => (view === 'by-media' ? byMedia.data?.data?.stats : bloatFlat.data?.data?.stats),
@@ -495,6 +558,87 @@ const PosterManagePage = () => {
                         </Button>
                     </div>
                 </div>
+
+                {/* Filters — library / media type / variant kind. The scan
+                    always fetches everything; these narrow the server-side
+                    response so the page doesn't get overwhelmed by episode
+                    thumbnails when you care about movie/show posters. */}
+                {view === 'by-media' && hasScanned && (
+                    <div className="flex flex-wrap items-center gap-3 border-t border-border pt-3 text-sm">
+                        <label className="flex items-center gap-2">
+                            <span className="text-tertiary">Library:</span>
+                            <select
+                                value={libraryId}
+                                onChange={e => {
+                                    setLibraryId(Number(e.target.value));
+                                    setPage(0);
+                                }}
+                                className="px-2 py-1 rounded bg-surface-alt border border-border"
+                            >
+                                <option value={0}>All libraries</option>
+                                {libraries.map(lib => (
+                                    <option key={lib.id} value={lib.id}>
+                                        {lib.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                        <label className="flex items-center gap-2">
+                            <span className="text-tertiary">Type:</span>
+                            <select
+                                value={mediaType}
+                                onChange={e => {
+                                    setMediaType(e.target.value);
+                                    setPage(0);
+                                }}
+                                className="px-2 py-1 rounded bg-surface-alt border border-border"
+                            >
+                                <option value="all">All</option>
+                                <option value="movie">Movie</option>
+                                <option value="show">Show</option>
+                                <option value="season">Season</option>
+                                <option value="episode">Episode</option>
+                                <option value="collection">Collection</option>
+                                <option value="artist">Artist</option>
+                                <option value="album">Album</option>
+                            </select>
+                        </label>
+                        <label className="flex items-center gap-2">
+                            <span className="text-tertiary">Kind:</span>
+                            <select
+                                value={variantKind}
+                                onChange={e => {
+                                    setVariantKind(e.target.value);
+                                    setPage(0);
+                                }}
+                                className="px-2 py-1 rounded bg-surface-alt border border-border"
+                            >
+                                <option value="all">All</option>
+                                <option value="poster">Posters</option>
+                                <option value="art">Background art</option>
+                                <option value="banner">Banners</option>
+                                <option value="thumb">Thumbnails</option>
+                                <option value="chapter">Chapter images</option>
+                                <option value="theme">Themes</option>
+                                <option value="other">Other</option>
+                            </select>
+                        </label>
+                        {(mediaType !== 'all' || libraryId !== 0 || variantKind !== 'all') && (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setMediaType('all');
+                                    setLibraryId(0);
+                                    setVariantKind('all');
+                                    setPage(0);
+                                }}
+                                className="text-xs text-accent hover:underline bg-transparent border-0 cursor-pointer"
+                            >
+                                Clear filters
+                            </button>
+                        )}
+                    </div>
+                )}
 
                 <div className="flex flex-wrap items-center gap-3 border-t border-border pt-3">
                     <label className="flex items-center gap-2 text-sm">
