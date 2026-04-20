@@ -21,32 +21,92 @@ const StatCard = ({ label, value, subtext, color = 'text-primary' }) => (
     </div>
 );
 
-/** Reusable breakdown section */
-const BreakdownSection = ({ title, items, labelKey, countKey = 'count', maxItems = null }) => {
+/**
+ * Reusable breakdown section.
+ *
+ * `variant` chooses the rendering:
+ *   - 'chips': pill list. Good for small bounded sets where every value
+ *     is roughly comparable (e.g. Status: 6 values).
+ *   - 'bars':  horizontal bars sorted by count desc. Good for skewed
+ *     high-cardinality sets where the visual gap between the top value
+ *     and the tail matters (e.g. Language: English 2209 vs Arabic 1).
+ *   - 'auto':  bars when items.length > 8, chips otherwise. Default.
+ */
+const BreakdownSection = ({
+    title,
+    items,
+    labelKey,
+    countKey = 'count',
+    maxItems = null,
+    variant = 'auto',
+}) => {
     const [expanded, setExpanded] = useState(false);
     if (!items || items.length === 0) return null;
 
-    const displayItems = maxItems && !expanded ? items.slice(0, maxItems) : items;
+    const resolvedVariant = variant === 'auto' ? (items.length > 8 ? 'bars' : 'chips') : variant;
+
+    // For bars we always sort by count desc so the visual proportion is
+    // legible at a glance. Chips keep the API-provided order (status has a
+    // natural reading order, e.g. Released → Continuing → Ended).
+    const sortedItems =
+        resolvedVariant === 'bars'
+            ? [...items].sort((a, b) => (b[countKey] ?? 0) - (a[countKey] ?? 0))
+            : items;
+
+    const displayItems = maxItems && !expanded ? sortedItems.slice(0, maxItems) : sortedItems;
     const hasMore = maxItems && items.length > maxItems;
+
+    const maxCount = sortedItems.reduce((m, it) => Math.max(m, it[countKey] ?? 0), 0) || 1;
 
     return (
         <section>
             <h3 className="text-lg font-semibold text-primary mb-3">
                 {title} ({items.length})
             </h3>
-            <div className="flex flex-wrap gap-2">
-                {displayItems.map((item, idx) => (
-                    <span
-                        key={item[labelKey] || idx}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-alt text-sm"
-                    >
-                        <span className="text-primary capitalize">
-                            {item[labelKey] || 'Unknown'}
+            {resolvedVariant === 'chips' ? (
+                <div className="flex flex-wrap gap-2">
+                    {displayItems.map((item, idx) => (
+                        <span
+                            key={item[labelKey] || idx}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-alt text-sm"
+                        >
+                            <span className="text-primary capitalize">
+                                {item[labelKey] || 'Unknown'}
+                            </span>
+                            <span className="text-tertiary font-medium">{item[countKey]}</span>
                         </span>
-                        <span className="text-tertiary font-medium">{item[countKey]}</span>
-                    </span>
-                ))}
-            </div>
+                    ))}
+                </div>
+            ) : (
+                <div className="flex flex-col gap-1.5">
+                    {displayItems.map((item, idx) => {
+                        const count = item[countKey] ?? 0;
+                        const pct = Math.round((count / maxCount) * 100);
+                        return (
+                            <div
+                                key={item[labelKey] || idx}
+                                className="grid grid-cols-[minmax(6rem,9rem)_1fr_auto] items-center gap-3 text-sm"
+                            >
+                                <span className="text-primary capitalize truncate">
+                                    {item[labelKey] || 'Unknown'}
+                                </span>
+                                <div
+                                    className="h-2 rounded-full bg-surface-alt overflow-hidden"
+                                    role="presentation"
+                                >
+                                    <div
+                                        className="h-full bg-accent/80"
+                                        style={{ width: `${pct}%` }}
+                                    />
+                                </div>
+                                <span className="tabular-nums text-tertiary font-medium">
+                                    {count.toLocaleString()}
+                                </span>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
             {hasMore && (
                 <button
                     className="mt-2 text-sm text-accent hover:underline"
@@ -251,16 +311,21 @@ const MediaStatsPage = () => {
                 </section>
             )}
 
-            {/* By Status */}
-            <BreakdownSection title="By Status" items={stats.by_status} labelKey="status" />
+            {/* By Status — small bounded set, keep as chips */}
+            <BreakdownSection
+                title="By Status"
+                items={stats.by_status}
+                labelKey="status"
+                variant="chips"
+            />
 
-            {/* By Language */}
+            {/* By Language — high-cardinality + skewed, bars read better */}
             <BreakdownSection title="By Language" items={stats.by_language} labelKey="language" />
 
-            {/* By Rating */}
+            {/* By Rating — high-cardinality + skewed */}
             <BreakdownSection title="By Rating" items={stats.by_rating} labelKey="rating" />
 
-            {/* By Studio */}
+            {/* By Studio — long tail, top 20 */}
             <BreakdownSection
                 title="By Studio"
                 items={stats.by_studio}
@@ -268,14 +333,24 @@ const MediaStatsPage = () => {
                 maxItems={20}
             />
 
-            {/* By Decade */}
-            <BreakdownSection title="By Decade" items={stats.by_decade} labelKey="decade" />
+            {/* By Decade — small bounded set */}
+            <BreakdownSection
+                title="By Decade"
+                items={stats.by_decade}
+                labelKey="decade"
+                variant="chips"
+            />
 
-            {/* By Genre */}
+            {/* By Genre — bars */}
             <BreakdownSection title="By Genre" items={stats.by_genre} labelKey="genre" />
 
-            {/* By Runtime */}
-            <BreakdownSection title="By Runtime" items={stats.by_runtime} labelKey="bucket" />
+            {/* By Runtime — small bounded set */}
+            <BreakdownSection
+                title="By Runtime"
+                items={stats.by_runtime}
+                labelKey="bucket"
+                variant="chips"
+            />
         </div>
     );
 };
