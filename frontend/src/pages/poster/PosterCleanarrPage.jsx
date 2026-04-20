@@ -8,10 +8,60 @@ import Spinner from '../../components/ui/Spinner.jsx';
 
 const PAGE_SIZE = 500; // master-detail needs the full bundle list client-side
 
-const MODE_LABELS = {
-    report: 'Report',
-    move: 'Move to trash',
-    remove: 'Delete permanently',
+// Mode metadata — one row per ImageMaid mode. `action` drives the Run button's
+// label + colour. `confirm` means the Run button fires a confirmation modal
+// (destructive / permanent operations only). `scope` toggles which modes are
+// allowed to send `target_paths`; restore/clear/nothing ignore selection.
+const MODE_META = {
+    report: {
+        label: 'Report',
+        action: 'Run scan',
+        variant: 'primary',
+        confirm: false,
+        scopeable: true,
+        description: 'Dry run — list bloat images, delete nothing.',
+    },
+    move: {
+        label: 'Move',
+        action: 'Move bloat to restore',
+        variant: 'warning',
+        confirm: false,
+        scopeable: true,
+        description: 'Relocate bloat to <plex_path>/Poster Cleanarr Restore/ — recoverable.',
+    },
+    restore: {
+        label: 'Restore',
+        action: 'Restore files',
+        variant: 'success',
+        confirm: false,
+        scopeable: false,
+        description: 'Move everything in the Restore directory back to Metadata/.',
+    },
+    clear: {
+        label: 'Clear',
+        action: 'Clear restore dir',
+        variant: 'danger',
+        confirm: true,
+        scopeable: false,
+        description: 'Permanently delete everything in the Restore directory. Cannot be undone.',
+    },
+    remove: {
+        label: 'Remove',
+        action: 'Delete bloat permanently',
+        variant: 'danger',
+        confirm: true,
+        scopeable: true,
+        description: 'Delete bloat from disk directly. Cannot be undone.',
+    },
+    nothing: {
+        label: 'Nothing',
+        action: null,
+        variant: 'secondary',
+        confirm: false,
+        scopeable: false,
+        description:
+            'Skip image processing entirely. Useful for scheduling an orphan-cleanup-only run.',
+    },
 };
 
 // localStorage key for persisting scan/filter/tree state across navigations.
@@ -110,14 +160,24 @@ const VariantTile = ({ variant, selected, onToggleSelect, onPreview }) => {
     const source = variant.cls?.source || variant.source || 'uploads';
     const isPlex = source === 'plex';
     const isActive = !!variant.active;
-    const borderClass = isPlex
-        ? 'border-[rgba(150,150,160,0.55)]'
-        : isActive
-          ? 'border-success ring-2 ring-success/40'
-          : 'border-[rgba(253,53,92,0.85)]';
+    const tileStyle = {
+        borderWidth: '3px',
+        borderStyle: 'solid',
+        borderColor: isPlex
+            ? 'rgba(150,150,160,0.55)'
+            : isActive
+              ? 'var(--color-success, #32d583)'
+              : 'rgba(253,53,92,0.85)',
+        boxShadow: isActive && !isPlex ? '0 0 0 2px rgba(50,213,131,0.4)' : 'none',
+    };
+    const imgStyle = {
+        filter: isPlex ? 'grayscale(30%)' : 'none',
+        opacity: !isActive && !isPlex ? 0.75 : 1,
+    };
     return (
         <div
-            className={`relative rounded-md overflow-hidden border-[3px] ${borderClass} bg-surface cursor-pointer group`}
+            className="relative rounded-md overflow-hidden bg-surface cursor-pointer"
+            style={tileStyle}
             onClick={() => onPreview(variant)}
             title={
                 isPlex
@@ -131,16 +191,16 @@ const VariantTile = ({ variant, selected, onToggleSelect, onPreview }) => {
                 src={postersAPI.getPlexVariantUrl(variant.path)}
                 alt={variant.filename}
                 loading="lazy"
-                className={`w-full h-40 object-cover ${isPlex ? 'grayscale-[30%]' : ''} ${
-                    !isActive && !isPlex ? 'opacity-75' : ''
-                }`}
+                className="w-full h-40 object-cover"
+                style={imgStyle}
                 onError={e => {
                     e.target.style.display = 'none';
                 }}
             />
             {!isActive && !isPlex && (
                 <label
-                    className="absolute top-1 left-1 bg-black/70 rounded px-1 py-0.5 cursor-pointer"
+                    className="absolute top-1 left-1 rounded px-1 py-0.5 cursor-pointer"
+                    style={{ background: 'rgba(0,0,0,0.7)' }}
                     onClick={e => e.stopPropagation()}
                 >
                     <input
@@ -255,7 +315,8 @@ const VariantPreviewModal = ({ target, onClose, onDelete, onSetActive }) => {
                     <img
                         src={postersAPI.getPlexVariantUrl(variant.path)}
                         alt={variant.filename}
-                        className="max-h-[60vh] w-auto mx-auto rounded"
+                        className="w-auto mx-auto rounded"
+                        style={{ maxHeight: '60vh' }}
                     />
                     <div className="text-xs text-secondary font-mono break-all">{variant.path}</div>
                     <div className="text-sm">
@@ -469,17 +530,20 @@ const PosterCleanarrPage = () => {
     const clearSelection = () => setSelectedPaths(new Set());
 
     const executeCleanup = useCallback(async () => {
+        const meta = MODE_META[mode];
+        if (!meta || !meta.action) return;
         setIsEnqueuing(true);
         try {
             const body = { mode };
-            if (selectedPaths.size > 0) body.target_paths = Array.from(selectedPaths);
+            if (meta.scopeable && selectedPaths.size > 0)
+                body.target_paths = Array.from(selectedPaths);
             const res = await postersAPI.runPlexMetadataCleanup(body);
             const jobId = res?.data?.job_id;
             if (!jobId) {
                 toast.error('Failed to start cleanup');
                 return;
             }
-            toast.success(`Cleanup started (job #${jobId})`);
+            toast.success(`${meta.label} started (job #${jobId})`);
             setLiveJobId(jobId);
             setSelectedPaths(new Set());
         } catch {
@@ -490,7 +554,7 @@ const PosterCleanarrPage = () => {
     }, [mode, selectedPaths, toast]);
 
     const runCleanup = () => {
-        if (mode === 'remove') {
+        if (MODE_META[mode]?.confirm) {
             setConfirmRemove(true);
             return;
         }
@@ -506,6 +570,73 @@ const PosterCleanarrPage = () => {
         } catch {
             toast.error('Failed to delete variant');
         }
+    };
+
+    // ---- Per-item bulk actions (right-pane action bar) ----
+    const [bulkBusy, setBulkBusy] = useState(false);
+    const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
+    const [confirmMakeActive, setConfirmMakeActive] = useState(null);
+
+    const deleteSelected = async () => {
+        if (bulkBusy || selectedPaths.size === 0) return;
+        setBulkBusy(true);
+        let ok = 0;
+        let failed = 0;
+        for (const path of selectedPaths) {
+            try {
+                await postersAPI.deletePlexMetadataVariant(path);
+                ok += 1;
+            } catch {
+                failed += 1;
+            }
+        }
+        setBulkBusy(false);
+        setSelectedPaths(new Set());
+        if (failed) toast.error(`Deleted ${ok}, ${failed} failed`);
+        else toast.success(`Deleted ${ok} variant${ok === 1 ? '' : 's'}`);
+        refreshScan();
+    };
+
+    // "Make active & delete rest": user ticks exactly one bloat variant, we
+    // promote it to active in Plex and delete every other non-active,
+    // non-plex variant in the current detail scope.
+    const makeActiveAndDeleteRest = async () => {
+        if (bulkBusy || !detail || !confirmMakeActive) return;
+        const { keepPath } = confirmMakeActive;
+        const keepVariant = detail.variants.find(v => v.path === keepPath);
+        if (!keepVariant) {
+            toast.error('Selected variant not found — rescan and retry');
+            return;
+        }
+        setBulkBusy(true);
+        setConfirmMakeActive(null);
+        try {
+            await postersAPI.setPlexMetadataActive(detail.bundle.rating_key, keepPath);
+        } catch {
+            setBulkBusy(false);
+            toast.error('Failed to set active poster in Plex');
+            return;
+        }
+        // After swapping active, every formerly-active OR formerly-bloat
+        // non-plex variant (except the kept one) becomes deletable.
+        const toDelete = detail.variants
+            .filter(v => v.path !== keepPath && (v.cls?.source || 'uploads') !== 'plex')
+            .map(v => v.path);
+        let ok = 0;
+        let failed = 0;
+        for (const path of toDelete) {
+            try {
+                await postersAPI.deletePlexMetadataVariant(path);
+                ok += 1;
+            } catch {
+                failed += 1;
+            }
+        }
+        setBulkBusy(false);
+        setSelectedPaths(new Set());
+        if (failed) toast.error(`Promoted active; deleted ${ok}, ${failed} failed`);
+        else toast.success(`Promoted active; deleted ${ok} variant${ok === 1 ? '' : 's'}`);
+        refreshScan();
     };
 
     const handleSetActiveRequest = (variant, bundle) => {
@@ -557,7 +688,9 @@ const PosterCleanarrPage = () => {
                 </div>
             )}
 
-            {/* Global cleanup bar (Mode + Run) — for the "clean everything right now" path. */}
+            {/* Global cleanup bar — Mode dropdown (all 6 ImageMaid modes) + a Run
+                button whose label, colour, and confirm behaviour all track the
+                selected mode, so the destructive options are visibly distinct. */}
             <section className="rounded-lg bg-surface border border-border p-3 flex flex-wrap items-center gap-3">
                 <Button variant="ghost" onClick={refreshScan} disabled={loading}>
                     <span className="material-symbols-outlined text-base">refresh</span>
@@ -571,20 +704,25 @@ const PosterCleanarrPage = () => {
                         onChange={e => setMode(e.target.value)}
                         className="bg-surface-alt border border-border rounded px-2 py-1 text-sm"
                     >
-                        {Object.entries(MODE_LABELS).map(([k, v]) => (
+                        {Object.entries(MODE_META).map(([k, m]) => (
                             <option key={k} value={k}>
-                                {v}
+                                {m.label}
                             </option>
                         ))}
                     </select>
                 </label>
+                <span className="text-xs text-tertiary" style={{ maxWidth: '420px' }}>
+                    {MODE_META[mode]?.description}
+                </span>
                 <div className="ml-auto flex items-center gap-2">
-                    <span className="text-xs text-secondary">
-                        {selectedPaths.size > 0
-                            ? `${selectedPaths.size} selected`
-                            : 'No selection → full library'}
-                    </span>
-                    {selectedPaths.size > 0 && (
+                    {MODE_META[mode]?.scopeable && (
+                        <span className="text-xs text-secondary">
+                            {selectedPaths.size > 0
+                                ? `${selectedPaths.size} selected`
+                                : 'No selection → full library'}
+                        </span>
+                    )}
+                    {MODE_META[mode]?.scopeable && selectedPaths.size > 0 && (
                         <Button variant="ghost" onClick={clearSelection}>
                             Clear
                         </Button>
@@ -592,11 +730,11 @@ const PosterCleanarrPage = () => {
                     <LoadingButton
                         loading={isEnqueuing}
                         loadingText="Starting…"
-                        variant="primary"
+                        variant={MODE_META[mode]?.variant || 'primary'}
                         onClick={runCleanup}
-                        disabled={!hasScanned}
+                        disabled={!hasScanned || !MODE_META[mode]?.action}
                     >
-                        Run Cleanup
+                        {MODE_META[mode]?.action || 'No action'}
                     </LoadingButton>
                 </div>
             </section>
@@ -628,7 +766,10 @@ const PosterCleanarrPage = () => {
             ) : (
                 // ---- Master-detail split ----
                 <section className="rounded-lg border border-border overflow-hidden bg-surface">
-                    <div className="grid grid-cols-1 md:grid-cols-[340px_1fr] min-h-[680px]">
+                    <div
+                        className="grid"
+                        style={{ gridTemplateColumns: '340px 1fr', minHeight: '680px' }}
+                    >
                         {/* Left pane */}
                         <div className="flex flex-col border-r border-border">
                             {/* Tabs */}
@@ -661,7 +802,7 @@ const PosterCleanarrPage = () => {
                                 className="m-2 px-3 py-1.5 rounded bg-surface-alt border border-border text-sm"
                             />
                             {/* Tree list */}
-                            <div className="overflow-y-auto flex-1 max-h-[620px]">
+                            <div className="overflow-y-auto flex-1" style={{ maxHeight: '620px' }}>
                                 {filteredBundles.length === 0 ? (
                                     <div className="text-center text-tertiary text-sm p-4">
                                         No matches
@@ -793,6 +934,33 @@ const PosterCleanarrPage = () => {
                                             >
                                                 Select all bloat
                                             </Button>
+                                            <LoadingButton
+                                                loading={bulkBusy}
+                                                loadingText="Deleting…"
+                                                variant="danger"
+                                                onClick={() => setConfirmBulkDelete(true)}
+                                                disabled={selectedPaths.size === 0}
+                                            >
+                                                Delete selected
+                                            </LoadingButton>
+                                            <LoadingButton
+                                                loading={bulkBusy}
+                                                loadingText="Applying…"
+                                                variant="primary"
+                                                onClick={() => {
+                                                    if (selectedPaths.size !== 1) {
+                                                        toast.error(
+                                                            'Tick exactly one variant to promote'
+                                                        );
+                                                        return;
+                                                    }
+                                                    const [keepPath] = [...selectedPaths];
+                                                    setConfirmMakeActive({ keepPath });
+                                                }}
+                                                disabled={selectedPaths.size !== 1}
+                                            >
+                                                Make active &amp; delete rest
+                                            </LoadingButton>
                                         </div>
                                     )}
                                 </>
@@ -827,10 +995,21 @@ const PosterCleanarrPage = () => {
                 </Modal.Footer>
             </Modal>
             <Modal isOpen={confirmRemove} onClose={() => setConfirmRemove(false)}>
-                <Modal.Header>Permanently delete bloat variants?</Modal.Header>
+                <Modal.Header>
+                    {mode === 'clear'
+                        ? 'Clear the restore directory?'
+                        : 'Permanently delete bloat variants?'}
+                </Modal.Header>
                 <Modal.Body>
                     <p className="text-sm">
-                        {selectedPaths.size > 0 ? (
+                        {mode === 'clear' ? (
+                            <>
+                                This will permanently delete{' '}
+                                <strong>every file in the Restore directory</strong>. These were
+                                moved there by previous &apos;Move&apos; runs and can currently
+                                still be restored; clearing makes them unrecoverable.
+                            </>
+                        ) : selectedPaths.size > 0 ? (
                             <>
                                 This will permanently delete <strong>{selectedPaths.size}</strong>{' '}
                                 selected variant
@@ -841,8 +1020,8 @@ const PosterCleanarrPage = () => {
                             <>
                                 This will permanently delete{' '}
                                 <strong>every bloat variant across your entire library</strong> from
-                                disk. This cannot be undone. Consider running <em>Move to trash</em>{' '}
-                                instead if you&apos;d like the option to restore.
+                                disk. This cannot be undone. Consider running <em>Move</em> instead
+                                if you&apos;d like the option to restore.
                             </>
                         )}
                     </p>
@@ -858,7 +1037,52 @@ const PosterCleanarrPage = () => {
                             executeCleanup();
                         }}
                     >
-                        Delete permanently
+                        {MODE_META[mode]?.action || 'Confirm'}
+                    </Button>
+                </Modal.Footer>
+            </Modal>
+            <Modal isOpen={confirmBulkDelete} onClose={() => setConfirmBulkDelete(false)}>
+                <Modal.Header>
+                    Delete {selectedPaths.size} selected variant
+                    {selectedPaths.size === 1 ? '' : 's'}?
+                </Modal.Header>
+                <Modal.Body>
+                    <p className="text-sm">
+                        Each variant is deleted from disk immediately. This cannot be undone — use{' '}
+                        <em>Move</em> mode instead if you want a restore path.
+                    </p>
+                </Modal.Body>
+                <Modal.Footer align="right">
+                    <Button variant="secondary" onClick={() => setConfirmBulkDelete(false)}>
+                        Cancel
+                    </Button>
+                    <Button
+                        variant="danger"
+                        onClick={() => {
+                            setConfirmBulkDelete(false);
+                            deleteSelected();
+                        }}
+                    >
+                        Delete {selectedPaths.size}
+                    </Button>
+                </Modal.Footer>
+            </Modal>
+            <Modal isOpen={!!confirmMakeActive} onClose={() => setConfirmMakeActive(null)}>
+                <Modal.Header>Promote variant and delete rest?</Modal.Header>
+                <Modal.Body>
+                    <p className="text-sm">
+                        The ticked variant becomes the active poster in Plex for{' '}
+                        <strong>{detail?.breadcrumb?.[detail.breadcrumb.length - 1]}</strong>, then
+                        every other non-Plex variant in this view is deleted from disk. Plex
+                        defaults are left alone. This cannot be undone.
+                    </p>
+                </Modal.Body>
+                <Modal.Footer align="right">
+                    <Button variant="secondary" onClick={() => setConfirmMakeActive(null)}>
+                        Cancel
+                    </Button>
+                    <Button variant="primary" onClick={makeActiveAndDeleteRest}>
+                        Make active &amp; delete rest
                     </Button>
                 </Modal.Footer>
             </Modal>
@@ -881,15 +1105,18 @@ const Chevron = ({ open, visible, onClick }) => {
                 e.stopPropagation();
                 onClick();
             }}
-            className={`w-6 h-6 shrink-0 inline-flex items-center justify-center rounded-md border cursor-pointer transition-colors ${
-                open
-                    ? 'bg-primary text-on-color border-primary'
-                    : 'bg-primary/15 text-primary border-primary/40 hover:bg-primary/25'
-            }`}
+            className="w-6 h-6 shrink-0 inline-flex items-center justify-center rounded-md cursor-pointer"
+            style={{
+                background: open ? 'var(--primary)' : 'rgba(135,103,247,0.15)',
+                color: open ? 'var(--on-color-text, #fff)' : 'var(--primary)',
+                border: `1px solid ${open ? 'var(--primary)' : 'rgba(135,103,247,0.4)'}`,
+                transition: 'background 100ms',
+            }}
         >
             <span
-                className="material-symbols-outlined text-[16px] leading-none"
+                className="material-symbols-outlined leading-none"
                 style={{
+                    fontSize: '16px',
                     transform: open ? 'rotate(90deg)' : 'none',
                     transition: 'transform 120ms',
                 }}
@@ -898,6 +1125,35 @@ const Chevron = ({ open, visible, onClick }) => {
             </span>
         </button>
     );
+};
+
+// Row-style helpers — selected rows get a left accent bar + faint primary
+// tint. Tree depth is encoded in the baseLeftPad argument.
+const rowBorder = { borderBottom: '1px solid rgba(var(--border-rgb, 42,48,82), 0.4)' };
+const rowStyle = (selected, baseLeftPad) => ({
+    ...rowBorder,
+    cursor: 'pointer',
+    background: selected ? 'rgba(135,103,247,0.15)' : 'transparent',
+    borderLeft: selected ? '3px solid var(--primary)' : '3px solid transparent',
+    paddingLeft: selected ? `${baseLeftPad - 3}px` : `${baseLeftPad}px`,
+    transition: 'background 100ms',
+});
+const bloatPill = {
+    padding: '1px 6px',
+    borderRadius: '9999px',
+    background: 'rgba(253,53,92,0.2)',
+    color: 'var(--error)',
+    fontWeight: 600,
+    fontSize: '10px',
+};
+const typeBadge = {
+    fontSize: '9px',
+    textTransform: 'uppercase',
+    letterSpacing: '0.08em',
+    padding: '1px 6px',
+    borderRadius: '4px',
+    background: 'var(--surface-alt)',
+    color: 'var(--text-tertiary)',
 };
 
 const BundleTreeRow = ({
@@ -925,11 +1181,8 @@ const BundleTreeRow = ({
     return (
         <>
             <div
-                className={`flex items-center gap-2 px-2 py-2 border-b border-border/40 cursor-pointer ${
-                    showSelected
-                        ? 'bg-primary/15 border-l-[3px] border-l-primary pl-[5px]'
-                        : 'hover:bg-surface-alt/60'
-                }`}
+                className="flex items-center gap-2 pr-2 py-2"
+                style={rowStyle(showSelected, 8)}
                 onClick={() => onSelect({ kind: 'show', ratingKey: bundle.rating_key })}
             >
                 <Chevron
@@ -943,19 +1196,16 @@ const BundleTreeRow = ({
                             {bundle.title || '(unknown)'}
                             {bundle.year ? ` (${bundle.year})` : ''}
                         </span>
-                        <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-surface-alt text-tertiary">
-                            {bundle.metadata_type_label}
-                        </span>
+                        <span style={typeBadge}>{bundle.metadata_type_label}</span>
                     </div>
-                    <div className="text-[11px] text-secondary flex items-center gap-2">
+                    <div
+                        className="text-secondary flex items-center gap-2"
+                        style={{ fontSize: '11px' }}
+                    >
                         <span className="truncate">
                             {bundle.library_name || ''} · {bundle.variants.length} variants
                         </span>
-                        {bloatCount > 0 && (
-                            <span className="px-1.5 py-0.5 rounded-full bg-error/20 text-error text-[10px] font-semibold">
-                                ● {bloatCount}
-                            </span>
-                        )}
+                        {bloatCount > 0 && <span style={bloatPill}>● {bloatCount}</span>}
                     </div>
                 </div>
             </div>
@@ -978,11 +1228,8 @@ const BundleTreeRow = ({
                             return (
                                 <React.Fragment key={season.n}>
                                     <div
-                                        className={`flex items-center gap-2 pl-6 pr-2 py-1.5 border-b border-border/40 cursor-pointer ${
-                                            seasonSelected
-                                                ? 'bg-primary/15 border-l-[3px] border-l-primary pl-[22px]'
-                                                : 'hover:bg-surface-alt/60'
-                                        }`}
+                                        className="flex items-center gap-2 pr-2 py-1.5"
+                                        style={rowStyle(seasonSelected, 24)}
                                         onClick={() =>
                                             onSelect({
                                                 kind: 'season',
@@ -998,9 +1245,15 @@ const BundleTreeRow = ({
                                                 onToggleSeason(bundle.rating_key, season.n)
                                             }
                                         />
-                                        <div className="flex-1 min-w-0 text-[13px] text-primary">
+                                        <div
+                                            className="flex-1 min-w-0 text-primary"
+                                            style={{ fontSize: '13px' }}
+                                        >
                                             Season {season.n}
-                                            <span className="text-[10px] text-secondary ml-2">
+                                            <span
+                                                className="text-secondary ml-2"
+                                                style={{ fontSize: '10px' }}
+                                            >
                                                 {season.posters.length} poster
                                                 {season.posters.length === 1 ? '' : 's'}
                                                 {season.episodes.size > 0
@@ -1009,7 +1262,7 @@ const BundleTreeRow = ({
                                                       }`
                                                     : ''}
                                                 {seasonBloat > 0 && (
-                                                    <span className="ml-2 px-1.5 py-0.5 rounded-full bg-error/20 text-error font-semibold">
+                                                    <span className="ml-2" style={bloatPill}>
                                                         ● {seasonBloat}
                                                     </span>
                                                 )}
@@ -1033,11 +1286,8 @@ const BundleTreeRow = ({
                                                 return (
                                                     <div
                                                         key={episode.n}
-                                                        className={`flex items-center gap-2 pl-12 pr-2 py-1.5 border-b border-border/40 cursor-pointer ${
-                                                            epSelected
-                                                                ? 'bg-primary/15 border-l-[3px] border-l-primary pl-[46px]'
-                                                                : 'hover:bg-surface-alt/60'
-                                                        }`}
+                                                        className="flex items-center gap-2 pr-2 py-1.5"
+                                                        style={rowStyle(epSelected, 48)}
                                                         onClick={() =>
                                                             onSelect({
                                                                 kind: 'episode',
@@ -1048,15 +1298,24 @@ const BundleTreeRow = ({
                                                         }
                                                     >
                                                         <span className="w-6 h-6 shrink-0" />
-                                                        <div className="flex-1 min-w-0 text-[12px] text-primary">
+                                                        <div
+                                                            className="flex-1 min-w-0 text-primary"
+                                                            style={{ fontSize: '12px' }}
+                                                        >
                                                             Episode {episode.n}
-                                                            <span className="text-[10px] text-secondary ml-2">
+                                                            <span
+                                                                className="text-secondary ml-2"
+                                                                style={{ fontSize: '10px' }}
+                                                            >
                                                                 {episode.thumbs.length} thumb
                                                                 {episode.thumbs.length === 1
                                                                     ? ''
                                                                     : 's'}
                                                                 {epBloat > 0 && (
-                                                                    <span className="ml-2 px-1.5 py-0.5 rounded-full bg-error/20 text-error font-semibold">
+                                                                    <span
+                                                                        className="ml-2"
+                                                                        style={bloatPill}
+                                                                    >
                                                                         ● {epBloat}
                                                                     </span>
                                                                 )}

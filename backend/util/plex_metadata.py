@@ -197,6 +197,11 @@ METADATA_TYPE_LABELS = {
     18: "collection",
 }
 
+# Metadata types we skip wholesale — music libraries are walked by Plex but
+# nobody uploads custom artwork for them, so including them bloats the scan
+# payload with tens of thousands of bundles that the UI would only ever hide.
+EXCLUDED_METADATA_TYPES = frozenset({8, 9, 10})
+
 
 def _classify_variant_kind(path: str) -> str:
     """Heuristic classifier for a variant file path.
@@ -372,6 +377,12 @@ def scan_bundles(plex_path: str, *, force: bool = False) -> Dict[str, Any]:
                     "library_section_id": hit.get("library_section_id"),
                 }
                 break
+
+        # Drop music bundles — the UI has no tab for them and people don't
+        # upload custom posters for individual tracks/albums. Keeps the
+        # payload to movies/shows/seasons/episodes/collections only.
+        if info.get("metadata_type") in EXCLUDED_METADATA_TYPES:
+            continue
 
         variants = []
         for f in files:
