@@ -169,10 +169,23 @@ const VariantTile = ({ variant, selected, onToggleSelect, onPreview }) => {
               ? 'var(--color-success, #32d583)'
               : 'rgba(253,53,92,0.85)',
         boxShadow: isActive && !isPlex ? '0 0 0 2px rgba(50,213,131,0.4)' : 'none',
+        // Poster aspect ratio — lets the full image show without cropping the
+        // top/bottom. Non-poster variants (art/banners/episode thumbs) render
+        // letterboxed via object-contain on the <img>, which is fine because
+        // those are the minority and previewing them whole beats cropping.
+        aspectRatio: '2 / 3',
+        // content-box so the 3px border wraps the 2:3 content area instead of
+        // eating into it. border-box (default) would compress the inner area
+        // to 0.660 aspect and create a 1-3px letterbox at top/bottom of a
+        // perfectly-sized poster.
+        boxSizing: 'content-box',
     };
     const imgStyle = {
         filter: isPlex ? 'grayscale(30%)' : 'none',
         opacity: !isActive && !isPlex ? 0.75 : 1,
+        // display:block prevents the default inline-img baseline gap under
+        // the image.
+        display: 'block',
     };
     return (
         <div
@@ -191,7 +204,7 @@ const VariantTile = ({ variant, selected, onToggleSelect, onPreview }) => {
                 src={postersAPI.getPlexVariantUrl(variant.path)}
                 alt={variant.filename}
                 loading="lazy"
-                className="w-full h-40 object-cover"
+                className="w-full h-full object-contain"
                 style={imgStyle}
                 onError={e => {
                     e.target.style.display = 'none';
