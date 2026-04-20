@@ -36,7 +36,7 @@
     "stylelint": "^16.26.1",
     "stylelint-config-standard": "^39.0.1",
     "stylelint-selector-bem-pattern": "^4.0.1",
-    "vite": "^8.0.8"
+    "vite": "^8.0.9"
   },
   "engines": {
     "node": ">=18.20.8"
