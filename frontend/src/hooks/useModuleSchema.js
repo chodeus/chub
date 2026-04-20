@@ -29,8 +29,20 @@ const CONFIG_MODULE_KEYS = [
  *
  * @returns {{ schemas: Array, loading: boolean, error: string|null }}
  */
+// Sort the static fallback up-front so the initial render uses the same
+// canonical order as the eventual backend merge. Otherwise General renders
+// last for the first paint and pops to the top once the schemas resolve.
+const SORTED_SETTINGS_SCHEMA = (() => {
+    const keyOrder = new Map(CONFIG_MODULE_KEYS.map((k, i) => [k, i]));
+    return [...SETTINGS_SCHEMA].sort((a, b) => {
+        const idxA = keyOrder.get(a.key) ?? Infinity;
+        const idxB = keyOrder.get(b.key) ?? Infinity;
+        return idxA - idxB;
+    });
+})();
+
 export function useModuleSchema() {
-    const [schemas, setSchemas] = useState(SETTINGS_SCHEMA);
+    const [schemas, setSchemas] = useState(SORTED_SETTINGS_SCHEMA);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
