@@ -510,53 +510,49 @@ const PosterAssetsSearchPage = () => {
                         )}
                     </div>
                     <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-8 gap-3">
-                        {items.map(item => (
-                            <div
-                                key={item.id}
-                                className="rounded-lg bg-surface border border-border overflow-hidden group flex flex-col"
-                            >
-                                {(item.folder || item.file) && (
-                                    <button
-                                        type="button"
-                                        onClick={() => setLightboxItem(item)}
-                                        className="aspect-[2/3] bg-surface-alt overflow-hidden block w-full p-0 border-0 cursor-zoom-in"
-                                        aria-label={`Enlarge ${item.title}`}
-                                    >
-                                        <img
-                                            src={
-                                                item.id
-                                                    ? postersAPI.getThumbnailUrl(item.id, 200)
-                                                    : postersAPI.getPreviewUrl(
-                                                          item.folder,
-                                                          item.file
-                                                      )
-                                            }
-                                            alt={item.title}
-                                            className="w-full h-full object-cover"
-                                            loading="lazy"
-                                            onError={e => {
-                                                e.target.style.display = 'none';
-                                                e.target.parentElement.innerHTML =
-                                                    '<div class="w-full h-full flex items-center justify-center text-tertiary"><span class="material-symbols-outlined text-3xl">image</span></div>';
-                                            }}
-                                        />
-                                    </button>
-                                )}
-                                <div className="p-1.5 flex items-start justify-between gap-1">
-                                    <div className="flex-1 min-w-0">
-                                        <h4 className="font-medium text-primary text-xs truncate leading-tight">
-                                            {item.title}
-                                        </h4>
-                                        <div className="flex items-center gap-1 text-[10px] text-secondary mt-0.5">
-                                            {item.year && <span>{item.year}</span>}
-                                            {item.season_number != null && (
-                                                <span>
-                                                    S{String(item.season_number).padStart(2, '0')}
-                                                </span>
-                                            )}
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center opacity-0 group-hover:opacity-100 transition-fast shrink-0">
+                        {items.map(item => {
+                            const suffixParts = [
+                                item.year,
+                                item.season_number != null
+                                    ? `S${String(item.season_number).padStart(2, '0')}`
+                                    : null,
+                            ].filter(Boolean);
+                            const displayTitle = suffixParts.length
+                                ? `${item.title} (${suffixParts.join(' ')})`
+                                : item.title;
+                            return (
+                                <div
+                                    key={item.id}
+                                    className="relative rounded-lg bg-surface border border-border overflow-hidden group flex flex-col"
+                                >
+                                    {(item.folder || item.file) && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setLightboxItem(item)}
+                                            className="aspect-[2/3] bg-surface-alt overflow-hidden block w-full p-0 border-0 cursor-zoom-in"
+                                            aria-label={`Enlarge ${displayTitle}`}
+                                        >
+                                            <img
+                                                src={
+                                                    item.id
+                                                        ? postersAPI.getThumbnailUrl(item.id, 200)
+                                                        : postersAPI.getPreviewUrl(
+                                                              item.folder,
+                                                              item.file
+                                                          )
+                                                }
+                                                alt={displayTitle}
+                                                className="w-full h-full object-cover"
+                                                loading="lazy"
+                                                onError={e => {
+                                                    e.target.style.display = 'none';
+                                                    e.target.parentElement.innerHTML =
+                                                        '<div class="w-full h-full flex items-center justify-center text-tertiary"><span class="material-symbols-outlined text-3xl">image</span></div>';
+                                                }}
+                                            />
+                                        </button>
+                                    )}
+                                    <div className="absolute top-1.5 right-1.5 z-10 flex items-center gap-0.5 rounded-lg bg-black/55 backdrop-blur-sm p-0.5 opacity-0 group-hover:opacity-100 transition-fast">
                                         <IconButton
                                             icon="playlist_add"
                                             aria-label="Add to collection"
@@ -582,9 +578,17 @@ const PosterAssetsSearchPage = () => {
                                             onClick={() => setDeleteTarget(item)}
                                         />
                                     </div>
+                                    <div className="p-1.5">
+                                        <h4
+                                            className="font-medium text-primary text-xs line-clamp-2 break-words leading-tight text-center"
+                                            title={displayTitle}
+                                        >
+                                            {displayTitle}
+                                        </h4>
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                     {/* Bottom pagination */}
                     {totalPages > 1 && (
