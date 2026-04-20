@@ -18,6 +18,18 @@ A self-hosted, all-in-one media asset manager for your Plex/ARR stack.
 
 ---
 
+## What is CHUB?
+
+CHUB keeps a Plex library tidy. Point it at Radarr, Sonarr, Lidarr, and Plex, and it takes care of the boring chores on a schedule:
+
+- **Posters** — rename them to match your library, optimize file sizes, re-apply brand or holiday borders, pull new ones from Google Drive, and clean up orphans.
+- **Media** — find duplicates, flag low-rated or incomplete items, edit metadata inline with a full audit trail, and batch-import into Radarr or Sonarr.
+- **Upkeep** — upgrade searches, rename sweeps, health checks, hardlink audits, ARR tag → Plex label sync.
+
+You run it in Docker, open it in a browser, configure it once, and let it work.
+
+---
+
 ## Screenshots
 
 <!-- Fill in once dashboard screenshots are captured against the new theme. -->
@@ -28,49 +40,11 @@ A self-hosted, all-in-one media asset manager for your Plex/ARR stack.
 
 ---
 
-## What's included
-
-CHUB bundles a React web UI, a FastAPI backend, and a set of scheduled modules that keep a Plex + Radarr/Sonarr/Lidarr library tidy.
-
-**Library & metadata**
-- Inline metadata editing with per-item audit history (`media_edit_history`)
-- Duplicate detection with fuzzy title matching + side-by-side resolution UI
-- Import movies/series into Radarr/Sonarr with pre-lookup validation
-- Time-windowed stats, low-rating and incomplete-metadata queries
-- Import-list exclusion inspection
-
-**Posters**
-- Batch optimization (resize, re-encode, WebP/JPEG conversion) via PIL
-- Thumbnail generation and on-the-fly download processing (size/format/quality)
-- Low-resolution filter, width/height indexing, `added-since` window query
-- Smart collections generated from media-cache tags
-- Orphaned-poster cleanup surfaced via `/api/system/cleanup-candidates`
-
-**Modules (scheduled or on-demand)**
-`poster_renamerr`, `poster_cleanarr`, `border_replacerr`, `labelarr`,
-`jduparr`, `nohl`, `unmatched_assets`, `upgradinatorr`, `renameinatorr`,
-`health_checkarr`, `nestarr`, `sync_gdrive`
-
-**Live operation**
-- SSE channel (`/api/modules/events`) for real-time module status
-- Cooperative job cancellation (`DELETE /api/modules/{name}/execution/{job_id}`)
-- Webhook ingest with optional shared-secret auth and origin tracking
-- Built-in 6-hour system tick writing to `system_health_snapshots`
-
-**Security posture**
-- Token-bucket rate limiter on `/api/auth/login`
-- SSRF guard on outbound instance probes (blocks cloud-metadata + reserved IPs)
-- Argument-smuggling guards on path-valued config fields
-- Log redaction for JWT, API keys, OAuth secrets, webhook URLs
-- SQLite-backed auth with bcrypt password hashing
-
-See [`docs/architecture.md`](docs/architecture.md) for the full picture.
-
----
-
 ## Quickstart
 
 ### Docker Compose (recommended)
+
+Save this as `compose.yaml` and adjust the paths to your setup:
 
 ```yaml
 services:
@@ -81,8 +55,8 @@ services:
     ports:
       - "8000:8000"
     environment:
-      PUID: "1000"
-      PGID: "1000"
+      PUID: "1000"             # Unraid users: 99
+      PGID: "1000"             # Unraid users: 100
       TZ: "America/Los_Angeles"
     volumes:
       - /srv/apps/chub/config:/config
@@ -91,60 +65,46 @@ services:
       - /srv/kometa/assets:/kometa:ro
 ```
 
+Then:
+
 ```bash
 docker compose up -d
 ```
 
-Then open [http://localhost:8000](http://localhost:8000) and complete the first-run auth setup.
+Open <http://localhost:8000>, create your admin user, connect your Radarr / Sonarr / Plex under **Settings → Instances**, and enable the modules you want under **Settings → Modules**.
 
-### Docker (single run)
+Full walk-through: **[Wiki → Installation](https://github.com/chodeus/chub/wiki/Installation)**.
 
-```bash
-docker run -d \
-  --name chub \
-  -p 8000:8000 \
-  -v /srv/apps/chub/config:/config \
-  -v /srv/apps/chub/posters:/posters \
-  -v /srv/media:/media \
-  ghcr.io/chodeus/chub:latest
-```
+### Other install methods
 
-### Local development
+Single-command Docker, Unraid, and bare-metal options: **[Wiki → Installation](https://github.com/chodeus/chub/wiki/Installation)**.
 
-```bash
-git clone https://github.com/chodeus/chub.git
-cd chub
+---
 
-# Backend
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-python3 main.py
+## Security — read before exposing CHUB
 
-# Frontend (separate terminal)
-cd frontend
-npm install
-npm run dev       # Vite dev server on :5174, proxies /api to :8000
-```
+**CHUB is built for a private network.** Run it on a LAN or behind a VPN. Before putting it anywhere else, take the steps below.
+
+1. **Use a strong admin password.** First-run enforces 8+ characters; use more. Lose it and you reset with `docker compose run --rm chub python3 main.py --reset-auth`.
+2. **If you want remote access, put CHUB behind a reverse proxy with TLS.** Add a second auth layer in front (Authelia, Authentik, Cloudflare Access). CHUB has built-in login and rate limiting, but no WAF or DDoS protection — it isn't meant to face the open internet alone.
+3. **Set a webhook secret if webhooks leave your LAN.** Configure `general.webhook_secret` in **Settings → General**. Any inbound Sonarr/Radarr/Tautulli webhook must then include it. Without it, webhook URLs are unauthenticated — fine inside a LAN, not fine on the public internet.
+4. **Use a read-only mount for Kometa assets.** Mount it as `/kometa:ro` (see the compose above) so CHUB can consume them but can't accidentally modify the source tree.
+5. **Pin the image tag for production.** Use a specific digest or date tag instead of `:latest` if you care about reproducible deploys.
+6. **Report vulnerabilities privately.** See [SECURITY.md](SECURITY.md) for the disclosure process.
 
 ---
 
 ## Documentation
 
-- [Architecture](docs/architecture.md)
-- [Deployment](docs/deployment.md)
-- [Security](SECURITY.md)
-- [GitHub Wiki](https://github.com/chodeus/chub/wiki) — installation, per-module reference, API, troubleshooting
+The GitHub Wiki is the full source:
 
----
-
-## Contributing
-
-PRs welcome for fixes, module ideas, and docs. Open an [issue](https://github.com/chodeus/chub/issues) first for anything larger than a patch so we can align on scope.
+- **[User Guide](https://github.com/chodeus/chub/wiki)** — installation, configuration, per-module walk-through, UI tour, webhooks, troubleshooting, FAQ.
+- **[Developer Guide](https://github.com/chodeus/chub/wiki/Developer-Guide)** — REST API reference, extending CHUB with new modules, security internals.
 
 ---
 
 ## Credits
 
-CHUB builds on the original [DAPS](https://github.com/Drazzilb08/daps) project by **Drazzilb08** — thank you for the scripts and inspiration that made this fork possible.
+CHUB is a fork of [DAPS](https://github.com/Drazzilb08/daps) by **Drazzilb08** — thank you for the scripts and inspiration that made this possible.
 
 Licensed under the [MIT License](LICENSE).
