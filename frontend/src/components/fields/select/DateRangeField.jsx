@@ -142,14 +142,10 @@ export const DateRangeField = React.memo(
 
         return (
             <FieldWrapper invalid={highlightInvalid}>
-                <FieldLabel
-                    htmlFor={inputId}
-                    label={field.label || 'Date Range'}
-                    required={field.required}
-                />
+                <FieldLabel label={field.label || 'Date Range'} required={field.required} />
 
                 {/* Enhanced accessibility with fieldset grouping */}
-                <fieldset aria-labelledby={inputId} className="border-0 p-0 m-0">
+                <fieldset aria-label={field.label || 'Date Range'} className="border-0 p-0 m-0">
                     <legend className="sr-only">Date range selection</legend>
 
                     {/* Mobile: Stack vertically, Desktop: Horizontal layout */}

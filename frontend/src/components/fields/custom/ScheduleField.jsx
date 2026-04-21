@@ -257,7 +257,7 @@ export const ScheduleField = React.memo(
 
         return (
             <FieldWrapper invalid={highlightInvalid}>
-                <FieldLabel htmlFor={inputId} label={field.label} required={field.required} />
+                <FieldLabel label={field.label} required={field.required} />
 
                 <div className="schedule-field space-y-4">
                     {/* Schedule type selector */}

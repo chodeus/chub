@@ -78,7 +78,7 @@ export const DirPickerField = React.memo(({ field, value, onChange, disabled = f
 
     return (
         <FieldWrapper>
-            <FieldLabel htmlFor={inputId} label={field.label} required={field.required} />
+            <FieldLabel label={field.label} required={field.required} />
 
             {/* Current path display */}
             <div className="flex items-center gap-2 mb-2">

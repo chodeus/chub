@@ -37,12 +37,7 @@ export const ColorField = React.memo(
 
         return (
             <FieldWrapper invalid={highlightInvalid}>
-                <FieldLabel
-                    id={`${inputId}-label`}
-                    htmlFor={inputId}
-                    label={field.label}
-                    required={field.required}
-                />
+                <FieldLabel label={field.label} required={field.required} />
 
                 <ColorInputPair
                     value={value}

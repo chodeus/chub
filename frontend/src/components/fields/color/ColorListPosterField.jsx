@@ -342,12 +342,7 @@ export const ColorListPosterField = React.memo(
 
         return (
             <div className="flex flex-col gap-4">
-                <FieldLabel
-                    id={`${inputId}-label`}
-                    htmlFor={inputId}
-                    label={label}
-                    required={field.required}
-                />
+                <FieldLabel label={label} required={field.required} />
 
                 {colorsArray.length === 0 ? (
                     // Empty state with add button
