@@ -435,6 +435,50 @@ def scan_bundles(plex_path: str, *, force: bool = False) -> Dict[str, Any]:
             }
         )
 
+    # Dedupe bundles that share a rating_key. Plex leaves orphaned .bundle
+    # dirs on disk after metadata refreshes / agent changes, and the walk
+    # above emits one row per directory — producing duplicate rows in the
+    # UI (Avatar twice, Dunkirk twice, etc.). Collapse them by merging
+    # their variants (deduped by path) under the canonical bundle: prefer
+    # the path whose variants contain the currently-active one, else the
+    # path with the most variants, else the lexicographically first path.
+    if bundles:
+        grouped: Dict[Any, List[Dict[str, Any]]] = {}
+        ordered_keys: List[Any] = []
+        for b in bundles:
+            rk = b.get("rating_key")
+            if rk is None:
+                # Keep untyped/unmatched rows intact under a synthetic key
+                # so they're never merged with each other.
+                rk = ("__unmatched__", b["bundle_path"])
+            if rk not in grouped:
+                grouped[rk] = []
+                ordered_keys.append(rk)
+            grouped[rk].append(b)
+
+        def _canonical_rank(b: Dict[str, Any]) -> tuple:
+            has_active = any(v.get("active") for v in b["variants"])
+            return (0 if has_active else 1, -len(b["variants"]), b["bundle_path"])
+
+        deduped: List[Dict[str, Any]] = []
+        for rk in ordered_keys:
+            group = grouped[rk]
+            if len(group) == 1:
+                deduped.append(group[0])
+                continue
+            group.sort(key=_canonical_rank)
+            canonical = group[0]
+            seen_paths = {v["path"] for v in canonical["variants"]}
+            merged_variants = list(canonical["variants"])
+            for other in group[1:]:
+                for v in other["variants"]:
+                    if v["path"] not in seen_paths:
+                        merged_variants.append(v)
+                        seen_paths.add(v["path"])
+            merged_variants.sort(key=_variant_rank)
+            deduped.append({**canonical, "variants": merged_variants})
+        bundles = deduped
+
     # Sort bundles alphabetically by title (case-insensitive). Untitled
     # bundles sort to the bottom so the list reads naturally in the UI.
     bundles.sort(key=lambda b: ((b["title"] or "\uffff").lower(), b.get("year") or 0))
