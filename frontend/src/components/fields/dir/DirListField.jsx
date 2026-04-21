@@ -64,12 +64,7 @@ export const DirListField = React.memo(
 
         return (
             <FieldWrapper invalid={highlightInvalid}>
-                <FieldLabel
-                    id={`${inputId}-label`}
-                    htmlFor={inputId}
-                    label={label}
-                    required={field.required}
-                />
+                <FieldLabel label={label} required={field.required} />
 
                 <DirectoryArray
                     directories={directoriesArray}

@@ -77,7 +77,7 @@ const UnknownFieldType = ({ field }) => {
 
     return (
         <>
-            <label htmlFor={inputId} className="text-sm font-medium text-secondary">
+            <label className="text-sm font-medium text-secondary">
                 {field.label}
                 {field.required && <span className="text-error ml-1">*</span>}
             </label>

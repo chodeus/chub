@@ -243,7 +243,7 @@ export const ArrayObjectField = ({
 
     return (
         <FieldWrapper invalid={highlightInvalid} variant="standard">
-            <FieldLabel htmlFor={inputId} label={field.label} required={field.required} />
+            <FieldLabel label={field.label} required={field.required} />
 
             <div className="flex flex-col gap-3 min-h-11" id={inputId}>
                 {/* Existing items */}

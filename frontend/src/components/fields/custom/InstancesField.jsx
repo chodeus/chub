@@ -973,7 +973,7 @@ export const InstancesField = React.memo(
         if (loading) {
             return (
                 <FieldWrapper invalid={highlightInvalid}>
-                    <FieldLabel htmlFor={inputId} label={field.label} required={isRequired} />
+                    <FieldLabel label={field.label} required={isRequired} />
                     <div className="flex flex-col items-center justify-center gap-3 text-center bg-surface border-2 text-secondary">
                         <div className="w-8 h-8 border-2 border-border border-t-primary rounded-full animate-spin" />
                         <span>Loading instances...</span>
@@ -989,7 +989,7 @@ export const InstancesField = React.memo(
         if (loadError) {
             return (
                 <FieldWrapper invalid={true}>
-                    <FieldLabel htmlFor={inputId} label={field.label} required={isRequired} />
+                    <FieldLabel label={field.label} required={isRequired} />
                     <div className="flex flex-col items-center gap-3 text-center bg-surface border-2 border-error">
                         <div>⚠️</div>
                         <div className="flex flex-col gap-2">
@@ -1042,7 +1042,7 @@ export const InstancesField = React.memo(
 
         return (
             <FieldWrapper invalid={highlightInvalid}>
-                <FieldLabel htmlFor={inputId} label={field.label} required={isRequired} />
+                <FieldLabel label={field.label} required={isRequired} />
 
                 <div id={inputId}>
                     {instanceTypes.length === 1 ? (
