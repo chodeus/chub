@@ -177,10 +177,15 @@ def _load_library_sections(db_path: str) -> Dict[int, Dict[str, Any]]:
                     sid, name, stype = row
                     sections[sid] = {"name": name or "", "section_type": stype}
             except sqlite3.OperationalError:
+                # Older Plex schemas may be missing the section_type column —
+                # return whatever rows we read so far.
                 pass
         finally:
             conn.close()
     except Exception:
+        # Same tolerance as get_in_use_hashes: empty sections map on DB
+        # failure, which downstream treats as "library names unknown"
+        # rather than propagating a 500.
         pass
     return sections
 
