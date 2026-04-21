@@ -18,8 +18,8 @@ const MODE_META = {
         action: 'Run scan',
         variant: 'primary',
         confirm: false,
-        scopeable: true,
-        description: 'Dry run — list bloat images, delete nothing.',
+        scopeable: false,
+        description: 'List bloat images in the UI. Nothing is deleted.',
     },
     move: {
         label: 'Move',
@@ -559,6 +559,12 @@ const PosterCleanarrPage = () => {
     }, [mode, selectedPaths, toast]);
 
     const runCleanup = () => {
+        // Report mode is the UI scan — populate tiles, don't enqueue a backend
+        // job (the log dialog doesn't tail, so it adds no value over refresh).
+        if (mode === 'report') {
+            refreshScan();
+            return;
+        }
         if (MODE_META[mode]?.confirm) {
             setConfirmRemove(true);
             return;
@@ -697,11 +703,6 @@ const PosterCleanarrPage = () => {
                 button whose label, colour, and confirm behaviour all track the
                 selected mode, so the destructive options are visibly distinct. */}
             <section className="rounded-lg bg-surface border border-border p-3 flex flex-wrap items-center gap-3">
-                <Button variant="ghost" onClick={refreshScan} disabled={loading}>
-                    <span className="material-symbols-outlined text-base">refresh</span>
-                    Refresh scan
-                </Button>
-                <div className="h-6 w-px bg-border mx-1" aria-hidden="true" />
                 <label className="flex items-center gap-2 text-sm">
                     Mode:
                     <select
@@ -733,11 +734,11 @@ const PosterCleanarrPage = () => {
                         </Button>
                     )}
                     <LoadingButton
-                        loading={isEnqueuing}
-                        loadingText="Starting…"
+                        loading={mode === 'report' ? loading : isEnqueuing}
+                        loadingText={mode === 'report' ? 'Scanning…' : 'Starting…'}
                         variant={MODE_META[mode]?.variant || 'primary'}
                         onClick={runCleanup}
-                        disabled={!hasScanned || !MODE_META[mode]?.action}
+                        disabled={!MODE_META[mode]?.action || (mode !== 'report' && !hasScanned)}
                     >
                         {MODE_META[mode]?.action || 'No action'}
                     </LoadingButton>
@@ -752,9 +753,9 @@ const PosterCleanarrPage = () => {
                     </span>
                     <p className="text-primary font-medium mb-1">Ready to scan</p>
                     <p>
-                        Click <span className="font-semibold">Refresh scan</span> above to scan Plex
-                        metadata. Walks every <code>.bundle</code> under <code>/plex</code>; can
-                        take a minute on large libraries.
+                        In Report mode, click <span className="font-semibold">Run scan</span> above
+                        to scan Plex metadata. Walks every <code>.bundle</code> under{' '}
+                        <code>/plex</code>; can take a minute on large libraries.
                     </p>
                 </div>
             ) : byMedia.error ? (
