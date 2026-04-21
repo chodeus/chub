@@ -13,6 +13,12 @@ const SECRET_FIELD_PATTERNS = [/^api$/, /api[_-]?key/i, /secret/i, /token/i, /pa
 const LOG_LEVEL_FIELDS = ['log_level'];
 const LOG_LEVEL_OPTIONS = ['debug', 'info', 'warning', 'error'];
 
+// Pydantic fields that are runtime-only overrides and must never render on
+// the Modules config page. Keyed by "moduleKey.fieldKey". Add entries here
+// when a backend model exposes a per-job scratch field that the API populates
+// itself (e.g. UI-driven selection carried in a cleanup job payload).
+const RUNTIME_ONLY_FIELDS = new Set(['poster_cleanarr.target_paths']);
+
 /**
  * Convert a snake_case key to a human-readable label.
  * e.g. 'source_dirs' -> 'Source Dirs'
@@ -147,11 +153,11 @@ function propertyToField(key, prop, definitions = {}, uiHints = {}) {
 /**
  * Convert object properties to an array of field definitions.
  */
-function objectPropertiesToFields(schema, definitions = {}, uiHints = {}) {
+function objectPropertiesToFields(schema, definitions = {}, uiHints = {}, moduleKey = '') {
     const props = schema.properties || {};
-    return Object.entries(props).map(([key, prop]) =>
-        propertyToField(key, prop, definitions, uiHints)
-    );
+    return Object.entries(props)
+        .filter(([key]) => !RUNTIME_ONLY_FIELDS.has(`${moduleKey}.${key}`))
+        .map(([key, prop]) => propertyToField(key, prop, definitions, uiHints));
 }
 
 /**
@@ -165,7 +171,7 @@ function objectPropertiesToFields(schema, definitions = {}, uiHints = {}) {
  */
 export function adaptModuleSchema(moduleKey, jsonSchema, uiHints = {}) {
     const definitions = jsonSchema.$defs || jsonSchema.definitions || {};
-    const fields = objectPropertiesToFields(jsonSchema, definitions, uiHints);
+    const fields = objectPropertiesToFields(jsonSchema, definitions, uiHints, moduleKey);
 
     return {
         key: moduleKey,
