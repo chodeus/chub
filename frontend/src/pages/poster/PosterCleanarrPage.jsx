@@ -816,7 +816,7 @@ const PosterCleanarrPage = () => {
                                 ) : (
                                     filteredBundles.map(bundle => (
                                         <BundleTreeRow
-                                            key={bundle.rating_key}
+                                            key={bundle.bundle_path}
                                             bundle={bundle}
                                             tree={bundleTrees.get(bundle.rating_key)}
                                             selected={selected}
