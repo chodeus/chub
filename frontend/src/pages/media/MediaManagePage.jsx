@@ -8,6 +8,7 @@ import { Modal } from '../../components/modals/Modal';
 import EditMediaModal from '../../components/modals/EditMediaModal.jsx';
 import { Button, LoadingButton, IconButton, PageHeader } from '../../components/ui/index.js';
 import Spinner from '../../components/ui/Spinner.jsx';
+import { LibraryMaintenance } from '../../components/maintenance/LibraryMaintenance.jsx';
 
 const MediaManagePage = () => {
     const toast = useToast();
@@ -19,9 +20,6 @@ const MediaManagePage = () => {
     const [resolveDeleteFiles, setResolveDeleteFiles] = useState(false);
     const [showImport, setShowImport] = useState(false);
     const [importText, setImportText] = useState('');
-    const [detailTarget, setDetailTarget] = useState(null);
-    const [detailData, setDetailData] = useState(null);
-    const [detailLoading, setDetailLoading] = useState(false);
     const [showCreateCollection, setShowCreateCollection] = useState(false);
     const [newCollectionName, setNewCollectionName] = useState('');
     const [editCollection, setEditCollection] = useState(null);
@@ -190,8 +188,6 @@ const MediaManagePage = () => {
     );
 
     const items = useMemo(() => mediaData?.data?.items || [], [mediaData]);
-    const total = useMemo(() => mediaData?.data?.total || 0, [mediaData]);
-    const totalPages = Math.ceil(total / PAGE_SIZE);
     const duplicates = useMemo(() => dupData?.data?.duplicates || [], [dupData]);
     const collections = useMemo(
         () => collectionsData?.data?.collections || collectionsData?.data || [],
@@ -301,19 +297,6 @@ const MediaManagePage = () => {
             await runImport(Array.isArray(data) ? data : [data]);
         } catch {
             toast.error('Import failed');
-        }
-    };
-
-    const handleViewDetail = async item => {
-        setDetailTarget(item);
-        setDetailLoading(true);
-        try {
-            const result = await mediaAPI.fetchMediaItem(item.id);
-            setDetailData(result?.data || item);
-        } catch {
-            setDetailData(item);
-        } finally {
-            setDetailLoading(false);
         }
     };
 
@@ -718,107 +701,7 @@ const MediaManagePage = () => {
                 </section>
             )}
 
-            <section>
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
-                    <h3 className="text-lg font-semibold text-primary">
-                        Media Library ({total} items)
-                    </h3>
-                    {totalPages > 1 && (
-                        <div className="flex flex-wrap items-center gap-2">
-                            <Button
-                                variant="ghost"
-                                size="small"
-                                disabled={page === 0}
-                                onClick={() => setPage(p => Math.max(0, p - 1))}
-                            >
-                                Previous
-                            </Button>
-                            <span className="text-sm text-secondary">
-                                Page {page + 1} of {totalPages}
-                            </span>
-                            <Button
-                                variant="ghost"
-                                size="small"
-                                disabled={page + 1 >= totalPages}
-                                onClick={() => setPage(p => p + 1)}
-                            >
-                                Next
-                            </Button>
-                        </div>
-                    )}
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {items.map(item => (
-                        <div
-                            key={item.id}
-                            className="p-3 rounded-lg bg-surface border border-border group"
-                        >
-                            <div className="flex items-start justify-between">
-                                <h4 className="font-medium text-primary truncate flex-1">
-                                    {item.title}
-                                </h4>
-                                <div className="flex items-center gap-1">
-                                    {item.matched ? (
-                                        <span className="w-2 h-2 rounded-full bg-success flex-shrink-0" />
-                                    ) : (
-                                        <span className="w-2 h-2 rounded-full bg-warning flex-shrink-0" />
-                                    )}
-                                    <IconButton
-                                        icon="visibility"
-                                        aria-label="View details"
-                                        title="View details, tags, and metadata"
-                                        variant="ghost"
-                                        className="opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-fast"
-                                        onClick={() => handleViewDetail(item)}
-                                    />
-                                    <IconButton
-                                        icon="edit"
-                                        aria-label="Edit"
-                                        title="Edit title, year, rating, studio, genre and other metadata"
-                                        variant="ghost"
-                                        className="opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-fast"
-                                        onClick={() => setEditTarget(item)}
-                                    />
-                                    <IconButton
-                                        icon="delete"
-                                        aria-label="Delete"
-                                        title="Remove from library (with optional delete files on disk)"
-                                        variant="ghost"
-                                        className="opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-fast"
-                                        onClick={() => setDeleteTarget(item)}
-                                    />
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-2 text-xs text-secondary mt-1">
-                                {item.year && <span>{item.year}</span>}
-                                <span className="capitalize">{item.asset_type}</span>
-                                <span className="text-tertiary">{item.instance_name}</span>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-                {totalPages > 1 && (
-                    <div className="flex items-center justify-center gap-4 mt-4">
-                        <Button
-                            variant="ghost"
-                            disabled={page === 0}
-                            onClick={() => setPage(p => Math.max(0, p - 1))}
-                        >
-                            Previous
-                        </Button>
-                        <span className="text-sm text-secondary">
-                            Page {page + 1} of {totalPages}
-                        </span>
-                        <Button
-                            variant="ghost"
-                            disabled={page + 1 >= totalPages}
-                            onClick={() => setPage(p => p + 1)}
-                        >
-                            Next
-                        </Button>
-                    </div>
-                )}
-            </section>
+            <LibraryMaintenance />
 
             <Modal
                 isOpen={!!deleteTarget}
@@ -1008,50 +891,6 @@ const MediaManagePage = () => {
                         disabled={isImporting || !importText.trim()}
                     >
                         {isImporting ? 'Importing...' : 'Import'}
-                    </Button>
-                </Modal.Footer>
-            </Modal>
-            {/* Media Detail Modal */}
-            <Modal
-                isOpen={!!detailTarget}
-                onClose={() => {
-                    setDetailTarget(null);
-                    setDetailData(null);
-                }}
-                size="medium"
-            >
-                <Modal.Header>{detailTarget?.title || 'Media Detail'}</Modal.Header>
-                <Modal.Body>
-                    {detailLoading ? (
-                        <Spinner size="medium" text="Loading details..." center />
-                    ) : detailData ? (
-                        <div className="grid grid-cols-2 gap-3">
-                            {Object.entries(detailData)
-                                .filter(
-                                    ([key, value]) =>
-                                        value != null &&
-                                        value !== '' &&
-                                        key !== 'id' &&
-                                        typeof value !== 'object'
-                                )
-                                .map(([key, value]) => (
-                                    <div key={key} className="p-2 rounded bg-surface-alt">
-                                        <span className="text-xs text-secondary block capitalize">
-                                            {key.replace(/_/g, ' ')}
-                                        </span>
-                                        <span className="text-sm font-medium text-primary break-words">
-                                            {String(value)}
-                                        </span>
-                                    </div>
-                                ))}
-                        </div>
-                    ) : (
-                        <p className="text-secondary">No data available</p>
-                    )}
-                </Modal.Body>
-                <Modal.Footer align="right">
-                    <Button variant="ghost" onClick={() => setDetailTarget(null)}>
-                        Close
                     </Button>
                 </Modal.Footer>
             </Modal>
