@@ -8,7 +8,6 @@ fixes, duplicate detection, import/export, and ARR integration.
 
 import csv
 import io
-import os
 from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -476,6 +475,7 @@ async def get_duplicates(
 
                 if len(group) > 1:
                     used.add(i)
+                    import json as _json
                     groups.append({
                         "normalized_title": title_a,
                         "year": year_a,
@@ -483,6 +483,7 @@ async def get_duplicates(
                         "count": len(group),
                         "ids": ",".join(str(g.get("id", "")) for g in group),
                         "instances": ",".join(g.get("instance_name", "") for g in group),
+                        "folders": _json.dumps([g.get("folder") or "" for g in group]),
                         "similarity": round(min(
                             SequenceMatcher(None, title_a,
                                 (g.get("normalized_title") or g.get("title", "")).lower()
@@ -1361,6 +1362,167 @@ async def get_orphaned_cache(
 
 class OrphanedPurgeRequest(BaseModel):
     ids: List[int]
+
+
+class DuplicateMembersRequest(BaseModel):
+    ids: List[int]
+
+
+def _format_bytes(n: Optional[int]) -> Optional[str]:
+    if not n or n <= 0:
+        return None
+    units = ["B", "KB", "MB", "GB", "TB", "PB"]
+    size = float(n)
+    i = 0
+    while size >= 1024 and i < len(units) - 1:
+        size /= 1024
+        i += 1
+    return f"{size:.1f} {units[i]}"
+
+
+def _fetch_duplicate_member(cache_row: dict, config, logger) -> dict:
+    """Augment a cache row with live ARR info for the Resolve modal."""
+    out = {
+        "id": cache_row.get("id"),
+        "title": cache_row.get("title"),
+        "arr_id": cache_row.get("arr_id"),
+        "instance_name": cache_row.get("instance_name"),
+        "asset_type": cache_row.get("asset_type"),
+        "year": cache_row.get("year"),
+        "folder": cache_row.get("folder"),
+        "root_folder": cache_row.get("root_folder"),
+        "cached_status": cache_row.get("status"),
+        "cached_monitored": cache_row.get("monitored"),
+        "live": None,
+        "error": None,
+    }
+
+    instance_name = cache_row.get("instance_name")
+    arr_id = cache_row.get("arr_id")
+    asset_type = cache_row.get("asset_type")
+    if not (instance_name and arr_id and asset_type):
+        out["error"] = "missing_cache_fields"
+        return out
+
+    instance_detail = None
+    for t in ("radarr", "sonarr", "lidarr"):
+        m = getattr(config.instances, t, {})
+        if instance_name in m:
+            instance_detail = m[instance_name]
+            break
+    if not instance_detail or not instance_detail.url or not instance_detail.api:
+        out["error"] = "instance_not_found"
+        return out
+
+    client = create_arr_client(instance_detail.url, instance_detail.api, logger)
+    if not client or not client.connect_status:
+        out["error"] = "unreachable"
+        return out
+
+    try:
+        if asset_type == "movie":
+            raw = client.make_get_request(f"{client.api_base}/movie/{arr_id}") or {}
+            movie_file = raw.get("movieFile") or {}
+            size = movie_file.get("size")
+            quality = (movie_file.get("quality") or {}).get("quality", {}).get("name")
+            out["live"] = {
+                "title": raw.get("title"),
+                "path": raw.get("path"),
+                "size_bytes": size,
+                "size_human": _format_bytes(size),
+                "file_count": 1 if movie_file else 0,
+                "quality": quality,
+                "monitored": raw.get("monitored"),
+                "status": raw.get("status"),
+                "added": raw.get("added"),
+                "has_file": bool(movie_file),
+            }
+        elif asset_type == "show":
+            raw = client.make_get_request(f"{client.api_base}/series/{arr_id}") or {}
+            stats = raw.get("statistics") or {}
+            size = stats.get("sizeOnDisk")
+            files = client.make_get_request(
+                f"{client.api_base}/episodefile?seriesId={arr_id}"
+            ) or []
+            qualities = sorted({
+                ((f.get("quality") or {}).get("quality") or {}).get("name")
+                for f in files
+                if ((f.get("quality") or {}).get("quality") or {}).get("name")
+            })
+            out["live"] = {
+                "title": raw.get("title"),
+                "path": raw.get("path"),
+                "size_bytes": size,
+                "size_human": _format_bytes(size),
+                "file_count": stats.get("episodeFileCount"),
+                "total_count": stats.get("totalEpisodeCount"),
+                "quality": ", ".join(qualities[:3]) + ("…" if len(qualities) > 3 else "") if qualities else None,
+                "monitored": raw.get("monitored"),
+                "status": raw.get("status"),
+                "added": raw.get("added"),
+                "has_file": (stats.get("episodeFileCount") or 0) > 0,
+            }
+        elif asset_type == "artist":
+            raw = client.make_get_request(f"{client.api_base}/artist/{arr_id}") or {}
+            stats = raw.get("statistics") or {}
+            size = stats.get("sizeOnDisk")
+            trackfiles = client.make_get_request(
+                f"{client.api_base}/trackfile?artistId={arr_id}"
+            ) or []
+            qualities = sorted({
+                ((f.get("quality") or {}).get("quality") or {}).get("name")
+                for f in trackfiles
+                if ((f.get("quality") or {}).get("quality") or {}).get("name")
+            })
+            out["live"] = {
+                "title": raw.get("artistName") or raw.get("title"),
+                "path": raw.get("path"),
+                "size_bytes": size,
+                "size_human": _format_bytes(size),
+                "file_count": stats.get("trackFileCount"),
+                "total_count": stats.get("trackCount"),
+                "quality": ", ".join(qualities[:3]) + ("…" if len(qualities) > 3 else "") if qualities else None,
+                "monitored": raw.get("monitored"),
+                "status": raw.get("status"),
+                "added": raw.get("added"),
+                "has_file": (stats.get("trackFileCount") or 0) > 0,
+            }
+        else:
+            out["error"] = "unsupported_type"
+    except Exception as e:
+        logger.error(f"Duplicate member fetch failed for id={cache_row.get('id')}: {e}")
+        out["error"] = "fetch_failed"
+
+    return out
+
+
+@router.post("/duplicates/members", summary="Fetch live per-member info for a duplicate group")
+async def get_duplicate_members(
+    body: DuplicateMembersRequest,
+    logger: Any = Depends(get_logger),
+    db: ChubDB = Depends(get_database),
+) -> JSONResponse:
+    """Given a list of media_cache ids, return per-id live info from the origin
+    ARR instance so the Resolve modal can show size, quality, file path, etc."""
+    try:
+        if not body.ids:
+            return error("No ids provided", code="NO_IDS", status_code=400)
+        config = load_config()
+        members = []
+        for mid in body.ids:
+            row = db.media.get_by_id(mid)
+            if not row:
+                members.append({"id": mid, "error": "not_in_cache"})
+                continue
+            members.append(_fetch_duplicate_member(row, config, logger))
+        return ok("Duplicate members resolved", {"members": members})
+    except Exception as e:
+        logger.error(f"Error fetching duplicate members: {e}", exc_info=True)
+        return error(
+            f"Error fetching duplicate members: {str(e)}",
+            code="DUPLICATE_MEMBERS_ERROR",
+            status_code=500,
+        )
 
 
 @router.post("/orphaned/purge", summary="Delete orphaned cache rows by id")

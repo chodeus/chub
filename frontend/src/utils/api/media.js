@@ -256,6 +256,8 @@ export const mediaAPI = {
         return apiCore.post('/media/export', options);
     },
 
+    fetchDuplicateMembers: ids => apiCore.post('/media/duplicates/members', { ids }),
+
     fetchOrphaned: () => apiCore.get('/media/orphaned', { useCache: false }),
 
     purgeOrphaned: ids => apiCore.post('/media/orphaned/purge', { ids }),
