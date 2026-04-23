@@ -203,8 +203,13 @@ const IncompleteMetadataCard = () => {
             return next;
         });
 
-    const whatsMissing = row =>
-        [...fields].filter(f => !row[f] || row[f] === 0 || row[f] === '').join(', ');
+    // Backend returns `missing` pre-filtered for fields that asset_type
+    // never populates (radarr has no tvdb_id, lidarr has no tmdb/tvdb/imdb,
+    // etc). Fall back to a client compute for older backends.
+    const whatsMissing = row => {
+        if (Array.isArray(row.missing)) return row.missing.join(', ');
+        return [...fields].filter(f => !row[f] || row[f] === 0 || row[f] === '').join(', ');
+    };
 
     return (
         <MaintenanceCard
