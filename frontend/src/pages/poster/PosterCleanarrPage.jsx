@@ -399,6 +399,12 @@ const PosterCleanarrPage = () => {
     const [liveJobId, setLiveJobId] = useState(null);
     const [isEnqueuing, setIsEnqueuing] = useState(false);
 
+    // Locally-deleted variant paths since the last scan. Added to on successful
+    // single/bulk delete so the UI prunes them immediately without a full
+    // /by-media rescan (which walks every .bundle under /plex). Cleared by
+    // refreshScan — a real scan is the source of truth.
+    const [deletedPaths, setDeletedPaths] = useState(new Set());
+
     // ---- Scan data ----
     const byMedia = useApiData({
         apiFunction: useCallback(
@@ -409,8 +415,36 @@ const PosterCleanarrPage = () => {
         options: { showErrorToast: false, immediate: false },
     });
 
-    const bundles = useMemo(() => byMedia.data?.data?.bundles || [], [byMedia.data]);
-    const stats = useMemo(() => byMedia.data?.data?.stats || null, [byMedia.data]);
+    const bundles = useMemo(() => {
+        const raw = byMedia.data?.data?.bundles || [];
+        if (deletedPaths.size === 0) return raw;
+        return raw.map(b => {
+            const orig = b.variants || [];
+            const variants = orig.filter(v => !deletedPaths.has(v.path));
+            return variants.length === orig.length ? b : { ...b, variants };
+        });
+    }, [byMedia.data, deletedPaths]);
+    const stats = useMemo(() => {
+        const raw = byMedia.data?.data?.stats || null;
+        if (!raw || deletedPaths.size === 0) return raw;
+        let dVariants = 0;
+        let dBloat = 0;
+        let dSize = 0;
+        for (const b of byMedia.data?.data?.bundles || []) {
+            for (const v of b.variants || []) {
+                if (!deletedPaths.has(v.path)) continue;
+                dVariants += 1;
+                if (!v.active && (v.cls?.source || 'uploads') !== 'plex') dBloat += 1;
+                dSize += v.size || 0;
+            }
+        }
+        return {
+            ...raw,
+            variant_count: Math.max(0, (raw.variant_count || 0) - dVariants),
+            bloat_count: Math.max(0, (raw.bloat_count || 0) - dBloat),
+            bloat_size: Math.max(0, (raw.bloat_size || 0) - dSize),
+        };
+    }, [byMedia.data, deletedPaths]);
     const loading = byMedia.isLoading;
 
     // Build all trees once per scan payload.
@@ -440,6 +474,7 @@ const PosterCleanarrPage = () => {
 
     const refreshScan = useCallback(() => {
         if (!hasScanned) setHasScanned(true);
+        setDeletedPaths(new Set());
         byMedia.refresh();
     }, [byMedia, hasScanned]);
 
@@ -577,7 +612,11 @@ const PosterCleanarrPage = () => {
             await postersAPI.deletePlexMetadataVariant(variant.path);
             toast.success('Variant deleted');
             setPreviewTarget(null);
-            refreshScan();
+            setDeletedPaths(prev => {
+                const next = new Set(prev);
+                next.add(variant.path);
+                return next;
+            });
         } catch {
             toast.error('Failed to delete variant');
         }
@@ -591,21 +630,27 @@ const PosterCleanarrPage = () => {
     const deleteSelected = async () => {
         if (bulkBusy || selectedPaths.size === 0) return;
         setBulkBusy(true);
-        let ok = 0;
+        const succeeded = new Set();
         let failed = 0;
         for (const path of selectedPaths) {
             try {
                 await postersAPI.deletePlexMetadataVariant(path);
-                ok += 1;
+                succeeded.add(path);
             } catch {
                 failed += 1;
             }
         }
         setBulkBusy(false);
         setSelectedPaths(new Set());
-        if (failed) toast.error(`Deleted ${ok}, ${failed} failed`);
-        else toast.success(`Deleted ${ok} variant${ok === 1 ? '' : 's'}`);
-        refreshScan();
+        if (succeeded.size > 0) {
+            setDeletedPaths(prev => {
+                const next = new Set(prev);
+                for (const p of succeeded) next.add(p);
+                return next;
+            });
+        }
+        if (failed) toast.error(`Deleted ${succeeded.size}, ${failed} failed`);
+        else toast.success(`Deleted ${succeeded.size} variant${succeeded.size === 1 ? '' : 's'}`);
     };
 
     // "Make active & delete rest": user ticks exactly one bloat variant, we
