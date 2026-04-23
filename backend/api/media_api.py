@@ -8,10 +8,12 @@ fixes, duplicate detection, import/export, and ARR integration.
 
 import csv
 import io
+import os
 from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
 from backend.api.utils import error, get_database, get_logger, ok
 from backend.util.arr import create_arr_client
@@ -1836,7 +1838,10 @@ async def get_incomplete_metadata(
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
     try:
-        allowed = {"rating", "studio", "language", "genre", "runtime", "edition"}
+        allowed = {
+            "rating", "studio", "language", "genre", "runtime", "edition",
+            "tmdb_id", "tvdb_id", "imdb_id", "year",
+        }
         requested = [f.strip() for f in fields.split(",") if f.strip() in allowed]
         if not requested:
             return error(
@@ -1846,7 +1851,15 @@ async def get_incomplete_metadata(
             )
         limit = max(1, min(limit, 1000))
         offset = max(0, offset)
-        clause = " OR ".join([f"({f} IS NULL OR {f} = '')" for f in requested])
+        # INTEGER columns can't be empty-string; compare to NULL/0 instead.
+        int_cols = {"tmdb_id", "tvdb_id", "runtime"}
+        clauses = []
+        for f in requested:
+            if f in int_cols:
+                clauses.append(f"({f} IS NULL OR {f} = 0)")
+            else:
+                clauses.append(f"({f} IS NULL OR {f} = '')")
+        clause = " OR ".join(clauses)
         rows = db.worker.execute_query(
             f"SELECT * FROM media_cache WHERE {clause} "
             "ORDER BY title ASC LIMIT ? OFFSET ?",
@@ -2073,5 +2086,252 @@ async def get_import_exclusion(
         return error(
             f"Error resolving import exclusion: {str(e)}",
             code="EXCLUSION_ERROR",
+            status_code=500,
+        )
+
+
+# --- Library Maintenance -------------------------------------------------
+
+
+def _live_arr_ids_by_instance(config, logger) -> dict:
+    """For each enabled ARR instance we can reach, return the set of live
+    media ids. Unreachable instances are omitted so rows from them aren't
+    mistakenly labelled orphaned."""
+    live: dict[str, set] = {}
+    for inst_type in ("radarr", "sonarr", "lidarr"):
+        for name, info in getattr(config.instances, inst_type, {}).items():
+            if not info.enabled:
+                continue
+            client = create_arr_client(info.url, info.api, logger)
+            if not client or not client.connect_status:
+                continue
+            items = client.get_all_media() or []
+            live[name] = {it.get("id") for it in items if it.get("id") is not None}
+    return live
+
+
+@router.get(
+    "/orphaned",
+    summary="List cache rows whose ARR entry no longer exists",
+)
+async def get_orphaned_cache(
+    logger: Any = Depends(get_logger),
+    db: ChubDB = Depends(get_database),
+) -> JSONResponse:
+    try:
+        config = load_config()
+        live = _live_arr_ids_by_instance(config, logger)
+        rows = db.worker.execute_query(
+            "SELECT id, title, asset_type, instance_name, arr_id, folder, root_folder "
+            "FROM media_cache WHERE arr_id IS NOT NULL AND instance_name IS NOT NULL",
+            fetch_all=True,
+        ) or []
+        orphaned = [
+            dict(r) for r in rows
+            if r["instance_name"] in live and r["arr_id"] not in live[r["instance_name"]]
+        ]
+        return ok(
+            f"Found {len(orphaned)} orphaned cache row(s)",
+            {
+                "items": orphaned,
+                "total": len(orphaned),
+                "instances_checked": sorted(live.keys()),
+            },
+        )
+    except Exception as e:
+        logger.error(f"Error finding orphaned cache: {e}", exc_info=True)
+        return error(
+            f"Error finding orphaned cache: {str(e)}",
+            code="ORPHANED_ERROR",
+            status_code=500,
+        )
+
+
+class OrphanedPurgeRequest(BaseModel):
+    ids: List[int]
+
+
+@router.post(
+    "/orphaned/purge",
+    summary="Delete orphaned cache rows by id",
+)
+async def purge_orphaned_cache(
+    body: OrphanedPurgeRequest,
+    logger: Any = Depends(get_logger),
+    db: ChubDB = Depends(get_database),
+) -> JSONResponse:
+    try:
+        if not body.ids:
+            return error(
+                "No ids provided",
+                code="NO_IDS",
+                status_code=400,
+            )
+        placeholders = ",".join("?" for _ in body.ids)
+        db.worker.execute_query(
+            f"DELETE FROM media_cache WHERE id IN ({placeholders})",
+            tuple(body.ids),
+        )
+        logger.info(f"Purged {len(body.ids)} orphaned cache row(s)")
+        return ok(
+            f"Purged {len(body.ids)} row(s) from cache",
+            {"purged": len(body.ids)},
+        )
+    except Exception as e:
+        logger.error(f"Error purging orphaned cache: {e}", exc_info=True)
+        return error(
+            f"Error purging orphaned cache: {str(e)}",
+            code="PURGE_ERROR",
+            status_code=500,
+        )
+
+
+class PathReplaceRequest(BaseModel):
+    old_prefix: str
+    new_prefix: str
+    ids: Optional[List[int]] = None
+    move_files: bool = False
+
+
+def _scan_path_candidates(db: ChubDB, old_prefix: str, ids: Optional[List[int]]):
+    if not old_prefix:
+        return []
+    base = (
+        "SELECT id, title, asset_type, instance_name, arr_id, folder "
+        "FROM media_cache WHERE folder IS NOT NULL AND folder LIKE ? "
+        "AND arr_id IS NOT NULL AND instance_name IS NOT NULL"
+    )
+    params: list = [old_prefix + "%"]
+    if ids:
+        placeholders = ",".join("?" for _ in ids)
+        base += f" AND id IN ({placeholders})"
+        params.extend(ids)
+    rows = db.worker.execute_query(base, tuple(params), fetch_all=True) or []
+    return [dict(r) for r in rows]
+
+
+@router.post(
+    "/paths/preview",
+    summary="Preview a path prefix replace across all ARR instances",
+)
+async def preview_path_replace(
+    body: PathReplaceRequest,
+    logger: Any = Depends(get_logger),
+    db: ChubDB = Depends(get_database),
+) -> JSONResponse:
+    try:
+        if not body.old_prefix or not body.new_prefix:
+            return error(
+                "Both old_prefix and new_prefix are required",
+                code="MISSING_PREFIX",
+                status_code=400,
+            )
+        rows = _scan_path_candidates(db, body.old_prefix, body.ids)
+        results = []
+        for r in rows:
+            new_path = body.new_prefix + r["folder"][len(body.old_prefix):]
+            results.append({
+                **r,
+                "old_path": r["folder"],
+                "new_path": new_path,
+            })
+        return ok(
+            f"Preview: {len(results)} item(s) affected",
+            {
+                "items": results,
+                "total": len(results),
+                "old_prefix": body.old_prefix,
+                "new_prefix": body.new_prefix,
+            },
+        )
+    except Exception as e:
+        logger.error(f"Error previewing path replace: {e}", exc_info=True)
+        return error(
+            f"Error previewing path replace: {str(e)}",
+            code="PATH_PREVIEW_ERROR",
+            status_code=500,
+        )
+
+
+@router.post(
+    "/paths/apply",
+    summary="Apply a path prefix replace across the selected ARR items",
+)
+async def apply_path_replace(
+    body: PathReplaceRequest,
+    logger: Any = Depends(get_logger),
+    db: ChubDB = Depends(get_database),
+) -> JSONResponse:
+    try:
+        if not body.old_prefix or not body.new_prefix:
+            return error(
+                "Both old_prefix and new_prefix are required",
+                code="MISSING_PREFIX",
+                status_code=400,
+            )
+        rows = _scan_path_candidates(db, body.old_prefix, body.ids)
+        if not rows:
+            return ok("No items match the prefix", {"applied": 0, "failed": 0, "results": []})
+
+        config = load_config()
+
+        def find_instance(name: str):
+            for inst_type in ("radarr", "sonarr", "lidarr"):
+                inst_map = getattr(config.instances, inst_type, {})
+                if name in inst_map:
+                    return inst_type, inst_map[name]
+            return None, None
+
+        resource_for_type = {"movie": "movie", "show": "series", "artist": "artist"}
+        applied = 0
+        failed = 0
+        results = []
+        move_flag = "true" if body.move_files else "false"
+
+        for r in rows:
+            new_path = body.new_prefix + r["folder"][len(body.old_prefix):]
+            inst_type, inst_detail = find_instance(r["instance_name"])
+            if not inst_detail or not inst_detail.url or not inst_detail.api:
+                failed += 1
+                results.append({**r, "new_path": new_path, "status": "instance_not_found"})
+                continue
+            client = create_arr_client(inst_detail.url, inst_detail.api, logger)
+            if not client or not client.connect_status:
+                failed += 1
+                results.append({**r, "new_path": new_path, "status": "unreachable"})
+                continue
+            resource = resource_for_type.get(r["asset_type"])
+            if not resource:
+                failed += 1
+                results.append({**r, "new_path": new_path, "status": "unsupported_type"})
+                continue
+            raw = client.make_get_request(f"{client.api_base}/{resource}/{r['arr_id']}")
+            if not raw:
+                failed += 1
+                results.append({**r, "new_path": new_path, "status": "arr_fetch_failed"})
+                continue
+            raw["path"] = os.path.normpath(new_path)
+            put_url = f"{client.api_base}/{resource}/{r['arr_id']}?moveFiles={move_flag}"
+            resp = client.make_put_request(put_url, json=raw)
+            if resp is None:
+                failed += 1
+                results.append({**r, "new_path": new_path, "status": "arr_put_failed"})
+                continue
+            applied += 1
+            results.append({**r, "new_path": new_path, "status": "applied"})
+            logger.info(
+                f"Path update [{r['instance_name']}] {r['arr_id']}: {r['folder']} -> {new_path} "
+                f"(move_files={body.move_files})"
+            )
+
+        return ok(
+            f"Applied {applied} update(s), {failed} failure(s)",
+            {"applied": applied, "failed": failed, "results": results},
+        )
+    except Exception as e:
+        logger.error(f"Error applying path replace: {e}", exc_info=True)
+        return error(
+            f"Error applying path replace: {str(e)}",
+            code="PATH_APPLY_ERROR",
             status_code=500,
         )

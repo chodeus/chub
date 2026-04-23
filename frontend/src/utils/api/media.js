@@ -270,4 +270,24 @@ export const mediaAPI = {
             ...options,
         });
     },
+
+    fetchOrphaned: () => apiCore.get('/media/orphaned', { useCache: false }),
+
+    purgeOrphaned: ids => apiCore.post('/media/orphaned/purge', { ids }),
+
+    fetchIncompleteMetadata: ({
+        fields = 'tmdb_id,tvdb_id,imdb_id,year',
+        limit = 500,
+        offset = 0,
+    } = {}) =>
+        apiCore.get(
+            `/media/incomplete-metadata?fields=${encodeURIComponent(fields)}&limit=${limit}&offset=${offset}`,
+            { useCache: false }
+        ),
+
+    previewPathReplace: ({ old_prefix, new_prefix, ids = null }) =>
+        apiCore.post('/media/paths/preview', { old_prefix, new_prefix, ids }),
+
+    applyPathReplace: ({ old_prefix, new_prefix, ids = null, move_files = false }) =>
+        apiCore.post('/media/paths/apply', { old_prefix, new_prefix, ids, move_files }),
 };
