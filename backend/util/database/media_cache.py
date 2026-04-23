@@ -846,7 +846,8 @@ class MediaCache(DatabaseBase):
                 SELECT normalized_title, title, year, instance_name,
                        COUNT(*) as count,
                        GROUP_CONCAT(id) as ids,
-                       GROUP_CONCAT(instance_name) as instances
+                       GROUP_CONCAT(instance_name) as instances,
+                       json_group_array(folder) as folders
                 FROM media_cache
                 WHERE normalized_title IS NOT NULL
                   AND season_number IS NULL

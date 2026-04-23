@@ -18,6 +18,8 @@ const MediaManagePage = () => {
     const [resolveTarget, setResolveTarget] = useState(null);
     const [resolveKeepId, setResolveKeepId] = useState(null);
     const [resolveDeleteFiles, setResolveDeleteFiles] = useState(false);
+    const [resolveMembers, setResolveMembers] = useState(null);
+    const [resolveMembersLoading, setResolveMembersLoading] = useState(false);
     const [showCreateCollection, setShowCreateCollection] = useState(false);
     const [newCollectionName, setNewCollectionName] = useState('');
     const [editCollection, setEditCollection] = useState(null);
@@ -27,8 +29,6 @@ const MediaManagePage = () => {
     const [fixTarget, setFixTarget] = useState(null);
     const [fixPreview, setFixPreview] = useState(null);
     const [previewLoading, setPreviewLoading] = useState(false);
-    const [page, setPage] = useState(0);
-    const PAGE_SIZE = 100;
 
     const { execute: saveMetadata, isLoading: isSaving } = useApiMutation(
         (id, metadata) => mediaAPI.updateMediaMetadata(id, metadata),
@@ -36,26 +36,9 @@ const MediaManagePage = () => {
             successMessage: 'Metadata updated',
             onSuccess: () => {
                 setEditTarget(null);
-                refreshMedia();
             },
         }
     );
-
-    const {
-        data: mediaData,
-        isLoading,
-        refresh: refreshMedia,
-    } = useApiData({
-        apiFunction: () =>
-            mediaAPI.searchMedia({
-                limit: PAGE_SIZE,
-                offset: page * PAGE_SIZE,
-                sort: 'title',
-                order: 'asc',
-            }),
-        options: { showErrorToast: false },
-        dependencies: [page],
-    });
 
     const { data: dupData, refresh: refreshDups } = useApiData({
         apiFunction: mediaAPI.fetchDuplicates,
@@ -69,22 +52,12 @@ const MediaManagePage = () => {
 
     const { execute: runScan, isLoading: isScanning } = useApiMutation(
         () => mediaAPI.scanForMedia(),
-        {
-            successMessage: 'Media scan initiated',
-            onSuccess: () => {
-                refreshMedia();
-            },
-        }
+        { successMessage: 'Media scan initiated' }
     );
 
     const { execute: runFixMetadata, isLoading: isFixing } = useApiMutation(
         () => mediaAPI.fixMetadata(),
-        {
-            successMessage: 'Metadata fix initiated',
-            onSuccess: () => {
-                refreshMedia();
-            },
-        }
+        { successMessage: 'Metadata fix initiated' }
     );
 
     const { execute: createCollection, isLoading: isCreatingCollection } = useApiMutation(
@@ -168,12 +141,40 @@ const MediaManagePage = () => {
             .catch(() => {});
     }, []);
 
+    // Fetch live per-member detail (size, quality, path, ...) when the
+    // Resolve Duplicates modal opens. Without this the rows would only have
+    // the cache snapshot — missing size / quality / file count.
+    useEffect(() => {
+        if (!resolveTarget) return;
+        const ids = (resolveTarget.ids || '')
+            .split(',')
+            .map(s => parseInt(s.trim(), 10))
+            .filter(n => !Number.isNaN(n));
+        if (ids.length === 0) return;
+        let cancelled = false;
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- valid loading-state pattern for async fetch
+        setResolveMembersLoading(true);
+        mediaAPI
+            .fetchDuplicateMembers(ids)
+            .then(result => {
+                if (!cancelled) setResolveMembers(result?.data?.members || []);
+            })
+            .catch(() => {
+                if (!cancelled) setResolveMembers([]);
+            })
+            .finally(() => {
+                if (!cancelled) setResolveMembersLoading(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [resolveTarget]);
+
     const { execute: runNestedFix, isLoading: isNestFixing } = useApiMutation(
         params => nestarrAPI.fix(params),
         { successMessage: 'Nested media item moved successfully' }
     );
 
-    const items = useMemo(() => mediaData?.data?.items || [], [mediaData]);
     const duplicates = useMemo(() => dupData?.data?.duplicates || [], [dupData]);
     const collections = useMemo(
         () => collectionsData?.data?.collections || collectionsData?.data || [],
@@ -185,8 +186,6 @@ const MediaManagePage = () => {
         {
             successMessage: 'Cache refresh initiated',
             onSuccess: () => {
-                setPage(0);
-                refreshMedia();
                 refreshDups();
             },
         }
@@ -290,7 +289,6 @@ const MediaManagePage = () => {
             await deleteItem();
             setDeleteTarget(null);
             setDeleteFiles(false);
-            refreshMedia();
         } catch {
             toast.error('Failed to delete media item');
         }
@@ -303,14 +301,12 @@ const MediaManagePage = () => {
             setResolveTarget(null);
             setResolveKeepId(null);
             setResolveDeleteFiles(false);
+            setResolveMembers(null);
             refreshDups();
-            refreshMedia();
         } catch {
             toast.error('Failed to resolve duplicates');
         }
     };
-
-    if (isLoading) return <Spinner size="large" text="Loading media..." center />;
 
     return (
         <div className="flex flex-col gap-6">
@@ -382,40 +378,64 @@ const MediaManagePage = () => {
                             return (
                                 <div
                                     key={dup.id || i}
-                                    className="p-3 rounded-lg bg-surface border border-border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2"
+                                    className="p-3 rounded-lg bg-surface border border-border flex flex-col gap-2"
                                 >
-                                    <div className="flex items-center gap-2 min-w-0">
-                                        <span className="font-medium text-primary truncate">
-                                            {dup.title || dup.normalized_title}
-                                        </span>
-                                        {dup.year && (
-                                            <span className="text-secondary flex-shrink-0">
-                                                ({dup.year})
+                                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                                        <div className="flex items-center gap-2 min-w-0">
+                                            <span className="font-medium text-primary truncate">
+                                                {dup.title || dup.normalized_title}
                                             </span>
-                                        )}
-                                    </div>
-                                    <div className="flex items-center flex-wrap gap-2 sm:gap-3">
-                                        <span className="text-sm font-medium text-warning">
-                                            {dup.count} copies
-                                        </span>
-                                        <div className="flex items-center flex-wrap gap-1">
-                                            {uniqueInstances.map(inst => (
-                                                <span
-                                                    key={inst}
-                                                    className="text-xs px-2 py-0.5 rounded-full bg-surface-alt text-secondary"
-                                                >
-                                                    {inst}
+                                            {dup.year && (
+                                                <span className="text-secondary flex-shrink-0">
+                                                    ({dup.year})
                                                 </span>
-                                            ))}
+                                            )}
                                         </div>
-                                        <Button
-                                            variant="ghost"
-                                            icon="auto_fix_high"
-                                            onClick={() => setResolveTarget(dup)}
-                                        >
-                                            Resolve
-                                        </Button>
+                                        <div className="flex items-center flex-wrap gap-2 sm:gap-3">
+                                            <span className="text-sm font-medium text-warning">
+                                                {dup.count} copies
+                                            </span>
+                                            <div className="flex items-center flex-wrap gap-1">
+                                                {uniqueInstances.map(inst => (
+                                                    <span
+                                                        key={inst}
+                                                        className="text-xs px-2 py-0.5 rounded-full bg-surface-alt text-secondary"
+                                                    >
+                                                        {inst}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                            <Button
+                                                variant="ghost"
+                                                icon="auto_fix_high"
+                                                onClick={() => setResolveTarget(dup)}
+                                            >
+                                                Resolve
+                                            </Button>
+                                        </div>
                                     </div>
+                                    {(() => {
+                                        let paths = [];
+                                        try {
+                                            paths = JSON.parse(dup.folders || '[]').filter(Boolean);
+                                        } catch {
+                                            paths = [];
+                                        }
+                                        if (paths.length === 0) return null;
+                                        return (
+                                            <div className="flex flex-col gap-0.5 text-xs font-mono text-tertiary">
+                                                {paths.map((p, idx) => (
+                                                    <span
+                                                        key={`${p}-${idx}`}
+                                                        className="truncate"
+                                                        title={p}
+                                                    >
+                                                        {p}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
                             );
                         })}
@@ -713,6 +733,7 @@ const MediaManagePage = () => {
                     setResolveTarget(null);
                     setResolveKeepId(null);
                     setResolveDeleteFiles(false);
+                    setResolveMembers(null);
                 }}
                 size="medium"
             >
@@ -725,57 +746,109 @@ const MediaManagePage = () => {
                         </span>{' '}
                         to keep. The others will be removed.
                     </p>
-                    <div className="grid gap-2">
-                        {(resolveTarget?.ids || '').split(',').map(idStr => {
-                            const id = parseInt(idStr.trim(), 10);
-                            if (isNaN(id)) return null;
-                            const item = items.find(m => m.id === id);
-                            const instance = (resolveTarget?.instances || '').split(',');
-                            const idx = (resolveTarget?.ids || '')
-                                .split(',')
-                                .findIndex(s => parseInt(s.trim(), 10) === id);
-                            const instanceName = instance[idx]?.trim() || 'unknown';
-                            return (
-                                <label
-                                    key={id}
-                                    className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
-                                        resolveKeepId === id
-                                            ? 'border-primary bg-primary/5'
-                                            : 'border-border bg-surface hover:border-secondary'
-                                    }`}
-                                >
-                                    <input
-                                        type="radio"
-                                        name="keep-duplicate"
-                                        checked={resolveKeepId === id}
-                                        onChange={() => setResolveKeepId(id)}
-                                        className="accent-primary"
-                                    />
-                                    <div className="flex-1 min-w-0">
-                                        <div className="font-medium text-primary truncate">
-                                            {item?.title || `ID: ${id}`}
-                                        </div>
-                                        <div className="flex items-center gap-2 text-xs text-secondary mt-0.5">
-                                            <span className="px-1.5 py-0.5 rounded bg-surface-alt">
-                                                {instanceName}
-                                            </span>
-                                            {item?.year && <span>{item.year}</span>}
-                                            {item?.asset_type && (
-                                                <span className="capitalize">
-                                                    {item.asset_type}
+                    {resolveMembersLoading && (
+                        <Spinner size="medium" text="Fetching live details..." center />
+                    )}
+                    {!resolveMembersLoading && resolveMembers && (
+                        <div className="grid gap-2">
+                            {resolveMembers.map(m => {
+                                const id = m.id;
+                                const live = m.live || {};
+                                const displayTitle = live.title || m.title || `ID: ${id}`;
+                                const path = live.path || m.folder;
+                                return (
+                                    <label
+                                        key={id}
+                                        className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                                            resolveKeepId === id
+                                                ? 'border-primary bg-primary/5'
+                                                : 'border-border bg-surface hover:border-secondary'
+                                        }`}
+                                    >
+                                        <input
+                                            type="radio"
+                                            name="keep-duplicate"
+                                            checked={resolveKeepId === id}
+                                            onChange={() => setResolveKeepId(id)}
+                                            className="accent-primary mt-1"
+                                        />
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center flex-wrap gap-2">
+                                                <span className="font-medium text-primary truncate">
+                                                    {displayTitle}
                                                 </span>
+                                                {live.monitored === false && (
+                                                    <span className="text-xs px-1.5 py-0.5 rounded bg-warning/10 text-warning">
+                                                        unmonitored
+                                                    </span>
+                                                )}
+                                                {m.error && (
+                                                    <span className="text-xs px-1.5 py-0.5 rounded bg-error/10 text-error">
+                                                        {m.error}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div className="flex items-center flex-wrap gap-2 text-xs text-secondary mt-1">
+                                                <span className="px-1.5 py-0.5 rounded bg-surface-alt">
+                                                    {m.instance_name || 'unknown'}
+                                                </span>
+                                                <span className="capitalize">{m.asset_type}</span>
+                                                {m.year && <span>{m.year}</span>}
+                                                <span className="font-mono text-tertiary">
+                                                    arr_id {m.arr_id ?? '—'}
+                                                </span>
+                                                {live.size_human && (
+                                                    <span className="font-medium text-primary">
+                                                        {live.size_human}
+                                                    </span>
+                                                )}
+                                                {live.quality && (
+                                                    <span className="px-1.5 py-0.5 rounded bg-surface-alt">
+                                                        {live.quality}
+                                                    </span>
+                                                )}
+                                                {live.file_count != null && (
+                                                    <span>
+                                                        {live.file_count}
+                                                        {live.total_count != null &&
+                                                            ` / ${live.total_count}`}{' '}
+                                                        file{live.file_count === 1 ? '' : 's'}
+                                                    </span>
+                                                )}
+                                                {live.status && (
+                                                    <span className="capitalize">
+                                                        {live.status}
+                                                    </span>
+                                                )}
+                                                {live.added && (
+                                                    <span
+                                                        className="text-tertiary"
+                                                        title={live.added}
+                                                    >
+                                                        added{' '}
+                                                        {new Date(live.added).toLocaleDateString()}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            {path && (
+                                                <div
+                                                    className="text-xs font-mono text-tertiary mt-1 truncate"
+                                                    title={path}
+                                                >
+                                                    {path}
+                                                </div>
                                             )}
                                         </div>
-                                    </div>
-                                    {resolveKeepId === id && (
-                                        <span className="text-xs px-2 py-0.5 rounded-full bg-success/10 text-success font-medium">
-                                            Keep
-                                        </span>
-                                    )}
-                                </label>
-                            );
-                        })}
-                    </div>
+                                        {resolveKeepId === id && (
+                                            <span className="text-xs px-2 py-0.5 rounded-full bg-success/10 text-success font-medium shrink-0 mt-1">
+                                                Keep
+                                            </span>
+                                        )}
+                                    </label>
+                                );
+                            })}
+                        </div>
+                    )}
                     <label className="flex items-center gap-2 mt-3 cursor-pointer">
                         <input
                             type="checkbox"
@@ -795,6 +868,7 @@ const MediaManagePage = () => {
                             setResolveTarget(null);
                             setResolveKeepId(null);
                             setResolveDeleteFiles(false);
+                            setResolveMembers(null);
                         }}
                     >
                         Cancel
