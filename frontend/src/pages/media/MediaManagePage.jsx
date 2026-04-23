@@ -18,8 +18,6 @@ const MediaManagePage = () => {
     const [resolveTarget, setResolveTarget] = useState(null);
     const [resolveKeepId, setResolveKeepId] = useState(null);
     const [resolveDeleteFiles, setResolveDeleteFiles] = useState(false);
-    const [showImport, setShowImport] = useState(false);
-    const [importText, setImportText] = useState('');
     const [showCreateCollection, setShowCreateCollection] = useState(false);
     const [newCollectionName, setNewCollectionName] = useState('');
     const [editCollection, setEditCollection] = useState(null);
@@ -84,18 +82,6 @@ const MediaManagePage = () => {
         {
             successMessage: 'Metadata fix initiated',
             onSuccess: () => {
-                refreshMedia();
-            },
-        }
-    );
-
-    const { execute: runImport, isLoading: isImporting } = useApiMutation(
-        data => mediaAPI.importMedia(data),
-        {
-            successMessage: 'Media import started',
-            onSuccess: () => {
-                setShowImport(false);
-                setImportText('');
                 refreshMedia();
             },
         }
@@ -280,26 +266,6 @@ const MediaManagePage = () => {
         }
     };
 
-    const handleImport = async () => {
-        if (!importText.trim()) return;
-        try {
-            // Parse as JSON array or newline-separated titles
-            let data;
-            try {
-                data = JSON.parse(importText);
-            } catch {
-                data = importText
-                    .split('\n')
-                    .map(l => l.trim())
-                    .filter(Boolean)
-                    .map(title => ({ title }));
-            }
-            await runImport(Array.isArray(data) ? data : [data]);
-        } catch {
-            toast.error('Import failed');
-        }
-    };
-
     const handleCreateCollection = async () => {
         if (!newCollectionName.trim()) return;
         try {
@@ -395,14 +361,6 @@ const MediaManagePage = () => {
                         >
                             Fix Metadata
                         </LoadingButton>
-                        <Button
-                            variant="primary"
-                            icon="add"
-                            onClick={() => setShowImport(true)}
-                            title="Add media items manually by title or JSON data"
-                        >
-                            Import
-                        </Button>
                     </div>
                 }
             />
@@ -858,42 +816,6 @@ const MediaManagePage = () => {
                 onSave={(id, metadata) => saveMetadata(id, metadata)}
                 isSaving={isSaving}
             />
-            <Modal
-                isOpen={showImport}
-                onClose={() => {
-                    setShowImport(false);
-                    setImportText('');
-                }}
-                size="medium"
-            >
-                <Modal.Header>Import Media</Modal.Header>
-                <Modal.Body>
-                    <p className="text-secondary mb-3">
-                        Add movies or series to your Radarr/Sonarr instances. Enter one title per
-                        line, or paste a JSON array.
-                    </p>
-                    <textarea
-                        value={importText}
-                        onChange={e => setImportText(e.target.value)}
-                        placeholder={'The Matrix\nInception\nBreaking Bad'}
-                        rows={8}
-                        className="w-full p-3 bg-input border border-border rounded-md text-primary text-sm font-mono resize-y focus:border-primary focus:outline-none"
-                    />
-                </Modal.Body>
-                <Modal.Footer align="right">
-                    <Button variant="ghost" onClick={() => setShowImport(false)}>
-                        Cancel
-                    </Button>
-                    <Button
-                        variant="primary"
-                        icon="add"
-                        onClick={handleImport}
-                        disabled={isImporting || !importText.trim()}
-                    >
-                        {isImporting ? 'Importing...' : 'Import'}
-                    </Button>
-                </Modal.Footer>
-            </Modal>
             {/* Create Collection Modal */}
             <Modal
                 isOpen={showCreateCollection}

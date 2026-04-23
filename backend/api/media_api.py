@@ -776,185 +776,6 @@ async def export_media(
         )
 
 
-@router.post(
-    "/import",
-    summary="Import media to Radarr/Sonarr",
-    description="Add media items to a Radarr or Sonarr instance.",
-    responses={
-        200: {
-            "description": "Import result",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "success": True,
-                        "message": "Imported 3 items: 2 added, 1 existing",
-                        "data": {
-                            "added": [{"tmdbId": 550, "title": "Fight Club"}],
-                            "existing": [{"tmdbId": 680, "title": "Pulp Fiction"}],
-                            "invalid": [],
-                            "failed": [],
-                        },
-                    }
-                }
-            },
-        }
-    },
-)
-async def import_media(
-    request: Request,
-    logger: Any = Depends(get_logger),
-) -> JSONResponse:
-    """
-    Import media items to a Radarr or Sonarr instance.
-
-    Validates each item doesn't already exist before adding.
-    Supports batch import with per-request feedback.
-
-    Request body (JSON):
-        items: List of media objects, each with:
-            - tmdbId or tvdbId (required): External ID
-            - title (required): Media title
-            - year (optional): Release year
-            - instanceName (required): Target ARR instance name
-            - qualityProfileId (required): Quality profile to use
-            - rootFolderPath (required): Root folder for downloads
-            - monitored (optional, default true): Whether to monitor
-            - searchOnAdd (optional, default true): Search immediately after adding
-
-    Returns:
-        Structured result with added/existing/invalid/failed lists
-    """
-    logger.debug("Serving POST /api/media/import")
-
-    try:
-        body = await request.json()
-    except Exception:
-        return error("Invalid request body", code="INVALID_BODY", status_code=400)
-
-    items = body.get("items", [])
-    if not items:
-        return error("No items provided", code="NO_ITEMS", status_code=400)
-
-    added = []
-    existing = []
-    invalid = []
-    failed = []
-
-    config = load_config()
-
-    for item in items:
-        tmdb_id = item.get("tmdbId")
-        tvdb_id = item.get("tvdbId")
-        title = item.get("title", "")
-        instance_name = item.get("instanceName")
-        quality_profile_id = item.get("qualityProfileId")
-        root_folder = item.get("rootFolderPath")
-        monitored = item.get("monitored", True)
-        search_on_add = item.get("searchOnAdd", True)
-
-        if not instance_name or not quality_profile_id or not root_folder:
-            invalid.append({
-                "title": title,
-                "reason": "Missing required fields: instanceName, qualityProfileId, rootFolderPath",
-            })
-            continue
-
-        if not tmdb_id and not tvdb_id:
-            invalid.append({"title": title, "reason": "Either tmdbId or tvdbId is required"})
-            continue
-
-        # Determine instance type and get client
-        instance_detail = None
-        is_radarr = False
-        if hasattr(config.instances, "radarr") and instance_name in config.instances.radarr:
-            instance_detail = config.instances.radarr[instance_name]
-            is_radarr = True
-        elif hasattr(config.instances, "sonarr") and instance_name in config.instances.sonarr:
-            instance_detail = config.instances.sonarr[instance_name]
-
-        if not instance_detail or not instance_detail.url or not instance_detail.api:
-            invalid.append({"title": title, "reason": f"Instance '{instance_name}' not found"})
-            continue
-
-        try:
-            arr_client = create_arr_client(
-                url=instance_detail.url,
-                api=instance_detail.api,
-                logger=logger,
-            )
-            if not arr_client:
-                failed.append({"title": title, "reason": "Failed to create ARR client"})
-                continue
-
-            if is_radarr:
-                # Check if movie already exists
-                lookup_url = f"{arr_client.url}/api/v3/movie?tmdbId={tmdb_id}"
-                existing_movies = arr_client.make_get_request(lookup_url) or []
-                if existing_movies:
-                    existing.append({"tmdbId": tmdb_id, "title": title, "instance": instance_name})
-                    continue
-
-                # Add movie
-                movie_payload = {
-                    "title": title,
-                    "tmdbId": tmdb_id,
-                    "year": item.get("year", 0),
-                    "qualityProfileId": quality_profile_id,
-                    "rootFolderPath": root_folder,
-                    "monitored": monitored,
-                    "minimumAvailability": "announced",
-                    "addOptions": {"searchForMovie": search_on_add},
-                }
-                movie_url = f"{arr_client.url}/api/v3/movie"
-                result = arr_client.make_post_request(movie_url, movie_payload)
-                arr_id = result.get("id") if isinstance(result, dict) else None
-                added.append({"tmdbId": tmdb_id, "title": title, "instance": instance_name, "arrId": arr_id})
-            else:
-                # Check if series already exists
-                lookup_url = f"{arr_client.url}/api/v3/series?tvdbId={tvdb_id}"
-                existing_series = arr_client.make_get_request(lookup_url) or []
-                if existing_series:
-                    existing.append({"tvdbId": tvdb_id, "title": title, "instance": instance_name})
-                    continue
-
-                # Add series
-                series_payload = {
-                    "title": title,
-                    "tvdbId": tvdb_id,
-                    "qualityProfileId": quality_profile_id,
-                    "rootFolderPath": root_folder,
-                    "monitored": monitored,
-                    "addOptions": {
-                        "searchForMissingEpisodes": search_on_add,
-                        "ignoreEpisodesWithFiles": True,
-                    },
-                }
-                series_url = f"{arr_client.url}/api/v3/series"
-                result = arr_client.make_post_request(series_url, series_payload)
-                arr_id = result.get("id") if isinstance(result, dict) else None
-                added.append({"tvdbId": tvdb_id, "title": title, "instance": instance_name, "arrId": arr_id})
-
-        except Exception as e:
-            logger.error(f"Failed to import '{title}' to {instance_name}: {e}")
-            failed.append({"title": title, "reason": str(e)})
-
-    total = len(added) + len(existing)
-    parts = []
-    if added:
-        parts.append(f"{len(added)} added")
-    if existing:
-        parts.append(f"{len(existing)} existing")
-    if invalid:
-        parts.append(f"{len(invalid)} invalid")
-    if failed:
-        parts.append(f"{len(failed)} failed")
-
-    return ok(
-        f"Imported {total} items: {', '.join(parts) or 'none'}",
-        {"added": added, "existing": existing, "invalid": invalid, "failed": failed},
-    )
-
-
 @router.delete(
     "/collections/{collection_id}",
     summary="Delete a collection",
@@ -1395,6 +1216,185 @@ async def bulk_fix_metadata(
         )
 
 
+@router.get("/low-rated", summary="List media below a rating threshold")
+async def get_low_rated(
+    max_rating: float = 5.0,
+    limit: int = 100,
+    offset: int = 0,
+    asset_type: Optional[str] = None,
+    logger: Any = Depends(get_logger),
+    db: ChubDB = Depends(get_database),
+) -> JSONResponse:
+    try:
+        limit = max(1, min(limit, 500))
+        offset = max(0, offset)
+        clauses = ["rating IS NOT NULL", "rating != ''", "CAST(rating AS REAL) < ?"]
+        params: list = [float(max_rating)]
+        if asset_type:
+            clauses.append("asset_type=?")
+            params.append(asset_type)
+        where = "WHERE " + " AND ".join(clauses)
+        rows = db.worker.execute_query(
+            f"SELECT * FROM media_cache {where} "
+            "ORDER BY CAST(rating AS REAL) ASC LIMIT ? OFFSET ?",
+            tuple(params) + (limit, offset),
+            fetch_all=True,
+        ) or []
+        return ok(
+            f"Found {len(rows)} low-rated items",
+            {"items": [dict(r) for r in rows], "limit": limit, "offset": offset},
+        )
+    except Exception as e:
+        logger.error(f"Error querying low-rated media: {e}")
+        return error(
+            f"Error querying low-rated media: {str(e)}",
+            code="LOW_RATED_ERROR",
+            status_code=500,
+        )
+
+
+@router.get("/incomplete-metadata", summary="List media with missing key metadata")
+async def get_incomplete_metadata(
+    fields: str = "rating,studio,language,genre",
+    limit: int = 200,
+    offset: int = 0,
+    logger: Any = Depends(get_logger),
+    db: ChubDB = Depends(get_database),
+) -> JSONResponse:
+    try:
+        allowed = {
+            "rating", "studio", "language", "genre", "runtime", "edition",
+            "tmdb_id", "tvdb_id", "imdb_id", "year",
+        }
+        requested = [f.strip() for f in fields.split(",") if f.strip() in allowed]
+        if not requested:
+            return error(
+                "No valid fields requested",
+                code="INVALID_FIELDS",
+                status_code=400,
+            )
+        limit = max(1, min(limit, 1000))
+        offset = max(0, offset)
+        # INTEGER columns can't be empty-string; compare to NULL/0 instead.
+        int_cols = {"tmdb_id", "tvdb_id", "runtime"}
+        clauses = []
+        for f in requested:
+            if f in int_cols:
+                clauses.append(f"({f} IS NULL OR {f} = 0)")
+            else:
+                clauses.append(f"({f} IS NULL OR {f} = '')")
+        clause = " OR ".join(clauses)
+        rows = db.worker.execute_query(
+            f"SELECT * FROM media_cache WHERE {clause} "
+            "ORDER BY title ASC LIMIT ? OFFSET ?",
+            (limit, offset),
+            fetch_all=True,
+        ) or []
+        return ok(
+            f"Found {len(rows)} media items with incomplete metadata",
+            {
+                "items": [dict(r) for r in rows],
+                "fields_checked": requested,
+                "limit": limit,
+                "offset": offset,
+            },
+        )
+    except Exception as e:
+        logger.error(f"Error querying incomplete metadata: {e}")
+        return error(
+            f"Error querying incomplete metadata: {str(e)}",
+            code="INCOMPLETE_META_ERROR",
+            status_code=500,
+        )
+
+
+def _live_arr_ids_by_instance(config, logger) -> dict:
+    """For each enabled ARR instance we can reach, return the set of live
+    media ids. Unreachable instances are omitted so rows from them aren't
+    mistakenly labelled orphaned."""
+    live: dict[str, set] = {}
+    for inst_type in ("radarr", "sonarr", "lidarr"):
+        for name, info in getattr(config.instances, inst_type, {}).items():
+            if not info.enabled:
+                continue
+            client = create_arr_client(info.url, info.api, logger)
+            if not client or not client.connect_status:
+                continue
+            items = client.get_all_media() or []
+            live[name] = {it.get("id") for it in items if it.get("id") is not None}
+    return live
+
+
+@router.get("/orphaned", summary="List cache rows whose ARR entry no longer exists")
+async def get_orphaned_cache(
+    logger: Any = Depends(get_logger),
+    db: ChubDB = Depends(get_database),
+) -> JSONResponse:
+    try:
+        config = load_config()
+        live = _live_arr_ids_by_instance(config, logger)
+        rows = db.worker.execute_query(
+            "SELECT id, title, asset_type, instance_name, arr_id, folder, root_folder "
+            "FROM media_cache WHERE arr_id IS NOT NULL AND instance_name IS NOT NULL",
+            fetch_all=True,
+        ) or []
+        orphaned = [
+            dict(r) for r in rows
+            if r["instance_name"] in live and r["arr_id"] not in live[r["instance_name"]]
+        ]
+        return ok(
+            f"Found {len(orphaned)} orphaned cache row(s)",
+            {
+                "items": orphaned,
+                "total": len(orphaned),
+                "instances_checked": sorted(live.keys()),
+            },
+        )
+    except Exception as e:
+        logger.error(f"Error finding orphaned cache: {e}", exc_info=True)
+        return error(
+            f"Error finding orphaned cache: {str(e)}",
+            code="ORPHANED_ERROR",
+            status_code=500,
+        )
+
+
+class OrphanedPurgeRequest(BaseModel):
+    ids: List[int]
+
+
+@router.post("/orphaned/purge", summary="Delete orphaned cache rows by id")
+async def purge_orphaned_cache(
+    body: OrphanedPurgeRequest,
+    logger: Any = Depends(get_logger),
+    db: ChubDB = Depends(get_database),
+) -> JSONResponse:
+    try:
+        if not body.ids:
+            return error(
+                "No ids provided",
+                code="NO_IDS",
+                status_code=400,
+            )
+        placeholders = ",".join("?" for _ in body.ids)
+        db.worker.execute_query(
+            f"DELETE FROM media_cache WHERE id IN ({placeholders})",
+            tuple(body.ids),
+        )
+        logger.info(f"Purged {len(body.ids)} orphaned cache row(s)")
+        return ok(
+            f"Purged {len(body.ids)} row(s) from cache",
+            {"purged": len(body.ids)},
+        )
+    except Exception as e:
+        logger.error(f"Error purging orphaned cache: {e}", exc_info=True)
+        return error(
+            f"Error purging orphaned cache: {str(e)}",
+            code="PURGE_ERROR",
+            status_code=500,
+        )
+
+
 # --- Parameterized path endpoints (must be after static paths) ---
 
 
@@ -1782,108 +1782,6 @@ async def fix_metadata(
 # --- Capability endpoints: filters, exclusions, audit, smart collections ---
 
 
-@router.get(
-    "/low-rated",
-    summary="List media below a rating threshold",
-    description="Return media items whose `rating` text parses as a number "
-    "below `max_rating` (default 5.0). Non-numeric ratings are excluded.",
-)
-async def get_low_rated(
-    max_rating: float = 5.0,
-    limit: int = 100,
-    offset: int = 0,
-    asset_type: Optional[str] = None,
-    logger: Any = Depends(get_logger),
-    db: ChubDB = Depends(get_database),
-) -> JSONResponse:
-    try:
-        limit = max(1, min(limit, 500))
-        offset = max(0, offset)
-        clauses = ["rating IS NOT NULL", "rating != ''", "CAST(rating AS REAL) < ?"]
-        params: list = [float(max_rating)]
-        if asset_type:
-            clauses.append("asset_type=?")
-            params.append(asset_type)
-        where = "WHERE " + " AND ".join(clauses)
-        rows = db.worker.execute_query(
-            f"SELECT * FROM media_cache {where} "
-            "ORDER BY CAST(rating AS REAL) ASC LIMIT ? OFFSET ?",
-            tuple(params) + (limit, offset),
-            fetch_all=True,
-        ) or []
-        return ok(
-            f"Found {len(rows)} low-rated items",
-            {"items": [dict(r) for r in rows], "limit": limit, "offset": offset},
-        )
-    except Exception as e:
-        logger.error(f"Error querying low-rated media: {e}")
-        return error(
-            f"Error querying low-rated media: {str(e)}",
-            code="LOW_RATED_ERROR",
-            status_code=500,
-        )
-
-
-@router.get(
-    "/incomplete-metadata",
-    summary="List media with missing key metadata",
-    description="Return media with NULL or empty values in any of the "
-    "configurable set of key fields: rating, studio, language, genre.",
-)
-async def get_incomplete_metadata(
-    fields: str = "rating,studio,language,genre",
-    limit: int = 200,
-    offset: int = 0,
-    logger: Any = Depends(get_logger),
-    db: ChubDB = Depends(get_database),
-) -> JSONResponse:
-    try:
-        allowed = {
-            "rating", "studio", "language", "genre", "runtime", "edition",
-            "tmdb_id", "tvdb_id", "imdb_id", "year",
-        }
-        requested = [f.strip() for f in fields.split(",") if f.strip() in allowed]
-        if not requested:
-            return error(
-                "No valid fields requested",
-                code="INVALID_FIELDS",
-                status_code=400,
-            )
-        limit = max(1, min(limit, 1000))
-        offset = max(0, offset)
-        # INTEGER columns can't be empty-string; compare to NULL/0 instead.
-        int_cols = {"tmdb_id", "tvdb_id", "runtime"}
-        clauses = []
-        for f in requested:
-            if f in int_cols:
-                clauses.append(f"({f} IS NULL OR {f} = 0)")
-            else:
-                clauses.append(f"({f} IS NULL OR {f} = '')")
-        clause = " OR ".join(clauses)
-        rows = db.worker.execute_query(
-            f"SELECT * FROM media_cache WHERE {clause} "
-            "ORDER BY title ASC LIMIT ? OFFSET ?",
-            (limit, offset),
-            fetch_all=True,
-        ) or []
-        return ok(
-            f"Found {len(rows)} media items with incomplete metadata",
-            {
-                "items": [dict(r) for r in rows],
-                "fields_checked": requested,
-                "limit": limit,
-                "offset": offset,
-            },
-        )
-    except Exception as e:
-        logger.error(f"Error querying incomplete metadata: {e}")
-        return error(
-            f"Error querying incomplete metadata: {str(e)}",
-            code="INCOMPLETE_META_ERROR",
-            status_code=500,
-        )
-
-
 @router.post(
     "/collections/from-tag",
     summary="Generate poster_collection from a tag",
@@ -2090,248 +1988,3 @@ async def get_import_exclusion(
         )
 
 
-# --- Library Maintenance -------------------------------------------------
-
-
-def _live_arr_ids_by_instance(config, logger) -> dict:
-    """For each enabled ARR instance we can reach, return the set of live
-    media ids. Unreachable instances are omitted so rows from them aren't
-    mistakenly labelled orphaned."""
-    live: dict[str, set] = {}
-    for inst_type in ("radarr", "sonarr", "lidarr"):
-        for name, info in getattr(config.instances, inst_type, {}).items():
-            if not info.enabled:
-                continue
-            client = create_arr_client(info.url, info.api, logger)
-            if not client or not client.connect_status:
-                continue
-            items = client.get_all_media() or []
-            live[name] = {it.get("id") for it in items if it.get("id") is not None}
-    return live
-
-
-@router.get(
-    "/orphaned",
-    summary="List cache rows whose ARR entry no longer exists",
-)
-async def get_orphaned_cache(
-    logger: Any = Depends(get_logger),
-    db: ChubDB = Depends(get_database),
-) -> JSONResponse:
-    try:
-        config = load_config()
-        live = _live_arr_ids_by_instance(config, logger)
-        rows = db.worker.execute_query(
-            "SELECT id, title, asset_type, instance_name, arr_id, folder, root_folder "
-            "FROM media_cache WHERE arr_id IS NOT NULL AND instance_name IS NOT NULL",
-            fetch_all=True,
-        ) or []
-        orphaned = [
-            dict(r) for r in rows
-            if r["instance_name"] in live and r["arr_id"] not in live[r["instance_name"]]
-        ]
-        return ok(
-            f"Found {len(orphaned)} orphaned cache row(s)",
-            {
-                "items": orphaned,
-                "total": len(orphaned),
-                "instances_checked": sorted(live.keys()),
-            },
-        )
-    except Exception as e:
-        logger.error(f"Error finding orphaned cache: {e}", exc_info=True)
-        return error(
-            f"Error finding orphaned cache: {str(e)}",
-            code="ORPHANED_ERROR",
-            status_code=500,
-        )
-
-
-class OrphanedPurgeRequest(BaseModel):
-    ids: List[int]
-
-
-@router.post(
-    "/orphaned/purge",
-    summary="Delete orphaned cache rows by id",
-)
-async def purge_orphaned_cache(
-    body: OrphanedPurgeRequest,
-    logger: Any = Depends(get_logger),
-    db: ChubDB = Depends(get_database),
-) -> JSONResponse:
-    try:
-        if not body.ids:
-            return error(
-                "No ids provided",
-                code="NO_IDS",
-                status_code=400,
-            )
-        placeholders = ",".join("?" for _ in body.ids)
-        db.worker.execute_query(
-            f"DELETE FROM media_cache WHERE id IN ({placeholders})",
-            tuple(body.ids),
-        )
-        logger.info(f"Purged {len(body.ids)} orphaned cache row(s)")
-        return ok(
-            f"Purged {len(body.ids)} row(s) from cache",
-            {"purged": len(body.ids)},
-        )
-    except Exception as e:
-        logger.error(f"Error purging orphaned cache: {e}", exc_info=True)
-        return error(
-            f"Error purging orphaned cache: {str(e)}",
-            code="PURGE_ERROR",
-            status_code=500,
-        )
-
-
-class PathReplaceRequest(BaseModel):
-    old_prefix: str
-    new_prefix: str
-    ids: Optional[List[int]] = None
-    move_files: bool = False
-
-
-def _scan_path_candidates(db: ChubDB, old_prefix: str, ids: Optional[List[int]]):
-    if not old_prefix:
-        return []
-    base = (
-        "SELECT id, title, asset_type, instance_name, arr_id, folder "
-        "FROM media_cache WHERE folder IS NOT NULL AND folder LIKE ? "
-        "AND arr_id IS NOT NULL AND instance_name IS NOT NULL"
-    )
-    params: list = [old_prefix + "%"]
-    if ids:
-        placeholders = ",".join("?" for _ in ids)
-        base += f" AND id IN ({placeholders})"
-        params.extend(ids)
-    rows = db.worker.execute_query(base, tuple(params), fetch_all=True) or []
-    return [dict(r) for r in rows]
-
-
-@router.post(
-    "/paths/preview",
-    summary="Preview a path prefix replace across all ARR instances",
-)
-async def preview_path_replace(
-    body: PathReplaceRequest,
-    logger: Any = Depends(get_logger),
-    db: ChubDB = Depends(get_database),
-) -> JSONResponse:
-    try:
-        if not body.old_prefix or not body.new_prefix:
-            return error(
-                "Both old_prefix and new_prefix are required",
-                code="MISSING_PREFIX",
-                status_code=400,
-            )
-        rows = _scan_path_candidates(db, body.old_prefix, body.ids)
-        results = []
-        for r in rows:
-            new_path = body.new_prefix + r["folder"][len(body.old_prefix):]
-            results.append({
-                **r,
-                "old_path": r["folder"],
-                "new_path": new_path,
-            })
-        return ok(
-            f"Preview: {len(results)} item(s) affected",
-            {
-                "items": results,
-                "total": len(results),
-                "old_prefix": body.old_prefix,
-                "new_prefix": body.new_prefix,
-            },
-        )
-    except Exception as e:
-        logger.error(f"Error previewing path replace: {e}", exc_info=True)
-        return error(
-            f"Error previewing path replace: {str(e)}",
-            code="PATH_PREVIEW_ERROR",
-            status_code=500,
-        )
-
-
-@router.post(
-    "/paths/apply",
-    summary="Apply a path prefix replace across the selected ARR items",
-)
-async def apply_path_replace(
-    body: PathReplaceRequest,
-    logger: Any = Depends(get_logger),
-    db: ChubDB = Depends(get_database),
-) -> JSONResponse:
-    try:
-        if not body.old_prefix or not body.new_prefix:
-            return error(
-                "Both old_prefix and new_prefix are required",
-                code="MISSING_PREFIX",
-                status_code=400,
-            )
-        rows = _scan_path_candidates(db, body.old_prefix, body.ids)
-        if not rows:
-            return ok("No items match the prefix", {"applied": 0, "failed": 0, "results": []})
-
-        config = load_config()
-
-        def find_instance(name: str):
-            for inst_type in ("radarr", "sonarr", "lidarr"):
-                inst_map = getattr(config.instances, inst_type, {})
-                if name in inst_map:
-                    return inst_type, inst_map[name]
-            return None, None
-
-        resource_for_type = {"movie": "movie", "show": "series", "artist": "artist"}
-        applied = 0
-        failed = 0
-        results = []
-        move_flag = "true" if body.move_files else "false"
-
-        for r in rows:
-            new_path = body.new_prefix + r["folder"][len(body.old_prefix):]
-            inst_type, inst_detail = find_instance(r["instance_name"])
-            if not inst_detail or not inst_detail.url or not inst_detail.api:
-                failed += 1
-                results.append({**r, "new_path": new_path, "status": "instance_not_found"})
-                continue
-            client = create_arr_client(inst_detail.url, inst_detail.api, logger)
-            if not client or not client.connect_status:
-                failed += 1
-                results.append({**r, "new_path": new_path, "status": "unreachable"})
-                continue
-            resource = resource_for_type.get(r["asset_type"])
-            if not resource:
-                failed += 1
-                results.append({**r, "new_path": new_path, "status": "unsupported_type"})
-                continue
-            raw = client.make_get_request(f"{client.api_base}/{resource}/{r['arr_id']}")
-            if not raw:
-                failed += 1
-                results.append({**r, "new_path": new_path, "status": "arr_fetch_failed"})
-                continue
-            raw["path"] = os.path.normpath(new_path)
-            put_url = f"{client.api_base}/{resource}/{r['arr_id']}?moveFiles={move_flag}"
-            resp = client.make_put_request(put_url, json=raw)
-            if resp is None:
-                failed += 1
-                results.append({**r, "new_path": new_path, "status": "arr_put_failed"})
-                continue
-            applied += 1
-            results.append({**r, "new_path": new_path, "status": "applied"})
-            logger.info(
-                f"Path update [{r['instance_name']}] {r['arr_id']}: {r['folder']} -> {new_path} "
-                f"(move_files={body.move_files})"
-            )
-
-        return ok(
-            f"Applied {applied} update(s), {failed} failure(s)",
-            {"applied": applied, "failed": failed, "results": results},
-        )
-    except Exception as e:
-        logger.error(f"Error applying path replace: {e}", exc_info=True)
-        return error(
-            f"Error applying path replace: {str(e)}",
-            code="PATH_APPLY_ERROR",
-            status_code=500,
-        )
