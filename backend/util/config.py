@@ -177,7 +177,6 @@ class NestarrMapping(BaseModel):
 
 class NestarrConfig(BaseModel):
     log_level: str = "info"
-    dry_run: bool = False
     library_mappings: List[NestarrMapping] = Field(default_factory=list)
     path_mapping: Optional[List[Dict[str, str]]] = None
     instances: Optional[List[str]] = None  # Deprecated: kept for backward compat

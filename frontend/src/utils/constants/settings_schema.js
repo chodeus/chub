@@ -640,12 +640,6 @@ export const SETTINGS_SCHEMA = [
                 description: 'Set the logging verbosity for nest detection.',
             },
             {
-                key: 'dry_run',
-                label: 'Dry Run',
-                type: 'check_box',
-                description: 'Report nested media without making changes.',
-            },
-            {
                 key: 'library_mappings',
                 label: 'Library Mappings',
                 type: 'object_array',

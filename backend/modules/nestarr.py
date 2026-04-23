@@ -1,6 +1,8 @@
 # modules/nestarr.py
 
+import json
 import os
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from backend.util.arr import create_arr_client
@@ -9,6 +11,64 @@ from backend.util.database import ChubDB
 from backend.util.helper import create_table, print_settings, progress
 from backend.util.logger import Logger
 from backend.util.notification import NotificationManager
+
+SCAN_TYPE = "nestarr"
+
+
+def _scan_cache_db(db: ChubDB):
+    return db.media
+
+
+def save_scan_results(
+    db: ChubDB, issues: list, instances_checked: list, logger=None
+) -> None:
+    """Persist Nestarr scan results to the scan_cache table so both the
+    module run path and the UI scan endpoint hydrate the same cache."""
+    try:
+        scanned_at = datetime.now(timezone.utc).isoformat()
+        payload = json.dumps(
+            {
+                "issues": issues,
+                "total": len(issues),
+                "instances_checked": instances_checked,
+            },
+            default=str,
+        )
+        _scan_cache_db(db).execute_query(
+            "INSERT OR REPLACE INTO scan_cache (scan_type, data, scanned_at) VALUES (?, ?, ?)",
+            (SCAN_TYPE, payload, scanned_at),
+        )
+        if logger:
+            logger.debug(f"Saved {len(issues)} scan results to cache")
+    except Exception as e:
+        if logger:
+            logger.error(f"Failed to save scan cache: {e}")
+
+
+def load_scan_results(db: ChubDB, logger=None) -> Optional[Dict[str, Any]]:
+    try:
+        row = _scan_cache_db(db).execute_query(
+            "SELECT data, scanned_at FROM scan_cache WHERE scan_type = ?",
+            (SCAN_TYPE,),
+            fetch_one=True,
+        )
+        if row and row.get("data"):
+            result = json.loads(row["data"])
+            result["scanned_at"] = row.get("scanned_at")
+            return result
+    except Exception as e:
+        if logger:
+            logger.error(f"Failed to load scan cache: {e}")
+    return None
+
+
+def enabled_arr_instances(instances_config) -> List[str]:
+    found = set()
+    for inst_type in ("radarr", "sonarr", "lidarr"):
+        for name, info in getattr(instances_config, inst_type, {}).items():
+            if info.enabled:
+                found.add(name)
+    return sorted(found)
 
 
 class _NestScanner:
@@ -830,11 +890,6 @@ class Nestarr(ChubModule):
             if self.config.log_level.lower() == "debug":
                 print_settings(self.logger, self.config)
 
-            if self.config.dry_run:
-                table = [["Dry Run"], ["NO CHANGES WILL BE MADE"]]
-                self.logger.info(create_table(table))
-                self.logger.info("")
-
             with ChubDB(logger=self.logger, quiet=True) as db:
                 scanner = _NestScanner(
                     self.full_config.instances,
@@ -849,6 +904,14 @@ class Nestarr(ChubModule):
                 self.logger.info("Scanning for unmatched and nested media...")
                 self.logger.info("")
                 all_issues = scanner.scan()
+
+                if not self.is_cancelled():
+                    save_scan_results(
+                        db,
+                        all_issues,
+                        enabled_arr_instances(self.full_config.instances),
+                        logger=self.logger,
+                    )
 
             if self.is_cancelled():
                 self.logger.info("Scan cancelled.")
