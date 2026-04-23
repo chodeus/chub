@@ -124,8 +124,20 @@ const BreakdownTabs = ({ stats }) => {
                                 color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
                             }}
                         >
-                            {tab.label}
-                            <span className="ml-1.5 text-tertiary font-medium">{count}</span>
+                            <span>{tab.label}</span>
+                            <span
+                                className="ml-2 text-tertiary font-medium tabular-nums"
+                                style={{
+                                    paddingLeft: '0.5rem',
+                                    borderLeft: `1px solid ${
+                                        isActive
+                                            ? 'color-mix(in srgb, var(--accent) 40%, transparent)'
+                                            : 'var(--border)'
+                                    }`,
+                                }}
+                            >
+                                {count}
+                            </span>
                         </button>
                     );
                 })}
