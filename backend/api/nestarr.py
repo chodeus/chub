@@ -1,6 +1,5 @@
 # api/nestarr.py
 
-import json
 import os
 from datetime import datetime, timezone
 
@@ -8,64 +7,15 @@ from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 
 from backend.api.utils import error, get_database, get_module_logger, ok
-from backend.modules.nestarr import Nestarr
+from backend.modules.nestarr import (
+    Nestarr,
+    enabled_arr_instances,
+    load_scan_results,
+    save_scan_results,
+)
 from backend.util.arr import create_arr_client
 from backend.util.config import load_config
 from backend.util.database import ChubDB
-
-SCAN_TYPE = "nestarr"
-
-
-def _get_db_base(db: ChubDB):
-    """Get a DatabaseBase interface from ChubDB for raw queries."""
-    # ChubDB is a facade; use any sub-interface (e.g. media) for execute_query
-    return db.media
-
-
-def _save_scan_cache(db: ChubDB, issues: list, instances_checked: list, logger=None) -> None:
-    """Persist scan results to the scan_cache table."""
-    try:
-        scanned_at = datetime.now(timezone.utc).isoformat()
-        payload = json.dumps(
-            {
-                "issues": issues,
-                "total": len(issues),
-                "instances_checked": instances_checked,
-            },
-            default=str,
-        )
-        _get_db_base(db).execute_query(
-            "INSERT OR REPLACE INTO scan_cache (scan_type, data, scanned_at) VALUES (?, ?, ?)",
-            (SCAN_TYPE, payload, scanned_at),
-        )
-        if logger:
-            logger.debug(f"Saved {len(issues)} scan results to cache")
-    except Exception as e:
-        if logger:
-            logger.error(f"Failed to save scan cache: {e}")
-
-
-def _load_scan_cache(db: ChubDB, logger=None) -> dict | None:
-    """Load cached scan results from the scan_cache table."""
-    try:
-        row = _get_db_base(db).execute_query(
-            "SELECT data, scanned_at FROM scan_cache WHERE scan_type = ?",
-            (SCAN_TYPE,),
-            fetch_one=True,
-        )
-        if row and row.get("data"):
-            result = json.loads(row["data"])
-            result["scanned_at"] = row.get("scanned_at")
-            if logger:
-                logger.debug(
-                    f"Loaded {result.get('total', 0)} cached scan results "
-                    f"from {result.get('scanned_at', '?')}"
-                )
-            return result
-    except Exception as e:
-        if logger:
-            logger.error(f"Failed to load scan cache: {e}")
-    return None
 
 router = APIRouter(
     prefix="/api/nestarr",
@@ -77,7 +27,7 @@ router = APIRouter(
 async def get_cached_scan_results(request: Request, db: ChubDB = Depends(get_database)):
     """Return the most recent cached scan results, or empty if no scan has been run."""
     logger = get_module_logger(request, "nestarr")
-    cached = _load_scan_cache(db, logger=logger)
+    cached = load_scan_results(db, logger=logger)
     if cached:
         return ok(
             message="Cached scan results loaded",
@@ -119,15 +69,8 @@ async def scan_nested_media(request: Request, db: ChubDB = Depends(get_database)
             path_mapping=path_mapping,
         )
 
-        instances_checked = set()
-        for inst_type in ["radarr", "sonarr", "lidarr"]:
-            instances = getattr(config.instances, inst_type, {})
-            for name, info in instances.items():
-                if info.enabled:
-                    instances_checked.add(name)
-
-        sorted_instances = sorted(instances_checked)
-        _save_scan_cache(db, issues, sorted_instances, logger=logger)
+        sorted_instances = enabled_arr_instances(config.instances)
+        save_scan_results(db, issues, sorted_instances, logger=logger)
 
         return ok(
             message=f"Scan complete. Found {len(issues)} nesting issue(s).",
@@ -280,22 +223,6 @@ async def fix_nested_media(request: Request, body: FixRequest):
             return ok(
                 message="Media is already at the target path — no move needed",
                 data={"media_id": body.media_id, "path": new_path},
-            )
-
-        # Respect dry_run config — preview only, no actual changes
-        if getattr(config.nestarr, "dry_run", False):
-            logger.info(
-                f"[DRY RUN] Would move {body.instance_type} item {body.media_id}: "
-                f"{old_path} -> {new_path}"
-            )
-            return ok(
-                message=f"[Dry Run] Would move media to {new_path} — no changes made",
-                data={
-                    "media_id": body.media_id,
-                    "old_path": old_path,
-                    "new_path": new_path,
-                    "dry_run": True,
-                },
             )
 
         # 2. Update the path field
