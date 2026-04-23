@@ -288,6 +288,7 @@ const ModuleSettingsContent = () => {
                                     }}
                                     className="space-y-4 md:space-y-6"
                                     noValidate
+                                    autoComplete="off"
                                 >
                                     {module.fields.map((field, fieldIndex) => {
                                         try {
