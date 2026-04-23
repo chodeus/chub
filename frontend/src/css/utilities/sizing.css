@@ -777,4 +777,15 @@
     @media (width >= 1536px) {
         .container { max-width: 1536px; }
     }
+
+    @media (width >= 640px) {
+        .sm\:min-w-24 { min-width: 6rem; }
+    }
+
+    @media (width >= 768px) {
+        .md\:min-w-0 { min-width: 0; }
+        .md\:min-w-25 { min-width: 6.25rem; }
+        .md\:min-w-30 { min-width: 7.5rem; }
+        .md\:max-w-sm { max-width: 24rem; }
+    }
 }

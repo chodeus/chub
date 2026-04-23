@@ -712,6 +712,29 @@
         .lg\:grid-cols-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
         .lg\:grid-cols-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
         .lg\:grid-cols-7 { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+        .lg\:grid-cols-8 { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+    }
+
+    /* Wide desktop: 1280px */
+    @media (width >= 1280px) {
+        .xl\:grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
+        .xl\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .xl\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .xl\:grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+        .xl\:grid-cols-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+        .xl\:grid-cols-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+        .xl\:grid-cols-7 { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+        .xl\:grid-cols-8 { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+    }
+
+    @media (width >= 640px) {
+        .sm\:col-span-2 { grid-column: span 2 / span 2; }
+        .sm\:table-auto { table-layout: auto; }
+        .sm\:table-cell { display: table-cell; }
+    }
+
+    @media (width >= 768px) {
+        .md\:flex-shrink-0 { flex-shrink: 0; }
     }
 
     /* ===========================================

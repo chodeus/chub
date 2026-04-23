@@ -350,6 +350,27 @@
     .text-info\/70 { color: color-mix(in srgb, var(--info) 70%, transparent); }
     .text-info\/80 { color: color-mix(in srgb, var(--info) 80%, transparent); }
 
+    .bg-primary\/15 { background: color-mix(in srgb, var(--primary) 15%, transparent); }
+    .bg-primary\/25 { background: color-mix(in srgb, var(--primary) 25%, transparent); }
+    .bg-success\/15 { background: color-mix(in srgb, var(--success) 15%, transparent); }
+    .bg-warning\/15 { background: color-mix(in srgb, var(--warning) 15%, transparent); }
+    .bg-error\/15 { background: color-mix(in srgb, var(--error) 15%, transparent); }
+    .bg-black\/55 { background: color-mix(in srgb, #000 55%, transparent); }
+    .bg-black\/60 { background: color-mix(in srgb, #000 60%, transparent); }
+    .bg-secondary\/15 { background: color-mix(in srgb, var(--text-secondary) 15%, transparent); }
+    .bg-secondary\/20 { background: color-mix(in srgb, var(--text-secondary) 20%, transparent); }
+    .bg-surface-alt\/30 { background: color-mix(in srgb, var(--surface-alt) 30%, transparent); }
+    .bg-surface-alt\/50 { background: color-mix(in srgb, var(--surface-alt) 50%, transparent); }
+    .bg-bg\/50 { background: color-mix(in srgb, var(--bg) 50%, transparent); }
+    .bg-bg-secondary\/30 { background: color-mix(in srgb, var(--bg-secondary) 30%, transparent); }
+
+    .border-brand-primary\/50 { border-color: color-mix(in srgb, var(--primary) 50%, transparent); }
+    .border-error\/30 { border-color: color-mix(in srgb, var(--error) 30%, transparent); }
+    .border-error\/40 { border-color: color-mix(in srgb, var(--error) 40%, transparent); }
+    .border-warning\/30 { border-color: color-mix(in srgb, var(--warning) 30%, transparent); }
+
+    .text-tertiary\/60 { color: color-mix(in srgb, var(--text-tertiary) 60%, transparent); }
+
     /* ===========================================
      DYNAMIC COLOR UTILITIES
      =========================================== */

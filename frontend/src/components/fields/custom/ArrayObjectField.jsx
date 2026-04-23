@@ -111,7 +111,8 @@ export const ArrayObjectField = ({
         return (
             <div key={index} className="border-b border-border last:border-b-0">
                 <div
-                    className="flex items-center justify-between p-3 min-h-11 cursor-pointer transition-colors hover:bg-surface-hover focus:bg-surface-hover focus:outline-2 focus:outline-primary focus:outline-offset-[-2px]"
+                    className="flex items-center justify-between p-3 min-h-11 cursor-pointer transition-colors hover:bg-surface-hover focus:bg-surface-hover focus:outline-2 focus:outline-primary"
+                    style={{ outlineOffset: '-2px' }}
                     onClick={() => handleEdit(index)}
                     tabIndex={0}
                     onKeyDown={e => {
@@ -124,9 +125,7 @@ export const ArrayObjectField = ({
                     <div className="flex-1 flex flex-col gap-1 md:flex-row md:items-center md:gap-4 min-w-0">
                         <div className="font-medium text-primary text-sm truncate">{primary}</div>
                         {secondary && (
-                            <div className="text-xs text-secondary truncate md:flex-shrink md:min-w-30">
-                                {secondary}
-                            </div>
+                            <div className="text-xs text-secondary truncate">{secondary}</div>
                         )}
                         {badge && (
                             <div className="inline-flex items-center px-2 py-0.5 bg-accent-bg text-brand-primary-text rounded text-xs font-medium whitespace-nowrap self-start md:ml-auto md:flex-shrink-0">
