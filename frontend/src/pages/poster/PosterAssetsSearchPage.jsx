@@ -329,7 +329,10 @@ const PosterAssetsSearchPage = () => {
                         <option value="season">Seasons</option>
                     </select>
                 </div>
-                <div className="flex items-center gap-2 flex-1 min-w-[200px] max-w-sm">
+                <div
+                    className="flex items-center gap-2 flex-1 max-w-sm"
+                    style={{ minWidth: '200px' }}
+                >
                     <label className="text-sm text-secondary">Search</label>
                     <input
                         type="text"
@@ -529,7 +532,8 @@ const PosterAssetsSearchPage = () => {
                                         <button
                                             type="button"
                                             onClick={() => setLightboxItem(item)}
-                                            className="aspect-[2/3] bg-surface-alt overflow-hidden block w-full p-0 border-0 cursor-zoom-in"
+                                            className="bg-surface-alt overflow-hidden block w-full p-0 border-0 cursor-zoom-in"
+                                            style={{ aspectRatio: '2 / 3' }}
                                             aria-label={`Enlarge ${displayTitle}`}
                                         >
                                             <img
@@ -669,7 +673,8 @@ const PosterAssetsSearchPage = () => {
                                         : postersAPI.getThumbnailUrl(lightboxItem.id, 500)
                                 }
                                 alt={lightboxItem.title}
-                                className="max-h-[75vh] w-auto object-contain"
+                                className="w-auto object-contain"
+                                style={{ maxHeight: '75vh' }}
                             />
                         </div>
                     )}
