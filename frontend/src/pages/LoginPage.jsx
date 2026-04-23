@@ -161,7 +161,7 @@ const LoginPage = () => {
                     border-radius: var(--radius-lg, 16px);
                     background: var(--surface);
                     color: var(--text-primary);
-                    font-size: 0.875rem;
+                    font-size: 1rem;
                     outline: none;
                     box-sizing: border-box;
                 }
