@@ -1254,6 +1254,18 @@ async def get_low_rated(
         )
 
 
+# Fields the ARR normalize layer never populates for a given asset_type, so
+# flagging them as "missing" is a false positive. Radarr has no tvdbId,
+# Sonarr has no tmdbId, Lidarr (artist) uses MusicBrainz IDs and leaves
+# tmdb/tvdb/imdb + rating/runtime/language/edition as None by design.
+_NEVER_POPULATED_FIELDS = {
+    "movie":  {"tvdb_id"},
+    "show":   {"tmdb_id"},
+    "artist": {"tmdb_id", "tvdb_id", "imdb_id",
+               "rating", "runtime", "language", "edition"},
+}
+
+
 @router.get("/incomplete-metadata", summary="List media with missing key metadata")
 async def get_incomplete_metadata(
     fields: str = "rating,studio,language,genre",
@@ -1278,23 +1290,78 @@ async def get_incomplete_metadata(
         offset = max(0, offset)
         # INTEGER columns can't be empty-string; compare to NULL/0 instead.
         int_cols = {"tmdb_id", "tvdb_id", "runtime"}
-        clauses = []
+
+        # Build a per-asset-type WHERE: for each known asset_type, only
+        # include requested fields that type can actually populate. A row
+        # matches if its asset_type has at least one null/empty expected
+        # field. Rows with unrecognised asset_types fall through a catch-all
+        # that uses the raw requested list.
+        subclauses = []
+        params: list = []
+        known_types = ("movie", "show", "artist")
+        for atype in known_types:
+            never = _NEVER_POPULATED_FIELDS.get(atype, set())
+            effective = [f for f in requested if f not in never]
+            if not effective:
+                continue
+            field_clauses = []
+            for f in effective:
+                if f in int_cols:
+                    field_clauses.append(f"({f} IS NULL OR {f} = 0)")
+                else:
+                    field_clauses.append(f"({f} IS NULL OR {f} = '')")
+            subclauses.append(
+                f"(asset_type = ? AND ({' OR '.join(field_clauses)}))"
+            )
+            params.append(atype)
+
+        # Fallback for any asset_type outside the known set — apply the full
+        # requested list as before. Keeps forward-compat if we add types.
+        unknown_field_clauses = []
         for f in requested:
             if f in int_cols:
-                clauses.append(f"({f} IS NULL OR {f} = 0)")
+                unknown_field_clauses.append(f"({f} IS NULL OR {f} = 0)")
             else:
-                clauses.append(f"({f} IS NULL OR {f} = '')")
-        clause = " OR ".join(clauses)
+                unknown_field_clauses.append(f"({f} IS NULL OR {f} = '')")
+        unknown_placeholders = ",".join(["?"] * len(known_types))
+        subclauses.append(
+            f"(asset_type NOT IN ({unknown_placeholders}) "
+            f"AND ({' OR '.join(unknown_field_clauses)}))"
+        )
+        params.extend(known_types)
+
+        where = " OR ".join(subclauses)
         rows = db.worker.execute_query(
-            f"SELECT * FROM media_cache WHERE {clause} "
+            f"SELECT * FROM media_cache WHERE {where} "
             "ORDER BY title ASC LIMIT ? OFFSET ?",
-            (limit, offset),
+            (*params, limit, offset),
             fetch_all=True,
         ) or []
+
+        # Compute per-row `missing` server-side using the same expected-field
+        # map, so the UI doesn't have to replicate the logic.
+        items = []
+        for r in rows:
+            row = dict(r)
+            never = _NEVER_POPULATED_FIELDS.get(row.get("asset_type") or "", set())
+            missing = []
+            for f in requested:
+                if f in never:
+                    continue
+                val = row.get(f)
+                if f in int_cols:
+                    if val is None or val == 0:
+                        missing.append(f)
+                else:
+                    if val is None or val == "":
+                        missing.append(f)
+            row["missing"] = missing
+            items.append(row)
+
         return ok(
-            f"Found {len(rows)} media items with incomplete metadata",
+            f"Found {len(items)} media items with incomplete metadata",
             {
-                "items": [dict(r) for r in rows],
+                "items": items,
                 "fields_checked": requested,
                 "limit": limit,
                 "offset": offset,
