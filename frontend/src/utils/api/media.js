@@ -256,21 +256,6 @@ export const mediaAPI = {
         return apiCore.post('/media/export', options);
     },
 
-    /**
-     * Import media data
-     * @param {Object} importData - Import data
-     * @param {Object} options - Import options
-     * @param {boolean} options.merge - Merge with existing data
-     * @param {boolean} options.overwrite - Overwrite existing metadata
-     * @returns {Promise<Object>} Import job information
-     */
-    importMedia: (importData, options = {}) => {
-        return apiCore.post('/media/import', {
-            data: importData,
-            ...options,
-        });
-    },
-
     fetchOrphaned: () => apiCore.get('/media/orphaned', { useCache: false }),
 
     purgeOrphaned: ids => apiCore.post('/media/orphaned/purge', { ids }),
@@ -284,10 +269,4 @@ export const mediaAPI = {
             `/media/incomplete-metadata?fields=${encodeURIComponent(fields)}&limit=${limit}&offset=${offset}`,
             { useCache: false }
         ),
-
-    previewPathReplace: ({ old_prefix, new_prefix, ids = null }) =>
-        apiCore.post('/media/paths/preview', { old_prefix, new_prefix, ids }),
-
-    applyPathReplace: ({ old_prefix, new_prefix, ids = null, move_files = false }) =>
-        apiCore.post('/media/paths/apply', { old_prefix, new_prefix, ids, move_files }),
 };
