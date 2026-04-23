@@ -17,104 +17,125 @@ const StatCard = ({ label, value, subtext, color = 'text-primary' }) => (
     <div className="p-5 rounded-xl bg-surface border border-border flex flex-col">
         <p className="text-sm text-secondary mb-1">{label}</p>
         <p className={`text-3xl font-bold ${color}`}>{value}</p>
-        <p className="text-xs text-tertiary mt-1 min-h-[1rem]">{subtext || '\u00a0'}</p>
+        <p className="text-xs text-tertiary mt-1" style={{ minHeight: '1rem' }}>
+            {subtext || '\u00a0'}
+        </p>
     </div>
 );
 
-/**
- * Reusable breakdown section.
- *
- * `variant` chooses the rendering:
- *   - 'chips': pill list. Good for small bounded sets where every value
- *     is roughly comparable (e.g. Status: 6 values).
- *   - 'bars':  horizontal bars sorted by count desc. Good for skewed
- *     high-cardinality sets where the visual gap between the top value
- *     and the tail matters (e.g. Language: English 2209 vs Arabic 1).
- *   - 'auto':  bars when items.length > 8, chips otherwise. Default.
- */
-const BreakdownSection = ({
-    title,
-    items,
-    labelKey,
-    countKey = 'count',
-    maxItems = null,
-    variant = 'auto',
-}) => {
+const BreakdownBars = ({ items, labelKey, countKey = 'count', maxItems = null }) => {
     const [expanded, setExpanded] = useState(false);
     if (!items || items.length === 0) return null;
 
-    const resolvedVariant = variant === 'auto' ? (items.length > 8 ? 'bars' : 'chips') : variant;
-
-    // For bars we always sort by count desc so the visual proportion is
-    // legible at a glance. Chips keep the API-provided order (status has a
-    // natural reading order, e.g. Released → Continuing → Ended).
-    const sortedItems =
-        resolvedVariant === 'bars'
-            ? [...items].sort((a, b) => (b[countKey] ?? 0) - (a[countKey] ?? 0))
-            : items;
-
+    const sortedItems = [...items].sort((a, b) => (b[countKey] ?? 0) - (a[countKey] ?? 0));
     const displayItems = maxItems && !expanded ? sortedItems.slice(0, maxItems) : sortedItems;
     const hasMore = maxItems && items.length > maxItems;
-
     const maxCount = sortedItems.reduce((m, it) => Math.max(m, it[countKey] ?? 0), 0) || 1;
 
     return (
-        <section>
-            <h3 className="text-lg font-semibold text-primary mb-3">
-                {title} ({items.length})
-            </h3>
-            {resolvedVariant === 'chips' ? (
-                <div className="flex flex-wrap gap-2">
-                    {displayItems.map((item, idx) => (
-                        <span
+        <div>
+            <div className="flex flex-col gap-1.5">
+                {displayItems.map((item, idx) => {
+                    const count = item[countKey] ?? 0;
+                    const pct = Math.round((count / maxCount) * 100);
+                    return (
+                        <div
                             key={item[labelKey] || idx}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-alt text-sm"
+                            className="grid items-center gap-3 text-sm"
+                            style={{ gridTemplateColumns: 'minmax(6rem, 9rem) 1fr auto' }}
                         >
-                            <span className="text-primary capitalize">
+                            <span className="text-primary capitalize truncate">
                                 {item[labelKey] || 'Unknown'}
                             </span>
-                            <span className="text-tertiary font-medium">{item[countKey]}</span>
-                        </span>
-                    ))}
-                </div>
-            ) : (
-                <div className="flex flex-col gap-1.5">
-                    {displayItems.map((item, idx) => {
-                        const count = item[countKey] ?? 0;
-                        const pct = Math.round((count / maxCount) * 100);
-                        return (
                             <div
-                                key={item[labelKey] || idx}
-                                className="grid grid-cols-[minmax(6rem,9rem)_1fr_auto] items-center gap-3 text-sm"
+                                className="h-2 rounded-full bg-surface-alt overflow-hidden"
+                                role="presentation"
                             >
-                                <span className="text-primary capitalize truncate">
-                                    {item[labelKey] || 'Unknown'}
-                                </span>
                                 <div
-                                    className="h-2 rounded-full bg-surface-alt overflow-hidden"
-                                    role="presentation"
-                                >
-                                    <div
-                                        className="h-full bg-accent/80"
-                                        style={{ width: `${pct}%` }}
-                                    />
-                                </div>
-                                <span className="tabular-nums text-tertiary font-medium">
-                                    {count.toLocaleString()}
-                                </span>
+                                    className="h-full"
+                                    style={{
+                                        width: `${pct}%`,
+                                        background: 'var(--accent)',
+                                    }}
+                                />
                             </div>
-                        );
-                    })}
-                </div>
-            )}
+                            <span className="tabular-nums text-tertiary font-medium">
+                                {count.toLocaleString()}
+                            </span>
+                        </div>
+                    );
+                })}
+            </div>
             {hasMore && (
                 <button
-                    className="mt-2 text-sm text-accent hover:underline"
+                    className="mt-3 text-sm text-accent hover:underline"
                     onClick={() => setExpanded(!expanded)}
                 >
                     {expanded ? 'Show less' : `Show all ${items.length}`}
                 </button>
             )}
+        </div>
+    );
+};
+
+const BREAKDOWN_TABS = [
+    { key: 'by_status', label: 'Status', labelKey: 'status' },
+    { key: 'by_language', label: 'Language', labelKey: 'language' },
+    { key: 'by_rating', label: 'Rating', labelKey: 'rating' },
+    { key: 'by_studio', label: 'Studio', labelKey: 'studio', maxItems: 20 },
+    { key: 'by_decade', label: 'Decade', labelKey: 'decade' },
+    { key: 'by_genre', label: 'Genre', labelKey: 'genre' },
+    { key: 'by_runtime', label: 'Runtime', labelKey: 'bucket' },
+];
+
+const BreakdownTabs = ({ stats }) => {
+    const availableTabs = BREAKDOWN_TABS.filter(tab => (stats[tab.key] || []).length > 0);
+    const [activeKey, setActiveKey] = useState(null);
+
+    const resolvedActive =
+        activeKey && availableTabs.some(t => t.key === activeKey)
+            ? activeKey
+            : availableTabs[0]?.key;
+
+    if (availableTabs.length === 0) return null;
+
+    const activeTab = availableTabs.find(t => t.key === resolvedActive);
+    const activeItems = stats[activeTab.key] || [];
+
+    return (
+        <section>
+            <h3 className="text-lg font-semibold text-primary mb-3">Breakdowns</h3>
+            <div className="flex flex-wrap gap-2 mb-4" role="tablist">
+                {availableTabs.map(tab => {
+                    const isActive = tab.key === resolvedActive;
+                    const count = (stats[tab.key] || []).length;
+                    return (
+                        <button
+                            key={tab.key}
+                            role="tab"
+                            aria-selected={isActive}
+                            onClick={() => setActiveKey(tab.key)}
+                            className="px-3 py-1.5 rounded-full text-sm transition-colors"
+                            style={{
+                                background: isActive
+                                    ? 'color-mix(in srgb, var(--accent) 18%, transparent)'
+                                    : 'var(--surface)',
+                                border: `1px solid ${isActive ? 'var(--accent)' : 'var(--border)'}`,
+                                color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
+                            }}
+                        >
+                            {tab.label}
+                            <span className="ml-1.5 text-tertiary font-medium">{count}</span>
+                        </button>
+                    );
+                })}
+            </div>
+            <BreakdownBars
+                key={activeTab.key}
+                items={activeItems}
+                labelKey={activeTab.labelKey}
+                maxItems={activeTab.maxItems || null}
+            />
         </section>
     );
 };
@@ -224,7 +245,10 @@ const MediaStatsPage = () => {
                                     <p className="text-sm font-medium text-primary capitalize mb-2 flex items-center gap-2">
                                         {row.asset_type}
                                         {zeroMatch && (
-                                            <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-error/20 text-error">
+                                            <span
+                                                className="uppercase tracking-wider px-1.5 py-0.5 rounded bg-error/20 text-error"
+                                                style={{ fontSize: '10px' }}
+                                            >
                                                 0% match
                                             </span>
                                         )}
@@ -279,7 +303,10 @@ const MediaStatsPage = () => {
                                     <p className="text-sm font-medium text-primary mb-2 flex items-center gap-2">
                                         {row.instance_name}
                                         {zeroMatch && (
-                                            <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-error/20 text-error">
+                                            <span
+                                                className="uppercase tracking-wider px-1.5 py-0.5 rounded bg-error/20 text-error"
+                                                style={{ fontSize: '10px' }}
+                                            >
                                                 0% match
                                             </span>
                                         )}
@@ -311,46 +338,7 @@ const MediaStatsPage = () => {
                 </section>
             )}
 
-            {/* By Status — small bounded set, keep as chips */}
-            <BreakdownSection
-                title="By Status"
-                items={stats.by_status}
-                labelKey="status"
-                variant="chips"
-            />
-
-            {/* By Language — high-cardinality + skewed, bars read better */}
-            <BreakdownSection title="By Language" items={stats.by_language} labelKey="language" />
-
-            {/* By Rating — high-cardinality + skewed */}
-            <BreakdownSection title="By Rating" items={stats.by_rating} labelKey="rating" />
-
-            {/* By Studio — long tail, top 20 */}
-            <BreakdownSection
-                title="By Studio"
-                items={stats.by_studio}
-                labelKey="studio"
-                maxItems={20}
-            />
-
-            {/* By Decade — small bounded set */}
-            <BreakdownSection
-                title="By Decade"
-                items={stats.by_decade}
-                labelKey="decade"
-                variant="chips"
-            />
-
-            {/* By Genre — bars */}
-            <BreakdownSection title="By Genre" items={stats.by_genre} labelKey="genre" />
-
-            {/* By Runtime — small bounded set */}
-            <BreakdownSection
-                title="By Runtime"
-                items={stats.by_runtime}
-                labelKey="bucket"
-                variant="chips"
-            />
+            <BreakdownTabs stats={stats} />
         </div>
     );
 };
