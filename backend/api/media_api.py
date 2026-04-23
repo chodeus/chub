@@ -1322,7 +1322,7 @@ def _live_arr_ids_by_instance(config, logger) -> dict:
             if not client or not client.connect_status:
                 continue
             items = client.get_all_media() or []
-            live[name] = {it.get("id") for it in items if it.get("id") is not None}
+            live[name] = {it.get("arr_id") for it in items if it.get("arr_id") is not None}
     return live
 
 
