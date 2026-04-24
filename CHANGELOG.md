@@ -2,6 +2,19 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.6.0](https://github.com/chodeus/chub/compare/v1.5.0...v1.6.0) (2026-04-24)
+
+
+### Features
+
+* **notifications:** add border_replacerr and sync_gdrive surfaces ([553980a](https://github.com/chodeus/chub/commit/553980a8dc320215216a796b67be4cd6d618819e))
+
+
+### Bug Fixes
+
+* **media-api:** strip /config disk prefix from Lidarr artist poster paths ([2485aab](https://github.com/chodeus/chub/commit/2485aab6be80cfa8796723bd5c37e3a8bd51a6e2))
+* **media-search:** include JWT in poster &lt;img src&gt; query param ([c8ea139](https://github.com/chodeus/chub/commit/c8ea1398186cc25abd0ada426d533615f778e1cc))
+
 ## [1.5.0](https://github.com/chodeus/chub/compare/v1.4.1...v1.5.0) (2026-04-24)
 
 
