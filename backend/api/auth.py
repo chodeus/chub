@@ -4,6 +4,7 @@ Authentication API endpoints for CHUB.
 Provides login, setup (first-run), and auth status endpoints.
 """
 
+import hmac
 from typing import Any
 
 from fastapi import APIRouter, Depends
@@ -152,11 +153,19 @@ async def login(
             status_code=500,
         )
 
-    if (
-        request_data.username != config.auth.username
-        or not verify_password(request_data.password, config.auth.password_hash)
-    ):
-        logger.warning(f"Failed login attempt for user: {request_data.username}")
+    # Constant-time username compare + always run bcrypt, so an attacker
+    # can't distinguish "wrong username" from "wrong password" by timing.
+    username_ok = hmac.compare_digest(
+        request_data.username.encode("utf-8"),
+        (config.auth.username or "").encode("utf-8"),
+    )
+    password_ok = verify_password(
+        request_data.password, config.auth.password_hash or ""
+    )
+    if not (username_ok and password_ok):
+        # Deliberately don't echo the attempted username — logs rotate and
+        # may be exposed, and this blocks a trivial enumeration channel.
+        logger.warning("Failed login attempt")
         return error(
             "Invalid username or password",
             code="AUTH_INVALID_CREDENTIALS",
