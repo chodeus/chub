@@ -32,8 +32,6 @@ You run it in Docker, open it in a browser, configure it once, and let it work.
 
 ## Screenshots
 
-<!-- Fill in once dashboard screenshots are captured against the new theme. -->
-
 | Light | Dark |
 | :---: | :---: |
 | ![Dashboard light](docs/images/dashboard-light.png) | ![Dashboard dark](docs/images/dashboard-dark.png) |
