@@ -1,5 +1,6 @@
 # util/scheduler.py
 
+import threading
 import time
 from datetime import datetime
 from logging import Logger
@@ -231,20 +232,29 @@ class ChubScheduler:
         health every 6h and write a snapshot row. The snapshots feed the
         dashboard and digest endpoints. Failures here must never crash the
         scheduler loop.
+
+        The health probe hits every configured Plex/ARR instance with a short
+        HTTP GET, so we run it in a daemon thread — otherwise N instances
+        times 3s timeout blocks the main scheduler tick loop.
         """
         now = time.monotonic()
         if now - self._last_health_check < SCHEDULER_HEALTH_CHECK_INTERVAL_SECONDS:
             return
         self._last_health_check = now
 
-        try:
-            self._write_health_snapshot()
-            self._prune_old_health_snapshots()
-        except Exception as e:
-            if self.logger:
-                self.logger.get_adapter("SCHEDULER").error(
-                    f"System tick error: {e}", exc_info=True
-                )
+        def _run() -> None:
+            try:
+                self._write_health_snapshot()
+                self._prune_old_health_snapshots()
+            except Exception as e:
+                if self.logger:
+                    self.logger.get_adapter("SCHEDULER").error(
+                        f"System tick error: {e}", exc_info=True
+                    )
+
+        threading.Thread(
+            target=_run, name="chub-health-snapshot", daemon=True
+        ).start()
 
     def _write_health_snapshot(self) -> None:
         import requests

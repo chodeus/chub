@@ -145,6 +145,13 @@ def _process_webhook_job(
             )
 
             if not client or not client.is_connected():
+                # Close the session we just opened; otherwise the socket
+                # leaks on every failed-to-connect attempt.
+                if client is not None:
+                    try:
+                        client.session.close()
+                    except Exception:
+                        pass
                 return {
                     "success": False,
                     "message": f"Failed to connect to {instance_info['type']} instance",
