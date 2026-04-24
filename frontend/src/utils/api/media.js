@@ -15,6 +15,26 @@ import { apiCore } from './core.js';
  */
 export const mediaAPI = {
     /**
+     * Build an authenticated URL for a media item's poster image. The JWT
+     * travels as a query param so `<img src>` (which can't send the
+     * Authorization header) still clears the auth middleware, matching the
+     * pattern used by posters.getThumbnailUrl and the SSE endpoint.
+     *
+     * @param {number|string} mediaId
+     * @returns {string|null} URL, or null if mediaId is missing.
+     */
+    getPosterUrl: mediaId => {
+        if (mediaId === undefined || mediaId === null || mediaId === '') {
+            return null;
+        }
+        const params = new URLSearchParams();
+        const token = localStorage.getItem('chub-auth-token');
+        if (token) params.set('token', token);
+        const qs = params.toString();
+        return qs ? `/api/media/${mediaId}/poster?${qs}` : `/api/media/${mediaId}/poster`;
+    },
+
+    /**
      * Search media library
      * @param {Object} searchParams - Search parameters
      * @param {string} searchParams.query - Search query string
