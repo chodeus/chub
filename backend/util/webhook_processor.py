@@ -289,11 +289,18 @@ class WebhookProcessor:
                 log.debug(f"Waiting {self.initial_delay}s for Plex to scan new media")
                 time.sleep(self.initial_delay)
 
+            from backend.util.ssrf_guard import is_safe_url
+
             # Try each Plex instance
             for name, details in plex_instances.items():
                 url = details.url
                 token = details.api
                 if not url or not token:
+                    continue
+
+                safe, reason = is_safe_url(url)
+                if not safe:
+                    log.warning(f"Refused Plex lookup for instance {name}: {reason}")
                     continue
 
                 for attempt in range(self.max_retries + 1):
