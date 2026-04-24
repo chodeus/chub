@@ -86,3 +86,8 @@ class RateLimiter:
 # Shared limiter instances. Local-first app — the only limiter that
 # protects against a real threat model is login (password brute-force).
 login_limiter = RateLimiter(rate=0.2, burst=5)  # 1 per 5s, 5 burst
+
+# Webhook endpoints. Sonarr/Radarr fire these a few per minute at most in
+# normal use; 10/sec with 20 burst accommodates legitimate bursts (e.g. a
+# library rescan emitting many Grab events) while blunting flood attacks.
+webhook_limiter = RateLimiter(rate=10, burst=20)

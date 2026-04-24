@@ -18,6 +18,7 @@ from fastapi.responses import JSONResponse
 from backend.api.utils import error, get_database, get_logger, ok
 from backend.util.config import ConfigError, load_config
 from backend.util.database import ChubDB
+from backend.util.rate_limiter import webhook_limiter
 
 
 def verify_webhook_secret(request: Request) -> None:
@@ -50,9 +51,14 @@ _WEBHOOK_DEBOUNCE_SECONDS = 5
 router = APIRouter(
     prefix="/api/webhooks",
     tags=["Webhooks"],
+    # Rate-limit every webhook route so a misbehaving (or hostile) caller
+    # can't flood the job queue. Applied in addition to the optional shared
+    # secret in verify_webhook_secret.
+    dependencies=[Depends(webhook_limiter)],
     responses={
         500: {"description": "Internal server error"},
         400: {"description": "Invalid webhook payload"},
+        429: {"description": "Rate limit exceeded"},
     },
 )
 
