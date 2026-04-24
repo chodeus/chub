@@ -175,18 +175,6 @@ export const FormRenderer = React.memo(
             [values, validationErrors, errors, disabled, loading, handleFieldChange, customErrors]
         );
 
-        // Handle nested field rendering for complex fields - currently unused
-        // const renderNestedFields = useCallback(
-        //     (parentField, nestedFields) => {
-        //         if (!nestedFields || !Array.isArray(nestedFields)) {
-        //             return null;
-        //         }
-
-        //         return <div className="form-nested-fields">{nestedFields.map(renderField)}</div>;
-        //     },
-        //     [renderField]
-        // );
-
         // Render form sections if schema has sections
         const renderFormSections = useCallback(() => {
             if (!schema?.fields) {

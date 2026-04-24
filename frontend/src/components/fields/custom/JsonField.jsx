@@ -16,7 +16,6 @@ export const JsonField = ({
 }) => {
     const inputId = useId();
     const [jsonError, setJsonError] = useState(null);
-    const [, setShowFormatted] = useState(true);
 
     // Convert value to string representation
     const getStringValue = useCallback(() => {
@@ -80,7 +79,6 @@ export const JsonField = ({
             setTextValue(formatted);
             onChange(formatted);
             setJsonError(null);
-            setShowFormatted(true);
         } catch (error) {
             setJsonError(`Cannot format invalid JSON: ${error.message}`);
         }
@@ -94,7 +92,6 @@ export const JsonField = ({
             setTextValue(minified);
             onChange(minified);
             setJsonError(null);
-            setShowFormatted(false);
         } catch (error) {
             setJsonError(`Cannot minify invalid JSON: ${error.message}`);
         }
