@@ -225,7 +225,7 @@ Per-table helpers live in `backend/util/database/*.py` (one file per concern).
 
 ### Stack
 
-- React 19 + Vite 6 (dev server on `:5174`, proxies `/api` to `:8000`)
+- React 19 + Vite 8 (dev server on `:5174`, proxies `/api` to `:8000`)
 - React Router DOM 7
 - PropTypes for runtime validation (no TypeScript)
 - CSS custom properties for theming (no Tailwind, no CSS-in-JS)
@@ -305,7 +305,7 @@ A non-exhaustive snapshot — see the wiki `API.md` for the full reference.
 | --- | --- |
 | Auth | `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me` |
 | Modules | `GET /api/modules`, `POST /api/modules/{name}/run`, `DELETE /api/modules/{name}/execution/{job_id}`, `GET /api/modules/events` (SSE) |
-| Media | `GET /api/media`, `POST /api/media/import`, `GET /api/media/duplicates?similarity=0.8`, `POST /api/media/duplicates/{group_id}/resolve`, `GET /api/media/stats?period=30d`, `GET /api/media/low-rated`, `GET /api/media/incomplete-metadata`, `GET /api/media/{id}/history`, `POST /api/media/collections/from-tag` |
+| Media | `GET /api/media`, `GET /api/media/{id}/poster`, `GET /api/media/duplicates?similarity=0.8`, `POST /api/media/duplicates/{group_id}/resolve`, `GET /api/media/stats?period=30d`, `GET /api/media/low-rated`, `GET /api/media/incomplete-metadata`, `GET /api/media/{id}/history`, `POST /api/media/collections/from-tag` |
 | Posters | `POST /api/posters/optimize`, `GET /api/posters/{id}/thumbnail`, `POST /api/posters/{id}/download`, `GET /api/posters/low-resolution`, `GET /api/posters/added-since`, `POST /api/posters/backfill-dimensions` |
 | Jobs | `GET /api/jobs`, `DELETE /api/jobs/old?days=30`, `GET /api/jobs/webhook-origins` |
 | System | `GET /api/system/health/snapshots`, `GET /api/system/digest`, `GET /api/system/cleanup-candidates` |
