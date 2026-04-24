@@ -1860,6 +1860,11 @@ def get_media_poster(
             return Response(status_code=404)
         base = instance_detail.url.rstrip("/")
         path = poster_url if poster_url.startswith("/") else f"/{poster_url}"
+        # Lidarr (and some older Radarr/Sonarr configs) leak the container's
+        # disk prefix `/config/MediaCover/...` into poster_url. The HTTP path
+        # that actually serves these is /MediaCover/... — strip the prefix.
+        if path.startswith("/config/MediaCover/"):
+            path = path[len("/config") :]
         fetch_url = f"{base}{path}"
         headers["X-Api-Key"] = instance_detail.api
 
