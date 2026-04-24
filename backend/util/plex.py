@@ -12,6 +12,7 @@ from unidecode import unidecode
 
 from backend.util.helper import generate_title_variants, progress
 from backend.util.normalization import normalize_titles
+from backend.util.ssrf_guard import is_safe_url
 
 
 class PlexClient:
@@ -29,6 +30,11 @@ class PlexClient:
         """
         Attempts to connect to the Plex server.
         """
+        safe, reason = is_safe_url(self.url)
+        if not safe:
+            self.logger.error(f"Refused Plex connection to {self.url}: {reason}")
+            self.plex = None
+            return
         try:
             self.plex = PlexServer(self.url, self.api_token)
 

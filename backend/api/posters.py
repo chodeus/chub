@@ -629,6 +629,18 @@ async def upload_poster(
     Returns:
         Upload confirmation with filename and storage path
     """
+    # Max 20 MiB — posters are typically 100-500 KiB; anything larger is
+    # almost certainly wrong (or a disk-fill attempt).
+    MAX_UPLOAD_BYTES = 20 * 1024 * 1024
+    # First bytes that identify a real image. We check the magic even though
+    # we already check the extension, because an attacker can rename anything
+    # to `.jpg`.
+    IMAGE_MAGIC = (
+        b"\xff\xd8\xff",              # JPEG
+        b"\x89PNG\r\n\x1a\n",         # PNG
+        b"RIFF",                      # WEBP (followed by 4-byte size + "WEBP")
+    )
+
     try:
         logger.debug(f"Serving POST /api/posters/upload filename={file.filename}")
 
@@ -638,6 +650,27 @@ async def upload_poster(
             return error(
                 f"Unsupported file type: {ext}. Allowed: {', '.join(allowed_extensions)}",
                 code="UNSUPPORTED_FILE_TYPE",
+                status_code=400,
+            )
+
+        # Read one byte over the cap so we can detect oversize without
+        # trusting the Content-Length header.
+        contents = await file.read(MAX_UPLOAD_BYTES + 1)
+        if len(contents) > MAX_UPLOAD_BYTES:
+            return error(
+                f"File exceeds max upload size of {MAX_UPLOAD_BYTES // (1024 * 1024)} MiB",
+                code="FILE_TOO_LARGE",
+                status_code=413,
+            )
+
+        head = contents[:12]
+        is_image = any(head.startswith(magic) for magic in IMAGE_MAGIC) or (
+            ext == ".webp" and head.startswith(b"RIFF") and head[8:12] == b"WEBP"
+        )
+        if not is_image:
+            return error(
+                "Uploaded file is not a valid image (magic bytes mismatch)",
+                code="INVALID_IMAGE",
                 status_code=400,
             )
 
@@ -658,8 +691,6 @@ async def upload_poster(
         safe_name = Path(file.filename).name
         dest_path = os.path.join(dest_dir, safe_name)
 
-        # Write file
-        contents = await file.read()
         with open(dest_path, "wb") as f:
             f.write(contents)
 
