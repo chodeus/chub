@@ -13,6 +13,7 @@ from backend.util.base_module import ChubModule
 from backend.util.database import ChubDB
 from backend.util.helper import print_settings
 from backend.util.logger import Logger
+from backend.util.notification import NotificationManager
 
 try:
     from dotenv import load_dotenv
@@ -404,6 +405,7 @@ class SyncGDrive(ChubModule):
             return False
 
     def run(self, progress_cb=lambda pct: None):
+        start_time = time.time()
         try:
             with ChubDB(logger=self.logger) as self.db:
                 if self.config.log_level.lower() == "debug":
@@ -432,6 +434,7 @@ class SyncGDrive(ChubModule):
                 self.ensure_remote()
                 total = len(sync_list)
                 failed_count = 0
+                synced_items = []  # captured for the notification payload
 
                 for idx, sync_item in enumerate(sync_list, 1):
                     if self.is_cancelled():
@@ -479,6 +482,13 @@ class SyncGDrive(ChubModule):
                     self.logger.info(
                         f"Updated gdrive_stats for {sync_location}: {file_count} files, {size_bytes} bytes, last updated {last_updated}"
                     )
+                    synced_items.append({
+                        "location": sync_location,
+                        "owner": owner,
+                        "file_count": file_count,
+                        "size_bytes": size_bytes,
+                        "success": success,
+                    })
 
                     progress_pct = int(10 + 80 * idx / total)
                     progress_cb(progress_pct)  # Step up after folder done
@@ -496,6 +506,27 @@ class SyncGDrive(ChubModule):
                         self.db.worker.update_progress("jobs", self.current_job_id, 100)
                     except Exception as e:
                         self.logger.debug(f"Failed to update progress: {e}")
+
+                # Notify — skipped on dry-run, empty lists (nothing to say),
+                # and when the user has no sources configured.
+                if (
+                    not getattr(self.config, "dry_run", False)
+                    and total > 0
+                    and synced_items
+                ):
+                    try:
+                        manager = NotificationManager(
+                            self.config, self.logger, module_name="sync_gdrive"
+                        )
+                        manager.send_notification({
+                            "total": total,
+                            "succeeded": total - failed_count,
+                            "failed": failed_count,
+                            "elapsed": f"{time.time() - start_time:.1f}s",
+                            "items": synced_items,
+                        })
+                    except Exception as e:
+                        self.logger.debug(f"sync_gdrive notification failed: {e}")
 
                 if failed_count > 0:
                     msg = f"GDrive sync failed for {failed_count}/{total} folders"

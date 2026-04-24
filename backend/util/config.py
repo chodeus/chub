@@ -258,6 +258,8 @@ class ConfigNotifications(BaseModel):
     nestarr: Optional[Dict[str, Any]] = Field(default_factory=dict)
     poster_cleanarr: Optional[Dict[str, Any]] = Field(default_factory=dict)
     plex_maintenance: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    border_replacerr: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    sync_gdrive: Optional[Dict[str, Any]] = Field(default_factory=dict)
     main: Optional[Dict[str, Any]] = Field(default_factory=dict)
 
 
