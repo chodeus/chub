@@ -31,9 +31,15 @@ class ARRAuthenticationError(Exception):
 
 
 class ARRRateLimitError(Exception):
-    """Raised when rate limited by ARR API"""
+    """Raised when rate limited by ARR API.
 
-    pass
+    Optionally carries the server's Retry-After delay (seconds) so the
+    retry loop can honor it instead of using its own backoff.
+    """
+
+    def __init__(self, message: str, retry_after: Optional[float] = None) -> None:
+        super().__init__(message)
+        self.retry_after = retry_after
 
 
 class ARRTemporaryError(Exception):
@@ -436,16 +442,22 @@ class BaseARRClient:
                     raise ARRPermanentError(f"Endpoint not found: {endpoint}")
                 elif response.status_code == 429:
                     # Extract retry-after header if available
-                    retry_after = response.headers.get("Retry-After")
-                    if retry_after:
+                    retry_after_raw = response.headers.get("Retry-After")
+                    retry_after: Optional[float] = None
+                    if retry_after_raw:
                         try:
-                            delay = int(retry_after)
-                            raise ARRRateLimitError(
-                                f"Rate limited, retry after {delay}s"
-                            )
+                            retry_after = float(retry_after_raw)
                         except ValueError:
-                            pass
-                    raise ARRRateLimitError("Rate limited")
+                            # RFC allows HTTP-date form; we don't try to
+                            # parse it — fall back to the retry handler's
+                            # default backoff.
+                            retry_after = None
+                    raise ARRRateLimitError(
+                        f"Rate limited, retry after {retry_after}s"
+                        if retry_after is not None
+                        else "Rate limited",
+                        retry_after=retry_after,
+                    )
                 elif response.status_code >= 500:
                     raise ARRTemporaryError(f"Server error: {response.status_code}")
 
@@ -477,7 +489,13 @@ class BaseARRClient:
                     )
                     return None
 
-                delay = self.retry_handler.calculate_delay(attempt)
+                # Honor server-supplied Retry-After when present, capped at
+                # 60s so a misbehaving/hostile server can't stall us forever.
+                server_delay = getattr(e, "retry_after", None)
+                if server_delay is not None and server_delay > 0:
+                    delay = min(float(server_delay), 60.0)
+                else:
+                    delay = self.retry_handler.calculate_delay(attempt)
                 self.logger.warning(
                     f"{method} request attempt {attempt + 1} failed, retrying in {delay:.2f}s: {e}"
                 )
