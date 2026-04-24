@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useCallback } from 'react';
+import PropTypes from 'prop-types';
 import { useApiData, useApiMutation } from '../../hooks/useApiData.js';
 import { useModuleExecution } from '../../hooks/useModuleExecution.js';
 import { useToast } from '../../contexts/ToastContext.jsx';
@@ -6,6 +7,31 @@ import { postersAPI } from '../../utils/api/posters.js';
 import { Modal } from '../../components/modals/Modal';
 import { Button, LoadingButton, IconButton, PageHeader } from '../../components/ui/index.js';
 import Spinner from '../../components/ui/Spinner.jsx';
+
+function PosterThumbnail({ src, alt }) {
+    const [errored, setErrored] = useState(false);
+    if (errored) {
+        return (
+            <div className="w-full h-full flex items-center justify-center text-tertiary">
+                <span className="material-symbols-outlined text-3xl">image</span>
+            </div>
+        );
+    }
+    return (
+        <img
+            src={src}
+            alt={alt}
+            className="w-full h-full object-cover"
+            loading="lazy"
+            onError={() => setErrored(true)}
+        />
+    );
+}
+
+PosterThumbnail.propTypes = {
+    src: PropTypes.string.isRequired,
+    alt: PropTypes.string,
+};
 
 const PAGE_SIZE = 60;
 const STORAGE_KEY = 'chub_poster_assets_filters';
@@ -536,7 +562,7 @@ const PosterAssetsSearchPage = () => {
                                             style={{ aspectRatio: '2 / 3' }}
                                             aria-label={`Enlarge ${displayTitle}`}
                                         >
-                                            <img
+                                            <PosterThumbnail
                                                 src={
                                                     item.id
                                                         ? postersAPI.getThumbnailUrl(item.id, 200)
@@ -546,13 +572,6 @@ const PosterAssetsSearchPage = () => {
                                                           )
                                                 }
                                                 alt={displayTitle}
-                                                className="w-full h-full object-cover"
-                                                loading="lazy"
-                                                onError={e => {
-                                                    e.target.style.display = 'none';
-                                                    e.target.parentElement.innerHTML =
-                                                        '<div class="w-full h-full flex items-center justify-center text-tertiary"><span class="material-symbols-outlined text-3xl">image</span></div>';
-                                                }}
                                             />
                                         </button>
                                     )}
