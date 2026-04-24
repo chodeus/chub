@@ -30,9 +30,18 @@ class JobResult:
 class DBWorker(DatabaseBase):
     """
     Simplified DB-backed job worker that delegates processing to job_processor.py
+
+    SQL identity: every public method takes a `table_name` which is
+    interpolated into SQL as an f-string. Callers are internal code only,
+    but we guard with an allowlist so a future refactor that accidentally
+    routes user input into `table_name` can't open a SQL-injection hole.
     """
 
     _POLL_TIMEOUT = 1  # max seconds to wait between job polls
+
+    # Allowlist of table names this worker is permitted to read/write.
+    # Only "jobs" exists today; new tables require an explicit entry.
+    _ALLOWED_TABLES = frozenset({"jobs"})
 
     # Class-level event shared by ALL DBWorker instances.
     # enqueue_job() may be called on the DEFAULT worker (db.worker) while
@@ -40,6 +49,15 @@ class DBWorker(DatabaseBase):
     # instances.  A class-level event ensures the signal reaches every
     # waiting worker regardless of which instance enqueued the job.
     _job_event = threading.Event()
+
+    @classmethod
+    def _check_table(cls, name: str) -> str:
+        if name not in cls._ALLOWED_TABLES:
+            raise ValueError(
+                f"Refusing to operate on table {name!r}: "
+                f"not in allowlist {sorted(cls._ALLOWED_TABLES)}"
+            )
+        return name
 
     def __init__(
         self,
@@ -89,6 +107,7 @@ class DBWorker(DatabaseBase):
 
     def process_pending_jobs(self, table_name: str, process_fn: Callable):
         """Main job processing loop"""
+        self._check_table(table_name)
         log = self.logger.get_adapter(f"WORKER:{self.worker_name}")
 
         while self.running and not self._shutdown_event.is_set():
@@ -234,6 +253,7 @@ class DBWorker(DatabaseBase):
 
     def reset_job_to_pending(self, table_name: str, job_id: int):
         """Reset a job to 'pending' status"""
+        self._check_table(table_name)
         row = self.execute_query(
             f"SELECT * FROM {table_name} WHERE id=?", (job_id,), fetch_one=True
         )
@@ -249,6 +269,7 @@ class DBWorker(DatabaseBase):
 
     def claim_next_job(self, table_name: str, job_type_filter: str = None):
         """Claim the next available job"""
+        self._check_table(table_name)
         now = datetime.datetime.now(datetime.timezone.utc).isoformat()
         query = f"""SELECT * FROM {table_name}
                     WHERE status='pending'
@@ -302,6 +323,7 @@ class DBWorker(DatabaseBase):
         """
         Start the worker - FIXED to use dedicated job processor by default
         """
+        self._check_table(table_name)
         log = self.logger.get_adapter("WORKER")
 
         # FIXED: Use the dedicated job processor if no process_fn provided
@@ -397,6 +419,7 @@ class DBWorker(DatabaseBase):
                 )
 
     def job_stats(self, table_name: str = "jobs", error_limit: int = 10):
+        self._check_table(table_name)
         try:
             status_rows = self.execute_query(
                 f"SELECT status, COUNT(*) AS count FROM {table_name} GROUP BY status",
@@ -443,6 +466,7 @@ class DBWorker(DatabaseBase):
             }
 
     def update_progress(self, table_name: str, job_id: int, progress: int):
+        self._check_table(table_name)
         self.execute_query(
             f"UPDATE {table_name} SET progress=? WHERE id=?",
             (progress, job_id),
@@ -457,6 +481,7 @@ class DBWorker(DatabaseBase):
         scheduled_at: str = None,
     ):
         """Add a new job to the specified table"""
+        self._check_table(table_name)
         now = datetime.datetime.now(datetime.timezone.utc).isoformat()
         fields = {
             "type": job_type,
@@ -496,6 +521,7 @@ class DBWorker(DatabaseBase):
             }
 
     def get_job_by_id(self, table_name: str, job_id: int):
+        self._check_table(table_name)
         row = self.execute_query(
             f"SELECT * FROM {table_name} WHERE id=?", (job_id,), fetch_one=True
         )
@@ -503,6 +529,7 @@ class DBWorker(DatabaseBase):
 
     def cleanup_jobs(self, table_name: str = "jobs", days: int = 30):
         """Delete old completed/failed jobs"""
+        self._check_table(table_name)
         try:
             cutoff = (
                 datetime.datetime.now(datetime.timezone.utc)
@@ -546,9 +573,10 @@ class DBWorker(DatabaseBase):
 
     def get_running_module_job(self, module_name: str, table_name: str = "jobs"):
         """Get running job for a specific module"""
+        self._check_table(table_name)
         import json
 
-        query = f"""SELECT id, status, payload FROM {table_name} 
+        query = f"""SELECT id, status, payload FROM {table_name}
                     WHERE status='running' AND type='module_run'"""
 
         rows = self.execute_query(query, fetch_all=True)
