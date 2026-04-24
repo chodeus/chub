@@ -10,14 +10,16 @@ import csv
 import io
 from typing import Any, List, Optional
 
+import requests
 from fastapi import APIRouter, Depends, Query, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 
 from backend.api.utils import error, get_database, get_logger, ok
 from backend.util.arr import create_arr_client
 from backend.util.config import load_config
 from backend.util.database import ChubDB
+from backend.util.ssrf_guard import is_safe_url
 
 router = APIRouter(
     prefix="/api/media",
@@ -1815,6 +1817,69 @@ async def update_media_metadata(
             code="MEDIA_UPDATE_ERROR",
             status_code=500,
         )
+
+
+@router.get(
+    "/{media_id}/poster",
+    summary="Proxy poster image for a media item",
+    description="Fetches the poster image for a media item from its source ARR "
+    "instance (or external CDN if the poster URL is absolute). API keys stay "
+    "server-side; the SSRF guard blocks cloud-metadata and link-local targets.",
+    responses={
+        200: {"description": "Poster image bytes", "content": {"image/*": {}}},
+        404: {"description": "Media item or poster URL not found"},
+        502: {"description": "Upstream fetch failed"},
+    },
+)
+def get_media_poster(
+    media_id: int,
+    logger: Any = Depends(get_logger),
+    db: ChubDB = Depends(get_database),
+) -> Response:
+    item = db.media.get_by_id(media_id)
+    if not item:
+        return Response(status_code=404)
+
+    poster_url = item.get("poster_url")
+    if not poster_url:
+        return Response(status_code=404)
+
+    headers: dict = {}
+    if poster_url.startswith("http://") or poster_url.startswith("https://"):
+        fetch_url = poster_url
+    else:
+        instance_name = item.get("instance_name")
+        config = load_config()
+        instance_detail = None
+        for arr_type in ("radarr", "sonarr", "lidarr"):
+            instances = getattr(config.instances, arr_type, None) or {}
+            if instance_name in instances:
+                instance_detail = instances[instance_name]
+                break
+        if not instance_detail or not instance_detail.url or not instance_detail.api:
+            return Response(status_code=404)
+        base = instance_detail.url.rstrip("/")
+        path = poster_url if poster_url.startswith("/") else f"/{poster_url}"
+        fetch_url = f"{base}{path}"
+        headers["X-Api-Key"] = instance_detail.api
+
+    safe, reason = is_safe_url(fetch_url)
+    if not safe:
+        logger.warning(f"Refused poster fetch for id={media_id}: {reason}")
+        return Response(status_code=403)
+
+    try:
+        resp = requests.get(fetch_url, headers=headers, timeout=10)
+        resp.raise_for_status()
+    except requests.RequestException as e:
+        logger.debug(f"Poster fetch failed for id={media_id}: {e}")
+        return Response(status_code=502)
+
+    return Response(
+        content=resp.content,
+        media_type=resp.headers.get("Content-Type", "image/jpeg"),
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
 
 
 @router.delete(
