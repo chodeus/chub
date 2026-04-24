@@ -20,7 +20,8 @@ const POSTER_FALLBACK_STYLE = {
 
 function PosterThumb({ mediaId }) {
     const [errored, setErrored] = useState(false);
-    if (errored || !mediaId) {
+    const src = mediaAPI.getPosterUrl(mediaId);
+    if (errored || !src) {
         return (
             <div className="rounded-md bg-surface-alt text-tertiary" style={POSTER_FALLBACK_STYLE}>
                 <span className="material-symbols-outlined opacity-40">image</span>
@@ -29,7 +30,7 @@ function PosterThumb({ mediaId }) {
     }
     return (
         <img
-            src={`/api/media/${mediaId}/poster`}
+            src={src}
             alt=""
             loading="lazy"
             onError={() => setErrored(true)}
