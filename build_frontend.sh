@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -e  # Exit on any error
+set -euo pipefail  # Exit on error, unbound var, or pipe failure
 
 echo "🔧 Building CHUB Frontend..."
 

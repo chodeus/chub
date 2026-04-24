@@ -46,6 +46,10 @@ permissions:
   contents: read
   packages: write
 
+concurrency:
+  group: codeql-lint-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # ---- CodeQL Analysis ----
   codeql-python:
@@ -102,7 +106,7 @@ jobs:
           cache: 'pip'
 
       - name: Install linting tools
-        run: pip install ruff
+        run: pip install ruff==0.15.11
 
       - name: Run Ruff linter
         run: ruff check .
