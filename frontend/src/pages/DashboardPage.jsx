@@ -377,15 +377,6 @@ const DashboardPage = () => {
                         variant="ghost"
                         onClick={handleRefreshAll}
                     />
-                    <Link
-                        to="/settings/modules"
-                        className="inline-flex items-center gap-2 bg-primary text-on-color no-underline rounded-lg px-4 py-2 text-sm font-medium hover:opacity-90 transition-opacity"
-                    >
-                        <span className="material-symbols-outlined text-base" aria-hidden="true">
-                            add
-                        </span>
-                        <span>New run</span>
-                    </Link>
                 </div>
             </section>
 
