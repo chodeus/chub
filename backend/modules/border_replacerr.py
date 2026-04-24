@@ -13,6 +13,7 @@ from backend.util.base_module import ChubModule
 from backend.util.database import ChubDB
 from backend.util.helper import create_table, print_settings, progress
 from backend.util.logger import Logger
+from backend.util.notification import NotificationManager
 
 logging.getLogger("PIL").setLevel(logging.WARNING)
 
@@ -346,3 +347,20 @@ class BorderReplacerr(ChubModule):
             self.logger.info("")
 
             db.holiday.set_status(active_holiday)
+
+            # Notify — skipped on dry-run or if nothing changed (no-op runs
+            # don't need to spam every cron).
+            if not getattr(self.config, "dry_run", False) and (replaced or removed):
+                try:
+                    manager = NotificationManager(
+                        self.config, self.logger, module_name="border_replacerr"
+                    )
+                    manager.send_notification({
+                        "processed": processed,
+                        "skipped": skipped,
+                        "replaced": replaced,
+                        "removed": removed,
+                        "active_holiday": active_holiday,
+                    })
+                except Exception as e:
+                    self.logger.debug(f"border_replacerr notification failed: {e}")

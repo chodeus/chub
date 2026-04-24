@@ -530,6 +530,74 @@ def format_for_discord(
             fields.append({"name": "Traceback", "value": f"```{tb}```"})
         return fields
 
+    def fmt_border_replacerr(o: Any) -> List[Dict[str, Any]]:
+        """Format border_replacerr output for Discord embeds."""
+        fields: List[Dict[str, Any]] = []
+        fields.append({
+            "name": "Processed",
+            "value": str(o.get("processed", 0)),
+            "inline": True,
+        })
+        fields.append({
+            "name": "Skipped",
+            "value": str(o.get("skipped", 0)),
+            "inline": True,
+        })
+        if o.get("replaced"):
+            fields.append({
+                "name": "Borders replaced",
+                "value": str(o["replaced"]),
+                "inline": True,
+            })
+        if o.get("removed"):
+            fields.append({
+                "name": "Borders removed",
+                "value": str(o["removed"]),
+                "inline": True,
+            })
+        if o.get("active_holiday"):
+            fields.append({
+                "name": "Holiday",
+                "value": str(o["active_holiday"]),
+                "inline": False,
+            })
+        return fields
+
+    def fmt_sync_gdrive(o: Any) -> List[Dict[str, Any]]:
+        """Format sync_gdrive output for Discord embeds."""
+        fields: List[Dict[str, Any]] = []
+        fields.append({
+            "name": "Folders",
+            "value": f"{o.get('succeeded', 0)} / {o.get('total', 0)}",
+            "inline": True,
+        })
+        if o.get("failed"):
+            fields.append({
+                "name": "Failed",
+                "value": str(o["failed"]),
+                "inline": True,
+            })
+        if o.get("elapsed"):
+            fields.append({
+                "name": "Elapsed",
+                "value": str(o["elapsed"]),
+                "inline": True,
+            })
+        items = o.get("items") or []
+        if items:
+            lines = [
+                f"• **{it.get('owner', '?')}** — {it.get('file_count', 0)} files"
+                for it in items[:15]
+            ]
+            if len(items) > 15:
+                lines.append(f"…and {len(items) - 15} more")
+            fields.append({
+                "name": "Sources",
+                "value": "\n".join(lines),
+                "inline": False,
+            })
+        return fields
+
     registry: Dict[str, Dict[str, Any]] = {
         "poster_renamerr": {"formatter": fmt_poster_renamerr, "type": "embedded"},
         "renameinatorr": {"formatter": fmt_renameinatorr, "type": "embedded"},
@@ -540,6 +608,8 @@ def format_for_discord(
         "jduparr": {"formatter": fmt_jduparr, "type": "flat"},
         "poster_cleanarr": {"formatter": fmt_poster_cleanarr, "type": "embedded"},
         "plex_maintenance": {"formatter": fmt_plex_maintenance, "type": "embedded"},
+        "border_replacerr": {"formatter": fmt_border_replacerr, "type": "embedded"},
+        "sync_gdrive": {"formatter": fmt_sync_gdrive, "type": "embedded"},
         "version_check": {"formatter": fmt_version_check, "type": "embedded"},
         "error_notify": {"formatter": fmt_error_notify, "type": "embedded"},
     }
@@ -1038,6 +1108,47 @@ def format_for_email(config: Any, output: Any) -> Tuple[str, bool]:
         sections.append("</div>")
         return "".join(sections)
 
+    def fmt_border_replacerr(output: dict) -> str:
+        """Format border_replacerr output for email (HTML)."""
+        sections: List[str] = ["<div class='section'><h3>Border Replacerr</h3>"]
+        sections.append(
+            f"<p><strong>Processed:</strong> {output.get('processed', 0)} &nbsp;|&nbsp; "
+            f"<strong>Skipped:</strong> {output.get('skipped', 0)}</p>"
+        )
+        if output.get("replaced"):
+            sections.append(f"<p><strong>Borders replaced:</strong> {output['replaced']}</p>")
+        if output.get("removed"):
+            sections.append(f"<p><strong>Borders removed:</strong> {output['removed']}</p>")
+        if output.get("active_holiday"):
+            sections.append(f"<p><em>Holiday: {output['active_holiday']}</em></p>")
+        sections.append("</div>")
+        return "".join(sections)
+
+    def fmt_sync_gdrive(output: dict) -> str:
+        """Format sync_gdrive output for email (HTML)."""
+        sections: List[str] = ["<div class='section'><h3>GDrive Sync</h3>"]
+        sections.append(
+            f"<p><strong>Folders:</strong> {output.get('succeeded', 0)} / "
+            f"{output.get('total', 0)}"
+        )
+        if output.get("failed"):
+            sections.append(
+                f" &nbsp;|&nbsp; <strong>Failed:</strong> {output['failed']}"
+            )
+        sections.append("</p>")
+        if output.get("elapsed"):
+            sections.append(f"<p><em>Elapsed: {output['elapsed']}</em></p>")
+        items = output.get("items") or []
+        if items:
+            sections.append("<p><strong>Sources:</strong></p><ul>")
+            for it in items:
+                sections.append(
+                    f"<li>{it.get('owner', '?')} — {it.get('file_count', 0)} files</li>"
+                )
+            sections.append("</ul>")
+        sections.append("</div>")
+        return "".join(sections)
+
     registry: Dict[str, Any] = {
         "poster_renamerr": fmt_poster_renamerr,
         "renameinatorr": fmt_renameinatorr,
@@ -1049,6 +1160,8 @@ def format_for_email(config: Any, output: Any) -> Tuple[str, bool]:
         "jduparr": fmt_jduparr,
         "poster_cleanarr": fmt_poster_cleanarr,
         "plex_maintenance": fmt_plex_maintenance,
+        "border_replacerr": fmt_border_replacerr,
+        "sync_gdrive": fmt_sync_gdrive,
     }
     formatter = registry.get(config.module_name)
     if not formatter:
