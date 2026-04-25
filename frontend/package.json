@@ -22,7 +22,7 @@
     "prop-types": "15.8.1",
     "react": "19.2.5",
     "react-dom": "19.2.5",
-    "react-router-dom": "7.14.1"
+    "react-router-dom": "7.14.2"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
@@ -36,7 +36,7 @@
     "stylelint": "^16.26.1",
     "stylelint-config-standard": "^39.0.1",
     "stylelint-selector-bem-pattern": "^4.0.1",
-    "vite": "^8.0.9"
+    "vite": "^8.0.10"
   },
   "engines": {
     "node": ">=18.20.8"
