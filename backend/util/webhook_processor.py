@@ -1,25 +1,22 @@
 # util/webhook_processor.py
 
-import hashlib
-import json
-import threading
 import time
 from typing import Optional, Tuple
 from urllib.parse import urlparse
 
 from backend.util.config import load_config
-from backend.util.database import ChubDB
 
 
 class WebhookProcessor:
     """
     Clean webhook processor that only handles validation and routing.
     Business logic is delegated to other components.
-    """
 
-    # Simple deduplication cache
-    _cache = {}
-    _cache_lock = threading.Lock()
+    Dedup lives in `db.webhook_cache` (persistent, restart-safe) and is
+    handled at the API layer in `backend/api/webhooks.py` before a job is
+    ever enqueued. This class only validates payloads and waits for Plex
+    availability.
+    """
 
     def __init__(self, logger):
         self.logger = logger
@@ -28,63 +25,6 @@ class WebhookProcessor:
         self.initial_delay = getattr(general, "webhook_initial_delay", 30)
         self.retry_delay = getattr(general, "webhook_retry_delay", 60)
         self.max_retries = getattr(general, "webhook_max_retries", 3)
-
-    def process_webhook(
-        self, webhook_data: dict, client_info: Optional[dict] = None
-    ) -> dict:
-        """
-        Process webhook and enqueue job for background processing.
-
-        Args:
-            webhook_data: Raw webhook data from ARR
-            client_info: Optional client info from API layer
-
-        Returns:
-            dict: Standardized success/failure response
-        """
-        log = self.logger.get_adapter("WEBHOOK")
-
-        # Validate and extract basic info
-        validation_result = self._validate_webhook(webhook_data, client_info)
-        if not validation_result["success"]:
-            return validation_result
-
-        # Check for duplicates (simple debouncing)
-        if self._is_duplicate(validation_result["cache_key"], webhook_data):
-            log.debug("Skipping duplicate webhook (debounced)")
-            return {
-                "success": True,
-                "message": "Webhook debounced (duplicate)",
-                "data": {"debounced": True},
-            }
-
-        # Enqueue job for background processing
-        job_payload = {
-            "webhook_data": webhook_data,
-            "client_info": client_info,
-            "instance_info": validation_result["instance_info"],
-        }
-
-        with ChubDB(logger=self.logger) as db:
-            enqueue_result = db.worker.enqueue_job(
-                table_name="jobs", payload=job_payload, job_type="webhook"
-            )
-
-        if enqueue_result["success"]:
-            job_id = enqueue_result["data"]["job_id"]
-            log.info(f"Webhook enqueued as job {job_id}")
-            return {
-                "success": True,
-                "message": "Webhook enqueued for processing",
-                "data": {"job_id": job_id},
-            }
-        else:
-            log.error(f"Failed to enqueue webhook: {enqueue_result['message']}")
-            return {
-                "success": False,
-                "message": "Failed to enqueue webhook",
-                "error_code": "ENQUEUE_FAILED",
-            }
 
     def _validate_webhook(
         self, webhook_data: dict, client_info: Optional[dict] = None
@@ -120,9 +60,6 @@ class WebhookProcessor:
                 "error_code": "NO_INSTANCE",
             }
 
-        # Create cache key for deduplication
-        cache_key = (instance_info["type"], instance_info["name"], media_type, media_id)
-
         return {
             "success": True,
             "message": "Webhook validated successfully",
@@ -130,7 +67,6 @@ class WebhookProcessor:
             "media_type": media_type,
             "media_id": media_id,
             "instance_info": instance_info,
-            "cache_key": cache_key,
         }
 
     def _extract_media_block(
@@ -212,54 +148,6 @@ class WebhookProcessor:
                     }
 
         return {"found": False, "error": "No matching instance"}
-
-    def _is_duplicate(self, cache_key: tuple, webhook_data: dict) -> bool:
-        """
-        Check if this webhook is a duplicate (simple debouncing).
-
-        Args:
-            cache_key: Unique cache key for this webhook
-            webhook_data: Raw webhook data
-
-        Returns:
-            bool: True if duplicate
-        """
-        media_block, _, _ = self._extract_media_block(webhook_data)
-        if not media_block:
-            return False
-
-        # Simple hash of relevant fields
-        hash_data = {
-            k: media_block.get(k)
-            for k in ["title", "year", "tmdb_id", "tvdb_id", "imdb_id"]
-            if k in media_block
-        }
-        content_hash = hashlib.sha256(
-            json.dumps(hash_data, sort_keys=True, default=str).encode("utf-8")
-        ).hexdigest()
-
-        debounce_window = getattr(self, "initial_delay", 5)
-        if debounce_window > 10:
-            debounce_window = (
-                5  # Keep dedup window short, use initial_delay for processing
-            )
-
-        now = time.time()
-        with self._cache_lock:
-            if cache_key in self._cache:
-                prev_hash, prev_time = self._cache[cache_key]
-                if prev_hash == content_hash and (now - prev_time) < debounce_window:
-                    return True
-
-            self._cache[cache_key] = (content_hash, now)
-
-            # Simple cleanup - remove entries older than 30 seconds
-            cutoff = now - 30
-            expired_keys = [k for k, (_, t) in self._cache.items() if t < cutoff]
-            for k in expired_keys:
-                del self._cache[k]
-
-        return False
 
     def wait_for_plex_availability(self, media_title: str, year=None) -> bool:
         """

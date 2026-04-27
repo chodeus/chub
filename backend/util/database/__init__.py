@@ -16,6 +16,7 @@ from .poster_cache import PosterCache
 from .run_state import RunState
 from .schema import SchemaManager
 from .stats import Stats
+from .webhook_cache import WebhookCache
 from .worker import DBWorker
 
 
@@ -185,6 +186,11 @@ class ChubDB:
         return self._get_interface("holiday", HolidayStatus)
 
     @property
+    def webhook_cache(self) -> WebhookCache:
+        """Access to persistent webhook dedup cache."""
+        return self._get_interface("webhook_cache", WebhookCache)
+
+    @property
     def worker(self) -> DBWorker:
         """Access to default worker operations."""
         return self._get_interface(
@@ -289,5 +295,6 @@ __all__ = [
     "DBWorker",
     "HolidayStatus",
     "MediaCache",
+    "WebhookCache",
     "with_database",
 ]
