@@ -249,7 +249,18 @@ def _process_webhook_job(
             log.info(f"[JOB:{job_id}] Webhook processing successful")
 
             if rename_result.get("output"):
-                _handle_post_rename_actions(rename_result, renamer, logger, job_id)
+                # Honour `webhook_force_reupload` on the originating *arr
+                # instance — when set, the queued upload job bypasses the
+                # uploader's hash-equal short-circuit so an unchanged
+                # poster still gets re-pushed to Plex.
+                force_upload = _instance_force_reupload(instance_info)
+                _handle_post_rename_actions(
+                    rename_result,
+                    renamer,
+                    logger,
+                    job_id,
+                    force_upload=force_upload,
+                )
 
             return {
                 "success": True,
@@ -457,8 +468,11 @@ def _process_upload_posters_job(
             "error_code": "MISSING_MANIFEST",
         }
 
+    force = bool(payload.get("force", False))
     with ChubDB(logger=logger) as db:
-        uploader = PosterUploader(db=db, logger=logger, manifest=manifest)
+        uploader = PosterUploader(
+            db=db, logger=logger, manifest=manifest, force=force
+        )
         result = uploader.run()
 
     if result.get("success"):
@@ -477,7 +491,11 @@ def _process_upload_posters_job(
 
 
 def _handle_post_rename_actions(
-    rename_result: Dict[str, Any], renamer, logger, job_id: int
+    rename_result: Dict[str, Any],
+    renamer,
+    logger,
+    job_id: int,
+    force_upload: bool = False,
 ) -> None:
     """
     Handle notifications and uploads after successful rename.
@@ -487,6 +505,9 @@ def _handle_post_rename_actions(
         renamer: PosterRenamerr instance
         logger: Logger instance
         job_id: Job ID for tracking
+        force_upload: When True, queues the upload job with `force=True` so
+            the uploader skips its hash-equal short-circuit. Webhook flows
+            set this from the *arr instance's `webhook_force_reupload`.
     """
     log = logger.get_adapter("POST_RENAME")
 
@@ -512,7 +533,7 @@ def _handle_post_rename_actions(
         # Queue upload job if Plex instances are enabled
         plex_enabled = _check_plex_upload_enabled(renamer.config)
         if plex_enabled and manifest:
-            _queue_upload_job(manifest, logger, job_id)
+            _queue_upload_job(manifest, logger, job_id, force=force_upload)
         else:
             log.info(
                 f"[JOB:{job_id}] Plex upload not enabled or no manifest - task complete"
@@ -520,6 +541,24 @@ def _handle_post_rename_actions(
 
     except Exception as e:
         log.error(f"[JOB:{job_id}] Error in post-rename actions: {e}")
+
+
+def _instance_force_reupload(instance_info: Dict[str, Any]) -> bool:
+    """
+    Return the configured `webhook_force_reupload` for a Sonarr/Radarr/Lidarr
+    instance identified by `instance_info`. Falls back to False on any
+    config-loading or attribute-lookup error so a malformed config can never
+    silently force-upload everything.
+    """
+    try:
+        from backend.util.config import load_config
+
+        cfg = load_config()
+        bucket = getattr(cfg.instances, instance_info.get("type", ""), None) or {}
+        details = bucket.get(instance_info.get("name", ""))
+        return bool(getattr(details, "webhook_force_reupload", False))
+    except Exception:
+        return False
 
 
 def _check_plex_upload_enabled(config) -> bool:
@@ -761,7 +800,9 @@ def _process_module_run_job(
         }
 
 
-def _queue_upload_job(manifest: Dict[str, Any], logger, job_id: int) -> None:
+def _queue_upload_job(
+    manifest: Dict[str, Any], logger, job_id: int, force: bool = False
+) -> None:
     """
     Queue a poster upload job.
 
@@ -769,11 +810,15 @@ def _queue_upload_job(manifest: Dict[str, Any], logger, job_id: int) -> None:
         manifest: Upload manifest data
         logger: Logger instance
         job_id: Current job ID for tracking
+        force: When True, the uploader bypasses its hash-equal short-circuit
+            so unchanged posters still get re-pushed to Plex. Set by webhook
+            flows when the originating *arr instance has
+            `webhook_force_reupload` enabled.
     """
     log = logger.get_adapter("UPLOAD_POSTERS")
 
     try:
-        upload_payload = {"manifest": manifest}
+        upload_payload = {"manifest": manifest, "force": bool(force)}
 
         with ChubDB(logger=logger) as db:
             result = db.worker.enqueue_job(

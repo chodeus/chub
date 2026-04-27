@@ -37,6 +37,13 @@ class InstanceDetail(BaseModel):
     url: Optional[str] = ""
     api: Optional[str] = ""
     enabled: bool = True
+    # When True, webhook-triggered uploads from this instance bypass the
+    # SHA-256 hash dedup in PosterUploader so an unchanged-on-disk poster
+    # is still re-pushed to Plex. Useful when Plex itself has been wiped
+    # or when the user is actively re-curating a particular library.
+    # Only meaningful for radarr / sonarr / lidarr (the instances that
+    # fire webhooks); harmless on plex entries.
+    webhook_force_reupload: bool = False
 
 
 class InstancesConfig(BaseModel):
@@ -197,9 +204,12 @@ class GeneralConfig(BaseModel):
     log_level: str = "info"
     update_notifications: bool = False
     max_logs: int = 9
+    # Plex's recently-added scan can lag 5+ minutes behind a Sonarr/Radarr
+    # import under load. Defaults give ~5.5 min of total search:
+    #   30s warmup + 10 attempts × 30s = 330s
     webhook_initial_delay: int = 30
-    webhook_retry_delay: int = 60
-    webhook_max_retries: int = 3
+    webhook_retry_delay: int = 30
+    webhook_max_retries: int = 10
     webhook_secret: str = ""
     duplicate_exclude_groups: List[Any] = Field(default_factory=list)
 
