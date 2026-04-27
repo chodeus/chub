@@ -46,6 +46,20 @@ def verify_webhook_secret(request: Request) -> None:
 # on restart. Backed by the `webhook_cache` table via `db.webhook_cache`.
 _WEBHOOK_DEDUP_TTL_SECONDS = 600
 
+# Sonarr/Radarr fire a wide range of events; only these actually correspond
+# to "new file on disk that needs a poster". `Grab` (download started, file
+# not yet on disk) and lifecycle events (Rename, *FileDelete, HealthIssue,
+# SeriesDelete, MovieDelete) are 200-acknowledged but skipped.
+_ACCEPTED_EVENT_TYPES = frozenset(
+    {
+        "Download",  # Sonarr v3 / Radarr — file imported
+        "MovieAdded",  # Radarr — movie added to library (pre-download)
+        "SeriesAdd",  # Sonarr — series added to library (pre-download)
+        "EpisodeFileImported",  # Sonarr v4+ — episode file imported
+        "MovieFileImported",  # Radarr v5+ — movie file imported
+    }
+)
+
 router = APIRouter(
     prefix="/api/webhooks",
     tags=["Webhooks"],
@@ -128,6 +142,17 @@ async def process_poster_webhook(
             return ok(
                 "Test webhook received successfully",
                 {"event_type": "test"},
+            )
+
+        # Skip events that don't correspond to a new on-disk file (Grab,
+        # *FileDelete, Rename, HealthIssue, etc.). Acknowledge with 200 so
+        # Sonarr/Radarr don't mark the connection broken.
+        event_type = data.get("eventType", "")
+        if event_type and event_type not in _ACCEPTED_EVENT_TYPES:
+            logger.debug(f"Ignoring unsupported event type: {event_type}")
+            return ok(
+                "Event type not supported — webhook ignored",
+                {"event_type": event_type, "status": "skipped"},
             )
 
         # Deduplicate at API layer before enqueuing — persistent rolling
