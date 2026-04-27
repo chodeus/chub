@@ -387,6 +387,29 @@ class SchemaManager:
         )
         self._add_table(system_health_snapshots)
 
+        # Webhook dedup cache — persistent rolling window so Sonarr/Radarr
+        # retries (minutes apart) get coalesced even across restarts.
+        # UNIQUE on (item_type, item_name) with timestamp-based eviction
+        # handled by the WebhookCache interface.
+        webhook_cache = TableDefinition(
+            name="webhook_cache",
+            columns=[
+                ColumnDefinition("id", "INTEGER", primary_key=True, nullable=False),
+                ColumnDefinition("item_type", "TEXT", nullable=False),
+                ColumnDefinition("item_name", "TEXT", nullable=False),
+                ColumnDefinition(
+                    "timestamp", "TEXT", nullable=False, default="CURRENT_TIMESTAMP"
+                ),
+            ],
+            constraints=[
+                "UNIQUE (item_type, item_name)",
+            ],
+            indexes=[
+                "CREATE INDEX IF NOT EXISTS webhook_cache_timestamp_idx ON webhook_cache (timestamp)",
+            ],
+        )
+        self._add_table(webhook_cache)
+
         # Media edit history — audit trail for user-initiated metadata edits.
         media_edit_history = TableDefinition(
             name="media_edit_history",

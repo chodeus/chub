@@ -8,8 +8,6 @@ media event notifications, and external service integrations.
 import hashlib
 import hmac
 import json
-import threading
-import time
 from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -43,10 +41,10 @@ def verify_webhook_secret(request: Request) -> None:
     if not provided or not hmac.compare_digest(expected, provided):
         raise HTTPException(status_code=401, detail="Invalid webhook secret")
 
-# API-layer webhook deduplication
-_webhook_cache: Dict[str, float] = {}
-_webhook_cache_lock = threading.Lock()
-_WEBHOOK_DEBOUNCE_SECONDS = 5
+# Persistent webhook dedup TTL (seconds). Sonarr/Radarr retry on minute-long
+# intervals; the previous in-memory 5s window never caught those and was wiped
+# on restart. Backed by the `webhook_cache` table via `db.webhook_cache`.
+_WEBHOOK_DEDUP_TTL_SECONDS = 600
 
 router = APIRouter(
     prefix="/api/webhooks",
@@ -132,8 +130,9 @@ async def process_poster_webhook(
                 {"event_type": "test"},
             )
 
-        # Deduplicate at API layer before enqueuing
-        if _is_duplicate_webhook(data, logger):
+        # Deduplicate at API layer before enqueuing — persistent rolling
+        # window so Sonarr/Radarr retries are coalesced even across restarts.
+        if _is_duplicate_webhook(data, db, logger):
             return ok(
                 "Duplicate webhook ignored",
                 {"duplicate": True, "status": "debounced"},
@@ -183,15 +182,22 @@ async def process_poster_webhook(
         )
 
 
-def _is_duplicate_webhook(data: Dict[str, Any], logger: Any = None) -> bool:
+def _is_duplicate_webhook(
+    data: Dict[str, Any], db: ChubDB, logger: Any = None
+) -> bool:
     """
-    Check if this webhook is a duplicate using content hashing and debouncing.
+    Check if this webhook is a duplicate against the persistent cache.
 
-    Creates a SHA-256 hash of the media-identifying fields and checks
-    against a time-windowed cache to prevent duplicate job enqueueing.
+    Builds an `item_type` (series/movie) and a SHA-256 of the identifying
+    fields as `item_name`, then asks `db.webhook_cache.is_duplicate` —
+    which sweeps expired rows, checks for a match within the TTL window,
+    and inserts a fresh row when not seen. Restart-safe.
     """
-    # Extract media identifiers for hashing
     media_block = data.get("series") or data.get("movie") or {}
+    item_type = "series" if "series" in data else "movie" if "movie" in data else ""
+    if not item_type:
+        return False
+
     hash_fields = {
         "title": media_block.get("title", ""),
         "year": str(media_block.get("year", "")),
@@ -200,32 +206,21 @@ def _is_duplicate_webhook(data: Dict[str, Any], logger: Any = None) -> bool:
         "imdb_id": str(media_block.get("imdbId", "")),
         "event_type": data.get("eventType", ""),
     }
-
-    content_hash = hashlib.sha256(
+    item_name = hashlib.sha256(
         json.dumps(hash_fields, sort_keys=True).encode()
     ).hexdigest()[:16]
 
-    now = time.time()
-
-    with _webhook_cache_lock:
-        # Clean up old entries
-        expired = [k for k, v in _webhook_cache.items() if now - v > 30]
-        for k in expired:
-            del _webhook_cache[k]
-
-        # Check for duplicate
-        if content_hash in _webhook_cache:
-            elapsed = now - _webhook_cache[content_hash]
-            if elapsed < _WEBHOOK_DEBOUNCE_SECONDS:
-                if logger:
-                    logger.debug(
-                        f"Duplicate webhook debounced (hash={content_hash}, {elapsed:.1f}s ago)"
-                    )
-                return True
-
-        _webhook_cache[content_hash] = now
-
-    return False
+    duplicate = db.webhook_cache.is_duplicate(
+        item_type=item_type,
+        item_name=item_name,
+        ttl_seconds=_WEBHOOK_DEDUP_TTL_SECONDS,
+    )
+    if duplicate and logger:
+        logger.debug(
+            f"Duplicate webhook debounced (item_type={item_type}, "
+            f"item_name={item_name}, ttl={_WEBHOOK_DEDUP_TTL_SECONDS}s)"
+        )
+    return duplicate
 
 
 def _is_test_event(data: Dict[str, Any]) -> bool:
