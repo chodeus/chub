@@ -182,10 +182,14 @@ persist result to jobs table, emit SSE update
 
 ## Webhooks
 
-`backend/api/webhooks.py` + `backend/util/webhook_processor.py`:
+`backend/api/webhooks.py` + `backend/util/webhook_processor.py`. End-user setup (where to copy the URL from, how to wire it into Sonarr/Radarr, accepted events, troubleshooting) lives in the [Webhooks wiki page](https://github.com/chodeus/chub/wiki/Webhooks); this section covers the internal model.
 
-- Accepts Sonarr/Radarr/Tautulli event payloads.
+- Accepts Sonarr/Radarr/Tautulli event payloads. The accepted-event allow-list is `Download`, `MovieAdded`, `SeriesAdd`, `EpisodeFileImported`, `MovieFileImported`. `Test` events are 200-acked separately. Anything else (Grab, *FileDelete, Rename, HealthIssue, *Delete) is 200-acked and dropped before dedup.
 - Optional shared-secret auth: if `general.webhook_secret` is set, requests must provide either `X-Webhook-Secret` header or `?secret=` query param (HMAC-compared). If unset, webhooks are accepted unauthenticated (matches Sonarr/Radarr's default posture).
+- Dedup is persistent: `webhook_cache` table with a 600s TTL keyed on `(item_type, sha256(identifying fields))`. Survives restart so Sonarr/Radarr retries (minutes apart) coalesce.
+- Sonarr `Download` / `EpisodeFileImported` payloads carry `episodes[*].seasonNumber`; the validator extracts it and the webhook job narrows `stored_media` to `(show row + matching season row)` so the renamer only re-walks what actually changed.
+- Each radarr/sonarr/lidarr `InstanceDetail` carries `webhook_force_reupload` (default `False`). When set, webhook-triggered uploads from that instance bypass the uploader's hash-equal short-circuit so an unchanged-on-disk poster is still re-pushed to Plex.
+- Recently-added retry: after enqueue, `wait_for_plex_availability` polls each Plex section's recently-added list with `webhook_initial_delay` warmup + `webhook_max_retries × webhook_retry_delay` (defaults 30s + 10×30s = ~5.5 min).
 - Each inbound webhook creates a job with origin metadata — enables downstream filtering and auditing.
 
 ---
