@@ -60,6 +60,8 @@ class WebhookProcessor:
                 "error_code": "NO_INSTANCE",
             }
 
+        season_number = self._extract_season_number(webhook_data)
+
         return {
             "success": True,
             "message": "Webhook validated successfully",
@@ -67,6 +69,7 @@ class WebhookProcessor:
             "media_type": media_type,
             "media_id": media_id,
             "instance_info": instance_info,
+            "season_number": season_number,
         }
 
     def _extract_media_block(
@@ -87,6 +90,26 @@ class WebhookProcessor:
             return webhook_data["movie"], "movie", webhook_data["movie"].get("id")
         else:
             return None, None, None
+
+    @staticmethod
+    def _extract_season_number(webhook_data: dict) -> Optional[int]:
+        """
+        For Sonarr Download / EpisodeFileImported events, pull the season
+        number from `episodes[0].seasonNumber` so downstream processing can
+        focus the asset match on the correct season instead of re-matching
+        the whole show.
+
+        Returns None for movies, series-add events, or payloads without an
+        episodes list — callers treat None as "not season-scoped".
+        """
+        episodes = webhook_data.get("episodes") or []
+        if not episodes:
+            return None
+        season = episodes[0].get("seasonNumber")
+        try:
+            return int(season) if season is not None else None
+        except (TypeError, ValueError):
+            return None
 
     def _find_arr_instance(self, client_info: Optional[dict] = None) -> dict:
         """
