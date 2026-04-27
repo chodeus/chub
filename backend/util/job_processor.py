@@ -132,6 +132,7 @@ def _process_webhook_job(
 
         instance_info = validation_result["instance_info"]
         media_id = validation_result["media_id"]
+        webhook_season = validation_result.get("season_number")
 
         # Helper function to process the media item
         def _process_media_item(db_context):
@@ -223,8 +224,24 @@ def _process_webhook_job(
         # Wait for item to appear in Plex before processing posters
         processor.wait_for_plex_availability(media["title"], year=media.get("year"))
 
-        # Run poster rename on the stored media
+        # Run poster rename on the stored media. For Sonarr Download /
+        # EpisodeFileImported events the payload carries the affected
+        # season; narrow `media_items` to (show row + matching season row)
+        # so the renamer only re-matches what actually changed.
         media_items = stored_media if isinstance(stored_media, list) else [stored_media]
+        if webhook_season is not None and instance_info["type"] == "sonarr":
+            focused = [
+                item
+                for item in media_items
+                if item.get("season_number") in (None, webhook_season)
+            ]
+            if focused:
+                log.debug(
+                    f"[JOB:{job_id}] Narrowed {len(media_items)} stored rows to "
+                    f"{len(focused)} for season {webhook_season}"
+                )
+                media_items = focused
+
         renamer = PosterRenamerr(logger=logger)
         rename_result = renamer.run_poster_rename_adhoc(media_items)
 
