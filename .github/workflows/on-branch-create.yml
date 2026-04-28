@@ -11,7 +11,10 @@ permissions:
 jobs:
   docker-tag:
     runs-on: ubuntu-latest
-    if: github.event.ref_type == 'branch'
+    # Run on `create` events for branches, and on manual dispatch (so a
+    # CI fix can be re-tested against an existing branch without having
+    # to delete + recreate it).
+    if: github.event_name == 'workflow_dispatch' || github.event.ref_type == 'branch'
 
     steps:
       - name: Checkout code
