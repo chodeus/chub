@@ -27,7 +27,15 @@ jobs:
 
       - name: Get the new branch name
         id: get_branch
-        run: echo "BRANCH_NAME=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
+        run: |
+          BRANCH_NAME="${GITHUB_REF#refs/heads/}"
+          # Docker tags can't contain `/` — convention-style names like
+          # feat/foo or fix/bar would otherwise fail with "invalid reference
+          # format". Keep BRANCH_NAME as the human-readable build-arg, but
+          # expose a sanitized BRANCH_TAG for the registry tag.
+          BRANCH_TAG="${BRANCH_NAME//\//-}"
+          echo "BRANCH_NAME=${BRANCH_NAME}" >> "$GITHUB_OUTPUT"
+          echo "BRANCH_TAG=${BRANCH_TAG}" >> "$GITHUB_OUTPUT"
 
       - name: Set build number
         run: echo "BUILD_NUMBER=$(git rev-list --count HEAD)" >> $GITHUB_ENV
@@ -50,4 +58,4 @@ jobs:
             BUILD_NUMBER=${{ env.BUILD_NUMBER }}
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/chub:${{ steps.get_branch.outputs.BRANCH_NAME }}
+            ghcr.io/${{ github.repository_owner }}/chub:${{ steps.get_branch.outputs.BRANCH_TAG }}
