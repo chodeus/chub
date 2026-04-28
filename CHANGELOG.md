@@ -2,6 +2,29 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.7.0](https://github.com/chodeus/chub/compare/v1.6.0...v1.7.0) (2026-04-28)
+
+
+### Features
+
+* **instances:** expose webhook_force_reupload toggle in UI ([35f1a87](https://github.com/chodeus/chub/commit/35f1a8750b1ad30a77fd1cbceff51528700d36b3))
+* **settings:** expose webhook retry knobs in General settings ([17e6a4f](https://github.com/chodeus/chub/commit/17e6a4f7f3d5ce944d1b8525979fb34de5acf811))
+* **settings:** expose webhook_secret in General settings ([1aeff9c](https://github.com/chodeus/chub/commit/1aeff9cbdf396874779e31460b81d666c489f0f4))
+* **webhooks:** bump retry defaults and add per-instance force-reupload ([7a8d1fc](https://github.com/chodeus/chub/commit/7a8d1fceac19860f86aec72ec063bad119274b84))
+* **webhooks:** event-type allow-list and season-aware path extraction ([9d43509](https://github.com/chodeus/chub/commit/9d435093ad88d2e41938e6259da1c7d9a928bb50))
+* **webhooks:** persist dedup cache in webhook_cache table ([6b0b620](https://github.com/chodeus/chub/commit/6b0b620dd4327a96aded642ad7229048adfbf389))
+
+
+### Bug Fixes
+
+* **deps:** update all non-major dependencies ([#65](https://github.com/chodeus/chub/issues/65)) ([3bca7d3](https://github.com/chodeus/chub/commit/3bca7d313fdac85e6586fe39541b70f02bbdd057))
+* **webhooks:** drop eventType from dedup hash ([3f8a599](https://github.com/chodeus/chub/commit/3f8a59911979af14a4c0259e2e55afd5c8346a22))
+
+
+### Documentation
+
+* refresh webhook section for new dedup/event model ([c4571e1](https://github.com/chodeus/chub/commit/c4571e1353b237778ca9b15acae0611cfbcded12))
+
 ## [1.6.0](https://github.com/chodeus/chub/compare/v1.5.0...v1.6.0) (2026-04-24)
 
 
