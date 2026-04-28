@@ -223,13 +223,16 @@ def _is_duplicate_webhook(
     if not item_type:
         return False
 
+    # Hash on media identity only — NOT eventType. Sonarr v4 fires both
+    # `Download` and `EpisodeFileImported` for the same import; including
+    # eventType in the hash would make the second event a different
+    # fingerprint and run the pipeline twice for one on-disk change.
     hash_fields = {
         "title": media_block.get("title", ""),
         "year": str(media_block.get("year", "")),
         "tmdb_id": str(media_block.get("tmdbId", "")),
         "tvdb_id": str(media_block.get("tvdbId", "")),
         "imdb_id": str(media_block.get("imdbId", "")),
-        "event_type": data.get("eventType", ""),
     }
     item_name = hashlib.sha256(
         json.dumps(hash_fields, sort_keys=True).encode()
