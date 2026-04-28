@@ -81,6 +81,9 @@ export const GeneralSettingsPage = () => {
                 log_level: 'info',
                 max_logs: 5,
                 update_notifications: false,
+                webhook_initial_delay: 30,
+                webhook_retry_delay: 30,
+                webhook_max_retries: 10,
             },
         };
         setFormData(initialData);
