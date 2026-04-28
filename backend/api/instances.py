@@ -65,6 +65,7 @@ class CreateInstanceRequest(BaseModel):
     api: Optional[str] = None
     type: Optional[str] = None
     apiKey: Optional[str] = None
+    webhook_force_reupload: bool = False
 
     @model_validator(mode="before")
     @classmethod
@@ -87,6 +88,7 @@ class UpdateInstanceRequest(BaseModel):
     api: Optional[str] = None
     type: Optional[str] = None
     apiKey: Optional[str] = None
+    webhook_force_reupload: bool = False
 
     @model_validator(mode="before")
     @classmethod
@@ -777,7 +779,11 @@ async def create_instance(
             )
 
         # Create new instance detail
-        new_instance = InstanceDetail(url=url, api=api_key)
+        new_instance = InstanceDetail(
+            url=url,
+            api=api_key,
+            webhook_force_reupload=data.webhook_force_reupload,
+        )
 
         # Add to appropriate service section
         service_instances[name] = new_instance
@@ -883,7 +889,11 @@ async def update_instance(
             logger.info(f"Renaming instance from '{instance_id}' to '{new_name}'")
 
         # Create/update instance with new values
-        updated_instance = InstanceDetail(url=url, api=api_key)
+        updated_instance = InstanceDetail(
+            url=url,
+            api=api_key,
+            webhook_force_reupload=data.webhook_force_reupload,
+        )
         service_instances[new_name] = updated_instance
 
         # Save updated configuration

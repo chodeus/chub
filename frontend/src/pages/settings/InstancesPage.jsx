@@ -206,6 +206,7 @@ export const InstancesPage = () => {
                 name: instanceName,
                 url: instanceUrl,
                 api: instanceConfig?.api || '',
+                webhook_force_reupload: !!instanceConfig?.webhook_force_reupload,
             });
             setFormErrors({});
             setEditModalOpen(true);
@@ -231,14 +232,16 @@ export const InstancesPage = () => {
      */
     const validateForm = useCallback(() => {
         const errors = {};
-        INSTANCE_SCHEMA.forEach(field => {
+        INSTANCE_SCHEMA.filter(
+            field => !field.serviceTypes || field.serviceTypes.includes(modalServiceType)
+        ).forEach(field => {
             if (field.required && !formData[field.key]) {
                 errors[field.key] = `${field.label} is required`;
             }
         });
         setFormErrors(errors);
         return Object.keys(errors).length === 0;
-    }, [formData]);
+    }, [formData, modalServiceType]);
 
     /**
      * Handle form submission for Add/Edit
@@ -273,6 +276,7 @@ export const InstancesPage = () => {
                             name: formData.name,
                             url: formData.url,
                             api: formData.api,
+                            webhook_force_reupload: !!formData.webhook_force_reupload,
                         };
 
                         if (isEdit) {
@@ -617,13 +621,19 @@ export const InstancesPage = () => {
                 </Modal.Header>
                 <Modal.Body>
                     <div className="flex flex-col gap-4">
-                        {INSTANCE_SCHEMA.map(field => {
+                        {INSTANCE_SCHEMA.filter(
+                            field =>
+                                !field.serviceTypes || field.serviceTypes.includes(modalServiceType)
+                        ).map(field => {
                             const FieldComponent = FieldRegistry.getField(field.type);
+                            const isToggle = field.type === 'toggle' || field.type === 'check_box';
                             return (
                                 <FieldComponent
                                     key={field.key}
                                     field={field}
-                                    value={formData[field.key] || ''}
+                                    value={
+                                        isToggle ? !!formData[field.key] : formData[field.key] || ''
+                                    }
                                     onChange={value => handleFieldChange(field.key, value)}
                                     errorMessage={formErrors[field.key]}
                                     highlightInvalid={!!formErrors[field.key]}
@@ -658,13 +668,19 @@ export const InstancesPage = () => {
                 </Modal.Header>
                 <Modal.Body>
                     <div className="flex flex-col gap-4">
-                        {INSTANCE_SCHEMA.map(field => {
+                        {INSTANCE_SCHEMA.filter(
+                            field =>
+                                !field.serviceTypes || field.serviceTypes.includes(modalServiceType)
+                        ).map(field => {
                             const FieldComponent = FieldRegistry.getField(field.type);
+                            const isToggle = field.type === 'toggle' || field.type === 'check_box';
                             return (
                                 <FieldComponent
                                     key={field.key}
                                     field={field}
-                                    value={formData[field.key] || ''}
+                                    value={
+                                        isToggle ? !!formData[field.key] : formData[field.key] || ''
+                                    }
                                     onChange={value => handleFieldChange(field.key, value)}
                                     errorMessage={formErrors[field.key]}
                                     highlightInvalid={!!formErrors[field.key]}

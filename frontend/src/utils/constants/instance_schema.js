@@ -23,4 +23,14 @@ export const INSTANCE_SCHEMA = [
         placeholder: 'Paste API Key',
         description: 'API Key for this instance.',
     },
+    {
+        key: 'webhook_force_reupload',
+        label: 'Force re-upload on webhook',
+        type: 'toggle',
+        // Plex doesn't fire webhooks at CHUB; the flag only matters for the
+        // *arr that triggered the import.
+        serviceTypes: ['radarr', 'sonarr', 'lidarr'],
+        description:
+            "When ON, webhooks from this instance bypass CHUB's file-hash skip and re-push the poster to Plex even if it hasn't changed on disk. Useful after a Plex wipe or while actively re-curating a library.",
+    },
 ];
