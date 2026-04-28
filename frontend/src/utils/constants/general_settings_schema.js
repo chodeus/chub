@@ -50,6 +50,14 @@ export const GENERAL_SETTINGS_SCHEMA = [
                 description:
                     'Maximum Plex recently-added checks per webhook before the upload step is skipped for this run.',
             },
+            {
+                key: 'webhook_secret',
+                label: 'Webhook secret',
+                type: 'password',
+                placeholder: 'Leave blank to accept unauthenticated webhooks',
+                description:
+                    'Optional shared secret. When set, every inbound webhook must send `X-Webhook-Secret: <value>` (or `?secret=<value>`) or it is rejected with 401. Recommended if your webhook URL is reachable outside your LAN.',
+            },
         ],
     },
 ];
