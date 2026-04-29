@@ -210,6 +210,10 @@ def _render_composite(
             try:
                 bordered_tmp.unlink()
             except OSError:
+                # Best-effort cleanup of the per-asset scratch file. A failure
+                # here (locked file, race with another preview run) is not
+                # worth surfacing — the next /preview POST wipes PREVIEW_DIR
+                # wholesale anyway.
                 pass
 
 
@@ -275,6 +279,10 @@ async def generate_preview(
         try:
             shutil.rmtree(PREVIEW_DIR)
         except OSError:
+            # If wipe fails (permissions, race with another worker), continue
+            # — mkdir+exist_ok=True below will reuse the directory and the
+            # new previews will land alongside any leftovers. /tmp gets wiped
+            # on container restart so worst case is a few stale files.
             pass
     PREVIEW_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -365,7 +373,17 @@ async def preview_file(token: str, logger: Any = Depends(get_logger)):
     if not token or len(token) != 32 or not all(c in "0123456789abcdef" for c in token):
         return error("Invalid preview token", code="BORDER_PREVIEW_BAD_TOKEN", status_code=404)
 
-    file_path = PREVIEW_DIR / f"{token}.jpg"
+    # Defense in depth: resolve the candidate path and confirm it lives
+    # inside PREVIEW_DIR before serving. The hex-token validator above
+    # already rules out traversal, but the explicit containment check
+    # makes the safety property obvious to static analysis (CodeQL
+    # py/path-injection) and survives any future loosening of the
+    # validator.
+    preview_root = PREVIEW_DIR.resolve()
+    file_path = (PREVIEW_DIR / f"{token}.jpg").resolve()
+    if not file_path.is_relative_to(preview_root):
+        return error("Invalid preview path", code="BORDER_PREVIEW_BAD_TOKEN", status_code=404)
+
     if not file_path.exists():
         return error(
             "Preview not found (it may have expired)",
