@@ -2,6 +2,23 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.8.0](https://github.com/chodeus/chub/compare/v1.7.0...v1.8.0) (2026-04-29)
+
+
+### Features
+
+* **border-replacerr:** live preview gallery page with holiday dropdown ([c299ec1](https://github.com/chodeus/chub/commit/c299ec1a4a5e57a439e5775815cd6a61966fdf35))
+
+
+### Bug Fixes
+
+* **border-replacerr:** drop unused os import (ruff F401) ([4ad1a67](https://github.com/chodeus/chub/commit/4ad1a67d0bef010ec0cc314c0e46300701ce14e4))
+
+
+### Refactoring
+
+* **settings:** regroup poster + border modules; drop dead toggle; library type from Plex ([ed19db2](https://github.com/chodeus/chub/commit/ed19db28f444648672dd46c8f1e808fc0598deed))
+
 ## [1.7.0](https://github.com/chodeus/chub/compare/v1.6.0...v1.7.0) (2026-04-28)
 
 
