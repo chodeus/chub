@@ -24,7 +24,6 @@ Endpoints:
         well-known temp directory and is wiped on each new POST.
 """
 
-import os
 import shutil
 import tempfile
 import uuid
