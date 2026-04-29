@@ -34,7 +34,7 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import FileResponse, JSONResponse
 from PIL import Image
 
-from backend.api.utils import error, get_logger, ok
+from backend.api.utils import error, get_database, get_logger, ok
 from backend.modules.border_replacerr import BorderReplacerr
 from backend.util.config import ChubConfig, load_config
 from backend.util.database import ChubDB
@@ -55,16 +55,12 @@ router = APIRouter(
 PREVIEW_DIR = Path(tempfile.gettempdir()) / "chub_border_preview"
 
 
-def _config() -> Any:
-    return load_config()
-
-
 def _get_config() -> Any:
     return load_config()
 
 
 def _resolve_palette(
-    config: ChubConfig, choice: str
+    config: ChubConfig, choice: str, db: ChubDB
 ) -> tuple[List[tuple[int, int, int]], Optional[str]]:
     """Resolve the user's holiday choice to an RGB palette + active label.
 
@@ -78,8 +74,7 @@ def _resolve_palette(
     if choice == "current":
         # Mirror what a real run would do: respect the existing holiday
         # parser including year-crossover rules.
-        with ChubDB() as db:
-            status = br.get_holiday_status(db=db)
+        status = br.get_holiday_status(db=db)
         return list(status.get("border_colors") or []), status.get("active_holiday")
 
     if choice and choice != "default":
@@ -222,12 +217,13 @@ async def preview_options(
 async def generate_preview(
     count: int = Query(6, ge=1, le=24),
     holiday: str = Query("current"),
+    db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_logger),
 ) -> JSONResponse:
     config = load_config()
     cfg = config.border_replacerr
 
-    palette, active_holiday = _resolve_palette(config, holiday)
+    palette, active_holiday = _resolve_palette(config, holiday, db)
     border_width = int(cfg.border_width or 26)
 
     # Wipe previous previews so /tmp doesn't grow unboundedly across refreshes.
@@ -239,8 +235,7 @@ async def generate_preview(
     PREVIEW_DIR.mkdir(parents=True, exist_ok=True)
 
     try:
-        with ChubDB(logger=logger) as db:
-            assets = _sample_assets(db, count)
+        assets = _sample_assets(db, count)
     except Exception as exc:  # pragma: no cover — DB read shouldn't fail in practice
         logger.error(f"Failed to sample assets for border preview: {exc}")
         return error(
