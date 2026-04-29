@@ -76,12 +76,13 @@ const BorderPreviewPage = () => {
                     </select>
                 </label>
                 <LoadingButton
-                    onPress={refreshPreview}
-                    isSpinning={isGenerating}
-                    isDisabled={isLoadingOptions}
-                    label="Refresh"
-                    iconName="refresh"
-                />
+                    onClick={refreshPreview}
+                    loading={isGenerating}
+                    disabled={isLoadingOptions}
+                    icon="refresh"
+                >
+                    Refresh
+                </LoadingButton>
             </div>
         ),
         [holiday, options, isLoadingOptions, isGenerating, handleHolidayChange, refreshPreview]

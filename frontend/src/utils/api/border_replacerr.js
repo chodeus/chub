@@ -37,8 +37,16 @@ export const borderReplacerrAPI = {
 
     /**
      * Build the URL for a generated preview composite. The browser fetches
-     * the bytes through the standard <img> mechanism, so this is a string
-     * helper rather than an apiCore call.
+     * the bytes through the standard <img> mechanism, which can't send an
+     * Authorization header — so we append the JWT as a `token` query param
+     * (the auth middleware accepts both header- and query-param tokens).
+     * Mirrors the same pattern postersAPI.getPreviewUrl uses.
      */
-    fileUrl: token => `/api/border-replacerr/preview/file/${token}.jpg`,
+    fileUrl: token => {
+        const params = new URLSearchParams();
+        const jwt = localStorage.getItem('chub-auth-token');
+        if (jwt) params.set('token', jwt);
+        const qs = params.toString();
+        return `/api/border-replacerr/preview/file/${token}.jpg${qs ? `?${qs}` : ''}`;
+    },
 };
