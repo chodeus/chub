@@ -2,6 +2,20 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.9.0](https://github.com/chodeus/chub/compare/v1.8.0...v1.9.0) (2026-04-29)
+
+
+### Features
+
+* **border-replacerr:** surface preset holidays in preview dropdown ([585cf54](https://github.com/chodeus/chub/commit/585cf54b463f0f13345540fa4e4f168643a0dbe9))
+
+
+### Bug Fixes
+
+* **border-replacerr:** address CodeQL path-injection + empty-except findings ([87fbd71](https://github.com/chodeus/chub/commit/87fbd718b2075ed29d24ca83a83abfddd04d21b5))
+* **border-replacerr:** img auth via ?token= query param + correct LoadingButton API ([8bdf0c8](https://github.com/chodeus/chub/commit/8bdf0c818a15db6640a5610d2c7d77eb0806689c))
+* **border-replacerr:** use shared app.state.db instead of constructing ChubDB without logger ([97447b2](https://github.com/chodeus/chub/commit/97447b2c3fbe23d57aea6603c769dc889bd0609f))
+
 ## [1.8.0](https://github.com/chodeus/chub/compare/v1.7.0...v1.8.0) (2026-04-29)
 
 
