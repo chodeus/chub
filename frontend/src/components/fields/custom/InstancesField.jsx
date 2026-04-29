@@ -148,9 +148,18 @@ const PlexLibrarySelector = React.memo(
             },
         });
 
-        // Extract libraries from API response and categorize them
+        // Extract libraries from API response and categorize them.
+        //
+        // The /plex/{instance}/libraries endpoint returns objects of shape
+        // `{title, type}` where `type` is the authoritative Plex section type
+        // (movie / show / artist / photo). We bucket by `type` so that a user
+        // who renames their movie library to "Cinema" still sees it under the
+        // Movies group.
+        //
+        // Legacy responses (plain strings) and any stale 10-min-TTL cache
+        // entries shaped that way are tolerated via a substring fallback so a
+        // mid-deploy reload does not break the UI.
         const { movieLibraries, tvLibraries, uncategorizedLibraries } = useMemo(() => {
-            // More robust null checking
             const librariesData = librariesResponse?.data?.libraries;
             if (!librariesData || !Array.isArray(librariesData)) {
                 return { movieLibraries: [], tvLibraries: [], uncategorizedLibraries: [] };
@@ -161,19 +170,38 @@ const PlexLibrarySelector = React.memo(
             const uncategorized = [];
 
             librariesData.forEach(library => {
-                if (!library || typeof library !== 'string') return; // Skip invalid entries
+                if (!library) return;
 
-                const lowerName = library.toLowerCase();
-                if (lowerName.includes('movie') || lowerName.includes('film')) {
-                    movies.push(library);
-                } else if (
-                    lowerName.includes('series') ||
-                    lowerName.includes('show') ||
-                    lowerName.includes('tv')
-                ) {
-                    tv.push(library);
+                let title;
+                let type;
+                if (typeof library === 'string') {
+                    // Legacy / stale-cache shape: bucket by title substring.
+                    title = library;
+                    const lowerName = title.toLowerCase();
+                    if (lowerName.includes('movie') || lowerName.includes('film')) {
+                        type = 'movie';
+                    } else if (
+                        lowerName.includes('series') ||
+                        lowerName.includes('show') ||
+                        lowerName.includes('tv')
+                    ) {
+                        type = 'show';
+                    } else {
+                        type = '';
+                    }
+                } else if (typeof library === 'object' && library.title) {
+                    title = library.title;
+                    type = (library.type || '').toLowerCase();
                 } else {
-                    uncategorized.push(library);
+                    return; // Skip invalid entries
+                }
+
+                if (type === 'movie') {
+                    movies.push(title);
+                } else if (type === 'show') {
+                    tv.push(title);
+                } else {
+                    uncategorized.push(title);
                 }
             });
 

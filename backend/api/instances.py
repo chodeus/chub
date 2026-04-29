@@ -489,7 +489,12 @@ async def get_instances(
                     "example": {
                         "success": True,
                         "message": "Retrieved 2 libraries for Plex instance 'main'",
-                        "data": {"libraries": ["Movies", "TV Shows"]},
+                        "data": {
+                            "libraries": [
+                                {"title": "Movies", "type": "movie"},
+                                {"title": "TV Shows", "type": "show"},
+                            ]
+                        },
                     }
                 }
             },
@@ -514,7 +519,8 @@ async def get_plex_libraries(
         instance: Name of the Plex instance from configuration
 
     Returns:
-        List of available Plex library names
+        List of available Plex libraries with their type
+        (e.g. ``{"title": "Movies", "type": "movie"}``).
     """
     try:
         logger.debug("Serving GET /api/plex/libraries for instance: %s", instance)
@@ -559,8 +565,13 @@ async def get_plex_libraries(
         import xml.etree.ElementTree as ET
 
         root = ET.fromstring(res.text)
+        # Plex returns each library section as a <Directory> with both a
+        # human-readable `title` and an authoritative `type` attribute
+        # (movie / show / artist / photo). Surfacing `type` lets the UI
+        # categorize libraries without substring-matching the title — which
+        # was unreliable when users renamed e.g. "Movies" to "Cinema".
         libraries = [
-            el.attrib["title"]
+            {"title": el.attrib["title"], "type": el.attrib.get("type", "")}
             for el in root.findall(".//Directory")
             if "title" in el.attrib
         ]
