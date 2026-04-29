@@ -55,6 +55,28 @@ router = APIRouter(
 PREVIEW_DIR = Path(tempfile.gettempdir()) / "chub_border_preview"
 
 
+# Holiday presets surfaced in the preview dropdown so the user can sanity-
+# check a palette before committing it to their config. Mirrors the catalogue
+# in frontend/src/components/fields/custom/PresetsField.jsx — when the
+# server-side catalogue lands (Phase 2 plan), both sides will read from a
+# shared backend/data/holiday_presets.json instead.
+#
+# Schedule strings are intentionally omitted: this preview tool only cares
+# about the palette, not the date window.
+_HOLIDAY_PRESETS: list[dict] = [
+    {"name": "🎆 New Year's Day", "colors": ["#00BFFF", "#FFD700"]},
+    {"name": "💘 Valentine's Day", "colors": ["#D41F3A", "#FFC0CB"]},
+    {"name": "🐣 Easter", "colors": ["#FFB6C1", "#87CEFA", "#98FB98"]},
+    {"name": "🌸 Mother's Day", "colors": ["#FF69B4", "#FFDAB9"]},
+    {"name": "👨‍👧‍👦 Father's Day", "colors": ["#1E90FF", "#4682B4"]},
+    {"name": "🗽 Independence Day", "colors": ["#FF0000", "#FFFFFF", "#0000FF"]},
+    {"name": "🧹 Labor Day", "colors": ["#FFD700", "#4682B4"]},
+    {"name": "🎃 Halloween", "colors": ["#FFA500", "#000000"]},
+    {"name": "🦃 Thanksgiving", "colors": ["#FFA500", "#8B4513"]},
+    {"name": "🎄 Christmas", "colors": ["#FF0000", "#00FF00"]},
+]
+
+
 def _get_config() -> Any:
     return load_config()
 
@@ -78,12 +100,21 @@ def _resolve_palette(
         return list(status.get("border_colors") or []), status.get("active_holiday")
 
     if choice and choice != "default":
-        # Match by name against configured holidays.
+        # Match by name against configured holidays first — saved entries win
+        # over presets so users who customized a preset's colors see their
+        # version, not the preset default.
         for holiday in cfg.holidays or []:
             if holiday.name == choice:
                 hex_colors = list(getattr(holiday, "colors", None) or cfg.border_colors or [])
                 rgb = [br.convert_to_rgb(c) for c in hex_colors]
                 return rgb, holiday.name
+
+        # Fall back to the built-in preset catalogue so the user can preview
+        # any holiday palette without first saving it to their config.
+        for preset in _HOLIDAY_PRESETS:
+            if preset["name"] == choice:
+                rgb = [br.convert_to_rgb(c) for c in preset["colors"]]
+                return rgb, preset["name"]
 
     # default / unknown choice → fall through to configured defaults
     rgb = [br.convert_to_rgb(c) for c in (cfg.border_colors or [])]
@@ -200,8 +231,21 @@ async def preview_options(
         {"value": "default", "label": "Default border colors"},
         {"value": "current", "label": "Current state (live holiday resolver)"},
     ]
+
+    # Saved holidays first, marked as such so the user can tell which entries
+    # already live in their config vs. which are preview-only suggestions.
+    saved_names: set[str] = set()
     for holiday in cfg.holidays or []:
-        options.append({"value": holiday.name, "label": holiday.name})
+        saved_names.add(holiday.name)
+        options.append({"value": holiday.name, "label": f"{holiday.name} (saved)"})
+
+    # Built-in preset catalogue — same set the holidays picker uses. Skipping
+    # entries the user already saved avoids dupes in the dropdown.
+    for preset in _HOLIDAY_PRESETS:
+        if preset["name"] in saved_names:
+            continue
+        options.append({"value": preset["name"], "label": preset["name"]})
+
     return ok("Preview options retrieved", {"options": options})
 
 
