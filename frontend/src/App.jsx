@@ -54,6 +54,7 @@ const PosterAssetsSearchPage = React.lazy(
     () => import('./pages/poster/PosterAssetsSearchPage.jsx')
 );
 const PosterCleanarrPage = React.lazy(() => import('./pages/poster/PosterCleanarrPage.jsx'));
+const BorderPreviewPage = React.lazy(() => import('./pages/poster/BorderPreviewPage.jsx'));
 const PosterStatsPage = React.lazy(() => import('./pages/poster/PosterStatsPage.jsx'));
 
 // Lazy-loaded dev pages
@@ -275,6 +276,17 @@ const App = () => {
                                                                 pageDescription="Review and clean up unused Plex poster variants"
                                                             >
                                                                 <PosterCleanarrPage />
+                                                            </PageErrorBoundary>
+                                                        }
+                                                    />
+                                                    <Route
+                                                        path="poster/border-replacerr"
+                                                        element={
+                                                            <PageErrorBoundary
+                                                                pageName="Border Replacerr"
+                                                                pageDescription="Live preview of border colors on a sample of your matched posters"
+                                                            >
+                                                                <BorderPreviewPage />
                                                             </PageErrorBoundary>
                                                         }
                                                     />

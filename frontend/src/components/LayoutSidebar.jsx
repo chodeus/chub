@@ -50,6 +50,11 @@ const NAV_SECTIONS = [
                     { id: 'gdrive-search', label: 'GDrive Search', path: '/poster/search/gdrive' },
                     { id: 'assets-search', label: 'Assets Search', path: '/poster/search/assets' },
                     { id: 'poster-cleanarr', label: 'Poster Cleanarr', path: '/poster/cleanarr' },
+                    {
+                        id: 'border-replacerr',
+                        label: 'Border Replacerr',
+                        path: '/poster/border-replacerr',
+                    },
                     { id: 'poster-statistics', label: 'Statistics', path: '/poster/statistics' },
                 ],
             },
