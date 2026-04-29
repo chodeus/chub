@@ -66,7 +66,6 @@ class PosterRenamerrConfig(BaseModel):
     asset_folders: bool = False
     print_only_renames: bool = False
     run_border_replacerr: bool = False
-    incremental_border_replacerr: bool = False
     run_cleanarr: bool = False
     report_unmatched_assets: bool = False
     source_dirs: List[str] = Field(default_factory=list)
