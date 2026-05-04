@@ -50,12 +50,11 @@ export const AuthProvider = ({ children }) => {
                     setAuthConfigured(configured);
 
                     // If auth is configured and we have a stored token, validate it
-                    // by hitting a protected endpoint. If the token is stale/invalid
-                    // (e.g. after container restart with new JWT secret), clear it.
+                    // and restore the username for the app chrome.
                     const storedToken = getStoredToken();
                     if (!configured || !storedToken) return;
                     try {
-                        const validateRes = await fetch('/api/config', {
+                        const validateRes = await fetch('/api/auth/me', {
                             headers: { Authorization: `Bearer ${storedToken}` },
                         });
                         if (cancelled) return;
@@ -63,6 +62,13 @@ export const AuthProvider = ({ children }) => {
                             localStorage.removeItem(TOKEN_STORAGE_KEY);
                             setToken(null);
                             setUser(null);
+                            return;
+                        }
+                        if (validateRes.ok) {
+                            const me = await validateRes.json();
+                            if (!cancelled) {
+                                setUser(me?.data?.username || null);
+                            }
                         }
                     } catch {
                         // Network error during validation — keep token, let normal

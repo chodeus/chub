@@ -22,14 +22,32 @@ const DAY_ABBR_TO_KEY = {
     Sat: 'saturday',
 };
 
-const DAY_KEY_TO_ABBR = {
-    sunday: 'Sun',
-    monday: 'Mon',
-    tuesday: 'Tue',
-    wednesday: 'Wed',
-    thursday: 'Thu',
-    friday: 'Fri',
-    saturday: 'Sat',
+const DAY_TOKEN_TO_KEY = {
+    0: 'sunday',
+    7: 'sunday',
+    sun: 'sunday',
+    sunday: 'sunday',
+    1: 'monday',
+    mon: 'monday',
+    monday: 'monday',
+    2: 'tuesday',
+    tue: 'tuesday',
+    tues: 'tuesday',
+    tuesday: 'tuesday',
+    3: 'wednesday',
+    wed: 'wednesday',
+    wednesday: 'wednesday',
+    4: 'thursday',
+    thu: 'thursday',
+    thur: 'thursday',
+    thurs: 'thursday',
+    thursday: 'thursday',
+    5: 'friday',
+    fri: 'friday',
+    friday: 'friday',
+    6: 'saturday',
+    sat: 'saturday',
+    saturday: 'saturday',
 };
 
 /**
@@ -81,29 +99,58 @@ export const ScheduleField = React.memo(
                     }
 
                     case 'weekly': {
-                        // Format: "Sun@14:00" or "Mon,Fri@09:00" (backend) or "monday@14:00" (legacy)
-                        const parts = dataStr.split('@');
-                        if (parts.length === 2) {
-                            const rawDays = parts[0].split(',').filter(Boolean);
-                            // Convert abbreviated names (Sun, Mon) to lowercase keys (sunday, monday)
-                            const days = rawDays.map(
-                                day => DAY_ABBR_TO_KEY[day] || day.toLowerCase()
-                            );
-                            const time = parts[1];
+                        // Accept both canonical "monday@09:00|friday@09:00"
+                        // and older comma-list "Mon,Fri@09:00" values.
+                        const entries = dataStr.split('|').filter(Boolean);
+                        const days = [];
+                        let time = '09:00';
+                        entries.forEach(entry => {
+                            const parts = entry.split('@');
+                            if (parts.length === 2) {
+                                parts[0]
+                                    .split(',')
+                                    .filter(Boolean)
+                                    .forEach(day => {
+                                        const token = day.trim().toLowerCase();
+                                        const normalized =
+                                            DAY_TOKEN_TO_KEY[token] ||
+                                            DAY_ABBR_TO_KEY[day.trim()] ||
+                                            token;
+                                        if (!days.includes(normalized)) {
+                                            days.push(normalized);
+                                        }
+                                    });
+                                time = parts[1];
+                            }
+                        });
+                        if (days.length > 0) {
                             return { type, data: { days, time } };
                         }
                         return { type, data: {} };
                     }
 
                     case 'monthly': {
-                        // Format: "1,15@14:00"
-                        const parts = dataStr.split('@');
-                        if (parts.length === 2) {
-                            const days = parts[0]
-                                .split(',')
-                                .map(d => parseInt(d, 10))
-                                .filter(d => !isNaN(d));
-                            const time = parts[1];
+                        // Accept both canonical "1@09:00|15@09:00"
+                        // and older comma-list "1,15@09:00" values.
+                        const entries = dataStr.split('|').filter(Boolean);
+                        const days = [];
+                        let time = '09:00';
+                        entries.forEach(entry => {
+                            const parts = entry.split('@');
+                            if (parts.length === 2) {
+                                parts[0]
+                                    .split(',')
+                                    .map(d => parseInt(d, 10))
+                                    .filter(d => !isNaN(d))
+                                    .forEach(day => {
+                                        if (!days.includes(day)) {
+                                            days.push(day);
+                                        }
+                                    });
+                                time = parts[1];
+                            }
+                        });
+                        if (days.length > 0) {
                             return { type, data: { days, time } };
                         }
                         return { type, data: {} };
@@ -145,16 +192,14 @@ export const ScheduleField = React.memo(
                         const days = data.days || [];
                         const time = data.time || '09:00';
                         if (days.length === 0) return '';
-                        // Convert lowercase keys (sunday, monday) to abbreviated names (Sun, Mon) for backend
-                        const abbrDays = days.map(day => DAY_KEY_TO_ABBR[day] || day);
-                        return `weekly(${abbrDays.join(',')}@${time})`;
+                        return `weekly(${days.map(day => `${day}@${time}`).join('|')})`;
                     }
 
                     case 'monthly': {
                         const days = data.days || [];
                         const time = data.time || '09:00';
                         if (days.length === 0) return '';
-                        return `monthly(${days.join(',')}@${time})`;
+                        return `monthly(${days.map(day => `${day}@${time}`).join('|')})`;
                     }
 
                     case 'cron': {

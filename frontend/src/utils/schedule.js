@@ -6,6 +6,82 @@
 import cronstrue from 'cronstrue/i18n';
 import { isValidCron } from 'cron-validator';
 
+const WEEKDAY_INDEX = {
+    0: 0,
+    7: 0,
+    sun: 0,
+    sunday: 0,
+    1: 1,
+    mon: 1,
+    monday: 1,
+    2: 2,
+    tue: 2,
+    tues: 2,
+    tuesday: 2,
+    3: 3,
+    wed: 3,
+    wednesday: 3,
+    4: 4,
+    thu: 4,
+    thur: 4,
+    thurs: 4,
+    thursday: 4,
+    5: 5,
+    fri: 5,
+    friday: 5,
+    6: 6,
+    sat: 6,
+    saturday: 6,
+};
+
+function parseTime(time) {
+    const match = String(time || '').match(/^(\d{1,2}):(\d{2})$/);
+    if (!match) return null;
+    const h = Number(match[1]);
+    const m = Number(match[2]);
+    if (h < 0 || h > 23 || m < 0 || m > 59) return null;
+    return { h, m };
+}
+
+function parseWeeklyEntries(data) {
+    const entries = [];
+    String(data || '')
+        .split('|')
+        .filter(Boolean)
+        .forEach(part => {
+            const [rawDays, rawTime] = part.split('@');
+            const time = parseTime(rawTime);
+            if (!rawDays || !time) return;
+            rawDays
+                .split(',')
+                .map(day => day.trim().toLowerCase())
+                .forEach(day => {
+                    if (Object.prototype.hasOwnProperty.call(WEEKDAY_INDEX, day)) {
+                        entries.push({ day: WEEKDAY_INDEX[day], ...time });
+                    }
+                });
+        });
+    return entries;
+}
+
+function parseMonthlyEntries(data) {
+    const entries = [];
+    String(data || '')
+        .split('|')
+        .filter(Boolean)
+        .forEach(part => {
+            const [rawDays, rawTime] = part.split('@');
+            const time = parseTime(rawTime);
+            if (!rawDays || !time) return;
+            rawDays
+                .split(',')
+                .map(day => Number(day.trim()))
+                .filter(day => Number.isInteger(day) && day >= 1 && day <= 31)
+                .forEach(day => entries.push({ day, ...time }));
+        });
+    return entries;
+}
+
 /**
  * Convert schedule string to human-readable format
  * @param {string} schedule - Schedule string from config
@@ -123,11 +199,7 @@ export function scheduleToNextFire(schedule, from = new Date()) {
         return atTime(tomorrow, h, m);
     }
     if (frequency === 'weekly') {
-        const entries = data.split('|').map(p => {
-            const [day, time] = p.split('@');
-            const [h, m] = time.split(':').map(Number);
-            return { day: parseInt(day, 10), h, m };
-        });
+        const entries = parseWeeklyEntries(data);
         const candidates = [];
         for (let offset = 0; offset < 8; offset++) {
             const d = new Date(base);
@@ -143,11 +215,7 @@ export function scheduleToNextFire(schedule, from = new Date()) {
         return candidates[0] || null;
     }
     if (frequency === 'monthly') {
-        const entries = data.split('|').map(p => {
-            const [day, time] = p.split('@');
-            const [h, m] = time.split(':').map(Number);
-            return { day: parseInt(day, 10), h, m };
-        });
+        const entries = parseMonthlyEntries(data);
         const candidates = [];
         for (let offset = 0; offset < 2; offset++) {
             const month = new Date(base.getFullYear(), base.getMonth() + offset, 1);
@@ -216,13 +284,15 @@ export function validateSchedule(schedule) {
             case 'cron':
                 return isValidCron(data, { seconds: true, allowBlankDay: true });
             case 'hourly':
-                return /^\d{1,2}$/.test(data);
-            case 'daily':
-                return /^(\d{1,2}:\d{2}(\|\d{1,2}:\d{2})*)$/.test(data);
+                return /^\d{1,2}$/.test(data) && Number(data) >= 0 && Number(data) <= 59;
+            case 'daily': {
+                const times = data.split('|').filter(Boolean);
+                return times.length > 0 && times.every(time => parseTime(time));
+            }
             case 'weekly':
-                return /^([0-6]@\d{1,2}:\d{2}(\|[0-6]@\d{1,2}:\d{2})*)$/.test(data);
+                return parseWeeklyEntries(data).length > 0;
             case 'monthly':
-                return /^(\d{1,2}@\d{1,2}:\d{2}(\|\d{1,2}@\d{1,2}:\d{2})*)$/.test(data);
+                return parseMonthlyEntries(data).length > 0;
             default:
                 return false;
         }

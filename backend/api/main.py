@@ -42,8 +42,12 @@ from backend.util.job_processor import process_job
 
 
 # Paths that do NOT require authentication
+AUTH_EXEMPT_PATHS = (
+    "/api/auth/login",
+    "/api/auth/setup",
+    "/api/auth/status",
+)
 AUTH_EXEMPT_PREFIXES = (
-    "/api/auth/",
     "/api/health",
     "/api/version",
     "/assets/",
@@ -65,7 +69,11 @@ class AuthMiddleware(BaseHTTPMiddleware):
         path = request.url.path
 
         # Non-API and exempt paths pass through
-        if not path.startswith("/api/") or path.startswith(AUTH_EXEMPT_PREFIXES):
+        if (
+            not path.startswith("/api/")
+            or path in AUTH_EXEMPT_PATHS
+            or path.startswith(AUTH_EXEMPT_PREFIXES)
+        ):
             return await call_next(request)
 
         # Check if auth is configured
@@ -112,6 +120,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         # Attach user info to request state for downstream use
         request.state.user = payload.get("sub", "")
         return await call_next(request)
+
 
 # Version functionality now in system.py
 
@@ -296,10 +305,22 @@ STATIC_DIR = Path(
     os.environ.get("STATIC_DIR", str(Path(__file__).parents[2] / "templates"))
 )
 
-app.mount("/assets", StaticFiles(directory=STATIC_DIR / "assets"), name="assets")
-app.mount("/icons", StaticFiles(directory=STATIC_DIR / "icons"), name="icons")
-app.mount("/img", StaticFiles(directory=STATIC_DIR / "img"), name="img")
-app.mount("/posters", StaticFiles(directory=STATIC_DIR / "posters"), name="posters")
+app.mount(
+    "/assets",
+    StaticFiles(directory=STATIC_DIR / "assets", check_dir=False),
+    name="assets",
+)
+app.mount(
+    "/icons", StaticFiles(directory=STATIC_DIR / "icons", check_dir=False), name="icons"
+)
+app.mount(
+    "/img", StaticFiles(directory=STATIC_DIR / "img", check_dir=False), name="img"
+)
+app.mount(
+    "/posters",
+    StaticFiles(directory=STATIC_DIR / "posters", check_dir=False),
+    name="posters",
+)
 
 
 @app.exception_handler(Exception)

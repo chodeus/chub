@@ -3,15 +3,19 @@
 import json
 import os
 import sys
+from datetime import datetime
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+import backend.util.scheduler as scheduler
 from backend.util.config import (
     ChubConfig,
     InstanceDetail,
     InstancesConfig,
     SyncGDriveConfig,
     SyncGDriveToken,
+    load_config,
+    save_config,
 )
 
 
@@ -29,8 +33,12 @@ def test_instances_round_trip():
     """Instances written into config should survive model_dump and re-parse."""
     config = ChubConfig(
         instances=InstancesConfig(
-            radarr={"radarr_main": InstanceDetail(url="http://radarr:7878", api="abc123")},
-            sonarr={"sonarr_main": InstanceDetail(url="http://sonarr:8989", api="def456")},
+            radarr={
+                "radarr_main": InstanceDetail(url="http://radarr:7878", api="abc123")
+            },
+            sonarr={
+                "sonarr_main": InstanceDetail(url="http://sonarr:8989", api="def456")
+            },
             plex={"plex_main": InstanceDetail(url="http://plex:32400", api="token789")},
         )
     )
@@ -75,6 +83,25 @@ def test_empty_instances_config():
     assert dumped["instances"]["radarr"] == {}
     assert dumped["instances"]["sonarr"] == {}
     assert dumped["instances"]["plex"] == {}
+
+
+def test_missing_config_path_returns_default_model(tmp_path):
+    """Fresh installs should be able to boot before config.yml exists."""
+    config_path = tmp_path / "missing" / "config.yml"
+
+    config = load_config(str(config_path))
+
+    assert isinstance(config, ChubConfig)
+    assert config.auth.username == ""
+
+
+def test_save_config_creates_config_directory(tmp_path):
+    """First-run auth setup can save config.yml into an empty config mount."""
+    config_path = tmp_path / "new-config-dir" / "config.yml"
+
+    save_config(ChubConfig(), str(config_path))
+
+    assert config_path.exists()
 
 
 # --- GDrive Token Tests ---
@@ -148,3 +175,38 @@ def test_gdrive_token_as_dict_from_yaml():
     # Pydantic should coerce the dict into SyncGDriveToken
     assert hasattr(config.token, "model_dump")
     assert config.token.access_token == "ya29.test"
+
+
+# --- Scheduler Format Tests ---
+
+
+class MondayMorning(datetime):
+    @classmethod
+    def now(cls, tz=None):
+        return cls(2024, 5, 6, 9, 0, tzinfo=tz)
+
+
+def test_weekly_schedule_accepts_ui_comma_day_format(monkeypatch):
+    """Schedules saved by the UI as Mon,Fri@09:00 should fire."""
+    monkeypatch.setattr(scheduler, "datetime", MondayMorning)
+
+    assert scheduler.check_schedule("labelarr", "weekly(Mon,Fri@09:00)", None)
+
+
+def test_weekly_schedule_accepts_canonical_pipe_format(monkeypatch):
+    """Canonical weekly schedules use one day/time entry per selected day."""
+    monkeypatch.setattr(scheduler, "datetime", MondayMorning)
+
+    assert scheduler.check_schedule(
+        "labelarr", "weekly(monday@09:00|friday@09:00)", None
+    )
+
+
+def test_monthly_schedule_accepts_multiple_days(monkeypatch):
+    """Monthly schedules can include multiple selected month days."""
+    monkeypatch.setattr(scheduler, "datetime", MondayMorning)
+
+    assert scheduler.check_schedule("poster_renamerr", "monthly(1,6,15@09:00)", None)
+    assert scheduler.check_schedule(
+        "poster_renamerr", "monthly(1@09:00|6@09:00|15@09:00)", None
+    )

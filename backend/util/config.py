@@ -295,7 +295,9 @@ class ChubConfig(BaseModel):
     jduparr: JduparrConfig = Field(default_factory=JduparrConfig)
     nestarr: NestarrConfig = Field(default_factory=NestarrConfig)
     poster_cleanarr: PosterCleanarrConfig = Field(default_factory=PosterCleanarrConfig)
-    plex_maintenance: PlexMaintenanceConfig = Field(default_factory=PlexMaintenanceConfig)
+    plex_maintenance: PlexMaintenanceConfig = Field(
+        default_factory=PlexMaintenanceConfig
+    )
     user_interface: UserInterfaceConfig = Field(default_factory=UserInterfaceConfig)
     general: GeneralConfig = Field(default_factory=GeneralConfig)
     auth: AuthConfig = Field(default_factory=AuthConfig)
@@ -379,7 +381,9 @@ class ConfigParseError(ConfigError):
 class ConfigValidationError(ConfigError):
     """Raised when config content fails Pydantic validation."""
 
-    def __init__(self, message: str, validation_error: Optional[ValidationError] = None):
+    def __init__(
+        self, message: str, validation_error: Optional[ValidationError] = None
+    ):
         super().__init__(message)
         self.validation_error = validation_error
 
@@ -429,26 +433,18 @@ def load_config(path: Optional[str] = None) -> ChubConfig:
     config_path = path or get_config_path()
 
     if not os.path.exists(config_path):
-        raise ConfigNotFoundError(
-            f"Configuration file not found: {config_path}"
-        )
+        return ChubConfig()
 
     try:
         with open(config_path, "r") as f:
             raw = yaml.safe_load(f)
     except yaml.YAMLError as e:
-        raise ConfigParseError(
-            f"Invalid YAML syntax in {config_path}: {e}"
-        ) from e
+        raise ConfigParseError(f"Invalid YAML syntax in {config_path}: {e}") from e
     except Exception as e:
-        raise ConfigParseError(
-            f"Failed to read {config_path}: {e}"
-        ) from e
+        raise ConfigParseError(f"Failed to read {config_path}: {e}") from e
 
     if raw is None:
-        raise ConfigParseError(
-            f"Configuration file is empty: {config_path}"
-        )
+        raise ConfigParseError(f"Configuration file is empty: {config_path}")
 
     try:
         return ChubConfig.model_validate(raw)
@@ -458,9 +454,7 @@ def load_config(path: Optional[str] = None) -> ChubConfig:
             validation_error=e,
         ) from e
     except Exception as e:
-        raise ConfigError(
-            f"Unexpected configuration error: {e}"
-        ) from e
+        raise ConfigError(f"Unexpected configuration error: {e}") from e
 
 
 def load_config_cli(path: Optional[str] = None) -> ChubConfig:
@@ -494,14 +488,11 @@ def save_config(config: ChubConfig, path: Optional[str] = None) -> None:
     config_path = path or get_config_path()
     config_dir = os.path.dirname(config_path)
     try:
-        fd, tmp_path = tempfile.mkstemp(
-            suffix=".yml.tmp", dir=config_dir
-        )
+        os.makedirs(config_dir, exist_ok=True)
+        fd, tmp_path = tempfile.mkstemp(suffix=".yml.tmp", dir=config_dir)
         try:
             with os.fdopen(fd, "w") as f:
-                yaml.safe_dump(
-                    config.model_dump(mode="python"), f, sort_keys=False
-                )
+                yaml.safe_dump(config.model_dump(mode="python"), f, sort_keys=False)
             os.replace(tmp_path, config_path)
         except BaseException:
             # Clean up temp file on any failure
