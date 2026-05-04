@@ -7,7 +7,7 @@ Provides login, setup (first-run), and auth status endpoints.
 import hmac
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -62,6 +62,33 @@ async def auth_status(logger: Any = Depends(get_logger)) -> JSONResponse:
         "Auth status retrieved",
         {"configured": configured, "required": True},
     )
+
+
+@router.get(
+    "/me",
+    summary="Current authenticated user",
+    description="Return the username from the validated JWT session.",
+)
+async def current_user(request: Request) -> JSONResponse:
+    """Return the authenticated user attached by AuthMiddleware."""
+    username = getattr(request.state, "user", "")
+    if not username:
+        return error(
+            "Authentication required",
+            code="AUTH_REQUIRED",
+            status_code=401,
+        )
+    return ok("Current user retrieved", {"username": username})
+
+
+@router.post(
+    "/logout",
+    summary="Logout",
+    description="Stateless JWT logout acknowledgement for frontend session cleanup.",
+)
+async def logout() -> JSONResponse:
+    """Acknowledge logout. Token removal happens client-side."""
+    return ok("Logout successful")
 
 
 @router.post(

@@ -31,11 +31,25 @@ class ConfigFileHandler(FileSystemEventHandler):
         self.debounce_interval = debounce_interval
 
     def on_modified(self, event):
-        if event.src_path.endswith("config.yml"):
-            now = time.time()
-            if now - self.last_modified > self.debounce_interval:
-                self.last_modified = now
-                self.callback()
+        self._maybe_trigger(event.src_path)
+
+    def on_moved(self, event):
+        # Atomic save_config uses os.replace, which inotify reports as a move
+        # (IN_MOVED_FROM + IN_MOVED_TO). Watchdog dispatches this as
+        # FileMovedEvent only — never FileModifiedEvent — so on_modified alone
+        # misses every API-driven config change on Linux.
+        self._maybe_trigger(getattr(event, "dest_path", "") or event.src_path)
+
+    def on_created(self, event):
+        self._maybe_trigger(event.src_path)
+
+    def _maybe_trigger(self, path):
+        if not path or not path.endswith("config.yml"):
+            return
+        now = time.time()
+        if now - self.last_modified > self.debounce_interval:
+            self.last_modified = now
+            self.callback()
 
 
 class ChubApplication:

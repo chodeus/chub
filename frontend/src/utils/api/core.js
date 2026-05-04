@@ -188,13 +188,21 @@ const apiCore = {
         // eslint-disable-next-line no-unused-vars
         const { headers: optionHeaders, timeout: _timeout, ...restOptions } = options;
 
+        const isFormData = typeof FormData !== 'undefined' && restOptions.body instanceof FormData;
+        const headers = {
+            ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
+            ...authHeaders,
+            ...optionHeaders,
+        };
+        Object.keys(headers).forEach(key => {
+            if (headers[key] === undefined || headers[key] === null) {
+                delete headers[key];
+            }
+        });
+
         const requestOptions = {
             ...restOptions,
-            headers: {
-                'Content-Type': 'application/json',
-                ...authHeaders,
-                ...optionHeaders,
-            },
+            headers,
             signal: controller.signal,
         };
 
@@ -308,9 +316,10 @@ const apiCore = {
      * @returns {Promise<*>} Response data
      */
     async post(url, data, options = {}) {
+        const isFormData = typeof FormData !== 'undefined' && data instanceof FormData;
         const response = await this.makeRequest(url, {
             method: 'POST',
-            body: JSON.stringify(data),
+            body: isFormData ? data : JSON.stringify(data),
             ...options,
         });
 
@@ -328,9 +337,10 @@ const apiCore = {
      * @returns {Promise<*>} Response data
      */
     async put(url, data, options = {}) {
+        const isFormData = typeof FormData !== 'undefined' && data instanceof FormData;
         const response = await this.makeRequest(url, {
             method: 'PUT',
-            body: JSON.stringify(data),
+            body: isFormData ? data : JSON.stringify(data),
             ...options,
         });
 

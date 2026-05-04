@@ -20,6 +20,60 @@ SCHEDULER_HEALTH_RETENTION_DAYS = 30
 # Persistent cache for cron next-run times (must survive across check_schedule calls)
 _next_run_times: Dict[str, datetime] = {}
 
+_WEEKDAY_ALIASES = {
+    "0": "sunday",
+    "7": "sunday",
+    "sun": "sunday",
+    "sunday": "sunday",
+    "1": "monday",
+    "mon": "monday",
+    "monday": "monday",
+    "2": "tuesday",
+    "tue": "tuesday",
+    "tues": "tuesday",
+    "tuesday": "tuesday",
+    "3": "wednesday",
+    "wed": "wednesday",
+    "wednesday": "wednesday",
+    "4": "thursday",
+    "thu": "thursday",
+    "thur": "thursday",
+    "thurs": "thursday",
+    "thursday": "thursday",
+    "5": "friday",
+    "fri": "friday",
+    "friday": "friday",
+    "6": "saturday",
+    "sat": "saturday",
+    "saturday": "saturday",
+}
+
+
+def _normalize_weekday(day: str) -> str:
+    return _WEEKDAY_ALIASES.get(day.strip().lower(), day.strip().lower())
+
+
+def _iter_weekly_entries(data: str):
+    """Yield (weekday, time) from both `mon@09|fri@09` and `Mon,Fri@09`."""
+    for part in data.split("|"):
+        if "@" not in part:
+            continue
+        raw_days, time_ = part.split("@", 1)
+        for day in raw_days.split(","):
+            normalized = _normalize_weekday(day)
+            if normalized:
+                yield normalized, time_
+
+
+def _iter_monthly_entries(data: str):
+    """Yield (monthday, time) from both `1@09|15@09` and `1,15@09`."""
+    for part in data.split("|"):
+        if "@" not in part:
+            continue
+        raw_days, time_ = part.split("@", 1)
+        for day in raw_days.split(","):
+            yield day.strip(), time_
+
 
 def check_schedule(script_name: str, schedule: str, logger: Optional[Logger]) -> bool:
     """Check if the current time matches the given schedule for a script."""
@@ -45,23 +99,19 @@ def check_schedule(script_name: str, schedule: str, logger: Optional[Logger]) ->
                     return True
 
         if frequency == "weekly":
-            days = [day.split("@")[0] for day in data.split("|")]
-            times = [day.split("@")[1] for day in data.split("|")]
             current_day = now.strftime("%A").lower()
-            for day, time_ in zip(days, times):
+            for day, time_ in _iter_weekly_entries(data):
                 hour, minute = map(int, time_.split(":"))
-                if current_day == day or (
-                    current_day == "sunday" and day == "saturday"
-                ):
+                if current_day == day:
                     if now.hour == hour and now.minute == minute:
                         return True
 
         if frequency == "monthly":
-            day_str, time_str = data.split("@")
-            day = int(day_str)
-            hour, minute = map(int, time_str.split(":"))
-            if now.day == day and now.hour == hour and now.minute == minute:
-                return True
+            for day_str, time_str in _iter_monthly_entries(data):
+                day = int(day_str)
+                hour, minute = map(int, time_str.split(":"))
+                if now.day == day and now.hour == hour and now.minute == minute:
+                    return True
 
         if frequency == "range":
             ranges = data.split("|")
@@ -84,8 +134,12 @@ def check_schedule(script_name: str, schedule: str, logger: Optional[Logger]) ->
                 _next_run_times[script_name] = next_run
                 logger.debug(f"Next run for {script_name}: {next_run}")
             if next_run <= current_time:
-                _next_run_times[script_name] = croniter(data, local_date).get_next(datetime)
-                logger.debug(f"Cron triggered for {script_name}, next run: {_next_run_times[script_name]}")
+                _next_run_times[script_name] = croniter(data, local_date).get_next(
+                    datetime
+                )
+                logger.debug(
+                    f"Cron triggered for {script_name}, next run: {_next_run_times[script_name]}"
+                )
                 return True
             return False
 
@@ -121,8 +175,6 @@ class ChubScheduler:
 
     def start(self) -> None:
         """Start the scheduler loop"""
-        schedule = self.config.schedule
-
         if self.logger:
             self.logger.get_adapter("SCHEDULER").info("Starting scheduler loop...")
             log_adapter = self.logger.get_adapter("SCHEDULER")
@@ -130,7 +182,7 @@ class ChubScheduler:
             print("[SCHEDULER] Starting scheduler loop...")
             log_adapter = None
 
-        print_schedule_table(log_adapter, schedule)
+        print_schedule_table(log_adapter, self.config.schedule)
 
         if self.logger:
             self.logger.get_adapter("SCHEDULER").info(
@@ -144,7 +196,7 @@ class ChubScheduler:
 
         try:
             while self.running:
-                self._tick(schedule)
+                self._tick(self.config.schedule)
                 self._system_tick()
                 time.sleep(SCHEDULER_POLL_INTERVAL_SECONDS)
 
@@ -252,9 +304,7 @@ class ChubScheduler:
                         f"System tick error: {e}", exc_info=True
                     )
 
-        threading.Thread(
-            target=_run, name="chub-health-snapshot", daemon=True
-        ).start()
+        threading.Thread(target=_run, name="chub-health-snapshot", daemon=True).start()
 
     def _write_health_snapshot(self) -> None:
         import requests
@@ -281,29 +331,32 @@ class ChubScheduler:
 
                 safe, reason = is_safe_url(test_url)
                 if not safe:
-                    rows.append(
-                        (now_iso, service, name, "blocked", None, None, reason)
-                    )
+                    rows.append((now_iso, service, name, "blocked", None, None, reason))
                     continue
 
                 import time as _t
+
                 start = _t.time()
                 try:
                     resp = requests.get(test_url, headers=headers, timeout=3)
                     elapsed = int((_t.time() - start) * 1000)
-                    rows.append((
-                        now_iso,
-                        service,
-                        name,
-                        "healthy" if resp.ok else "unhealthy",
-                        resp.status_code,
-                        elapsed,
-                        None,
-                    ))
+                    rows.append(
+                        (
+                            now_iso,
+                            service,
+                            name,
+                            "healthy" if resp.ok else "unhealthy",
+                            resp.status_code,
+                            elapsed,
+                            None,
+                        )
+                    )
                 except requests.exceptions.Timeout:
                     rows.append((now_iso, service, name, "timeout", None, 3000, None))
                 except requests.exceptions.ConnectionError:
-                    rows.append((now_iso, service, name, "unreachable", None, None, None))
+                    rows.append(
+                        (now_iso, service, name, "unreachable", None, None, None)
+                    )
                 except Exception as exc:
                     rows.append((now_iso, service, name, "error", None, None, str(exc)))
 
@@ -326,7 +379,9 @@ class ChubScheduler:
 
         from backend.util.database import ChubDB
 
-        cutoff = (datetime.now() - timedelta(days=SCHEDULER_HEALTH_RETENTION_DAYS)).isoformat()
+        cutoff = (
+            datetime.now() - timedelta(days=SCHEDULER_HEALTH_RETENTION_DAYS)
+        ).isoformat()
         try:
             with ChubDB(logger=self.logger, quiet=True) as db:
                 db.worker.execute_query(
