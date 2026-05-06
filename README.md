@@ -5,6 +5,7 @@
 # ![CHUB](https://img.shields.io/badge/CHUB-463fbc?style=for-the-badge&labelColor=463fbc)
 
 ### Chodeus' Media Script Hub
+**alpha version, this is still under active development**
 
 A self-hosted, all-in-one media asset manager for your Plex/ARR stack.
 
