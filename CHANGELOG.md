@@ -2,6 +2,14 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.9.2](https://github.com/chodeus/chub/compare/v1.9.1...v1.9.2) (2026-05-10)
+
+
+### Bug Fixes
+
+* **deps:** update all non-major dependencies ([#91](https://github.com/chodeus/chub/issues/91)) ([4dd6c5c](https://github.com/chodeus/chub/commit/4dd6c5c9be15554a178e5ab2c16453e714d60852))
+* **upgradinatorr:** satisfy backend lint ([20ceada](https://github.com/chodeus/chub/commit/20ceada2a09c4161fc09ca2a418bfafe5f7b1bc4))
+
 ## [1.9.1](https://github.com/chodeus/chub/compare/v1.9.0...v1.9.1) (2026-05-06)
 
 
