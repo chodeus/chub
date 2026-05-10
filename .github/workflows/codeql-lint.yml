@@ -142,7 +142,7 @@ jobs:
     name: Frontend Lint
     uses: chodeus/chodeus-ops/.github/workflows/node-ci.yml@bce9575d63bcd87ba1ff07bb95a08c64130104bd # main
     with:
-      node_version: '20'
+      node_version: '24'
       package_json_dir: frontend
       run_lint: true
       run_stylelint: true

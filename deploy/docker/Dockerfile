@@ -2,12 +2,20 @@
 # Stage 1: Builder
 # -------------------------
 FROM python:3.13-slim@sha256:d49c1ff87eb98eac346fc250f52925f726eb913c43a92854246dd03c9692ad67 AS builder
+ARG NODE_MAJOR=24
 
-# Install build dependencies (including Node.js and build tools)
+# Install build dependencies (including Node.js 24 and build tools)
 RUN set -eux; \
     apt-get update && \
     apt-get install -y --no-install-recommends \
-        gcc wget curl unzip p7zip-full tzdata jq git build-essential nodejs npm && \
+        ca-certificates gnupg gcc wget curl unzip p7zip-full tzdata jq git build-essential && \
+    install -d -m 0755 /etc/apt/keyrings && \
+    curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg && \
+    echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_${NODE_MAJOR}.x nodistro main" > /etc/apt/sources.list.d/nodesource.list && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends nodejs && \
+    node --version && npm --version && \
+    node -e "if (process.versions.node.split('.')[0] !== '${NODE_MAJOR}') process.exit(1)" && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
