@@ -4,19 +4,24 @@ import json
 import os
 import sys
 from datetime import datetime
+from types import SimpleNamespace
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import backend.util.scheduler as scheduler
+from backend.modules.upgradinatorr import Upgradinatorr
 from backend.util.config import (
     ChubConfig,
     InstanceDetail,
     InstancesConfig,
     SyncGDriveConfig,
     SyncGDriveToken,
+    UpgradinatorrConfig,
+    UpgradinatorrInstance,
     load_config,
     save_config,
 )
+from backend.util.scheduler import ChubScheduler
 
 
 # --- Config Model Tests ---
@@ -210,3 +215,255 @@ def test_monthly_schedule_accepts_multiple_days(monkeypatch):
     assert scheduler.check_schedule(
         "poster_renamerr", "monthly(1@09:00|6@09:00|15@09:00)", None
     )
+
+
+# --- Upgradinatorr Profile / Tag Tests ---
+
+
+class StubLogger:
+    def debug(self, *args, **kwargs):
+        pass
+
+    def info(self, *args, **kwargs):
+        pass
+
+    def warning(self, *args, **kwargs):
+        pass
+
+    def error(self, *args, **kwargs):
+        pass
+
+    def log_outro(self):
+        pass
+
+    def get_adapter(self, *_args, **_kwargs):
+        return self
+
+
+def make_upgradinatorr(dry_run=True):
+    module = object.__new__(Upgradinatorr)
+    module._cancel_event = None
+    module.logger = StubLogger()
+    module.config = SimpleNamespace(dry_run=dry_run)
+    return module
+
+
+def upgradinatorr_media_item(tags):
+    return {
+        "title": "Movie",
+        "year": 2024,
+        "media_id": 7,
+        "monitored": True,
+        "status": "released",
+        "seasons": None,
+        "tags": tags,
+    }
+
+
+class FakeARR:
+    instance_name = "radarr"
+    instance_type = "Radarr"
+
+    def __init__(self, media_batches):
+        self.media_batches = list(media_batches)
+        self.remove_calls = []
+        self.search_calls = []
+        self.add_calls = []
+
+    def get_all_media(self, *args, **kwargs):
+        if len(self.media_batches) > 1:
+            return self.media_batches.pop(0)
+        return self.media_batches[0]
+
+    def get_tag_id_from_name(self, name):
+        return {"checked": 1, "ignore": 2}[name]
+
+    def remove_tags(self, media_ids, tag_id):
+        self.remove_calls.append((media_ids, tag_id))
+
+    def search_media(self, media_id):
+        self.search_calls.append(media_id)
+        return {"id": 99}
+
+    def wait_for_command(self, command_id):
+        return True
+
+    def add_tags(self, media_id, tag_id):
+        self.add_calls.append((media_id, tag_id))
+
+    def get_queue(self):
+        return {"records": []}
+
+
+def test_upgradinatorr_filter_skips_checked_tag_name():
+    module = make_upgradinatorr()
+
+    result = module.filter_media(
+        [upgradinatorr_media_item(["checked"])], "checked", "ignore", 10, 0
+    )
+
+    assert result == []
+
+
+def test_upgradinatorr_filter_skips_ignore_tag_name():
+    module = make_upgradinatorr()
+
+    result = module.filter_media(
+        [upgradinatorr_media_item(["ignore"])], "checked", "ignore", 10, 0
+    )
+
+    assert result == []
+
+
+def test_upgradinatorr_unattended_dry_run_does_not_remove_tags():
+    module = make_upgradinatorr(dry_run=True)
+    app = FakeARR([[upgradinatorr_media_item(["checked"])]])
+
+    result = module.process_instance(
+        "radarr",
+        SimpleNamespace(
+            count=10,
+            tag_name="checked",
+            ignore_tag="ignore",
+            unattended=True,
+            season_monitored_threshold=0,
+            search_mode="upgrade",
+        ),
+        app,
+    )
+
+    assert app.remove_calls == []
+    assert result["tagged_count"] == 1
+    assert result["data"] == []
+
+
+def test_upgradinatorr_unattended_resets_checked_tag_then_processes_next_cycle():
+    module = make_upgradinatorr(dry_run=False)
+    app = FakeARR([[upgradinatorr_media_item(["checked"])], [upgradinatorr_media_item([])]])
+
+    result = module.process_instance(
+        "radarr",
+        SimpleNamespace(
+            count=10,
+            tag_name="checked",
+            ignore_tag="ignore",
+            unattended=True,
+            season_monitored_threshold=0,
+            search_mode="upgrade",
+        ),
+        app,
+    )
+
+    assert app.remove_calls == [([7], 1)]
+    assert app.search_calls == [7]
+    assert app.add_calls == [(7, 1)]
+    assert result["data"][0]["media_id"] == 7
+
+
+def test_upgradinatorr_run_skips_disabled_profiles(monkeypatch):
+    calls = []
+
+    def fake_create_arr_client(*args, **kwargs):
+        calls.append((args, kwargs))
+        return None
+
+    monkeypatch.setattr(
+        "backend.modules.upgradinatorr.create_arr_client", fake_create_arr_client
+    )
+
+    module = object.__new__(Upgradinatorr)
+    module._cancel_event = None
+    module.logger = StubLogger()
+    module.config = UpgradinatorrConfig(
+        instances_list=[
+            UpgradinatorrInstance(
+                enabled=False,
+                instance="radarr_main",
+                count=10,
+                tag_name="checked",
+            )
+        ]
+    )
+    module.full_config = ChubConfig(
+        instances=InstancesConfig(
+            radarr={
+                "radarr_main": InstanceDetail(url="http://radarr:7878", api="key")
+            }
+        ),
+        upgradinatorr=module.config,
+    )
+
+    module.run()
+
+    assert calls == []
+
+
+class MondayNine(datetime):
+    @classmethod
+    def now(cls, tz=None):
+        return cls(2024, 5, 6, 9, 0, tzinfo=tz)
+
+
+class Profile(SimpleNamespace):
+    def model_dump(self, mode="python"):
+        return dict(vars(self))
+
+
+class FakeOrchestrator:
+    def __init__(self):
+        self.calls = []
+
+    def get_module_status(self, module_name):
+        return {"running": False}
+
+    def run_module_async(self, module_name, origin="scheduled", overrides=None):
+        self.calls.append((module_name, origin, overrides))
+        return {"success": True, "data": {"job_id": 123}}
+
+
+def test_scheduler_enqueues_due_upgradinatorr_profile(monkeypatch):
+    monkeypatch.setattr(scheduler, "datetime", MondayNine)
+    config = SimpleNamespace(
+        schedule={},
+        upgradinatorr=SimpleNamespace(
+            instances_list=[
+                Profile(
+                    label="Main Radarr",
+                    enabled=True,
+                    schedule="daily(09:00)",
+                    instance="radarr_main",
+                    count=10,
+                    tag_name="checked",
+                    ignore_tag="ignore",
+                    unattended=False,
+                    search_mode="upgrade",
+                )
+            ]
+        ),
+    )
+    orchestrator = FakeOrchestrator()
+    chub_scheduler = ChubScheduler(config, logger=None, module_orchestrator=orchestrator)
+
+    chub_scheduler._tick(config.schedule)
+
+    assert orchestrator.calls == [
+        (
+            "upgradinatorr",
+            "scheduled:upgradinatorr_profiles",
+            {
+                "instances_list": [
+                    {
+                        "label": "Main Radarr",
+                        "enabled": True,
+                        "schedule": "daily(09:00)",
+                        "instance": "radarr_main",
+                        "count": 10,
+                        "tag_name": "checked",
+                        "ignore_tag": "ignore",
+                        "unattended": False,
+                        "search_mode": "upgrade",
+                    }
+                ]
+            },
+        )
+    ]

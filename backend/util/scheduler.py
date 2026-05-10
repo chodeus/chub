@@ -4,7 +4,7 @@ import threading
 import time
 from datetime import datetime
 from logging import Logger
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from croniter import croniter
 from dateutil import tz
@@ -161,6 +161,30 @@ def print_schedule_table(logger: Optional[Any], schedule: Dict[str, str]) -> Non
     logger.info(create_table(table_data))
 
 
+def _profile_value(profile: Any, key: str, default: Any = None) -> Any:
+    if isinstance(profile, dict):
+        return profile.get(key, default)
+    return getattr(profile, key, default)
+
+
+def _profile_to_dict(profile: Any) -> Dict[str, Any]:
+    if isinstance(profile, dict):
+        return dict(profile)
+    if hasattr(profile, "model_dump"):
+        return profile.model_dump(mode="python")
+    if hasattr(profile, "__dict__"):
+        return dict(vars(profile))
+    return {}
+
+
+def _upgradinatorr_profile_label(profile: Any, index: int) -> str:
+    return (
+        _profile_value(profile, "label", "")
+        or _profile_value(profile, "instance", "")
+        or f"profile_{index + 1}"
+    )
+
+
 class ChubScheduler:
     """Pure scheduling logic - delegates execution to ModuleOrchestrator via job queue"""
 
@@ -233,6 +257,7 @@ class ChubScheduler:
     def _tick(self, schedule: Dict[str, str]) -> None:
         """Check for due modules and queue them for execution"""
         try:
+            queued_modules = set()
             for name, sched in schedule.items():
                 if not sched:
                     continue
@@ -268,6 +293,10 @@ class ChubScheduler:
                             print(
                                 f"[SCHEDULER] Failed to queue module {name}: {result['message']}"
                             )
+                    else:
+                        queued_modules.add(name)
+
+            self._tick_upgradinatorr_profiles(queued_modules)
 
         except Exception as e:
             if self.logger:
@@ -277,6 +306,67 @@ class ChubScheduler:
             else:
                 print(f"[SCHEDULER] Exception in tick(): {e}")
             raise
+
+    def _tick_upgradinatorr_profiles(self, queued_modules: set) -> None:
+        """Queue Upgradinatorr profile-specific schedules."""
+        if "upgradinatorr" in queued_modules:
+            return
+
+        upgradinatorr_config = getattr(self.config, "upgradinatorr", None)
+        profiles = getattr(upgradinatorr_config, "instances_list", None) or []
+        if not profiles:
+            return
+
+        log_adapter = self.logger.get_adapter("scheduler") if self.logger else None
+        due_profiles: List[Dict[str, Any]] = []
+        due_labels: List[str] = []
+
+        for index, profile in enumerate(profiles):
+            if not _profile_value(profile, "enabled", True):
+                continue
+            sched = _profile_value(profile, "schedule", "")
+            if not sched:
+                continue
+
+            label = _upgradinatorr_profile_label(profile, index)
+            schedule_key = f"upgradinatorr:{index}:{label}"
+            if check_schedule(schedule_key, sched, log_adapter):
+                due_profiles.append(_profile_to_dict(profile))
+                due_labels.append(label)
+
+        if not due_profiles:
+            return
+
+        status = self.module_orchestrator.get_module_status("upgradinatorr")
+        if status["running"]:
+            return
+
+        if self.logger:
+            self.logger.get_adapter("SCHEDULER").info(
+                "Running scheduled Upgradinatorr profile(s): "
+                + ", ".join(due_labels)
+            )
+        else:
+            print(
+                "[SCHEDULER] Running scheduled Upgradinatorr profile(s): "
+                + ", ".join(due_labels)
+            )
+
+        result = self.module_orchestrator.run_module_async(
+            "upgradinatorr",
+            "scheduled:upgradinatorr_profiles",
+            overrides={"instances_list": due_profiles},
+        )
+
+        if not result["success"]:
+            if self.logger:
+                self.logger.get_adapter("SCHEDULER").error(
+                    f"Failed to queue Upgradinatorr profiles: {result['message']}"
+                )
+            else:
+                print(
+                    f"[SCHEDULER] Failed to queue Upgradinatorr profiles: {result['message']}"
+                )
 
     def _system_tick(self) -> None:
         """

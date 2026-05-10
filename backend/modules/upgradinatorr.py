@@ -16,29 +16,46 @@ class Upgradinatorr(ChubModule):
     def __init__(self, logger: Optional[Logger] = None) -> None:
         super().__init__(logger=logger)
 
+    @staticmethod
+    def _get_setting(settings: Any, key: str, default: Any = None) -> Any:
+        if isinstance(settings, dict):
+            return settings.get(key, default)
+        return getattr(settings, key, default)
+
+    @staticmethod
+    def _tag_names(item: Dict[str, Any]) -> set:
+        return {
+            str(tag).strip().lower()
+            for tag in item.get("tags", [])
+            if tag is not None and str(tag).strip()
+        }
+
     def filter_media(
         self,
         media_dict: List[Dict[str, Any]],
-        checked_tag_id: int,
-        ignore_tag_id: int,
+        checked_tag_name: str,
+        ignore_tag_name: Optional[str],
         count: int,
         season_monitored_threshold: int,
     ) -> List[Dict[str, Any]]:
         filtered_media_dict: List[Dict[str, Any]] = []
         filter_count: int = 0
+        checked_tag = (checked_tag_name or "").strip().lower()
+        ignore_tag = (ignore_tag_name or "").strip().lower()
         for item in media_dict:
             if filter_count == count:
                 break
+            item_tags = self._tag_names(item)
             if (
-                checked_tag_id in item["tags"]
-                or ignore_tag_id in item["tags"]
+                checked_tag in item_tags
+                or (ignore_tag and ignore_tag in item_tags)
                 or not item["monitored"]
                 or item["status"] not in VALID_STATUSES
             ):
                 reasons = []
-                if checked_tag_id in item["tags"]:
+                if checked_tag in item_tags:
                     reasons.append("tagged")
-                if ignore_tag_id in item["tags"]:
+                if ignore_tag and ignore_tag in item_tags:
                     reasons.append("ignore")
                 if not item["monitored"]:
                     reasons.append("unmonitored")
@@ -247,12 +264,26 @@ class Upgradinatorr(ChubModule):
         tagged_count: int = 0
         untagged_count: int = 0
         total_count: int = 0
-        count: int = instance_settings.count
-        checked_tag_name: str = instance_settings.tag_name or "checked"
-        ignore_tag_name: str = instance_settings.ignore_tag or "ignore"
-        unattended: bool = instance_settings.unattended
-        season_monitored_threshold = instance_settings.season_monitored_threshold or 0
-        search_mode: str = getattr(instance_settings, "search_mode", "upgrade") or "upgrade"
+        count: int = self._get_setting(instance_settings, "count", 0) or 0
+        checked_tag_name: str = (
+            self._get_setting(instance_settings, "tag_name", "") or "checked"
+        ).strip()
+        ignore_tag_name: str = (
+            self._get_setting(instance_settings, "ignore_tag", "") or "ignore"
+        ).strip()
+        unattended: bool = bool(self._get_setting(instance_settings, "unattended", False))
+        season_monitored_threshold = (
+            self._get_setting(instance_settings, "season_monitored_threshold", None) or 0
+        )
+        search_mode: str = (
+            self._get_setting(instance_settings, "search_mode", "upgrade") or "upgrade"
+        )
+
+        if count <= 0:
+            self.logger.warning(
+                f"Skipping {app.instance_name}: count must be greater than 0."
+            )
+            return None
 
         if search_mode not in VALID_SEARCH_MODES:
             self.logger.warning(
@@ -284,8 +315,8 @@ class Upgradinatorr(ChubModule):
 
         filtered_media_dict: List[Dict[str, Any]] = self.filter_media(
             media_dict,
-            checked_tag_id,
-            ignore_tag_id,
+            checked_tag_name,
+            ignore_tag_name,
             count,
             season_monitored_threshold,
         )
@@ -294,8 +325,13 @@ class Upgradinatorr(ChubModule):
                 f"All media for {app.instance_name} is already tagged—removing tags for unattended operation."
             )
             media_ids = [item["media_id"] for item in media_dict]
-            self.logger.info("All media is tagged. Removing tags...")
-            app.remove_tags(media_ids, checked_tag_id)
+            if self.config.dry_run:
+                self.logger.info(
+                    "Dry run: would remove checked tags for unattended operation."
+                )
+            else:
+                self.logger.info("All media is tagged. Removing tags...")
+                app.remove_tags(media_ids, checked_tag_id)
             if search_mode in ("missing", "cutoff"):
                 wanted_records = self._get_all_wanted(app, search_mode)
                 media_dict = self._convert_wanted_to_media_dict(
@@ -307,8 +343,8 @@ class Upgradinatorr(ChubModule):
                 media_dict = app.get_all_media()
             filtered_media_dict = self.filter_media(
                 media_dict,
-                checked_tag_id,
-                ignore_tag_id,
+                checked_tag_name,
+                ignore_tag_name,
                 count,
                 season_monitored_threshold,
             )
@@ -324,7 +360,7 @@ class Upgradinatorr(ChubModule):
         if media_dict:
             total_count = len(media_dict)
             for item in media_dict:
-                if checked_tag_id in item["tags"]:
+                if checked_tag_name.strip().lower() in self._tag_names(item):
                     tagged_count += 1
                 else:
                     untagged_count += 1
@@ -524,7 +560,14 @@ class Upgradinatorr(ChubModule):
                 return
             output: Dict[str, Any] = {}
             for instance_entry in self.config.instances_list:
-                instance_name = instance_entry.instance
+                if not self._get_setting(instance_entry, "enabled", True):
+                    label = self._get_setting(instance_entry, "label", "") or self._get_setting(
+                        instance_entry, "instance", "unknown"
+                    )
+                    self.logger.info(f"Skipping disabled Upgradinatorr profile: {label}")
+                    continue
+
+                instance_name = self._get_setting(instance_entry, "instance", "")
                 if not instance_name:
                     continue
 

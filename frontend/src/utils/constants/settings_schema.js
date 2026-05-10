@@ -351,8 +351,26 @@ export const SETTINGS_SCHEMA = [
                 type: 'object_array',
                 displayType: 'upgradinatorr',
 
-                description: 'List of instance configs.',
+                description:
+                    'Profiles can run with the main Upgradinatorr schedule or on their own schedule.',
                 fields: [
+                    {
+                        key: 'enabled',
+                        label: 'Enabled',
+                        type: 'check_box',
+                        defaultValue: true,
+                        description:
+                            'Temporarily opt this profile out without deleting its settings.',
+                    },
+                    {
+                        key: 'label',
+                        label: 'Profile Name',
+                        type: 'text',
+                        required: false,
+                        placeholder: 'Movies 4K upgrades',
+                        description:
+                            'Optional display name used in the profile list and scheduler logs.',
+                    },
                     {
                         key: 'instance',
                         label: 'Instance',
@@ -363,10 +381,19 @@ export const SETTINGS_SCHEMA = [
                         description: 'Select the instance to upgrade (Radarr, Sonarr, or Lidarr).',
                     },
                     {
+                        key: 'schedule',
+                        label: 'Profile Schedule',
+                        type: 'schedule',
+                        required: false,
+                        description:
+                            'Optional schedule for this profile. Leave empty to run only when the main Upgradinatorr schedule or Run button runs.',
+                    },
+                    {
                         key: 'search_mode',
                         label: 'Search Mode',
                         type: 'dropdown',
                         options: ['upgrade', 'missing', 'cutoff'],
+                        defaultValue: 'upgrade',
                         required: false,
                         description:
                             'Upgrade: search all untagged items for better quality. Missing: search only items with no files. Cutoff: search items below quality profile cutoff.',
@@ -382,20 +409,26 @@ export const SETTINGS_SCHEMA = [
                         key: 'tag_name',
                         label: 'Tag Name',
                         type: 'text',
-                        required: true,
-                        description: 'Tag name to filter items for upgrade.',
+                        required: false,
+                        defaultValue: 'checked',
+                        placeholder: 'checked',
+                        description:
+                            'Marker tag Upgradinatorr adds after searching an item. Leave blank to use "checked".',
                     },
                     {
                         key: 'ignore_tag',
                         label: 'Ignore Tag',
                         type: 'text',
-                        description: 'Tag name to exclude from upgrade.',
+                        placeholder: 'ignore',
+                        description:
+                            'ARR tag used to exclude media from this profile. Leave blank to use "ignore".',
                     },
                     {
                         key: 'unattended',
-                        label: 'Unattended',
+                        label: 'Auto reset processed tag',
                         type: 'check_box',
-                        description: 'Run upgrades without user intervention.',
+                        description:
+                            'When every eligible item has the marker tag, remove that marker tag and start the rotation again.',
                     },
                     {
                         key: 'season_monitored_threshold',
