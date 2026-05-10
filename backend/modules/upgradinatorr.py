@@ -308,10 +308,9 @@ class Upgradinatorr(ChubModule):
             media_dict = app.get_all_media(include_episode=True)
         else:
             media_dict = app.get_all_media()
-        ignore_tag_id = None
         checked_tag_id: int = app.get_tag_id_from_name(checked_tag_name)
         if ignore_tag_name:
-            ignore_tag_id: int = app.get_tag_id_from_name(ignore_tag_name)
+            app.get_tag_id_from_name(ignore_tag_name)
 
         filtered_media_dict: List[Dict[str, Any]] = self.filter_media(
             media_dict,
