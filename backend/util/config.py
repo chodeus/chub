@@ -95,6 +95,9 @@ class BorderReplacerrConfig(BaseModel):
 
 
 class UpgradinatorrInstance(BaseModel):
+    label: str = ""
+    enabled: bool = True
+    schedule: str = ""
     instance: str = ""
     count: int = 0
     tag_name: str = ""

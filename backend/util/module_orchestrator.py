@@ -100,23 +100,30 @@ class ModuleOrchestrator:
             }
 
     def run_module_async(
-        self, module_name: str, origin: str = "scheduled"
+        self,
+        module_name: str,
+        origin: str = "scheduled",
+        overrides: Dict[str, Any] = None,
     ) -> Dict[str, Any]:
         """
         Run a module asynchronously via job queue.
         Used for scheduled runs and fire-and-forget execution.
         """
         try:
+            payload = {
+                "module_name": module_name,
+                "origin": origin,
+                "immediate": False,
+            }
+            if overrides is not None:
+                payload["overrides"] = overrides
+
             # Use shared database or create new context
             if self.db is not None:
                 # Use shared database context
                 result = self.db.worker.enqueue_job(
                     table_name="jobs",
-                    payload={
-                        "module_name": module_name,
-                        "origin": origin,
-                        "immediate": False,
-                    },
+                    payload=payload,
                     job_type="module_run",
                     extra_fields={"priority": 0},  # Normal priority
                 )
@@ -125,11 +132,7 @@ class ModuleOrchestrator:
                 with ChubDB(self.logger, quiet=True) as db:
                     result = db.worker.enqueue_job(
                         table_name="jobs",
-                        payload={
-                            "module_name": module_name,
-                            "origin": origin,
-                            "immediate": False,
-                        },
+                        payload=payload,
                         job_type="module_run",
                         extra_fields={"priority": 0},  # Normal priority
                     )

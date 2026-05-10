@@ -4,6 +4,7 @@ import { RemoveButton, AddButton, ColorSwatches } from '../features/shared';
 import { FieldRegistry } from '../FieldRegistry';
 import { shouldShowField, generateInstanceOptions } from '../../../utils/forms/conditionalFields';
 import { useInstancesData } from '../../../hooks/useInstancesData';
+import { scheduleToHuman } from '../../../utils/schedule';
 
 /**
  * Unified ArrayObjectField - Handles dynamic array of objects with configurable schemas
@@ -35,11 +36,26 @@ export const ArrayObjectField = ({
     // Get display template for this field type
     const displayTemplate = getDisplayTemplate(field.displayType || field.type);
 
+    const buildDefaultItem = useCallback(() => {
+        const defaults = {};
+        (field.fields || []).forEach(subField => {
+            const defaultValue =
+                subField.defaultValue !== undefined ? subField.defaultValue : subField.default;
+            if (defaultValue !== undefined) {
+                defaults[subField.key] =
+                    Array.isArray(defaultValue) || typeof defaultValue === 'object'
+                        ? structuredClone(defaultValue)
+                        : defaultValue;
+            }
+        });
+        return defaults;
+    }, [field.fields]);
+
     const handleAdd = useCallback(() => {
         const newIndex = value.length;
         setExpandedIndex(newIndex);
-        setEditingData({});
-    }, [value.length]);
+        setEditingData(buildDefaultItem());
+    }, [value.length, buildDefaultItem]);
 
     const handleEdit = useCallback(
         index => {
@@ -208,7 +224,12 @@ export const ArrayObjectField = ({
                                 <div key={subField.key}>
                                     <FieldComponent
                                         field={enhancedField}
-                                        value={editingData[subField.key] || ''}
+                                        value={
+                                            editingData[subField.key] ??
+                                            subField.defaultValue ??
+                                            subField.default ??
+                                            ''
+                                        }
                                         onChange={value => handleFieldChange(subField.key, value)}
                                         disabled={disabled}
                                         {...additionalProps}
@@ -311,12 +332,16 @@ const DISPLAY_TEMPLATES = {
         },
     },
     upgradinatorr: {
-        itemName: 'Instance Mapping',
-        display: item => ({
-            primary: item.instance || 'Unknown Instance',
-            secondary: `Tag: ${item.tag_name || 'None'} | Count: ${item.count || 0}`,
-            badge: item.unattended ? 'Unattended' : 'Manual',
-        }),
+        itemName: 'Upgrade Profile',
+        display: item => {
+            const schedule = item.schedule ? scheduleToHuman(item.schedule) : 'Main schedule only';
+            return {
+                primary: item.label || item.instance || 'Unknown Instance',
+                secondary: `${item.instance || 'No instance'} | Tag: ${item.tag_name || 'checked'} | Count: ${item.count || 0} | ${schedule}`,
+                badge:
+                    item.enabled === false ? 'Disabled' : item.unattended ? 'Auto reset' : 'Manual',
+            };
+        },
     },
     labelarr: {
         itemName: 'Tag Mapping',

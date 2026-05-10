@@ -1302,12 +1302,18 @@ async def test_module(
 
         results = []
         for inst in instances_list:
+            if isinstance(inst, dict):
+                if not inst.get("enabled", True):
+                    continue
+            elif not isinstance(inst, str):
+                if not getattr(inst, "enabled", True):
+                    continue
             inst_name = (
                 inst
                 if isinstance(inst, str)
                 else inst.get("instance", str(inst))
                 if isinstance(inst, dict)
-                else str(inst)
+                else getattr(inst, "instance", str(inst))
             )
             if isinstance(inst, dict) and not inst.get("instance"):
                 inst_name = next(iter(inst.keys()), str(inst))
