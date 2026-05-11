@@ -180,6 +180,7 @@ class CollectionCache(DatabaseBase):
         matched_value: Optional[Any] = None,
         original_file: Optional[Any] = None,
         renamed_file: Optional[Any] = None,
+        id: Optional[Any] = None,
     ) -> None:
         """Update fields for a given collection."""
         set_clauses = []
@@ -198,6 +199,16 @@ class CollectionCache(DatabaseBase):
             params.append(renamed_file)
 
         if not set_clauses:
+            return
+
+        if id is not None:
+            query = f"""
+                UPDATE collections_cache
+                SET {', '.join(set_clauses)}
+                WHERE id=?
+            """
+            params.append(id)
+            self.execute_query(query, tuple(params))
             return
 
         query = f"""

@@ -79,6 +79,7 @@ class PosterRenamerr(ChubModule):
         instance_name = media.get("instance_name")
         normalized_title = media.get("normalized_title")
         season_number = media.get("season_number")
+        expected_asset_type = "collection" if is_collection else asset_type
 
         alt_titles = []
         try:
@@ -94,7 +95,9 @@ class PosterRenamerr(ChubModule):
         for id_field in ["imdb_id", "tmdb_id", "tvdb_id"]:
             id_val = media.get(id_field)
             if id_val:
-                c = db.poster.get_by_id(id_field, id_val, season_number)
+                c = db.poster.get_by_id(
+                    id_field, id_val, season_number, asset_type=expected_asset_type
+                )
                 if c:
                     matched, reason = is_match(c, media)
                     if matched:
@@ -106,7 +109,9 @@ class PosterRenamerr(ChubModule):
                         break
 
         if not candidate:
-            candidates = db.poster.get_candidates_by_prefix(title)
+            candidates = db.poster.get_candidates_by_prefix(
+                title or "", asset_type=expected_asset_type
+            )
             all_titles = set()
             if normalized_title:
                 all_titles.add(normalized_title)
@@ -115,6 +120,8 @@ class PosterRenamerr(ChubModule):
             for cand in candidates:
                 cand_season = cand.get("season_number")
                 if season_number is not None and cand_season != season_number:
+                    continue
+                if season_number is None and cand_season is not None:
                     continue
                 cand_norm_title = cand.get("normalized_title", "")
                 cand_alt_titles = set(
@@ -141,6 +148,7 @@ class PosterRenamerr(ChubModule):
                 instance_name=instance_name,
                 matched_value=matched,
                 original_file=candidate.get("file") if candidate else None,
+                id=media.get("id"),
             )
         else:
             db.media.update(
@@ -151,6 +159,7 @@ class PosterRenamerr(ChubModule):
                 matched_value=matched,
                 season_number=season_number,
                 original_file=candidate.get("file") if candidate else None,
+                id=media.get("id"),
             )
 
         if asset_type == "show":
@@ -300,6 +309,7 @@ class PosterRenamerr(ChubModule):
                 matched_value=None,
                 original_file=None,
                 renamed_file=new_file_path,
+                id=item.get("id"),
             )
         else:
             db.media.update(
@@ -311,6 +321,7 @@ class PosterRenamerr(ChubModule):
                 season_number=item.get("season_number"),
                 original_file=None,
                 renamed_file=new_file_path,
+                id=item.get("id"),
             )
 
         messages = []
@@ -459,10 +470,24 @@ class PosterRenamerr(ChubModule):
                         self.logger.info(f"\t{msg}")
                     self.logger.info("")
 
+    def _classify_asset_record(self, record: dict, show_keys: set) -> str:
+        if record.get("season_number") is not None or record.get("tvdb_id"):
+            return "show"
+
+        key = (record.get("normalized_title"), record.get("year"))
+        if record.get("year") is not None and key in show_keys:
+            return "show"
+
+        if record.get("year") is None:
+            return "collection"
+
+        return "movie"
+
     def _get_assets_files(self, source_dir: str):
         asset_records = []
         for root, dirs, files in os.walk(source_dir):
-            for fname in files:
+            dirs.sort(key=str.lower)
+            for fname in sorted(files, key=str.lower):
                 if not fname.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
                     continue
                 fpath = os.path.join(root, fname)
@@ -471,6 +496,7 @@ class PosterRenamerr(ChubModule):
 
                 title_base = id_content_regex.sub("", filename).strip()
                 title = year_regex.sub("", title_base).strip()
+                title = season_number_regex.sub("", title).strip(" -_")
 
                 year = (
                     extract_year(fname) or extract_year(title) or extract_year(folder)
@@ -499,6 +525,14 @@ class PosterRenamerr(ChubModule):
                     "file": fpath,
                 }
                 asset_records.append(record)
+
+        show_keys = {
+            (record.get("normalized_title"), record.get("year"))
+            for record in asset_records
+            if record.get("season_number") is not None or record.get("tvdb_id")
+        }
+        for record in asset_records:
+            record["asset_type"] = self._classify_asset_record(record, show_keys)
         return asset_records
 
     def merge_assets(self, source_dirs: List[str], db: ChubDB):
@@ -520,13 +554,17 @@ class PosterRenamerr(ChubModule):
                     id_val = asset.get(id_field)
                     if id_val:
                         db.poster.delete_by_id(
-                            id_field, id_val, asset.get("season_number")
+                            id_field,
+                            id_val,
+                            asset.get("season_number"),
+                            asset_type=asset.get("asset_type"),
                         )
 
                 db.poster.delete_by_title(
                     asset["normalized_title"],
                     asset.get("year"),
                     asset.get("season_number"),
+                    asset_type=asset.get("asset_type"),
                 )
 
                 matched = None
@@ -538,7 +576,10 @@ class PosterRenamerr(ChubModule):
                 for id_field, id_val in id_fields:
                     if id_val:
                         matched = db.poster.get_by_id(
-                            id_field, id_val, asset.get("season_number")
+                            id_field,
+                            id_val,
+                            asset.get("season_number"),
+                            asset_type=asset.get("asset_type"),
                         )
                         if matched:
                             break
@@ -547,6 +588,7 @@ class PosterRenamerr(ChubModule):
                         asset["normalized_title"],
                         asset.get("year"),
                         asset.get("season_number"),
+                        asset_type=asset.get("asset_type"),
                     )
                 if matched and not is_match(matched, asset)[0]:
                     matched = None
@@ -556,9 +598,10 @@ class PosterRenamerr(ChubModule):
                         if matched.get(id_field) and not asset.get(id_field):
                             asset[id_field] = matched[id_field]
 
-                    db.poster.propagate_ids_for_show(
-                        asset["title"], asset.get("year"), asset
-                    )
+                    if asset.get("asset_type") == "show":
+                        db.poster.propagate_ids_for_show(
+                            asset["title"], asset.get("year"), asset
+                        )
 
                 db.poster.upsert(asset)
         duration = datetime.now() - start_time

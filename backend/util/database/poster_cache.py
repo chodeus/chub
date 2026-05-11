@@ -56,15 +56,17 @@ class PosterCache(DatabaseBase):
         self.execute_query(
             """
             INSERT INTO poster_cache
-                (title, normalized_title, year,
+                (asset_type, title, normalized_title, year,
                  tmdb_id, tvdb_id, imdb_id, season_number, folder, file, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(title, year, tmdb_id, tvdb_id, imdb_id, season_number, file)
             DO UPDATE SET
+                asset_type=excluded.asset_type,
                 normalized_title=excluded.normalized_title,
                 folder=excluded.folder
             """,
             (
+                record.get("asset_type"),
                 record["title"],
                 record["normalized_title"],
                 record["year"],
@@ -112,10 +114,16 @@ class PosterCache(DatabaseBase):
         """Return all records from poster_cache as a list of dicts."""
         return self.execute_query("SELECT * FROM poster_cache", fetch_all=True) or []
 
-    def get_by_id(self, id_field: str, id_val, season_number=None) -> Optional[dict]:
+    def get_by_id(
+        self, id_field: str, id_val, season_number=None, asset_type: Optional[str] = None
+    ) -> Optional[dict]:
         """Get poster cache record by ID field."""
         sql = f"SELECT * FROM poster_cache WHERE {id_field}=?"
         params = [id_val]
+
+        if asset_type:
+            sql += " AND asset_type=?"
+            params.append(asset_type)
 
         if season_number is not None:
             sql += " AND season_number=?"
@@ -130,10 +138,15 @@ class PosterCache(DatabaseBase):
         normalized_title: str,
         year: Optional[int] = None,
         season_number: Optional[int] = None,
+        asset_type: Optional[str] = None,
     ) -> Optional[dict]:
         """Get poster cache record by normalized title."""
         sql = "SELECT * FROM poster_cache WHERE normalized_title=?"
         params = [normalized_title]
+
+        if asset_type:
+            sql += " AND asset_type=?"
+            params.append(asset_type)
 
         if year is not None:
             sql += " AND year=?"
@@ -147,10 +160,14 @@ class PosterCache(DatabaseBase):
 
         return self.execute_query(sql, params, fetch_one=True)
 
-    def delete_by_id(self, id_field, id_value, season_number):
+    def delete_by_id(self, id_field, id_value, season_number, asset_type=None):
         """Delete a record by id_field (and season_number, or IS NULL)."""
         sql = f"DELETE FROM poster_cache WHERE {id_field}=?"
         params = [id_value]
+
+        if asset_type:
+            sql += " AND asset_type=?"
+            params.append(asset_type)
 
         if season_number is not None:
             sql += " AND season_number=?"
@@ -160,10 +177,14 @@ class PosterCache(DatabaseBase):
 
         return self.execute_query(sql, params)
 
-    def delete_by_title(self, normalized_title, year, season_number):
+    def delete_by_title(self, normalized_title, year, season_number, asset_type=None):
         """Delete a record by normalized_title/year/season_number."""
         sql = "DELETE FROM poster_cache WHERE normalized_title=? AND year IS ? AND season_number IS ?"
-        return self.execute_query(sql, (normalized_title, year, season_number))
+        params = [normalized_title, year, season_number]
+        if asset_type:
+            sql += " AND asset_type=?"
+            params.append(asset_type)
+        return self.execute_query(sql, tuple(params))
 
     def clear(self) -> None:
         """Delete all rows from poster_cache."""
@@ -184,6 +205,7 @@ class PosterCache(DatabaseBase):
                 tvdb_id = COALESCE(tvdb_id, ?)
             WHERE normalized_title = ?
             AND year IS ?
+            AND asset_type = 'show'
             AND file != ?
         """
         params = [
@@ -264,14 +286,21 @@ class PosterCache(DatabaseBase):
     def get_all_grouped(self) -> dict:
         """Return all poster_cache records grouped by type."""
         all_records = self.get_all()
-        grouped = {"movies": [], "shows": [], "seasons": []}
+        grouped = {"movies": [], "shows": [], "seasons": [], "collections": []}
         for record in all_records:
+            asset_type = record.get("asset_type")
             season = record.get("season_number")
-            if season is not None:
+            if asset_type == "collection":
+                grouped["collections"].append(record)
+            elif asset_type == "movie":
+                grouped["movies"].append(record)
+            elif asset_type == "show" and season is not None:
+                grouped["seasons"].append(record)
+            elif asset_type == "show":
+                grouped["shows"].append(record)
+            elif season is not None:
                 grouped["seasons"].append(record)
             else:
-                # Heuristic: if there are other records with same title that have seasons,
-                # this is a show. Otherwise treat as movie.
                 grouped["shows"].append(record)
         return grouped
 
@@ -308,9 +337,14 @@ class PosterCache(DatabaseBase):
             conditions.append("(folder = ? OR folder LIKE ?)")
             params.extend([owner, f"%/{owner}"])
 
-        if asset_type == "movie":
-            conditions.append("season_number IS NULL")
+        if asset_type in {"movie", "show", "collection"}:
+            conditions.append("asset_type = ?")
+            params.append(asset_type)
+            if asset_type == "show":
+                conditions.append("season_number IS NULL")
         elif asset_type == "season":
+            conditions.append("asset_type = ?")
+            params.append("show")
             conditions.append("season_number IS NOT NULL")
 
         where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
@@ -331,7 +365,9 @@ class PosterCache(DatabaseBase):
 
         return {"items": items, "total": total, "limit": limit, "offset": offset}
 
-    def get_candidates_by_prefix(self, title: str, length: int = 3) -> list:
+    def get_candidates_by_prefix(
+        self, title: str, length: int = 3, asset_type: Optional[str] = None
+    ) -> list:
         """Get poster candidates by title prefix."""
         prefix = get_prefix(title, length)
         if not prefix:
@@ -339,5 +375,8 @@ class PosterCache(DatabaseBase):
 
         sql = "SELECT * FROM poster_cache WHERE LOWER(normalized_title) LIKE ?"
         params = [f"{prefix}%"]
+        if asset_type:
+            sql += " AND asset_type=?"
+            params.append(asset_type)
 
         return self.execute_query(sql, params, fetch_all=True) or []

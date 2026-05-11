@@ -425,10 +425,9 @@ def is_match(
         rule matches, returns ``(False, "")``.
 
     Caveats:
-        * If **both** sides have at least one valid ID but **none** of those IDs
-          match, the function returns ``False`` immediately without trying title
-          heuristics. This is intentional to avoid mismatching distinct entities
-          that coincidentally share a title.
+        * If both sides provide the same ID source and the values differ, the
+          function returns ``False`` immediately. If their ID sources do not
+          overlap, title/year heuristics are still allowed.
     """
     if media.get("folder"):
         folder_base_name = os.path.basename(media["folder"])
@@ -440,61 +439,71 @@ def is_match(
             )
             media["normalized_folder_title"] = normalize_titles(media["folder_title"])
 
+    def json_list(value: Any) -> List[Any]:
+        if isinstance(value, list):
+            return value
+        if isinstance(value, str):
+            try:
+                parsed = json.loads(value)
+                return parsed if isinstance(parsed, list) else []
+            except Exception:
+                return []
+        return []
+
+    asset_alt_titles = json_list(asset.get("alternate_titles"))
+    asset_norm_alt_titles = json_list(asset.get("normalized_alternate_titles"))
+    media_alt_titles = json_list(media.get("alternate_titles"))
+    media_norm_alt_titles = json_list(media.get("normalized_alternate_titles"))
+
+    def normalized_year(value: Any) -> Optional[int]:
+        if value in (None, "", "None"):
+            return None
+        try:
+            return int(value)
+        except Exception:
+            return None
+
     def year_matches() -> bool:
         """Check if asset year matches any media year."""
-        asset_year = asset.get("year")
+        asset_year = normalized_year(asset.get("year"))
         media_years = [
-            media.get(key) for key in ["year", "secondary_year", "folder_year"]
+            normalized_year(media.get(key))
+            for key in ["year", "secondary_year", "folder_year"]
         ]
         if asset_year is None and all(year is None for year in media_years):
             return True
         return any(asset_year == year for year in media_years if year is not None)
 
-    def has_any_valid_id(data: Dict[str, Any]) -> bool:
-        """Check if dict has valid media database IDs."""
-        for key in ["tmdb_id", "tvdb_id", "imdb_id"]:
-            value = data.get(key)
-            if key == "imdb_id":
-                if value and isinstance(value, str) and value.startswith("tt"):
-                    return True
-            else:
-                if value and str(value).isdigit() and int(value) > 0:
-                    return True
-        return False
+    def normalized_id(key: str, data: Dict[str, Any]) -> Optional[str]:
+        value = data.get(key)
+        if value in (None, "", "None", 0, "0"):
+            return None
+        if key == "imdb_id":
+            value = str(value).strip().lower()
+            return value if value.startswith("tt") else None
+        try:
+            value_int = int(value)
+            return str(value_int) if value_int > 0 else None
+        except Exception:
+            return None
 
-    has_asset_ids = has_any_valid_id(asset)
-    has_media_ids = has_any_valid_id(media)
+    shared_id_sources = []
+    for key in ["tvdb_id", "tmdb_id", "imdb_id"]:
+        asset_id = normalized_id(key, asset)
+        media_id = normalized_id(key, media)
+        if not asset_id or not media_id:
+            continue
+        if asset_id == media_id:
+            return True, f"ID match: {key}"
+        shared_id_sources.append(key)
 
-    if has_asset_ids and has_media_ids:
-        id_match_criteria = [
-            (
-                media.get("tvdb_id")
-                and asset.get("tvdb_id")
-                and media["tvdb_id"] == asset["tvdb_id"],
-                "ID match: tvdb_id",
-            ),
-            (
-                media.get("tmdb_id")
-                and asset.get("tmdb_id")
-                and media["tmdb_id"] == asset["tmdb_id"],
-                "ID match: tmdb_id",
-            ),
-            (
-                media.get("imdb_id")
-                and asset.get("imdb_id")
-                and media["imdb_id"] == asset["imdb_id"],
-                "ID match: imdb_id",
-            ),
-        ]
-        for matched, reason in id_match_criteria:
-            if matched:
-                return True, reason
+    if shared_id_sources:
         return False, ""
 
     match_criteria = [
         (asset.get("title") == media.get("title"), "Asset title equals media title"),
         (
-            asset.get("title") in media.get("alternate_titles", []),
+            asset.get("title") in media_alt_titles,
             "Asset title found in media's alternate titles",
         ),
         (asset.get("title") == media.get("folder"), "Asset title equals media folder"),
@@ -512,34 +521,34 @@ def is_match(
         ),
         (
             asset.get("normalized_title")
-            in media.get("normalized_alternate_titles", []),
+            in media_norm_alt_titles,
             "Asset normalized title found in media's normalized alternate titles",
         ),
         (
             any(
                 assets == media.get("title")
-                for assets in asset.get("alternate_titles", [])
+                for assets in asset_alt_titles
             ),
             "One of asset's alternate_titles matches media title",
         ),
         (
             any(
                 assets == media.get("normalized_title")
-                for assets in asset.get("normalized_alternate_titles", [])
+                for assets in asset_norm_alt_titles
             ),
             "One of asset's normalized_alternate_titles matches media normalized title",
         ),
         (
             any(
                 media_alt == asset.get("title")
-                for media_alt in media.get("alternate_titles", [])
+                for media_alt in media_alt_titles
             ),
             "One of media's alternate_titles matches asset title",
         ),
         (
             any(
                 media_alt == asset.get("normalized_title")
-                for media_alt in media.get("normalized_alternate_titles", [])
+                for media_alt in media_norm_alt_titles
             ),
             "One of media's normalized_alternate_titles matches asset normalized title",
         ),
