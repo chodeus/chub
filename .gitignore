@@ -18,7 +18,9 @@ ENV/
 .venv/
 .archives/
 /logs/
-tests/
+tests/local/
+tests/private/
+tests/fixtures/private/
 screenshots/
 .extra_scripts/
 *.log
