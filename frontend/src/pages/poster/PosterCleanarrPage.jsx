@@ -8,7 +8,7 @@ import Spinner from '../../components/ui/Spinner.jsx';
 
 const PAGE_SIZE = 500; // master-detail needs the full bundle list client-side
 
-// Mode metadata — one row per ImageMaid mode. `action` drives the Run button's
+// Mode metadata — one row per cleanup mode. `action` drives the Run button's
 // label + colour. `confirm` means the Run button fires a confirmation modal
 // (destructive / permanent operations only). `scope` toggles which modes are
 // allowed to send `target_paths`; restore/clear/nothing ignore selection.
@@ -744,7 +744,7 @@ const PosterCleanarrPage = () => {
                 </div>
             )}
 
-            {/* Global cleanup bar — Mode dropdown (all 6 ImageMaid modes) + a Run
+            {/* Global cleanup bar — Mode dropdown (all 6 cleanup modes) + a Run
                 button whose label, colour, and confirm behaviour all track the
                 selected mode, so the destructive options are visibly distinct. */}
             <section className="rounded-lg bg-surface border border-border p-3 flex flex-wrap items-center gap-3">

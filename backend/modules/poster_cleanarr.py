@@ -9,11 +9,18 @@ import zipfile
 from typing import Any, Dict, List, Optional, Set, Tuple
 from urllib.parse import urlparse
 
+from PIL import Image, UnidentifiedImageError
+
 from backend.util.base_module import ChubModule
 from backend.util.database import ChubDB
 from backend.util.helper import create_table
 from backend.util.logger import Logger
 from backend.util.notification import NotificationManager
+
+# EXIF tag id Kometa writes onto its generated overlay images. Used by the
+# overlays_only mode to skip user-uploaded customs (which lack the tag).
+KOMETA_OVERLAY_EXIF_TAG = 0x04BC
+KOMETA_OVERLAY_EXIF_VALUE = "overlay"
 
 
 def format_bytes(size: int) -> str:
@@ -442,7 +449,16 @@ class PosterCleanarr(ChubModule):
             try:
                 cursor = conn.cursor()
 
-                for column in ("user_thumb_url", "user_art_url", "user_banner_url"):
+                # Plex's "new experience" UI added user_clear_logo_url and
+                # user_square_art_url; without them any custom-uploaded clear
+                # logo or square art is wrongly flagged as bloat.
+                for column in (
+                    "user_thumb_url",
+                    "user_art_url",
+                    "user_banner_url",
+                    "user_clear_logo_url",
+                    "user_square_art_url",
+                ):
                     query = (
                         f"SELECT {column} FROM metadata_items "
                         f"WHERE {column} LIKE 'upload://%' OR {column} LIKE 'metadata://%'"
@@ -498,6 +514,22 @@ class PosterCleanarr(ChubModule):
     # Mode execution
     # =========================================================================
 
+    @staticmethod
+    def _is_kometa_overlay(path: str) -> bool:
+        """True if the image at `path` carries Kometa's overlay EXIF marker.
+
+        Plex uploads are stored extensionless, which `Image.open` handles fine
+        (PIL detects format from magic bytes). Anything we can't open or read
+        EXIF from is treated as "not a Kometa overlay" so overlays_only mode
+        leaves it alone — that's the conservative direction (skip rather than
+        delete on uncertainty)."""
+        try:
+            with Image.open(path) as img:
+                exif = img.getexif()
+                return exif.get(KOMETA_OVERLAY_EXIF_TAG) == KOMETA_OVERLAY_EXIF_VALUE
+        except (UnidentifiedImageError, OSError, ValueError):
+            return False
+
     def _execute_mode(
         self,
         bloat_list: List[Dict[str, Any]],
@@ -509,11 +541,18 @@ class PosterCleanarr(ChubModule):
         count = 0
         total_size = 0
         label = MODE_LABELS.get(mode, {})
+        overlays_only = bool(getattr(self.config, "overlays_only", False))
+        ignored_non_overlay = 0
 
         if not bloat_list:
             self.logger.info("No bloat images found. Plex metadata is clean!")
             return {"count": 0, "total_size": 0, "mode": mode}
 
+        if overlays_only:
+            self.logger.info(
+                f"overlays_only enabled — only files with the Kometa overlay "
+                f"EXIF tag (0x{KOMETA_OVERLAY_EXIF_TAG:04x} == '{KOMETA_OVERLAY_EXIF_VALUE}') will be {label.get('ed', 'processed').lower()}."
+            )
         self.logger.info(f"{label.get('ing', 'Processing')} {len(bloat_list)} bloat images...")
 
         for item in bloat_list:
@@ -522,6 +561,13 @@ class PosterCleanarr(ChubModule):
 
             filepath = item["path"]
             size = item["size"]
+
+            if overlays_only and not self._is_kometa_overlay(filepath):
+                self.logger.debug(
+                    f"  [SKIP non-overlay] {filepath} (no Kometa EXIF tag)"
+                )
+                ignored_non_overlay += 1
+                continue
 
             if mode == "report":
                 # Per-file audit at DEBUG only — at INFO this drowns the log
@@ -548,10 +594,19 @@ class PosterCleanarr(ChubModule):
                 except Exception as e:
                     self.logger.error(f"Failed to remove {filepath}: {e}")
 
+        if overlays_only and ignored_non_overlay:
+            self.logger.info(
+                f"overlays_only: skipped {ignored_non_overlay} non-overlay file(s)."
+            )
         self.logger.info(
             f"{label.get('ed', 'Processed')} {count} bloat images ({format_bytes(total_size)})"
         )
-        return {"count": count, "total_size": total_size, "mode": mode}
+        return {
+            "count": count,
+            "total_size": total_size,
+            "mode": mode,
+            "ignored_non_overlay": ignored_non_overlay,
+        }
 
     def _execute_restore(self, restore_dir: str, metadata_dir: str) -> Dict[str, Any]:
         """Restore previously moved files from restore directory."""
@@ -712,6 +767,7 @@ class PosterCleanarr(ChubModule):
                 "count": bloat_stats.get("count", 0),
                 "size": bloat_stats.get("total_size", 0),
                 "size_human": format_bytes(bloat_stats.get("total_size", 0)),
+                "ignored_non_overlay": bloat_stats.get("ignored_non_overlay", 0),
             },
             "orphaned": {
                 "count": orphaned_stats.get("count", 0),
@@ -742,6 +798,14 @@ class PosterCleanarr(ChubModule):
             summary_rows.append([
                 "Empty Directories",
                 str(output["empty_dirs"]),
+                "—",
+            ])
+
+        ignored_non_overlay = output["bloat"].get("ignored_non_overlay", 0)
+        if ignored_non_overlay:
+            summary_rows.append([
+                "Skipped (non-overlay)",
+                str(ignored_non_overlay),
                 "—",
             ])
 

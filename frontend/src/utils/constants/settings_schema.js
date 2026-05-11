@@ -854,6 +854,13 @@ export const SETTINGS_SCHEMA = [
                 description: 'Bypass the Plex running detection when using local database mode.',
             },
             {
+                key: 'overlays_only',
+                label: 'Overlays Only',
+                type: 'check_box',
+                description:
+                    'Only act on files that carry the Kometa overlay EXIF tag. Custom-uploaded posters/art (which lack the tag) are left alone. Safer for Kometa users — files without the marker are skipped, not deleted.',
+            },
+            {
                 key: 'sleep',
                 label: 'Sleep Between Operations',
                 type: 'number',
