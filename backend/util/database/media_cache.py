@@ -74,6 +74,8 @@ class MediaCache(DatabaseBase):
         required_keys = [
             "title",
             "normalized_title",
+            "alternate_titles",
+            "normalized_alternate_titles",
             "year",
             "tmdb_id",
             "tvdb_id",
@@ -127,19 +129,31 @@ class MediaCache(DatabaseBase):
         else:
             record["tags"] = json.dumps(tags_value)
 
+        for key in ("alternate_titles", "normalized_alternate_titles"):
+            value = item.get(key)
+            if value is None:
+                record[key] = json.dumps([])
+            elif isinstance(value, str):
+                record[key] = value
+            else:
+                record[key] = json.dumps(value)
+
         identity_key = self._identity_key(record, asset_type, instance_name)
 
         self.execute_query(
             """
             INSERT INTO media_cache
                 (identity_key, asset_type, title, normalized_title,
+                alternate_titles, normalized_alternate_titles,
                 year, tmdb_id, tvdb_id, imdb_id, musicbrainz_id, folder, root_folder, tags,
                 season_number, matched, instance_name, source, poster_url, arr_id,
                 status, rating, studio, edition, runtime, language, monitored, genre)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(identity_key)
             DO UPDATE SET
                 normalized_title=excluded.normalized_title,
+                alternate_titles=excluded.alternate_titles,
+                normalized_alternate_titles=excluded.normalized_alternate_titles,
                 folder=excluded.folder,
                 root_folder=excluded.root_folder,
                 tags=excluded.tags,
@@ -163,6 +177,8 @@ class MediaCache(DatabaseBase):
                 record["asset_type"],
                 record["title"],
                 record["normalized_title"],
+                record["alternate_titles"],
+                record["normalized_alternate_titles"],
                 record["year"],
                 record["tmdb_id"],
                 record["tvdb_id"],
@@ -412,6 +428,7 @@ class MediaCache(DatabaseBase):
         runtime: Optional[Any] = None,
         language: Optional[Any] = None,
         monitored: Optional[Any] = None,
+        id: Optional[Any] = None,
     ) -> None:
         """Update fields for a given media record."""
         set_clauses = []
@@ -471,6 +488,16 @@ class MediaCache(DatabaseBase):
             params.append(int(bool(monitored)))
 
         if not set_clauses:
+            return
+
+        if id is not None:
+            query = f"""
+                UPDATE media_cache
+                SET {", ".join(set_clauses)}
+                WHERE id=?
+            """
+            params.append(id)
+            self.execute_query(query, tuple(params))
             return
 
         query = f"""
