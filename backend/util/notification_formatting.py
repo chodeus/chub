@@ -259,26 +259,34 @@ def format_for_discord(
         """
         fields: List[Dict[str, Any]] = []
         grouped: Dict[str, List[str]] = {}
-        for item in output:
+        for item in o:
             title = item.get("title", "Untitled")
             year = f" ({item.get('year')})" if item.get("year") else ""
+            instance_type = item.get("instance_type", "")
             db_id = (
-                item["tvdb_id"]
-                if item["instance_type"] == "sonarr"
+                item.get("tvdb_id")
+                if instance_type == "sonarr"
                 else item.get("tmdb_id")
             )
-            grouped.setdefault(item["instance_name"], []).append(
-                f"{title}{year}\t{db_id}"
+            db_id = db_id or item.get("db_id", "")
+            instance = (
+                item.get("instance_name")
+                or item.get("config_instance_name")
+                or "Unknown Instance"
             )
+            grouped.setdefault(instance, []).append(f"{title}{year}\t{db_id}")
         for instance, lines in grouped.items():
             text = "\n".join(lines)
             fields.extend(chunk_code_fields(instance, text))
         if fields:
-            summary = (
-                "🔍 The following items were flagged as removed from TMDB/TVDB and would be deleted."
-                if output and output[0].get("dry_run")
-                else "🧹 The following items were deleted as they were removed from TMDB/TVDB."
-            )
+            dry_run = any(item.get("dry_run") for item in o)
+            report_only = any(item.get("report_only") for item in o)
+            if dry_run:
+                summary = "🔍 The following items were flagged as removed from TMDB/TVDB and would be deleted."
+            elif report_only:
+                summary = "🔍 The following items were flagged as removed from TMDB/TVDB and were not deleted."
+            else:
+                summary = "🧹 The following items were deleted as they were removed from TMDB/TVDB."
             fields.insert(0, {"name": "Summary", "value": f"```{summary}```"})
         return fields
 
@@ -971,7 +979,11 @@ def format_for_email(config: Any, output: Any) -> Tuple[str, bool]:
             name = item.get("title", "Untitled")
             year = f" ({item.get('year')})" if item.get("year") else ""
             db_id = item.get("tvdb_id") or item.get("tmdb_id")
-            key = item["instance_name"]
+            key = (
+                item.get("instance_name")
+                or item.get("config_instance_name")
+                or "Unknown Instance"
+            )
             grouped.setdefault(key, []).append(f"{name}{year} - {db_id}")
         sections: List[str] = []
         for instance, entries in grouped.items():
