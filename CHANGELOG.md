@@ -2,6 +2,24 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.10.0](https://github.com/chodeus/chub/compare/v1.9.3...v1.10.0) (2026-05-11)
+
+
+### Features
+
+* **poster_cleanarr:** expand in-use query and add overlays-only filter ([a646595](https://github.com/chodeus/chub/commit/a6465951bcc436ac02174f7cc2fda25a54506356))
+* **upgradinatorr:** add count_mode for season/album-level search budgets ([64ce71f](https://github.com/chodeus/chub/commit/64ce71fbea3cebd420398366eaee418224eb4cd3))
+
+
+### Bug Fixes
+
+* **frontend:** drop superfluous arg from canRemoveDirectory call sites ([d0b00b5](https://github.com/chodeus/chub/commit/d0b00b597aa547c4abfcaba25825e9dabe26641b))
+
+
+### Documentation
+
+* **changelog:** polish v1.4.0 poster-cleanarr entry wording ([eb46f81](https://github.com/chodeus/chub/commit/eb46f81bc9a526025d506d49ac448d2b0732c28a))
+
 ## [1.9.3](https://github.com/chodeus/chub/compare/v1.9.2...v1.9.3) (2026-05-11)
 
 
