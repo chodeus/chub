@@ -1,10 +1,8 @@
 """Tests for backend/util/auth.py — bcrypt + JWT helpers."""
 
 import time
-from unittest.mock import patch
 
 import jwt
-import pytest
 
 from backend.util.auth import (
     JWT_ALGORITHM,

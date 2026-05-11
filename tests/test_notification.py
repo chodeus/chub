@@ -3,7 +3,6 @@
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-import pytest
 
 from backend.util.notification import NotificationManager, get_random_joke
 

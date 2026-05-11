@@ -1,6 +1,5 @@
 """Tests for backend/util/path_safety.py — filesystem access guard."""
 
-import os
 
 from backend.util.path_safety import get_allowed_roots, is_path_allowed
 

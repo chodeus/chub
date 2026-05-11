@@ -127,7 +127,11 @@ jobs:
           cache: 'pip'
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: |
+          pip install -r requirements.txt
+          # httpx is required by Starlette's TestClient (used in tests/test_api_smoke.py)
+          # but isn't a runtime dep, so it lives outside requirements.txt.
+          pip install httpx
 
       - name: Verify FastAPI app imports cleanly
         run: |

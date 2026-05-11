@@ -13,7 +13,6 @@ matching and cache handling"), specifically:
 import os
 from types import SimpleNamespace
 
-import pytest
 
 from backend.modules.poster_renamerr import PosterRenamerr
 

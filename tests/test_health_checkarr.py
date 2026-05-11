@@ -3,7 +3,6 @@
 import re
 from types import SimpleNamespace
 
-import pytest
 
 from backend.modules.health_checkarr import HealthCheckarr
 from backend.util.config import ChubConfig, InstanceDetail, InstancesConfig

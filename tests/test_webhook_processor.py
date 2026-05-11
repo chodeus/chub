@@ -1,6 +1,5 @@
 """Tests for backend/util/webhook_processor.py — webhook parsing & instance routing."""
 
-from unittest.mock import patch
 
 import pytest
 

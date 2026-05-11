@@ -8,8 +8,13 @@ import os
 import sys
 
 import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
+
+# Starlette's TestClient requires httpx; skip the whole module cleanly
+# when it's not installed (e.g. minimal local environments).
+pytest.importorskip("httpx")
+
+from fastapi import FastAPI  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 

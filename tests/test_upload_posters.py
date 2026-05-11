@@ -2,7 +2,6 @@
 
 import hashlib
 
-import pytest
 
 from backend.util.upload_posters import PosterUploader
 
