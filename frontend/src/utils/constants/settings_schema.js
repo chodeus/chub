@@ -681,6 +681,12 @@ export const SETTINGS_SCHEMA = [
                 description: 'Simulate health checks without making changes.',
             },
             {
+                key: 'report_only',
+                label: 'Report Only',
+                type: 'check_box',
+                description: 'Report removed TMDB/TVDB entries without deleting them.',
+            },
+            {
                 key: 'instances',
                 label: 'Instances',
                 type: 'instances',

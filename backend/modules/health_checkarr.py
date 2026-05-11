@@ -1,8 +1,7 @@
 # modules/health_checkarr.py
 
-import json
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 from backend.util.arr import create_arr_client
 from backend.util.base_module import ChubModule
@@ -23,6 +22,26 @@ class HealthCheckarr(ChubModule):
         """
         super().__init__(logger=logger)
 
+    @staticmethod
+    def _extract_removed_ids(
+        health: List[Dict[str, Any]], instance_type: str
+    ) -> Set[int]:
+        """Extract removed TMDB/TVDB IDs from ARR health messages."""
+        wanted_source = (
+            "RemovedMovieCheck" if instance_type == "radarr" else "RemovedSeriesCheck"
+        )
+        id_regex = tmdb_id_regex if instance_type == "radarr" else tvdb_id_regex
+        ids: Set[int] = set()
+
+        for health_item in health:
+            if health_item.get("source") != wanted_source:
+                continue
+            message = health_item.get("message") or ""
+            for match in re.finditer(id_regex, message):
+                ids.add(int(match.group(1)))
+
+        return ids
+
     def run(self) -> None:
         """
         Process Radarr and Sonarr instances to identify and delete media items flagged by health checks
@@ -42,46 +61,54 @@ class HealthCheckarr(ChubModule):
                 self.logger.info(create_table(table))
                 self.logger.info("")
 
+            selected_instances = set(getattr(self.config, "instances", None) or [])
+            if not selected_instances:
+                self.logger.warning(
+                    "No Health Checkarr instances configured. Skipping run."
+                )
+                return
+
             # Supported instance types: radarr/sonarr
             for instance_type in ["radarr", "sonarr"]:
-                instances = getattr(self.full_config.instances, instance_type)
+                instances = getattr(self.full_config.instances, instance_type, {}) or {}
                 if not instances:
                     continue
                 for instance_name, instance_info in instances.items():
-                    app = create_arr_client(
-                        instance_info.url,
-                        instance_info.api,
-                        self.logger,
-                    )
-                    if not app or not app.is_connected():
-                        self.logger.warning(
-                            f"[{instance_type}] '{instance_name}': connection failed."
+                    if instance_name not in selected_instances:
+                        continue
+                    if not getattr(instance_info, "enabled", True):
+                        self.logger.info(
+                            f"[{instance_type}] '{instance_name}': disabled; skipping."
                         )
                         continue
 
-                    health = app.get_health()
-                    media_dict = app.get_all_media()  # List of dicts
+                    app = None
+                    try:
+                        app = create_arr_client(
+                            instance_info.url,
+                            instance_info.api,
+                            self.logger,
+                        )
+                        if not app or not app.is_connected():
+                            self.logger.warning(
+                                f"[{instance_type}] '{instance_name}': connection failed."
+                            )
+                            continue
 
-                    id_list: List[int] = []
-                    # Parse health check messages for removed media IDs
-                    if health:
-                        for health_item in health:
-                            if (
-                                health_item["source"] == "RemovedMovieCheck"
-                                or health_item["source"] == "RemovedSeriesCheck"
-                            ):
-                                if instance_type == "radarr":
-                                    for m in re.finditer(
-                                        tmdb_id_regex, health_item["message"]
-                                    ):
-                                        id_list.append(int(m.group(1)))
-                                if instance_type == "sonarr":
-                                    for m in re.finditer(
-                                        tvdb_id_regex, health_item["message"]
-                                    ):
-                                        id_list.append(int(m.group(1)))
+                        health = app.get_health() or []
+                        removed_ids = self._extract_removed_ids(health, instance_type)
+                        self.logger.debug(
+                            f"[{instance_type}] '{instance_name}' removed IDs: "
+                            f"{sorted(removed_ids)}"
+                        )
+                        if not removed_ids:
+                            self.logger.info(
+                                f"No removed TMDB/TVDB health items found for "
+                                f"{app.instance_name or instance_name}."
+                            )
+                            continue
 
-                        self.logger.debug(f"id_list:\n{json.dumps(id_list, indent=4)}")
+                        media_dict = app.get_all_media()  # List of dicts
                         output: List[Dict[str, Any]] = []
 
                         # Match health-check IDs with media library entries
@@ -95,69 +122,110 @@ class HealthCheckarr(ChubModule):
                             for item in pbar:
                                 if self.is_cancelled():
                                     return
-                                # media_dict items are expected to be dicts from the API
-                                if (
-                                    instance_type == "radarr"
-                                    and item["tmdb_id"] in id_list
-                                ) or (
-                                    instance_type == "sonarr"
-                                    and item["tvdb_id"] in id_list
-                                ):
-                                    db_id = (
-                                        item["tmdb_id"]
-                                        if instance_type == "radarr"
-                                        else item["tvdb_id"]
-                                    )
-                                    self.logger.debug(
-                                        f"Found {item['title']} with: {db_id}"
-                                    )
-                                    output.append(item)
 
-                        self.logger.debug(f"output:\n{json.dumps(output, indent=4)}")
+                                db_id = item.get(
+                                    "tmdb_id"
+                                    if instance_type == "radarr"
+                                    else "tvdb_id"
+                                )
+                                if db_id not in removed_ids:
+                                    continue
 
-                        if output:
+                                self.logger.debug(
+                                    f"Found {item.get('title', 'Untitled')} with: {db_id}"
+                                )
+                                enriched_item = dict(item)
+                                enriched_item.update(
+                                    {
+                                        "config_instance_name": instance_name,
+                                        "instance_name": app.instance_name
+                                        or instance_name,
+                                        "instance_type": instance_type,
+                                        "db_id": db_id,
+                                        "dry_run": bool(self.config.dry_run),
+                                        "report_only": bool(self.config.report_only),
+                                    }
+                                )
+                                output.append(enriched_item)
+
+                        if not output:
                             self.logger.info(
-                                f"Deleting {len(output)} {instance_type} items from {app.instance_name}"
+                                f"Removed IDs were reported for "
+                                f"{app.instance_name or instance_name}, but no matching "
+                                "local media entries were found."
                             )
-                            # Delete each matched item unless dry run is enabled
-                            with progress(
-                                output,
-                                desc=f"Deleting {instance_type} items",
-                                unit="items",
-                                logger=self.logger,
-                                leave=True,
-                            ) as pbar:
-                                for item in pbar:
-                                    if self.is_cancelled():
-                                        return
-                                    if self.config.dry_run:
-                                        self.logger.info(
-                                            f"{item['title']} would have been deleted with id: {item['media_id']}"
-                                        )
-                                    elif self.config.report_only:
-                                        self.logger.info(
-                                            f"[REPORT] {item['title']} flagged for deletion with id: {item['media_id']} and tvdb/tmdb id: {item.get('db_id', '')}"
-                                        )
-                                    else:
-                                        self.logger.info(
-                                            f"{item['title']} deleted with id: {item['media_id']} and tvdb/tmdb id: {item.get('db_id', '')}"
-                                        )
-                                        app.delete_media(item["media_id"])
+                            continue
 
-                            # Send notification with deleted items
-                            manager = NotificationManager(
-                                self.config, self.logger, module_name="health_checkarr"
-                            )
-                            manager.send_notification(output)
+                        if self.config.dry_run:
+                            action = "Would delete"
+                            progress_desc = f"Reviewing {instance_type} items"
+                        elif self.config.report_only:
+                            action = "Reporting"
+                            progress_desc = f"Reviewing {instance_type} items"
                         else:
-                            self.logger.info(
-                                f"No health data returned for {app.instance_name}, this is fine if there was nothing to delete. Skipping deletion checks."
-                            )
+                            action = "Deleting"
+                            progress_desc = f"Deleting {instance_type} items"
+
+                        self.logger.info(
+                            f"{action} {len(output)} {instance_type} items from "
+                            f"{app.instance_name or instance_name}"
+                        )
+                        # Delete each matched item unless dry run/report only is enabled.
+                        with progress(
+                            output,
+                            desc=progress_desc,
+                            unit="items",
+                            logger=self.logger,
+                            leave=True,
+                        ) as pbar:
+                            for item in pbar:
+                                if self.is_cancelled():
+                                    return
+                                media_id = item.get("media_id")
+                                if media_id is None:
+                                    self.logger.warning(
+                                        f"Skipping {item.get('title', 'Untitled')}: "
+                                        "missing ARR media id."
+                                    )
+                                    continue
+                                if self.config.dry_run:
+                                    self.logger.info(
+                                        f"{item['title']} would have been deleted with id: {media_id}"
+                                    )
+                                elif self.config.report_only:
+                                    self.logger.info(
+                                        f"[REPORT] {item['title']} flagged for deletion "
+                                        f"with id: {media_id} and tvdb/tmdb id: "
+                                        f"{item.get('db_id', '')}"
+                                    )
+                                else:
+                                    app.delete_media(media_id)
+                                    self.logger.info(
+                                        f"{item['title']} deleted with id: {media_id} "
+                                        f"and tvdb/tmdb id: {item.get('db_id', '')}"
+                                    )
+
+                        # Send notification with deleted/flagged items.
+                        manager = NotificationManager(
+                            self.full_config, self.logger, module_name="health_checkarr"
+                        )
+                        manager.send_notification(output)
+                    finally:
+                        if (
+                            app is not None
+                            and hasattr(app, "session")
+                            and app.session is not None
+                        ):
+                            try:
+                                app.session.close()
+                            except Exception:
+                                pass
         except KeyboardInterrupt:
             print("Keyboard Interrupt detected. Exiting...")
             return
         except Exception:
             self.logger.error("\n\nAn error occurred:\n", exc_info=True)
             self.logger.error("\n\n")
+            raise
         finally:
             self.logger.log_outro()

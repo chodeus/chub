@@ -3,10 +3,12 @@
 import re
 from types import SimpleNamespace
 
+import pytest
 
 from backend.modules.health_checkarr import HealthCheckarr
 from backend.util.config import ChubConfig, InstanceDetail, InstancesConfig
 from backend.util.constants import tmdb_id_regex, tvdb_id_regex
+from backend.util.notification_formatting import format_for_discord, format_for_email
 
 
 class StubLogger:
@@ -60,7 +62,8 @@ def test_tmdb_regex_no_match_on_unrelated_text():
 class FakeARR:
     instance_name = "main"
 
-    def __init__(self, health, media):
+    def __init__(self, health, media, instance_name="main"):
+        self.instance_name = instance_name
         self._health = health
         self._media = media
         self.deleted = []
@@ -79,7 +82,7 @@ class FakeARR:
         self.deleted.append(media_id)
 
 
-def make_module(dry_run=False, report_only=False):
+def make_module(dry_run=False, report_only=False, instances=None):
     m = object.__new__(HealthCheckarr)
     m._cancel_event = None
     m.logger = StubLogger()
@@ -87,6 +90,7 @@ def make_module(dry_run=False, report_only=False):
         log_level="info",
         dry_run=dry_run,
         report_only=report_only,
+        instances=["main"] if instances is None else instances,
     )
     m.full_config = ChubConfig(
         instances=InstancesConfig(
@@ -179,3 +183,165 @@ def test_run_ignores_unrelated_health_sources(monkeypatch):
     _patch_arr(monkeypatch, fake)
     module.run()
     assert fake.deleted == []
+
+
+def test_run_respects_configured_instances(monkeypatch):
+    main = FakeARR(
+        health=[{"source": "RemovedMovieCheck", "message": "tmdb 100"}],
+        media=[{"tmdb_id": 100, "title": "Delete", "media_id": 1}],
+        instance_name="main",
+    )
+    other = FakeARR(
+        health=[{"source": "RemovedMovieCheck", "message": "tmdb 200"}],
+        media=[{"tmdb_id": 200, "title": "Skip", "media_id": 2}],
+        instance_name="other",
+    )
+    module = make_module(instances=["main"])
+    module.full_config = ChubConfig(
+        instances=InstancesConfig(
+            radarr={
+                "main": InstanceDetail(url="http://radarr-main:7878", api="key"),
+                "other": InstanceDetail(url="http://radarr-other:7878", api="key"),
+            }
+        )
+    )
+    by_url = {
+        "http://radarr-main:7878": main,
+        "http://radarr-other:7878": other,
+    }
+    monkeypatch.setattr(
+        "backend.modules.health_checkarr.create_arr_client",
+        lambda url, *_a, **_kw: by_url[url],
+    )
+    monkeypatch.setattr(
+        "backend.modules.health_checkarr.NotificationManager",
+        lambda *a, **kw: SimpleNamespace(send_notification=lambda *_a, **_kw: None),
+    )
+
+    module.run()
+
+    assert main.deleted == [1]
+    assert other.deleted == []
+
+
+def test_run_skips_disabled_instance(monkeypatch):
+    fake = FakeARR(
+        health=[{"source": "RemovedMovieCheck", "message": "tmdb 100"}],
+        media=[{"tmdb_id": 100, "title": "Disabled", "media_id": 1}],
+    )
+    module = make_module(instances=["main"])
+    module.full_config = ChubConfig(
+        instances=InstancesConfig(
+            radarr={
+                "main": InstanceDetail(
+                    url="http://radarr:7878", api="key", enabled=False
+                ),
+            }
+        )
+    )
+    monkeypatch.setattr(
+        "backend.modules.health_checkarr.create_arr_client",
+        lambda *a, **kw: fake,
+    )
+
+    module.run()
+
+    assert fake.deleted == []
+
+
+def test_run_with_no_configured_instances_does_not_connect(monkeypatch):
+    module = make_module(instances=[])
+    monkeypatch.setattr(
+        "backend.modules.health_checkarr.create_arr_client",
+        lambda *a, **kw: pytest.fail("Should not connect without selected instances"),
+    )
+
+    module.run()
+
+
+def test_run_enriches_notification_payload(monkeypatch):
+    fake = FakeARR(
+        health=[{"source": "RemovedMovieCheck", "message": "tmdb 100"}],
+        media=[{"tmdb_id": 100, "title": "Notify", "media_id": 1, "year": 2024}],
+    )
+    captured = {}
+    module = make_module(dry_run=True)
+    _patch_arr(monkeypatch, fake)
+
+    class CaptureNotificationManager:
+        def __init__(self, config, *_args, **_kwargs):
+            captured["config"] = config
+
+        def send_notification(self, output):
+            captured["output"] = output
+
+    monkeypatch.setattr(
+        "backend.modules.health_checkarr.NotificationManager",
+        CaptureNotificationManager,
+    )
+
+    module.run()
+
+    assert captured["config"] is module.full_config
+    assert captured["output"][0]["instance_name"] == "main"
+    assert captured["output"][0]["instance_type"] == "radarr"
+    assert captured["output"][0]["db_id"] == 100
+    assert captured["output"][0]["dry_run"] is True
+
+
+def test_run_propagates_delete_failure(monkeypatch):
+    class FailingARR(FakeARR):
+        def delete_media(self, media_id):
+            raise RuntimeError("delete failed")
+
+    fake = FailingARR(
+        health=[{"source": "RemovedMovieCheck", "message": "tmdb 100"}],
+        media=[{"tmdb_id": 100, "title": "Boom", "media_id": 1}],
+    )
+    module = make_module()
+    _patch_arr(monkeypatch, fake)
+
+    with pytest.raises(RuntimeError, match="delete failed"):
+        module.run()
+
+
+def test_health_checkarr_formatters_handle_module_output():
+    output = [
+        {
+            "title": "Movie",
+            "year": 2024,
+            "tmdb_id": 100,
+            "media_id": 1,
+            "instance_name": "main",
+            "instance_type": "radarr",
+            "dry_run": True,
+        }
+    ]
+
+    discord_fields, ok = format_for_discord(
+        SimpleNamespace(module_name="health_checkarr"), output
+    )
+    email_body, email_ok = format_for_email(
+        SimpleNamespace(module_name="health_checkarr"), output
+    )
+
+    assert ok is True
+    assert email_ok is True
+    assert discord_fields[1][0]["name"] == "Summary"
+    assert "main" in email_body
+
+
+def test_health_checkarr_formatters_fallback_when_instance_metadata_missing():
+    output = [{"title": "Movie", "year": 2024, "tmdb_id": 100, "media_id": 1}]
+
+    discord_fields, ok = format_for_discord(
+        SimpleNamespace(module_name="health_checkarr"), output
+    )
+    email_body, email_ok = format_for_email(
+        SimpleNamespace(module_name="health_checkarr"), output
+    )
+
+    assert ok is True
+    assert email_ok is True
+    assert discord_fields[1][1]["name"] == "Unknown Instance"
+    assert "Unknown Instance" in email_body

@@ -1548,6 +1548,7 @@ def create_arr_client(
             pass
 
     # Try v3 probe (Radarr / Sonarr)
+    temp = None
     try:
         temp = BaseARRClient(url, api, SilentLogger())
         if temp.connect_status:
@@ -1560,8 +1561,15 @@ def create_arr_client(
                 return LidarrClient(url, api, logger)
     except (ARRConnectionError, ARRAuthenticationError):
         pass  # v3 probe failed — fall through to v1
+    finally:
+        if temp is not None and temp.session is not None:
+            try:
+                temp.session.close()
+            except Exception:
+                pass
 
     # v3 failed — try v1 probe for Lidarr
+    session = None
     try:
         clean_url = url.rstrip("/")
         session = requests.Session()
@@ -1576,6 +1584,9 @@ def create_arr_client(
                 return LidarrClient(url, api, logger)
     except Exception:
         pass
+    finally:
+        if session is not None:
+            session.close()
 
     logger.error("Unknown ARR type or connection failed")
     return None
