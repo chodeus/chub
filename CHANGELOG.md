@@ -2,6 +2,14 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.10.1](https://github.com/chodeus/chub/compare/v1.10.0...v1.10.1) (2026-05-11)
+
+
+### Bug Fixes
+
+* harden nestarr scanning and cache ([e43dccd](https://github.com/chodeus/chub/commit/e43dccdd52bc7b72014fb0a0ef3a8f3f09a73241))
+* **health_checkarr:** scope to selected instances and propagate failures ([afd070e](https://github.com/chodeus/chub/commit/afd070e21de151036b4822175a977bb0e3832959))
+
 ## [1.10.0](https://github.com/chodeus/chub/compare/v1.9.3...v1.10.0) (2026-05-11)
 
 
