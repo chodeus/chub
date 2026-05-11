@@ -6,14 +6,16 @@ from types import SimpleNamespace
 import pytest
 
 import backend.util.scheduler as scheduler
-from backend.util.scheduler import (
-    ChubScheduler,
-    _iter_monthly_entries,
-    _iter_weekly_entries,
-    _normalize_weekday,
-    check_schedule,
-    print_schedule_table,
-)
+
+# Re-exports kept as module-level names so the test bodies stay readable;
+# they all live on `scheduler` so monkeypatching `scheduler.datetime` is
+# still effective.
+ChubScheduler = scheduler.ChubScheduler
+_iter_monthly_entries = scheduler._iter_monthly_entries
+_iter_weekly_entries = scheduler._iter_weekly_entries
+_normalize_weekday = scheduler._normalize_weekday
+check_schedule = scheduler.check_schedule
+print_schedule_table = scheduler.print_schedule_table
 
 
 # --- Weekday normalization ---
