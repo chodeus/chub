@@ -2,6 +2,13 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.11.0](https://github.com/chodeus/chub/compare/v1.10.2...v1.11.0) (2026-05-11)
+
+
+### Features
+
+* **poster_cleanarr:** mobile layout, transcoder cache stat, list fit ([ad1155c](https://github.com/chodeus/chub/commit/ad1155c2c5646b7bf6e133338b45522461b5dd0a))
+
 ## [1.10.2](https://github.com/chodeus/chub/compare/v1.10.1...v1.10.2) (2026-05-11)
 
 
