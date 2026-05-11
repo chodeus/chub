@@ -5,12 +5,15 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
+from starlette.concurrency import run_in_threadpool
 
 from backend.api.utils import error, get_database, get_module_logger, ok
 from backend.modules.nestarr import (
     Nestarr,
+    clear_scan_results,
     enabled_arr_instances,
     load_scan_results,
+    nestarr_config_fingerprint,
     save_scan_results,
 )
 from backend.util.arr import create_arr_client
@@ -23,19 +26,31 @@ router = APIRouter(
 )
 
 
+def _empty_results():
+    return {"issues": [], "total": 0, "instances_checked": [], "scanned_at": None}
+
+
 @router.get("/results")
 async def get_cached_scan_results(request: Request, db: ChubDB = Depends(get_database)):
     """Return the most recent cached scan results, or empty if no scan has been run."""
     logger = get_module_logger(request, "nestarr")
     cached = load_scan_results(db, logger=logger)
+    config_hash = nestarr_config_fingerprint(load_config().nestarr)
     if cached:
+        if cached.get("config_hash") != config_hash:
+            logger.debug("Ignoring stale Nestarr scan cache after config change")
+            clear_scan_results(db, logger=logger)
+            return ok(
+                message="No cached scan results available",
+                data=_empty_results(),
+            )
         return ok(
             message="Cached scan results loaded",
             data=cached,
         )
     return ok(
         message="No cached scan results available",
-        data={"issues": [], "total": 0, "instances_checked": [], "scanned_at": None},
+        data=_empty_results(),
     )
 
 
@@ -46,15 +61,12 @@ class FixRequest(BaseModel):
     target_path: str
 
 
-@router.get("/scan")
-async def scan_nested_media(request: Request, db: ChubDB = Depends(get_database)):
+def _scan_nested_media_sync(logger, db: ChubDB):
     """
     Compare ARR media against Plex to find unmatched items,
     and scan for incorrectly nested media paths.
     Returns a list of issues with suggested actions.
     """
-    logger = get_module_logger(request, "nestarr")
-
     try:
         config = load_config()
         library_mappings = (
@@ -64,13 +76,19 @@ async def scan_nested_media(request: Request, db: ChubDB = Depends(get_database)
             config.nestarr.path_mapping if config.nestarr.path_mapping else None
         )
         issues = Nestarr.scan_instances(
-            config.instances, logger, db=db,
+            config.instances,
+            logger,
+            db=db,
+            instance_filter=config.nestarr.instances if not library_mappings else None,
             library_mappings=library_mappings,
             path_mapping=path_mapping,
         )
 
         sorted_instances = enabled_arr_instances(config.instances)
-        save_scan_results(db, issues, sorted_instances, logger=logger)
+        config_hash = nestarr_config_fingerprint(config.nestarr)
+        save_scan_results(
+            db, issues, sorted_instances, logger=logger, config_hash=config_hash
+        )
 
         return ok(
             message=f"Scan complete. Found {len(issues)} nesting issue(s).",
@@ -90,6 +108,23 @@ async def scan_nested_media(request: Request, db: ChubDB = Depends(get_database)
         )
 
 
+async def _scan_nested_media(request: Request, db: ChubDB):
+    logger = get_module_logger(request, "nestarr")
+    return await run_in_threadpool(_scan_nested_media_sync, logger, db)
+
+
+@router.post("/scan")
+async def scan_nested_media(request: Request, db: ChubDB = Depends(get_database)):
+    return await _scan_nested_media(request, db)
+
+
+@router.get("/scan")
+async def scan_nested_media_legacy(
+    request: Request, db: ChubDB = Depends(get_database)
+):
+    return await _scan_nested_media(request, db)
+
+
 def _get_arr_client(config, body, logger):
     """Shared helper to validate input and return an ARR client."""
     if body.instance_type not in ("radarr", "sonarr", "lidarr"):
@@ -106,6 +141,12 @@ def _get_arr_client(config, body, logger):
             code="INSTANCE_NOT_FOUND",
             status_code=404,
         )
+    if not getattr(instance_info, "enabled", True):
+        return None, error(
+            message=f"Instance '{body.instance_name}' is disabled",
+            code="INSTANCE_DISABLED",
+            status_code=400,
+        )
 
     app = create_arr_client(instance_info.url, instance_info.api, logger)
     if not app or not app.is_connected():
@@ -116,6 +157,50 @@ def _get_arr_client(config, body, logger):
         )
 
     return app, None
+
+
+def _resource_for_instance(instance_type: str) -> str:
+    return {"radarr": "movie", "sonarr": "series", "lidarr": "artist"}[instance_type]
+
+
+def _paths_equal(left: str, right: str) -> bool:
+    return os.path.normcase(os.path.normpath(left)) == os.path.normcase(
+        os.path.normpath(right)
+    )
+
+
+def _expected_target_path(raw_media: dict):
+    old_path = raw_media.get("path") or raw_media.get("folderPath") or ""
+    root_folder = raw_media.get("rootFolderPath") or ""
+    if not old_path:
+        return None, "ARR did not provide a current path for this media item"
+    if not root_folder:
+        return None, "ARR did not provide rootFolderPath for this media item"
+
+    folder_name = os.path.basename(os.path.normpath(old_path))
+    if not folder_name:
+        return None, "Could not determine the media folder name"
+
+    return os.path.normpath(os.path.join(root_folder, folder_name)), None
+
+
+def _validate_target_path(raw_media: dict, body: FixRequest):
+    expected_path, reason = _expected_target_path(raw_media)
+    if reason:
+        return None, error(
+            message=reason, code="TARGET_PATH_UNAVAILABLE", status_code=400
+        )
+
+    requested_path = os.path.normpath(body.target_path)
+    if not _paths_equal(requested_path, expected_path):
+        return None, error(
+            message="target_path does not match the server-computed Nestarr move target",
+            code="INVALID_TARGET_PATH",
+            data={"expected_path": expected_path, "requested_path": requested_path},
+            status_code=400,
+        )
+
+    return expected_path, None
 
 
 @router.post("/preview")
@@ -133,12 +218,9 @@ async def preview_fix(request: Request, body: FixRequest):
         if err_response:
             return err_response
 
-        resource_map = {"radarr": "movie", "sonarr": "series", "lidarr": "artist"}
-        resource = resource_map[body.instance_type]
+        resource = _resource_for_instance(body.instance_type)
 
-        raw_media = app.make_get_request(
-            f"{app.api_base}/{resource}/{body.media_id}"
-        )
+        raw_media = app.make_get_request(f"{app.api_base}/{resource}/{body.media_id}")
         if not raw_media:
             return error(
                 message=f"Media item {body.media_id} not found",
@@ -146,8 +228,10 @@ async def preview_fix(request: Request, body: FixRequest):
                 status_code=404,
             )
 
-        old_path = raw_media.get("path", "")
-        new_path = os.path.normpath(body.target_path)
+        old_path = raw_media.get("path") or raw_media.get("folderPath") or ""
+        new_path, err_response = _validate_target_path(raw_media, body)
+        if err_response:
+            return err_response
 
         # Get pending renames from the ARR rename preview API.
         # This shows what the files/folders WOULD be renamed to
@@ -156,10 +240,12 @@ async def preview_fix(request: Request, body: FixRequest):
         try:
             raw_renames = app.get_rename_list(body.media_id) or []
             for item in raw_renames:
-                rename_preview.append({
-                    "existing_path": item.get("existingPath", ""),
-                    "new_path": item.get("newPath", ""),
-                })
+                rename_preview.append(
+                    {
+                        "existing_path": item.get("existingPath", ""),
+                        "new_path": item.get("newPath", ""),
+                    }
+                )
         except Exception:
             pass  # Rename preview is best-effort
 
@@ -174,7 +260,7 @@ async def preview_fix(request: Request, body: FixRequest):
                 "current_path": old_path,
                 "target_path": new_path,
                 "rename_preview": rename_preview,
-                "already_correct": os.path.normpath(old_path) == new_path,
+                "already_correct": _paths_equal(old_path, new_path),
             },
         )
 
@@ -188,7 +274,9 @@ async def preview_fix(request: Request, body: FixRequest):
 
 
 @router.post("/fix")
-async def fix_nested_media(request: Request, body: FixRequest):
+async def fix_nested_media(
+    request: Request, body: FixRequest, db: ChubDB = Depends(get_database)
+):
     """
     Fix a nested media item by updating its path in Radarr/Sonarr and
     moving files to the correct location, then triggering a rename
@@ -202,13 +290,10 @@ async def fix_nested_media(request: Request, body: FixRequest):
         if err_response:
             return err_response
 
-        resource_map = {"radarr": "movie", "sonarr": "series", "lidarr": "artist"}
-        resource = resource_map[body.instance_type]
+        resource = _resource_for_instance(body.instance_type)
 
         # 1. GET the raw media object from the ARR API
-        raw_media = app.make_get_request(
-            f"{app.api_base}/{resource}/{body.media_id}"
-        )
+        raw_media = app.make_get_request(f"{app.api_base}/{resource}/{body.media_id}")
         if not raw_media:
             return error(
                 message=f"Media item {body.media_id} not found",
@@ -216,10 +301,13 @@ async def fix_nested_media(request: Request, body: FixRequest):
                 status_code=404,
             )
 
-        old_path = raw_media.get("path", "")
-        new_path = os.path.normpath(body.target_path)
+        old_path = raw_media.get("path") or raw_media.get("folderPath") or ""
+        new_path, err_response = _validate_target_path(raw_media, body)
+        if err_response:
+            return err_response
 
-        if os.path.normpath(old_path) == new_path:
+        if _paths_equal(old_path, new_path):
+            clear_scan_results(db, logger=logger)
             return ok(
                 message="Media is already at the target path — no move needed",
                 data={"media_id": body.media_id, "path": new_path},
@@ -242,8 +330,7 @@ async def fix_nested_media(request: Request, body: FixRequest):
             )
 
         logger.info(
-            f"Moved {body.instance_type} item {body.media_id}: "
-            f"{old_path} -> {new_path}"
+            f"Moved {body.instance_type} item {body.media_id}: {old_path} -> {new_path}"
         )
 
         # 4. Trigger rename so the folder and file names match
@@ -261,6 +348,7 @@ async def fix_nested_media(request: Request, body: FixRequest):
                 "The media is in the correct location but may need a manual rename."
             )
 
+        clear_scan_results(db, logger=logger)
         return ok(
             message=f"Successfully moved media to {new_path}",
             data={

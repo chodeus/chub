@@ -1,5 +1,6 @@
 # modules/nestarr.py
 
+import hashlib
 import json
 import os
 from datetime import datetime, timezone
@@ -19,8 +20,24 @@ def _scan_cache_db(db: ChubDB):
     return db.media
 
 
+def nestarr_config_fingerprint(nestarr_config: Any) -> str:
+    """Return a stable fingerprint for settings that affect Nestarr results."""
+    if hasattr(nestarr_config, "model_dump"):
+        raw = nestarr_config.model_dump(mode="python")
+    elif isinstance(nestarr_config, dict):
+        raw = nestarr_config
+    else:
+        raw = {}
+    payload = json.dumps(raw, sort_keys=True, default=str)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
 def save_scan_results(
-    db: ChubDB, issues: list, instances_checked: list, logger=None
+    db: ChubDB,
+    issues: list,
+    instances_checked: list,
+    logger=None,
+    config_hash: Optional[str] = None,
 ) -> None:
     """Persist Nestarr scan results to the scan_cache table so both the
     module run path and the UI scan endpoint hydrate the same cache."""
@@ -31,6 +48,7 @@ def save_scan_results(
                 "issues": issues,
                 "total": len(issues),
                 "instances_checked": instances_checked,
+                "config_hash": config_hash,
             },
             default=str,
         )
@@ -62,6 +80,20 @@ def load_scan_results(db: ChubDB, logger=None) -> Optional[Dict[str, Any]]:
     return None
 
 
+def clear_scan_results(db: ChubDB, logger=None) -> None:
+    """Remove cached Nestarr scan results after config or filesystem changes."""
+    try:
+        _scan_cache_db(db).execute_query(
+            "DELETE FROM scan_cache WHERE scan_type = ?",
+            (SCAN_TYPE,),
+        )
+        if logger:
+            logger.debug("Cleared Nestarr scan cache")
+    except Exception as e:
+        if logger:
+            logger.error(f"Failed to clear scan cache: {e}")
+
+
 def enabled_arr_instances(instances_config) -> List[str]:
     found = set()
     for inst_type in ("radarr", "sonarr", "lidarr"):
@@ -84,8 +116,15 @@ class _NestScanner:
 
     VIDEO_EXTS = frozenset({".mkv", ".mp4", ".avi", ".m4v", ".wmv", ".ts", ".m2ts"})
 
-    def __init__(self, instances_config, logger, db=None, instance_filter=None,
-                 library_mappings=None, path_mapping=None):
+    def __init__(
+        self,
+        instances_config,
+        logger,
+        db=None,
+        instance_filter=None,
+        library_mappings=None,
+        path_mapping=None,
+    ):
         self.instances_config = instances_config
         self.logger = logger
         self.db = db
@@ -104,14 +143,17 @@ class _NestScanner:
         sonarr_media: List[Dict[str, Any]] = []
         lidarr_media: List[Dict[str, Any]] = []
 
-        # Derive effective instance filter from library_mappings if configured
+        # Derive effective instance filter from valid library_mappings if configured
         effective_filter = self.instance_filter
         if self.library_mappings and not effective_filter:
-            effective_filter = [
-                m.arr_instance if hasattr(m, "arr_instance") else m.get("arr_instance", "")
-                for m in self.library_mappings
-                if (m.arr_instance if hasattr(m, "arr_instance") else m.get("arr_instance"))
-            ]
+            arr_to_libraries, mapped_libraries = self._build_mapping_lookups()
+            if mapped_libraries:
+                effective_filter = sorted(arr_to_libraries.keys())
+            else:
+                self.logger.warning(
+                    "[Phase 1] Ignoring library_mappings because no valid Plex "
+                    "libraries were configured."
+                )
 
         # Connect to ARR instances and collect tracked media paths for nesting detection
         for instance_type in ["radarr", "sonarr", "lidarr"]:
@@ -155,8 +197,10 @@ class _NestScanner:
                 if raw_media:
                     sample = raw_media[0]
                     path_field = (
-                        "path" if "path" in sample
-                        else "folderPath" if "folderPath" in sample
+                        "path"
+                        if "path" in sample
+                        else "folderPath"
+                        if "folderPath" in sample
                         else "MISSING"
                     )
                     self.logger.debug(
@@ -185,16 +229,18 @@ class _NestScanner:
                         has_file = (stats.get("trackFileCount") or 0) > 0
                     else:
                         has_file = True
-                    media_items.append({
-                        "media_id": item.get("id"),
-                        "title": item.get("title", "Unknown"),
-                        "year": item.get("year"),
-                        "path": normed,
-                        "root_folder": item.get("rootFolderPath", ""),
-                        "instance_type": instance_type,
-                        "instance_name": instance_name,
-                        "has_file": has_file,
-                    })
+                    media_items.append(
+                        {
+                            "media_id": item.get("id"),
+                            "title": item.get("title", "Unknown"),
+                            "year": item.get("year"),
+                            "path": normed,
+                            "root_folder": item.get("rootFolderPath") or "",
+                            "instance_type": instance_type,
+                            "instance_name": instance_name,
+                            "has_file": has_file,
+                        }
+                    )
 
                 if instance_type == "radarr":
                     radarr_media.extend(media_items)
@@ -226,13 +272,21 @@ class _NestScanner:
             issues.extend(self._detect_cross_nesting(radarr_media, sonarr_media))
         # Cross-nesting with Lidarr
         if lidarr_media and not self._cancelled():
-            issues.extend(self._cross_check(lidarr_media, radarr_media, "artist_in_movie"))
+            issues.extend(
+                self._cross_check(lidarr_media, radarr_media, "artist_in_movie")
+            )
         if lidarr_media and not self._cancelled():
-            issues.extend(self._cross_check(radarr_media, lidarr_media, "movie_in_artist"))
+            issues.extend(
+                self._cross_check(radarr_media, lidarr_media, "movie_in_artist")
+            )
         if lidarr_media and not self._cancelled():
-            issues.extend(self._cross_check(lidarr_media, sonarr_media, "artist_in_series"))
+            issues.extend(
+                self._cross_check(lidarr_media, sonarr_media, "artist_in_series")
+            )
         if lidarr_media and not self._cancelled():
-            issues.extend(self._cross_check(sonarr_media, lidarr_media, "series_in_artist"))
+            issues.extend(
+                self._cross_check(sonarr_media, lidarr_media, "series_in_artist")
+            )
 
         # Phase 3: Filesystem scan for stray/misplaced files
         if not self._cancelled():
@@ -262,12 +316,14 @@ class _NestScanner:
         arr_to_libraries = {}
         mapped_libraries = set()
 
-        for mapping in (self.library_mappings or []):
+        for mapping in self.library_mappings or []:
             arr_inst = (
                 getattr(mapping, "arr_instance", None)
                 if hasattr(mapping, "arr_instance")
                 else mapping.get("arr_instance", "")
             )
+            if isinstance(arr_inst, str):
+                arr_inst = arr_inst.strip()
             if not arr_inst:
                 continue
 
@@ -276,9 +332,6 @@ class _NestScanner:
                 if hasattr(mapping, "plex_instances")
                 else mapping.get("plex_instances", [])
             ) or []
-
-            if arr_inst not in arr_to_libraries:
-                arr_to_libraries[arr_inst] = set()
 
             for pi in plex_instances:
                 inst = (
@@ -295,7 +348,8 @@ class _NestScanner:
                     continue
                 for lib_name in libs:
                     if isinstance(lib_name, str) and lib_name.strip():
-                        pair = (inst, lib_name)
+                        pair = (inst.strip(), lib_name.strip())
+                        arr_to_libraries.setdefault(arr_inst, set())
                         arr_to_libraries[arr_inst].add(pair)
                         mapped_libraries.add(pair)
 
@@ -319,10 +373,16 @@ class _NestScanner:
         """
         issues: List[Dict[str, Any]] = []
 
-        # Build mapping lookups if configured
-        has_mappings = bool(self.library_mappings)
-        if has_mappings:
+        # Build mapping lookups if configured. Blank/incomplete mappings are
+        # ignored so an accidental empty row cannot turn Plex filtering into
+        # "compare against zero libraries".
+        arr_to_libraries = {}
+        mapped_libraries = set()
+        has_mappings = False
+        if self.library_mappings:
             arr_to_libraries, mapped_libraries = self._build_mapping_lookups()
+            has_mappings = bool(mapped_libraries)
+        if has_mappings:
             effective_instance_filter = set(arr_to_libraries.keys())
             self.logger.debug(
                 f"[Phase 1] Library mappings active — "
@@ -334,10 +394,14 @@ class _NestScanner:
                     f"{sorted(f'{inst}/{lib}' for inst, lib in libs)}"
                 )
         else:
-            mapped_libraries = set()
             effective_instance_filter = (
                 set(self.instance_filter) if self.instance_filter else None
             )
+            if self.library_mappings:
+                self.logger.warning(
+                    "[Phase 1] No valid library mappings found; falling back to "
+                    "unmapped ARR/Plex comparison."
+                )
             self.logger.debug(
                 f"[Phase 1] No library mappings — "
                 f"instance filter: {sorted(effective_instance_filter) if effective_instance_filter else 'ALL'}"
@@ -349,8 +413,10 @@ class _NestScanner:
         # When mappings exist, filter Plex items to only mapped libraries
         if has_mappings:
             plex_items = [
-                item for item in plex_items_raw
-                if (item.get("instance_name"), item.get("library_name")) in mapped_libraries
+                item
+                for item in plex_items_raw
+                if (item.get("instance_name"), item.get("library_name"))
+                in mapped_libraries
             ]
         else:
             plex_items = plex_items_raw
@@ -375,7 +441,8 @@ class _NestScanner:
         # Filter by effective instances for ARR-not-in-Plex direction
         if effective_instance_filter:
             all_media = [
-                m for m in all_media_unfiltered
+                m
+                for m in all_media_unfiltered
                 if m.get("instance_name") in effective_instance_filter
             ]
         else:
@@ -438,7 +505,7 @@ class _NestScanner:
                         f"plex_mapping_id={mapping_id} not in plex_lookup"
                         if plex_pair is None
                         else f"plex_mapping_id={mapping_id} maps to {plex_pair[0]}/{plex_pair[1]} "
-                             f"which is not in mapped libraries for {inst_name}"
+                        f"which is not in mapped libraries for {inst_name}"
                     )
                 else:
                     reason = "plex_mapping_id is NULL"
@@ -469,19 +536,21 @@ class _NestScanner:
 
             issue_id = f"arr_unmatched_{instance_name}_{media_id}".replace(" ", "_")
 
-            issues.append({
-                "id": issue_id,
-                "type": "arr_not_in_plex",
-                "name": item.get("title", "Unknown"),
-                "year": item.get("year"),
-                "path": item.get("folder", ""),
-                "instance": instance_name,
-                "instance_type": item.get("source", ""),
-                "parent": None,
-                "nested": None,
-                "suggested_path": None,
-                "suggested_action": "review",
-            })
+            issues.append(
+                {
+                    "id": issue_id,
+                    "type": "arr_not_in_plex",
+                    "name": item.get("title", "Unknown"),
+                    "year": item.get("year"),
+                    "path": item.get("folder", ""),
+                    "instance": instance_name,
+                    "instance_type": item.get("source", ""),
+                    "parent": None,
+                    "nested": None,
+                    "suggested_path": None,
+                    "suggested_action": "review",
+                }
+            )
 
         self.logger.debug(
             f"[Phase 1] ARR→Plex: {arr_matched} matched, {arr_unmatched} unmatched, "
@@ -520,33 +589,44 @@ class _NestScanner:
 
             issue_id = f"plex_unmatched_{instance_name}_{plex_id}".replace(" ", "_")
 
-            issues.append({
-                "id": issue_id,
-                "type": "plex_not_in_arr",
-                "name": plex_item.get("title", "Unknown"),
-                "year": plex_item.get("year"),
-                "instance": instance_name,
-                "instance_type": "plex",
-                "library_name": plex_item.get("library_name", ""),
-                "path": None,
-                "parent": None,
-                "nested": None,
-                "suggested_path": None,
-                "suggested_action": "review",
-            })
+            issues.append(
+                {
+                    "id": issue_id,
+                    "type": "plex_not_in_arr",
+                    "name": plex_item.get("title", "Unknown"),
+                    "year": plex_item.get("year"),
+                    "instance": instance_name,
+                    "instance_type": "plex",
+                    "library_name": plex_item.get("library_name", ""),
+                    "path": None,
+                    "parent": None,
+                    "nested": None,
+                    "suggested_path": None,
+                    "suggested_action": "review",
+                }
+            )
 
         self.logger.debug(
             f"[Phase 1] Plex→ARR: {plex_matched} matched, {plex_unmatched} unmatched"
         )
-        self.logger.debug(
-            f"[Phase 1] Total unmatched issues: {len(issues)}"
-        )
+        self.logger.debug(f"[Phase 1] Total unmatched issues: {len(issues)}")
 
         return issues
 
     # ------------------------------------------------------------------
     # Phase 2: Path nesting among tracked items
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _is_nested_path(child_path: str, parent_path: str) -> bool:
+        child_norm = os.path.normpath(child_path)
+        parent_norm = os.path.normpath(parent_path)
+        if child_norm == parent_norm:
+            return False
+        try:
+            return os.path.commonpath([child_norm, parent_norm]) == parent_norm
+        except ValueError:
+            return False
 
     def _detect_nesting(
         self, media_list: List[Dict[str, Any]], media_type: str
@@ -563,44 +643,38 @@ class _NestScanner:
         # Log first few paths for context
         for sample in sorted_media[:5]:
             self.logger.debug(
-                f"  {sample['instance_name']}: "
-                f"'{sample['title']}' → {sample['path']}"
+                f"  {sample['instance_name']}: '{sample['title']}' → {sample['path']}"
             )
         if len(sorted_media) > 5:
             self.logger.debug(f"  ... and {len(sorted_media) - 5} more")
 
-        for i in range(len(sorted_media) - 1):
-            parent = sorted_media[i]
-            for j in range(i + 1, len(sorted_media)):
-                child = sorted_media[j]
-                if child["path"].startswith(parent["path"] + os.sep):
-                    nesting_type = {
-                        "movie": "movie_in_movie",
-                        "series": "series_in_series",
-                        "artist": "artist_in_artist",
-                    }.get(media_type, f"{media_type}_in_{media_type}")
-                    self.logger.debug(
-                        f"  [NESTED] {nesting_type}: "
-                        f"'{child['title']}' ({child['instance_name']}) "
-                        f"is inside '{parent['title']}' ({parent['instance_name']})"
-                    )
-                    self.logger.debug(
-                        f"    parent: {parent['path']}"
-                    )
-                    self.logger.debug(
-                        f"    child:  {child['path']}"
-                    )
-                    issues.append(self._build_nesting_issue(
-                        child, parent, nesting_type
-                    ))
-                elif not child["path"].startswith(parent["path"]):
-                    # Once we pass all paths sharing the parent prefix,
-                    # no later (sorted) path can be nested under it.
-                    break
+        for child_index, child in enumerate(sorted_media):
+            best_parent = None
+            for parent in sorted_media[:child_index]:
+                if not self._is_nested_path(child["path"], parent["path"]):
+                    continue
+                if best_parent is None or len(parent["path"]) > len(
+                    best_parent["path"]
+                ):
+                    best_parent = parent
+            if best_parent is None:
+                continue
 
-        self.logger.debug(
-            f"[Phase 2] {media_type} nesting: {len(issues)} issues found"
-        )
+            nesting_type = {
+                "movie": "movie_in_movie",
+                "series": "series_in_series",
+                "artist": "artist_in_artist",
+            }.get(media_type, f"{media_type}_in_{media_type}")
+            self.logger.debug(
+                f"  [NESTED] {nesting_type}: "
+                f"'{child['title']}' ({child['instance_name']}) "
+                f"is inside '{best_parent['title']}' ({best_parent['instance_name']})"
+            )
+            self.logger.debug(f"    parent: {best_parent['path']}")
+            self.logger.debug(f"    child:  {child['path']}")
+            issues.append(self._build_nesting_issue(child, best_parent, nesting_type))
+
+        self.logger.debug(f"[Phase 2] {media_type} nesting: {len(issues)} issues found")
 
         return issues
 
@@ -610,12 +684,8 @@ class _NestScanner:
         sonarr_media: List[Dict[str, Any]],
     ) -> List[Dict[str, Any]]:
         issues: List[Dict[str, Any]] = []
-        issues.extend(
-            self._cross_check(radarr_media, sonarr_media, "movie_in_series")
-        )
-        issues.extend(
-            self._cross_check(sonarr_media, radarr_media, "series_in_movie")
-        )
+        issues.extend(self._cross_check(radarr_media, sonarr_media, "movie_in_series"))
+        issues.extend(self._cross_check(sonarr_media, radarr_media, "series_in_movie"))
         return issues
 
     def _cross_check(
@@ -628,20 +698,25 @@ class _NestScanner:
             return []
 
         issues: List[Dict[str, Any]] = []
-        sorted_parents = sorted(parents, key=lambda m: m["path"])
 
         for child in children:
-            for parent in sorted_parents:
-                if child["path"].startswith(parent["path"] + os.sep):
-                    self.logger.debug(
-                        f"  [CROSS-NESTED] {nesting_type}: "
-                        f"'{child['title']}' ({child['instance_name']}) "
-                        f"inside '{parent['title']}' ({parent['instance_name']})"
-                    )
-                    issues.append(self._build_nesting_issue(
-                        child, parent, nesting_type
-                    ))
-                    break
+            best_parent = None
+            for parent in parents:
+                if not self._is_nested_path(child["path"], parent["path"]):
+                    continue
+                if best_parent is None or len(parent["path"]) > len(
+                    best_parent["path"]
+                ):
+                    best_parent = parent
+            if best_parent is None:
+                continue
+
+            self.logger.debug(
+                f"  [CROSS-NESTED] {nesting_type}: "
+                f"'{child['title']}' ({child['instance_name']}) "
+                f"inside '{best_parent['title']}' ({best_parent['instance_name']})"
+            )
+            issues.append(self._build_nesting_issue(child, best_parent, nesting_type))
 
         if issues:
             self.logger.debug(
@@ -656,12 +731,44 @@ class _NestScanner:
 
     def _translate_path(self, path: str) -> str:
         """Apply path_mapping prefix replacements (ARR path → CHUB-accessible path)."""
+        candidates = []
         for mapping in self.path_mapping:
-            arr_prefix = mapping.get("arr_path", "")
-            local_prefix = mapping.get("local_path", "")
-            if arr_prefix and local_prefix and path.startswith(arr_prefix):
-                return local_prefix + path[len(arr_prefix):]
+            arr_prefix = (
+                mapping.get("arr_path", "")
+                if isinstance(mapping, dict)
+                else getattr(mapping, "arr_path", "")
+            )
+            local_prefix = (
+                mapping.get("local_path", "")
+                if isinstance(mapping, dict)
+                else getattr(mapping, "local_path", "")
+            )
+            if not arr_prefix or not local_prefix:
+                continue
+            arr_prefix = os.path.normpath(arr_prefix)
+            local_prefix = os.path.normpath(local_prefix)
+            if self._is_same_or_child_path(path, arr_prefix):
+                candidates.append((arr_prefix, local_prefix))
+        if candidates:
+            arr_prefix, local_prefix = max(candidates, key=lambda item: len(item[0]))
+            remainder = os.path.relpath(os.path.normpath(path), arr_prefix)
+            return (
+                local_prefix
+                if remainder == "."
+                else os.path.join(local_prefix, remainder)
+            )
         return path
+
+    @staticmethod
+    def _is_same_or_child_path(path: str, prefix: str) -> bool:
+        path_norm = os.path.normpath(path)
+        prefix_norm = os.path.normpath(prefix)
+        if path_norm == prefix_norm:
+            return True
+        try:
+            return os.path.commonpath([path_norm, prefix_norm]) == prefix_norm
+        except ValueError:
+            return False
 
     def _is_video_file(self, filename: str) -> bool:
         return os.path.splitext(filename)[1].lower() in self.VIDEO_EXTS
@@ -684,7 +791,14 @@ class _NestScanner:
             # Group items by root folder
             root_to_items: Dict[str, List[Dict[str, Any]]] = {}
             for item in media_items:
-                root = os.path.normpath(item["root_folder"])
+                raw_root = item.get("root_folder") or ""
+                if not raw_root:
+                    self.logger.warning(
+                        f"[Phase 3] Skipping '{item.get('title', 'Unknown')}' "
+                        "because ARR did not provide rootFolderPath."
+                    )
+                    continue
+                root = os.path.normpath(raw_root)
                 root_to_items.setdefault(root, []).append(item)
 
             for arr_root, items_in_root in root_to_items.items():
@@ -696,7 +810,11 @@ class _NestScanner:
                 if not os.path.isdir(local_root):
                     self.logger.debug(
                         f"[Phase 3] Root folder not accessible: {arr_root}"
-                        + (f" (translated to {local_root})" if local_root != arr_root else "")
+                        + (
+                            f" (translated to {local_root})"
+                            if local_root != arr_root
+                            else ""
+                        )
                         + " — skipping filesystem scan"
                     )
                     continue
@@ -735,15 +853,40 @@ class _NestScanner:
                             stray_count += 1
                             # Map back to ARR path for display
                             arr_child_path = os.path.join(arr_root, child)
-                            issue_id = (
-                                f"stray_{media_type}_{child}"
-                            ).replace(" ", "_")[:120]
-                            self.logger.debug(
-                                f"  [STRAY FOLDER] {arr_child_path}"
+                            issue_key = f"{media_type}|folder|{arr_child_path}"
+                            digest = hashlib.sha1(issue_key.encode("utf-8")).hexdigest()
+                            issue_id = (f"stray_{media_type}_{digest[:12]}").replace(
+                                " ", "_"
                             )
-                            issues.append({
+                            self.logger.debug(f"  [STRAY FOLDER] {arr_child_path}")
+                            issues.append(
+                                {
+                                    "id": issue_id,
+                                    "type": "stray_folder",
+                                    "name": child,
+                                    "path": arr_child_path,
+                                    "root_folder": arr_root,
+                                    "instance": items_in_root[0]["instance_name"],
+                                    "instance_type": items_in_root[0]["instance_type"],
+                                    "parent": None,
+                                    "nested": None,
+                                    "suggested_path": None,
+                                    "suggested_action": "review",
+                                }
+                            )
+                    elif os.path.isfile(child_path) and self._is_video_file(child):
+                        stray_count += 1
+                        arr_child_path = os.path.join(arr_root, child)
+                        issue_key = f"{media_type}|file|{arr_child_path}"
+                        digest = hashlib.sha1(issue_key.encode("utf-8")).hexdigest()
+                        issue_id = f"stray_file_{media_type}_{digest[:12]}".replace(
+                            " ", "_"
+                        )
+                        self.logger.debug(f"  [STRAY FILE] {arr_child_path}")
+                        issues.append(
+                            {
                                 "id": issue_id,
-                                "type": "stray_folder",
+                                "type": "stray_file",
                                 "name": child,
                                 "path": arr_child_path,
                                 "root_folder": arr_root,
@@ -753,27 +896,8 @@ class _NestScanner:
                                 "nested": None,
                                 "suggested_path": None,
                                 "suggested_action": "review",
-                            })
-                    elif os.path.isfile(child_path) and self._is_video_file(child):
-                        stray_count += 1
-                        arr_child_path = os.path.join(arr_root, child)
-                        issue_id = f"stray_file_{media_type}_{child}".replace(" ", "_")[:120]
-                        self.logger.debug(
-                            f"  [STRAY FILE] {arr_child_path}"
+                            }
                         )
-                        issues.append({
-                            "id": issue_id,
-                            "type": "stray_file",
-                            "name": child,
-                            "path": arr_child_path,
-                            "root_folder": arr_root,
-                            "instance": items_in_root[0]["instance_name"],
-                            "instance_type": items_in_root[0]["instance_type"],
-                            "parent": None,
-                            "nested": None,
-                            "suggested_path": None,
-                            "suggested_action": "review",
-                        })
 
                 # Check tracked media folders for extra video files
                 # (only for movies — series/artists legitimately have multiple video files)
@@ -785,7 +909,8 @@ class _NestScanner:
                             continue
                         try:
                             video_files = [
-                                f for f in os.listdir(local_path)
+                                f
+                                for f in os.listdir(local_path)
                                 if os.path.isfile(os.path.join(local_path, f))
                                 and self._is_video_file(f)
                             ]
@@ -802,36 +927,34 @@ class _NestScanner:
                                 f"  [EXTRA VIDEO] {arr_item_path} has "
                                 f"{len(video_files)} video files: {video_files}"
                             )
-                            issues.append({
-                                "id": issue_id,
-                                "type": "extra_video_in_folder",
-                                "name": item["title"],
-                                "year": item.get("year"),
-                                "path": arr_item_path,
-                                "root_folder": item["root_folder"],
-                                "instance": item["instance_name"],
-                                "instance_type": item["instance_type"],
-                                "video_files": video_files,
-                                "parent": {
-                                    "title": item["title"],
+                            issues.append(
+                                {
+                                    "id": issue_id,
+                                    "type": "extra_video_in_folder",
+                                    "name": item["title"],
                                     "year": item.get("year"),
                                     "path": arr_item_path,
-                                    "media_id": item["media_id"],
+                                    "root_folder": item["root_folder"],
                                     "instance": item["instance_name"],
                                     "instance_type": item["instance_type"],
-                                },
-                                "nested": None,
-                                "suggested_path": None,
-                                "suggested_action": "review",
-                            })
+                                    "video_files": video_files,
+                                    "parent": {
+                                        "title": item["title"],
+                                        "year": item.get("year"),
+                                        "path": arr_item_path,
+                                        "media_id": item["media_id"],
+                                        "instance": item["instance_name"],
+                                        "instance_type": item["instance_type"],
+                                    },
+                                    "nested": None,
+                                    "suggested_path": None,
+                                    "suggested_action": "review",
+                                }
+                            )
 
-                self.logger.debug(
-                    f"[Phase 3] {arr_root}: {stray_count} issues found"
-                )
+                self.logger.debug(f"[Phase 3] {arr_root}: {stray_count} issues found")
 
-        self.logger.debug(
-            f"[Phase 3] Total filesystem issues: {len(issues)}"
-        )
+        self.logger.debug(f"[Phase 3] Total filesystem issues: {len(issues)}")
         return issues
 
     @staticmethod
@@ -839,12 +962,19 @@ class _NestScanner:
         child: Dict[str, Any], parent: Dict[str, Any], nesting_type: str
     ) -> Dict[str, Any]:
         nested_folder = os.path.basename(child["path"])
-        root = os.path.normpath(child["root_folder"])
-        suggested_path = os.path.join(root, nested_folder)
+        root = child.get("root_folder") or ""
+        suggested_path = (
+            os.path.join(os.path.normpath(root), nested_folder) if root else None
+        )
 
+        issue_key = (
+            f"{nesting_type}|{child['instance_type']}|{child['instance_name']}|"
+            f"{child['media_id']}|{parent['instance_type']}|{parent['instance_name']}|"
+            f"{parent['media_id']}|{child['path']}|{parent['path']}"
+        )
+        digest = hashlib.sha1(issue_key.encode("utf-8")).hexdigest()
         issue_id = (
-            f"{child['instance_type']}_{child['instance_name']}"
-            f"_{child['media_id']}"
+            f"{nesting_type}_{child['instance_name']}_{child['media_id']}_{digest[:10]}"
         ).replace(" ", "_")
 
         return {
@@ -855,7 +985,7 @@ class _NestScanner:
             "root_folder": child["root_folder"],
             "instance": child["instance_name"],
             "instance_type": child["instance_type"],
-            "suggested_action": "move",
+            "suggested_action": "move" if suggested_path else "review",
             "suggested_path": suggested_path,
             "parent": {
                 "title": parent["title"],
@@ -895,9 +1025,15 @@ class Nestarr(ChubModule):
                     self.full_config.instances,
                     self.logger,
                     db=db,
-                    instance_filter=self.config.instances if not self.config.library_mappings else None,
-                    library_mappings=self.config.library_mappings if self.config.library_mappings else None,
-                    path_mapping=self.config.path_mapping if self.config.path_mapping else None,
+                    instance_filter=self.config.instances
+                    if not self.config.library_mappings
+                    else None,
+                    library_mappings=self.config.library_mappings
+                    if self.config.library_mappings
+                    else None,
+                    path_mapping=self.config.path_mapping
+                    if self.config.path_mapping
+                    else None,
                 )
                 scanner.set_cancel_check(self.is_cancelled)
 
@@ -911,6 +1047,7 @@ class Nestarr(ChubModule):
                         all_issues,
                         enabled_arr_instances(self.full_config.instances),
                         logger=self.logger,
+                        config_hash=nestarr_config_fingerprint(self.config),
                     )
 
             if self.is_cancelled():
@@ -919,15 +1056,27 @@ class Nestarr(ChubModule):
 
             if all_issues:
                 # Tally by type
-                FILESYSTEM_TYPES = {"stray_folder", "stray_file", "extra_video_in_folder"}
+                FILESYSTEM_TYPES = {
+                    "stray_folder",
+                    "stray_file",
+                    "extra_video_in_folder",
+                }
                 UNMATCHED_TYPES = {"arr_not_in_plex", "plex_not_in_arr"}
-                arr_not_in_plex = [i for i in all_issues if i["type"] == "arr_not_in_plex"]
-                plex_not_in_arr = [i for i in all_issues if i["type"] == "plex_not_in_arr"]
-                nesting_issues = [
-                    i for i in all_issues
-                    if i["type"] not in UNMATCHED_TYPES and i["type"] not in FILESYSTEM_TYPES
+                arr_not_in_plex = [
+                    i for i in all_issues if i["type"] == "arr_not_in_plex"
                 ]
-                filesystem_issues = [i for i in all_issues if i["type"] in FILESYSTEM_TYPES]
+                plex_not_in_arr = [
+                    i for i in all_issues if i["type"] == "plex_not_in_arr"
+                ]
+                nesting_issues = [
+                    i
+                    for i in all_issues
+                    if i["type"] not in UNMATCHED_TYPES
+                    and i["type"] not in FILESYSTEM_TYPES
+                ]
+                filesystem_issues = [
+                    i for i in all_issues if i["type"] in FILESYSTEM_TYPES
+                ]
 
                 summary = [["Issue Type", "Count"]]
                 if arr_not_in_plex:
@@ -937,7 +1086,9 @@ class Nestarr(ChubModule):
                 if nesting_issues:
                     summary.append(["Nested Media", str(len(nesting_issues))])
                 if filesystem_issues:
-                    summary.append(["Stray/Misplaced Files", str(len(filesystem_issues))])
+                    summary.append(
+                        ["Stray/Misplaced Files", str(len(filesystem_issues))]
+                    )
                 summary.append(["Total", str(len(all_issues))])
 
                 self.logger.info(create_table(summary))
@@ -978,7 +1129,11 @@ class Nestarr(ChubModule):
                             if self.is_cancelled():
                                 break
                             year = f" ({issue['year']})" if issue.get("year") else ""
-                            lib = f" [{issue.get('library_name', '')}]" if issue.get("library_name") else ""
+                            lib = (
+                                f" [{issue.get('library_name', '')}]"
+                                if issue.get("library_name")
+                                else ""
+                            )
                             self.logger.info(
                                 f"  [NOT IN ARR] {issue['name']}{year}"
                                 f" — {issue['instance']}{lib}"
@@ -1014,25 +1169,19 @@ class Nestarr(ChubModule):
                         name = issue.get("name", "?")
                         if issue["type"] == "extra_video_in_folder":
                             files = issue.get("video_files", [])
-                            self.logger.info(
-                                f"  [{itype}] {name} — {path}"
-                            )
+                            self.logger.info(f"  [{itype}] {name} — {path}")
                             self.logger.info(
                                 f"    Contains {len(files)} video files: {', '.join(files)}"
                             )
                         else:
-                            self.logger.info(
-                                f"  [{itype}] {path}"
-                            )
+                            self.logger.info(f"  [{itype}] {path}")
 
                 manager = NotificationManager(
                     self.config, self.logger, module_name="nestarr"
                 )
                 manager.send_notification(all_issues)
             else:
-                self.logger.info(
-                    "No unmatched or nesting issues found."
-                )
+                self.logger.info("No unmatched or nesting issues found.")
 
         except KeyboardInterrupt:
             print("Keyboard Interrupt detected. Exiting...")
@@ -1040,6 +1189,7 @@ class Nestarr(ChubModule):
         except Exception:
             self.logger.error("\n\nAn error occurred:\n", exc_info=True)
             self.logger.error("\n\n")
+            raise
         finally:
             self.logger.log_outro()
 
@@ -1064,15 +1214,21 @@ class Nestarr(ChubModule):
 
     @staticmethod
     def scan_instances(
-        instances_config, logger, db=None, instance_filter: Optional[List[str]] = None,
-        library_mappings=None, path_mapping=None,
+        instances_config,
+        logger,
+        db=None,
+        instance_filter: Optional[List[str]] = None,
+        library_mappings=None,
+        path_mapping=None,
     ) -> List[Dict[str, Any]]:
         """
         Static scan method for use by the API layer.
         Returns a list of all issues (unmatched + nesting + filesystem).
         """
         scanner = _NestScanner(
-            instances_config, logger, db=db,
+            instances_config,
+            logger,
+            db=db,
             instance_filter=instance_filter,
             library_mappings=library_mappings,
             path_mapping=path_mapping,

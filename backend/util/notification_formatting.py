@@ -410,6 +410,60 @@ def format_for_discord(
             )
         return fields
 
+    def fmt_nestarr(o: Any) -> List[Dict[str, Any]]:
+        """Format Nestarr scan issues for Discord embeds."""
+        issues = o.get("issues", []) if isinstance(o, dict) else (o or [])
+        if not issues:
+            return [
+                {
+                    "name": "Summary",
+                    "value": "No unmatched, nested, or stray media issues found.",
+                }
+            ]
+
+        type_labels = {
+            "arr_not_in_plex": "In ARR, Not in Plex",
+            "plex_not_in_arr": "In Plex, Not in ARR",
+            "stray_folder": "Stray Folder",
+            "stray_file": "Stray File",
+            "extra_video_in_folder": "Extra Video Files",
+        }
+        grouped: Dict[str, List[Dict[str, Any]]] = {}
+        for issue in issues:
+            grouped.setdefault(issue.get("type", "unknown"), []).append(issue)
+
+        summary_lines = [
+            f"{type_labels.get(issue_type, issue_type.replace('_', ' ').title())}: {len(items)}"
+            for issue_type, items in sorted(grouped.items())
+        ]
+        fields = [
+            {
+                "name": "Summary",
+                "value": f"```Total issues: {len(issues)}\n"
+                + "\n".join(summary_lines)
+                + "```",
+            }
+        ]
+
+        for issue_type, items in sorted(grouped.items()):
+            lines = []
+            for issue in items[:20]:
+                year = f" ({issue.get('year')})" if issue.get("year") else ""
+                instance = (
+                    issue.get("instance") or issue.get("instance_type") or "unknown"
+                )
+                title = issue.get("name") or "Unknown"
+                path = issue.get("path") or issue.get("suggested_path") or ""
+                line = f"{title}{year} [{instance}]"
+                if path:
+                    line = f"{line}\n  {path}"
+                lines.append(line)
+            if len(items) > 20:
+                lines.append(f"...and {len(items) - 20} more")
+            label = type_labels.get(issue_type, issue_type.replace("_", " ").title())
+            fields.extend(chunk_code_fields(label, "\n".join(lines)))
+        return fields
+
     def fmt_jduparr(o: Any) -> List[Dict[str, Any]]:
         """Format jduparr output for Discord flat messages.
 
@@ -645,6 +699,7 @@ def format_for_discord(
         "nohl": {"formatter": fmt_nohl, "type": "embedded"},
         "upgradinatorr": {"formatter": fmt_upgradinatorr, "type": "embedded"},
         "labelarr": {"formatter": fmt_labelarr, "type": "embedded"},
+        "nestarr": {"formatter": fmt_nestarr, "type": "embedded"},
         "jduparr": {"formatter": fmt_jduparr, "type": "flat"},
         "poster_cleanarr": {"formatter": fmt_poster_cleanarr, "type": "embedded"},
         "plex_maintenance": {"formatter": fmt_plex_maintenance, "type": "embedded"},
@@ -743,6 +798,60 @@ def format_for_email(config: Any, output: Any) -> Tuple[str, bool]:
         </body>
         </html>
         """.strip()
+
+    def fmt_nestarr(o: Any) -> str:
+        """Format Nestarr scan issues for email."""
+        from html import escape
+
+        issues = o.get("issues", []) if isinstance(o, dict) else (o or [])
+        if not issues:
+            return (
+                "<div class='summary'><strong>No unmatched, nested, or stray "
+                "media issues found.</strong></div>"
+            )
+
+        type_labels = {
+            "arr_not_in_plex": "In ARR, Not in Plex",
+            "plex_not_in_arr": "In Plex, Not in ARR",
+            "stray_folder": "Stray Folder",
+            "stray_file": "Stray File",
+            "extra_video_in_folder": "Extra Video Files",
+        }
+        grouped: Dict[str, List[Dict[str, Any]]] = {}
+        for issue in issues:
+            grouped.setdefault(issue.get("type", "unknown"), []).append(issue)
+
+        summary_items = []
+        for issue_type, items in sorted(grouped.items()):
+            label = type_labels.get(issue_type, issue_type.replace("_", " ").title())
+            summary_items.append(f"<li>{escape(label)}: {len(items)}</li>")
+        blocks = [
+            "<div class='summary'><strong>"
+            f"Nestarr found {len(issues)} issue(s).</strong><ul>",
+            *summary_items,
+            "</ul></div>",
+        ]
+
+        for issue_type, items in sorted(grouped.items()):
+            label = type_labels.get(issue_type, issue_type.replace("_", " ").title())
+            blocks.append(f"<div class='group'><h3>{escape(label)}</h3><ul>")
+            for issue in items[:50]:
+                year_value = issue.get("year")
+                year = f" ({escape(str(year_value))})" if year_value else ""
+                instance = (
+                    issue.get("instance") or issue.get("instance_type") or "unknown"
+                )
+                title = issue.get("name") or "Unknown"
+                path = issue.get("path") or issue.get("suggested_path") or ""
+                detail = f"{escape(str(title))}{year} [{escape(str(instance))}]"
+                if path:
+                    detail = f"{detail}<br><code>{escape(path)}</code>"
+                blocks.append(f"<li>{detail}</li>")
+            if len(items) > 50:
+                blocks.append(f"<li>...and {len(items) - 50} more</li>")
+            blocks.append("</ul></div>")
+
+        return "\n".join(blocks)
 
     def fmt_poster_renamerr(o: Any) -> str:
         """Format poster_renamerr output for email (HTML).
@@ -1268,6 +1377,7 @@ def format_for_email(config: Any, output: Any) -> Tuple[str, bool]:
         "upgradinatorr": fmt_upgradinatorr,
         "unmatched_assets": fmt_unmatched_assets,
         "labelarr": fmt_labelarr,
+        "nestarr": fmt_nestarr,
         "jduparr": fmt_jduparr,
         "poster_cleanarr": fmt_poster_cleanarr,
         "plex_maintenance": fmt_plex_maintenance,

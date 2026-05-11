@@ -22,7 +22,7 @@ export const nestarrAPI = {
      * Scan all instances for nested media issues
      * @returns {Promise<Object>} Scan results with issues array
      */
-    scan: () => apiCore.get('/nestarr/scan'),
+    scan: () => apiCore.post('/nestarr/scan', {}, { timeout: 120000 }),
 
     /**
      * Preview what a fix would do before executing
@@ -34,7 +34,7 @@ export const nestarrAPI = {
     /**
      * Fix a nested media item by moving it to the correct path
      * @param {Object} params - Fix parameters
-     * @param {string} params.instance_type - "radarr" or "sonarr"
+     * @param {string} params.instance_type - "radarr", "sonarr", or "lidarr"
      * @param {string} params.instance_name - Instance name
      * @param {number} params.media_id - Media ID to fix
      * @param {string} params.target_path - Target path to move to

@@ -480,7 +480,11 @@ const MediaManagePage = () => {
                                 'stray_file',
                                 'extra_video_in_folder',
                             ].includes(issue.type);
-                            const isNested = !isUnmatched && !isFilesystem;
+                            const isNested =
+                                !isUnmatched &&
+                                !isFilesystem &&
+                                issue.suggested_action === 'move' &&
+                                Boolean(issue.suggested_path);
 
                             let badgeLabel, badgeColor, badgeBg;
                             if (isArrNotPlex) {
