@@ -178,6 +178,11 @@ class PlexClient:
                     for g in getattr(item, "guids", [])
                     if "://" in g.id
                 }
+                # plexapi exposes `year` even when unset (as None) — coerce to
+                # an empty string so downstream matchers don't compare against
+                # the literal "None". Hits hardest on artists, which never
+                # carry a year.
+                item_year = str(getattr(item, "year", None) or "")
                 try:
                     if typ == "movie":
                         file_paths = []
@@ -195,7 +200,7 @@ class PlexClient:
                                 "title": item.title,
                                 "normalized_title": normalize_titles(item.title),
                                 "season_number": None,
-                                "year": str(getattr(item, "year", "")),
+                                "year": item_year,
                                 "guids": guids,
                                 "labels": [
                                     label.tag for label in getattr(item, "labels", [])
@@ -222,7 +227,7 @@ class PlexClient:
                                 "title": item.title,
                                 "normalized_title": normalize_titles(item.title),
                                 "season_number": None,
-                                "year": str(getattr(item, "year", "")),
+                                "year": item_year,
                                 "guids": guids,
                                 "labels": [
                                     label.tag for label in getattr(item, "labels", [])
@@ -245,7 +250,7 @@ class PlexClient:
                                         if season.index is not None
                                         else None
                                     ),
-                                    "year": str(getattr(item, "year", "")),
+                                    "year": item_year,
                                     "guids": guids,
                                     "labels": [
                                         label.tag
@@ -268,7 +273,7 @@ class PlexClient:
                                 "title": item.title,
                                 "normalized_title": normalize_titles(item.title),
                                 "season_number": None,
-                                "year": str(getattr(item, "year", "")),
+                                "year": item_year,
                                 "guids": guids,
                                 "labels": [
                                     label.tag for label in getattr(item, "labels", [])

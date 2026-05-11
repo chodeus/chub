@@ -777,6 +777,7 @@ class Connector:
         media_tmdb = self._get_clean_id(media_item.get("tmdb_id"))
         media_tvdb = self._get_clean_id(media_item.get("tvdb_id"))
         media_imdb = self._get_clean_id(media_item.get("imdb_id"))
+        media_mbid = self._get_clean_id(media_item.get("musicbrainz_id"))
         media_season = media_item.get("season_number")
         media_title = normalize_titles(media_item.get("title"))
         media_year = str(media_item.get("year") or "")
@@ -791,6 +792,7 @@ class Connector:
             plex_tmdb = self._get_clean_id(guids.get("tmdb"))
             plex_tvdb = self._get_clean_id(guids.get("tvdb"))
             plex_imdb = self._get_clean_id(guids.get("imdb"))
+            plex_mbid = self._get_clean_id(guids.get("mbid"))
             plex_season = plex_item.get("season_number")
             plex_title = normalize_titles(plex_item.get("title"))
             plex_year = str(plex_item.get("year") or "")
@@ -809,6 +811,8 @@ class Connector:
             elif media_tvdb and plex_tvdb and media_tvdb == plex_tvdb:
                 id_match = True
             elif media_imdb and plex_imdb and media_imdb == plex_imdb:
+                id_match = True
+            elif media_mbid and plex_mbid and media_mbid == plex_mbid:
                 id_match = True
 
             if season_match and (id_match or (title_match and year_match)):
