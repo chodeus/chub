@@ -25,6 +25,7 @@ Public surface:
     copy_plex_db(plex_path, dest) -> Optional[str]
     scan_bundles(plex_path, *, force=False) -> Dict
     get_bloat_flat(plex_path, *, force=False) -> List[Dict]
+    scan_transcoder_cache(plex_path, *, force=False) -> Dict
     invalidate_cache()
 """
 
@@ -552,6 +553,44 @@ def get_bloat_flat(plex_path: str, *, force: bool = False) -> List[Dict[str, Any
             })
     flat.sort(key=lambda e: -e["size"])
     return flat
+
+
+def scan_transcoder_cache(plex_path: str, *, force: bool = False) -> Dict[str, int]:
+    """
+    Walk `<plex>/Cache/PhotoTranscoder/` and report total file count + byte size.
+
+    Read-only; the matching wipe lives in `plex_maintenance._clean_photo_transcoder`
+    and is exposed through the Plex Maintenance module. This helper exists so the
+    Poster Cleanarr UI can surface the reclaimable cache size next to its other
+    scan stats without invoking the cleanup module just to peek at the disk usage.
+
+    Returns {"count": int, "size_bytes": int}. Missing directory → zeros (not an
+    error). Cached for `_CACHE_TTL_SEC` unless `force=True`.
+    """
+    cache_key = f"tcache::{plex_path}"
+    if not force:
+        cached = _cache_get(cache_key)
+        if cached:
+            return {"count": cached["count"], "size_bytes": cached["size_bytes"]}
+
+    transcoder_dir = os.path.join(plex_path, "Cache", "PhotoTranscoder")
+    count = 0
+    size_bytes = 0
+    if os.path.isdir(transcoder_dir):
+        for root, _dirs, files in os.walk(transcoder_dir):
+            for filename in files:
+                fpath = os.path.join(root, filename)
+                try:
+                    size_bytes += os.path.getsize(fpath)
+                    count += 1
+                except OSError:
+                    # File vanished or unreadable mid-walk — skip silently; this
+                    # is a stat-only report, not a critical path.
+                    continue
+
+    result = {"count": count, "size_bytes": size_bytes}
+    _cache_put(cache_key, result)
+    return result
 
 
 def delete_variant(file_path: str, *, plex_path: str) -> bool:

@@ -2138,7 +2138,7 @@ async def list_plex_metadata_by_media(
     try:
         import time as _time
 
-        from backend.util.plex_metadata import scan_bundles
+        from backend.util.plex_metadata import scan_bundles, scan_transcoder_cache
 
         plex_path = _get_plex_path(request)
         if not plex_path:
@@ -2154,11 +2154,13 @@ async def list_plex_metadata_by_media(
         )
         _t0 = _time.time()
         scan = scan_bundles(plex_path, force=force)
+        transcoder = scan_transcoder_cache(plex_path, force=force)
         logger.info(
             f"UI scan complete in {_time.time() - _t0:.1f}s — "
             f"{scan['stats']['bundle_count']} bundles, "
             f"{scan['stats']['variant_count']} variants, "
-            f"{scan['stats']['bloat_count']} bloat"
+            f"{scan['stats']['bloat_count']} bloat, "
+            f"transcoder cache {transcoder['count']} files / {transcoder['size_bytes']} bytes"
         )
         bundles = scan["bundles"]
 
@@ -2191,6 +2193,7 @@ async def list_plex_metadata_by_media(
                 "limit": limit,
                 "offset": offset,
                 "stats": scan["stats"],
+                "transcoder": transcoder,
             },
         )
     except Exception as e:
