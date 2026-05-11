@@ -1,10 +1,8 @@
 """Tests for backend/util/version.py — manifest-driven versioning."""
 
-import json
 import subprocess
 from unittest.mock import patch
 
-import backend.util.version as version_mod
 from backend.util.version import _read_base_version, get_version
 
 

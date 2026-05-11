@@ -2,7 +2,6 @@
 
 from types import SimpleNamespace
 
-import pytest
 
 from backend.modules.labelarr import Labelarr
 from backend.util.config import (

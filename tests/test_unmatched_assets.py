@@ -2,7 +2,6 @@
 
 from types import SimpleNamespace
 
-import pytest
 
 from backend.modules.unmatched_assets import UnmatchedAssets
 

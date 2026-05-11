@@ -2,7 +2,6 @@
 
 import os
 
-import pytest
 
 from backend.util.helper import (
     compare_strings,

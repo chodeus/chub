@@ -1,6 +1,5 @@
 """Tests for backend/util/plex_metadata.py — variant classification & DB helpers."""
 
-import os
 import sqlite3
 
 import pytest
