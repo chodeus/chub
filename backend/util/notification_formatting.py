@@ -40,7 +40,6 @@ def format_for_discord(
         for line in lines:
             candidate = buffer + line + "\n"
             if len(candidate) > DISCORD_FIELD_CHAR_LIMIT:
-
                 field = {
                     "name": name if first else "",
                     "value": f"```{buffer.rstrip()}```",
@@ -236,7 +235,7 @@ def format_for_discord(
                 lst = grouped.setdefault(name, [])
                 if np := item.get("new_path_name"):
                     lst.append(
-                        f"Folder:\n{item.get('path_name','').lstrip('/')} -> {np.lstrip('/')}"
+                        f"Folder:\n{item.get('path_name', '').lstrip('/')} -> {np.lstrip('/')}"
                     )
                 for old, new in item.get("file_info", {}).items():
                     lst.append(old.lstrip("/"))
@@ -455,27 +454,33 @@ def format_for_discord(
 
         bloat = o.get("bloat", {})
         if bloat.get("count", 0) > 0:
-            fields.append({
-                "name": "Bloat Images",
-                "value": f"{bloat['count']} files ({bloat.get('size_human', '0 B')})",
-                "inline": True,
-            })
+            fields.append(
+                {
+                    "name": "Bloat Images",
+                    "value": f"{bloat['count']} files ({bloat.get('size_human', '0 B')})",
+                    "inline": True,
+                }
+            )
 
         orphaned = o.get("orphaned", {})
         if orphaned.get("count", 0) > 0:
-            fields.append({
-                "name": "Orphaned Posters",
-                "value": str(orphaned["count"]),
-                "inline": True,
-            })
+            fields.append(
+                {
+                    "name": "Orphaned Posters",
+                    "value": str(orphaned["count"]),
+                    "inline": True,
+                }
+            )
 
         pt = o.get("photo_transcoder", {})
         if pt.get("count", 0) > 0:
-            fields.append({
-                "name": "PhotoTranscoder",
-                "value": f"{pt['count']} files ({pt.get('size_human', '0 B')})",
-                "inline": True,
-            })
+            fields.append(
+                {
+                    "name": "PhotoTranscoder",
+                    "value": f"{pt['count']} files ({pt.get('size_human', '0 B')})",
+                    "inline": True,
+                }
+            )
 
         maintenance = o.get("maintenance", {})
         if maintenance:
@@ -483,10 +488,12 @@ def format_for_discord(
             for task, status in maintenance.items():
                 icon = "✅" if status == "success" else "❌"
                 lines.append(f"{icon} {task}: {status}")
-            fields.append({
-                "name": "Plex Maintenance",
-                "value": "\n".join(lines),
-            })
+            fields.append(
+                {
+                    "name": "Plex Maintenance",
+                    "value": "\n".join(lines),
+                }
+            )
 
         elapsed = o.get("elapsed", 0)
         fields.append({"name": "Duration", "value": f"{elapsed}s", "inline": True})
@@ -498,11 +505,13 @@ def format_for_discord(
 
         pt = o.get("photo_transcoder", {})
         if pt.get("count", 0) > 0:
-            fields.append({
-                "name": "PhotoTranscoder",
-                "value": f"{pt['count']} files ({pt.get('size_human', '0 B')})",
-                "inline": True,
-            })
+            fields.append(
+                {
+                    "name": "PhotoTranscoder",
+                    "value": f"{pt['count']} files ({pt.get('size_human', '0 B')})",
+                    "inline": True,
+                }
+            )
 
         maintenance = o.get("maintenance", {})
         if maintenance:
@@ -510,10 +519,12 @@ def format_for_discord(
             for task, status in maintenance.items():
                 icon = "✅" if status == "success" else "❌"
                 lines.append(f"{icon} {task}: {status}")
-            fields.append({
-                "name": "Plex Maintenance",
-                "value": "\n".join(lines),
-            })
+            fields.append(
+                {
+                    "name": "Plex Maintenance",
+                    "value": "\n".join(lines),
+                }
+            )
 
         elapsed = o.get("elapsed", "")
         if elapsed:
@@ -536,7 +547,6 @@ def format_for_discord(
         ]
         tb = o.get("traceback")
         if tb:
-
             if len(tb) > 1800:
                 tb = tb[:1800] + "\n...truncated..."
             fields.append({"name": "Traceback", "value": f"```{tb}```"})
@@ -545,56 +555,72 @@ def format_for_discord(
     def fmt_border_replacerr(o: Any) -> List[Dict[str, Any]]:
         """Format border_replacerr output for Discord embeds."""
         fields: List[Dict[str, Any]] = []
-        fields.append({
-            "name": "Processed",
-            "value": str(o.get("processed", 0)),
-            "inline": True,
-        })
-        fields.append({
-            "name": "Skipped",
-            "value": str(o.get("skipped", 0)),
-            "inline": True,
-        })
+        fields.append(
+            {
+                "name": "Processed",
+                "value": str(o.get("processed", 0)),
+                "inline": True,
+            }
+        )
+        fields.append(
+            {
+                "name": "Skipped",
+                "value": str(o.get("skipped", 0)),
+                "inline": True,
+            }
+        )
         if o.get("replaced"):
-            fields.append({
-                "name": "Borders replaced",
-                "value": str(o["replaced"]),
-                "inline": True,
-            })
+            fields.append(
+                {
+                    "name": "Borders replaced",
+                    "value": str(o["replaced"]),
+                    "inline": True,
+                }
+            )
         if o.get("removed"):
-            fields.append({
-                "name": "Borders removed",
-                "value": str(o["removed"]),
-                "inline": True,
-            })
+            fields.append(
+                {
+                    "name": "Borders removed",
+                    "value": str(o["removed"]),
+                    "inline": True,
+                }
+            )
         if o.get("active_holiday"):
-            fields.append({
-                "name": "Holiday",
-                "value": str(o["active_holiday"]),
-                "inline": False,
-            })
+            fields.append(
+                {
+                    "name": "Holiday",
+                    "value": str(o["active_holiday"]),
+                    "inline": False,
+                }
+            )
         return fields
 
     def fmt_sync_gdrive(o: Any) -> List[Dict[str, Any]]:
         """Format sync_gdrive output for Discord embeds."""
         fields: List[Dict[str, Any]] = []
-        fields.append({
-            "name": "Folders",
-            "value": f"{o.get('succeeded', 0)} / {o.get('total', 0)}",
-            "inline": True,
-        })
+        fields.append(
+            {
+                "name": "Folders",
+                "value": f"{o.get('succeeded', 0)} / {o.get('total', 0)}",
+                "inline": True,
+            }
+        )
         if o.get("failed"):
-            fields.append({
-                "name": "Failed",
-                "value": str(o["failed"]),
-                "inline": True,
-            })
+            fields.append(
+                {
+                    "name": "Failed",
+                    "value": str(o["failed"]),
+                    "inline": True,
+                }
+            )
         if o.get("elapsed"):
-            fields.append({
-                "name": "Elapsed",
-                "value": str(o["elapsed"]),
-                "inline": True,
-            })
+            fields.append(
+                {
+                    "name": "Elapsed",
+                    "value": str(o["elapsed"]),
+                    "inline": True,
+                }
+            )
         items = o.get("items") or []
         if items:
             lines = [
@@ -603,11 +629,13 @@ def format_for_discord(
             ]
             if len(items) > 15:
                 lines.append(f"…and {len(items) - 15} more")
-            fields.append({
-                "name": "Sources",
-                "value": "\n".join(lines),
-                "inline": False,
-            })
+            fields.append(
+                {
+                    "name": "Sources",
+                    "value": "\n".join(lines),
+                    "inline": False,
+                }
+            )
         return fields
 
     registry: Dict[str, Dict[str, Any]] = {
@@ -897,7 +925,40 @@ def format_for_email(config: Any, output: Any) -> Tuple[str, bool]:
         """
 
         sections: List[str] = []
-        for inst_name, inst_data in o.items():
+
+        scanned = o.get("scanned", {}) if isinstance(o, dict) else {}
+        if scanned:
+            section: List[str] = ["<div class='instance'><h3>Scanned</h3>"]
+            for path, results in scanned.items():
+                section.append(
+                    f"<div class='media'><div class='title'><strong>{path}</strong></div>"
+                )
+                lines: List[str] = []
+                for item in results.get("movies", []):
+                    title = item.get("title", "Unknown")
+                    year = f" ({item.get('year')})" if item.get("year") else ""
+                    lines.append(f"<li>{title}{year}</li>")
+                for item in results.get("series", []):
+                    title = item.get("title", "Unknown")
+                    year = f" ({item.get('year')})" if item.get("year") else ""
+                    lines.append(f"<li>{title}{year}<ul>")
+                    for season in item.get("season_info", []):
+                        lines.append(f"<li>Season {season.get('season_number')}</li>")
+                    lines.append("</ul></li>")
+                if lines:
+                    section.append("<ul>")
+                    section.extend(lines)
+                    section.append("</ul>")
+                else:
+                    section.append(
+                        "<div class='all-linked'>✅ All scanned files are already hardlinked.</div>"
+                    )
+                section.append("</div>")
+            section.append("</div>")
+            sections.append("\n".join(section))
+
+        resolved = o.get("resolved", {}) if isinstance(o, dict) else {}
+        for inst_name, inst_data in resolved.items():
             server_name = inst_data.get("server_name", inst_name).capitalize()
             section: List[str] = [f"<div class='instance'><h3>{server_name}</h3>"]
             search_media = inst_data.get("data", {}).get("search_media", [])
@@ -941,7 +1002,7 @@ def format_for_email(config: Any, output: Any) -> Tuple[str, bool]:
                     section.append(f"<li>{title}{year}<ul>")
                     if not item.get("monitored"):
                         section.append("<li>⏭️ Skipped (not monitored)</li>")
-                    elif item.get("exclude_media"):
+                    elif item.get("excluded") or item.get("exclude_media"):
                         section.append("<li>⛔ Skipped (excluded)</li>")
                     elif item.get("quality_profile"):
                         section.append(
@@ -951,6 +1012,17 @@ def format_for_email(config: Any, output: Any) -> Tuple[str, bool]:
                 section.append("</ul></div>")
             section.append("</div>")
             sections.append("\n".join(section))
+
+        summary = o.get("summary", {}) if isinstance(o, dict) else {}
+        if summary and not all(value == 0 for value in summary.values()):
+            sections.append(
+                "<div class='instance'><h3>Summary</h3><ul>"
+                f"<li>Total Non-Hardlinked Scanned Movies: {summary.get('total_scanned_movies', 0)}</li>"
+                f"<li>Total Non-Hardlinked Scanned Series: {summary.get('total_scanned_series', 0)}</li>"
+                f"<li>Total Non-Hardlinked Resolved Movies: {summary.get('total_resolved_movies', 0)}</li>"
+                f"<li>Total Non-Hardlinked Resolved Series: {summary.get('total_resolved_series', 0)}</li>"
+                "</ul></div>"
+            )
         return "".join(sections)
 
     def fmt_unmatched_assets(output: dict) -> str:
@@ -1151,9 +1223,13 @@ def format_for_email(config: Any, output: Any) -> Tuple[str, bool]:
             f"<strong>Skipped:</strong> {output.get('skipped', 0)}</p>"
         )
         if output.get("replaced"):
-            sections.append(f"<p><strong>Borders replaced:</strong> {output['replaced']}</p>")
+            sections.append(
+                f"<p><strong>Borders replaced:</strong> {output['replaced']}</p>"
+            )
         if output.get("removed"):
-            sections.append(f"<p><strong>Borders removed:</strong> {output['removed']}</p>")
+            sections.append(
+                f"<p><strong>Borders removed:</strong> {output['removed']}</p>"
+            )
         if output.get("active_holiday"):
             sections.append(f"<p><em>Holiday: {output['active_holiday']}</em></p>")
         sections.append("</div>")

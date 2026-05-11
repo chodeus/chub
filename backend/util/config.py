@@ -128,7 +128,7 @@ class RenameinatorrConfig(BaseModel):
 
 class NohlSourceDir(BaseModel):
     path: str
-    mode: str
+    mode: str = "resolve"
 
 
 class NohlConfig(BaseModel):

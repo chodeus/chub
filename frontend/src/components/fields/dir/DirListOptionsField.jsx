@@ -30,9 +30,11 @@ export const DirListOptionsField = React.memo(
         highlightInvalid = false,
         errorMessage = null,
     }) => {
+        const defaultMode = field.default_mode || field.defaultMode || '';
+
         // Parse value into directories and modes arrays
         const { directoriesArray, modesArray } = useMemo(() => {
-            if (!value) return { directoriesArray: [''], modesArray: [''] };
+            if (!value) return { directoriesArray: [''], modesArray: [defaultMode] };
 
             if (Array.isArray(value)) {
                 // Handle array of objects: [{path: "...", mode: "..."}, ...]
@@ -42,22 +44,22 @@ export const DirListOptionsField = React.memo(
                     value[0].path !== undefined
                 ) {
                     const directories = value.map(item => item.path || '');
-                    const modes = value.map(item => item.mode || '');
+                    const modes = value.map(item => item.mode || defaultMode);
                     return {
                         directoriesArray: directories.length > 0 ? directories : [''],
-                        modesArray: modes.length > 0 ? modes : [''],
+                        modesArray: modes.length > 0 ? modes : [defaultMode],
                     };
                 }
                 // Handle legacy array of strings (backwards compatibility)
                 return {
                     directoriesArray: value.length > 0 ? value : [''],
-                    modesArray: new Array(value.length || 1).fill(''),
+                    modesArray: new Array(value.length || 1).fill(defaultMode),
                 };
             }
 
             // Handle single value
-            return { directoriesArray: [value], modesArray: [''] };
-        }, [value]);
+            return { directoriesArray: [value], modesArray: [defaultMode] };
+        }, [defaultMode, value]);
 
         // Handle directory list changes
         const handleDirectoryChange = useCallback(
@@ -65,7 +67,7 @@ export const DirListOptionsField = React.memo(
                 // Ensure modes array matches directories length
                 const newModes = [...modesArray];
                 while (newModes.length < newDirectories.length) {
-                    newModes.push(''); // Default mode for new directories
+                    newModes.push(defaultMode); // Default mode for new directories
                 }
                 if (newModes.length > newDirectories.length) {
                     newModes.splice(newDirectories.length); // Remove excess modes
@@ -74,12 +76,12 @@ export const DirListOptionsField = React.memo(
                 // Output as array of objects with path and mode
                 const newValue = newDirectories.map((path, index) => ({
                     path: path || '',
-                    mode: newModes[index] || '',
+                    mode: newModes[index] || defaultMode,
                 }));
 
                 onChange(newValue);
             },
-            [modesArray, onChange]
+            [defaultMode, modesArray, onChange]
         );
 
         // Handle mode selection changes
@@ -87,12 +89,12 @@ export const DirListOptionsField = React.memo(
             (index, newMode) => {
                 const newValue = directoriesArray.map((path, i) => ({
                     path: path || '',
-                    mode: i === index ? newMode : modesArray[i] || '',
+                    mode: i === index ? newMode : modesArray[i] || defaultMode,
                 }));
 
                 onChange(newValue);
             },
-            [directoriesArray, modesArray, onChange]
+            [defaultMode, directoriesArray, modesArray, onChange]
         );
 
         const inputId = `field-${field.key}`;
