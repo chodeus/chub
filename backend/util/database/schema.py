@@ -433,6 +433,25 @@ class SchemaManager:
         )
         self._add_table(media_edit_history)
 
+        # Upgradinatorr progress — tracks searched seasons/albums in season_album
+        # count_mode so rotations can resume mid-series/artist instead of
+        # re-searching the same children on every run.
+        upgradinatorr_progress = TableDefinition(
+            name="upgradinatorr_progress",
+            columns=[
+                ColumnDefinition("id", "INTEGER", primary_key=True, nullable=False),
+                ColumnDefinition("instance_name", "TEXT", nullable=False),
+                ColumnDefinition("media_id", "INTEGER", nullable=False),
+                ColumnDefinition("child_id", "TEXT", nullable=False),
+                ColumnDefinition("searched_at", "TEXT"),
+            ],
+            indexes=[
+                "CREATE UNIQUE INDEX IF NOT EXISTS upgradinatorr_progress_unique_idx ON upgradinatorr_progress (instance_name, media_id, child_id)",
+                "CREATE INDEX IF NOT EXISTS upgradinatorr_progress_lookup_idx ON upgradinatorr_progress (instance_name, media_id)",
+            ],
+        )
+        self._add_table(upgradinatorr_progress)
+
         # Calculate schema hash for change detection
         self._calculate_schema_hash()
 

@@ -16,6 +16,15 @@ const CONDITION_TYPES = {
         const instanceType = getInstanceType(selectedValue, apiData);
         return instanceType === targetValue;
     },
+    instance_type_in: (selectedValue, targetValues, apiData) => {
+        const instanceType = getInstanceType(selectedValue, apiData);
+        console.log('[conditionalFields] Evaluating instance_type_in:', {
+            selectedValue,
+            targetValues,
+            instanceType,
+        });
+        return Array.isArray(targetValues) && targetValues.includes(instanceType);
+    },
     equals: (selectedValue, targetValue) => {
         console.log('[conditionalFields] Evaluating equals:', { selectedValue, targetValue });
         return selectedValue === targetValue;

@@ -295,6 +295,205 @@ class FakeARR:
         return {"records": []}
 
 
+def test_upgradinatorr_instance_count_mode_defaults_to_series_artist():
+    inst = UpgradinatorrInstance()
+    assert inst.count_mode == "series_artist"
+
+
+def test_upgradinatorr_instance_count_mode_accepts_season_album():
+    inst = UpgradinatorrInstance(count_mode="season_album")
+    assert inst.count_mode == "season_album"
+
+
+class FakeProgress:
+    """In-memory stand-in for UpgradinatorrProgress."""
+
+    def __init__(self):
+        self._rows = {}  # (instance, media_id) -> set[str]
+        self.cleared_media = []
+        self.cleared_instances = []
+
+    def get_processed_children(self, instance_name, media_id):
+        return set(self._rows.get((instance_name, media_id), set()))
+
+    def record_processed_child(self, instance_name, media_id, child_id):
+        self._rows.setdefault((instance_name, media_id), set()).add(str(child_id))
+
+    def clear_for_media(self, instance_name, media_id):
+        self._rows.pop((instance_name, media_id), None)
+        self.cleared_media.append((instance_name, media_id))
+
+    def clear_for_instance(self, instance_name):
+        for key in list(self._rows):
+            if key[0] == instance_name:
+                self._rows.pop(key)
+        self.cleared_instances.append(instance_name)
+
+
+class FakeSonarrApp:
+    instance_name = "sonarr_main"
+    instance_type = "Sonarr"
+
+    def __init__(self):
+        self.season_searches = []
+        self.tag_calls = []
+
+    def search_season(self, media_id, season_number):
+        self.season_searches.append((media_id, season_number))
+        return {"id": 42}
+
+    def wait_for_command(self, _cmd_id):
+        return True
+
+    def add_tags(self, media_id, tag_id):
+        self.tag_calls.append((media_id, tag_id))
+
+
+class FakeLidarrApp:
+    instance_name = "lidarr_main"
+    instance_type = "Lidarr"
+
+    def __init__(self):
+        self.album_searches = []
+        self.tag_calls = []
+
+    def search_album(self, album_id):
+        self.album_searches.append(album_id)
+        return {"id": 42}
+
+    def wait_for_command(self, _cmd_id):
+        return True
+
+    def add_tags(self, media_id, tag_id):
+        self.tag_calls.append((media_id, tag_id))
+
+
+def _sonarr_item():
+    return {
+        "title": "Show",
+        "year": 2024,
+        "media_id": 11,
+        "monitored": True,
+        "status": "continuing",
+        "tags": [],
+        "seasons": [
+            {"season_number": 1, "monitored": True, "episode_data": []},
+            {"season_number": 2, "monitored": True, "episode_data": []},
+            {"season_number": 3, "monitored": True, "episode_data": []},
+        ],
+    }
+
+
+def _lidarr_item():
+    return {
+        "title": "Artist",
+        "year": 2024,
+        "media_id": 21,
+        "monitored": True,
+        "status": "continuing",
+        "tags": [],
+        "seasons": [
+            {"season_number": 0, "album_id": 101, "album_title": "A", "monitored": True, "episode_data": []},
+            {"season_number": 1, "album_id": 102, "album_title": "B", "monitored": True, "episode_data": []},
+            {"season_number": 2, "album_id": 103, "album_title": "C", "monitored": True, "episode_data": []},
+        ],
+    }
+
+
+def test_upgradinatorr_granular_sonarr_resumes_across_runs():
+    module = make_upgradinatorr(dry_run=False)
+    app = FakeSonarrApp()
+    progress = FakeProgress()
+    item = _sonarr_item()
+
+    # Run 1: budget = 2 → search seasons 1, 2, no tag, progress records both.
+    new_count, hit = module._process_sonarr_item(
+        item, app, checked_tag_id=99, count=2, granular=True,
+        progress_db=progress, search_count=0,
+    )
+    assert hit is True
+    assert new_count == 2
+    assert app.season_searches == [(11, 1), (11, 2)]
+    assert app.tag_calls == []
+    assert progress.get_processed_children("sonarr_main", 11) == {"1", "2"}
+
+    # Run 2: only season 3 remains → 1 search, tag added, progress cleared.
+    new_count, hit = module._process_sonarr_item(
+        item, app, checked_tag_id=99, count=2, granular=True,
+        progress_db=progress, search_count=0,
+    )
+    assert hit is False
+    assert new_count == 1
+    assert app.season_searches == [(11, 1), (11, 2), (11, 3)]
+    assert app.tag_calls == [(11, 99)]
+    assert progress.get_processed_children("sonarr_main", 11) == set()
+
+
+def test_upgradinatorr_granular_sonarr_skips_already_done_parent():
+    module = make_upgradinatorr(dry_run=False)
+    app = FakeSonarrApp()
+    progress = FakeProgress()
+    progress.record_processed_child("sonarr_main", 11, "1")
+    progress.record_processed_child("sonarr_main", 11, "2")
+    progress.record_processed_child("sonarr_main", 11, "3")
+
+    new_count, hit = module._process_sonarr_item(
+        _sonarr_item(), app, checked_tag_id=99, count=5, granular=True,
+        progress_db=progress, search_count=0,
+    )
+    # No budget consumed but parent finalized.
+    assert hit is False
+    assert new_count == 0
+    assert app.season_searches == []
+    assert app.tag_calls == [(11, 99)]
+    assert progress.get_processed_children("sonarr_main", 11) == set()
+
+
+def test_upgradinatorr_legacy_sonarr_tags_once_and_clears_stale_progress():
+    module = make_upgradinatorr(dry_run=False)
+    app = FakeSonarrApp()
+    progress = FakeProgress()
+    progress.record_processed_child("sonarr_main", 11, "1")
+
+    new_count, hit = module._process_sonarr_item(
+        _sonarr_item(), app, checked_tag_id=99, count=5, granular=False,
+        progress_db=progress, search_count=0,
+    )
+    # All monitored seasons searched, parent tagged once, stale row wiped.
+    assert hit is False
+    assert new_count == 1
+    assert app.season_searches == [(11, 1), (11, 2), (11, 3)]
+    assert app.tag_calls == [(11, 99)]
+    assert progress.get_processed_children("sonarr_main", 11) == set()
+
+
+def test_upgradinatorr_granular_lidarr_resumes_across_runs():
+    module = make_upgradinatorr(dry_run=False)
+    app = FakeLidarrApp()
+    progress = FakeProgress()
+    item = _lidarr_item()
+
+    new_count, hit = module._process_lidarr_item(
+        item, app, checked_tag_id=99, count=2, granular=True,
+        progress_db=progress, search_count=0,
+    )
+    assert hit is True
+    assert new_count == 2
+    assert app.album_searches == [101, 102]
+    assert app.tag_calls == []
+    assert progress.get_processed_children("lidarr_main", 21) == {"101", "102"}
+
+    new_count, hit = module._process_lidarr_item(
+        item, app, checked_tag_id=99, count=2, granular=True,
+        progress_db=progress, search_count=0,
+    )
+    assert hit is False
+    assert new_count == 1
+    assert app.album_searches == [101, 102, 103]
+    assert app.tag_calls == [(21, 99)]
+    assert progress.get_processed_children("lidarr_main", 21) == set()
+
+
 def test_upgradinatorr_filter_skips_checked_tag_name():
     module = make_upgradinatorr()
 

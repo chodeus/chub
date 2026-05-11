@@ -16,6 +16,7 @@ from .poster_cache import PosterCache
 from .run_state import RunState
 from .schema import SchemaManager
 from .stats import Stats
+from .upgradinatorr_progress import UpgradinatorrProgress
 from .webhook_cache import WebhookCache
 from .worker import DBWorker
 
@@ -189,6 +190,11 @@ class ChubDB:
     def webhook_cache(self) -> WebhookCache:
         """Access to persistent webhook dedup cache."""
         return self._get_interface("webhook_cache", WebhookCache)
+
+    @property
+    def upgradinatorr_progress(self) -> UpgradinatorrProgress:
+        """Access to Upgradinatorr per-child progress tracking."""
+        return self._get_interface("upgradinatorr_progress", UpgradinatorrProgress)
 
     @property
     def worker(self) -> DBWorker:
