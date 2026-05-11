@@ -1,15 +1,18 @@
 # modules/upgradinatorr.py
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from backend.util.arr import BaseARRClient, create_arr_client
 from backend.util.base_module import ChubModule
+from backend.util.database import ChubDB
+from backend.util.database.upgradinatorr_progress import UpgradinatorrProgress
 from backend.util.helper import create_table, print_settings
 from backend.util.logger import Logger
 from backend.util.notification import NotificationManager
 
 VALID_STATUSES = {"continuing", "airing", "ended", "canceled", "released"}
 VALID_SEARCH_MODES = {"upgrade", "missing", "cutoff"}
+VALID_COUNT_MODES = {"series_artist", "season_album"}
 
 
 class Upgradinatorr(ChubModule):
@@ -124,6 +127,184 @@ class Upgradinatorr(ChubModule):
                 )
         else:
             self.logger.warning(f"No search response for media ID: {media_id}")
+
+    def _process_sonarr_item(
+        self,
+        item: Dict[str, Any],
+        app: BaseARRClient,
+        checked_tag_id: int,
+        count: int,
+        granular: bool,
+        progress_db: Optional[UpgradinatorrProgress],
+        search_count: int,
+    ) -> Tuple[int, bool]:
+        """Handle one Sonarr series. Returns (new_search_count, budget_hit).
+
+        In series_artist mode: searches every monitored season then tags the
+        series once, counting it as a single search toward the budget.
+
+        In season_album mode: each monitored season is a separate search counted
+        against the budget. Already-processed seasons (from a previous run) are
+        skipped via the progress table. The series is only tagged once every
+        monitored season has been searched in this rotation."""
+        if not granular:
+            searched = False
+            for season in item["seasons"]:
+                if season["monitored"]:
+                    self.logger.debug(
+                        f"  [SEASON] {season['season_number']}: Searching..."
+                    )
+                    search_response = app.search_season(
+                        item["media_id"], season["season_number"]
+                    )
+                    self.process_search_response(
+                        search_response, item["media_id"], app
+                    )
+                    searched = True
+            if searched:
+                self.logger.debug(
+                    f"  [TAG] Adding tag {checked_tag_id} to media ID: {item['media_id']}"
+                )
+                app.add_tags(item["media_id"], checked_tag_id)
+                search_count += 1
+                if progress_db is not None:
+                    # Clean up any stale progress rows from a prior granular run.
+                    progress_db.clear_for_media(app.instance_name, item["media_id"])
+            return search_count, search_count >= count
+
+        # Granular: per-season counting + resume support.
+        processed = (
+            progress_db.get_processed_children(app.instance_name, item["media_id"])
+            if progress_db is not None
+            else set()
+        )
+        monitored_seasons = sorted(
+            (s for s in item["seasons"] if s.get("monitored")),
+            key=lambda s: s.get("season_number", 0),
+        )
+        remaining = [s for s in monitored_seasons if str(s["season_number"]) not in processed]
+        if not monitored_seasons:
+            return search_count, False
+        if not remaining:
+            # All monitored seasons searched in earlier runs — finalize.
+            self.logger.debug(
+                f"  [TAG] All monitored seasons already processed; tagging media ID: {item['media_id']}"
+            )
+            app.add_tags(item["media_id"], checked_tag_id)
+            if progress_db is not None:
+                progress_db.clear_for_media(app.instance_name, item["media_id"])
+            return search_count, False
+
+        for season in remaining:
+            self.logger.debug(
+                f"  [SEASON] {season['season_number']}: Searching..."
+            )
+            search_response = app.search_season(
+                item["media_id"], season["season_number"]
+            )
+            self.process_search_response(search_response, item["media_id"], app)
+            if progress_db is not None:
+                progress_db.record_processed_child(
+                    app.instance_name, item["media_id"], str(season["season_number"])
+                )
+            search_count += 1
+            if search_count >= count:
+                # Cut off mid-series: leave untagged so next run resumes here.
+                return search_count, True
+
+        # Finished every monitored season this rotation — tag and clear progress.
+        self.logger.debug(
+            f"  [TAG] All monitored seasons searched; tagging media ID: {item['media_id']}"
+        )
+        app.add_tags(item["media_id"], checked_tag_id)
+        if progress_db is not None:
+            progress_db.clear_for_media(app.instance_name, item["media_id"])
+        return search_count, search_count >= count
+
+    def _process_lidarr_item(
+        self,
+        item: Dict[str, Any],
+        app: BaseARRClient,
+        checked_tag_id: int,
+        count: int,
+        granular: bool,
+        progress_db: Optional[UpgradinatorrProgress],
+        search_count: int,
+    ) -> Tuple[int, bool]:
+        """Handle one Lidarr artist. Returns (new_search_count, budget_hit).
+        Mirrors _process_sonarr_item but operates on albums (album_id is the
+        child key in the progress table)."""
+        if not granular:
+            searched = False
+            for album in item["seasons"]:
+                if album.get("monitored", False):
+                    album_id = album.get("album_id")
+                    album_title = album.get(
+                        "album_title", f"Album #{album.get('season_number', '?')}"
+                    )
+                    if album_id:
+                        self.logger.debug(f"  [ALBUM] {album_title}: Searching...")
+                        search_response = app.search_album(album_id)
+                        self.process_search_response(
+                            search_response, item["media_id"], app
+                        )
+                        searched = True
+            if searched:
+                self.logger.debug(
+                    f"  [TAG] Adding tag {checked_tag_id} to media ID: {item['media_id']}"
+                )
+                app.add_tags(item["media_id"], checked_tag_id)
+                search_count += 1
+                if progress_db is not None:
+                    progress_db.clear_for_media(app.instance_name, item["media_id"])
+            return search_count, search_count >= count
+
+        # Granular: per-album counting + resume support.
+        processed = (
+            progress_db.get_processed_children(app.instance_name, item["media_id"])
+            if progress_db is not None
+            else set()
+        )
+        monitored_albums = [
+            a for a in item["seasons"] if a.get("monitored") and a.get("album_id")
+        ]
+        remaining = [
+            a for a in monitored_albums if str(a["album_id"]) not in processed
+        ]
+        if not monitored_albums:
+            return search_count, False
+        if not remaining:
+            self.logger.debug(
+                f"  [TAG] All monitored albums already processed; tagging media ID: {item['media_id']}"
+            )
+            app.add_tags(item["media_id"], checked_tag_id)
+            if progress_db is not None:
+                progress_db.clear_for_media(app.instance_name, item["media_id"])
+            return search_count, False
+
+        for album in remaining:
+            album_id = album["album_id"]
+            album_title = album.get(
+                "album_title", f"Album #{album.get('season_number', '?')}"
+            )
+            self.logger.debug(f"  [ALBUM] {album_title}: Searching...")
+            search_response = app.search_album(album_id)
+            self.process_search_response(search_response, item["media_id"], app)
+            if progress_db is not None:
+                progress_db.record_processed_child(
+                    app.instance_name, item["media_id"], str(album_id)
+                )
+            search_count += 1
+            if search_count >= count:
+                return search_count, True
+
+        self.logger.debug(
+            f"  [TAG] All monitored albums searched; tagging media ID: {item['media_id']}"
+        )
+        app.add_tags(item["media_id"], checked_tag_id)
+        if progress_db is not None:
+            progress_db.clear_for_media(app.instance_name, item["media_id"])
+        return search_count, search_count >= count
 
     def process_queue(
         self, queue: Dict[str, Any], instance_type: str, media_ids: List[int]
@@ -278,6 +459,10 @@ class Upgradinatorr(ChubModule):
         search_mode: str = (
             self._get_setting(instance_settings, "search_mode", "upgrade") or "upgrade"
         )
+        count_mode: str = (
+            self._get_setting(instance_settings, "count_mode", "series_artist")
+            or "series_artist"
+        )
 
         if count <= 0:
             self.logger.warning(
@@ -290,6 +475,15 @@ class Upgradinatorr(ChubModule):
                 f"Invalid search_mode '{search_mode}', falling back to 'upgrade'."
             )
             search_mode = "upgrade"
+
+        if count_mode not in VALID_COUNT_MODES:
+            self.logger.warning(
+                f"Invalid count_mode '{count_mode}', falling back to 'series_artist'."
+            )
+            count_mode = "series_artist"
+        # Granular mode only meaningful for sonarr/lidarr; radarr items always
+        # cost 1 search regardless.
+        granular = count_mode == "season_album" and instance_type in ("sonarr", "lidarr")
 
         self.logger.info(
             f"Gathering media from {app.instance_name} ({instance_type}) "
@@ -312,11 +506,16 @@ class Upgradinatorr(ChubModule):
         if ignore_tag_name:
             app.get_tag_id_from_name(ignore_tag_name)
 
+        # In granular mode, `count` caps season/album searches, not parents — so
+        # we need to keep the parent cap loose enough that we can consume the
+        # budget even when each parent only contributes a few unprocessed children.
+        filter_cap = len(media_dict) if granular else count
+
         filtered_media_dict: List[Dict[str, Any]] = self.filter_media(
             media_dict,
             checked_tag_name,
             ignore_tag_name,
-            count,
+            filter_cap,
             season_monitored_threshold,
         )
         if not filtered_media_dict and unattended:
@@ -331,6 +530,19 @@ class Upgradinatorr(ChubModule):
             else:
                 self.logger.info("All media is tagged. Removing tags...")
                 app.remove_tags(media_ids, checked_tag_id)
+                if instance_type in ("sonarr", "lidarr"):
+                    try:
+                        with ChubDB(logger=self.logger) as db:
+                            db.upgradinatorr_progress.clear_for_instance(
+                                app.instance_name
+                            )
+                            self.logger.debug(
+                                f"Cleared upgradinatorr_progress rows for {app.instance_name} (unattended reset)."
+                            )
+                    except Exception as e:
+                        self.logger.warning(
+                            f"Failed to clear upgradinatorr_progress for {app.instance_name}: {e}"
+                        )
             if search_mode in ("missing", "cutoff"):
                 wanted_records = self._get_all_wanted(app, search_mode)
                 media_dict = self._convert_wanted_to_media_dict(
@@ -340,11 +552,12 @@ class Upgradinatorr(ChubModule):
                 media_dict = app.get_all_media(include_episode=True)
             else:
                 media_dict = app.get_all_media()
+            filter_cap = len(media_dict) if granular else count
             filtered_media_dict = self.filter_media(
                 media_dict,
                 checked_tag_name,
                 ignore_tag_name,
-                count,
+                filter_cap,
                 season_monitored_threshold,
             )
 
@@ -375,31 +588,69 @@ class Upgradinatorr(ChubModule):
         if not self.config.dry_run:
             search_count: int = 0
             media_ids: List[int] = [item["media_id"] for item in filtered_media_dict]
-            for item in filtered_media_dict:
-                if self.is_cancelled():
-                    break
-                self.logger.debug("")  # Blank line before block
-                self.logger.debug("═" * 70)
-                self.logger.debug(
-                    f"[PROCESSING] {item['title']} ({item['year']}) | ID: {item['media_id']}"
-                )
-                self.logger.debug("═" * 70)
+            progress_db: Optional[UpgradinatorrProgress] = None
+            db_ctx: Optional[ChubDB] = None
+            # Open the progress DB for any sonarr/lidarr run so that leftover
+            # rows from a previous granular run get cleared when those parents
+            # are tagged in series_artist mode.
+            if instance_type in ("sonarr", "lidarr"):
+                db_ctx = ChubDB(logger=self.logger)
+                db_ctx.__enter__()
+                progress_db = db_ctx.upgradinatorr_progress
 
-                if item["seasons"] is None:
-                    # Movies (Radarr) or artists without album data
+            try:
+                for item in filtered_media_dict:
+                    if self.is_cancelled():
+                        break
+                    self.logger.debug("")  # Blank line before block
+                    self.logger.debug("═" * 70)
                     self.logger.debug(
-                        f"Searching media without seasons for media ID: {item['media_id']}"
+                        f"[PROCESSING] {item['title']} ({item['year']}) | ID: {item['media_id']}"
                     )
-                    search_response = app.search_media(item["media_id"])
-                    self.process_search_response(search_response, item["media_id"], app)
-                    self.logger.debug(
-                        f"  [TAG] Adding tag {checked_tag_id} to media ID: {item['media_id']}"
-                    )
-                    app.add_tags(item["media_id"], checked_tag_id)
-                    search_count += 1
-                    if search_count >= count:
+                    self.logger.debug("═" * 70)
+
+                    budget_hit = False
+
+                    if item["seasons"] is None:
+                        # Movies (Radarr) or artists without album data
                         self.logger.debug(
-                            f"Reached search count limit after non-season search ({search_count} >= {count}), breaking."
+                            f"Searching media without seasons for media ID: {item['media_id']}"
+                        )
+                        search_response = app.search_media(item["media_id"])
+                        self.process_search_response(
+                            search_response, item["media_id"], app
+                        )
+                        self.logger.debug(
+                            f"  [TAG] Adding tag {checked_tag_id} to media ID: {item['media_id']}"
+                        )
+                        app.add_tags(item["media_id"], checked_tag_id)
+                        search_count += 1
+                        if search_count >= count:
+                            budget_hit = True
+                    elif instance_type == "lidarr":
+                        search_count, budget_hit = self._process_lidarr_item(
+                            item,
+                            app,
+                            checked_tag_id,
+                            count,
+                            granular,
+                            progress_db,
+                            search_count,
+                        )
+                    else:
+                        search_count, budget_hit = self._process_sonarr_item(
+                            item,
+                            app,
+                            checked_tag_id,
+                            count,
+                            granular,
+                            progress_db,
+                            search_count,
+                        )
+
+                    if budget_hit:
+                        self.logger.debug(
+                            f"Reached search count limit ({search_count} >= {count}), breaking."
                         )
                         self.logger.debug("─" * 70)
                         self.logger.debug(
@@ -408,83 +659,19 @@ class Upgradinatorr(ChubModule):
                         self.logger.debug("─" * 70)
                         self.logger.debug("")
                         break
-                elif instance_type == "lidarr":
-                    # Lidarr: search monitored albums individually
-                    searched = False
-                    for album in item["seasons"]:
-                        if album.get("monitored", False):
-                            album_id = album.get("album_id")
-                            album_title = album.get("album_title", f"Album #{album.get('season_number', '?')}")
-                            if album_id:
-                                self.logger.debug(
-                                    f"  [ALBUM] {album_title}: Searching..."
-                                )
-                                search_response = app.search_album(album_id)
-                                self.process_search_response(
-                                    search_response, item["media_id"], app
-                                )
-                                searched = True
 
-                    if searched:
-                        self.logger.debug(
-                            f"  [TAG] Adding tag {checked_tag_id} to media ID: {item['media_id']}"
-                        )
-                        app.add_tags(item["media_id"], checked_tag_id)
-                        search_count += 1
-                        if search_count >= count:
-                            self.logger.debug(
-                                f"Reached album-based search count limit ({search_count} >= {count}), breaking."
-                            )
-                            self.logger.debug("─" * 70)
-                            self.logger.debug(
-                                f"[END] Finished: {item['title']} ({item['year']}) | ID: {item['media_id']}"
-                            )
-                            self.logger.debug("─" * 70)
-                            self.logger.debug("")
-                            break
-                else:
-                    # Sonarr: search monitored seasons individually
-                    searched = False
-                    for season in item["seasons"]:
-                        if season["monitored"]:
-                            self.logger.debug(
-                                f"  [SEASON] {season['season_number']}: Searching..."
-                            )
-                            search_response = app.search_season(
-                                item["media_id"], season["season_number"]
-                            )
-                            self.process_search_response(
-                                search_response, item["media_id"], app
-                            )
-                            searched = True
-
-                    if searched:
-                        self.logger.debug(
-                            f"  [TAG] Adding tag {checked_tag_id} to media ID: {item['media_id']}"
-                        )
-                        app.add_tags(item["media_id"], checked_tag_id)
-                        search_count += 1
-                        if search_count >= count:
-                            self.logger.debug(
-                                f"Reached series-based search count limit ({search_count} >= {count}), breaking."
-                            )
-                            self.logger.debug("─" * 70)
-                            self.logger.debug(
-                                f"[END] Finished: {item['title']} ({item['year']}) | ID: {item['media_id']}"
-                            )
-                            self.logger.debug("─" * 70)
-                            self.logger.debug("")
-                            break
-
-                self.logger.debug("─" * 70)
-                self.logger.debug(
-                    f"[END] Finished: {item['title']} ({item['year']}) | ID: {item['media_id']}"
-                )
-                self.logger.debug("─" * 70)
-                self.logger.debug("")  # Blank line after block
-                self.logger.info(
-                    f"Finished processing: {item['title']} ({item['year']})"
-                )
+                    self.logger.debug("─" * 70)
+                    self.logger.debug(
+                        f"[END] Finished: {item['title']} ({item['year']}) | ID: {item['media_id']}"
+                    )
+                    self.logger.debug("─" * 70)
+                    self.logger.debug("")  # Blank line after block
+                    self.logger.info(
+                        f"Finished processing: {item['title']} ({item['year']})"
+                    )
+            finally:
+                if db_ctx is not None:
+                    db_ctx.__exit__(None, None, None)
 
             self.logger.info(
                 f"Completed upgrade operations for {app.instance_name}. Now retrieving download queue..."

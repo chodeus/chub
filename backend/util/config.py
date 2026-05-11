@@ -105,6 +105,7 @@ class UpgradinatorrInstance(BaseModel):
     unattended: bool = False
     season_monitored_threshold: Optional[float] = None
     search_mode: str = "upgrade"  # "upgrade" | "missing" | "cutoff"
+    count_mode: str = "series_artist"  # "series_artist" | "season_album"
 
 
 class UpgradinatorrConfig(BaseModel):

@@ -399,11 +399,28 @@ export const SETTINGS_SCHEMA = [
                             'Upgrade: search all untagged items for better quality. Missing: search only items with no files. Cutoff: search items below quality profile cutoff.',
                     },
                     {
+                        key: 'count_mode',
+                        label: 'Count Mode',
+                        type: 'dropdown',
+                        options: ['series_artist', 'season_album'],
+                        defaultValue: 'series_artist',
+                        required: false,
+                        conditional: {
+                            field: 'instance',
+                            condition: 'instance_type_in',
+                            value: ['sonarr', 'lidarr'],
+                            api_lookup: 'instances',
+                        },
+                        description:
+                            'series_artist: Count caps how many series/artists are processed per run (every monitored season/album of each gets searched). season_album: Count caps the number of season/album searches — safer for trackers; partially-processed series/artists resume next run.',
+                    },
+                    {
                         key: 'count',
                         label: 'Count',
                         type: 'number',
                         required: true,
-                        description: 'Number of items to upgrade per run.',
+                        description:
+                            'Items per run. Interpreted by Count Mode: series/artists (Radarr, or series_artist mode) or individual season/album searches (season_album mode).',
                     },
                     {
                         key: 'tag_name',
