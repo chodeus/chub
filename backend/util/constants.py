@@ -36,9 +36,6 @@ tvdb_id_regex = re.compile(r"(?i)\btvdb(?:id[-_\s]*|[-_\s])(\d+)\b")
 # Matches strings like "imdb-tt1234567", "imdb_tt1234567", or "imdb tt1234567", capturing the "tt" plus digits as the IMDb ID
 imdb_id_regex: Pattern = re.compile(r"imdb[-_\s](tt\d+)")
 
-# Matches the start of a Windows drive path like "C:\" or "D:\", capturing the drive letter and colon
-windows_path_regex: Pattern = re.compile(r"^([A-Z]:\\)")
-
 # Remove bracketed blocks containing TMDB, TVDB, or IMDb IDs
 id_content_regex = re.compile(
     r"\s*[\{\[]\s*(?:"

@@ -59,10 +59,10 @@ def app_with_router():
 def test_auth_status_returns_unconfigured(monkeypatch, app_with_router, tmp_path):
     """A fresh install has no auth configured."""
     monkeypatch.setenv("CONFIG_DIR", str(tmp_path))
-    # Override load_config in auth module so it picks up tmp env
-    monkeypatch.setattr(
-        "backend.api.auth.load_config", lambda: ChubConfig()
-    )
+    # Override load_config in auth module so it picks up tmp env.
+    # ChubConfig() builds a fresh default each time it's called, so the
+    # class itself works as the patched factory.
+    monkeypatch.setattr("backend.api.auth.load_config", ChubConfig)
     app = app_with_router(auth_router.router)
     client = TestClient(app)
     resp = client.get("/api/auth/status")
