@@ -19,6 +19,8 @@ ENV/
 .archives/
 /logs/
 tests/
+!tests/
+!tests/test_jduparr.py
 screenshots/
 .extra_scripts/
 *.log

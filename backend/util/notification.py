@@ -4,6 +4,7 @@ import os
 import random
 import traceback
 from dataclasses import dataclass
+from types import SimpleNamespace
 from typing import Any, Dict, List, Tuple, Union
 from urllib.parse import quote
 
@@ -21,6 +22,8 @@ class NotifiarrConfig:
 class NotificationManager:
     def __init__(self, config, logger, module_name="main"):
         self.config = config
+        self.module_config = self._get_module_config(config, module_name)
+        self.format_config = SimpleNamespace(module_name=module_name)
         self.logger = logger
         self.module_name = module_name
         self.SEND_HANDLERS = {
@@ -28,6 +31,42 @@ class NotificationManager:
             "discord": self.send_discord_notification,
             "email": self.send_email_notification,
         }
+
+    @staticmethod
+    def _as_dict(value: Any) -> Dict[str, Any]:
+        if value is None:
+            return {}
+        if isinstance(value, dict):
+            return value
+        if hasattr(value, "model_dump"):
+            return value.model_dump(mode="python")
+        return {}
+
+    @classmethod
+    def _get_module_config(cls, config: Any, module_name: str) -> Any:
+        if not isinstance(config, dict) and hasattr(config, module_name):
+            return getattr(config, module_name)
+        if isinstance(config, dict):
+            return config.get(module_name, config)
+        return config
+
+    def _get_notification_targets(self) -> Dict[str, Any]:
+        raw_targets = None
+        if isinstance(self.config, dict):
+            raw_targets = self.config.get("notifications", {})
+        else:
+            raw_targets = getattr(self.config, "notifications", {})
+
+        targets = self._as_dict(raw_targets)
+        module_targets = targets.get(self.module_name)
+        if isinstance(module_targets, dict):
+            return module_targets
+
+        service_keys = set(self.SEND_HANDLERS)
+        if any(key in targets for key in service_keys):
+            return targets
+
+        return {}
 
     @staticmethod
     def format_module_title(name: str) -> str:
@@ -158,7 +197,7 @@ class NotificationManager:
 
         from backend.util.notification_formatting import format_for_discord
 
-        data, _ = format_for_discord(self.config, output)
+        data, _ = format_for_discord(self.format_config, output)
         parts: List[Dict[str, Any]] = []
         if isinstance(data, dict):
             for idx, fields in data.items():
@@ -224,10 +263,10 @@ class NotificationManager:
 
         from backend.util.notification_formatting import format_for_discord
 
-        data, _ = format_for_discord(self.config, output)
+        data, _ = format_for_discord(self.format_config, output)
         timestamp = datetime.utcnow().isoformat()
-        dry_run = getattr(self.config, "dry_run", False)
-        color = output.get("color", 0x00FF00)
+        dry_run = getattr(self.module_config, "dry_run", False)
+        color = output.get("color", 0x00FF00) if isinstance(output, dict) else 0x00FF00
         success = True
         messages = []
         for payload in self.build_discord_payload(
@@ -275,7 +314,7 @@ class NotificationManager:
         from backend.util.notification_formatting import format_for_email
 
         try:
-            body, success = format_for_email(self.config, output)
+            body, success = format_for_email(self.format_config, output)
             if not success:
                 self.logger.warning("[Notification] Email skipped: no formatter found.")
                 return False, "No email formatter found."
@@ -295,14 +334,9 @@ class NotificationManager:
         self, test: bool = False
     ) -> Dict[str, Union[str, Dict[str, Any]]]:
 
-        config = self.config
         logger = self.logger
         target_data: Dict[str, Union[str, Dict[str, Any]]] = {}
-        notification_targets = getattr(config, "notifications", None)
-        if notification_targets is None and isinstance(config, dict):
-            notification_targets = config.get("notifications", [])
-        if notification_targets is None:
-            notification_targets = {}
+        notification_targets = self._get_notification_targets()
         try:
             for ttype, target in notification_targets.items():
                 if not isinstance(target, dict):

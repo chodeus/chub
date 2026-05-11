@@ -20,6 +20,7 @@ def get_allowed_roots(config: ChubConfig) -> List[Path]:
     - Poster source and destination directories
     - Border replacerr source and destination directories
     - Nohl source directories
+    - Jduparr source directories and hash database location
     - GDrive source locations
     - The app config directory itself
     """
@@ -43,6 +44,11 @@ def get_allowed_roots(config: ChubConfig) -> List[Path]:
             roots.append(src)
         elif hasattr(src, "path"):
             roots.append(src.path)
+
+    # Jduparr source dirs and optional hash database location
+    roots.extend(config.jduparr.source_dirs)
+    if config.jduparr.hash_database:
+        roots.append(str(Path(config.jduparr.hash_database).expanduser().parent))
 
     # GDrive locations
     for entry in config.sync_gdrive.gdrive_list:

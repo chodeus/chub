@@ -422,15 +422,27 @@ def format_for_discord(
         """
         results: List[Dict[str, Any]] = []
         for item in o:
+            source_dirs = item.get("source_dirs")
             source_dir = item.get("source_dir", "Unknown")
             field_message = item.get("field_message", "")
             parsed_files = item.get("output", [])
             sub_count = item.get("sub_count", 0)
-            dir = os.path.basename(source_dir).capitalize()
-            header = f"_\nSource Directory: '__**{dir}**__'\n{field_message}"
+            linked_count = item.get("linked_count", 0)
+            if isinstance(source_dirs, list) and source_dirs:
+                dir_label = ", ".join(
+                    os.path.basename(os.path.normpath(path)) or path
+                    for path in source_dirs
+                )
+            else:
+                dir_label = os.path.basename(os.path.normpath(source_dir)).capitalize()
+            header = f"_\nSource Directory: '__**{dir_label}**__'\n{field_message}"
             footer = f"\nPowered by: CHUB | {get_random_joke()}"
             lines = [f"\t{line}" for line in parsed_files]
-            lines.append(f"\tTotal items re-linked in '{dir}': {sub_count}")
+            lines.append(f"\tRelink candidates in '{dir_label}': {sub_count}")
+            if linked_count:
+                lines.append(f"\tItems re-linked in '{dir_label}': {linked_count}")
+            if item.get("error"):
+                lines.append(f"\tError: {item['error']}")
             content = "\n".join(lines)
             results.extend(chunk_flat_content(header, content, footer))
         return results
@@ -1021,28 +1033,51 @@ def format_for_email(config: Any, output: Any) -> Tuple[str, bool]:
           HTML string.
         """
         total_count = 0
+        total_linked = 0
         blocks: List[str] = []
         for item in output:
             path = item.get("source_dir", "Unknown Path")
+            source_dirs = item.get("source_dirs")
             field_message = item.get("field_message", "")
             parsed_files = item.get("output", [])
             sub_count = item.get("sub_count", 0)
+            linked_count = item.get("linked_count", 0)
             total_count += sub_count
-            block: List[str] = [f"<div class='group'><h3>{os.path.basename(path)}</h3>"]
+            total_linked += linked_count
+            if isinstance(source_dirs, list) and source_dirs:
+                title = ", ".join(
+                    os.path.basename(os.path.normpath(source)) or source
+                    for source in source_dirs
+                )
+            else:
+                title = os.path.basename(path)
+            block: List[str] = [f"<div class='group'><h3>{title}</h3>"]
             block.append(f"<div class='summary'>{field_message}</div>")
             if parsed_files:
                 block.append("<div class='files'><ul>")
                 for fname in parsed_files:
                     block.append(f"<li>{fname}</li>")
                 block.append("</ul></div>")
+            if item.get("error"):
+                block.append(
+                    f"<div class='summary'><strong>Error:</strong> {item['error']}</div>"
+                )
             block.append(
-                f"<div class='summary'><strong>Total items for '{os.path.basename(path)}': {sub_count}</strong></div>"
+                f"<div class='summary'><strong>Relink candidates for '{title}': {sub_count}</strong></div>"
             )
+            if linked_count:
+                block.append(
+                    f"<div class='summary'><strong>Items relinked for '{title}': {linked_count}</strong></div>"
+                )
             block.append("</div>")
             blocks.append("".join(block))
         blocks.append(
-            f"<div class='summary'><strong>Total items relinked: {total_count}</strong></div>"
+            f"<div class='summary'><strong>Total relink candidates: {total_count}</strong></div>"
         )
+        if total_linked:
+            blocks.append(
+                f"<div class='summary'><strong>Total items relinked: {total_linked}</strong></div>"
+            )
         return "\n".join(blocks)
 
     def fmt_poster_cleanarr(output: dict) -> str:

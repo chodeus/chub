@@ -43,6 +43,23 @@ class NotificationUpdateRequest(BaseModel):
     config: dict  # Service-specific configuration
 
 
+def get_notification_section(config: ChubConfig, module_name: str) -> dict:
+    notifications = getattr(config, "notifications", None)
+    if isinstance(notifications, dict):
+        return notifications.get(module_name) or {}
+    return getattr(notifications, module_name, {}) or {}
+
+
+def set_notification_section(
+    config: ChubConfig, module_name: str, notifications_for_module: dict
+) -> None:
+    notifications = getattr(config, "notifications", None)
+    if isinstance(notifications, dict):
+        notifications[module_name] = notifications_for_module
+    else:
+        setattr(notifications, module_name, notifications_for_module)
+
+
 def get_logger(request: Request, source: str = "WEB") -> Any:
     """Get logger adapter from app state."""
     return request.app.state.logger.get_adapter(source)
@@ -342,16 +359,10 @@ async def update_module_notification(
         # Load current config
         config = load_config()
 
-        # Ensure notifications structure exists
-        if not hasattr(config, "notifications") or config.notifications is None:
-            config.notifications = {}
-
-        # Ensure module entry exists
-        if module_name not in config.notifications:
-            config.notifications[module_name] = {}
-
         # Update notification for the module and service type
-        config.notifications[module_name][service_type] = notification_config
+        module_notifications = get_notification_section(config, module_name)
+        module_notifications[service_type] = notification_config
+        set_notification_section(config, module_name, module_notifications)
 
         # Save updated configuration
         save_config(config)
@@ -425,8 +436,10 @@ async def delete_module_notification(
         # Load current config
         config = load_config()
 
+        module_notifications = get_notification_section(config, module_id)
+
         # Check if module has any notifications configured
-        if module_id not in config.notifications:
+        if not module_notifications:
             return error(
                 f"No notifications found for module '{module_id}'",
                 code="NOTIFICATION_NOT_FOUND",
@@ -434,7 +447,7 @@ async def delete_module_notification(
             )
 
         # Check if service type exists for this module
-        if service_type not in config.notifications[module_id]:
+        if service_type not in module_notifications:
             return error(
                 f"No '{service_type}' notification found for module '{module_id}'",
                 code="NOTIFICATION_NOT_FOUND",
@@ -442,11 +455,11 @@ async def delete_module_notification(
             )
 
         # Remove the notification
-        del config.notifications[module_id][service_type]
+        del module_notifications[service_type]
 
-        # Clean up empty module key if no other services remain
-        if not config.notifications[module_id]:
-            del config.notifications[module_id]
+        # ConfigNotifications has fixed module fields, so an empty dict is the
+        # durable representation of "no notifications for this module."
+        set_notification_section(config, module_id, module_notifications)
 
         # Save updated configuration
         save_config(config)
