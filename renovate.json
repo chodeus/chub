@@ -5,6 +5,17 @@
   ],
   "packageRules": [
     {
+      "matchManagers": [
+        "npm"
+      ],
+      "matchPackageNames": [
+        "eslint",
+        "@eslint/js"
+      ],
+      "allowedVersions": "<10",
+      "description": "ESLint v10 is not compatible with the current frontend lint setup. Keep ESLint packages on v9 until the config is migrated."
+    },
+    {
       "matchDatasources": [
         "docker"
       ],
