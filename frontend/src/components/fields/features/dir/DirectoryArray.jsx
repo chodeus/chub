@@ -44,7 +44,8 @@ const SortableDirectoryItem = React.memo(
         onMoveUp,
         onMoveDown,
         onRemove,
-        onClick,
+        onBrowseClick,
+        onPathChange,
         disabled,
         invalid,
         placeholder,
@@ -104,11 +105,10 @@ const SortableDirectoryItem = React.memo(
                         value={directory || ''}
                         placeholder={placeholder}
                         disabled={disabled}
-                        readOnly={true}
-                        onClick={() => onClick(index)}
+                        onChange={e => onPathChange(index, e.target.value)}
                         invalid={invalid}
                         aria-label={`${label} ${index + 1}`}
-                        className={`${modeOptions ? 'md:min-w-30' : ''} ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                        className={modeOptions ? 'md:min-w-30' : ''}
                     />
 
                     {/* Mode selection - only show if modeOptions provided */}
@@ -127,6 +127,15 @@ const SortableDirectoryItem = React.memo(
                         />
                     )}
                 </div>
+
+                <FieldButton
+                    onClick={() => onBrowseClick(index)}
+                    disabled={disabled}
+                    ariaLabel={`Browse for ${label} ${index + 1}`}
+                    className="flex-shrink-0 self-start"
+                >
+                    <span className="material-symbols-outlined text-base">folder_open</span>
+                </FieldButton>
 
                 {/* Touch devices: Down Button (right side) */}
                 {enableReordering && isTouch && (
@@ -176,7 +185,8 @@ const DirectoryItem = React.memo(
         itemId,
         canRemoveDirectory,
         onRemove,
-        onClick,
+        onBrowseClick,
+        onPathChange,
         disabled,
         invalid,
         placeholder,
@@ -200,11 +210,10 @@ const DirectoryItem = React.memo(
                         value={directory || ''}
                         placeholder={placeholder}
                         disabled={disabled}
-                        readOnly={true}
-                        onClick={() => onClick(index)}
+                        onChange={e => onPathChange(index, e.target.value)}
                         invalid={invalid}
                         aria-label={`${label} ${index + 1}`}
-                        className={`${modeOptions ? 'md:min-w-30' : ''} ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                        className={modeOptions ? 'md:min-w-30' : ''}
                     />
 
                     {/* Mode selection - only show if modeOptions provided */}
@@ -223,6 +232,15 @@ const DirectoryItem = React.memo(
                         />
                     )}
                 </div>
+
+                <FieldButton
+                    onClick={() => onBrowseClick(index)}
+                    disabled={disabled}
+                    ariaLabel={`Browse for ${label} ${index + 1}`}
+                    className="flex-shrink-0 self-start"
+                >
+                    <span className="material-symbols-outlined text-base">folder_open</span>
+                </FieldButton>
 
                 <RemoveButton
                     onClick={() => onRemove(index)}
@@ -315,21 +333,30 @@ export const DirectoryArray = React.memo(
             [directories, minDirectories, onChange]
         );
 
-        // Handle changing a directory at specific index - currently unused
-        // const handleDirectoryChange = useCallback(
-        //     (index, newPath) => {
-        //         const newDirectories = [...directories];
-        //         newDirectories[index] = newPath;
-        //         onChange?.(newDirectories);
-        //     },
-        //     [directories, onChange]
-        // );
+        // Handle changing a directory at specific index
+        const handleDirectoryChange = useCallback(
+            (index, newPath) => {
+                const newDirectories = [...directories];
+                newDirectories[index] = newPath;
+                onChange?.(newDirectories);
+            },
+            [directories, onChange]
+        );
 
         // Handle clicking on directory input to open modal
         const handleDirectoryClick = useCallback(index => {
             setSelectedIndex(index);
             setModalOpen(true);
         }, []);
+
+        const handlePickerChange = useCallback(
+            newPath => {
+                if (selectedIndex === null) return;
+                handleDirectoryChange(selectedIndex, newPath);
+                setModalOpen(false);
+            },
+            [handleDirectoryChange, selectedIndex]
+        );
 
         const canAddDirectory = !disabled;
         const canRemoveDirectory = () => directories.length > minDirectories && !disabled;
@@ -392,7 +419,8 @@ export const DirectoryArray = React.memo(
                                             onMoveUp={onMoveUp}
                                             onMoveDown={onMoveDown}
                                             onRemove={handleRemoveDirectory}
-                                            onClick={handleDirectoryClick}
+                                            onBrowseClick={handleDirectoryClick}
+                                            onPathChange={handleDirectoryChange}
                                             disabled={disabled}
                                             invalid={invalid}
                                             placeholder={placeholder}
@@ -415,7 +443,8 @@ export const DirectoryArray = React.memo(
                                             itemId={itemId}
                                             canRemoveDirectory={canRemoveDirectory(index)}
                                             onRemove={handleRemoveDirectory}
-                                            onClick={handleDirectoryClick}
+                                            onBrowseClick={handleDirectoryClick}
+                                            onPathChange={handleDirectoryChange}
                                             disabled={disabled}
                                             invalid={invalid}
                                             placeholder={placeholder}
@@ -461,7 +490,7 @@ export const DirectoryArray = React.memo(
                                         description: 'Browse and select a directory',
                                     }}
                                     value={currentValue}
-                                    onChange={() => {}}
+                                    onChange={handlePickerChange}
                                 />
                             )}
                         </div>

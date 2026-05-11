@@ -700,7 +700,15 @@ export const SETTINGS_SCHEMA = [
                 type: 'dirlist',
                 required: true,
 
-                description: 'Directories to scan for duplicate files.',
+                description:
+                    'Directories to scan together for duplicate media files. Duplicates across these directories can be hardlinked.',
+            },
+            {
+                key: 'hash_database',
+                label: 'Hash Database',
+                type: 'text',
+                description:
+                    'Optional jdupes hash database file path. Leave blank unless you want jdupes to reuse a persistent hash cache.',
             },
         ],
     },

@@ -34,8 +34,8 @@ export const DirPickerField = React.memo(({ field, value, onChange, disabled = f
     }, []);
 
     useEffect(() => {
-        loadDirectory(currentPath);
-    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+        loadDirectory(value || '/');
+    }, [loadDirectory, value]);
 
     const handleNavigate = useCallback(
         dirName => {

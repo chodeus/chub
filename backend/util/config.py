@@ -170,8 +170,14 @@ class HealthCheckarrConfig(BaseModel):
 class JduparrConfig(BaseModel):
     log_level: str = "info"
     dry_run: bool = False
-    hash_database: Optional[str] = None
-    source_dirs: Optional[List[str]] = None
+    hash_database: Optional[str] = Field(
+        default=None,
+        description="Optional jdupes hash database file path.",
+    )
+    source_dirs: List[str] = Field(
+        default_factory=list,
+        description="Directories to scan together for duplicate media files.",
+    )
 
 
 class NestarrPlexInstance(BaseModel):
