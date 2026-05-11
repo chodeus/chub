@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional
 
 from backend.util.arr import create_arr_client
 from backend.util.base_module import ChubModule
-from backend.util.constants import episode_regex, season_regex
+from backend.util.constants import episode_regex, season_number_regex
 from backend.util.helper import (
     create_table,
     normalize_titles,
@@ -18,11 +18,153 @@ from backend.util.logger import Logger
 from backend.util.notification import NotificationManager
 
 VIDEO_EXTS = (".mkv", ".mp4")
+VALID_SOURCE_MODES = {"scan", "resolve"}
+SEASON_EPISODE_REGEX = re.compile(r"\b[Ss](\d{1,4})[Ee](\d{1,2})\b")
 
 
 class Nohl(ChubModule):
     def __init__(self, logger: Optional[Logger] = None) -> None:
         super().__init__(logger=logger)
+
+    @staticmethod
+    def _video_files_in_dir(path: str, logger: Logger) -> List[str]:
+        try:
+            files = [
+                file
+                for file in os.listdir(path)
+                if os.path.isfile(os.path.join(path, file))
+                and not file.startswith(".")
+                and file.lower().endswith(VIDEO_EXTS)
+            ]
+        except OSError as e:
+            logger.error(f"Error reading directory '{path}': {e}")
+            return []
+
+        nohl_files = []
+        for file in files:
+            file_path = os.path.join(path, file)
+            try:
+                st = os.stat(file_path)
+                if st.st_nlink == 1:
+                    nohl_files.append(file_path)
+            except OSError as e:
+                logger.warning(f"Skipping file '{file_path}': {e}")
+        return nohl_files
+
+    @staticmethod
+    def _season_number_from_folder(folder: str) -> Optional[int]:
+        season = season_number_regex.search(folder)
+        if not season:
+            return None
+        try:
+            return int(season.group(1) or 0)
+        except (TypeError, ValueError):
+            return 0
+
+    @staticmethod
+    def _episode_number_from_file(file_path: str) -> Optional[int]:
+        episode_match = re.search(episode_regex, os.path.basename(file_path))
+        if episode_match is None:
+            return None
+        try:
+            return int(episode_match.group(1))
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _season_episode_from_file(file_path: str) -> Optional[tuple[int, int]]:
+        episode_match = SEASON_EPISODE_REGEX.search(os.path.basename(file_path))
+        if episode_match is None:
+            return None
+        try:
+            return int(episode_match.group(1)), int(episode_match.group(2))
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _root_hint(path: str) -> str:
+        parts = [part for part in os.path.normpath(path).split(os.sep) if part]
+        if len(parts) >= 2:
+            return os.path.join(*parts[-2:])
+        return os.path.normpath(path)
+
+    @staticmethod
+    def _config_list(value: Any) -> List[str]:
+        if isinstance(value, str):
+            return [
+                item.strip()
+                for item in re.split(r"[\n,]", value)
+                if item and item.strip()
+            ]
+        if value is None:
+            return []
+        return [str(item).strip() for item in value if str(item).strip()]
+
+    @staticmethod
+    def _search_operation_count(
+        search_media: List[Dict[str, Any]], instance_type: str
+    ) -> int:
+        if instance_type == "sonarr":
+            return sum(len(item.get("seasons", [])) for item in search_media)
+        return len(search_media)
+
+    @staticmethod
+    def _apply_search_limit(
+        data_list: Dict[str, List[Dict[str, Any]]],
+        search_limit: Any,
+        instance_type: str,
+        logger: Logger,
+    ) -> None:
+        if search_limit is None:
+            return
+        try:
+            limit = int(search_limit)
+        except (TypeError, ValueError):
+            logger.warning(f"Invalid search limit '{search_limit}', ignoring limit.")
+            return
+
+        search_media = data_list["search_media"]
+        operation_count = Nohl._search_operation_count(search_media, instance_type)
+        if operation_count <= limit:
+            return
+
+        logger.info(
+            f"Search limit applied: reducing search operations from {operation_count} to {limit}."
+        )
+        if instance_type != "sonarr":
+            data_list["search_media"] = search_media[: max(limit, 0)]
+            return
+
+        remaining = max(limit, 0)
+        limited_items = []
+        for item in search_media:
+            if remaining <= 0:
+                break
+            seasons = item.get("seasons", [])
+            limited_seasons = seasons[:remaining]
+            if limited_seasons:
+                limited_item = dict(item)
+                limited_item["seasons"] = limited_seasons
+                limited_items.append(limited_item)
+                remaining -= len(limited_seasons)
+        data_list["search_media"] = limited_items
+
+    @staticmethod
+    def _season_entry(season_number: int, nohl_files: List[str]) -> Dict[str, Any]:
+        episodes = [
+            episode
+            for episode in (
+                Nohl._episode_number_from_file(file_path) for file_path in nohl_files
+            )
+            if episode is not None
+        ]
+        episodes.sort(key=int)
+        return {
+            "season_number": season_number,
+            "episodes": episodes,
+            "season_pack": bool(nohl_files and not episodes),
+            "nohl": nohl_files,
+        }
 
     @staticmethod
     def find_nohl_files(
@@ -52,7 +194,7 @@ class Nohl(ChubModule):
             if year_match:
                 try:
                     year = int(year_match.group(1))
-                    title = item[:year_match.start(1)].rstrip(" .-_()")
+                    title = item[: year_match.start(1)].rstrip(" .-_()")
                 except ValueError:
                     year = 0
                     title = item
@@ -63,90 +205,72 @@ class Nohl(ChubModule):
                 "title": title,
                 "year": year,
                 "normalized_title": normalize_titles(title),
-                "root_path": os.path.join(*path.rstrip(os.sep).split(os.sep)[-2:]),
+                "root_path": Nohl._root_hint(path.rstrip(os.sep)),
+                "source_path": path.rstrip(os.sep),
                 "path": os.path.join(path, item),
             }
             item_path = os.path.join(path, item)
-            if os.path.isdir(item_path) and any(
-                os.path.isdir(os.path.join(item_path, sub_folder))
-                for sub_folder in os.listdir(item_path)
-            ):
-                sub_folders = [
-                    sub_folder
-                    for sub_folder in os.listdir(item_path)
-                    if os.path.isdir(os.path.join(item_path, sub_folder))
-                    and not sub_folder.startswith(".")
-                ]
+            try:
+                child_names = os.listdir(item_path)
+            except OSError as e:
+                logger.error(f"Error reading directory '{item_path}': {e}")
+                continue
+
+            sub_folders = [
+                sub_folder
+                for sub_folder in child_names
+                if os.path.isdir(os.path.join(item_path, sub_folder))
+                and not sub_folder.startswith(".")
+            ]
+            season_folders = [
+                (sub_folder, season_number)
+                for sub_folder in sub_folders
+                for season_number in [Nohl._season_number_from_folder(sub_folder)]
+                if season_number is not None
+            ]
+            direct_nohl_files = Nohl._video_files_in_dir(item_path, logger)
+
+            flat_episode_groups: Dict[int, Dict[str, Any]] = {}
+            for file_path in direct_nohl_files:
+                parsed = Nohl._season_episode_from_file(file_path)
+                if parsed is None:
+                    continue
+                season_number, episode_number = parsed
+                flat_episode_groups.setdefault(
+                    season_number, {"episodes": [], "nohl": []}
+                )
+                flat_episode_groups[season_number]["episodes"].append(episode_number)
+                flat_episode_groups[season_number]["nohl"].append(file_path)
+
+            if season_folders or flat_episode_groups:
                 asset_list["season_info"] = []
-                for sub_folder in sub_folders:
+                for sub_folder, season_number in season_folders:
                     sub_folder_path = os.path.join(item_path, sub_folder)
-                    sub_folder_files = [
-                        file
-                        for file in os.listdir(sub_folder_path)
-                        if os.path.isfile(os.path.join(sub_folder_path, file))
-                        and not file.startswith(".")
-                    ]
-                    season = re.search(season_regex, sub_folder)
-                    try:
-                        season_number = int(season.group(1))
-                    except AttributeError:
-                        season_number = 0
-                    nohl_files = []
-                    for file in sub_folder_files:
-                        if not file.endswith(VIDEO_EXTS):
-                            continue
-                        file_path = os.path.join(sub_folder_path, file)
-                        try:
-                            st = os.stat(file_path)
-                            if st.st_nlink == 1:
-                                nohl_files.append(file_path)
-                        except Exception:
-                            continue
+                    nohl_files = Nohl._video_files_in_dir(sub_folder_path, logger)
                     if nohl_files:
                         logger.debug(
                             f"Found {len(nohl_files)} non-hardlinked files in '{sub_folder_path}'"
                         )
-                    episodes = []
-                    for file in nohl_files:
-                        try:
-                            episode_match = re.search(episode_regex, file)
-                            if episode_match is not None:
-                                episode = int(episode_match.group(1))
-                                episodes.append(episode)
-                        except Exception as e:
-                            logger.error(f"{e}")
-                            logger.error(f"Error processing file: {file}.")
-                            continue
-                    season_list = {
-                        "season_number": season_number,
-                        "episodes": episodes,
-                        "nohl": nohl_files,
-                    }
                     if nohl_files:
-                        asset_list["season_info"].append(season_list)
+                        asset_list["season_info"].append(
+                            Nohl._season_entry(season_number, nohl_files)
+                        )
+                for season_number, season_data in flat_episode_groups.items():
+                    season_data["episodes"].sort(key=int)
+                    asset_list["season_info"].append(
+                        {
+                            "season_number": season_number,
+                            "episodes": season_data["episodes"],
+                            "season_pack": False,
+                            "nohl": season_data["nohl"],
+                        }
+                    )
                 if asset_list["season_info"] and any(
                     season["nohl"] for season in asset_list["season_info"]
                 ):
                     nohl_data["series"].append(asset_list)
             else:
-                files_path = item_path
-                files = [
-                    file
-                    for file in os.listdir(files_path)
-                    if os.path.isfile(os.path.join(files_path, file))
-                    and not file.startswith(".")
-                ]
-                nohl_files = []
-                for file in files:
-                    if not file.endswith(VIDEO_EXTS):
-                        continue
-                    file_path = os.path.join(files_path, file)
-                    try:
-                        st = os.stat(file_path)
-                        if st.st_nlink == 1:
-                            nohl_files.append(file_path)
-                    except Exception:
-                        continue
+                nohl_files = direct_nohl_files
                 if nohl_files:
                     logger.debug(
                         f"Found {len(nohl_files)} non-hardlinked files in '{item_path}'"
@@ -182,22 +306,26 @@ class Nohl(ChubModule):
         source_entries = []
         for entry in config.source_dirs:
             if isinstance(entry, dict):
-                source_entries.append(
-                    {
-                        "path": entry["path"],
-                        "mode": entry.get("mode", "resolve"),
-                    }
-                )
+                path = entry.get("path", "")
+                mode = entry.get("mode") or "resolve"
             elif hasattr(entry, "path"):
-                # Handle Pydantic NohlSourceDir models
-                source_entries.append(
-                    {
-                        "path": entry.path,
-                        "mode": getattr(entry, "mode", "resolve"),
-                    }
-                )
+                path = entry.path
+                mode = getattr(entry, "mode", None) or "resolve"
             else:
-                source_entries.append({"path": str(entry), "mode": "resolve"})
+                path = str(entry)
+                mode = "resolve"
+
+            path = str(path).strip()
+            mode = str(mode).strip().lower()
+            if not path:
+                continue
+            if mode not in VALID_SOURCE_MODES:
+                raise ValueError(
+                    f"Invalid Nohl source directory mode '{mode}' for path '{path}'. "
+                    "Expected 'scan' or 'resolve'."
+                )
+            source_entries.append({"path": path, "mode": mode})
+
         scan_entries = [e for e in source_entries if e["mode"] == "scan"]
         resolve_entries = [e for e in source_entries if e["mode"] == "resolve"]
         return scan_entries, resolve_entries
@@ -251,6 +379,11 @@ class Nohl(ChubModule):
             )
 
             if instance_type == "radarr":
+                if not item.get("file_ids"):
+                    logger.warning(
+                        f" No movie file ID found for '{title}' ({year}) - skipping."
+                    )
+                    continue
                 if config.dry_run:
                     logger.debug(
                         f"[Dry Run] Would search and delete: '{title}' ({year}), file IDs: {item['file_ids']}"
@@ -269,7 +402,10 @@ class Nohl(ChubModule):
                         f" Refreshing movie: '{title}' ({year}) [media_id={item['media_id']}]"
                     )
                     results = app.refresh_items(item["media_id"])
-                    ready = app.wait_for_command(results["id"])
+                    command_id = (
+                        results.get("id") if isinstance(results, dict) else None
+                    )
+                    ready = bool(command_id and app.wait_for_command(command_id))
                     if ready:
                         logger.debug(
                             f" Initiating search for movie: '{title}' ({year}), media_id: {item['media_id']}"
@@ -296,12 +432,25 @@ class Nohl(ChubModule):
                     snum = season["season_number"]
                     season_pack = season.get("season_pack", False)
                     file_ids = list(
-                        {ep["episode_file_id"] for ep in season["episode_data"]}
+                        {
+                            ep.get("episode_file_id")
+                            for ep in season["episode_data"]
+                            if ep.get("episode_file_id")
+                        }
                     )
-                    episode_ids = [ep["episode_id"] for ep in season["episode_data"]]
+                    episode_ids = [
+                        ep.get("episode_id")
+                        for ep in season["episode_data"]
+                        if ep.get("episode_id")
+                    ]
                     episode_numbers = [
                         ep.get("episode_number") for ep in season["episode_data"]
                     ]
+                    if not file_ids:
+                        logger.warning(
+                            f" No episode file IDs found for '{title}' ({year}) Season {snum} - skipping."
+                        )
+                        continue
                     if season_pack:
                         if config.dry_run:
                             logger.debug(
@@ -310,6 +459,7 @@ class Nohl(ChubModule):
                             per_item_info_logs.append(
                                 f"[Dry Run] Would search season pack: '{title}' ({year}) Season {snum} [media_id={item.get('media_id')}]"
                             )
+                            searched_this_item = True
                         else:
                             logger.debug(
                                 f" Deleting episode file IDs: {file_ids} for Season {snum} of '{title}' ({year}) [media_id={item.get('media_id')}]"
@@ -319,7 +469,12 @@ class Nohl(ChubModule):
                                 f" Refreshing series: '{title}' ({year}) [media_id={item['media_id']}]"
                             )
                             results = app.refresh_items(item["media_id"])
-                            ready = app.wait_for_command(results["id"])
+                            command_id = (
+                                results.get("id") if isinstance(results, dict) else None
+                            )
+                            ready = bool(
+                                command_id and app.wait_for_command(command_id)
+                            )
                             if ready:
                                 logger.debug(
                                     f" Initiating season pack search for: '{title}' ({year}) Season {snum} [media_id={item['media_id']}]"
@@ -328,11 +483,11 @@ class Nohl(ChubModule):
                                 per_item_info_logs.append(
                                     f" Searched season pack: '{title}' ({year}) Season {snum} [media_id={item['media_id']}]"
                                 )
+                                searched_this_item = True
                             else:
                                 logger.warning(
                                     f" Command for season pack '{title}' ({year}) Season {snum} was not ready in time."
                                 )
-                        searched_this_item = True
                     else:
                         if config.dry_run:
                             logger.debug(
@@ -341,7 +496,13 @@ class Nohl(ChubModule):
                             per_item_info_logs.append(
                                 f"[Dry Run] Would search episodes {episode_numbers} of '{title}' ({year}) Season {snum} [media_id={item.get('media_id')}]"
                             )
+                            searched_this_item = True
                         else:
+                            if not episode_ids:
+                                logger.warning(
+                                    f" No episode IDs found for '{title}' ({year}) Season {snum} - skipping."
+                                )
+                                continue
                             logger.debug(
                                 f" Deleting episode file IDs: {file_ids} for episodes {episode_numbers} in Season {snum} of '{title}' ({year}) [media_id={item.get('media_id')}]"
                             )
@@ -350,7 +511,12 @@ class Nohl(ChubModule):
                                 f" Refreshing series: '{title}' ({year}) [media_id={item['media_id']}]"
                             )
                             results = app.refresh_items(item["media_id"])
-                            ready = app.wait_for_command(results["id"])
+                            command_id = (
+                                results.get("id") if isinstance(results, dict) else None
+                            )
+                            ready = bool(
+                                command_id and app.wait_for_command(command_id)
+                            )
                             if ready:
                                 logger.debug(
                                     f" Initiating episode search for: '{title}' ({year}) Episodes {episode_ids} in Season {snum} [media_id={item['media_id']}]"
@@ -359,11 +525,11 @@ class Nohl(ChubModule):
                                 per_item_info_logs.append(
                                     f" Searched episodes {episode_numbers} of '{title}' ({year}) Season {snum} [media_id={item['media_id']}]"
                                 )
+                                searched_this_item = True
                             else:
                                 logger.warning(
                                     f" Command for episodes '{title}' ({year}) Season {snum} was not ready in time."
                                 )
-                        searched_this_item = True
                 if searched_this_item:
                     searched_for.append(item)
                     searches += 1
@@ -382,12 +548,51 @@ class Nohl(ChubModule):
         logger.debug(
             f"Filtering {len(nohl_data)} non-hardlinked items against {len(media_dict)} media items from {instance_type.title()}."
         )
-        quality_profiles = app.get_quality_profile_names()
+        quality_profiles = app.get_quality_profile_names() or {}
         exclude_profile_ids = [
             quality_profiles[profile]
-            for profile in getattr(config, "exclude_profiles", [])
+            for profile in Nohl._config_list(getattr(config, "exclude_profiles", []))
             if profile in quality_profiles
         ]
+
+        excluded_movies = set(Nohl._config_list(getattr(config, "exclude_movies", [])))
+        excluded_series = set(Nohl._config_list(getattr(config, "exclude_series", [])))
+
+        def title_matches(media_item, nohl_item):
+            nohl_title = nohl_item.get("normalized_title")
+            candidates = {
+                media_item.get("normalized_title"),
+                media_item.get("normalized_folder"),
+            }
+            candidates.update(media_item.get("normalized_alternate_titles") or [])
+            return nohl_title in {candidate for candidate in candidates if candidate}
+
+        def year_matches(media_item, nohl_item):
+            nohl_year = nohl_item.get("year") or 0
+            if not nohl_year:
+                return True
+            years = {
+                media_item.get("year"),
+                media_item.get("secondary_year"),
+            }
+            return nohl_year in {year for year in years if year}
+
+        def root_matches(media_item, nohl_item):
+            media_root = media_item.get("root_folder") or ""
+            if not media_root:
+                return True
+
+            item_path = nohl_item.get("path") or ""
+            try:
+                root_norm = os.path.normcase(os.path.normpath(media_root))
+                item_norm = os.path.normcase(os.path.normpath(item_path))
+                if item_norm == root_norm or item_norm.startswith(root_norm + os.sep):
+                    return True
+            except (TypeError, ValueError):
+                pass
+
+            root_hint = nohl_item.get("root_path") or ""
+            return bool(root_hint and root_hint in media_root)
 
         def build_season_filtering(media_season, file_season):
             season_data = []
@@ -400,22 +605,47 @@ class Nohl(ChubModule):
                     }
                 )
             else:
-                if media_season.get("season_pack"):
-                    season_data.append(
-                        {
-                            "season_number": media_season["season_number"],
-                            "season_pack": True,
-                            "episode_data": media_season["episode_data"],
-                        }
-                    )
+                if file_season.get("season_pack"):
+                    episode_data = [
+                        episode
+                        for episode in media_season.get("episode_data", [])
+                        if episode.get("monitored")
+                        and episode.get("episode_file_id")
+                        and episode.get("episode_id")
+                    ]
+                    filtered_episodes = [
+                        episode
+                        for episode in media_season.get("episode_data", [])
+                        if not episode.get("monitored")
+                    ]
+                    if filtered_episodes:
+                        filtered_seasons.append(
+                            {
+                                "season_number": media_season["season_number"],
+                                "monitored": True,
+                                "episodes": filtered_episodes,
+                            }
+                        )
+                    if episode_data:
+                        season_data.append(
+                            {
+                                "season_number": media_season["season_number"],
+                                "season_pack": True,
+                                "episode_data": episode_data,
+                            }
+                        )
                 else:
                     episode_set = set(file_season.get("episodes", []))
                     filtered_episodes = []
                     episode_data = []
                     for episode in media_season.get("episode_data", []):
+                        if episode.get("episode_number") not in episode_set:
+                            continue
                         if not episode.get("monitored"):
                             filtered_episodes.append(episode)
-                        elif episode.get("episode_number") in episode_set:
+                        elif episode.get("episode_file_id") and episode.get(
+                            "episode_id"
+                        ):
                             episode_data.append(episode)
                     if filtered_episodes:
                         filtered_seasons.append(
@@ -445,12 +675,10 @@ class Nohl(ChubModule):
             logger=logger,
         ):
             for media_item in media_dict:
-                if media_item.get("normalized_title") == nohl_item.get(
-                    "normalized_title"
-                ) and media_item.get("year") == nohl_item.get("year"):
-                    if (
-                        nohl_item["root_path"] not in media_item.get("root_folder", "")
-                    ):
+                if title_matches(media_item, nohl_item) and year_matches(
+                    media_item, nohl_item
+                ):
+                    if not root_matches(media_item, nohl_item):
                         logger.debug(
                             f"Skipped: '{media_item['title']}' ({media_item['year']}) [root folder mismatch]"
                         )
@@ -461,14 +689,14 @@ class Nohl(ChubModule):
                         reasons.append("not monitored")
                     if (
                         instance_type == "radarr"
-                        and getattr(config, "exclude_movies", [])
-                        and media_item["title"] in config.exclude_movies
+                        and excluded_movies
+                        and media_item["title"] in excluded_movies
                     ):
                         reasons.append("excluded by title")
                     if (
                         instance_type == "sonarr"
-                        and getattr(config, "exclude_series", [])
-                        and media_item["title"] in config.exclude_series
+                        and excluded_series
+                        and media_item["title"] in excluded_series
                     ):
                         reasons.append("excluded by title")
                     if media_item.get("quality_profile") in exclude_profile_ids:
@@ -485,7 +713,11 @@ class Nohl(ChubModule):
                                 ),
                                 "quality_profile": (
                                     next(
-                                        (name for name, pid in quality_profiles.items() if pid == media_item.get("quality_profile")),
+                                        (
+                                            name
+                                            for name, pid in quality_profiles.items()
+                                            if pid == media_item.get("quality_profile")
+                                        ),
                                         str(media_item.get("quality_profile")),
                                     )
                                     if media_item.get("quality_profile")
@@ -501,6 +733,21 @@ class Nohl(ChubModule):
 
                     if instance_type == "radarr":
                         file_ids = media_item["file_id"]
+                        if not file_ids:
+                            data_list["filtered_media"].append(
+                                {
+                                    "title": media_item["title"],
+                                    "year": media_item["year"],
+                                    "monitored": media_item["monitored"],
+                                    "excluded": False,
+                                    "quality_profile": None,
+                                    "missing_file_id": True,
+                                }
+                            )
+                            logger.warning(
+                                f"Filtered out: '{media_item['title']}' ({media_item['year']}), missing movie file ID"
+                            )
+                            continue
                         data_list["search_media"].append(
                             {
                                 "media_id": media_item["media_id"],
@@ -513,8 +760,8 @@ class Nohl(ChubModule):
                             f"Will process '{media_item['title']}' ({media_item['year']}), file_ids={file_ids}, media_id={media_item['media_id']}"
                         )
                     elif instance_type == "sonarr":
-                        media_seasons_info = media_item["seasons"]
-                        file_season_info = nohl_item["season_info"]
+                        media_seasons_info = media_item.get("seasons") or []
+                        file_season_info = nohl_item.get("season_info") or []
                         season_data = []
                         filtered_seasons = []
                         for media_season in media_seasons_info:
@@ -553,20 +800,21 @@ class Nohl(ChubModule):
                                 f" Will process '{media_item['title']}' ({media_item['year']}), seasons: {[s['season_number'] for s in season_data]}, media_id={media_item['media_id']}"
                             )
 
-        search_limit = getattr(config, "searches", None)
-        if search_limit is not None and len(data_list["search_media"]) > search_limit:
-            logger.info(
-                f"Search limit applied: reducing search_media from {len(data_list['search_media'])} to {search_limit}."
-            )
-            data_list["search_media"] = data_list["search_media"][:search_limit]
+        Nohl._apply_search_limit(
+            data_list, getattr(config, "searches", None), instance_type, logger
+        )
 
         logger.debug(
-            f"Filtering complete. Searchable items: {len(data_list['search_media'])}, Filtered/excluded items: {len(data_list['filtered_media'])}"
+            f"Filtering complete. Searchable items: {len(data_list['search_media'])}, "
+            f"search operations: {Nohl._search_operation_count(data_list['search_media'], instance_type)}, "
+            f"Filtered/excluded items: {len(data_list['filtered_media'])}"
         )
         return data_list
 
     @staticmethod
-    def handle_messages(output: Dict[str, Any], logger: Logger, print_files: bool = True) -> None:
+    def handle_messages(
+        output: Dict[str, Any], logger: Logger, print_files: bool = True
+    ) -> None:
         # Print scanned section
         if output.get("scanned", {}):
             logger.info(create_table([["Scanned Non-Hardlinked Files"]]))
@@ -574,7 +822,9 @@ class Nohl(ChubModule):
                 logger.info(f"Scanning results for: {path}")
                 for item in results.get("movies", []):
                     nohl_count = len(item.get("nohl", []))
-                    logger.info(f"{item['title']} ({item['year']}) [{nohl_count} file(s)]")
+                    logger.info(
+                        f"{item['title']} ({item['year']}) [{nohl_count} file(s)]"
+                    )
                     if print_files and item.get("nohl"):
                         for file_path in item["nohl"]:
                             logger.info(f"\t{os.path.basename(file_path)}")
@@ -584,7 +834,9 @@ class Nohl(ChubModule):
                     for season in item.get("season_info", []):
                         if season.get("nohl"):
                             nohl_count = len(season["nohl"])
-                            logger.info(f"\tSeason {season['season_number']} [{nohl_count} file(s)]")
+                            logger.info(
+                                f"\tSeason {season['season_number']} [{nohl_count} file(s)]"
+                            )
                             if print_files:
                                 for file_path in season["nohl"]:
                                     logger.info(f"\t\t{os.path.basename(file_path)}")
@@ -727,7 +979,9 @@ class Nohl(ChubModule):
         print_json(output_dict, logger, "nohl", "output_dict")
 
     @classmethod
-    def process_arr_instances(cls, config, nohl_list, logger, full_config_instances=None):
+    def process_arr_instances(
+        cls, config, nohl_list, logger, full_config_instances=None
+    ):
         output_dict: Dict[str, Any] = {}
         if config.instances:
             instance_index = cls.build_instance_index(
@@ -738,14 +992,24 @@ class Nohl(ChubModule):
                     instance if isinstance(instance, str) else list(instance.keys())[0]
                 )
                 if instance_name not in instance_index:
-                    logger.warning(f"Instance '{instance_name}' not found in config. Skipping.")
+                    logger.warning(
+                        f"Instance '{instance_name}' not found in config. Skipping."
+                    )
                     continue
                 instance_type, instance_settings = instance_index[instance_name]
                 if instance_type not in ("radarr", "sonarr"):
                     continue
                 # Use attribute access for Pydantic InstanceDetail models
-                inst_url = getattr(instance_settings, "url", None) or (instance_settings.get("url") if isinstance(instance_settings, dict) else None)
-                inst_api = getattr(instance_settings, "api", None) or (instance_settings.get("api") if isinstance(instance_settings, dict) else None)
+                inst_url = getattr(instance_settings, "url", None) or (
+                    instance_settings.get("url")
+                    if isinstance(instance_settings, dict)
+                    else None
+                )
+                inst_api = getattr(instance_settings, "api", None) or (
+                    instance_settings.get("api")
+                    if isinstance(instance_settings, dict)
+                    else None
+                )
                 app = create_arr_client(inst_url, inst_api, logger)
                 if not (app and app.connect_status):
                     logger.warning(f"Skipping {instance_name} (not connected)")
@@ -756,7 +1020,9 @@ class Nohl(ChubModule):
                 nohl_data = (
                     nohl_list["movies"]
                     if instance_type == "radarr"
-                    else nohl_list["series"] if instance_type == "sonarr" else None
+                    else nohl_list["series"]
+                    if instance_type == "sonarr"
+                    else None
                 )
                 if not nohl_data:
                     logger.info(
@@ -814,7 +1080,9 @@ class Nohl(ChubModule):
                 self.logger.info("Cancellation requested before ARR phase.")
                 return
             output_dict = self.process_arr_instances(
-                self.config, nohl_list, self.logger,
+                self.config,
+                nohl_list,
+                self.logger,
                 full_config_instances=self.full_config.instances,
             )
             if self.config.log_level.lower() == "debug":
@@ -825,16 +1093,17 @@ class Nohl(ChubModule):
                 "resolved": output_dict,
                 "summary": summary,
             }
-            self.handle_messages(final_output, self.logger, print_files=self.config.print_files)
-            manager = NotificationManager(
-                self.config, self.logger, module_name="nohl"
+            self.handle_messages(
+                final_output, self.logger, print_files=self.config.print_files
             )
+            manager = NotificationManager(self.config, self.logger, module_name="nohl")
             manager.send_notification(final_output)
         except KeyboardInterrupt:
             print("Keyboard Interrupt detected. Exiting...")
-            return
+            raise
         except Exception:
             self.logger.error("\n\nAn error occurred:\n", exc_info=True)
             self.logger.error("\n\n")
+            raise
         finally:
             self.logger.log_outro()

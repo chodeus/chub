@@ -552,6 +552,7 @@ export const SETTINGS_SCHEMA = [
                 label: 'Source Directories',
                 type: 'dirlist_options',
                 options: ['scan', 'resolve'],
+                default_mode: 'resolve',
                 required: true,
 
                 description: 'Directories to scan or resolve for files.',
