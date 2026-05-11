@@ -2,6 +2,13 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.10.2](https://github.com/chodeus/chub/compare/v1.10.1...v1.10.2) (2026-05-11)
+
+
+### Bug Fixes
+
+* **connector:** match Lidarr artists to Plex by MusicBrainz ID ([ff74d01](https://github.com/chodeus/chub/commit/ff74d017f741e5bf7e11f88a3300c096ee556a1f))
+
 ## [1.10.1](https://github.com/chodeus/chub/compare/v1.10.0...v1.10.1) (2026-05-11)
 
 
