@@ -5,7 +5,7 @@ import tempfile
 from typing import Any, Dict, List, Optional, Union
 
 import yaml
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, model_validator
 
 # ==== SECTION: MODELS FOR CONFIG STRUCTURE ====
 
@@ -196,6 +196,49 @@ class NestarrConfig(BaseModel):
     library_mappings: List[NestarrMapping] = Field(default_factory=list)
     path_mapping: Optional[List[Dict[str, str]]] = None
     instances: Optional[List[str]] = None  # Deprecated: kept for backward compat
+
+    @model_validator(mode="after")
+    def normalize_mappings(self):
+        valid_mappings: List[NestarrMapping] = []
+        for mapping in self.library_mappings or []:
+            arr_instance = (mapping.arr_instance or "").strip()
+            if not arr_instance:
+                continue
+
+            valid_plex_instances: List[NestarrPlexInstance] = []
+            for plex_instance in mapping.plex_instances or []:
+                instance_name = (plex_instance.instance or "").strip()
+                library_names = [
+                    name.strip()
+                    for name in plex_instance.library_names or []
+                    if isinstance(name, str) and name.strip()
+                ]
+                if instance_name and library_names:
+                    plex_instance.instance = instance_name
+                    plex_instance.library_names = library_names
+                    valid_plex_instances.append(plex_instance)
+
+            if valid_plex_instances:
+                mapping.arr_instance = arr_instance
+                mapping.plex_instances = valid_plex_instances
+                valid_mappings.append(mapping)
+
+        self.library_mappings = valid_mappings
+
+        if self.path_mapping is not None:
+            self.path_mapping = [
+                {
+                    "arr_path": entry["arr_path"].strip(),
+                    "local_path": entry["local_path"].strip(),
+                }
+                for entry in self.path_mapping
+                if isinstance(entry, dict)
+                and isinstance(entry.get("arr_path"), str)
+                and isinstance(entry.get("local_path"), str)
+                and entry["arr_path"].strip()
+                and entry["local_path"].strip()
+            ]
+        return self
 
 
 class AuthConfig(BaseModel):
