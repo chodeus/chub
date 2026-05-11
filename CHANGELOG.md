@@ -2,6 +2,13 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.9.3](https://github.com/chodeus/chub/compare/v1.9.2...v1.9.3) (2026-05-11)
+
+
+### Bug Fixes
+
+* **jduparr:** harden duplicate linking workflow ([9a7f6bc](https://github.com/chodeus/chub/commit/9a7f6bc827f67ee7ad463d850d218e45b14d33eb))
+
 ## [1.9.2](https://github.com/chodeus/chub/compare/v1.9.1...v1.9.2) (2026-05-10)
 
 
