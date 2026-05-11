@@ -230,6 +230,7 @@ class PosterCleanarrConfig(BaseModel):
     local_db: bool = False
     use_existing_db: bool = False
     ignore_running: bool = False
+    overlays_only: bool = False
     sleep: int = 60
     timeout: int = 600
     instances: List[str] = Field(default_factory=list)
