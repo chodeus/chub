@@ -1,27 +1,29 @@
 """
-Border Replacerr preview API.
+Border Replacerr API.
 
-Powers the Border Replacerr preview page in the UI. Generates side-by-side
-"original | bordered" composite JPGs for a small mix of the user's actual
-matched media so the user can sanity-check border colors and per-holiday
-palettes without committing a full module run.
+Powers the Border Replacerr page in the UI. Two concerns live here:
 
-Endpoints:
+Preview composites (existing)
     GET  /api/border-replacerr/preview/options
-        List the holidays available in the user's config so the frontend
-        dropdown can populate without a duplicate config fetch.
-
     POST /api/border-replacerr/preview
-        Generate up to 6 composites (2 movies + 2 series + 2 collections,
-        falling back across kinds when one is empty). Accepts ``count`` and
-        ``holiday`` (default | current | <holiday name>) query params. The
-        actual cropping/bordering reuses BorderReplacerr.replace_borders()
-        so the preview is faithful to a real run.
-
     GET  /api/border-replacerr/preview/file/{token}.jpg
-        Serve the bytes for a token returned by the POST endpoint. Tokens
-        are opaque uuid4 hex strings; the backing file lives in a single
-        well-known temp directory and is wiped on each new POST.
+        Side-by-side "original | bordered" JPGs for a small mix of the
+        user's matched media so palettes can be sanity-checked before a
+        full run.
+
+Border manager (added when the page absorbed border colour + holiday
+border editing — see the rebuild that moved visual config off the
+Module Settings form)
+    GET  /api/border-replacerr/presets
+        The canonical holiday preset catalogue (name + schedule + colors).
+    GET  /api/border-replacerr/borders/{holiday}
+        List bundled (assets/borders/<folder>) + user (/config/borders/
+        <folder>) variant names for a holiday so the picker can render
+        thumbnails.
+    GET  /api/border-replacerr/borders/{holiday}/{source}/{variant}.png
+        Serve a resized thumbnail of one variant. Source is ``bundled``
+        or ``user``; the on-disk PNG is resized to ~300x450 and cached
+        in /tmp/chub_border_thumbs/.
 """
 
 import shutil
@@ -38,6 +40,16 @@ from backend.api.utils import error, get_database, get_logger, ok
 from backend.modules.border_replacerr import BorderReplacerr
 from backend.util.config import ChubConfig, load_config
 from backend.util.database import ChubDB
+from backend.util.helper import get_config_dir
+
+# Bundled border PNGs live next to the SVG sources after the Docker build
+# rasterizes them (see scripts/rasterize_borders.py + deploy/docker/Dockerfile).
+_BUNDLED_BORDERS_DIR = Path(__file__).resolve().parents[1] / "assets" / "borders"
+
+# Thumbnail cache. Wiping on container restart is fine — thumbs are
+# deterministic per (folder, source, name) and re-generated cheaply.
+_THUMB_DIR = Path(tempfile.gettempdir()) / "chub_border_thumbs"
+_THUMB_SIZE = (300, 450)
 
 router = APIRouter(
     prefix="/api/border-replacerr",
@@ -55,25 +67,75 @@ router = APIRouter(
 PREVIEW_DIR = Path(tempfile.gettempdir()) / "chub_border_preview"
 
 
-# Holiday presets surfaced in the preview dropdown so the user can sanity-
-# check a palette before committing it to their config. Mirrors the catalogue
-# in frontend/src/components/fields/custom/PresetsField.jsx — when the
-# server-side catalogue lands (Phase 2 plan), both sides will read from a
-# shared backend/data/holiday_presets.json instead.
-#
-# Schedule strings are intentionally omitted: this preview tool only cares
-# about the palette, not the date window.
+# Holiday presets — the canonical catalogue. The frontend used to maintain
+# its own copy in PresetsField.jsx; that file now reads this list via
+# GET /api/border-replacerr/presets so the two sides can't drift.
 _HOLIDAY_PRESETS: list[dict] = [
-    {"name": "🎆 New Year's Day", "colors": ["#00BFFF", "#FFD700"]},
-    {"name": "💘 Valentine's Day", "colors": ["#D41F3A", "#FFC0CB"]},
-    {"name": "🐣 Easter", "colors": ["#FFB6C1", "#87CEFA", "#98FB98"]},
-    {"name": "🌸 Mother's Day", "colors": ["#FF69B4", "#FFDAB9"]},
-    {"name": "👨‍👧‍👦 Father's Day", "colors": ["#1E90FF", "#4682B4"]},
-    {"name": "🗽 Independence Day", "colors": ["#FF0000", "#FFFFFF", "#0000FF"]},
-    {"name": "🧹 Labor Day", "colors": ["#FFD700", "#4682B4"]},
-    {"name": "🎃 Halloween", "colors": ["#FFA500", "#000000"]},
-    {"name": "🦃 Thanksgiving", "colors": ["#FFA500", "#8B4513"]},
-    {"name": "🎄 Christmas", "colors": ["#FF0000", "#00FF00"]},
+    {
+        "name": "🎆 New Year's Day",
+        "schedule": "range(12/30-01/02)",
+        "colors": ["#00BFFF", "#FFD700"],
+    },
+    {
+        "name": "🧧 Lunar New Year",
+        "schedule": "range(01/20-02/20)",
+        "colors": ["#C8102E", "#FFD700"],
+    },
+    {
+        "name": "💘 Valentine's Day",
+        "schedule": "range(02/05-02/15)",
+        "colors": ["#D41F3A", "#FFC0CB"],
+    },
+    {
+        "name": "🍀 St. Patrick's Day",
+        "schedule": "range(03/14-03/18)",
+        "colors": ["#00A36C", "#FFD700"],
+    },
+    {
+        "name": "🐣 Easter",
+        "schedule": "range(03/31-04/02)",
+        "colors": ["#FFB6C1", "#87CEFA", "#98FB98"],
+    },
+    {
+        "name": "🌸 Mother's Day",
+        "schedule": "range(05/10-05/15)",
+        "colors": ["#FF69B4", "#FFDAB9"],
+    },
+    {
+        "name": "👨‍👧‍👦 Father's Day",
+        "schedule": "range(06/15-06/20)",
+        "colors": ["#1E90FF", "#4682B4"],
+    },
+    {
+        "name": "🏳️‍🌈 Pride",
+        "schedule": "range(06/01-06/30)",
+        "colors": ["#E40303", "#FF8C00", "#FFED00", "#008026", "#004CFF", "#732982"],
+    },
+    {
+        "name": "🗽 Independence Day",
+        "schedule": "range(07/01-07/05)",
+        "colors": ["#FF0000", "#FFFFFF", "#0000FF"],
+    },
+    {
+        "name": "🧹 Labor Day",
+        "schedule": "range(09/01-09/07)",
+        "colors": ["#FFD700", "#4682B4"],
+    },
+    {
+        "name": "🎃 Halloween",
+        "schedule": "range(10/01-10/31)",
+        "colors": ["#FFA500", "#000000"],
+    },
+    {
+        "name": "🦃 Thanksgiving",
+        "schedule": "range(11/01-11/30)",
+        "colors": ["#FFA500", "#8B4513"],
+    },
+    {
+        "name": "🎄 Christmas",
+        "schedule": "range(12/01-12/31)",
+        "colors": ["#FF0000", "#00FF00"],
+    },
 ]
 
 
@@ -418,4 +480,160 @@ async def preview_file(token: str, logger: Any = Depends(get_logger)):
         path=str(file_path),
         media_type="image/jpeg",
         headers={"Cache-Control": "no-store"},
+    )
+
+
+# ─── Border manager: presets + thumbnail catalogue ──────────────────────
+
+
+def _safe_holiday_folder(holiday_name: str) -> Optional[str]:
+    """Resolve a holiday display name to its assets/borders/ folder name.
+
+    Returns None for inputs that don't map to a known folder. The folder
+    string from ``BorderReplacerr._holiday_folder`` is alphanumeric-only,
+    so anything coming back here is safe to use as a path segment.
+    """
+    folder = BorderReplacerr()._holiday_folder(holiday_name)
+    if not folder:
+        return None
+    # Belt-and-braces: enforce the documented invariant (alphanumeric, no
+    # dots/slashes) before the caller stitches it into a filesystem path.
+    if not folder.isalnum():
+        return None
+    return folder
+
+
+def _list_variants_in(directory: Path) -> List[str]:
+    """Return sorted variant names (PNG stems) under ``directory``.
+
+    Missing directories return an empty list so the caller doesn't need
+    to special-case fresh installs or holidays without bundled art.
+    """
+    if not directory.is_dir():
+        return []
+    names = sorted(p.stem for p in directory.glob("*.png") if p.is_file())
+    return names
+
+
+@router.get(
+    "/presets",
+    summary="Holiday preset catalogue",
+    description=(
+        "Return the canonical list of holiday presets (name, schedule, "
+        "colors) so the frontend doesn't have to keep a parallel copy."
+    ),
+)
+async def list_presets() -> JSONResponse:
+    return ok("Holiday presets retrieved", {"presets": _HOLIDAY_PRESETS})
+
+
+@router.get(
+    "/borders/{holiday}",
+    summary="List bundled + user border variants for a holiday",
+    description=(
+        "Return the variant names available for the given holiday. "
+        "``bundled`` entries come from the shipped assets; ``user`` entries "
+        "come from /config/borders/<folder>/. Each entry can be fetched as "
+        "a thumbnail via /borders/{holiday}/{source}/{name}.png."
+    ),
+)
+async def list_borders(holiday: str) -> JSONResponse:
+    folder = _safe_holiday_folder(holiday)
+    if not folder:
+        return ok(
+            "No bundled folder for that holiday",
+            {"holiday": holiday, "folder": None, "bundled": [], "user": []},
+        )
+
+    bundled_dir = _BUNDLED_BORDERS_DIR / folder
+    user_dir = Path(get_config_dir()) / "borders" / folder
+    return ok(
+        "Border variants retrieved",
+        {
+            "holiday": holiday,
+            "folder": folder,
+            "bundled": _list_variants_in(bundled_dir),
+            "user": _list_variants_in(user_dir),
+        },
+    )
+
+
+def _resolve_variant_source_dir(source: str, folder: str) -> Optional[Path]:
+    if source == "bundled":
+        return _BUNDLED_BORDERS_DIR / folder
+    if source == "user":
+        return Path(get_config_dir()) / "borders" / folder
+    return None
+
+
+@router.get(
+    "/borders/{holiday}/{source}/{variant}.png",
+    summary="Serve a border variant thumbnail",
+    description=(
+        "Return a ~300x450 PNG thumbnail of the requested border variant. "
+        "Thumbnails are cached in /tmp/chub_border_thumbs/ — a container "
+        "restart wipes them; they regenerate on next request."
+    ),
+    responses={
+        200: {"content": {"image/png": {}}},
+        404: {"description": "Variant not found"},
+    },
+)
+async def border_thumbnail(
+    holiday: str,
+    source: str,
+    variant: str,
+    logger: Any = Depends(get_logger),
+):
+    folder = _safe_holiday_folder(holiday)
+    if not folder:
+        return error("Unknown holiday", code="BORDER_THUMB_UNKNOWN_HOLIDAY", status_code=404)
+
+    source_dir = _resolve_variant_source_dir(source, folder)
+    if source_dir is None:
+        return error("Unknown source", code="BORDER_THUMB_BAD_SOURCE", status_code=404)
+
+    # Variant comes from URL; allow only alphanumerics, dashes, dots, and
+    # underscores so a stem like "v1" or "user_one" works but "../foo"
+    # cannot. Stem-strip again as belt-and-braces.
+    stem = Path(variant).stem
+    if not stem or not all(c.isalnum() or c in "-_." for c in stem):
+        return error("Invalid variant name", code="BORDER_THUMB_BAD_VARIANT", status_code=404)
+
+    source_root = source_dir.resolve()
+    full_png = (source_dir / f"{stem}.png").resolve()
+    if not full_png.is_relative_to(source_root) or not full_png.is_file():
+        return error("Variant not found", code="BORDER_THUMB_NOT_FOUND", status_code=404)
+
+    cache_dir = _THUMB_DIR / folder
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    cache_path = cache_dir / f"{source}_{stem}.png"
+
+    # Regenerate when the source PNG is newer than the cached thumbnail
+    # (catches user edits dropped into /config/borders/...). Bundled PNGs
+    # are static after build, so this normally hits the cache.
+    needs_render = (
+        not cache_path.is_file()
+        or cache_path.stat().st_mtime < full_png.stat().st_mtime
+    )
+    if needs_render:
+        try:
+            with Image.open(full_png) as img:
+                img = img.convert("RGBA")
+                img.thumbnail(_THUMB_SIZE, Image.Resampling.LANCZOS)
+                img.save(cache_path, "PNG", optimize=True)
+        except Exception as exc:
+            logger.warning("Failed to render border thumbnail %s: %s", full_png, exc)
+            return error(
+                "Failed to render thumbnail",
+                code="BORDER_THUMB_RENDER_FAILED",
+                status_code=500,
+            )
+
+    return FileResponse(
+        path=str(cache_path),
+        media_type="image/png",
+        # Thumbnails are deterministic per (folder, source, variant) until
+        # the source PNG changes; a long browser cache is safe.
+        headers={"Cache-Control": "public, max-age=86400"},
     )

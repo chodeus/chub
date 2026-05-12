@@ -1,19 +1,32 @@
 /**
- * Border Replacerr preview API client.
+ * Border Replacerr API client.
  *
- * Powers the Border Replacerr preview page in the UI. Two endpoints:
- * - GET /api/border-replacerr/preview/options — holiday dropdown options
+ * Powers the Border Replacerr page in the UI:
+ * - GET  /api/border-replacerr/preview/options — holiday dropdown options
  * - POST /api/border-replacerr/preview — generate composites; returns tokens
+ * - GET  /api/border-replacerr/preview/file/{token}.jpg — composite bytes
+ * - GET  /api/border-replacerr/presets — canonical holiday preset catalogue
+ * - GET  /api/border-replacerr/borders/{holiday} — bundled + user variants
+ * - GET  /api/border-replacerr/borders/{holiday}/{source}/{name}.png — thumbs
  *
- * The composite bytes are served at /api/border-replacerr/preview/file/{token}.jpg;
- * the page consumes those URLs directly via <img src=...>.
+ * Image endpoints are consumed directly via <img src=...> using the URL
+ * helpers below.
  */
 
 import { apiCore } from './core.js';
 
+const ENCODE = encodeURIComponent;
+
+const withAuthQuery = () => {
+    const params = new URLSearchParams();
+    const jwt = localStorage.getItem('chub-auth-token');
+    if (jwt) params.set('token', jwt);
+    return params.toString();
+};
+
 export const borderReplacerrAPI = {
     /**
-     * Fetch holiday dropdown options for the preview page.
+     * Fetch holiday dropdown options for the preview section.
      */
     fetchOptions: async () => {
         return apiCore.get('/border-replacerr/preview/options', {
@@ -43,10 +56,35 @@ export const borderReplacerrAPI = {
      * Mirrors the same pattern postersAPI.getPreviewUrl uses.
      */
     fileUrl: token => {
-        const params = new URLSearchParams();
-        const jwt = localStorage.getItem('chub-auth-token');
-        if (jwt) params.set('token', jwt);
-        const qs = params.toString();
+        const qs = withAuthQuery();
         return `/api/border-replacerr/preview/file/${token}.jpg${qs ? `?${qs}` : ''}`;
+    },
+
+    /**
+     * Fetch the canonical holiday preset catalogue (name, schedule, colors).
+     */
+    fetchPresets: async () => {
+        return apiCore.get('/border-replacerr/presets', {
+            useCache: true,
+            cacheTTL: 5 * 60 * 1000,
+        });
+    },
+
+    /**
+     * List bundled + user border variants for a holiday by display name.
+     */
+    fetchBorders: async holiday => {
+        return apiCore.get(`/border-replacerr/borders/${ENCODE(holiday)}`, {
+            useCache: false,
+        });
+    },
+
+    /**
+     * Thumbnail URL for a single variant. ``source`` is 'bundled' or 'user'.
+     */
+    thumbnailUrl: (holiday, source, name) => {
+        const qs = withAuthQuery();
+        const path = `/api/border-replacerr/borders/${ENCODE(holiday)}/${ENCODE(source)}/${ENCODE(name)}.png`;
+        return qs ? `${path}?${qs}` : path;
     },
 };
