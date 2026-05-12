@@ -79,6 +79,7 @@ class BorderHoliday(BaseModel):
     name: str
     schedule: str
     colors: List[str] = Field(default_factory=list)
+    borders: List[str] = Field(default_factory=list)
 
 
 class BorderReplacerrConfig(BaseModel):

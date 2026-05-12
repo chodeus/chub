@@ -58,3 +58,7 @@ transformation/
 
 # Local-only dev files
 jokes.txt
+
+# Build artifacts — rasterized from backend/assets/borders/**/*.svg
+# at Docker build time. Don't commit; rebuild via scripts/rasterize_borders.py.
+backend/assets/borders/**/*.png

@@ -49,6 +49,8 @@ const BorderPreviewPage = () => {
     const activeHoliday = previewData?.active_holiday;
     const borderWidth = previewData?.border_width;
     const paletteSize = previewData?.palette_size ?? 0;
+    const borderCount = previewData?.border_count ?? 0;
+    const mode = previewData?.mode || 'remove';
 
     const errorMessage = previewError?.message || null;
 
@@ -107,11 +109,20 @@ const BorderPreviewPage = () => {
             )}
 
             <div className="mt-4 text-sm text-secondary flex flex-wrap gap-x-6 gap-y-1">
-                {borderWidth != null && (
+                {mode === 'image' ? (
                     <span>
-                        <span className="text-tertiary">Border width: </span>
-                        <span className="text-primary font-medium">{borderWidth}px</span>
+                        <span className="text-tertiary">Mode: </span>
+                        <span className="text-primary font-medium">
+                            Image ({borderCount} variant{borderCount === 1 ? '' : 's'})
+                        </span>
                     </span>
+                ) : (
+                    borderWidth != null && (
+                        <span>
+                            <span className="text-tertiary">Border width: </span>
+                            <span className="text-primary font-medium">{borderWidth}px</span>
+                        </span>
+                    )
                 )}
                 {activeHoliday && (
                     <span>
@@ -119,9 +130,18 @@ const BorderPreviewPage = () => {
                         <span className="text-primary font-medium">{activeHoliday}</span>
                     </span>
                 )}
-                {paletteSize === 0 && previewData && (
+                {mode === 'remove' && previewData && (
                     <span className="text-warning">
-                        No colors configured — previewing the &quot;remove border&quot; path.
+                        No borders or colors configured — previewing the &quot;remove border&quot;
+                        path.
+                    </span>
+                )}
+                {mode === 'color' && paletteSize > 0 && (
+                    <span>
+                        <span className="text-tertiary">Palette: </span>
+                        <span className="text-primary font-medium">
+                            {paletteSize} color{paletteSize === 1 ? '' : 's'}
+                        </span>
                     </span>
                 )}
             </div>
@@ -186,15 +206,24 @@ const PreviewCard = ({ preview }) => {
                     </div>
                     <div className="text-xs text-tertiary">{kindLabel}</div>
                 </div>
-                {preview.color && (
-                    <div className="flex items-center gap-1 text-xs text-secondary">
-                        <span
-                            className="inline-block w-4 h-4 rounded border border-border-subtle"
-                            style={{ backgroundColor: preview.color }}
-                            aria-hidden="true"
-                        />
-                        <span className="font-mono">{preview.color.toUpperCase()}</span>
+                {preview.border ? (
+                    <div
+                        className="text-xs text-secondary font-mono truncate max-w-[120px]"
+                        title={preview.border}
+                    >
+                        {preview.border}
                     </div>
+                ) : (
+                    preview.color && (
+                        <div className="flex items-center gap-1 text-xs text-secondary">
+                            <span
+                                className="inline-block w-4 h-4 rounded border border-border-subtle"
+                                style={{ backgroundColor: preview.color }}
+                                aria-hidden="true"
+                            />
+                            <span className="font-mono">{preview.color.toUpperCase()}</span>
+                        </div>
+                    )
                 )}
             </div>
         </div>

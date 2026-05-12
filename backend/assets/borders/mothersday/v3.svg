@@ -1,0 +1,304 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1500" width="1000" height="1500">
+  <defs>
+    <linearGradient id="frameBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#2a1a18"/>
+      <stop offset="50%" stop-color="#180e0c"/>
+      <stop offset="100%" stop-color="#080604"/>
+    </linearGradient>
+    <radialGradient id="vintageRose" cx="40%" cy="35%" r="80%">
+      <stop offset="0%" stop-color="#fae0d8"/>
+      <stop offset="40%" stop-color="#d49080"/>
+      <stop offset="100%" stop-color="#7a4030"/>
+    </radialGradient>
+    <radialGradient id="vintageCore" cx="50%" cy="50%" r="60%">
+      <stop offset="0%" stop-color="#a86048"/>
+      <stop offset="100%" stop-color="#4a1a08"/>
+    </radialGradient>
+    <radialGradient id="creamPale" cx="50%" cy="40%" r="65%">
+      <stop offset="0%" stop-color="#fff4e0"/>
+      <stop offset="100%" stop-color="#d4b890"/>
+    </radialGradient>
+    <linearGradient id="teaG" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#daab90"/>
+      <stop offset="50%" stop-color="#a87058"/>
+      <stop offset="100%" stop-color="#5a3018"/>
+    </linearGradient>
+    <radialGradient id="sageG" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#b8c8a8"/>
+      <stop offset="55%" stop-color="#688070"/>
+      <stop offset="100%" stop-color="#2a3a30"/>
+    </radialGradient>
+  </defs>
+
+  <path d="M 0,0 L 1000,0 L 1000,1500 L 0,1500 Z M 60,60 L 60,1440 L 940,1440 L 940,60 Z" fill="url(#frameBg)" fill-rule="evenodd"/>
+
+  <g id="vintageRoseG">
+    <circle cx="0" cy="0" r="15" fill="url(#vintageRose)" stroke="#7a4030" stroke-width="0.5"/>
+    <path d="M0,-12 C-7,-10 -11,-5 -11,0 C-11,6 -7,11 0,12 C7,11 11,6 11,0 C11,-5 7,-10 0,-12 Z" fill="url(#vintageRose)" opacity="0.85"/>
+    <path d="M0,-9 C-5,-7 -7,-4 -7,0 C-7,4 -5,8 0,9 C5,8 7,4 7,0 C7,-4 5,-7 0,-9 Z" fill="url(#vintageRose)"/>
+    <circle cx="0" cy="0" r="4" fill="url(#vintageCore)"/>
+    <path d="M-14,-2 Q-6,2 0,-4 M14,-2 Q6,2 0,-4 M-14,2 Q-6,-2 0,4 M14,2 Q6,-2 0,4" stroke="#7a4030" stroke-width="0.3" fill="none" opacity="0.7"/>
+    <circle cx="-3" cy="-3" r="1.4" fill="#fae0d8" opacity="0.8"/>
+  </g>
+
+  <g id="vintageLeaf">
+    <ellipse cx="0" cy="-10" rx="4" ry="11" fill="url(#sageG)" stroke="#2a3a30" stroke-width="0.4"/>
+    <path d="M0,0 L0,-20" stroke="#2a3a30" stroke-width="0.4"/>
+    <path d="M-3,-5 Q0,-7 3,-5 M-3,-12 Q0,-14 3,-12" stroke="#b8c8a8" stroke-width="0.3" fill="none"/>
+  </g>
+
+  <g id="laceEdge">
+    <path d="M0,0 A6,6 0 0,1 12,0 A6,6 0 0,1 24,0 A6,6 0 0,1 36,0 A6,6 0 0,1 48,0" stroke="url(#creamPale)" stroke-width="1.4" fill="none"/>
+    <circle cx="6" cy="-3" r="1.4" fill="url(#creamPale)"/>
+    <circle cx="18" cy="-3" r="1.4" fill="url(#creamPale)"/>
+    <circle cx="30" cy="-3" r="1.4" fill="url(#creamPale)"/>
+    <circle cx="42" cy="-3" r="1.4" fill="url(#creamPale)"/>
+    <path d="M0,0 L0,4 M12,0 L12,4 M24,0 L24,4 M36,0 L36,4 M48,0 L48,4" stroke="url(#creamPale)" stroke-width="0.5"/>
+    <path d="M3,-4 L9,-4 M15,-4 L21,-4 M27,-4 L33,-4 M39,-4 L45,-4" stroke="url(#creamPale)" stroke-width="0.4"/>
+  </g>
+
+  <g id="laceEdgeV">
+    <path d="M0,0 A6,6 0 0,0 0,12 A6,6 0 0,0 0,24 A6,6 0 0,0 0,36 A6,6 0 0,0 0,48" stroke="url(#creamPale)" stroke-width="1.4" fill="none"/>
+    <circle cx="-3" cy="6" r="1.4" fill="url(#creamPale)"/>
+    <circle cx="-3" cy="18" r="1.4" fill="url(#creamPale)"/>
+    <circle cx="-3" cy="30" r="1.4" fill="url(#creamPale)"/>
+    <circle cx="-3" cy="42" r="1.4" fill="url(#creamPale)"/>
+  </g>
+
+  <g id="teacupSilhouette">
+    <path d="M-20,-8 L20,-8 L18,12 C18,18 12,22 0,22 C-12,22 -18,18 -18,12 Z" fill="none" stroke="url(#teaG)" stroke-width="1.6"/>
+    <ellipse cx="0" cy="-8" rx="20" ry="3" fill="none" stroke="url(#teaG)" stroke-width="1.4"/>
+    <path d="M20,-4 C28,-2 30,4 28,10 C26,14 22,14 20,12" fill="none" stroke="url(#teaG)" stroke-width="1.4"/>
+    <ellipse cx="0" cy="-7" rx="18" ry="2" fill="url(#vintageCore)" opacity="0.5"/>
+    <path d="M-16,22 L16,22 L18,26 L-18,26 Z" fill="none" stroke="url(#teaG)" stroke-width="1.4"/>
+    <path d="M-12,0 Q0,-2 12,0" stroke="url(#vintageRose)" stroke-width="0.5" fill="none" opacity="0.6"/>
+    <use href="#vintageRoseG" transform="translate(0,4) scale(0.3)"/>
+  </g>
+
+  <g id="pearlDot">
+    <circle cx="0" cy="0" r="2" fill="url(#creamPale)" stroke="#9a7058" stroke-width="0.3"/>
+    <circle cx="-0.6" cy="-0.6" r="0.7" fill="#fff"/>
+  </g>
+
+  <g id="pearlStrand">
+    <use href="#pearlDot" transform="translate(0,0)"/>
+    <use href="#pearlDot" transform="translate(7,0)"/>
+    <use href="#pearlDot" transform="translate(14,0)"/>
+    <use href="#pearlDot" transform="translate(21,0)"/>
+    <use href="#pearlDot" transform="translate(28,0)"/>
+    <use href="#pearlDot" transform="translate(35,0)"/>
+    <use href="#pearlDot" transform="translate(42,0)"/>
+  </g>
+
+  <!-- TOP -->
+  <use href="#laceEdge" transform="translate(60,56)"/>
+  <use href="#laceEdge" transform="translate(108,56)"/>
+  <use href="#laceEdge" transform="translate(156,56)"/>
+  <use href="#laceEdge" transform="translate(204,56)"/>
+  <use href="#laceEdge" transform="translate(252,56)"/>
+  <use href="#laceEdge" transform="translate(300,56)"/>
+  <use href="#laceEdge" transform="translate(348,56)"/>
+  <use href="#laceEdge" transform="translate(396,56)"/>
+  <use href="#laceEdge" transform="translate(444,56)"/>
+  <use href="#laceEdge" transform="translate(492,56)"/>
+  <use href="#laceEdge" transform="translate(540,56)"/>
+  <use href="#laceEdge" transform="translate(588,56)"/>
+  <use href="#laceEdge" transform="translate(636,56)"/>
+  <use href="#laceEdge" transform="translate(684,56)"/>
+  <use href="#laceEdge" transform="translate(732,56)"/>
+  <use href="#laceEdge" transform="translate(780,56)"/>
+  <use href="#laceEdge" transform="translate(828,56)"/>
+  <use href="#laceEdge" transform="translate(876,56)"/>
+  <use href="#vintageRoseG" transform="translate(140,28)"/>
+  <use href="#vintageRoseG" transform="translate(280,28) scale(1.1)"/>
+  <use href="#vintageRoseG" transform="translate(420,28)"/>
+  <use href="#vintageRoseG" transform="translate(560,28) scale(1.1)"/>
+  <use href="#vintageRoseG" transform="translate(700,28)"/>
+  <use href="#vintageRoseG" transform="translate(840,28) scale(1.1)"/>
+  <use href="#vintageLeaf" transform="translate(200,40) rotate(180)"/>
+  <use href="#vintageLeaf" transform="translate(360,40) rotate(180)"/>
+  <use href="#vintageLeaf" transform="translate(500,40) rotate(180)"/>
+  <use href="#vintageLeaf" transform="translate(640,40) rotate(180)"/>
+  <use href="#vintageLeaf" transform="translate(780,40) rotate(180)"/>
+  <use href="#vintageLeaf" transform="translate(900,40) rotate(180)"/>
+  <use href="#pearlStrand" transform="translate(100,14)"/>
+  <use href="#pearlStrand" transform="translate(360,14)"/>
+  <use href="#pearlStrand" transform="translate(620,14)"/>
+  <use href="#pearlStrand" transform="translate(840,14)"/>
+
+  <!-- BOTTOM -->
+  <use href="#laceEdge" transform="translate(60,1444) scale(1,-1)"/>
+  <use href="#laceEdge" transform="translate(108,1444) scale(1,-1)"/>
+  <use href="#laceEdge" transform="translate(156,1444) scale(1,-1)"/>
+  <use href="#laceEdge" transform="translate(204,1444) scale(1,-1)"/>
+  <use href="#laceEdge" transform="translate(252,1444) scale(1,-1)"/>
+  <use href="#laceEdge" transform="translate(300,1444) scale(1,-1)"/>
+  <use href="#laceEdge" transform="translate(348,1444) scale(1,-1)"/>
+  <use href="#laceEdge" transform="translate(396,1444) scale(1,-1)"/>
+  <use href="#laceEdge" transform="translate(444,1444) scale(1,-1)"/>
+  <use href="#laceEdge" transform="translate(492,1444) scale(1,-1)"/>
+  <use href="#laceEdge" transform="translate(540,1444) scale(1,-1)"/>
+  <use href="#laceEdge" transform="translate(588,1444) scale(1,-1)"/>
+  <use href="#laceEdge" transform="translate(636,1444) scale(1,-1)"/>
+  <use href="#laceEdge" transform="translate(684,1444) scale(1,-1)"/>
+  <use href="#laceEdge" transform="translate(732,1444) scale(1,-1)"/>
+  <use href="#laceEdge" transform="translate(780,1444) scale(1,-1)"/>
+  <use href="#laceEdge" transform="translate(828,1444) scale(1,-1)"/>
+  <use href="#laceEdge" transform="translate(876,1444) scale(1,-1)"/>
+  <use href="#vintageRoseG" transform="translate(140,1472)"/>
+  <use href="#vintageRoseG" transform="translate(280,1472) scale(1.1)"/>
+  <use href="#vintageRoseG" transform="translate(420,1472)"/>
+  <use href="#vintageRoseG" transform="translate(560,1472) scale(1.1)"/>
+  <use href="#vintageRoseG" transform="translate(700,1472)"/>
+  <use href="#vintageRoseG" transform="translate(840,1472) scale(1.1)"/>
+  <use href="#vintageLeaf" transform="translate(200,1462)"/>
+  <use href="#vintageLeaf" transform="translate(360,1462)"/>
+  <use href="#vintageLeaf" transform="translate(500,1462)"/>
+  <use href="#vintageLeaf" transform="translate(640,1462)"/>
+  <use href="#vintageLeaf" transform="translate(780,1462)"/>
+  <use href="#vintageLeaf" transform="translate(900,1462)"/>
+  <use href="#pearlStrand" transform="translate(100,1488)"/>
+  <use href="#pearlStrand" transform="translate(360,1488)"/>
+  <use href="#pearlStrand" transform="translate(620,1488)"/>
+  <use href="#pearlStrand" transform="translate(840,1488)"/>
+
+  <!-- LEFT -->
+  <use href="#laceEdgeV" transform="translate(56,60)"/>
+  <use href="#laceEdgeV" transform="translate(56,108)"/>
+  <use href="#laceEdgeV" transform="translate(56,156)"/>
+  <use href="#laceEdgeV" transform="translate(56,204)"/>
+  <use href="#laceEdgeV" transform="translate(56,252)"/>
+  <use href="#laceEdgeV" transform="translate(56,300)"/>
+  <use href="#laceEdgeV" transform="translate(56,348)"/>
+  <use href="#laceEdgeV" transform="translate(56,396)"/>
+  <use href="#laceEdgeV" transform="translate(56,444)"/>
+  <use href="#laceEdgeV" transform="translate(56,492)"/>
+  <use href="#laceEdgeV" transform="translate(56,540)"/>
+  <use href="#laceEdgeV" transform="translate(56,588)"/>
+  <use href="#laceEdgeV" transform="translate(56,636)"/>
+  <use href="#laceEdgeV" transform="translate(56,684)"/>
+  <use href="#laceEdgeV" transform="translate(56,732)"/>
+  <use href="#laceEdgeV" transform="translate(56,780)"/>
+  <use href="#laceEdgeV" transform="translate(56,828)"/>
+  <use href="#laceEdgeV" transform="translate(56,876)"/>
+  <use href="#laceEdgeV" transform="translate(56,924)"/>
+  <use href="#laceEdgeV" transform="translate(56,972)"/>
+  <use href="#laceEdgeV" transform="translate(56,1020)"/>
+  <use href="#laceEdgeV" transform="translate(56,1068)"/>
+  <use href="#laceEdgeV" transform="translate(56,1116)"/>
+  <use href="#laceEdgeV" transform="translate(56,1164)"/>
+  <use href="#laceEdgeV" transform="translate(56,1212)"/>
+  <use href="#laceEdgeV" transform="translate(56,1260)"/>
+  <use href="#laceEdgeV" transform="translate(56,1308)"/>
+  <use href="#laceEdgeV" transform="translate(56,1356)"/>
+  <use href="#laceEdgeV" transform="translate(56,1404)"/>
+  <use href="#vintageRoseG" transform="translate(28,150)"/>
+  <use href="#vintageRoseG" transform="translate(28,310) scale(1.1)"/>
+  <use href="#vintageRoseG" transform="translate(28,470)"/>
+  <use href="#vintageRoseG" transform="translate(28,630) scale(1.1)"/>
+  <use href="#vintageRoseG" transform="translate(28,790)"/>
+  <use href="#vintageRoseG" transform="translate(28,950) scale(1.1)"/>
+  <use href="#vintageRoseG" transform="translate(28,1110)"/>
+  <use href="#vintageRoseG" transform="translate(28,1270) scale(1.1)"/>
+  <use href="#vintageRoseG" transform="translate(28,1400)"/>
+  <use href="#vintageLeaf" transform="translate(40,230) rotate(90)"/>
+  <use href="#vintageLeaf" transform="translate(40,390) rotate(90)"/>
+  <use href="#vintageLeaf" transform="translate(40,550) rotate(90)"/>
+  <use href="#vintageLeaf" transform="translate(40,710) rotate(90)"/>
+  <use href="#vintageLeaf" transform="translate(40,870) rotate(90)"/>
+  <use href="#vintageLeaf" transform="translate(40,1030) rotate(90)"/>
+  <use href="#vintageLeaf" transform="translate(40,1190) rotate(90)"/>
+  <use href="#vintageLeaf" transform="translate(40,1350) rotate(90)"/>
+  <use href="#pearlDot" transform="translate(14,200)"/>
+  <use href="#pearlDot" transform="translate(14,360)"/>
+  <use href="#pearlDot" transform="translate(14,520)"/>
+  <use href="#pearlDot" transform="translate(14,680)"/>
+  <use href="#pearlDot" transform="translate(14,840)"/>
+  <use href="#pearlDot" transform="translate(14,1000)"/>
+  <use href="#pearlDot" transform="translate(14,1160)"/>
+  <use href="#pearlDot" transform="translate(14,1320)"/>
+
+  <!-- RIGHT -->
+  <use href="#laceEdgeV" transform="translate(944,60) scale(-1,1)"/>
+  <use href="#laceEdgeV" transform="translate(944,108) scale(-1,1)"/>
+  <use href="#laceEdgeV" transform="translate(944,156) scale(-1,1)"/>
+  <use href="#laceEdgeV" transform="translate(944,204) scale(-1,1)"/>
+  <use href="#laceEdgeV" transform="translate(944,252) scale(-1,1)"/>
+  <use href="#laceEdgeV" transform="translate(944,300) scale(-1,1)"/>
+  <use href="#laceEdgeV" transform="translate(944,348) scale(-1,1)"/>
+  <use href="#laceEdgeV" transform="translate(944,396) scale(-1,1)"/>
+  <use href="#laceEdgeV" transform="translate(944,444) scale(-1,1)"/>
+  <use href="#laceEdgeV" transform="translate(944,492) scale(-1,1)"/>
+  <use href="#laceEdgeV" transform="translate(944,540) scale(-1,1)"/>
+  <use href="#laceEdgeV" transform="translate(944,588) scale(-1,1)"/>
+  <use href="#laceEdgeV" transform="translate(944,636) scale(-1,1)"/>
+  <use href="#laceEdgeV" transform="translate(944,684) scale(-1,1)"/>
+  <use href="#laceEdgeV" transform="translate(944,732) scale(-1,1)"/>
+  <use href="#laceEdgeV" transform="translate(944,780) scale(-1,1)"/>
+  <use href="#laceEdgeV" transform="translate(944,828) scale(-1,1)"/>
+  <use href="#laceEdgeV" transform="translate(944,876) scale(-1,1)"/>
+  <use href="#laceEdgeV" transform="translate(944,924) scale(-1,1)"/>
+  <use href="#laceEdgeV" transform="translate(944,972) scale(-1,1)"/>
+  <use href="#laceEdgeV" transform="translate(944,1020) scale(-1,1)"/>
+  <use href="#laceEdgeV" transform="translate(944,1068) scale(-1,1)"/>
+  <use href="#laceEdgeV" transform="translate(944,1116) scale(-1,1)"/>
+  <use href="#laceEdgeV" transform="translate(944,1164) scale(-1,1)"/>
+  <use href="#laceEdgeV" transform="translate(944,1212) scale(-1,1)"/>
+  <use href="#laceEdgeV" transform="translate(944,1260) scale(-1,1)"/>
+  <use href="#laceEdgeV" transform="translate(944,1308) scale(-1,1)"/>
+  <use href="#laceEdgeV" transform="translate(944,1356) scale(-1,1)"/>
+  <use href="#laceEdgeV" transform="translate(944,1404) scale(-1,1)"/>
+  <use href="#vintageRoseG" transform="translate(972,150)"/>
+  <use href="#vintageRoseG" transform="translate(972,310) scale(1.1)"/>
+  <use href="#vintageRoseG" transform="translate(972,470)"/>
+  <use href="#vintageRoseG" transform="translate(972,630) scale(1.1)"/>
+  <use href="#vintageRoseG" transform="translate(972,790)"/>
+  <use href="#vintageRoseG" transform="translate(972,950) scale(1.1)"/>
+  <use href="#vintageRoseG" transform="translate(972,1110)"/>
+  <use href="#vintageRoseG" transform="translate(972,1270) scale(1.1)"/>
+  <use href="#vintageRoseG" transform="translate(972,1400)"/>
+  <use href="#vintageLeaf" transform="translate(960,230) rotate(270)"/>
+  <use href="#vintageLeaf" transform="translate(960,390) rotate(270)"/>
+  <use href="#vintageLeaf" transform="translate(960,550) rotate(270)"/>
+  <use href="#vintageLeaf" transform="translate(960,710) rotate(270)"/>
+  <use href="#vintageLeaf" transform="translate(960,870) rotate(270)"/>
+  <use href="#vintageLeaf" transform="translate(960,1030) rotate(270)"/>
+  <use href="#vintageLeaf" transform="translate(960,1190) rotate(270)"/>
+  <use href="#vintageLeaf" transform="translate(960,1350) rotate(270)"/>
+  <use href="#pearlDot" transform="translate(986,200)"/>
+  <use href="#pearlDot" transform="translate(986,360)"/>
+  <use href="#pearlDot" transform="translate(986,520)"/>
+  <use href="#pearlDot" transform="translate(986,680)"/>
+  <use href="#pearlDot" transform="translate(986,840)"/>
+  <use href="#pearlDot" transform="translate(986,1000)"/>
+  <use href="#pearlDot" transform="translate(986,1160)"/>
+  <use href="#pearlDot" transform="translate(986,1320)"/>
+
+  <!-- CORNERS: teacup -->
+  <g transform="translate(40,40)">
+    <use href="#teacupSilhouette" transform="translate(36,30) scale(1.1)"/>
+    <use href="#vintageRoseG" transform="translate(68,18) scale(1.1)"/>
+    <use href="#vintageRoseG" transform="translate(18,68) scale(1.1)"/>
+    <use href="#pearlStrand" transform="translate(54,60) scale(0.6)"/>
+  </g>
+  <g transform="translate(960,40)">
+    <use href="#teacupSilhouette" transform="translate(-36,30) scale(1.1) scale(-1,1)"/>
+    <use href="#vintageRoseG" transform="translate(-68,18) scale(1.1)"/>
+    <use href="#vintageRoseG" transform="translate(-18,68) scale(1.1)"/>
+    <use href="#pearlStrand" transform="translate(-86,60) scale(0.6)"/>
+  </g>
+  <g transform="translate(40,1460)">
+    <use href="#teacupSilhouette" transform="translate(36,-30) scale(1.1)"/>
+    <use href="#vintageRoseG" transform="translate(68,-18) scale(1.1)"/>
+    <use href="#vintageRoseG" transform="translate(18,-68) scale(1.1)"/>
+    <use href="#pearlStrand" transform="translate(54,-60) scale(0.6)"/>
+  </g>
+  <g transform="translate(960,1460)">
+    <use href="#teacupSilhouette" transform="translate(-36,-30) scale(1.1) scale(-1,1)"/>
+    <use href="#vintageRoseG" transform="translate(-68,-18) scale(1.1)"/>
+    <use href="#vintageRoseG" transform="translate(-18,-68) scale(1.1)"/>
+    <use href="#pearlStrand" transform="translate(-86,-60) scale(0.6)"/>
+  </g>
+
+  <path d="M60,55 L940,55 M60,1445 L940,1445 M55,60 L55,1440 M945,60 L945,1440" stroke="url(#creamPale)" stroke-width="1.4" fill="none"/>
+</svg>

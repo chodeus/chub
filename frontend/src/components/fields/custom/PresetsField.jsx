@@ -17,9 +17,19 @@ const HOLIDAY_PRESETS = [
         colors: ['#00BFFF', '#FFD700'],
     },
     {
+        name: '🧧 Lunar New Year',
+        schedule: 'range(01/20-02/20)',
+        colors: ['#C8102E', '#FFD700'],
+    },
+    {
         name: "💘 Valentine's Day",
         schedule: 'range(02/05-02/15)',
         colors: ['#D41F3A', '#FFC0CB'],
+    },
+    {
+        name: "🍀 St. Patrick's Day",
+        schedule: 'range(03/14-03/18)',
+        colors: ['#00A36C', '#FFD700'],
     },
     {
         name: '🐣 Easter',
@@ -35,6 +45,11 @@ const HOLIDAY_PRESETS = [
         name: "👨‍👧‍👦 Father's Day",
         schedule: 'range(06/15-06/20)',
         colors: ['#1E90FF', '#4682B4'],
+    },
+    {
+        name: '🏳️‍🌈 Pride',
+        schedule: 'range(06/01-06/30)',
+        colors: ['#E40303', '#FF8C00', '#FFED00', '#008026', '#004CFF', '#732982'],
     },
     {
         name: '🗽 Independence Day',

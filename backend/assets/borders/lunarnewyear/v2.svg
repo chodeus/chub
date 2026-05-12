@@ -1,0 +1,292 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1500" width="1000" height="1500">
+  <defs>
+    <linearGradient id="frameBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1a0810"/>
+      <stop offset="50%" stop-color="#0c040a"/>
+      <stop offset="100%" stop-color="#040204"/>
+    </linearGradient>
+    <radialGradient id="pinkPale" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#ffeaee"/>
+      <stop offset="60%" stop-color="#fac0d0"/>
+      <stop offset="100%" stop-color="#a06080"/>
+    </radialGradient>
+    <radialGradient id="pinkDeep" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#fac0d0"/>
+      <stop offset="60%" stop-color="#e07090"/>
+      <stop offset="100%" stop-color="#702048"/>
+    </radialGradient>
+    <radialGradient id="redSm" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#ff5848"/>
+      <stop offset="55%" stop-color="#a01828"/>
+      <stop offset="100%" stop-color="#3a0408"/>
+    </radialGradient>
+    <linearGradient id="branchG" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#4a2818"/>
+      <stop offset="100%" stop-color="#1a0c04"/>
+    </linearGradient>
+    <linearGradient id="paleGoldF" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7a5a18"/>
+      <stop offset="50%" stop-color="#f0d8a0"/>
+      <stop offset="100%" stop-color="#a07020"/>
+    </linearGradient>
+  </defs>
+
+  <path d="M 0,0 L 1000,0 L 1000,1500 L 0,1500 Z M 60,60 L 60,1440 L 940,1440 L 940,60 Z" fill="url(#frameBg)" fill-rule="evenodd"/>
+
+  <g id="bigPlumBlossom">
+    <g>
+      <ellipse cx="0" cy="-8" rx="5.5" ry="7" fill="url(#pinkPale)" stroke="#a06080" stroke-width="0.4"/>
+      <ellipse cx="0" cy="-8" rx="5.5" ry="7" fill="url(#pinkPale)" transform="rotate(72)" stroke="#a06080" stroke-width="0.4"/>
+      <ellipse cx="0" cy="-8" rx="5.5" ry="7" fill="url(#pinkPale)" transform="rotate(144)" stroke="#a06080" stroke-width="0.4"/>
+      <ellipse cx="0" cy="-8" rx="5.5" ry="7" fill="url(#pinkPale)" transform="rotate(216)" stroke="#a06080" stroke-width="0.4"/>
+      <ellipse cx="0" cy="-8" rx="5.5" ry="7" fill="url(#pinkPale)" transform="rotate(288)" stroke="#a06080" stroke-width="0.4"/>
+    </g>
+    <circle cx="0" cy="0" r="2" fill="#d4a020"/>
+    <path d="M0,0 L0,-5 M0,0 L4.8,-1.6 M0,0 L3,4 M0,0 L-3,4 M0,0 L-4.8,-1.6" stroke="#a07020" stroke-width="0.4"/>
+    <circle cx="0" cy="-2" r="0.7" fill="#d4a020"/>
+  </g>
+
+  <g id="deepPlumBlossom">
+    <g>
+      <ellipse cx="0" cy="-7" rx="5" ry="6" fill="url(#pinkDeep)" stroke="#702048" stroke-width="0.4"/>
+      <ellipse cx="0" cy="-7" rx="5" ry="6" fill="url(#pinkDeep)" transform="rotate(72)" stroke="#702048" stroke-width="0.4"/>
+      <ellipse cx="0" cy="-7" rx="5" ry="6" fill="url(#pinkDeep)" transform="rotate(144)" stroke="#702048" stroke-width="0.4"/>
+      <ellipse cx="0" cy="-7" rx="5" ry="6" fill="url(#pinkDeep)" transform="rotate(216)" stroke="#702048" stroke-width="0.4"/>
+      <ellipse cx="0" cy="-7" rx="5" ry="6" fill="url(#pinkDeep)" transform="rotate(288)" stroke="#702048" stroke-width="0.4"/>
+    </g>
+    <circle cx="0" cy="0" r="1.6" fill="#d4a020"/>
+  </g>
+
+  <g id="plumBud">
+    <ellipse cx="0" cy="0" rx="2.5" ry="3.5" fill="url(#pinkDeep)" stroke="#702048" stroke-width="0.3"/>
+    <path d="M-1,2 L1,2 M0,2 L0,4" stroke="#4a2818" stroke-width="0.3"/>
+  </g>
+
+  <g id="thinBranch">
+    <path d="M0,0 C12,-4 26,4 38,-2 C50,-8 64,4 76,-2" stroke="url(#branchG)" stroke-width="1.6" fill="none"/>
+    <path d="M14,-4 L18,-10 M40,2 L44,-6 M62,-2 L66,-10" stroke="url(#branchG)" stroke-width="1" fill="none"/>
+  </g>
+
+  <g id="denseBranch">
+    <use href="#thinBranch"/>
+    <use href="#bigPlumBlossom" transform="translate(14,-10)"/>
+    <use href="#deepPlumBlossom" transform="translate(38,-8)"/>
+    <use href="#bigPlumBlossom" transform="translate(62,-10)"/>
+    <use href="#plumBud" transform="translate(24,-4)"/>
+    <use href="#plumBud" transform="translate(50,-2)"/>
+    <use href="#bigPlumBlossom" transform="translate(4,4) scale(0.7)"/>
+    <use href="#deepPlumBlossom" transform="translate(76,4) scale(0.7)"/>
+  </g>
+
+  <g id="smallLanternG">
+    <rect x="-2" y="-16" width="4" height="2" fill="url(#paleGoldF)" stroke="#7a5a18" stroke-width="0.3"/>
+    <path d="M-9,-14 L9,-14 L9,-10 L-9,-10 Z" fill="url(#paleGoldF)" stroke="#7a5a18" stroke-width="0.3"/>
+    <path d="M-12,-10 C-14,-2 -14,0 -10,4 L10,4 C14,0 14,-2 12,-10 Z" fill="url(#redSm)" stroke="#3a0408" stroke-width="0.4"/>
+    <path d="M-9,4 L9,4 L9,6 L-9,6 Z" fill="url(#paleGoldF)" stroke="#7a5a18" stroke-width="0.3"/>
+    <path d="M-6,6 L-6,12 M0,6 L0,14 M6,6 L6,12" stroke="#a07020" stroke-width="0.4"/>
+    <ellipse cx="-1" cy="-2" rx="2" ry="3" fill="#ff5848" opacity="0.4"/>
+  </g>
+
+  <g id="butterflyOutline">
+    <path d="M0,0 C-8,-12 -16,-12 -14,-2 C-10,4 -4,4 0,0 Z" fill="url(#pinkPale)" stroke="#a06080" stroke-width="0.5" opacity="0.85"/>
+    <path d="M0,0 C8,-12 16,-12 14,-2 C10,4 4,4 0,0 Z" fill="url(#pinkPale)" stroke="#a06080" stroke-width="0.5" opacity="0.85"/>
+    <path d="M0,0 C-6,4 -8,10 -6,12 C-2,10 0,6 0,4 Z" fill="url(#pinkDeep)" stroke="#702048" stroke-width="0.4" opacity="0.85"/>
+    <path d="M0,0 C6,4 8,10 6,12 C2,10 0,6 0,4 Z" fill="url(#pinkDeep)" stroke="#702048" stroke-width="0.4" opacity="0.85"/>
+    <path d="M-1,-2 L1,-2 L1,8 L-1,8 Z" fill="#4a2818" stroke="#1a0c04" stroke-width="0.3"/>
+    <circle cx="-1" cy="-2" r="0.5" fill="#4a2818"/>
+    <circle cx="1" cy="-2" r="0.5" fill="#4a2818"/>
+    <path d="M0,-2 L-2,-5 M0,-2 L2,-5" stroke="#4a2818" stroke-width="0.4"/>
+    <circle cx="-8" cy="-6" r="0.8" fill="#702048"/>
+    <circle cx="8" cy="-6" r="0.8" fill="#702048"/>
+  </g>
+
+  <!-- TOP: BLOSSOM HEAVY -->
+  <use href="#denseBranch" transform="translate(60,50)"/>
+  <use href="#denseBranch" transform="translate(160,50)"/>
+  <use href="#denseBranch" transform="translate(260,50)"/>
+  <use href="#denseBranch" transform="translate(360,50)"/>
+  <use href="#denseBranch" transform="translate(460,50)"/>
+  <use href="#denseBranch" transform="translate(560,50)"/>
+  <use href="#denseBranch" transform="translate(660,50)"/>
+  <use href="#denseBranch" transform="translate(760,50)"/>
+  <use href="#denseBranch" transform="translate(860,50)"/>
+  <use href="#bigPlumBlossom" transform="translate(120,32)"/>
+  <use href="#deepPlumBlossom" transform="translate(220,32)"/>
+  <use href="#bigPlumBlossom" transform="translate(320,32)"/>
+  <use href="#deepPlumBlossom" transform="translate(420,32)"/>
+  <use href="#bigPlumBlossom" transform="translate(520,32)"/>
+  <use href="#deepPlumBlossom" transform="translate(620,32)"/>
+  <use href="#bigPlumBlossom" transform="translate(720,32)"/>
+  <use href="#deepPlumBlossom" transform="translate(820,32)"/>
+  <use href="#bigPlumBlossom" transform="translate(900,32)"/>
+  <use href="#plumBud" transform="translate(160,18)"/>
+  <use href="#plumBud" transform="translate(260,16)"/>
+  <use href="#plumBud" transform="translate(360,18)"/>
+  <use href="#plumBud" transform="translate(460,16)"/>
+  <use href="#plumBud" transform="translate(560,18)"/>
+  <use href="#plumBud" transform="translate(660,16)"/>
+  <use href="#plumBud" transform="translate(760,18)"/>
+  <use href="#plumBud" transform="translate(860,16)"/>
+  <use href="#smallLanternG" transform="translate(180,42)"/>
+  <use href="#smallLanternG" transform="translate(380,42)"/>
+  <use href="#smallLanternG" transform="translate(580,42)"/>
+  <use href="#smallLanternG" transform="translate(780,42)"/>
+  <use href="#butterflyOutline" transform="translate(240,32) scale(0.8)"/>
+  <use href="#butterflyOutline" transform="translate(440,32) scale(0.8)"/>
+  <use href="#butterflyOutline" transform="translate(640,32) scale(0.8)"/>
+  <use href="#butterflyOutline" transform="translate(840,32) scale(0.8)"/>
+
+  <!-- BOTTOM -->
+  <use href="#denseBranch" transform="translate(60,1450)"/>
+  <use href="#denseBranch" transform="translate(160,1450)"/>
+  <use href="#denseBranch" transform="translate(260,1450)"/>
+  <use href="#denseBranch" transform="translate(360,1450)"/>
+  <use href="#denseBranch" transform="translate(460,1450)"/>
+  <use href="#denseBranch" transform="translate(560,1450)"/>
+  <use href="#denseBranch" transform="translate(660,1450)"/>
+  <use href="#denseBranch" transform="translate(760,1450)"/>
+  <use href="#denseBranch" transform="translate(860,1450)"/>
+  <use href="#bigPlumBlossom" transform="translate(120,1470)"/>
+  <use href="#deepPlumBlossom" transform="translate(220,1470)"/>
+  <use href="#bigPlumBlossom" transform="translate(320,1470)"/>
+  <use href="#deepPlumBlossom" transform="translate(420,1470)"/>
+  <use href="#bigPlumBlossom" transform="translate(520,1470)"/>
+  <use href="#deepPlumBlossom" transform="translate(620,1470)"/>
+  <use href="#bigPlumBlossom" transform="translate(720,1470)"/>
+  <use href="#deepPlumBlossom" transform="translate(820,1470)"/>
+  <use href="#bigPlumBlossom" transform="translate(900,1470)"/>
+  <use href="#plumBud" transform="translate(160,1484)"/>
+  <use href="#plumBud" transform="translate(260,1486)"/>
+  <use href="#plumBud" transform="translate(360,1484)"/>
+  <use href="#plumBud" transform="translate(460,1486)"/>
+  <use href="#plumBud" transform="translate(560,1484)"/>
+  <use href="#plumBud" transform="translate(660,1486)"/>
+  <use href="#plumBud" transform="translate(760,1484)"/>
+  <use href="#plumBud" transform="translate(860,1486)"/>
+  <use href="#smallLanternG" transform="translate(180,1462)"/>
+  <use href="#smallLanternG" transform="translate(380,1462)"/>
+  <use href="#smallLanternG" transform="translate(580,1462)"/>
+  <use href="#smallLanternG" transform="translate(780,1462)"/>
+  <use href="#butterflyOutline" transform="translate(240,1470) scale(0.8)"/>
+  <use href="#butterflyOutline" transform="translate(440,1470) scale(0.8)"/>
+  <use href="#butterflyOutline" transform="translate(640,1470) scale(0.8)"/>
+  <use href="#butterflyOutline" transform="translate(840,1470) scale(0.8)"/>
+
+  <!-- LEFT -->
+  <use href="#denseBranch" transform="translate(50,60) rotate(90)"/>
+  <use href="#denseBranch" transform="translate(50,160) rotate(90)"/>
+  <use href="#denseBranch" transform="translate(50,260) rotate(90)"/>
+  <use href="#denseBranch" transform="translate(50,360) rotate(90)"/>
+  <use href="#denseBranch" transform="translate(50,460) rotate(90)"/>
+  <use href="#denseBranch" transform="translate(50,560) rotate(90)"/>
+  <use href="#denseBranch" transform="translate(50,660) rotate(90)"/>
+  <use href="#denseBranch" transform="translate(50,760) rotate(90)"/>
+  <use href="#denseBranch" transform="translate(50,860) rotate(90)"/>
+  <use href="#denseBranch" transform="translate(50,960) rotate(90)"/>
+  <use href="#denseBranch" transform="translate(50,1060) rotate(90)"/>
+  <use href="#denseBranch" transform="translate(50,1160) rotate(90)"/>
+  <use href="#denseBranch" transform="translate(50,1260) rotate(90)"/>
+  <use href="#denseBranch" transform="translate(50,1360) rotate(90)"/>
+  <use href="#bigPlumBlossom" transform="translate(32,120)"/>
+  <use href="#deepPlumBlossom" transform="translate(32,220)"/>
+  <use href="#bigPlumBlossom" transform="translate(32,320)"/>
+  <use href="#deepPlumBlossom" transform="translate(32,420)"/>
+  <use href="#bigPlumBlossom" transform="translate(32,520)"/>
+  <use href="#deepPlumBlossom" transform="translate(32,620)"/>
+  <use href="#bigPlumBlossom" transform="translate(32,720)"/>
+  <use href="#deepPlumBlossom" transform="translate(32,820)"/>
+  <use href="#bigPlumBlossom" transform="translate(32,920)"/>
+  <use href="#deepPlumBlossom" transform="translate(32,1020)"/>
+  <use href="#bigPlumBlossom" transform="translate(32,1120)"/>
+  <use href="#deepPlumBlossom" transform="translate(32,1220)"/>
+  <use href="#bigPlumBlossom" transform="translate(32,1320)"/>
+  <use href="#deepPlumBlossom" transform="translate(32,1400)"/>
+  <use href="#smallLanternG" transform="translate(42,180)"/>
+  <use href="#smallLanternG" transform="translate(42,380)"/>
+  <use href="#smallLanternG" transform="translate(42,580)"/>
+  <use href="#smallLanternG" transform="translate(42,780)"/>
+  <use href="#smallLanternG" transform="translate(42,980)"/>
+  <use href="#smallLanternG" transform="translate(42,1180)"/>
+  <use href="#smallLanternG" transform="translate(42,1380)"/>
+  <use href="#butterflyOutline" transform="translate(20,260) scale(0.8)"/>
+  <use href="#butterflyOutline" transform="translate(20,460) scale(0.8)"/>
+  <use href="#butterflyOutline" transform="translate(20,660) scale(0.8)"/>
+  <use href="#butterflyOutline" transform="translate(20,860) scale(0.8)"/>
+  <use href="#butterflyOutline" transform="translate(20,1060) scale(0.8)"/>
+  <use href="#butterflyOutline" transform="translate(20,1260) scale(0.8)"/>
+
+  <!-- RIGHT -->
+  <use href="#denseBranch" transform="translate(950,60) rotate(90)"/>
+  <use href="#denseBranch" transform="translate(950,160) rotate(90)"/>
+  <use href="#denseBranch" transform="translate(950,260) rotate(90)"/>
+  <use href="#denseBranch" transform="translate(950,360) rotate(90)"/>
+  <use href="#denseBranch" transform="translate(950,460) rotate(90)"/>
+  <use href="#denseBranch" transform="translate(950,560) rotate(90)"/>
+  <use href="#denseBranch" transform="translate(950,660) rotate(90)"/>
+  <use href="#denseBranch" transform="translate(950,760) rotate(90)"/>
+  <use href="#denseBranch" transform="translate(950,860) rotate(90)"/>
+  <use href="#denseBranch" transform="translate(950,960) rotate(90)"/>
+  <use href="#denseBranch" transform="translate(950,1060) rotate(90)"/>
+  <use href="#denseBranch" transform="translate(950,1160) rotate(90)"/>
+  <use href="#denseBranch" transform="translate(950,1260) rotate(90)"/>
+  <use href="#denseBranch" transform="translate(950,1360) rotate(90)"/>
+  <use href="#bigPlumBlossom" transform="translate(968,120)"/>
+  <use href="#deepPlumBlossom" transform="translate(968,220)"/>
+  <use href="#bigPlumBlossom" transform="translate(968,320)"/>
+  <use href="#deepPlumBlossom" transform="translate(968,420)"/>
+  <use href="#bigPlumBlossom" transform="translate(968,520)"/>
+  <use href="#deepPlumBlossom" transform="translate(968,620)"/>
+  <use href="#bigPlumBlossom" transform="translate(968,720)"/>
+  <use href="#deepPlumBlossom" transform="translate(968,820)"/>
+  <use href="#bigPlumBlossom" transform="translate(968,920)"/>
+  <use href="#deepPlumBlossom" transform="translate(968,1020)"/>
+  <use href="#bigPlumBlossom" transform="translate(968,1120)"/>
+  <use href="#deepPlumBlossom" transform="translate(968,1220)"/>
+  <use href="#bigPlumBlossom" transform="translate(968,1320)"/>
+  <use href="#deepPlumBlossom" transform="translate(968,1400)"/>
+  <use href="#smallLanternG" transform="translate(958,180)"/>
+  <use href="#smallLanternG" transform="translate(958,380)"/>
+  <use href="#smallLanternG" transform="translate(958,580)"/>
+  <use href="#smallLanternG" transform="translate(958,780)"/>
+  <use href="#smallLanternG" transform="translate(958,980)"/>
+  <use href="#smallLanternG" transform="translate(958,1180)"/>
+  <use href="#smallLanternG" transform="translate(958,1380)"/>
+  <use href="#butterflyOutline" transform="translate(980,260) scale(0.8)"/>
+  <use href="#butterflyOutline" transform="translate(980,460) scale(0.8)"/>
+  <use href="#butterflyOutline" transform="translate(980,660) scale(0.8)"/>
+  <use href="#butterflyOutline" transform="translate(980,860) scale(0.8)"/>
+  <use href="#butterflyOutline" transform="translate(980,1060) scale(0.8)"/>
+  <use href="#butterflyOutline" transform="translate(980,1260) scale(0.8)"/>
+
+  <!-- CORNERS -->
+  <g transform="translate(40,40)">
+    <use href="#denseBranch" transform="translate(10,30) rotate(20)"/>
+    <use href="#smallLanternG" transform="translate(30,30) scale(1.4)"/>
+    <use href="#bigPlumBlossom" transform="translate(60,16) scale(1.6)"/>
+    <use href="#deepPlumBlossom" transform="translate(16,60) scale(1.6)"/>
+    <use href="#butterflyOutline" transform="translate(70,50)"/>
+  </g>
+  <g transform="translate(960,40)">
+    <use href="#denseBranch" transform="translate(-10,30) rotate(160) scale(-1,1)"/>
+    <use href="#smallLanternG" transform="translate(-30,30) scale(1.4)"/>
+    <use href="#bigPlumBlossom" transform="translate(-60,16) scale(1.6)"/>
+    <use href="#deepPlumBlossom" transform="translate(-16,60) scale(1.6)"/>
+    <use href="#butterflyOutline" transform="translate(-70,50)"/>
+  </g>
+  <g transform="translate(40,1460)">
+    <use href="#denseBranch" transform="translate(10,-30) rotate(-20)"/>
+    <use href="#smallLanternG" transform="translate(30,-30) scale(1.4)"/>
+    <use href="#bigPlumBlossom" transform="translate(60,-16) scale(1.6)"/>
+    <use href="#deepPlumBlossom" transform="translate(16,-60) scale(1.6)"/>
+    <use href="#butterflyOutline" transform="translate(70,-50)"/>
+  </g>
+  <g transform="translate(960,1460)">
+    <use href="#denseBranch" transform="translate(-10,-30) rotate(-160) scale(-1,1)"/>
+    <use href="#smallLanternG" transform="translate(-30,-30) scale(1.4)"/>
+    <use href="#bigPlumBlossom" transform="translate(-60,-16) scale(1.6)"/>
+    <use href="#deepPlumBlossom" transform="translate(-16,-60) scale(1.6)"/>
+    <use href="#butterflyOutline" transform="translate(-70,-50)"/>
+  </g>
+
+  <path d="M60,55 L940,55 M60,1445 L940,1445 M55,60 L55,1440 M945,60 L945,1440" stroke="url(#paleGoldF)" stroke-width="1.4" fill="none" opacity="0.85"/>
+</svg>

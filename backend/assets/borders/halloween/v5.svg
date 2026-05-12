@@ -1,0 +1,220 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1500" width="1000" height="1500">
+  <defs>
+    <linearGradient id="frameBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#04081a"/>
+      <stop offset="50%" stop-color="#02040e"/>
+      <stop offset="100%" stop-color="#010206"/>
+    </linearGradient>
+    <radialGradient id="silverMoon" cx="35%" cy="30%" r="75%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="50%" stop-color="#d4dcec"/>
+      <stop offset="100%" stop-color="#5a6478"/>
+    </radialGradient>
+    <radialGradient id="moonShadow" cx="65%" cy="50%" r="55%">
+      <stop offset="0%" stop-color="#04081a" stop-opacity="1"/>
+      <stop offset="80%" stop-color="#04081a" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="midBranch" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1a1f2e"/>
+      <stop offset="50%" stop-color="#0a0e1a"/>
+      <stop offset="100%" stop-color="#04060e"/>
+    </linearGradient>
+    <linearGradient id="silverStrk" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#5a6478"/>
+      <stop offset="50%" stop-color="#dde4f0"/>
+      <stop offset="100%" stop-color="#5a6478"/>
+    </linearGradient>
+    <radialGradient id="starGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#a0a8be" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <path d="M 0,0 L 1000,0 L 1000,1500 L 0,1500 Z M 60,60 L 60,1440 L 940,1440 L 940,60 Z" fill="url(#frameBg)" fill-rule="evenodd"/>
+
+  <g id="thornBr">
+    <path d="M0,0 C20,-4 40,4 60,-2 C80,-8 100,4 120,0" stroke="url(#midBranch)" stroke-width="3" fill="none"/>
+    <path d="M10,-2 L8,-8 L14,-4 Z M30,0 L34,-8 L34,-2 Z M50,-2 L48,-10 L54,-4 Z M70,-4 L70,-10 L74,-4 Z M90,-2 L94,-10 L90,-4 Z M110,-2 L110,-8 L114,-4 Z" fill="#04060e"/>
+    <path d="M15,2 L18,8 L12,4 Z M35,2 L34,10 L38,4 Z M55,2 L54,10 L58,4 Z M75,2 L78,10 L72,4 Z M95,2 L94,10 L98,4 Z M115,2 L114,10 L118,4 Z" fill="#04060e"/>
+  </g>
+
+  <g id="crescent">
+    <circle cx="0" cy="0" r="18" fill="url(#silverMoon)"/>
+    <circle cx="6" cy="0" r="16" fill="url(#moonShadow)"/>
+    <circle cx="0" cy="0" r="18" fill="none" stroke="#dde4f0" stroke-width="0.6" opacity="0.6"/>
+  </g>
+
+  <g id="star4">
+    <path d="M0,-7 L1.6,-1.6 L7,0 L1.6,1.6 L0,7 L-1.6,1.6 L-7,0 L-1.6,-1.6 Z" fill="url(#silverStrk)"/>
+    <circle cx="0" cy="0" r="1" fill="#ffffff"/>
+  </g>
+
+  <g id="starSm">
+    <path d="M0,-4 L1,-1 L4,0 L1,1 L0,4 L-1,1 L-4,0 L-1,-1 Z" fill="#dde4f0"/>
+  </g>
+
+  <g id="starGlowDot">
+    <circle cx="0" cy="0" r="3" fill="url(#starGlow)"/>
+    <circle cx="0" cy="0" r="0.9" fill="#ffffff"/>
+  </g>
+
+  <use href="#thornBr" transform="translate(60,40)"/>
+  <use href="#thornBr" transform="translate(180,28)"/>
+  <use href="#thornBr" transform="translate(300,42)"/>
+  <use href="#thornBr" transform="translate(420,30)"/>
+  <use href="#thornBr" transform="translate(540,42)"/>
+  <use href="#thornBr" transform="translate(660,30)"/>
+  <use href="#thornBr" transform="translate(780,42)"/>
+  <use href="#thornBr" transform="translate(880,30)"/>
+  <use href="#star4" transform="translate(140,22)"/>
+  <use href="#star4" transform="translate(260,18) scale(0.9)"/>
+  <use href="#star4" transform="translate(380,22) scale(1.1)"/>
+  <use href="#star4" transform="translate(500,18)"/>
+  <use href="#star4" transform="translate(620,22) scale(0.9)"/>
+  <use href="#star4" transform="translate(740,18) scale(1.1)"/>
+  <use href="#star4" transform="translate(860,22)"/>
+  <use href="#starSm" transform="translate(180,12)"/>
+  <use href="#starSm" transform="translate(320,14)"/>
+  <use href="#starSm" transform="translate(460,12)"/>
+  <use href="#starSm" transform="translate(580,14)"/>
+  <use href="#starSm" transform="translate(700,12)"/>
+  <use href="#starSm" transform="translate(820,14)"/>
+  <use href="#starGlowDot" transform="translate(220,38)"/>
+  <use href="#starGlowDot" transform="translate(420,38)"/>
+  <use href="#starGlowDot" transform="translate(620,38)"/>
+  <use href="#starGlowDot" transform="translate(820,38)"/>
+
+  <use href="#thornBr" transform="translate(60,1460)"/>
+  <use href="#thornBr" transform="translate(180,1472)"/>
+  <use href="#thornBr" transform="translate(300,1458)"/>
+  <use href="#thornBr" transform="translate(420,1470)"/>
+  <use href="#thornBr" transform="translate(540,1458)"/>
+  <use href="#thornBr" transform="translate(660,1470)"/>
+  <use href="#thornBr" transform="translate(780,1458)"/>
+  <use href="#thornBr" transform="translate(880,1470)"/>
+  <use href="#star4" transform="translate(140,1482)"/>
+  <use href="#star4" transform="translate(260,1486) scale(0.9)"/>
+  <use href="#star4" transform="translate(380,1482) scale(1.1)"/>
+  <use href="#star4" transform="translate(500,1486)"/>
+  <use href="#star4" transform="translate(620,1482) scale(0.9)"/>
+  <use href="#star4" transform="translate(740,1486) scale(1.1)"/>
+  <use href="#star4" transform="translate(860,1482)"/>
+  <use href="#starSm" transform="translate(180,1492)"/>
+  <use href="#starSm" transform="translate(320,1490)"/>
+  <use href="#starSm" transform="translate(460,1492)"/>
+  <use href="#starSm" transform="translate(580,1490)"/>
+  <use href="#starSm" transform="translate(700,1492)"/>
+  <use href="#starSm" transform="translate(820,1490)"/>
+  <use href="#starGlowDot" transform="translate(220,1462)"/>
+  <use href="#starGlowDot" transform="translate(420,1462)"/>
+  <use href="#starGlowDot" transform="translate(620,1462)"/>
+  <use href="#starGlowDot" transform="translate(820,1462)"/>
+
+  <use href="#thornBr" transform="translate(40,80) rotate(90)"/>
+  <use href="#thornBr" transform="translate(28,200) rotate(90)"/>
+  <use href="#thornBr" transform="translate(42,320) rotate(90)"/>
+  <use href="#thornBr" transform="translate(30,440) rotate(90)"/>
+  <use href="#thornBr" transform="translate(42,560) rotate(90)"/>
+  <use href="#thornBr" transform="translate(30,680) rotate(90)"/>
+  <use href="#thornBr" transform="translate(42,800) rotate(90)"/>
+  <use href="#thornBr" transform="translate(30,920) rotate(90)"/>
+  <use href="#thornBr" transform="translate(42,1040) rotate(90)"/>
+  <use href="#thornBr" transform="translate(30,1160) rotate(90)"/>
+  <use href="#thornBr" transform="translate(42,1280) rotate(90)"/>
+  <use href="#star4" transform="translate(22,140)"/>
+  <use href="#star4" transform="translate(18,260) scale(0.9)"/>
+  <use href="#star4" transform="translate(22,380) scale(1.1)"/>
+  <use href="#star4" transform="translate(18,500)"/>
+  <use href="#star4" transform="translate(22,620) scale(0.9)"/>
+  <use href="#star4" transform="translate(18,740) scale(1.1)"/>
+  <use href="#star4" transform="translate(22,860)"/>
+  <use href="#star4" transform="translate(18,980) scale(0.9)"/>
+  <use href="#star4" transform="translate(22,1100) scale(1.1)"/>
+  <use href="#star4" transform="translate(18,1220)"/>
+  <use href="#star4" transform="translate(22,1340) scale(0.9)"/>
+  <use href="#starSm" transform="translate(12,180)"/>
+  <use href="#starSm" transform="translate(12,320)"/>
+  <use href="#starSm" transform="translate(12,460)"/>
+  <use href="#starSm" transform="translate(12,600)"/>
+  <use href="#starSm" transform="translate(12,740)"/>
+  <use href="#starSm" transform="translate(12,880)"/>
+  <use href="#starSm" transform="translate(12,1020)"/>
+  <use href="#starSm" transform="translate(12,1160)"/>
+  <use href="#starSm" transform="translate(12,1300)"/>
+  <use href="#starGlowDot" transform="translate(38,220)"/>
+  <use href="#starGlowDot" transform="translate(38,420)"/>
+  <use href="#starGlowDot" transform="translate(38,620)"/>
+  <use href="#starGlowDot" transform="translate(38,820)"/>
+  <use href="#starGlowDot" transform="translate(38,1020)"/>
+  <use href="#starGlowDot" transform="translate(38,1220)"/>
+
+  <use href="#thornBr" transform="translate(960,80) rotate(90)"/>
+  <use href="#thornBr" transform="translate(972,200) rotate(90)"/>
+  <use href="#thornBr" transform="translate(958,320) rotate(90)"/>
+  <use href="#thornBr" transform="translate(970,440) rotate(90)"/>
+  <use href="#thornBr" transform="translate(958,560) rotate(90)"/>
+  <use href="#thornBr" transform="translate(970,680) rotate(90)"/>
+  <use href="#thornBr" transform="translate(958,800) rotate(90)"/>
+  <use href="#thornBr" transform="translate(970,920) rotate(90)"/>
+  <use href="#thornBr" transform="translate(958,1040) rotate(90)"/>
+  <use href="#thornBr" transform="translate(970,1160) rotate(90)"/>
+  <use href="#thornBr" transform="translate(958,1280) rotate(90)"/>
+  <use href="#star4" transform="translate(978,140)"/>
+  <use href="#star4" transform="translate(982,260) scale(0.9)"/>
+  <use href="#star4" transform="translate(978,380) scale(1.1)"/>
+  <use href="#star4" transform="translate(982,500)"/>
+  <use href="#star4" transform="translate(978,620) scale(0.9)"/>
+  <use href="#star4" transform="translate(982,740) scale(1.1)"/>
+  <use href="#star4" transform="translate(978,860)"/>
+  <use href="#star4" transform="translate(982,980) scale(0.9)"/>
+  <use href="#star4" transform="translate(978,1100) scale(1.1)"/>
+  <use href="#star4" transform="translate(982,1220)"/>
+  <use href="#star4" transform="translate(978,1340) scale(0.9)"/>
+  <use href="#starSm" transform="translate(988,180)"/>
+  <use href="#starSm" transform="translate(988,320)"/>
+  <use href="#starSm" transform="translate(988,460)"/>
+  <use href="#starSm" transform="translate(988,600)"/>
+  <use href="#starSm" transform="translate(988,740)"/>
+  <use href="#starSm" transform="translate(988,880)"/>
+  <use href="#starSm" transform="translate(988,1020)"/>
+  <use href="#starSm" transform="translate(988,1160)"/>
+  <use href="#starSm" transform="translate(988,1300)"/>
+  <use href="#starGlowDot" transform="translate(962,220)"/>
+  <use href="#starGlowDot" transform="translate(962,420)"/>
+  <use href="#starGlowDot" transform="translate(962,620)"/>
+  <use href="#starGlowDot" transform="translate(962,820)"/>
+  <use href="#starGlowDot" transform="translate(962,1020)"/>
+  <use href="#starGlowDot" transform="translate(962,1220)"/>
+
+  <g transform="translate(35,35)">
+    <use href="#crescent" transform="translate(0,0) rotate(-45)"/>
+    <use href="#star4" transform="translate(36,18)"/>
+    <use href="#star4" transform="translate(18,36) scale(0.8)"/>
+    <use href="#starSm" transform="translate(46,8)"/>
+    <use href="#starSm" transform="translate(8,46)"/>
+  </g>
+  <g transform="translate(965,35)">
+    <use href="#crescent" transform="translate(0,0) rotate(225)"/>
+    <use href="#star4" transform="translate(-36,18)"/>
+    <use href="#star4" transform="translate(-18,36) scale(0.8)"/>
+    <use href="#starSm" transform="translate(-46,8)"/>
+    <use href="#starSm" transform="translate(-8,46)"/>
+  </g>
+  <g transform="translate(35,1465)">
+    <use href="#crescent" transform="translate(0,0) rotate(45)"/>
+    <use href="#star4" transform="translate(36,-18)"/>
+    <use href="#star4" transform="translate(18,-36) scale(0.8)"/>
+    <use href="#starSm" transform="translate(46,-8)"/>
+    <use href="#starSm" transform="translate(8,-46)"/>
+  </g>
+  <g transform="translate(965,1465)">
+    <use href="#crescent" transform="translate(0,0) rotate(135)"/>
+    <use href="#star4" transform="translate(-36,-18)"/>
+    <use href="#star4" transform="translate(-18,-36) scale(0.8)"/>
+    <use href="#starSm" transform="translate(-46,-8)"/>
+    <use href="#starSm" transform="translate(-8,-46)"/>
+  </g>
+
+  <path d="M60,55 L940,55 M60,1445 L940,1445 M55,60 L55,1440 M945,60 L945,1440" stroke="url(#silverStrk)" stroke-width="1.4" fill="none" opacity="0.85"/>
+  <path d="M60,57 L940,57 M60,1443 L940,1443 M57,60 L57,1440 M943,60 L943,1440" stroke="#04081a" stroke-width="0.4" fill="none"/>
+</svg>

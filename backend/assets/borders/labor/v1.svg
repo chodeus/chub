@@ -1,0 +1,236 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1500" width="1000" height="1500">
+  <defs>
+    <linearGradient id="frameBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#181820"/>
+      <stop offset="50%" stop-color="#0c0c10"/>
+      <stop offset="100%" stop-color="#040406"/>
+    </linearGradient>
+    <linearGradient id="steelG" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3a4050"/>
+      <stop offset="50%" stop-color="#a0a8b8"/>
+      <stop offset="100%" stop-color="#4a5060"/>
+    </linearGradient>
+    <radialGradient id="goldSpark" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#fff0b0"/>
+      <stop offset="55%" stop-color="#d4a020"/>
+      <stop offset="100%" stop-color="#604010"/>
+    </radialGradient>
+    <radialGradient id="darkSteel" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#5a6070"/>
+      <stop offset="55%" stop-color="#2a3040"/>
+      <stop offset="100%" stop-color="#0a0c14"/>
+    </radialGradient>
+    <linearGradient id="anvilG" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#5a6070"/>
+      <stop offset="50%" stop-color="#2a3040"/>
+      <stop offset="100%" stop-color="#0a0c14"/>
+    </linearGradient>
+  </defs>
+
+  <path d="M 0,0 L 1000,0 L 1000,1500 L 0,1500 Z M 60,60 L 60,1440 L 940,1440 L 940,60 Z" fill="url(#frameBg)" fill-rule="evenodd"/>
+
+  <g id="cogGear">
+    <g fill="url(#steelG)" stroke="#0a0c14" stroke-width="0.4">
+      <path d="M-4,-22 L4,-22 L5,-16 L-5,-16 Z"/>
+      <path d="M-4,22 L4,22 L5,16 L-5,16 Z"/>
+      <path d="M-22,-4 L-22,4 L-16,5 L-16,-5 Z"/>
+      <path d="M22,-4 L22,4 L16,5 L16,-5 Z"/>
+      <path d="M-17.7,-14.5 L-13.7,-18.5 L-9.4,-14.5 L-13.5,-10.5 Z"/>
+      <path d="M17.7,-14.5 L13.7,-18.5 L9.4,-14.5 L13.5,-10.5 Z"/>
+      <path d="M-17.7,14.5 L-13.7,18.5 L-9.4,14.5 L-13.5,10.5 Z"/>
+      <path d="M17.7,14.5 L13.7,18.5 L9.4,14.5 L13.5,10.5 Z"/>
+    </g>
+    <circle cx="0" cy="0" r="14" fill="url(#steelG)" stroke="#0a0c14" stroke-width="0.6"/>
+    <circle cx="0" cy="0" r="14" fill="none" stroke="#a0a8b8" stroke-width="0.4"/>
+    <circle cx="0" cy="0" r="5" fill="url(#darkSteel)" stroke="#0a0c14" stroke-width="0.5"/>
+    <circle cx="0" cy="0" r="2" fill="#0a0c14"/>
+    <path d="M-3,-3 L3,3 M3,-3 L-3,3" stroke="#0a0c14" stroke-width="0.4"/>
+  </g>
+
+  <g id="hammerAnvil">
+    <path d="M-22,-6 L22,-6 L20,-2 L-20,-2 Z" fill="url(#anvilG)" stroke="#0a0c14" stroke-width="0.4"/>
+    <path d="M-26,-6 L-22,-6 L-22,-2 L-26,-2 Z M22,-6 L26,-6 L26,-2 L22,-2 Z" fill="url(#anvilG)" stroke="#0a0c14" stroke-width="0.4"/>
+    <path d="M-14,-2 L14,-2 L12,16 L-12,16 Z" fill="url(#darkSteel)" stroke="#0a0c14" stroke-width="0.5"/>
+    <path d="M-20,16 L20,16 L20,20 L-20,20 Z" fill="url(#anvilG)" stroke="#0a0c14" stroke-width="0.4"/>
+    <path d="M-12,-10 L-4,-10 L-3,-6 L-13,-6 Z" fill="url(#steelG)" stroke="#0a0c14" stroke-width="0.4" transform="rotate(-25,-8,-8)"/>
+    <rect x="-30" y="-10" width="20" height="3" fill="url(#anvilG)" stroke="#0a0c14" stroke-width="0.3" transform="rotate(-25,-20,-8)"/>
+    <path d="M-22,-6 Q-2,-4 22,-6" stroke="#a0a8b8" stroke-width="0.4" fill="none" opacity="0.6"/>
+  </g>
+
+  <g id="rivetPlate">
+    <rect x="0" y="-12" width="120" height="24" fill="url(#anvilG)" stroke="#0a0c14" stroke-width="0.4"/>
+    <rect x="2" y="-10" width="116" height="20" fill="none" stroke="#a0a8b8" stroke-width="0.3"/>
+    <circle cx="10" cy="-6" r="2" fill="url(#steelG)" stroke="#0a0c14" stroke-width="0.3"/>
+    <circle cx="10" cy="6" r="2" fill="url(#steelG)" stroke="#0a0c14" stroke-width="0.3"/>
+    <circle cx="30" cy="-6" r="2" fill="url(#steelG)" stroke="#0a0c14" stroke-width="0.3"/>
+    <circle cx="30" cy="6" r="2" fill="url(#steelG)" stroke="#0a0c14" stroke-width="0.3"/>
+    <circle cx="50" cy="-6" r="2" fill="url(#steelG)" stroke="#0a0c14" stroke-width="0.3"/>
+    <circle cx="50" cy="6" r="2" fill="url(#steelG)" stroke="#0a0c14" stroke-width="0.3"/>
+    <circle cx="70" cy="-6" r="2" fill="url(#steelG)" stroke="#0a0c14" stroke-width="0.3"/>
+    <circle cx="70" cy="6" r="2" fill="url(#steelG)" stroke="#0a0c14" stroke-width="0.3"/>
+    <circle cx="90" cy="-6" r="2" fill="url(#steelG)" stroke="#0a0c14" stroke-width="0.3"/>
+    <circle cx="90" cy="6" r="2" fill="url(#steelG)" stroke="#0a0c14" stroke-width="0.3"/>
+    <circle cx="110" cy="-6" r="2" fill="url(#steelG)" stroke="#0a0c14" stroke-width="0.3"/>
+    <circle cx="110" cy="6" r="2" fill="url(#steelG)" stroke="#0a0c14" stroke-width="0.3"/>
+    <circle cx="9" cy="-7" r="0.6" fill="#a0a8b8" opacity="0.7"/>
+    <circle cx="29" cy="-7" r="0.6" fill="#a0a8b8" opacity="0.7"/>
+    <circle cx="49" cy="-7" r="0.6" fill="#a0a8b8" opacity="0.7"/>
+    <circle cx="69" cy="-7" r="0.6" fill="#a0a8b8" opacity="0.7"/>
+    <circle cx="89" cy="-7" r="0.6" fill="#a0a8b8" opacity="0.7"/>
+    <circle cx="109" cy="-7" r="0.6" fill="#a0a8b8" opacity="0.7"/>
+  </g>
+
+  <g id="rivetPlateV">
+    <rect x="-12" y="0" width="24" height="120" fill="url(#anvilG)" stroke="#0a0c14" stroke-width="0.4"/>
+    <rect x="-10" y="2" width="20" height="116" fill="none" stroke="#a0a8b8" stroke-width="0.3"/>
+    <circle cx="-6" cy="10" r="2" fill="url(#steelG)" stroke="#0a0c14" stroke-width="0.3"/>
+    <circle cx="6" cy="10" r="2" fill="url(#steelG)" stroke="#0a0c14" stroke-width="0.3"/>
+    <circle cx="-6" cy="30" r="2" fill="url(#steelG)" stroke="#0a0c14" stroke-width="0.3"/>
+    <circle cx="6" cy="30" r="2" fill="url(#steelG)" stroke="#0a0c14" stroke-width="0.3"/>
+    <circle cx="-6" cy="50" r="2" fill="url(#steelG)" stroke="#0a0c14" stroke-width="0.3"/>
+    <circle cx="6" cy="50" r="2" fill="url(#steelG)" stroke="#0a0c14" stroke-width="0.3"/>
+    <circle cx="-6" cy="70" r="2" fill="url(#steelG)" stroke="#0a0c14" stroke-width="0.3"/>
+    <circle cx="6" cy="70" r="2" fill="url(#steelG)" stroke="#0a0c14" stroke-width="0.3"/>
+    <circle cx="-6" cy="90" r="2" fill="url(#steelG)" stroke="#0a0c14" stroke-width="0.3"/>
+    <circle cx="6" cy="90" r="2" fill="url(#steelG)" stroke="#0a0c14" stroke-width="0.3"/>
+    <circle cx="-6" cy="110" r="2" fill="url(#steelG)" stroke="#0a0c14" stroke-width="0.3"/>
+    <circle cx="6" cy="110" r="2" fill="url(#steelG)" stroke="#0a0c14" stroke-width="0.3"/>
+  </g>
+
+  <g id="sparkStar">
+    <path d="M0,-8 L2.4,-2.4 L8,0 L2.4,2.4 L0,8 L-2.4,2.4 L-8,0 L-2.4,-2.4 Z" fill="url(#goldSpark)"/>
+    <circle cx="0" cy="0" r="1.4" fill="#fff0b0"/>
+  </g>
+
+  <!-- TOP -->
+  <use href="#rivetPlate" transform="translate(60,42)"/>
+  <use href="#rivetPlate" transform="translate(180,42)"/>
+  <use href="#rivetPlate" transform="translate(300,42)"/>
+  <use href="#rivetPlate" transform="translate(420,42)"/>
+  <use href="#rivetPlate" transform="translate(540,42)"/>
+  <use href="#rivetPlate" transform="translate(660,42)"/>
+  <use href="#rivetPlate" transform="translate(780,42)"/>
+  <use href="#rivetPlate" transform="translate(820,42)"/>
+  <use href="#hammerAnvil" transform="translate(140,22)"/>
+  <use href="#hammerAnvil" transform="translate(300,22)"/>
+  <use href="#hammerAnvil" transform="translate(460,22)"/>
+  <use href="#hammerAnvil" transform="translate(620,22)"/>
+  <use href="#hammerAnvil" transform="translate(780,22)"/>
+  <use href="#hammerAnvil" transform="translate(900,22)"/>
+  <use href="#sparkStar" transform="translate(220,16)"/>
+  <use href="#sparkStar" transform="translate(380,16)"/>
+  <use href="#sparkStar" transform="translate(540,16)"/>
+  <use href="#sparkStar" transform="translate(700,16)"/>
+  <use href="#sparkStar" transform="translate(860,16)"/>
+
+  <!-- BOTTOM -->
+  <use href="#rivetPlate" transform="translate(60,1458)"/>
+  <use href="#rivetPlate" transform="translate(180,1458)"/>
+  <use href="#rivetPlate" transform="translate(300,1458)"/>
+  <use href="#rivetPlate" transform="translate(420,1458)"/>
+  <use href="#rivetPlate" transform="translate(540,1458)"/>
+  <use href="#rivetPlate" transform="translate(660,1458)"/>
+  <use href="#rivetPlate" transform="translate(780,1458)"/>
+  <use href="#rivetPlate" transform="translate(820,1458)"/>
+  <use href="#hammerAnvil" transform="translate(140,1478) scale(1,-1)"/>
+  <use href="#hammerAnvil" transform="translate(300,1478) scale(1,-1)"/>
+  <use href="#hammerAnvil" transform="translate(460,1478) scale(1,-1)"/>
+  <use href="#hammerAnvil" transform="translate(620,1478) scale(1,-1)"/>
+  <use href="#hammerAnvil" transform="translate(780,1478) scale(1,-1)"/>
+  <use href="#hammerAnvil" transform="translate(900,1478) scale(1,-1)"/>
+  <use href="#sparkStar" transform="translate(220,1484)"/>
+  <use href="#sparkStar" transform="translate(380,1484)"/>
+  <use href="#sparkStar" transform="translate(540,1484)"/>
+  <use href="#sparkStar" transform="translate(700,1484)"/>
+  <use href="#sparkStar" transform="translate(860,1484)"/>
+
+  <!-- LEFT -->
+  <use href="#rivetPlateV" transform="translate(42,60)"/>
+  <use href="#rivetPlateV" transform="translate(42,180)"/>
+  <use href="#rivetPlateV" transform="translate(42,300)"/>
+  <use href="#rivetPlateV" transform="translate(42,420)"/>
+  <use href="#rivetPlateV" transform="translate(42,540)"/>
+  <use href="#rivetPlateV" transform="translate(42,660)"/>
+  <use href="#rivetPlateV" transform="translate(42,780)"/>
+  <use href="#rivetPlateV" transform="translate(42,900)"/>
+  <use href="#rivetPlateV" transform="translate(42,1020)"/>
+  <use href="#rivetPlateV" transform="translate(42,1140)"/>
+  <use href="#rivetPlateV" transform="translate(42,1260)"/>
+  <use href="#rivetPlateV" transform="translate(42,1320)"/>
+  <use href="#hammerAnvil" transform="translate(22,140) rotate(90)"/>
+  <use href="#hammerAnvil" transform="translate(22,300) rotate(90)"/>
+  <use href="#hammerAnvil" transform="translate(22,460) rotate(90)"/>
+  <use href="#hammerAnvil" transform="translate(22,620) rotate(90)"/>
+  <use href="#hammerAnvil" transform="translate(22,780) rotate(90)"/>
+  <use href="#hammerAnvil" transform="translate(22,940) rotate(90)"/>
+  <use href="#hammerAnvil" transform="translate(22,1100) rotate(90)"/>
+  <use href="#hammerAnvil" transform="translate(22,1260) rotate(90)"/>
+  <use href="#hammerAnvil" transform="translate(22,1400) rotate(90)"/>
+  <use href="#sparkStar" transform="translate(16,220)"/>
+  <use href="#sparkStar" transform="translate(16,380)"/>
+  <use href="#sparkStar" transform="translate(16,540)"/>
+  <use href="#sparkStar" transform="translate(16,700)"/>
+  <use href="#sparkStar" transform="translate(16,860)"/>
+  <use href="#sparkStar" transform="translate(16,1020)"/>
+  <use href="#sparkStar" transform="translate(16,1180)"/>
+  <use href="#sparkStar" transform="translate(16,1340)"/>
+
+  <!-- RIGHT -->
+  <use href="#rivetPlateV" transform="translate(958,60)"/>
+  <use href="#rivetPlateV" transform="translate(958,180)"/>
+  <use href="#rivetPlateV" transform="translate(958,300)"/>
+  <use href="#rivetPlateV" transform="translate(958,420)"/>
+  <use href="#rivetPlateV" transform="translate(958,540)"/>
+  <use href="#rivetPlateV" transform="translate(958,660)"/>
+  <use href="#rivetPlateV" transform="translate(958,780)"/>
+  <use href="#rivetPlateV" transform="translate(958,900)"/>
+  <use href="#rivetPlateV" transform="translate(958,1020)"/>
+  <use href="#rivetPlateV" transform="translate(958,1140)"/>
+  <use href="#rivetPlateV" transform="translate(958,1260)"/>
+  <use href="#rivetPlateV" transform="translate(958,1320)"/>
+  <use href="#hammerAnvil" transform="translate(978,140) rotate(270)"/>
+  <use href="#hammerAnvil" transform="translate(978,300) rotate(270)"/>
+  <use href="#hammerAnvil" transform="translate(978,460) rotate(270)"/>
+  <use href="#hammerAnvil" transform="translate(978,620) rotate(270)"/>
+  <use href="#hammerAnvil" transform="translate(978,780) rotate(270)"/>
+  <use href="#hammerAnvil" transform="translate(978,940) rotate(270)"/>
+  <use href="#hammerAnvil" transform="translate(978,1100) rotate(270)"/>
+  <use href="#hammerAnvil" transform="translate(978,1260) rotate(270)"/>
+  <use href="#hammerAnvil" transform="translate(978,1400) rotate(270)"/>
+  <use href="#sparkStar" transform="translate(984,220)"/>
+  <use href="#sparkStar" transform="translate(984,380)"/>
+  <use href="#sparkStar" transform="translate(984,540)"/>
+  <use href="#sparkStar" transform="translate(984,700)"/>
+  <use href="#sparkStar" transform="translate(984,860)"/>
+  <use href="#sparkStar" transform="translate(984,1020)"/>
+  <use href="#sparkStar" transform="translate(984,1180)"/>
+  <use href="#sparkStar" transform="translate(984,1340)"/>
+
+  <!-- CORNERS: cog gears -->
+  <g transform="translate(40,40)">
+    <use href="#cogGear" transform="translate(34,34) scale(1.4)"/>
+    <use href="#hammerAnvil" transform="translate(68,18)"/>
+    <use href="#sparkStar" transform="translate(72,52) scale(1.2)"/>
+    <use href="#sparkStar" transform="translate(52,72) scale(1.2)"/>
+  </g>
+  <g transform="translate(960,40)">
+    <use href="#cogGear" transform="translate(-34,34) scale(1.4)"/>
+    <use href="#hammerAnvil" transform="translate(-68,18)"/>
+    <use href="#sparkStar" transform="translate(-72,52) scale(1.2)"/>
+    <use href="#sparkStar" transform="translate(-52,72) scale(1.2)"/>
+  </g>
+  <g transform="translate(40,1460)">
+    <use href="#cogGear" transform="translate(34,-34) scale(1.4)"/>
+    <use href="#hammerAnvil" transform="translate(68,-18) scale(1,-1)"/>
+    <use href="#sparkStar" transform="translate(72,-52) scale(1.2)"/>
+    <use href="#sparkStar" transform="translate(52,-72) scale(1.2)"/>
+  </g>
+  <g transform="translate(960,1460)">
+    <use href="#cogGear" transform="translate(-34,-34) scale(1.4)"/>
+    <use href="#hammerAnvil" transform="translate(-68,-18) scale(1,-1)"/>
+    <use href="#sparkStar" transform="translate(-72,-52) scale(1.2)"/>
+    <use href="#sparkStar" transform="translate(-52,-72) scale(1.2)"/>
+  </g>
+
+  <path d="M60,55 L940,55 M60,1445 L940,1445 M55,60 L55,1440 M945,60 L945,1440" stroke="url(#steelG)" stroke-width="1.4" fill="none"/>
+</svg>

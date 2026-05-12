@@ -4,11 +4,14 @@
 FROM python:3.13-slim@sha256:d49c1ff87eb98eac346fc250f52925f726eb913c43a92854246dd03c9692ad67 AS builder
 ARG NODE_MAJOR=24
 
-# Install build dependencies (including Node.js 24 and build tools)
+# Install build dependencies (including Node.js 24 and build tools).
+# libcairo2-dev + cairo runtime libs are needed at build time for
+# cairosvg, which rasterizes the holiday border SVGs to PNGs.
 RUN set -eux; \
     apt-get update && \
     apt-get install -y --no-install-recommends \
-        ca-certificates gnupg gcc wget curl unzip p7zip-full tzdata jq git build-essential && \
+        ca-certificates gnupg gcc wget curl unzip p7zip-full tzdata jq git build-essential \
+        libcairo2-dev pkg-config && \
     install -d -m 0755 /etc/apt/keyrings && \
     curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg && \
     echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_${NODE_MAJOR}.x nodistro main" > /etc/apt/sources.list.d/nodesource.list && \
@@ -37,6 +40,12 @@ RUN set -eux; \
 
 # Copy full app source (including frontend)
 COPY . .
+
+# Rasterize holiday border SVGs to PNGs (cairosvg is a build-only dep).
+# Runtime reads the PNGs directly, so the final image doesn't need cairo.
+RUN pip3 install --no-cache-dir cairosvg && \
+    python3 scripts/rasterize_borders.py && \
+    pip3 uninstall -y cairosvg
 
 # Build frontend assets
 RUN cd frontend && npm install && npm run build

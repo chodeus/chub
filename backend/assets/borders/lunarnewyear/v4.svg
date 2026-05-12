@@ -1,0 +1,286 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1500" width="1000" height="1500">
+  <defs>
+    <linearGradient id="frameBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#200408"/>
+      <stop offset="50%" stop-color="#100204"/>
+      <stop offset="100%" stop-color="#080102"/>
+    </linearGradient>
+    <radialGradient id="vermilion" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#ff5848"/>
+      <stop offset="55%" stop-color="#d01828"/>
+      <stop offset="100%" stop-color="#5a0408"/>
+    </radialGradient>
+    <radialGradient id="goldScale" cx="40%" cy="30%" r="70%">
+      <stop offset="0%" stop-color="#fff0a8"/>
+      <stop offset="50%" stop-color="#d4a020"/>
+      <stop offset="100%" stop-color="#503808"/>
+    </radialGradient>
+    <radialGradient id="darkScale" cx="40%" cy="30%" r="70%">
+      <stop offset="0%" stop-color="#d4a020"/>
+      <stop offset="60%" stop-color="#8a5018"/>
+      <stop offset="100%" stop-color="#3a2008"/>
+    </radialGradient>
+    <linearGradient id="goldStroke" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#5a3a08"/>
+      <stop offset="50%" stop-color="#f0d050"/>
+      <stop offset="100%" stop-color="#8a5018"/>
+    </linearGradient>
+  </defs>
+
+  <path d="M 0,0 L 1000,0 L 1000,1500 L 0,1500 Z M 60,60 L 60,1440 L 940,1440 L 940,60 Z" fill="url(#frameBg)" fill-rule="evenodd"/>
+
+  <g id="scaleA">
+    <path d="M0,0 C-7,0 -10,-4 -10,-8 C-10,-12 -6,-16 0,-16 C6,-16 10,-12 10,-8 C10,-4 7,0 0,0 Z" fill="url(#goldScale)" stroke="#503808" stroke-width="0.4"/>
+    <path d="M0,-3 C-5,-3 -7,-6 -7,-8 C-7,-11 -3,-13 0,-13" fill="none" stroke="#fff0a8" stroke-width="0.4" opacity="0.5"/>
+  </g>
+
+  <g id="scaleB">
+    <path d="M0,0 C-7,0 -10,-4 -10,-8 C-10,-12 -6,-16 0,-16 C6,-16 10,-12 10,-8 C10,-4 7,0 0,0 Z" fill="url(#darkScale)" stroke="#3a2008" stroke-width="0.4"/>
+    <path d="M0,-3 C-5,-3 -7,-6 -7,-8 C-7,-11 -3,-13 0,-13" fill="none" stroke="#d4a020" stroke-width="0.3" opacity="0.6"/>
+  </g>
+
+  <g id="scaleRowAlt">
+    <use href="#scaleA" transform="translate(0,0)"/>
+    <use href="#scaleB" transform="translate(20,0)"/>
+    <use href="#scaleA" transform="translate(40,0)"/>
+    <use href="#scaleB" transform="translate(60,0)"/>
+    <use href="#scaleA" transform="translate(80,0)"/>
+    <use href="#scaleB" transform="translate(100,0)"/>
+    <use href="#scaleA" transform="translate(120,0)"/>
+  </g>
+
+  <g id="scaleRowAltOffset">
+    <use href="#scaleB" transform="translate(-10,0)"/>
+    <use href="#scaleA" transform="translate(10,0)"/>
+    <use href="#scaleB" transform="translate(30,0)"/>
+    <use href="#scaleA" transform="translate(50,0)"/>
+    <use href="#scaleB" transform="translate(70,0)"/>
+    <use href="#scaleA" transform="translate(90,0)"/>
+    <use href="#scaleB" transform="translate(110,0)"/>
+    <use href="#scaleA" transform="translate(130,0)"/>
+  </g>
+
+  <g id="scaleColumn">
+    <use href="#scaleA" transform="translate(0,0) rotate(90)"/>
+    <use href="#scaleB" transform="translate(0,20) rotate(90)"/>
+    <use href="#scaleA" transform="translate(0,40) rotate(90)"/>
+    <use href="#scaleB" transform="translate(0,60) rotate(90)"/>
+    <use href="#scaleA" transform="translate(0,80) rotate(90)"/>
+    <use href="#scaleB" transform="translate(0,100) rotate(90)"/>
+    <use href="#scaleA" transform="translate(0,120) rotate(90)"/>
+  </g>
+
+  <g id="scaleColumnOffset">
+    <use href="#scaleB" transform="translate(0,-10) rotate(90)"/>
+    <use href="#scaleA" transform="translate(0,10) rotate(90)"/>
+    <use href="#scaleB" transform="translate(0,30) rotate(90)"/>
+    <use href="#scaleA" transform="translate(0,50) rotate(90)"/>
+    <use href="#scaleB" transform="translate(0,70) rotate(90)"/>
+    <use href="#scaleA" transform="translate(0,90) rotate(90)"/>
+    <use href="#scaleB" transform="translate(0,110) rotate(90)"/>
+    <use href="#scaleA" transform="translate(0,130) rotate(90)"/>
+  </g>
+
+  <g id="scaledLantern">
+    <rect x="-3" y="-22" width="6" height="3" fill="url(#goldScale)" stroke="#503808" stroke-width="0.4"/>
+    <path d="M-14,-19 L14,-19 L14,-14 L-14,-14 Z" fill="url(#goldScale)" stroke="#503808" stroke-width="0.4"/>
+    <path d="M-18,-14 C-22,0 -22,4 -14,8 L14,8 C22,4 22,0 18,-14 Z" fill="url(#vermilion)" stroke="#5a0408" stroke-width="0.6"/>
+    <g transform="translate(-14,-13)">
+      <use href="#scaleA" transform="translate(4,4) scale(0.35)"/>
+      <use href="#scaleB" transform="translate(11,4) scale(0.35)"/>
+      <use href="#scaleA" transform="translate(18,4) scale(0.35)"/>
+      <use href="#scaleB" transform="translate(25,4) scale(0.35)"/>
+      <use href="#scaleA" transform="translate(7,9) scale(0.35)"/>
+      <use href="#scaleB" transform="translate(14,9) scale(0.35)"/>
+      <use href="#scaleA" transform="translate(21,9) scale(0.35)"/>
+    </g>
+    <path d="M-14,8 L14,8 L14,12 L-14,12 Z" fill="url(#goldScale)" stroke="#503808" stroke-width="0.4"/>
+    <path d="M-10,12 L-10,22 M-4,12 L-4,22 M4,12 L4,22 M10,12 L10,22 M0,12 L0,24" stroke="#d4a020" stroke-width="0.5"/>
+    <path d="M-10,22 L-12,26 M-4,22 L-6,26 M4,22 L6,26 M10,22 L12,26 M0,24 L0,28" stroke="#d4a020" stroke-width="0.5"/>
+  </g>
+
+  <g id="plumBlossomR">
+    <g>
+      <ellipse cx="0" cy="-5" rx="3.5" ry="4.5" fill="url(#vermilion)" stroke="#5a0408" stroke-width="0.3"/>
+      <ellipse cx="0" cy="-5" rx="3.5" ry="4.5" fill="url(#vermilion)" transform="rotate(72)" stroke="#5a0408" stroke-width="0.3"/>
+      <ellipse cx="0" cy="-5" rx="3.5" ry="4.5" fill="url(#vermilion)" transform="rotate(144)" stroke="#5a0408" stroke-width="0.3"/>
+      <ellipse cx="0" cy="-5" rx="3.5" ry="4.5" fill="url(#vermilion)" transform="rotate(216)" stroke="#5a0408" stroke-width="0.3"/>
+      <ellipse cx="0" cy="-5" rx="3.5" ry="4.5" fill="url(#vermilion)" transform="rotate(288)" stroke="#5a0408" stroke-width="0.3"/>
+    </g>
+    <circle cx="0" cy="0" r="1.4" fill="url(#goldScale)"/>
+  </g>
+
+  <!-- TOP: stacked rows of scales -->
+  <use href="#scaleRowAlt" transform="translate(60,28)"/>
+  <use href="#scaleRowAltOffset" transform="translate(60,42)"/>
+  <use href="#scaleRowAlt" transform="translate(60,56)"/>
+  <use href="#scaleRowAlt" transform="translate(200,28)"/>
+  <use href="#scaleRowAltOffset" transform="translate(200,42)"/>
+  <use href="#scaleRowAlt" transform="translate(200,56)"/>
+  <use href="#scaleRowAlt" transform="translate(340,28)"/>
+  <use href="#scaleRowAltOffset" transform="translate(340,42)"/>
+  <use href="#scaleRowAlt" transform="translate(340,56)"/>
+  <use href="#scaleRowAlt" transform="translate(480,28)"/>
+  <use href="#scaleRowAltOffset" transform="translate(480,42)"/>
+  <use href="#scaleRowAlt" transform="translate(480,56)"/>
+  <use href="#scaleRowAlt" transform="translate(620,28)"/>
+  <use href="#scaleRowAltOffset" transform="translate(620,42)"/>
+  <use href="#scaleRowAlt" transform="translate(620,56)"/>
+  <use href="#scaleRowAlt" transform="translate(760,28)"/>
+  <use href="#scaleRowAltOffset" transform="translate(760,42)"/>
+  <use href="#scaleRowAlt" transform="translate(760,56)"/>
+  <use href="#scaledLantern" transform="translate(140,40) scale(0.9)"/>
+  <use href="#scaledLantern" transform="translate(280,40) scale(0.9)"/>
+  <use href="#scaledLantern" transform="translate(420,40) scale(0.9)"/>
+  <use href="#scaledLantern" transform="translate(560,40) scale(0.9)"/>
+  <use href="#scaledLantern" transform="translate(700,40) scale(0.9)"/>
+  <use href="#scaledLantern" transform="translate(840,40) scale(0.9)"/>
+  <use href="#scaledLantern" transform="translate(900,40) scale(0.9)"/>
+
+  <!-- BOTTOM -->
+  <use href="#scaleRowAlt" transform="translate(60,1444)"/>
+  <use href="#scaleRowAltOffset" transform="translate(60,1458)"/>
+  <use href="#scaleRowAlt" transform="translate(60,1472)"/>
+  <use href="#scaleRowAlt" transform="translate(200,1444)"/>
+  <use href="#scaleRowAltOffset" transform="translate(200,1458)"/>
+  <use href="#scaleRowAlt" transform="translate(200,1472)"/>
+  <use href="#scaleRowAlt" transform="translate(340,1444)"/>
+  <use href="#scaleRowAltOffset" transform="translate(340,1458)"/>
+  <use href="#scaleRowAlt" transform="translate(340,1472)"/>
+  <use href="#scaleRowAlt" transform="translate(480,1444)"/>
+  <use href="#scaleRowAltOffset" transform="translate(480,1458)"/>
+  <use href="#scaleRowAlt" transform="translate(480,1472)"/>
+  <use href="#scaleRowAlt" transform="translate(620,1444)"/>
+  <use href="#scaleRowAltOffset" transform="translate(620,1458)"/>
+  <use href="#scaleRowAlt" transform="translate(620,1472)"/>
+  <use href="#scaleRowAlt" transform="translate(760,1444)"/>
+  <use href="#scaleRowAltOffset" transform="translate(760,1458)"/>
+  <use href="#scaleRowAlt" transform="translate(760,1472)"/>
+  <use href="#scaledLantern" transform="translate(140,1462) scale(0.9)"/>
+  <use href="#scaledLantern" transform="translate(280,1462) scale(0.9)"/>
+  <use href="#scaledLantern" transform="translate(420,1462) scale(0.9)"/>
+  <use href="#scaledLantern" transform="translate(560,1462) scale(0.9)"/>
+  <use href="#scaledLantern" transform="translate(700,1462) scale(0.9)"/>
+  <use href="#scaledLantern" transform="translate(840,1462) scale(0.9)"/>
+  <use href="#scaledLantern" transform="translate(900,1462) scale(0.9)"/>
+
+  <!-- LEFT -->
+  <use href="#scaleColumn" transform="translate(28,60)"/>
+  <use href="#scaleColumnOffset" transform="translate(42,60)"/>
+  <use href="#scaleColumn" transform="translate(56,60)"/>
+  <use href="#scaleColumn" transform="translate(28,200)"/>
+  <use href="#scaleColumnOffset" transform="translate(42,200)"/>
+  <use href="#scaleColumn" transform="translate(56,200)"/>
+  <use href="#scaleColumn" transform="translate(28,340)"/>
+  <use href="#scaleColumnOffset" transform="translate(42,340)"/>
+  <use href="#scaleColumn" transform="translate(56,340)"/>
+  <use href="#scaleColumn" transform="translate(28,480)"/>
+  <use href="#scaleColumnOffset" transform="translate(42,480)"/>
+  <use href="#scaleColumn" transform="translate(56,480)"/>
+  <use href="#scaleColumn" transform="translate(28,620)"/>
+  <use href="#scaleColumnOffset" transform="translate(42,620)"/>
+  <use href="#scaleColumn" transform="translate(56,620)"/>
+  <use href="#scaleColumn" transform="translate(28,760)"/>
+  <use href="#scaleColumnOffset" transform="translate(42,760)"/>
+  <use href="#scaleColumn" transform="translate(56,760)"/>
+  <use href="#scaleColumn" transform="translate(28,900)"/>
+  <use href="#scaleColumnOffset" transform="translate(42,900)"/>
+  <use href="#scaleColumn" transform="translate(56,900)"/>
+  <use href="#scaleColumn" transform="translate(28,1040)"/>
+  <use href="#scaleColumnOffset" transform="translate(42,1040)"/>
+  <use href="#scaleColumn" transform="translate(56,1040)"/>
+  <use href="#scaleColumn" transform="translate(28,1180)"/>
+  <use href="#scaleColumnOffset" transform="translate(42,1180)"/>
+  <use href="#scaleColumn" transform="translate(56,1180)"/>
+  <use href="#scaleColumn" transform="translate(28,1320)"/>
+  <use href="#scaleColumnOffset" transform="translate(42,1320)"/>
+  <use href="#scaleColumn" transform="translate(56,1320)"/>
+  <use href="#scaledLantern" transform="translate(42,140) scale(0.9)"/>
+  <use href="#scaledLantern" transform="translate(42,280) scale(0.9)"/>
+  <use href="#scaledLantern" transform="translate(42,420) scale(0.9)"/>
+  <use href="#scaledLantern" transform="translate(42,560) scale(0.9)"/>
+  <use href="#scaledLantern" transform="translate(42,700) scale(0.9)"/>
+  <use href="#scaledLantern" transform="translate(42,840) scale(0.9)"/>
+  <use href="#scaledLantern" transform="translate(42,980) scale(0.9)"/>
+  <use href="#scaledLantern" transform="translate(42,1120) scale(0.9)"/>
+  <use href="#scaledLantern" transform="translate(42,1260) scale(0.9)"/>
+  <use href="#scaledLantern" transform="translate(42,1400) scale(0.9)"/>
+
+  <!-- RIGHT -->
+  <use href="#scaleColumn" transform="translate(944,60)"/>
+  <use href="#scaleColumnOffset" transform="translate(958,60)"/>
+  <use href="#scaleColumn" transform="translate(972,60)"/>
+  <use href="#scaleColumn" transform="translate(944,200)"/>
+  <use href="#scaleColumnOffset" transform="translate(958,200)"/>
+  <use href="#scaleColumn" transform="translate(972,200)"/>
+  <use href="#scaleColumn" transform="translate(944,340)"/>
+  <use href="#scaleColumnOffset" transform="translate(958,340)"/>
+  <use href="#scaleColumn" transform="translate(972,340)"/>
+  <use href="#scaleColumn" transform="translate(944,480)"/>
+  <use href="#scaleColumnOffset" transform="translate(958,480)"/>
+  <use href="#scaleColumn" transform="translate(972,480)"/>
+  <use href="#scaleColumn" transform="translate(944,620)"/>
+  <use href="#scaleColumnOffset" transform="translate(958,620)"/>
+  <use href="#scaleColumn" transform="translate(972,620)"/>
+  <use href="#scaleColumn" transform="translate(944,760)"/>
+  <use href="#scaleColumnOffset" transform="translate(958,760)"/>
+  <use href="#scaleColumn" transform="translate(972,760)"/>
+  <use href="#scaleColumn" transform="translate(944,900)"/>
+  <use href="#scaleColumnOffset" transform="translate(958,900)"/>
+  <use href="#scaleColumn" transform="translate(972,900)"/>
+  <use href="#scaleColumn" transform="translate(944,1040)"/>
+  <use href="#scaleColumnOffset" transform="translate(958,1040)"/>
+  <use href="#scaleColumn" transform="translate(972,1040)"/>
+  <use href="#scaleColumn" transform="translate(944,1180)"/>
+  <use href="#scaleColumnOffset" transform="translate(958,1180)"/>
+  <use href="#scaleColumn" transform="translate(972,1180)"/>
+  <use href="#scaleColumn" transform="translate(944,1320)"/>
+  <use href="#scaleColumnOffset" transform="translate(958,1320)"/>
+  <use href="#scaleColumn" transform="translate(972,1320)"/>
+  <use href="#scaledLantern" transform="translate(958,140) scale(0.9)"/>
+  <use href="#scaledLantern" transform="translate(958,280) scale(0.9)"/>
+  <use href="#scaledLantern" transform="translate(958,420) scale(0.9)"/>
+  <use href="#scaledLantern" transform="translate(958,560) scale(0.9)"/>
+  <use href="#scaledLantern" transform="translate(958,700) scale(0.9)"/>
+  <use href="#scaledLantern" transform="translate(958,840) scale(0.9)"/>
+  <use href="#scaledLantern" transform="translate(958,980) scale(0.9)"/>
+  <use href="#scaledLantern" transform="translate(958,1120) scale(0.9)"/>
+  <use href="#scaledLantern" transform="translate(958,1260) scale(0.9)"/>
+  <use href="#scaledLantern" transform="translate(958,1400) scale(0.9)"/>
+
+  <!-- CORNERS -->
+  <g transform="translate(20,20)">
+    <use href="#scaleRowAlt" transform="translate(0,12) scale(0.6)"/>
+    <use href="#scaleRowAltOffset" transform="translate(0,22) scale(0.6)"/>
+    <use href="#scaleRowAlt" transform="translate(0,32) scale(0.6)"/>
+    <use href="#scaleRowAltOffset" transform="translate(0,42) scale(0.6)"/>
+    <use href="#scaledLantern" transform="translate(40,46) scale(1.1)"/>
+    <use href="#plumBlossomR" transform="translate(60,12) scale(1.4)"/>
+  </g>
+  <g transform="translate(980,20)">
+    <use href="#scaleRowAlt" transform="translate(0,12) scale(-0.6,0.6)"/>
+    <use href="#scaleRowAltOffset" transform="translate(0,22) scale(-0.6,0.6)"/>
+    <use href="#scaleRowAlt" transform="translate(0,32) scale(-0.6,0.6)"/>
+    <use href="#scaleRowAltOffset" transform="translate(0,42) scale(-0.6,0.6)"/>
+    <use href="#scaledLantern" transform="translate(-40,46) scale(1.1)"/>
+    <use href="#plumBlossomR" transform="translate(-60,12) scale(1.4)"/>
+  </g>
+  <g transform="translate(20,1480)">
+    <use href="#scaleRowAlt" transform="translate(0,-12) scale(0.6,-0.6)"/>
+    <use href="#scaleRowAltOffset" transform="translate(0,-22) scale(0.6,-0.6)"/>
+    <use href="#scaleRowAlt" transform="translate(0,-32) scale(0.6,-0.6)"/>
+    <use href="#scaleRowAltOffset" transform="translate(0,-42) scale(0.6,-0.6)"/>
+    <use href="#scaledLantern" transform="translate(40,-30) scale(1.1)"/>
+    <use href="#plumBlossomR" transform="translate(60,-12) scale(1.4)"/>
+  </g>
+  <g transform="translate(980,1480)">
+    <use href="#scaleRowAlt" transform="translate(0,-12) scale(-0.6,-0.6)"/>
+    <use href="#scaleRowAltOffset" transform="translate(0,-22) scale(-0.6,-0.6)"/>
+    <use href="#scaleRowAlt" transform="translate(0,-32) scale(-0.6,-0.6)"/>
+    <use href="#scaleRowAltOffset" transform="translate(0,-42) scale(-0.6,-0.6)"/>
+    <use href="#scaledLantern" transform="translate(-40,-30) scale(1.1)"/>
+    <use href="#plumBlossomR" transform="translate(-60,-12) scale(1.4)"/>
+  </g>
+
+  <path d="M60,55 L940,55 M60,1445 L940,1445 M55,60 L55,1440 M945,60 L945,1440" stroke="url(#goldStroke)" stroke-width="1.4" fill="none"/>
+</svg>

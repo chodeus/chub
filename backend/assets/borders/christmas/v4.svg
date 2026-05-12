@@ -1,0 +1,261 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1500" width="1000" height="1500">
+  <defs>
+    <linearGradient id="frameBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#200808"/>
+      <stop offset="50%" stop-color="#140404"/>
+      <stop offset="100%" stop-color="#080202"/>
+    </linearGradient>
+    <radialGradient id="pineLeaf" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#5db05a"/>
+      <stop offset="55%" stop-color="#2a7a2a"/>
+      <stop offset="100%" stop-color="#103a10"/>
+    </radialGradient>
+    <radialGradient id="redBerry" cx="35%" cy="30%" r="75%">
+      <stop offset="0%" stop-color="#ff8a8a"/>
+      <stop offset="40%" stop-color="#d8222a"/>
+      <stop offset="100%" stop-color="#5a0808"/>
+    </radialGradient>
+    <radialGradient id="holly" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#6dc46d"/>
+      <stop offset="55%" stop-color="#1f6020"/>
+      <stop offset="100%" stop-color="#082008"/>
+    </radialGradient>
+    <radialGradient id="redCone" cx="50%" cy="30%" r="75%">
+      <stop offset="0%" stop-color="#ff8a8a"/>
+      <stop offset="55%" stop-color="#a01818"/>
+      <stop offset="100%" stop-color="#3a0404"/>
+    </radialGradient>
+    <pattern id="cane" patternUnits="userSpaceOnUse" width="14" height="14" patternTransform="rotate(45)">
+      <rect width="14" height="14" fill="#ffffff"/>
+      <rect width="6" height="14" fill="#d8222a"/>
+    </pattern>
+    <pattern id="caneV" patternUnits="userSpaceOnUse" width="14" height="14" patternTransform="rotate(-45)">
+      <rect width="14" height="14" fill="#ffffff"/>
+      <rect width="6" height="14" fill="#d8222a"/>
+    </pattern>
+  </defs>
+
+  <path d="M 0,0 L 1000,0 L 1000,1500 L 0,1500 Z M 60,60 L 60,1440 L 940,1440 L 940,60 Z" fill="url(#frameBg)" fill-rule="evenodd"/>
+
+  <g id="pineSprig">
+    <path d="M0,0 C-2,-18 -10,-32 -22,-44 C-12,-40 -4,-30 0,-20 C4,-30 12,-40 22,-44 C10,-32 2,-18 0,0 Z" fill="url(#pineLeaf)" stroke="#103a10" stroke-width="0.6"/>
+    <path d="M0,0 L0,-44" stroke="#082408" stroke-width="0.5" fill="none"/>
+    <path d="M-6,-12 L-2,-22 M6,-12 L2,-22 M-8,-22 L-3,-30 M8,-22 L3,-30 M-9,-30 L-4,-36 M9,-30 L4,-36" stroke="#9adb9a" stroke-width="0.4" fill="none" opacity="0.5"/>
+  </g>
+
+  <g id="hollyCluster">
+    <path d="M0,0 C-4,-5 -10,-7 -14,-12 C-12,-18 -8,-22 -4,-26 C-8,-30 -10,-34 -8,-38 C-4,-36 -2,-32 0,-30 C2,-32 4,-36 8,-38 C10,-34 8,-30 4,-26 C8,-22 12,-18 14,-12 C10,-7 4,-5 0,0 Z" fill="url(#holly)" stroke="#082008" stroke-width="0.7"/>
+    <path d="M0,-2 L0,-34" stroke="#062006" stroke-width="0.5"/>
+    <path d="M-6,-12 Q-2,-14 0,-20 M6,-12 Q2,-14 0,-20" stroke="#9adb9a" stroke-width="0.4" fill="none"/>
+  </g>
+
+  <g id="redBerries">
+    <circle cx="0" cy="0" r="5.5" fill="url(#redBerry)" stroke="#5a0808" stroke-width="0.4"/>
+    <circle cx="9" cy="3" r="4.5" fill="url(#redBerry)" stroke="#5a0808" stroke-width="0.4"/>
+    <circle cx="-7" cy="5" r="5" fill="url(#redBerry)" stroke="#5a0808" stroke-width="0.4"/>
+    <circle cx="4" cy="-7" r="4" fill="url(#redBerry)" stroke="#5a0808" stroke-width="0.4"/>
+    <circle cx="-1" cy="-1" r="1.2" fill="#ffd8d8"/>
+    <circle cx="8" cy="2" r="1" fill="#ffd8d8"/>
+    <circle cx="-8" cy="4" r="1" fill="#ffd8d8"/>
+  </g>
+
+  <g id="candyBow">
+    <path d="M0,0 C-22,-14 -42,-10 -50,4 C-46,12 -32,16 -18,10 C-10,8 -4,4 0,0 C4,4 10,8 18,10 C32,16 46,12 50,4 C42,-10 22,-14 0,0 Z" fill="url(#cane)" stroke="#5a0808" stroke-width="0.8"/>
+    <path d="M-4,2 L-12,28 L-2,22 L0,4 Z M4,2 L12,28 L2,22 L0,4 Z" fill="url(#cane)" stroke="#5a0808" stroke-width="0.7"/>
+    <circle cx="0" cy="1" r="5" fill="url(#redBerry)" stroke="#5a0808" stroke-width="0.6"/>
+  </g>
+
+  <path d="M60,30 Q150,12 250,30 Q350,48 450,28 Q550,8 650,30 Q750,52 850,30 Q920,18 940,30" stroke="url(#cane)" stroke-width="10" fill="none"/>
+  <path d="M60,30 Q150,12 250,30 Q350,48 450,28 Q550,8 650,30 Q750,52 850,30 Q920,18 940,30" stroke="#5a0808" stroke-width="0.6" fill="none" opacity="0.7"/>
+
+  <use href="#pineSprig" transform="translate(120,52) rotate(180)"/>
+  <use href="#pineSprig" transform="translate(170,48) rotate(170)"/>
+  <use href="#pineSprig" transform="translate(220,54) rotate(195)"/>
+  <use href="#pineSprig" transform="translate(280,46) rotate(175)"/>
+  <use href="#pineSprig" transform="translate(340,52) rotate(185)"/>
+  <use href="#pineSprig" transform="translate(400,48) rotate(170)"/>
+  <use href="#pineSprig" transform="translate(460,54) rotate(195)"/>
+  <use href="#pineSprig" transform="translate(520,48) rotate(175)"/>
+  <use href="#pineSprig" transform="translate(580,52) rotate(190)"/>
+  <use href="#pineSprig" transform="translate(640,46) rotate(170)"/>
+  <use href="#pineSprig" transform="translate(700,52) rotate(200)"/>
+  <use href="#pineSprig" transform="translate(760,48) rotate(180)"/>
+  <use href="#pineSprig" transform="translate(820,52) rotate(195)"/>
+  <use href="#pineSprig" transform="translate(880,48) rotate(170)"/>
+  <use href="#hollyCluster" transform="translate(200,40) rotate(200)"/>
+  <use href="#hollyCluster" transform="translate(210,42) rotate(150)"/>
+  <use href="#hollyCluster" transform="translate(380,42) rotate(195)"/>
+  <use href="#hollyCluster" transform="translate(390,40) rotate(155)"/>
+  <use href="#hollyCluster" transform="translate(560,42) rotate(200)"/>
+  <use href="#hollyCluster" transform="translate(570,40) rotate(150)"/>
+  <use href="#hollyCluster" transform="translate(740,40) rotate(195)"/>
+  <use href="#hollyCluster" transform="translate(750,42) rotate(155)"/>
+  <use href="#redBerries" transform="translate(180,32)"/>
+  <use href="#redBerries" transform="translate(310,28)"/>
+  <use href="#redBerries" transform="translate(440,32)"/>
+  <use href="#redBerries" transform="translate(560,30)"/>
+  <use href="#redBerries" transform="translate(680,28)"/>
+  <use href="#redBerries" transform="translate(800,32)"/>
+
+  <path d="M60,1470 Q150,1488 250,1470 Q350,1452 450,1472 Q550,1492 650,1470 Q750,1448 850,1470 Q920,1482 940,1470" stroke="url(#cane)" stroke-width="10" fill="none"/>
+  <path d="M60,1470 Q150,1488 250,1470 Q350,1452 450,1472 Q550,1492 650,1470 Q750,1448 850,1470 Q920,1482 940,1470" stroke="#5a0808" stroke-width="0.6" fill="none" opacity="0.7"/>
+
+  <use href="#pineSprig" transform="translate(120,1448)"/>
+  <use href="#pineSprig" transform="translate(170,1452) rotate(10)"/>
+  <use href="#pineSprig" transform="translate(220,1446) rotate(-15)"/>
+  <use href="#pineSprig" transform="translate(280,1454) rotate(5)"/>
+  <use href="#pineSprig" transform="translate(340,1448)"/>
+  <use href="#pineSprig" transform="translate(400,1452) rotate(10)"/>
+  <use href="#pineSprig" transform="translate(460,1446) rotate(-15)"/>
+  <use href="#pineSprig" transform="translate(520,1452) rotate(5)"/>
+  <use href="#pineSprig" transform="translate(580,1448) rotate(-10)"/>
+  <use href="#pineSprig" transform="translate(640,1454) rotate(10)"/>
+  <use href="#pineSprig" transform="translate(700,1448) rotate(-20)"/>
+  <use href="#pineSprig" transform="translate(760,1452)"/>
+  <use href="#pineSprig" transform="translate(820,1448) rotate(15)"/>
+  <use href="#pineSprig" transform="translate(880,1452) rotate(-10)"/>
+  <use href="#hollyCluster" transform="translate(200,1460) rotate(20)"/>
+  <use href="#hollyCluster" transform="translate(210,1458) rotate(-30)"/>
+  <use href="#hollyCluster" transform="translate(380,1458) rotate(15)"/>
+  <use href="#hollyCluster" transform="translate(390,1460) rotate(-25)"/>
+  <use href="#hollyCluster" transform="translate(560,1460) rotate(20)"/>
+  <use href="#hollyCluster" transform="translate(570,1458) rotate(-30)"/>
+  <use href="#hollyCluster" transform="translate(740,1458) rotate(15)"/>
+  <use href="#hollyCluster" transform="translate(750,1460) rotate(-25)"/>
+  <use href="#redBerries" transform="translate(180,1468)"/>
+  <use href="#redBerries" transform="translate(310,1472)"/>
+  <use href="#redBerries" transform="translate(440,1468)"/>
+  <use href="#redBerries" transform="translate(560,1470)"/>
+  <use href="#redBerries" transform="translate(680,1472)"/>
+  <use href="#redBerries" transform="translate(800,1468)"/>
+
+  <path d="M30,60 Q12,150 30,250 Q48,350 28,450 Q8,550 30,650 Q52,750 30,850 Q18,920 30,940 Q42,1050 30,1150 Q12,1250 30,1350 Q48,1420 30,1440" stroke="url(#caneV)" stroke-width="10" fill="none"/>
+
+  <use href="#pineSprig" transform="translate(48,120) rotate(90)"/>
+  <use href="#pineSprig" transform="translate(52,180) rotate(80)"/>
+  <use href="#pineSprig" transform="translate(46,240) rotate(105)"/>
+  <use href="#pineSprig" transform="translate(54,300) rotate(85)"/>
+  <use href="#pineSprig" transform="translate(48,360) rotate(95)"/>
+  <use href="#pineSprig" transform="translate(52,420) rotate(80)"/>
+  <use href="#pineSprig" transform="translate(46,480) rotate(105)"/>
+  <use href="#pineSprig" transform="translate(54,540) rotate(85)"/>
+  <use href="#pineSprig" transform="translate(48,600) rotate(100)"/>
+  <use href="#pineSprig" transform="translate(52,660) rotate(80)"/>
+  <use href="#pineSprig" transform="translate(46,720) rotate(110)"/>
+  <use href="#pineSprig" transform="translate(54,780) rotate(85)"/>
+  <use href="#pineSprig" transform="translate(48,840) rotate(95)"/>
+  <use href="#pineSprig" transform="translate(52,900) rotate(80)"/>
+  <use href="#pineSprig" transform="translate(46,960) rotate(105)"/>
+  <use href="#pineSprig" transform="translate(54,1020) rotate(85)"/>
+  <use href="#pineSprig" transform="translate(48,1080) rotate(100)"/>
+  <use href="#pineSprig" transform="translate(52,1140) rotate(80)"/>
+  <use href="#pineSprig" transform="translate(46,1200) rotate(110)"/>
+  <use href="#pineSprig" transform="translate(54,1260) rotate(85)"/>
+  <use href="#pineSprig" transform="translate(48,1320) rotate(95)"/>
+  <use href="#pineSprig" transform="translate(52,1380) rotate(80)"/>
+  <use href="#hollyCluster" transform="translate(40,200) rotate(110)"/>
+  <use href="#hollyCluster" transform="translate(42,210) rotate(60)"/>
+  <use href="#hollyCluster" transform="translate(40,380) rotate(105)"/>
+  <use href="#hollyCluster" transform="translate(42,390) rotate(65)"/>
+  <use href="#hollyCluster" transform="translate(40,560) rotate(110)"/>
+  <use href="#hollyCluster" transform="translate(42,570) rotate(60)"/>
+  <use href="#hollyCluster" transform="translate(40,740) rotate(105)"/>
+  <use href="#hollyCluster" transform="translate(42,750) rotate(65)"/>
+  <use href="#hollyCluster" transform="translate(40,920) rotate(110)"/>
+  <use href="#hollyCluster" transform="translate(42,930) rotate(60)"/>
+  <use href="#hollyCluster" transform="translate(40,1100) rotate(105)"/>
+  <use href="#hollyCluster" transform="translate(42,1110) rotate(65)"/>
+  <use href="#hollyCluster" transform="translate(40,1280) rotate(110)"/>
+  <use href="#hollyCluster" transform="translate(42,1290) rotate(60)"/>
+  <use href="#redBerries" transform="translate(32,160)"/>
+  <use href="#redBerries" transform="translate(28,290)"/>
+  <use href="#redBerries" transform="translate(32,420)"/>
+  <use href="#redBerries" transform="translate(30,560)"/>
+  <use href="#redBerries" transform="translate(28,680)"/>
+  <use href="#redBerries" transform="translate(32,800)"/>
+  <use href="#redBerries" transform="translate(28,920)"/>
+  <use href="#redBerries" transform="translate(32,1060)"/>
+  <use href="#redBerries" transform="translate(28,1200)"/>
+  <use href="#redBerries" transform="translate(32,1320)"/>
+
+  <path d="M970,60 Q988,150 970,250 Q952,350 972,450 Q992,550 970,650 Q948,750 970,850 Q982,920 970,940 Q958,1050 970,1150 Q988,1250 970,1350 Q952,1420 970,1440" stroke="url(#caneV)" stroke-width="10" fill="none"/>
+
+  <use href="#pineSprig" transform="translate(952,120) rotate(270)"/>
+  <use href="#pineSprig" transform="translate(948,180) rotate(280)"/>
+  <use href="#pineSprig" transform="translate(954,240) rotate(255)"/>
+  <use href="#pineSprig" transform="translate(946,300) rotate(275)"/>
+  <use href="#pineSprig" transform="translate(952,360) rotate(265)"/>
+  <use href="#pineSprig" transform="translate(948,420) rotate(280)"/>
+  <use href="#pineSprig" transform="translate(954,480) rotate(255)"/>
+  <use href="#pineSprig" transform="translate(946,540) rotate(275)"/>
+  <use href="#pineSprig" transform="translate(952,600) rotate(260)"/>
+  <use href="#pineSprig" transform="translate(948,660) rotate(280)"/>
+  <use href="#pineSprig" transform="translate(954,720) rotate(250)"/>
+  <use href="#pineSprig" transform="translate(946,780) rotate(275)"/>
+  <use href="#pineSprig" transform="translate(952,840) rotate(265)"/>
+  <use href="#pineSprig" transform="translate(948,900) rotate(280)"/>
+  <use href="#pineSprig" transform="translate(954,960) rotate(255)"/>
+  <use href="#pineSprig" transform="translate(946,1020) rotate(275)"/>
+  <use href="#pineSprig" transform="translate(952,1080) rotate(260)"/>
+  <use href="#pineSprig" transform="translate(948,1140) rotate(280)"/>
+  <use href="#pineSprig" transform="translate(954,1200) rotate(250)"/>
+  <use href="#pineSprig" transform="translate(946,1260) rotate(275)"/>
+  <use href="#pineSprig" transform="translate(952,1320) rotate(265)"/>
+  <use href="#pineSprig" transform="translate(948,1380) rotate(280)"/>
+  <use href="#hollyCluster" transform="translate(960,200) rotate(290)"/>
+  <use href="#hollyCluster" transform="translate(958,210) rotate(240)"/>
+  <use href="#hollyCluster" transform="translate(960,380) rotate(285)"/>
+  <use href="#hollyCluster" transform="translate(958,390) rotate(245)"/>
+  <use href="#hollyCluster" transform="translate(960,560) rotate(290)"/>
+  <use href="#hollyCluster" transform="translate(958,570) rotate(240)"/>
+  <use href="#hollyCluster" transform="translate(960,740) rotate(285)"/>
+  <use href="#hollyCluster" transform="translate(958,750) rotate(245)"/>
+  <use href="#hollyCluster" transform="translate(960,920) rotate(290)"/>
+  <use href="#hollyCluster" transform="translate(958,930) rotate(240)"/>
+  <use href="#hollyCluster" transform="translate(960,1100) rotate(285)"/>
+  <use href="#hollyCluster" transform="translate(958,1110) rotate(245)"/>
+  <use href="#hollyCluster" transform="translate(960,1280) rotate(290)"/>
+  <use href="#hollyCluster" transform="translate(958,1290) rotate(240)"/>
+  <use href="#redBerries" transform="translate(968,160)"/>
+  <use href="#redBerries" transform="translate(972,290)"/>
+  <use href="#redBerries" transform="translate(968,420)"/>
+  <use href="#redBerries" transform="translate(970,560)"/>
+  <use href="#redBerries" transform="translate(972,680)"/>
+  <use href="#redBerries" transform="translate(968,800)"/>
+  <use href="#redBerries" transform="translate(972,920)"/>
+  <use href="#redBerries" transform="translate(968,1060)"/>
+  <use href="#redBerries" transform="translate(972,1200)"/>
+  <use href="#redBerries" transform="translate(968,1320)"/>
+
+  <g transform="translate(38,38)">
+    <ellipse cx="0" cy="0" rx="14" ry="22" fill="url(#redCone)" transform="rotate(225)"/>
+    <use href="#hollyCluster" transform="translate(18,4) rotate(120)"/>
+    <use href="#hollyCluster" transform="translate(4,18) rotate(210)"/>
+    <use href="#redBerries" transform="translate(18,18)"/>
+    <use href="#candyBow" transform="translate(-2,-2) scale(0.5) rotate(225)"/>
+  </g>
+  <g transform="translate(962,38)">
+    <ellipse cx="0" cy="0" rx="14" ry="22" fill="url(#redCone)" transform="rotate(135)"/>
+    <use href="#hollyCluster" transform="translate(-18,4) rotate(240)"/>
+    <use href="#hollyCluster" transform="translate(-4,18) rotate(150)"/>
+    <use href="#redBerries" transform="translate(-18,18)"/>
+    <use href="#candyBow" transform="translate(2,-2) scale(0.5) rotate(135)"/>
+  </g>
+  <g transform="translate(38,1462)">
+    <ellipse cx="0" cy="0" rx="14" ry="22" fill="url(#redCone)" transform="rotate(315)"/>
+    <use href="#hollyCluster" transform="translate(18,-4) rotate(60)"/>
+    <use href="#hollyCluster" transform="translate(4,-18) rotate(330)"/>
+    <use href="#redBerries" transform="translate(18,-18)"/>
+    <use href="#candyBow" transform="translate(-2,2) scale(0.5) rotate(315)"/>
+  </g>
+  <g transform="translate(962,1462)">
+    <ellipse cx="0" cy="0" rx="14" ry="22" fill="url(#redCone)" transform="rotate(45)"/>
+    <use href="#hollyCluster" transform="translate(-18,-4) rotate(300)"/>
+    <use href="#hollyCluster" transform="translate(-4,-18) rotate(30)"/>
+    <use href="#redBerries" transform="translate(-18,-18)"/>
+    <use href="#candyBow" transform="translate(2,2) scale(0.5) rotate(45)"/>
+  </g>
+
+  <path d="M60,55 L940,55 M60,1445 L940,1445 M55,60 L55,1440 M945,60 L945,1440" stroke="#d8222a" stroke-width="1.4" fill="none"/>
+  <path d="M60,57 L940,57 M60,1443 L940,1443 M57,60 L57,1440 M943,60 L943,1440" stroke="#ffffff" stroke-width="0.6" fill="none"/>
+</svg>

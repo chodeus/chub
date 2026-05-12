@@ -1,0 +1,241 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1500" width="1000" height="1500">
+  <defs>
+    <linearGradient id="frameBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1f1a10"/>
+      <stop offset="50%" stop-color="#100c08"/>
+      <stop offset="100%" stop-color="#060402"/>
+    </linearGradient>
+    <radialGradient id="parchmentFill" cx="50%" cy="50%" r="60%">
+      <stop offset="0%" stop-color="#f0e0b8"/>
+      <stop offset="80%" stop-color="#c8a878"/>
+      <stop offset="100%" stop-color="#7a5828"/>
+    </radialGradient>
+    <radialGradient id="redInk" cx="40%" cy="35%" r="60%">
+      <stop offset="0%" stop-color="#c83030"/>
+      <stop offset="60%" stop-color="#8a1818"/>
+      <stop offset="100%" stop-color="#3a0808"/>
+    </radialGradient>
+    <radialGradient id="redInkDark" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#6a1010"/>
+      <stop offset="100%" stop-color="#200404"/>
+    </radialGradient>
+  </defs>
+
+  <path d="M 0,0 L 1000,0 L 1000,1500 L 0,1500 Z M 60,60 L 60,1440 L 940,1440 L 940,60 Z" fill="url(#frameBg)" fill-rule="evenodd"/>
+
+  <g id="inkStippleStar">
+    <path d="M0,-14 L4.1,-4.3 L14,-4.3 L6.2,1.7 L9.3,11.3 L0,5.6 L-9.3,11.3 L-6.2,1.7 L-14,-4.3 L-4.1,-4.3 Z" fill="url(#redInk)" stroke="#3a0808" stroke-width="0.5"/>
+    <g fill="#3a0808">
+      <circle cx="-2" cy="-6" r="0.4"/>
+      <circle cx="3" cy="-4" r="0.4"/>
+      <circle cx="-3" cy="2" r="0.4"/>
+      <circle cx="4" cy="3" r="0.4"/>
+      <circle cx="-5" cy="-2" r="0.3"/>
+      <circle cx="5" cy="-2" r="0.3"/>
+      <circle cx="0" cy="-9" r="0.3"/>
+      <circle cx="-1" cy="6" r="0.3"/>
+    </g>
+    <circle cx="-3" cy="-5" r="1.4" fill="#f0c8c8" opacity="0.5"/>
+  </g>
+
+  <g id="redInkStar">
+    <path d="M0,-10 L2.9,-3.1 L10,-3.1 L4.4,1.2 L6.6,8.1 L0,4 L-6.6,8.1 L-4.4,1.2 L-10,-3.1 L-2.9,-3.1 Z" fill="url(#redInk)" stroke="#3a0808" stroke-width="0.3"/>
+  </g>
+
+  <g id="inkDot">
+    <circle cx="0" cy="0" r="2" fill="url(#redInkDark)"/>
+    <circle cx="0" cy="0" r="3.5" fill="none" stroke="#3a0808" stroke-width="0.3" opacity="0.5"/>
+  </g>
+
+  <g id="inkScroll">
+    <path d="M0,0 Q-8,4 -14,0 Q-20,-4 -22,4 Q-22,12 -14,12 L40,12 L40,0 Z" fill="url(#parchmentFill)" stroke="#7a5828" stroke-width="0.5"/>
+    <path d="M-14,0 Q-20,-4 -22,4 Q-22,12 -14,12" fill="none" stroke="#3a0808" stroke-width="0.4"/>
+    <path d="M-14,0 L-14,12 M-12,0 L-12,12" stroke="#3a0808" stroke-width="0.3" opacity="0.5"/>
+    <path d="M-4,4 L36,4 M-4,8 L36,8" stroke="#3a0808" stroke-width="0.3" opacity="0.4"/>
+    <use href="#redInkStar" transform="translate(20,6) scale(0.5)"/>
+  </g>
+
+  <g id="redRibbonInk">
+    <path d="M0,0 C20,8 40,8 60,0 C80,-8 100,-8 120,0" stroke="url(#redInk)" stroke-width="4" fill="none" stroke-linecap="round"/>
+    <path d="M0,0 C20,8 40,8 60,0 C80,-8 100,-8 120,0" stroke="#3a0808" stroke-width="0.5" fill="none" opacity="0.7"/>
+    <circle cx="0" cy="0" r="2" fill="url(#redInkDark)"/>
+    <circle cx="60" cy="6" r="2" fill="url(#redInkDark)"/>
+    <circle cx="120" cy="0" r="2" fill="url(#redInkDark)"/>
+  </g>
+
+  <g id="redRibbonInkV">
+    <path d="M0,0 C8,20 8,40 0,60 C-8,80 -8,100 0,120" stroke="url(#redInk)" stroke-width="4" fill="none" stroke-linecap="round"/>
+    <circle cx="0" cy="0" r="2" fill="url(#redInkDark)"/>
+    <circle cx="6" cy="60" r="2" fill="url(#redInkDark)"/>
+    <circle cx="0" cy="120" r="2" fill="url(#redInkDark)"/>
+  </g>
+
+  <g id="sealStamp">
+    <circle cx="0" cy="0" r="20" fill="url(#redInk)" stroke="#3a0808" stroke-width="0.8"/>
+    <circle cx="0" cy="0" r="20" fill="none" stroke="#5a0808" stroke-width="2" opacity="0.5"/>
+    <circle cx="0" cy="0" r="14" fill="none" stroke="#f0e0b8" stroke-width="0.8" opacity="0.6"/>
+    <use href="#redInkStar" transform="translate(0,0) scale(1.1)"/>
+    <g fill="#f0e0b8" opacity="0.6">
+      <circle cx="0" cy="-16" r="0.8"/>
+      <circle cx="0" cy="16" r="0.8"/>
+      <circle cx="-16" cy="0" r="0.8"/>
+      <circle cx="16" cy="0" r="0.8"/>
+      <circle cx="-11" cy="-11" r="0.7"/>
+      <circle cx="11" cy="-11" r="0.7"/>
+      <circle cx="-11" cy="11" r="0.7"/>
+      <circle cx="11" cy="11" r="0.7"/>
+    </g>
+  </g>
+
+  <!-- TOP -->
+  <use href="#redRibbonInk" transform="translate(60,32)"/>
+  <use href="#redRibbonInk" transform="translate(220,32)"/>
+  <use href="#redRibbonInk" transform="translate(380,32)"/>
+  <use href="#redRibbonInk" transform="translate(540,32)"/>
+  <use href="#redRibbonInk" transform="translate(700,32)"/>
+  <use href="#redRibbonInk" transform="translate(820,32)"/>
+  <use href="#inkStippleStar" transform="translate(140,46)"/>
+  <use href="#inkStippleStar" transform="translate(280,46) scale(0.9)"/>
+  <use href="#inkStippleStar" transform="translate(420,46)"/>
+  <use href="#inkStippleStar" transform="translate(560,46) scale(0.9)"/>
+  <use href="#inkStippleStar" transform="translate(700,46)"/>
+  <use href="#inkStippleStar" transform="translate(840,46) scale(0.9)"/>
+  <use href="#redInkStar" transform="translate(180,18)"/>
+  <use href="#redInkStar" transform="translate(320,18)"/>
+  <use href="#redInkStar" transform="translate(460,18)"/>
+  <use href="#redInkStar" transform="translate(600,18)"/>
+  <use href="#redInkStar" transform="translate(740,18)"/>
+  <use href="#redInkStar" transform="translate(880,18)"/>
+  <use href="#inkDot" transform="translate(220,48)"/>
+  <use href="#inkDot" transform="translate(360,48)"/>
+  <use href="#inkDot" transform="translate(500,48)"/>
+  <use href="#inkDot" transform="translate(640,48)"/>
+  <use href="#inkDot" transform="translate(780,48)"/>
+  <use href="#inkScroll" transform="translate(100,12)"/>
+  <use href="#inkScroll" transform="translate(500,12)"/>
+  <use href="#inkScroll" transform="translate(800,12)"/>
+
+  <!-- BOTTOM -->
+  <use href="#redRibbonInk" transform="translate(60,1468) scale(1,-1)"/>
+  <use href="#redRibbonInk" transform="translate(220,1468) scale(1,-1)"/>
+  <use href="#redRibbonInk" transform="translate(380,1468) scale(1,-1)"/>
+  <use href="#redRibbonInk" transform="translate(540,1468) scale(1,-1)"/>
+  <use href="#redRibbonInk" transform="translate(700,1468) scale(1,-1)"/>
+  <use href="#redRibbonInk" transform="translate(820,1468) scale(1,-1)"/>
+  <use href="#inkStippleStar" transform="translate(140,1454)"/>
+  <use href="#inkStippleStar" transform="translate(280,1454) scale(0.9)"/>
+  <use href="#inkStippleStar" transform="translate(420,1454)"/>
+  <use href="#inkStippleStar" transform="translate(560,1454) scale(0.9)"/>
+  <use href="#inkStippleStar" transform="translate(700,1454)"/>
+  <use href="#inkStippleStar" transform="translate(840,1454) scale(0.9)"/>
+  <use href="#redInkStar" transform="translate(180,1482)"/>
+  <use href="#redInkStar" transform="translate(320,1482)"/>
+  <use href="#redInkStar" transform="translate(460,1482)"/>
+  <use href="#redInkStar" transform="translate(600,1482)"/>
+  <use href="#redInkStar" transform="translate(740,1482)"/>
+  <use href="#redInkStar" transform="translate(880,1482)"/>
+  <use href="#inkScroll" transform="translate(100,1474) scale(1,-1)"/>
+  <use href="#inkScroll" transform="translate(500,1474) scale(1,-1)"/>
+  <use href="#inkScroll" transform="translate(800,1474) scale(1,-1)"/>
+
+  <!-- LEFT -->
+  <use href="#redRibbonInkV" transform="translate(32,60)"/>
+  <use href="#redRibbonInkV" transform="translate(32,220)"/>
+  <use href="#redRibbonInkV" transform="translate(32,380)"/>
+  <use href="#redRibbonInkV" transform="translate(32,540)"/>
+  <use href="#redRibbonInkV" transform="translate(32,700)"/>
+  <use href="#redRibbonInkV" transform="translate(32,860)"/>
+  <use href="#redRibbonInkV" transform="translate(32,1020)"/>
+  <use href="#redRibbonInkV" transform="translate(32,1180)"/>
+  <use href="#redRibbonInkV" transform="translate(32,1320)"/>
+  <use href="#inkStippleStar" transform="translate(46,140)"/>
+  <use href="#inkStippleStar" transform="translate(46,300) scale(0.9)"/>
+  <use href="#inkStippleStar" transform="translate(46,460)"/>
+  <use href="#inkStippleStar" transform="translate(46,620) scale(0.9)"/>
+  <use href="#inkStippleStar" transform="translate(46,780)"/>
+  <use href="#inkStippleStar" transform="translate(46,940) scale(0.9)"/>
+  <use href="#inkStippleStar" transform="translate(46,1100)"/>
+  <use href="#inkStippleStar" transform="translate(46,1260) scale(0.9)"/>
+  <use href="#inkStippleStar" transform="translate(46,1400)"/>
+  <use href="#redInkStar" transform="translate(18,180)"/>
+  <use href="#redInkStar" transform="translate(18,340)"/>
+  <use href="#redInkStar" transform="translate(18,500)"/>
+  <use href="#redInkStar" transform="translate(18,660)"/>
+  <use href="#redInkStar" transform="translate(18,820)"/>
+  <use href="#redInkStar" transform="translate(18,980)"/>
+  <use href="#redInkStar" transform="translate(18,1140)"/>
+  <use href="#redInkStar" transform="translate(18,1300)"/>
+  <use href="#inkDot" transform="translate(48,220)"/>
+  <use href="#inkDot" transform="translate(48,380)"/>
+  <use href="#inkDot" transform="translate(48,540)"/>
+  <use href="#inkDot" transform="translate(48,700)"/>
+  <use href="#inkDot" transform="translate(48,860)"/>
+  <use href="#inkDot" transform="translate(48,1020)"/>
+  <use href="#inkDot" transform="translate(48,1180)"/>
+  <use href="#inkDot" transform="translate(48,1340)"/>
+
+  <!-- RIGHT -->
+  <use href="#redRibbonInkV" transform="translate(968,60)"/>
+  <use href="#redRibbonInkV" transform="translate(968,220)"/>
+  <use href="#redRibbonInkV" transform="translate(968,380)"/>
+  <use href="#redRibbonInkV" transform="translate(968,540)"/>
+  <use href="#redRibbonInkV" transform="translate(968,700)"/>
+  <use href="#redRibbonInkV" transform="translate(968,860)"/>
+  <use href="#redRibbonInkV" transform="translate(968,1020)"/>
+  <use href="#redRibbonInkV" transform="translate(968,1180)"/>
+  <use href="#redRibbonInkV" transform="translate(968,1320)"/>
+  <use href="#inkStippleStar" transform="translate(954,140)"/>
+  <use href="#inkStippleStar" transform="translate(954,300) scale(0.9)"/>
+  <use href="#inkStippleStar" transform="translate(954,460)"/>
+  <use href="#inkStippleStar" transform="translate(954,620) scale(0.9)"/>
+  <use href="#inkStippleStar" transform="translate(954,780)"/>
+  <use href="#inkStippleStar" transform="translate(954,940) scale(0.9)"/>
+  <use href="#inkStippleStar" transform="translate(954,1100)"/>
+  <use href="#inkStippleStar" transform="translate(954,1260) scale(0.9)"/>
+  <use href="#inkStippleStar" transform="translate(954,1400)"/>
+  <use href="#redInkStar" transform="translate(982,180)"/>
+  <use href="#redInkStar" transform="translate(982,340)"/>
+  <use href="#redInkStar" transform="translate(982,500)"/>
+  <use href="#redInkStar" transform="translate(982,660)"/>
+  <use href="#redInkStar" transform="translate(982,820)"/>
+  <use href="#redInkStar" transform="translate(982,980)"/>
+  <use href="#redInkStar" transform="translate(982,1140)"/>
+  <use href="#redInkStar" transform="translate(982,1300)"/>
+  <use href="#inkDot" transform="translate(952,220)"/>
+  <use href="#inkDot" transform="translate(952,380)"/>
+  <use href="#inkDot" transform="translate(952,540)"/>
+  <use href="#inkDot" transform="translate(952,700)"/>
+  <use href="#inkDot" transform="translate(952,860)"/>
+  <use href="#inkDot" transform="translate(952,1020)"/>
+  <use href="#inkDot" transform="translate(952,1180)"/>
+  <use href="#inkDot" transform="translate(952,1340)"/>
+
+  <!-- CORNERS: wax seal + scroll -->
+  <g transform="translate(40,40)">
+    <use href="#sealStamp" transform="translate(28,28) scale(1.1)"/>
+    <use href="#inkStippleStar" transform="translate(60,18) scale(1.3)"/>
+    <use href="#inkStippleStar" transform="translate(18,60) scale(1.3)"/>
+    <use href="#inkScroll" transform="translate(56,56) scale(0.7)"/>
+  </g>
+  <g transform="translate(960,40)">
+    <use href="#sealStamp" transform="translate(-28,28) scale(1.1)"/>
+    <use href="#inkStippleStar" transform="translate(-60,18) scale(1.3)"/>
+    <use href="#inkStippleStar" transform="translate(-18,60) scale(1.3)"/>
+    <use href="#inkScroll" transform="translate(-56,56) scale(0.7) scale(-1,1)"/>
+  </g>
+  <g transform="translate(40,1460)">
+    <use href="#sealStamp" transform="translate(28,-28) scale(1.1)"/>
+    <use href="#inkStippleStar" transform="translate(60,-18) scale(1.3)"/>
+    <use href="#inkStippleStar" transform="translate(18,-60) scale(1.3)"/>
+    <use href="#inkScroll" transform="translate(56,-56) scale(0.7)"/>
+  </g>
+  <g transform="translate(960,1460)">
+    <use href="#sealStamp" transform="translate(-28,-28) scale(1.1)"/>
+    <use href="#inkStippleStar" transform="translate(-60,-18) scale(1.3)"/>
+    <use href="#inkStippleStar" transform="translate(-18,-60) scale(1.3)"/>
+    <use href="#inkScroll" transform="translate(-56,-56) scale(0.7) scale(-1,1)"/>
+  </g>
+
+  <path d="M60,55 L940,55 M60,1445 L940,1445 M55,60 L55,1440 M945,60 L945,1440" stroke="#8a1818" stroke-width="1.4" fill="none"/>
+  <path d="M60,57 L940,57 M60,1443 L940,1443 M57,60 L57,1440 M943,60 L943,1440" stroke="#c8a878" stroke-width="0.4" fill="none" opacity="0.5"/>
+</svg>

@@ -1,0 +1,279 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1500" width="1000" height="1500">
+  <defs>
+    <linearGradient id="frameBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#2a1f08"/>
+      <stop offset="50%" stop-color="#1a1404"/>
+      <stop offset="100%" stop-color="#0a0802"/>
+    </linearGradient>
+    <radialGradient id="whiteRose" cx="40%" cy="35%" r="80%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="50%" stop-color="#f4ead4"/>
+      <stop offset="100%" stop-color="#a89870"/>
+    </radialGradient>
+    <radialGradient id="whiteRoseCore" cx="50%" cy="50%" r="60%">
+      <stop offset="0%" stop-color="#f8eecf"/>
+      <stop offset="100%" stop-color="#a07a25"/>
+    </radialGradient>
+    <radialGradient id="pearl" cx="35%" cy="30%" r="75%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="40%" stop-color="#fefbf0"/>
+      <stop offset="100%" stop-color="#a89870"/>
+    </radialGradient>
+    <linearGradient id="goldStroke" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#5a4012"/>
+      <stop offset="50%" stop-color="#f8eab0"/>
+      <stop offset="100%" stop-color="#8a6520"/>
+    </linearGradient>
+    <linearGradient id="ringGold" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#5a4012"/>
+      <stop offset="25%" stop-color="#c89c2a"/>
+      <stop offset="50%" stop-color="#fef0a8"/>
+      <stop offset="75%" stop-color="#c89c2a"/>
+      <stop offset="100%" stop-color="#5a4012"/>
+    </linearGradient>
+    <linearGradient id="satinH" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#7a5a1f"/>
+      <stop offset="20%" stop-color="#c89c2a"/>
+      <stop offset="50%" stop-color="#fef0a8"/>
+      <stop offset="80%" stop-color="#c89c2a"/>
+      <stop offset="100%" stop-color="#7a5a1f"/>
+    </linearGradient>
+    <linearGradient id="satinV" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#7a5a1f"/>
+      <stop offset="20%" stop-color="#c89c2a"/>
+      <stop offset="50%" stop-color="#fef0a8"/>
+      <stop offset="80%" stop-color="#c89c2a"/>
+      <stop offset="100%" stop-color="#7a5a1f"/>
+    </linearGradient>
+    <radialGradient id="goldLeaf" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#fff0bc"/>
+      <stop offset="55%" stop-color="#c89c2a"/>
+      <stop offset="100%" stop-color="#5a4012"/>
+    </radialGradient>
+  </defs>
+
+  <path d="M 0,0 L 1000,0 L 1000,1500 L 0,1500 Z M 60,60 L 60,1440 L 940,1440 L 940,60 Z" fill="url(#frameBg)" fill-rule="evenodd"/>
+
+  <g id="goldLeafG">
+    <path d="M0,0 C-4,-5 -10,-7 -14,-12 C-12,-18 -8,-22 -4,-26 C-8,-30 -10,-34 -8,-38 C-4,-36 -2,-32 0,-30 C2,-32 4,-36 8,-38 C10,-34 8,-30 4,-26 C8,-22 12,-18 14,-12 C10,-7 4,-5 0,0 Z" fill="url(#goldLeaf)" stroke="#5a4012" stroke-width="0.6"/>
+    <path d="M0,-2 L0,-34" stroke="#5a4012" stroke-width="0.4"/>
+  </g>
+
+  <g id="whiteRoseG">
+    <circle cx="0" cy="0" r="14" fill="url(#whiteRose)" stroke="#c89c2a" stroke-width="0.5"/>
+    <path d="M0,-12 C-6,-10 -10,-6 -10,0 C-10,6 -6,10 0,12 C6,10 10,6 10,0 C10,-6 6,-10 0,-12 Z" fill="url(#whiteRose)" opacity="0.85" stroke="#c89c2a" stroke-width="0.3"/>
+    <path d="M0,-9 C-4,-7 -7,-4 -7,0 C-7,4 -4,7 0,9 C4,7 7,4 7,0 C7,-4 4,-7 0,-9 Z" fill="url(#whiteRose)" stroke="#c89c2a" stroke-width="0.3"/>
+    <path d="M0,-6 C-3,-5 -5,-3 -5,0 C-5,3 -3,5 0,6 C3,5 5,3 5,0 C5,-3 3,-5 0,-6 Z" fill="url(#whiteRoseCore)"/>
+    <path d="M-14,0 Q-8,4 0,0 Q8,4 14,0 M0,-14 Q4,-8 0,0 Q4,8 0,14" stroke="#a07a25" stroke-width="0.3" fill="none"/>
+  </g>
+
+  <g id="pearlCluster">
+    <circle cx="0" cy="0" r="6" fill="url(#pearl)" stroke="#a89870" stroke-width="0.4"/>
+    <circle cx="10" cy="2" r="5" fill="url(#pearl)" stroke="#a89870" stroke-width="0.4"/>
+    <circle cx="-8" cy="4" r="5.5" fill="url(#pearl)" stroke="#a89870" stroke-width="0.4"/>
+    <circle cx="4" cy="-8" r="4.5" fill="url(#pearl)" stroke="#a89870" stroke-width="0.4"/>
+    <circle cx="-2" cy="-7" r="3.5" fill="url(#pearl)" stroke="#a89870" stroke-width="0.4"/>
+    <circle cx="-1" cy="-2" r="1.2" fill="#ffffff"/>
+    <circle cx="9" cy="1" r="1" fill="#ffffff"/>
+    <circle cx="-9" cy="3" r="1" fill="#ffffff"/>
+    <circle cx="3" cy="-9" r="0.8" fill="#ffffff"/>
+  </g>
+
+  <g id="pearlStrand">
+    <circle cx="0" cy="0" r="3" fill="url(#pearl)" stroke="#a89870" stroke-width="0.3"/>
+    <circle cx="8" cy="0" r="3" fill="url(#pearl)" stroke="#a89870" stroke-width="0.3"/>
+    <circle cx="16" cy="0" r="3" fill="url(#pearl)" stroke="#a89870" stroke-width="0.3"/>
+    <circle cx="24" cy="0" r="3" fill="url(#pearl)" stroke="#a89870" stroke-width="0.3"/>
+    <circle cx="32" cy="0" r="3" fill="url(#pearl)" stroke="#a89870" stroke-width="0.3"/>
+    <circle cx="40" cy="0" r="3" fill="url(#pearl)" stroke="#a89870" stroke-width="0.3"/>
+    <circle cx="48" cy="0" r="3" fill="url(#pearl)" stroke="#a89870" stroke-width="0.3"/>
+    <circle cx="56" cy="0" r="3" fill="url(#pearl)" stroke="#a89870" stroke-width="0.3"/>
+    <circle cx="-1" cy="-1" r="0.6" fill="#ffffff"/>
+    <circle cx="7" cy="-1" r="0.6" fill="#ffffff"/>
+    <circle cx="15" cy="-1" r="0.6" fill="#ffffff"/>
+    <circle cx="23" cy="-1" r="0.6" fill="#ffffff"/>
+    <circle cx="31" cy="-1" r="0.6" fill="#ffffff"/>
+    <circle cx="39" cy="-1" r="0.6" fill="#ffffff"/>
+    <circle cx="47" cy="-1" r="0.6" fill="#ffffff"/>
+    <circle cx="55" cy="-1" r="0.6" fill="#ffffff"/>
+  </g>
+
+  <g id="weddingRing">
+    <circle cx="-12" cy="0" r="20" fill="none" stroke="url(#ringGold)" stroke-width="4"/>
+    <circle cx="-12" cy="0" r="20" fill="none" stroke="#5a4012" stroke-width="0.5"/>
+    <circle cx="-12" cy="0" r="16" fill="none" stroke="#5a4012" stroke-width="0.4"/>
+    <circle cx="12" cy="0" r="20" fill="none" stroke="url(#ringGold)" stroke-width="4"/>
+    <circle cx="12" cy="0" r="20" fill="none" stroke="#5a4012" stroke-width="0.5"/>
+    <circle cx="12" cy="0" r="16" fill="none" stroke="#5a4012" stroke-width="0.4"/>
+    <path d="M-12,-18 A20,20 0 0,1 8,0 A20,20 0 0,1 -12,18" stroke="#fef0a8" stroke-width="0.6" fill="none" opacity="0.8"/>
+    <circle cx="0" cy="-20" r="2.5" fill="url(#pearl)" stroke="#a89870" stroke-width="0.3"/>
+    <circle cx="-22" cy="-12" r="1.6" fill="url(#pearl)" stroke="#a89870" stroke-width="0.3"/>
+    <circle cx="22" cy="12" r="1.6" fill="url(#pearl)" stroke="#a89870" stroke-width="0.3"/>
+  </g>
+
+  <g id="satinSwag">
+    <path d="M0,0 C40,32 80,32 120,0 C160,-32 200,-32 240,0" stroke="url(#satinH)" stroke-width="10" fill="none"/>
+    <path d="M0,0 C40,32 80,32 120,0 C160,-32 200,-32 240,0" stroke="#5a4012" stroke-width="0.6" fill="none" opacity="0.8"/>
+    <path d="M0,2 C40,30 80,30 120,2" stroke="#fef0a8" stroke-width="0.5" fill="none" opacity="0.6"/>
+    <path d="M120,2 C160,-30 200,-30 240,2" stroke="#fef0a8" stroke-width="0.5" fill="none" opacity="0.6"/>
+    <circle cx="0" cy="0" r="3" fill="url(#ringGold)" stroke="#5a4012" stroke-width="0.5"/>
+    <circle cx="120" cy="20" r="3.5" fill="url(#ringGold)" stroke="#5a4012" stroke-width="0.5"/>
+    <circle cx="240" cy="0" r="3" fill="url(#ringGold)" stroke="#5a4012" stroke-width="0.5"/>
+  </g>
+
+  <g id="satinSwagV">
+    <path d="M0,0 C32,40 32,80 0,120 C-32,160 -32,200 0,240" stroke="url(#satinV)" stroke-width="10" fill="none"/>
+    <path d="M0,0 C32,40 32,80 0,120 C-32,160 -32,200 0,240" stroke="#5a4012" stroke-width="0.6" fill="none" opacity="0.8"/>
+    <circle cx="0" cy="0" r="3" fill="url(#ringGold)" stroke="#5a4012" stroke-width="0.5"/>
+    <circle cx="20" cy="120" r="3.5" fill="url(#ringGold)" stroke="#5a4012" stroke-width="0.5"/>
+    <circle cx="0" cy="240" r="3" fill="url(#ringGold)" stroke="#5a4012" stroke-width="0.5"/>
+  </g>
+
+  <!-- TOP: satin swag, white roses, pearl clusters, gold leaves -->
+  <use href="#satinSwag" transform="translate(60,30)"/>
+  <use href="#satinSwag" transform="translate(300,30)"/>
+  <use href="#satinSwag" transform="translate(540,30)"/>
+  <use href="#satinSwag" transform="translate(780,30)"/>
+  <use href="#whiteRoseG" transform="translate(150,30) scale(1.2)"/>
+  <use href="#whiteRoseG" transform="translate(360,30) scale(1.3)"/>
+  <use href="#whiteRoseG" transform="translate(500,30) scale(1.2)"/>
+  <use href="#whiteRoseG" transform="translate(640,30) scale(1.3)"/>
+  <use href="#whiteRoseG" transform="translate(850,30) scale(1.2)"/>
+  <use href="#pearlCluster" transform="translate(220,40)"/>
+  <use href="#pearlCluster" transform="translate(430,40)"/>
+  <use href="#pearlCluster" transform="translate(570,40)"/>
+  <use href="#pearlCluster" transform="translate(720,40)"/>
+  <use href="#pearlCluster" transform="translate(900,40)"/>
+  <use href="#goldLeafG" transform="translate(190,52) rotate(180)"/>
+  <use href="#goldLeafG" transform="translate(400,52) rotate(180)"/>
+  <use href="#goldLeafG" transform="translate(540,52) rotate(180)"/>
+  <use href="#goldLeafG" transform="translate(680,52) rotate(180)"/>
+  <use href="#goldLeafG" transform="translate(890,52) rotate(180)"/>
+  <use href="#pearlStrand" transform="translate(110,18)"/>
+  <use href="#pearlStrand" transform="translate(310,16)"/>
+  <use href="#pearlStrand" transform="translate(510,18)"/>
+  <use href="#pearlStrand" transform="translate(710,16)"/>
+  <use href="#pearlStrand" transform="translate(840,18)"/>
+
+  <!-- BOTTOM -->
+  <use href="#satinSwag" transform="translate(60,1470) scale(1,-1)"/>
+  <use href="#satinSwag" transform="translate(300,1470) scale(1,-1)"/>
+  <use href="#satinSwag" transform="translate(540,1470) scale(1,-1)"/>
+  <use href="#satinSwag" transform="translate(780,1470) scale(1,-1)"/>
+  <use href="#whiteRoseG" transform="translate(150,1470) scale(1.2)"/>
+  <use href="#whiteRoseG" transform="translate(360,1470) scale(1.3)"/>
+  <use href="#whiteRoseG" transform="translate(500,1470) scale(1.2)"/>
+  <use href="#whiteRoseG" transform="translate(640,1470) scale(1.3)"/>
+  <use href="#whiteRoseG" transform="translate(850,1470) scale(1.2)"/>
+  <use href="#pearlCluster" transform="translate(220,1460)"/>
+  <use href="#pearlCluster" transform="translate(430,1460)"/>
+  <use href="#pearlCluster" transform="translate(570,1460)"/>
+  <use href="#pearlCluster" transform="translate(720,1460)"/>
+  <use href="#pearlCluster" transform="translate(900,1460)"/>
+  <use href="#goldLeafG" transform="translate(190,1448)"/>
+  <use href="#goldLeafG" transform="translate(400,1448)"/>
+  <use href="#goldLeafG" transform="translate(540,1448)"/>
+  <use href="#goldLeafG" transform="translate(680,1448)"/>
+  <use href="#goldLeafG" transform="translate(890,1448)"/>
+  <use href="#pearlStrand" transform="translate(110,1484)"/>
+  <use href="#pearlStrand" transform="translate(310,1486)"/>
+  <use href="#pearlStrand" transform="translate(510,1484)"/>
+  <use href="#pearlStrand" transform="translate(710,1486)"/>
+  <use href="#pearlStrand" transform="translate(840,1484)"/>
+
+  <!-- LEFT -->
+  <use href="#satinSwagV" transform="translate(30,60)"/>
+  <use href="#satinSwagV" transform="translate(30,300)"/>
+  <use href="#satinSwagV" transform="translate(30,540)"/>
+  <use href="#satinSwagV" transform="translate(30,780)"/>
+  <use href="#satinSwagV" transform="translate(30,1020)"/>
+  <use href="#satinSwagV" transform="translate(30,1260)"/>
+  <use href="#whiteRoseG" transform="translate(30,150) scale(1.2)"/>
+  <use href="#whiteRoseG" transform="translate(30,360) scale(1.3)"/>
+  <use href="#whiteRoseG" transform="translate(30,500) scale(1.2)"/>
+  <use href="#whiteRoseG" transform="translate(30,640) scale(1.3)"/>
+  <use href="#whiteRoseG" transform="translate(30,850) scale(1.2)"/>
+  <use href="#whiteRoseG" transform="translate(30,1060) scale(1.3)"/>
+  <use href="#whiteRoseG" transform="translate(30,1200) scale(1.2)"/>
+  <use href="#whiteRoseG" transform="translate(30,1340) scale(1.3)"/>
+  <use href="#pearlCluster" transform="translate(40,220)"/>
+  <use href="#pearlCluster" transform="translate(40,430)"/>
+  <use href="#pearlCluster" transform="translate(40,570)"/>
+  <use href="#pearlCluster" transform="translate(40,720)"/>
+  <use href="#pearlCluster" transform="translate(40,920)"/>
+  <use href="#pearlCluster" transform="translate(40,1130)"/>
+  <use href="#pearlCluster" transform="translate(40,1280)"/>
+  <use href="#goldLeafG" transform="translate(52,200) rotate(90)"/>
+  <use href="#goldLeafG" transform="translate(52,400) rotate(90)"/>
+  <use href="#goldLeafG" transform="translate(52,600) rotate(90)"/>
+  <use href="#goldLeafG" transform="translate(52,800) rotate(90)"/>
+  <use href="#goldLeafG" transform="translate(52,1000) rotate(90)"/>
+  <use href="#goldLeafG" transform="translate(52,1200) rotate(90)"/>
+  <use href="#goldLeafG" transform="translate(52,1400) rotate(90)"/>
+
+  <!-- RIGHT -->
+  <use href="#satinSwagV" transform="translate(970,60)"/>
+  <use href="#satinSwagV" transform="translate(970,300)"/>
+  <use href="#satinSwagV" transform="translate(970,540)"/>
+  <use href="#satinSwagV" transform="translate(970,780)"/>
+  <use href="#satinSwagV" transform="translate(970,1020)"/>
+  <use href="#satinSwagV" transform="translate(970,1260)"/>
+  <use href="#whiteRoseG" transform="translate(970,150) scale(1.2)"/>
+  <use href="#whiteRoseG" transform="translate(970,360) scale(1.3)"/>
+  <use href="#whiteRoseG" transform="translate(970,500) scale(1.2)"/>
+  <use href="#whiteRoseG" transform="translate(970,640) scale(1.3)"/>
+  <use href="#whiteRoseG" transform="translate(970,850) scale(1.2)"/>
+  <use href="#whiteRoseG" transform="translate(970,1060) scale(1.3)"/>
+  <use href="#whiteRoseG" transform="translate(970,1200) scale(1.2)"/>
+  <use href="#whiteRoseG" transform="translate(970,1340) scale(1.3)"/>
+  <use href="#pearlCluster" transform="translate(960,220)"/>
+  <use href="#pearlCluster" transform="translate(960,430)"/>
+  <use href="#pearlCluster" transform="translate(960,570)"/>
+  <use href="#pearlCluster" transform="translate(960,720)"/>
+  <use href="#pearlCluster" transform="translate(960,920)"/>
+  <use href="#pearlCluster" transform="translate(960,1130)"/>
+  <use href="#pearlCluster" transform="translate(960,1280)"/>
+  <use href="#goldLeafG" transform="translate(948,200) rotate(270)"/>
+  <use href="#goldLeafG" transform="translate(948,400) rotate(270)"/>
+  <use href="#goldLeafG" transform="translate(948,600) rotate(270)"/>
+  <use href="#goldLeafG" transform="translate(948,800) rotate(270)"/>
+  <use href="#goldLeafG" transform="translate(948,1000) rotate(270)"/>
+  <use href="#goldLeafG" transform="translate(948,1200) rotate(270)"/>
+  <use href="#goldLeafG" transform="translate(948,1400) rotate(270)"/>
+
+  <!-- CORNERS: wedding rings + clustered pearls + roses -->
+  <g transform="translate(46,46)">
+    <use href="#weddingRing" transform="translate(8,8) scale(0.75)"/>
+    <use href="#whiteRoseG" transform="translate(38,8) scale(1.0)"/>
+    <use href="#whiteRoseG" transform="translate(8,38) scale(1.0)"/>
+    <use href="#pearlCluster" transform="translate(40,40)"/>
+    <use href="#goldLeafG" transform="translate(50,20) rotate(130)"/>
+    <use href="#goldLeafG" transform="translate(20,50) rotate(220)"/>
+  </g>
+  <g transform="translate(954,46)">
+    <use href="#weddingRing" transform="translate(-8,8) scale(0.75)"/>
+    <use href="#whiteRoseG" transform="translate(-38,8) scale(1.0)"/>
+    <use href="#whiteRoseG" transform="translate(-8,38) scale(1.0)"/>
+    <use href="#pearlCluster" transform="translate(-40,40)"/>
+    <use href="#goldLeafG" transform="translate(-50,20) rotate(230)"/>
+    <use href="#goldLeafG" transform="translate(-20,50) rotate(140)"/>
+  </g>
+  <g transform="translate(46,1454)">
+    <use href="#weddingRing" transform="translate(8,-8) scale(0.75)"/>
+    <use href="#whiteRoseG" transform="translate(38,-8) scale(1.0)"/>
+    <use href="#whiteRoseG" transform="translate(8,-38) scale(1.0)"/>
+    <use href="#pearlCluster" transform="translate(40,-40)"/>
+    <use href="#goldLeafG" transform="translate(50,-20) rotate(50)"/>
+    <use href="#goldLeafG" transform="translate(20,-50) rotate(320)"/>
+  </g>
+  <g transform="translate(954,1454)">
+    <use href="#weddingRing" transform="translate(-8,-8) scale(0.75)"/>
+    <use href="#whiteRoseG" transform="translate(-38,-8) scale(1.0)"/>
+    <use href="#whiteRoseG" transform="translate(-8,-38) scale(1.0)"/>
+    <use href="#pearlCluster" transform="translate(-40,-40)"/>
+    <use href="#goldLeafG" transform="translate(-50,-20) rotate(310)"/>
+    <use href="#goldLeafG" transform="translate(-20,-50) rotate(40)"/>
+  </g>
+
+  <path d="M60,55 L940,55 M60,1445 L940,1445 M55,60 L55,1440 M945,60 L945,1440" stroke="url(#goldStroke)" stroke-width="1.4" fill="none"/>
+</svg>

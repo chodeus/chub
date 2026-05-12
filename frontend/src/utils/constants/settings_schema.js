@@ -284,7 +284,16 @@ export const SETTINGS_SCHEMA = [
                         type: 'color_list',
                         preview: 'false',
                         required: false,
-                        description: 'Colors to use for the holiday border override.',
+                        description:
+                            'Colors used when no themed borders are picked below. The list cycles per poster.',
+                    },
+                    {
+                        key: 'borders',
+                        label: 'Themed borders',
+                        type: 'textarea',
+                        required: false,
+                        description:
+                            'Optional. List bundled or custom border variants (one per line, e.g. "v1", "v2") to composite over each poster instead of a flat color. When set, image mode wins over color mode. Variants cycle per poster in the order listed. Drop custom PNGs at /config/borders/<holiday>/ to extend the set (user files override bundled ones with the same name). The border_width setting is ignored in image mode.',
                     },
                 ],
             },

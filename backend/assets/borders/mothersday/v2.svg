@@ -1,0 +1,260 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1500" width="1000" height="1500">
+  <defs>
+    <linearGradient id="frameBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1a1224"/>
+      <stop offset="50%" stop-color="#0e0814"/>
+      <stop offset="100%" stop-color="#06040a"/>
+    </linearGradient>
+    <radialGradient id="lavender" cx="50%" cy="40%" r="65%">
+      <stop offset="0%" stop-color="#d8c0f4"/>
+      <stop offset="55%" stop-color="#9070d4"/>
+      <stop offset="100%" stop-color="#4a3070"/>
+    </radialGradient>
+    <radialGradient id="eucalyptus" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#c8d8c0"/>
+      <stop offset="55%" stop-color="#8aa090"/>
+      <stop offset="100%" stop-color="#384a40"/>
+    </radialGradient>
+    <radialGradient id="sage" cx="50%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#b8c8a8"/>
+      <stop offset="100%" stop-color="#5a7058"/>
+    </radialGradient>
+    <linearGradient id="twine" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#a89070"/>
+      <stop offset="50%" stop-color="#705840"/>
+      <stop offset="100%" stop-color="#382818"/>
+    </linearGradient>
+    <radialGradient id="babys" cx="50%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#dac8d8"/>
+    </radialGradient>
+  </defs>
+
+  <path d="M 0,0 L 1000,0 L 1000,1500 L 0,1500 Z M 60,60 L 60,1440 L 940,1440 L 940,60 Z" fill="url(#frameBg)" fill-rule="evenodd"/>
+
+  <g id="lavenderStem">
+    <path d="M0,0 L0,38" stroke="url(#sage)" stroke-width="1.4" fill="none"/>
+    <g fill="url(#lavender)" stroke="#4a3070" stroke-width="0.3">
+      <ellipse cx="-3" cy="-2" rx="2.2" ry="3.4" transform="rotate(-30,-3,-2)"/>
+      <ellipse cx="3" cy="-2" rx="2.2" ry="3.4" transform="rotate(30,3,-2)"/>
+      <ellipse cx="-3" cy="-8" rx="2.2" ry="3.4" transform="rotate(-30,-3,-8)"/>
+      <ellipse cx="3" cy="-8" rx="2.2" ry="3.4" transform="rotate(30,3,-8)"/>
+      <ellipse cx="-3" cy="-14" rx="2" ry="3.2" transform="rotate(-30,-3,-14)"/>
+      <ellipse cx="3" cy="-14" rx="2" ry="3.2" transform="rotate(30,3,-14)"/>
+      <ellipse cx="-3" cy="-20" rx="2" ry="3" transform="rotate(-30,-3,-20)"/>
+      <ellipse cx="3" cy="-20" rx="2" ry="3" transform="rotate(30,3,-20)"/>
+      <ellipse cx="0" cy="-25" rx="2.2" ry="3.4"/>
+      <ellipse cx="0" cy="-29" rx="2" ry="3"/>
+    </g>
+    <circle cx="0" cy="-22" r="0.8" fill="#d8c0f4"/>
+    <circle cx="0" cy="-26" r="0.6" fill="#d8c0f4"/>
+  </g>
+
+  <g id="eucalyptusSprig">
+    <path d="M0,0 L0,40" stroke="#384a40" stroke-width="1" fill="none"/>
+    <ellipse cx="-5" cy="-2" rx="4" ry="2.5" fill="url(#eucalyptus)" stroke="#384a40" stroke-width="0.3" transform="rotate(-20,-5,-2)"/>
+    <ellipse cx="5" cy="-6" rx="4" ry="2.5" fill="url(#eucalyptus)" stroke="#384a40" stroke-width="0.3" transform="rotate(20,5,-6)"/>
+    <ellipse cx="-5" cy="-10" rx="4.5" ry="2.8" fill="url(#eucalyptus)" stroke="#384a40" stroke-width="0.3" transform="rotate(-25,-5,-10)"/>
+    <ellipse cx="5" cy="-14" rx="4.5" ry="2.8" fill="url(#eucalyptus)" stroke="#384a40" stroke-width="0.3" transform="rotate(25,5,-14)"/>
+    <ellipse cx="-5" cy="-18" rx="4.5" ry="2.8" fill="url(#eucalyptus)" stroke="#384a40" stroke-width="0.3" transform="rotate(-25,-5,-18)"/>
+    <ellipse cx="5" cy="-22" rx="4.5" ry="2.8" fill="url(#eucalyptus)" stroke="#384a40" stroke-width="0.3" transform="rotate(25,5,-22)"/>
+    <ellipse cx="-4" cy="-26" rx="4" ry="2.5" fill="url(#eucalyptus)" stroke="#384a40" stroke-width="0.3" transform="rotate(-30,-4,-26)"/>
+    <ellipse cx="4" cy="-30" rx="4" ry="2.5" fill="url(#eucalyptus)" stroke="#384a40" stroke-width="0.3" transform="rotate(30,4,-30)"/>
+    <ellipse cx="0" cy="-34" rx="3.4" ry="2.2" fill="url(#eucalyptus)" stroke="#384a40" stroke-width="0.3"/>
+  </g>
+
+  <g id="twineBow">
+    <path d="M0,0 C-12,-6 -24,-2 -28,4 C-26,8 -16,10 -8,6 C-4,4 0,2 0,0 C0,2 4,4 8,6 C16,10 26,8 28,4 C24,-2 12,-6 0,0 Z" fill="url(#twine)" stroke="#382818" stroke-width="0.4"/>
+    <path d="M-2,2 L-6,16 L-1,12 L0,4 Z M2,2 L6,16 L1,12 L0,4 Z" fill="url(#twine)" stroke="#382818" stroke-width="0.4"/>
+    <circle cx="0" cy="1" r="2.5" fill="#382818" stroke="#a89070" stroke-width="0.3"/>
+    <path d="M-28,3 L-32,6 M28,3 L32,6" stroke="#382818" stroke-width="0.4"/>
+    <path d="M-14,2 L-16,4 M14,2 L16,4 M-22,4 L-24,6 M22,4 L24,6" stroke="#382818" stroke-width="0.3"/>
+  </g>
+
+  <g id="babysBreath">
+    <circle cx="0" cy="0" r="2.4" fill="url(#babys)"/>
+    <circle cx="5" cy="2" r="2" fill="url(#babys)"/>
+    <circle cx="-4" cy="3" r="1.8" fill="url(#babys)"/>
+    <circle cx="2" cy="-4" r="2" fill="url(#babys)"/>
+    <circle cx="-3" cy="-3" r="1.4" fill="url(#babys)"/>
+    <circle cx="0" cy="0" r="0.5" fill="#fff"/>
+  </g>
+
+  <!-- TOP -->
+  <use href="#lavenderStem" transform="translate(110,55) rotate(180)"/>
+  <use href="#lavenderStem" transform="translate(180,55) rotate(180)"/>
+  <use href="#lavenderStem" transform="translate(250,55) rotate(180)"/>
+  <use href="#lavenderStem" transform="translate(320,55) rotate(180)"/>
+  <use href="#lavenderStem" transform="translate(390,55) rotate(180)"/>
+  <use href="#lavenderStem" transform="translate(460,55) rotate(180)"/>
+  <use href="#lavenderStem" transform="translate(530,55) rotate(180)"/>
+  <use href="#lavenderStem" transform="translate(600,55) rotate(180)"/>
+  <use href="#lavenderStem" transform="translate(670,55) rotate(180)"/>
+  <use href="#lavenderStem" transform="translate(740,55) rotate(180)"/>
+  <use href="#lavenderStem" transform="translate(810,55) rotate(180)"/>
+  <use href="#lavenderStem" transform="translate(880,55) rotate(180)"/>
+  <use href="#eucalyptusSprig" transform="translate(140,55) rotate(180)"/>
+  <use href="#eucalyptusSprig" transform="translate(280,55) rotate(180)"/>
+  <use href="#eucalyptusSprig" transform="translate(420,55) rotate(180)"/>
+  <use href="#eucalyptusSprig" transform="translate(560,55) rotate(180)"/>
+  <use href="#eucalyptusSprig" transform="translate(700,55) rotate(180)"/>
+  <use href="#eucalyptusSprig" transform="translate(840,55) rotate(180)"/>
+  <use href="#babysBreath" transform="translate(160,20)"/>
+  <use href="#babysBreath" transform="translate(260,18)"/>
+  <use href="#babysBreath" transform="translate(360,20)"/>
+  <use href="#babysBreath" transform="translate(460,18)"/>
+  <use href="#babysBreath" transform="translate(560,20)"/>
+  <use href="#babysBreath" transform="translate(660,18)"/>
+  <use href="#babysBreath" transform="translate(760,20)"/>
+  <use href="#babysBreath" transform="translate(860,18)"/>
+
+  <!-- BOTTOM -->
+  <use href="#lavenderStem" transform="translate(110,1445)"/>
+  <use href="#lavenderStem" transform="translate(180,1445)"/>
+  <use href="#lavenderStem" transform="translate(250,1445)"/>
+  <use href="#lavenderStem" transform="translate(320,1445)"/>
+  <use href="#lavenderStem" transform="translate(390,1445)"/>
+  <use href="#lavenderStem" transform="translate(460,1445)"/>
+  <use href="#lavenderStem" transform="translate(530,1445)"/>
+  <use href="#lavenderStem" transform="translate(600,1445)"/>
+  <use href="#lavenderStem" transform="translate(670,1445)"/>
+  <use href="#lavenderStem" transform="translate(740,1445)"/>
+  <use href="#lavenderStem" transform="translate(810,1445)"/>
+  <use href="#lavenderStem" transform="translate(880,1445)"/>
+  <use href="#eucalyptusSprig" transform="translate(140,1445)"/>
+  <use href="#eucalyptusSprig" transform="translate(280,1445)"/>
+  <use href="#eucalyptusSprig" transform="translate(420,1445)"/>
+  <use href="#eucalyptusSprig" transform="translate(560,1445)"/>
+  <use href="#eucalyptusSprig" transform="translate(700,1445)"/>
+  <use href="#eucalyptusSprig" transform="translate(840,1445)"/>
+  <use href="#babysBreath" transform="translate(160,1480)"/>
+  <use href="#babysBreath" transform="translate(260,1482)"/>
+  <use href="#babysBreath" transform="translate(360,1480)"/>
+  <use href="#babysBreath" transform="translate(460,1482)"/>
+  <use href="#babysBreath" transform="translate(560,1480)"/>
+  <use href="#babysBreath" transform="translate(660,1482)"/>
+  <use href="#babysBreath" transform="translate(760,1480)"/>
+  <use href="#babysBreath" transform="translate(860,1482)"/>
+
+  <!-- LEFT -->
+  <use href="#lavenderStem" transform="translate(55,110) rotate(90)"/>
+  <use href="#lavenderStem" transform="translate(55,180) rotate(90)"/>
+  <use href="#lavenderStem" transform="translate(55,250) rotate(90)"/>
+  <use href="#lavenderStem" transform="translate(55,320) rotate(90)"/>
+  <use href="#lavenderStem" transform="translate(55,390) rotate(90)"/>
+  <use href="#lavenderStem" transform="translate(55,460) rotate(90)"/>
+  <use href="#lavenderStem" transform="translate(55,530) rotate(90)"/>
+  <use href="#lavenderStem" transform="translate(55,600) rotate(90)"/>
+  <use href="#lavenderStem" transform="translate(55,670) rotate(90)"/>
+  <use href="#lavenderStem" transform="translate(55,740) rotate(90)"/>
+  <use href="#lavenderStem" transform="translate(55,810) rotate(90)"/>
+  <use href="#lavenderStem" transform="translate(55,880) rotate(90)"/>
+  <use href="#lavenderStem" transform="translate(55,950) rotate(90)"/>
+  <use href="#lavenderStem" transform="translate(55,1020) rotate(90)"/>
+  <use href="#lavenderStem" transform="translate(55,1090) rotate(90)"/>
+  <use href="#lavenderStem" transform="translate(55,1160) rotate(90)"/>
+  <use href="#lavenderStem" transform="translate(55,1230) rotate(90)"/>
+  <use href="#lavenderStem" transform="translate(55,1300) rotate(90)"/>
+  <use href="#lavenderStem" transform="translate(55,1370) rotate(90)"/>
+  <use href="#eucalyptusSprig" transform="translate(55,140) rotate(90)"/>
+  <use href="#eucalyptusSprig" transform="translate(55,280) rotate(90)"/>
+  <use href="#eucalyptusSprig" transform="translate(55,420) rotate(90)"/>
+  <use href="#eucalyptusSprig" transform="translate(55,560) rotate(90)"/>
+  <use href="#eucalyptusSprig" transform="translate(55,700) rotate(90)"/>
+  <use href="#eucalyptusSprig" transform="translate(55,840) rotate(90)"/>
+  <use href="#eucalyptusSprig" transform="translate(55,980) rotate(90)"/>
+  <use href="#eucalyptusSprig" transform="translate(55,1120) rotate(90)"/>
+  <use href="#eucalyptusSprig" transform="translate(55,1260) rotate(90)"/>
+  <use href="#eucalyptusSprig" transform="translate(55,1400) rotate(90)"/>
+  <use href="#babysBreath" transform="translate(20,160)"/>
+  <use href="#babysBreath" transform="translate(18,260)"/>
+  <use href="#babysBreath" transform="translate(20,360)"/>
+  <use href="#babysBreath" transform="translate(18,460)"/>
+  <use href="#babysBreath" transform="translate(20,560)"/>
+  <use href="#babysBreath" transform="translate(18,660)"/>
+  <use href="#babysBreath" transform="translate(20,760)"/>
+  <use href="#babysBreath" transform="translate(18,860)"/>
+  <use href="#babysBreath" transform="translate(20,960)"/>
+  <use href="#babysBreath" transform="translate(18,1060)"/>
+  <use href="#babysBreath" transform="translate(20,1160)"/>
+  <use href="#babysBreath" transform="translate(18,1260)"/>
+  <use href="#babysBreath" transform="translate(20,1360)"/>
+
+  <!-- RIGHT -->
+  <use href="#lavenderStem" transform="translate(945,110) rotate(270)"/>
+  <use href="#lavenderStem" transform="translate(945,180) rotate(270)"/>
+  <use href="#lavenderStem" transform="translate(945,250) rotate(270)"/>
+  <use href="#lavenderStem" transform="translate(945,320) rotate(270)"/>
+  <use href="#lavenderStem" transform="translate(945,390) rotate(270)"/>
+  <use href="#lavenderStem" transform="translate(945,460) rotate(270)"/>
+  <use href="#lavenderStem" transform="translate(945,530) rotate(270)"/>
+  <use href="#lavenderStem" transform="translate(945,600) rotate(270)"/>
+  <use href="#lavenderStem" transform="translate(945,670) rotate(270)"/>
+  <use href="#lavenderStem" transform="translate(945,740) rotate(270)"/>
+  <use href="#lavenderStem" transform="translate(945,810) rotate(270)"/>
+  <use href="#lavenderStem" transform="translate(945,880) rotate(270)"/>
+  <use href="#lavenderStem" transform="translate(945,950) rotate(270)"/>
+  <use href="#lavenderStem" transform="translate(945,1020) rotate(270)"/>
+  <use href="#lavenderStem" transform="translate(945,1090) rotate(270)"/>
+  <use href="#lavenderStem" transform="translate(945,1160) rotate(270)"/>
+  <use href="#lavenderStem" transform="translate(945,1230) rotate(270)"/>
+  <use href="#lavenderStem" transform="translate(945,1300) rotate(270)"/>
+  <use href="#lavenderStem" transform="translate(945,1370) rotate(270)"/>
+  <use href="#eucalyptusSprig" transform="translate(945,140) rotate(270)"/>
+  <use href="#eucalyptusSprig" transform="translate(945,280) rotate(270)"/>
+  <use href="#eucalyptusSprig" transform="translate(945,420) rotate(270)"/>
+  <use href="#eucalyptusSprig" transform="translate(945,560) rotate(270)"/>
+  <use href="#eucalyptusSprig" transform="translate(945,700) rotate(270)"/>
+  <use href="#eucalyptusSprig" transform="translate(945,840) rotate(270)"/>
+  <use href="#eucalyptusSprig" transform="translate(945,980) rotate(270)"/>
+  <use href="#eucalyptusSprig" transform="translate(945,1120) rotate(270)"/>
+  <use href="#eucalyptusSprig" transform="translate(945,1260) rotate(270)"/>
+  <use href="#eucalyptusSprig" transform="translate(945,1400) rotate(270)"/>
+  <use href="#babysBreath" transform="translate(980,160)"/>
+  <use href="#babysBreath" transform="translate(982,260)"/>
+  <use href="#babysBreath" transform="translate(980,360)"/>
+  <use href="#babysBreath" transform="translate(982,460)"/>
+  <use href="#babysBreath" transform="translate(980,560)"/>
+  <use href="#babysBreath" transform="translate(982,660)"/>
+  <use href="#babysBreath" transform="translate(980,760)"/>
+  <use href="#babysBreath" transform="translate(982,860)"/>
+  <use href="#babysBreath" transform="translate(980,960)"/>
+  <use href="#babysBreath" transform="translate(982,1060)"/>
+  <use href="#babysBreath" transform="translate(980,1160)"/>
+  <use href="#babysBreath" transform="translate(982,1260)"/>
+  <use href="#babysBreath" transform="translate(980,1360)"/>
+
+  <!-- CORNERS: tied bouquets -->
+  <g transform="translate(40,40)">
+    <use href="#twineBow" transform="translate(30,28) scale(0.9)"/>
+    <use href="#lavenderStem" transform="translate(20,60) rotate(-15)"/>
+    <use href="#lavenderStem" transform="translate(38,60) rotate(0)"/>
+    <use href="#eucalyptusSprig" transform="translate(56,60) rotate(15)"/>
+    <use href="#babysBreath" transform="translate(60,30)"/>
+    <use href="#babysBreath" transform="translate(28,8)"/>
+  </g>
+  <g transform="translate(960,40)">
+    <use href="#twineBow" transform="translate(-30,28) scale(0.9)"/>
+    <use href="#lavenderStem" transform="translate(-20,60) rotate(15)"/>
+    <use href="#lavenderStem" transform="translate(-38,60) rotate(0)"/>
+    <use href="#eucalyptusSprig" transform="translate(-56,60) rotate(-15)"/>
+    <use href="#babysBreath" transform="translate(-60,30)"/>
+    <use href="#babysBreath" transform="translate(-28,8)"/>
+  </g>
+  <g transform="translate(40,1460)">
+    <use href="#twineBow" transform="translate(30,-28) scale(0.9)"/>
+    <use href="#lavenderStem" transform="translate(20,-22) rotate(165)"/>
+    <use href="#lavenderStem" transform="translate(38,-22) rotate(180)"/>
+    <use href="#eucalyptusSprig" transform="translate(56,-22) rotate(195)"/>
+    <use href="#babysBreath" transform="translate(60,-30)"/>
+  </g>
+  <g transform="translate(960,1460)">
+    <use href="#twineBow" transform="translate(-30,-28) scale(0.9)"/>
+    <use href="#lavenderStem" transform="translate(-20,-22) rotate(195)"/>
+    <use href="#lavenderStem" transform="translate(-38,-22) rotate(180)"/>
+    <use href="#eucalyptusSprig" transform="translate(-56,-22) rotate(165)"/>
+    <use href="#babysBreath" transform="translate(-60,-30)"/>
+  </g>
+
+  <path d="M60,55 L940,55 M60,1445 L940,1445 M55,60 L55,1440 M945,60 L945,1440" stroke="#9070d4" stroke-width="1.4" fill="none" opacity="0.85"/>
+</svg>

@@ -1,0 +1,267 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1500" width="1000" height="1500">
+  <defs>
+    <linearGradient id="frameBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1a1a20"/>
+      <stop offset="50%" stop-color="#0c0c10"/>
+      <stop offset="100%" stop-color="#040406"/>
+    </linearGradient>
+    <linearGradient id="steel" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3a3e48"/>
+      <stop offset="50%" stop-color="#a0a8b8"/>
+      <stop offset="100%" stop-color="#4a4e58"/>
+    </linearGradient>
+    <radialGradient id="copperG" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#ffb888"/>
+      <stop offset="55%" stop-color="#c06030"/>
+      <stop offset="100%" stop-color="#5a2008"/>
+    </radialGradient>
+    <linearGradient id="woodgrainStrip" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#3a2410"/>
+      <stop offset="50%" stop-color="#7a4a20"/>
+      <stop offset="100%" stop-color="#3a2410"/>
+    </linearGradient>
+    <linearGradient id="woodgrainStripV" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#3a2410"/>
+      <stop offset="50%" stop-color="#7a4a20"/>
+      <stop offset="100%" stop-color="#3a2410"/>
+    </linearGradient>
+    <radialGradient id="boltG" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#c0c8d0"/>
+      <stop offset="60%" stop-color="#606878"/>
+      <stop offset="100%" stop-color="#2a3038"/>
+    </radialGradient>
+  </defs>
+
+  <path d="M 0,0 L 1000,0 L 1000,1500 L 0,1500 Z M 60,60 L 60,1440 L 940,1440 L 940,60 Z" fill="url(#frameBg)" fill-rule="evenodd"/>
+
+  <g id="hammerSil">
+    <path d="M-8,-12 L8,-12 L10,-6 L-10,-6 Z" fill="url(#steel)" stroke="#2a3038" stroke-width="0.4"/>
+    <rect x="-2" y="-6" width="4" height="24" fill="url(#copperG)" stroke="#5a2008" stroke-width="0.3"/>
+    <path d="M-2,2 L2,2 M-2,8 L2,8 M-2,14 L2,14" stroke="#5a2008" stroke-width="0.4"/>
+    <path d="M-8,-12 L8,-12" stroke="#a0a8b8" stroke-width="0.6"/>
+    <circle cx="-5" cy="-9" r="1" fill="#a0a8b8"/>
+    <circle cx="5" cy="-9" r="1" fill="#a0a8b8"/>
+  </g>
+
+  <g id="wrenchSil">
+    <path d="M-5,-18 L5,-18 C9,-18 11,-14 11,-10 L11,-2 C11,2 9,4 5,4 L4,4 L4,18 L-4,18 L-4,4 L-5,4 C-9,4 -11,2 -11,-2 L-11,-10 C-11,-14 -9,-18 -5,-18 Z" fill="url(#steel)" stroke="#2a3038" stroke-width="0.5"/>
+    <path d="M-5,-14 L5,-14 C7,-14 7,-12 7,-10 L7,-2 C7,0 5,0 5,0 L-5,0 C-5,0 -7,0 -7,-2 L-7,-10 C-7,-12 -7,-14 -5,-14 Z" fill="#1a1c22"/>
+    <path d="M-4,4 L4,4 M-4,10 L4,10" stroke="#2a3038" stroke-width="0.4"/>
+  </g>
+
+  <g id="nutBolt">
+    <path d="M-6,-3 L0,-6 L6,-3 L6,3 L0,6 L-6,3 Z" fill="url(#boltG)" stroke="#2a3038" stroke-width="0.4"/>
+    <circle cx="0" cy="0" r="2.4" fill="#2a3038"/>
+    <circle cx="-1" cy="-1" r="0.8" fill="#c0c8d0" opacity="0.6"/>
+  </g>
+
+  <g id="nutBoltRow">
+    <use href="#nutBolt" transform="translate(0,0)"/>
+    <use href="#nutBolt" transform="translate(16,0)"/>
+    <use href="#nutBolt" transform="translate(32,0)"/>
+    <use href="#nutBolt" transform="translate(48,0)"/>
+    <use href="#nutBolt" transform="translate(64,0)"/>
+    <use href="#nutBolt" transform="translate(80,0)"/>
+    <use href="#nutBolt" transform="translate(96,0)"/>
+    <use href="#nutBolt" transform="translate(112,0)"/>
+  </g>
+
+  <g id="rulerTick">
+    <path d="M0,0 L0,5 M5,0 L5,3 M10,0 L10,3 M15,0 L15,3 M20,0 L20,5 M25,0 L25,3 M30,0 L30,3 M35,0 L35,3 M40,0 L40,5" stroke="#c0c8d0" stroke-width="0.5"/>
+    <path d="M0,0 L40,0" stroke="#c0c8d0" stroke-width="0.4"/>
+  </g>
+
+  <g id="woodgrainBand">
+    <rect x="0" y="-4" width="100" height="8" fill="url(#woodgrainStrip)"/>
+    <path d="M0,-2 C20,-3 40,-1 60,-2 C80,-3 100,-1 100,-2" stroke="#3a2410" stroke-width="0.4" fill="none"/>
+    <path d="M0,2 C20,1 40,3 60,2 C80,1 100,3 100,2" stroke="#3a2410" stroke-width="0.4" fill="none"/>
+    <ellipse cx="40" cy="0" rx="3" ry="2" fill="none" stroke="#3a2410" stroke-width="0.4"/>
+  </g>
+
+  <g id="woodgrainBandV">
+    <rect x="-4" y="0" width="8" height="100" fill="url(#woodgrainStripV)"/>
+    <path d="M-2,0 C-3,20 -1,40 -2,60 C-3,80 -1,100 -2,100" stroke="#3a2410" stroke-width="0.4" fill="none"/>
+    <path d="M2,0 C1,20 3,40 2,60 C1,80 3,100 2,100" stroke="#3a2410" stroke-width="0.4" fill="none"/>
+  </g>
+
+  <g id="copperRivet">
+    <circle cx="0" cy="0" r="3" fill="url(#copperG)" stroke="#5a2008" stroke-width="0.3"/>
+    <circle cx="-1" cy="-1" r="1" fill="#ffb888" opacity="0.7"/>
+  </g>
+
+  <!-- TOP -->
+  <use href="#woodgrainBand" transform="translate(60,30)"/>
+  <use href="#woodgrainBand" transform="translate(160,30)"/>
+  <use href="#woodgrainBand" transform="translate(260,30)"/>
+  <use href="#woodgrainBand" transform="translate(360,30)"/>
+  <use href="#woodgrainBand" transform="translate(460,30)"/>
+  <use href="#woodgrainBand" transform="translate(560,30)"/>
+  <use href="#woodgrainBand" transform="translate(660,30)"/>
+  <use href="#woodgrainBand" transform="translate(760,30)"/>
+  <use href="#woodgrainBand" transform="translate(840,30)"/>
+  <use href="#nutBoltRow" transform="translate(70,52)"/>
+  <use href="#nutBoltRow" transform="translate(310,52)"/>
+  <use href="#nutBoltRow" transform="translate(550,52)"/>
+  <use href="#nutBoltRow" transform="translate(790,52)"/>
+  <use href="#rulerTick" transform="translate(60,55)"/>
+  <use href="#rulerTick" transform="translate(180,55)"/>
+  <use href="#rulerTick" transform="translate(300,55)"/>
+  <use href="#rulerTick" transform="translate(420,55)"/>
+  <use href="#rulerTick" transform="translate(540,55)"/>
+  <use href="#rulerTick" transform="translate(660,55)"/>
+  <use href="#rulerTick" transform="translate(780,55)"/>
+  <use href="#rulerTick" transform="translate(900,55)"/>
+  <use href="#copperRivet" transform="translate(140,16)"/>
+  <use href="#copperRivet" transform="translate(280,16)"/>
+  <use href="#copperRivet" transform="translate(420,16)"/>
+  <use href="#copperRivet" transform="translate(560,16)"/>
+  <use href="#copperRivet" transform="translate(700,16)"/>
+  <use href="#copperRivet" transform="translate(840,16)"/>
+  <use href="#copperRivet" transform="translate(900,16)"/>
+
+  <!-- BOTTOM -->
+  <use href="#woodgrainBand" transform="translate(60,1470)"/>
+  <use href="#woodgrainBand" transform="translate(160,1470)"/>
+  <use href="#woodgrainBand" transform="translate(260,1470)"/>
+  <use href="#woodgrainBand" transform="translate(360,1470)"/>
+  <use href="#woodgrainBand" transform="translate(460,1470)"/>
+  <use href="#woodgrainBand" transform="translate(560,1470)"/>
+  <use href="#woodgrainBand" transform="translate(660,1470)"/>
+  <use href="#woodgrainBand" transform="translate(760,1470)"/>
+  <use href="#woodgrainBand" transform="translate(840,1470)"/>
+  <use href="#nutBoltRow" transform="translate(70,1448)"/>
+  <use href="#nutBoltRow" transform="translate(310,1448)"/>
+  <use href="#nutBoltRow" transform="translate(550,1448)"/>
+  <use href="#nutBoltRow" transform="translate(790,1448)"/>
+  <use href="#rulerTick" transform="translate(60,1445) scale(1,-1)"/>
+  <use href="#rulerTick" transform="translate(180,1445) scale(1,-1)"/>
+  <use href="#rulerTick" transform="translate(300,1445) scale(1,-1)"/>
+  <use href="#rulerTick" transform="translate(420,1445) scale(1,-1)"/>
+  <use href="#rulerTick" transform="translate(540,1445) scale(1,-1)"/>
+  <use href="#rulerTick" transform="translate(660,1445) scale(1,-1)"/>
+  <use href="#rulerTick" transform="translate(780,1445) scale(1,-1)"/>
+  <use href="#rulerTick" transform="translate(900,1445) scale(1,-1)"/>
+  <use href="#copperRivet" transform="translate(140,1484)"/>
+  <use href="#copperRivet" transform="translate(280,1484)"/>
+  <use href="#copperRivet" transform="translate(420,1484)"/>
+  <use href="#copperRivet" transform="translate(560,1484)"/>
+  <use href="#copperRivet" transform="translate(700,1484)"/>
+  <use href="#copperRivet" transform="translate(840,1484)"/>
+  <use href="#copperRivet" transform="translate(900,1484)"/>
+
+  <!-- LEFT -->
+  <use href="#woodgrainBandV" transform="translate(30,60)"/>
+  <use href="#woodgrainBandV" transform="translate(30,160)"/>
+  <use href="#woodgrainBandV" transform="translate(30,260)"/>
+  <use href="#woodgrainBandV" transform="translate(30,360)"/>
+  <use href="#woodgrainBandV" transform="translate(30,460)"/>
+  <use href="#woodgrainBandV" transform="translate(30,560)"/>
+  <use href="#woodgrainBandV" transform="translate(30,660)"/>
+  <use href="#woodgrainBandV" transform="translate(30,760)"/>
+  <use href="#woodgrainBandV" transform="translate(30,860)"/>
+  <use href="#woodgrainBandV" transform="translate(30,960)"/>
+  <use href="#woodgrainBandV" transform="translate(30,1060)"/>
+  <use href="#woodgrainBandV" transform="translate(30,1160)"/>
+  <use href="#woodgrainBandV" transform="translate(30,1260)"/>
+  <use href="#woodgrainBandV" transform="translate(30,1340)"/>
+  <use href="#nutBoltRow" transform="translate(52,70) rotate(90)"/>
+  <use href="#nutBoltRow" transform="translate(52,310) rotate(90)"/>
+  <use href="#nutBoltRow" transform="translate(52,550) rotate(90)"/>
+  <use href="#nutBoltRow" transform="translate(52,790) rotate(90)"/>
+  <use href="#nutBoltRow" transform="translate(52,1030) rotate(90)"/>
+  <use href="#nutBoltRow" transform="translate(52,1270) rotate(90)"/>
+  <use href="#rulerTick" transform="translate(55,60) rotate(90)"/>
+  <use href="#rulerTick" transform="translate(55,180) rotate(90)"/>
+  <use href="#rulerTick" transform="translate(55,300) rotate(90)"/>
+  <use href="#rulerTick" transform="translate(55,420) rotate(90)"/>
+  <use href="#rulerTick" transform="translate(55,540) rotate(90)"/>
+  <use href="#rulerTick" transform="translate(55,660) rotate(90)"/>
+  <use href="#rulerTick" transform="translate(55,780) rotate(90)"/>
+  <use href="#rulerTick" transform="translate(55,900) rotate(90)"/>
+  <use href="#rulerTick" transform="translate(55,1020) rotate(90)"/>
+  <use href="#rulerTick" transform="translate(55,1140) rotate(90)"/>
+  <use href="#rulerTick" transform="translate(55,1260) rotate(90)"/>
+  <use href="#rulerTick" transform="translate(55,1380) rotate(90)"/>
+  <use href="#copperRivet" transform="translate(16,140)"/>
+  <use href="#copperRivet" transform="translate(16,280)"/>
+  <use href="#copperRivet" transform="translate(16,420)"/>
+  <use href="#copperRivet" transform="translate(16,560)"/>
+  <use href="#copperRivet" transform="translate(16,700)"/>
+  <use href="#copperRivet" transform="translate(16,840)"/>
+  <use href="#copperRivet" transform="translate(16,980)"/>
+  <use href="#copperRivet" transform="translate(16,1120)"/>
+  <use href="#copperRivet" transform="translate(16,1260)"/>
+  <use href="#copperRivet" transform="translate(16,1400)"/>
+
+  <!-- RIGHT -->
+  <use href="#woodgrainBandV" transform="translate(970,60)"/>
+  <use href="#woodgrainBandV" transform="translate(970,160)"/>
+  <use href="#woodgrainBandV" transform="translate(970,260)"/>
+  <use href="#woodgrainBandV" transform="translate(970,360)"/>
+  <use href="#woodgrainBandV" transform="translate(970,460)"/>
+  <use href="#woodgrainBandV" transform="translate(970,560)"/>
+  <use href="#woodgrainBandV" transform="translate(970,660)"/>
+  <use href="#woodgrainBandV" transform="translate(970,760)"/>
+  <use href="#woodgrainBandV" transform="translate(970,860)"/>
+  <use href="#woodgrainBandV" transform="translate(970,960)"/>
+  <use href="#woodgrainBandV" transform="translate(970,1060)"/>
+  <use href="#woodgrainBandV" transform="translate(970,1160)"/>
+  <use href="#woodgrainBandV" transform="translate(970,1260)"/>
+  <use href="#woodgrainBandV" transform="translate(970,1340)"/>
+  <use href="#nutBoltRow" transform="translate(948,70) rotate(90)"/>
+  <use href="#nutBoltRow" transform="translate(948,310) rotate(90)"/>
+  <use href="#nutBoltRow" transform="translate(948,550) rotate(90)"/>
+  <use href="#nutBoltRow" transform="translate(948,790) rotate(90)"/>
+  <use href="#nutBoltRow" transform="translate(948,1030) rotate(90)"/>
+  <use href="#nutBoltRow" transform="translate(948,1270) rotate(90)"/>
+  <use href="#rulerTick" transform="translate(945,60) rotate(90) scale(-1,1)"/>
+  <use href="#rulerTick" transform="translate(945,180) rotate(90) scale(-1,1)"/>
+  <use href="#rulerTick" transform="translate(945,300) rotate(90) scale(-1,1)"/>
+  <use href="#rulerTick" transform="translate(945,420) rotate(90) scale(-1,1)"/>
+  <use href="#rulerTick" transform="translate(945,540) rotate(90) scale(-1,1)"/>
+  <use href="#rulerTick" transform="translate(945,660) rotate(90) scale(-1,1)"/>
+  <use href="#rulerTick" transform="translate(945,780) rotate(90) scale(-1,1)"/>
+  <use href="#rulerTick" transform="translate(945,900) rotate(90) scale(-1,1)"/>
+  <use href="#rulerTick" transform="translate(945,1020) rotate(90) scale(-1,1)"/>
+  <use href="#rulerTick" transform="translate(945,1140) rotate(90) scale(-1,1)"/>
+  <use href="#rulerTick" transform="translate(945,1260) rotate(90) scale(-1,1)"/>
+  <use href="#rulerTick" transform="translate(945,1380) rotate(90) scale(-1,1)"/>
+  <use href="#copperRivet" transform="translate(984,140)"/>
+  <use href="#copperRivet" transform="translate(984,280)"/>
+  <use href="#copperRivet" transform="translate(984,420)"/>
+  <use href="#copperRivet" transform="translate(984,560)"/>
+  <use href="#copperRivet" transform="translate(984,700)"/>
+  <use href="#copperRivet" transform="translate(984,840)"/>
+  <use href="#copperRivet" transform="translate(984,980)"/>
+  <use href="#copperRivet" transform="translate(984,1120)"/>
+  <use href="#copperRivet" transform="translate(984,1260)"/>
+  <use href="#copperRivet" transform="translate(984,1400)"/>
+
+  <!-- CORNERS: tools -->
+  <g transform="translate(40,40)">
+    <use href="#hammerSil" transform="translate(28,32) scale(1.4)"/>
+    <use href="#wrenchSil" transform="translate(60,30) scale(1.2) rotate(45)"/>
+    <use href="#nutBolt" transform="translate(76,60)"/>
+    <use href="#copperRivet" transform="translate(56,72)"/>
+  </g>
+  <g transform="translate(960,40)">
+    <use href="#hammerSil" transform="translate(-28,32) scale(1.4)"/>
+    <use href="#wrenchSil" transform="translate(-60,30) scale(1.2) rotate(-45)"/>
+    <use href="#nutBolt" transform="translate(-76,60)"/>
+    <use href="#copperRivet" transform="translate(-56,72)"/>
+  </g>
+  <g transform="translate(40,1460)">
+    <use href="#hammerSil" transform="translate(28,-32) scale(1.4) scale(1,-1)"/>
+    <use href="#wrenchSil" transform="translate(60,-30) scale(1.2) rotate(135)"/>
+    <use href="#nutBolt" transform="translate(76,-60)"/>
+    <use href="#copperRivet" transform="translate(56,-72)"/>
+  </g>
+  <g transform="translate(960,1460)">
+    <use href="#hammerSil" transform="translate(-28,-32) scale(1.4) scale(1,-1)"/>
+    <use href="#wrenchSil" transform="translate(-60,-30) scale(1.2) rotate(-135)"/>
+    <use href="#nutBolt" transform="translate(-76,-60)"/>
+    <use href="#copperRivet" transform="translate(-56,-72)"/>
+  </g>
+
+  <path d="M60,55 L940,55 M60,1445 L940,1445 M55,60 L55,1440 M945,60 L945,1440" stroke="url(#steel)" stroke-width="1.4" fill="none"/>
+</svg>

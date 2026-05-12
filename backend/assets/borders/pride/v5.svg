@@ -1,0 +1,266 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1500" width="1000" height="1500">
+  <defs>
+    <linearGradient id="frameBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#050505"/>
+      <stop offset="50%" stop-color="#020202"/>
+      <stop offset="100%" stop-color="#010101"/>
+    </linearGradient>
+    <linearGradient id="bandRed" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#a01018"/>
+      <stop offset="100%" stop-color="#e0282a"/>
+    </linearGradient>
+    <linearGradient id="bandOrange" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#b04810"/>
+      <stop offset="100%" stop-color="#f08818"/>
+    </linearGradient>
+    <linearGradient id="bandYellow" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#a08820"/>
+      <stop offset="100%" stop-color="#f4d040"/>
+    </linearGradient>
+    <linearGradient id="bandGreen" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#185020"/>
+      <stop offset="100%" stop-color="#48b840"/>
+    </linearGradient>
+    <linearGradient id="bandBlue" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#103860"/>
+      <stop offset="100%" stop-color="#3878d8"/>
+    </linearGradient>
+    <linearGradient id="bandViolet" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#401860"/>
+      <stop offset="100%" stop-color="#8038c8"/>
+    </linearGradient>
+    <linearGradient id="bandBlack" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#000"/>
+      <stop offset="100%" stop-color="#2a2a2a"/>
+    </linearGradient>
+    <linearGradient id="bandBrown" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#2a1408"/>
+      <stop offset="100%" stop-color="#704020"/>
+    </linearGradient>
+    <linearGradient id="bandLtBlue" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#3a6090"/>
+      <stop offset="100%" stop-color="#90c8e8"/>
+    </linearGradient>
+    <linearGradient id="bandPink" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#a06070"/>
+      <stop offset="100%" stop-color="#fac8d4"/>
+    </linearGradient>
+    <linearGradient id="bandWhite" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#a0a0a0"/>
+      <stop offset="100%" stop-color="#ffffff"/>
+    </linearGradient>
+    <linearGradient id="progressH" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#e0282a"/>
+      <stop offset="9%" stop-color="#f08818"/>
+      <stop offset="18%" stop-color="#f4d040"/>
+      <stop offset="27%" stop-color="#48b840"/>
+      <stop offset="36%" stop-color="#3878d8"/>
+      <stop offset="45%" stop-color="#8038c8"/>
+      <stop offset="55%" stop-color="#000"/>
+      <stop offset="64%" stop-color="#704020"/>
+      <stop offset="73%" stop-color="#90c8e8"/>
+      <stop offset="82%" stop-color="#fac8d4"/>
+      <stop offset="91%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#e0282a"/>
+    </linearGradient>
+  </defs>
+
+  <path d="M 0,0 L 1000,0 L 1000,1500 L 0,1500 Z M 60,60 L 60,1440 L 940,1440 L 940,60 Z" fill="url(#frameBg)" fill-rule="evenodd"/>
+
+  <g id="progressBraidH">
+    <path d="M0,0 C20,-8 40,8 60,0 C80,-8 100,8 120,0" stroke="url(#bandRed)" stroke-width="3.4" fill="none" stroke-linecap="round"/>
+    <path d="M0,4 C20,-4 40,12 60,4 C80,-4 100,12 120,4" stroke="url(#bandOrange)" stroke-width="3.4" fill="none" stroke-linecap="round"/>
+    <path d="M0,8 C20,0 40,16 60,8 C80,0 100,16 120,8" stroke="url(#bandYellow)" stroke-width="3.4" fill="none" stroke-linecap="round"/>
+    <path d="M0,12 C20,4 40,20 60,12 C80,4 100,20 120,12" stroke="url(#bandGreen)" stroke-width="3.4" fill="none" stroke-linecap="round"/>
+    <path d="M0,16 C20,8 40,24 60,16 C80,8 100,24 120,16" stroke="url(#bandBlue)" stroke-width="3.4" fill="none" stroke-linecap="round"/>
+    <path d="M0,20 C20,12 40,28 60,20 C80,12 100,28 120,20" stroke="url(#bandViolet)" stroke-width="3.4" fill="none" stroke-linecap="round"/>
+    <path d="M0,24 C20,16 40,32 60,24 C80,16 100,32 120,24" stroke="url(#bandBlack)" stroke-width="3.4" fill="none" stroke-linecap="round"/>
+    <path d="M0,28 C20,20 40,36 60,28 C80,20 100,36 120,28" stroke="url(#bandBrown)" stroke-width="3.4" fill="none" stroke-linecap="round"/>
+    <path d="M0,32 C20,24 40,40 60,32 C80,24 100,40 120,32" stroke="url(#bandLtBlue)" stroke-width="3.4" fill="none" stroke-linecap="round"/>
+    <path d="M0,36 C20,28 40,44 60,36 C80,28 100,44 120,36" stroke="url(#bandPink)" stroke-width="3.4" fill="none" stroke-linecap="round"/>
+    <path d="M0,40 C20,32 40,48 60,40 C80,32 100,48 120,40" stroke="url(#bandWhite)" stroke-width="3.4" fill="none" stroke-linecap="round"/>
+  </g>
+
+  <g id="progressBraidV">
+    <path d="M0,0 C-8,20 8,40 0,60 C-8,80 8,100 0,120" stroke="url(#bandRed)" stroke-width="3.4" fill="none" stroke-linecap="round"/>
+    <path d="M4,0 C-4,20 12,40 4,60 C-4,80 12,100 4,120" stroke="url(#bandOrange)" stroke-width="3.4" fill="none" stroke-linecap="round"/>
+    <path d="M8,0 C0,20 16,40 8,60 C0,80 16,100 8,120" stroke="url(#bandYellow)" stroke-width="3.4" fill="none" stroke-linecap="round"/>
+    <path d="M12,0 C4,20 20,40 12,60 C4,80 20,100 12,120" stroke="url(#bandGreen)" stroke-width="3.4" fill="none" stroke-linecap="round"/>
+    <path d="M16,0 C8,20 24,40 16,60 C8,80 24,100 16,120" stroke="url(#bandBlue)" stroke-width="3.4" fill="none" stroke-linecap="round"/>
+    <path d="M20,0 C12,20 28,40 20,60 C12,80 28,100 20,120" stroke="url(#bandViolet)" stroke-width="3.4" fill="none" stroke-linecap="round"/>
+    <path d="M24,0 C16,20 32,40 24,60 C16,80 32,100 24,120" stroke="url(#bandBlack)" stroke-width="3.4" fill="none" stroke-linecap="round"/>
+    <path d="M28,0 C20,20 36,40 28,60 C20,80 36,100 28,120" stroke="url(#bandBrown)" stroke-width="3.4" fill="none" stroke-linecap="round"/>
+    <path d="M32,0 C24,20 40,40 32,60 C24,80 40,100 32,120" stroke="url(#bandLtBlue)" stroke-width="3.4" fill="none" stroke-linecap="round"/>
+    <path d="M36,0 C28,20 44,40 36,60 C28,80 44,100 36,120" stroke="url(#bandPink)" stroke-width="3.4" fill="none" stroke-linecap="round"/>
+    <path d="M40,0 C32,20 48,40 40,60 C32,80 48,100 40,120" stroke="url(#bandWhite)" stroke-width="3.4" fill="none" stroke-linecap="round"/>
+  </g>
+
+  <g id="bandDot">
+    <circle cx="0" cy="0" r="1.6" fill="url(#progressH)"/>
+  </g>
+
+  <g id="bandKnot">
+    <circle cx="0" cy="0" r="4" fill="url(#bandWhite)"/>
+    <circle cx="0" cy="0" r="4" fill="none" stroke="url(#bandRed)" stroke-width="1.4"/>
+  </g>
+
+  <!-- TOP -->
+  <use href="#progressBraidH" transform="translate(60,10)"/>
+  <use href="#progressBraidH" transform="translate(180,10)"/>
+  <use href="#progressBraidH" transform="translate(300,10)"/>
+  <use href="#progressBraidH" transform="translate(420,10)"/>
+  <use href="#progressBraidH" transform="translate(540,10)"/>
+  <use href="#progressBraidH" transform="translate(660,10)"/>
+  <use href="#progressBraidH" transform="translate(780,10)"/>
+  <use href="#progressBraidH" transform="translate(820,10)"/>
+  <use href="#bandDot" transform="translate(140,12)"/>
+  <use href="#bandDot" transform="translate(220,12)"/>
+  <use href="#bandDot" transform="translate(300,12)"/>
+  <use href="#bandDot" transform="translate(380,12)"/>
+  <use href="#bandDot" transform="translate(460,12)"/>
+  <use href="#bandDot" transform="translate(540,12)"/>
+  <use href="#bandDot" transform="translate(620,12)"/>
+  <use href="#bandDot" transform="translate(700,12)"/>
+  <use href="#bandDot" transform="translate(780,12)"/>
+  <use href="#bandDot" transform="translate(860,12)"/>
+  <use href="#bandKnot" transform="translate(120,30)"/>
+  <use href="#bandKnot" transform="translate(240,30)"/>
+  <use href="#bandKnot" transform="translate(360,30)"/>
+  <use href="#bandKnot" transform="translate(480,30)"/>
+  <use href="#bandKnot" transform="translate(600,30)"/>
+  <use href="#bandKnot" transform="translate(720,30)"/>
+  <use href="#bandKnot" transform="translate(840,30)"/>
+
+  <!-- BOTTOM -->
+  <use href="#progressBraidH" transform="translate(60,1450)"/>
+  <use href="#progressBraidH" transform="translate(180,1450)"/>
+  <use href="#progressBraidH" transform="translate(300,1450)"/>
+  <use href="#progressBraidH" transform="translate(420,1450)"/>
+  <use href="#progressBraidH" transform="translate(540,1450)"/>
+  <use href="#progressBraidH" transform="translate(660,1450)"/>
+  <use href="#progressBraidH" transform="translate(780,1450)"/>
+  <use href="#progressBraidH" transform="translate(820,1450)"/>
+  <use href="#bandKnot" transform="translate(120,1470)"/>
+  <use href="#bandKnot" transform="translate(240,1470)"/>
+  <use href="#bandKnot" transform="translate(360,1470)"/>
+  <use href="#bandKnot" transform="translate(480,1470)"/>
+  <use href="#bandKnot" transform="translate(600,1470)"/>
+  <use href="#bandKnot" transform="translate(720,1470)"/>
+  <use href="#bandKnot" transform="translate(840,1470)"/>
+  <use href="#bandDot" transform="translate(140,1488)"/>
+  <use href="#bandDot" transform="translate(220,1488)"/>
+  <use href="#bandDot" transform="translate(300,1488)"/>
+  <use href="#bandDot" transform="translate(380,1488)"/>
+  <use href="#bandDot" transform="translate(460,1488)"/>
+  <use href="#bandDot" transform="translate(540,1488)"/>
+  <use href="#bandDot" transform="translate(620,1488)"/>
+  <use href="#bandDot" transform="translate(700,1488)"/>
+  <use href="#bandDot" transform="translate(780,1488)"/>
+  <use href="#bandDot" transform="translate(860,1488)"/>
+
+  <!-- LEFT -->
+  <use href="#progressBraidV" transform="translate(10,60)"/>
+  <use href="#progressBraidV" transform="translate(10,180)"/>
+  <use href="#progressBraidV" transform="translate(10,300)"/>
+  <use href="#progressBraidV" transform="translate(10,420)"/>
+  <use href="#progressBraidV" transform="translate(10,540)"/>
+  <use href="#progressBraidV" transform="translate(10,660)"/>
+  <use href="#progressBraidV" transform="translate(10,780)"/>
+  <use href="#progressBraidV" transform="translate(10,900)"/>
+  <use href="#progressBraidV" transform="translate(10,1020)"/>
+  <use href="#progressBraidV" transform="translate(10,1140)"/>
+  <use href="#progressBraidV" transform="translate(10,1260)"/>
+  <use href="#progressBraidV" transform="translate(10,1320)"/>
+  <use href="#bandKnot" transform="translate(30,120)"/>
+  <use href="#bandKnot" transform="translate(30,240)"/>
+  <use href="#bandKnot" transform="translate(30,360)"/>
+  <use href="#bandKnot" transform="translate(30,480)"/>
+  <use href="#bandKnot" transform="translate(30,600)"/>
+  <use href="#bandKnot" transform="translate(30,720)"/>
+  <use href="#bandKnot" transform="translate(30,840)"/>
+  <use href="#bandKnot" transform="translate(30,960)"/>
+  <use href="#bandKnot" transform="translate(30,1080)"/>
+  <use href="#bandKnot" transform="translate(30,1200)"/>
+  <use href="#bandKnot" transform="translate(30,1320)"/>
+  <use href="#bandDot" transform="translate(12,140)"/>
+  <use href="#bandDot" transform="translate(12,220)"/>
+  <use href="#bandDot" transform="translate(12,300)"/>
+  <use href="#bandDot" transform="translate(12,380)"/>
+  <use href="#bandDot" transform="translate(12,460)"/>
+  <use href="#bandDot" transform="translate(12,540)"/>
+  <use href="#bandDot" transform="translate(12,620)"/>
+  <use href="#bandDot" transform="translate(12,700)"/>
+  <use href="#bandDot" transform="translate(12,780)"/>
+  <use href="#bandDot" transform="translate(12,860)"/>
+  <use href="#bandDot" transform="translate(12,940)"/>
+  <use href="#bandDot" transform="translate(12,1020)"/>
+  <use href="#bandDot" transform="translate(12,1100)"/>
+  <use href="#bandDot" transform="translate(12,1180)"/>
+  <use href="#bandDot" transform="translate(12,1260)"/>
+  <use href="#bandDot" transform="translate(12,1340)"/>
+
+  <!-- RIGHT -->
+  <use href="#progressBraidV" transform="translate(950,60)"/>
+  <use href="#progressBraidV" transform="translate(950,180)"/>
+  <use href="#progressBraidV" transform="translate(950,300)"/>
+  <use href="#progressBraidV" transform="translate(950,420)"/>
+  <use href="#progressBraidV" transform="translate(950,540)"/>
+  <use href="#progressBraidV" transform="translate(950,660)"/>
+  <use href="#progressBraidV" transform="translate(950,780)"/>
+  <use href="#progressBraidV" transform="translate(950,900)"/>
+  <use href="#progressBraidV" transform="translate(950,1020)"/>
+  <use href="#progressBraidV" transform="translate(950,1140)"/>
+  <use href="#progressBraidV" transform="translate(950,1260)"/>
+  <use href="#progressBraidV" transform="translate(950,1320)"/>
+  <use href="#bandKnot" transform="translate(970,120)"/>
+  <use href="#bandKnot" transform="translate(970,240)"/>
+  <use href="#bandKnot" transform="translate(970,360)"/>
+  <use href="#bandKnot" transform="translate(970,480)"/>
+  <use href="#bandKnot" transform="translate(970,600)"/>
+  <use href="#bandKnot" transform="translate(970,720)"/>
+  <use href="#bandKnot" transform="translate(970,840)"/>
+  <use href="#bandKnot" transform="translate(970,960)"/>
+  <use href="#bandKnot" transform="translate(970,1080)"/>
+  <use href="#bandKnot" transform="translate(970,1200)"/>
+  <use href="#bandKnot" transform="translate(970,1320)"/>
+  <use href="#bandDot" transform="translate(988,140)"/>
+  <use href="#bandDot" transform="translate(988,220)"/>
+  <use href="#bandDot" transform="translate(988,300)"/>
+  <use href="#bandDot" transform="translate(988,380)"/>
+  <use href="#bandDot" transform="translate(988,460)"/>
+  <use href="#bandDot" transform="translate(988,540)"/>
+  <use href="#bandDot" transform="translate(988,620)"/>
+  <use href="#bandDot" transform="translate(988,700)"/>
+  <use href="#bandDot" transform="translate(988,780)"/>
+  <use href="#bandDot" transform="translate(988,860)"/>
+  <use href="#bandDot" transform="translate(988,940)"/>
+  <use href="#bandDot" transform="translate(988,1020)"/>
+  <use href="#bandDot" transform="translate(988,1100)"/>
+  <use href="#bandDot" transform="translate(988,1180)"/>
+  <use href="#bandDot" transform="translate(988,1260)"/>
+  <use href="#bandDot" transform="translate(988,1340)"/>
+
+  <!-- CORNERS -->
+  <g transform="translate(40,40)">
+    <use href="#progressBraidH" transform="translate(0,0) scale(0.7)"/>
+    <use href="#progressBraidH" transform="translate(0,32) scale(0.7)"/>
+    <use href="#bandKnot" transform="translate(60,60)"/>
+  </g>
+  <g transform="translate(960,40)">
+    <use href="#progressBraidH" transform="translate(0,0) scale(-0.7,0.7)"/>
+    <use href="#progressBraidH" transform="translate(0,32) scale(-0.7,0.7)"/>
+    <use href="#bandKnot" transform="translate(-60,60)"/>
+  </g>
+  <g transform="translate(40,1460)">
+    <use href="#progressBraidH" transform="translate(0,0) scale(0.7,-0.7)"/>
+    <use href="#progressBraidH" transform="translate(0,-32) scale(0.7,-0.7)"/>
+    <use href="#bandKnot" transform="translate(60,-60)"/>
+  </g>
+  <g transform="translate(960,1460)">
+    <use href="#progressBraidH" transform="translate(0,0) scale(-0.7,-0.7)"/>
+    <use href="#progressBraidH" transform="translate(0,-32) scale(-0.7,-0.7)"/>
+    <use href="#bandKnot" transform="translate(-60,-60)"/>
+  </g>
+
+  <path d="M60,55 L940,55 M60,1445 L940,1445 M55,60 L55,1440 M945,60 L945,1440" stroke="url(#progressH)" stroke-width="1.4" fill="none"/>
+</svg>
