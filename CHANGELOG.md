@@ -2,6 +2,13 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.15.1](https://github.com/chodeus/chub/compare/v1.15.0...v1.15.1) (2026-05-12)
+
+
+### Bug Fixes
+
+* **assets:** make Asset Search top-bar actually filter, fix card layout ([6a044ef](https://github.com/chodeus/chub/commit/6a044ef7e9cb9eb3181059f6152937a88b068ff8))
+
 ## [1.15.0](https://github.com/chodeus/chub/compare/v1.14.1...v1.15.0) (2026-05-12)
 
 
