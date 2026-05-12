@@ -1566,6 +1566,8 @@ def create_arr_client(
             try:
                 temp.session.close()
             except Exception:
+                # Cleanup-only path; a session-close error must not mask
+                # the real probe exception that's already unwinding.
                 pass
 
     # v3 failed — try v1 probe for Lidarr
@@ -1583,6 +1585,9 @@ def create_arr_client(
             if data.get("appName") == "Lidarr":
                 return LidarrClient(url, api, logger)
     except Exception:
+        # v1 probe failed too — fall through to the "unknown ARR" log
+        # below. We intentionally don't surface the inner exception
+        # because the caller only needs the "no client" signal.
         pass
     finally:
         if session is not None:

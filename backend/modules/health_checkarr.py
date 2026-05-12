@@ -219,6 +219,8 @@ class HealthCheckarr(ChubModule):
                             try:
                                 app.session.close()
                             except Exception:
+                                # Cleanup-only path; a session-close error
+                                # must not mask any in-flight exception.
                                 pass
         except KeyboardInterrupt:
             print("Keyboard Interrupt detected. Exiting...")
