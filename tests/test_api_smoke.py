@@ -19,6 +19,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from backend.api import auth as auth_router  # noqa: E402
+from backend.api import border_replacerr as border_router  # noqa: E402
 from backend.util.config import ChubConfig  # noqa: E402
 
 
@@ -194,3 +195,88 @@ def test_login_fails_with_unknown_user(monkeypatch, app_with_router):
         "/api/auth/login", json={"username": "unknown", "password": "secret123"}
     )
     assert resp.status_code in (400, 401)
+
+
+# --- Border Replacerr: presets + borders catalogue ---
+
+
+def test_border_presets_returns_catalogue(app_with_router):
+    """The /presets endpoint surfaces the canonical holiday catalogue."""
+    app = app_with_router(border_router.router)
+    client = TestClient(app)
+    resp = client.get("/api/border-replacerr/presets")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["success"] is True
+    presets = body["data"]["presets"]
+    # Every preset has name + schedule + colors, and the known holidays are
+    # all represented so the frontend dropdown can render without a fallback.
+    names = {p["name"] for p in presets}
+    assert "🎄 Christmas" in names
+    assert "🎃 Halloween" in names
+    assert "🏳️‍🌈 Pride" in names
+    for preset in presets:
+        assert preset["name"]
+        assert preset["schedule"].startswith("range(")
+        assert isinstance(preset["colors"], list) and preset["colors"]
+
+
+def test_border_list_returns_bundled_variants(tmp_path, monkeypatch, app_with_router):
+    """A known holiday name returns its bundled PNGs and an empty user list."""
+    # Fresh tmp config dir so no user-side variants exist.
+    monkeypatch.setenv("CONFIG_DIR", str(tmp_path))
+    monkeypatch.setenv("DOCKER_ENV", "true")
+
+    # Bundled PNGs are gitignored locally — drop a couple of stubs into
+    # the bundled dir so the test can assert against a known set, then
+    # clean them up regardless of result.
+    bundled_dir = border_router._BUNDLED_BORDERS_DIR / "christmas"
+    created = []
+    from PIL import Image as _Image
+
+    for stem in ("v1", "v2"):
+        path = bundled_dir / f"{stem}.png"
+        if not path.exists():
+            bundled_dir.mkdir(parents=True, exist_ok=True)
+            _Image.new("RGBA", (10, 15), (0, 0, 0, 0)).save(path)
+            created.append(path)
+    try:
+        app = app_with_router(border_router.router)
+        client = TestClient(app)
+        resp = client.get("/api/border-replacerr/borders/%F0%9F%8E%84%20Christmas")
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["data"]["folder"] == "christmas"
+        assert {"v1", "v2"}.issubset(set(body["data"]["bundled"]))
+        assert body["data"]["user"] == []
+    finally:
+        for path in created:
+            try:
+                path.unlink()
+            except OSError:
+                pass
+
+
+def test_border_list_unknown_holiday_returns_empty(app_with_router):
+    """Holiday names that don't map to a folder return null folder + empty lists."""
+    app = app_with_router(border_router.router)
+    client = TestClient(app)
+    # "!!!" strips to nothing → _holiday_folder returns None.
+    resp = client.get("/api/border-replacerr/borders/!!!")
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert data["folder"] is None
+    assert data["bundled"] == []
+    assert data["user"] == []
+
+
+def test_border_thumbnail_rejects_traversal(app_with_router):
+    """The thumbnail endpoint must not serve files outside its source dirs."""
+    app = app_with_router(border_router.router)
+    client = TestClient(app)
+    # Dots and slashes are stripped by Path(...).stem + the charset check,
+    # but exercise the explicit guard anyway.
+    resp = client.get(
+        "/api/border-replacerr/borders/%F0%9F%8E%84%20Christmas/bundled/..%2Fetc%2Fpasswd.png"
+    )
+    assert resp.status_code == 404

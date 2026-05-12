@@ -284,7 +284,7 @@ const App = () => {
                                                         element={
                                                             <PageErrorBoundary
                                                                 pageName="Border Replacerr"
-                                                                pageDescription="Live preview of border colors on a sample of your matched posters"
+                                                                pageDescription="Pick colors and themed border art, with live preview on a sample of your matched posters"
                                                             >
                                                                 <BorderPreviewPage />
                                                             </PageErrorBoundary>

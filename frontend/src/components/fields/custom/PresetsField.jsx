@@ -8,75 +8,12 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { FieldWrapper, FieldLabel, FieldError, FieldDescription, SelectBase } from '../primitives';
 import { Card } from '../../ui';
+import { borderReplacerrAPI } from '../../../utils/api/border_replacerr.js';
 
-// Holiday presets data
-const HOLIDAY_PRESETS = [
-    {
-        name: "🎆 New Year's Day",
-        schedule: 'range(12/30-01/02)',
-        colors: ['#00BFFF', '#FFD700'],
-    },
-    {
-        name: '🧧 Lunar New Year',
-        schedule: 'range(01/20-02/20)',
-        colors: ['#C8102E', '#FFD700'],
-    },
-    {
-        name: "💘 Valentine's Day",
-        schedule: 'range(02/05-02/15)',
-        colors: ['#D41F3A', '#FFC0CB'],
-    },
-    {
-        name: "🍀 St. Patrick's Day",
-        schedule: 'range(03/14-03/18)',
-        colors: ['#00A36C', '#FFD700'],
-    },
-    {
-        name: '🐣 Easter',
-        schedule: 'range(03/31-04/02)',
-        colors: ['#FFB6C1', '#87CEFA', '#98FB98'],
-    },
-    {
-        name: "🌸 Mother's Day",
-        schedule: 'range(05/10-05/15)',
-        colors: ['#FF69B4', '#FFDAB9'],
-    },
-    {
-        name: "👨‍👧‍👦 Father's Day",
-        schedule: 'range(06/15-06/20)',
-        colors: ['#1E90FF', '#4682B4'],
-    },
-    {
-        name: '🏳️‍🌈 Pride',
-        schedule: 'range(06/01-06/30)',
-        colors: ['#E40303', '#FF8C00', '#FFED00', '#008026', '#004CFF', '#732982'],
-    },
-    {
-        name: '🗽 Independence Day',
-        schedule: 'range(07/01-07/05)',
-        colors: ['#FF0000', '#FFFFFF', '#0000FF'],
-    },
-    {
-        name: '🧹 Labor Day',
-        schedule: 'range(09/01-09/07)',
-        colors: ['#FFD700', '#4682B4'],
-    },
-    {
-        name: '🎃 Halloween',
-        schedule: 'range(10/01-10/31)',
-        colors: ['#FFA500', '#000000'],
-    },
-    {
-        name: '🦃 Thanksgiving',
-        schedule: 'range(11/01-11/30)',
-        colors: ['#FFA500', '#8B4513'],
-    },
-    {
-        name: '🎄 Christmas',
-        schedule: 'range(12/01-12/31)',
-        colors: ['#FF0000', '#00FF00'],
-    },
-];
+// In-memory cache so opening the holiday picker multiple times in one
+// session doesn't re-hit the backend. The catalogue is static between
+// deploys.
+let _holidayPresetsCache = null;
 
 // const GDRIVE_PRESETS_URL =
 //     'https://raw.githubusercontent.com/Drazzilb08/daps-gdrive-presets/CL2K/presets.json';
@@ -121,9 +58,26 @@ export const PresetsField = React.memo(
             let mounted = true;
 
             if (presetType === 'holiday') {
-                // Use local holiday presets
-                setPresets(HOLIDAY_PRESETS);
-                return;
+                // Backend is source of truth (GET /border-replacerr/presets).
+                if (_holidayPresetsCache) {
+                    setPresets(_holidayPresetsCache);
+                    return;
+                }
+                setLoading(true);
+                borderReplacerrAPI
+                    .fetchPresets()
+                    .then(resp => {
+                        const list = resp?.data?.presets;
+                        if (Array.isArray(list)) {
+                            _holidayPresetsCache = list;
+                            if (mounted) setPresets(list);
+                        }
+                    })
+                    .catch(() => mounted && setPresets([]))
+                    .finally(() => mounted && setLoading(false));
+                return () => {
+                    mounted = false;
+                };
             }
 
             if (presetType === 'gdrive' && presetUrl) {

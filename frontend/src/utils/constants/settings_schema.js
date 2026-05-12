@@ -226,15 +226,6 @@ export const SETTINGS_SCHEMA = [
                 description:
                     'Pixels cropped from each edge before re-bordering. Posters that follow the TPDB standard ship with a 26px white border, so 26 is the right value for almost every library. Posters without a matching border will lose this much real artwork.',
             },
-            {
-                key: 'border_colors',
-                label: 'Border Colors',
-                type: 'color_list_poster',
-                section: 'Border',
-                preview: 'true',
-                description:
-                    'Colors used to repaint the border once cropped. With one or more colors set, the existing border is replaced by the selected color (cycling per poster if multiple). With no colors set, the border is simply stripped — the poster keeps its cropped artwork at 1000×1500 with no replacement border.',
-            },
             // ─── Holidays ──────────────────────────────────────────────
             {
                 key: 'skip',
@@ -251,7 +242,7 @@ export const SETTINGS_SCHEMA = [
                 section: 'Holidays',
                 displayType: 'replacerr',
                 description:
-                    "Per-holiday color overrides. When today falls inside a holiday's schedule, that holiday's colors are used instead of the default Border Colors above.",
+                    "Add the holidays you want themed borders for and set their date windows here. Pick colors and themed border art on the Border Replacerr page — when today falls inside a holiday's window, that holiday's styling is used instead of the defaults.",
                 fields: [
                     {
                         key: 'preset',
@@ -261,7 +252,8 @@ export const SETTINGS_SCHEMA = [
                         identifierField: 'name',
                         moduleConfigKey: 'holidays',
                         targetFields: ['name', 'schedule', 'colors'],
-                        description: 'Select a preset for holiday color overrides.',
+                        description:
+                            'Picking a preset prefills name, date window, and default colors. Customize colors and pick border art on the Border Replacerr page.',
                         presetHandler: true,
                     },
                     {
@@ -277,23 +269,6 @@ export const SETTINGS_SCHEMA = [
                         type: 'holiday_schedule',
                         required: false,
                         description: 'Schedule for when the holiday override is active.',
-                    },
-                    {
-                        key: 'colors',
-                        label: 'Colors',
-                        type: 'color_list',
-                        preview: 'false',
-                        required: false,
-                        description:
-                            'Colors used when no themed borders are picked below. The list cycles per poster.',
-                    },
-                    {
-                        key: 'borders',
-                        label: 'Themed borders',
-                        type: 'textarea',
-                        required: false,
-                        description:
-                            'Optional. List bundled or custom border variants (one per line, e.g. "v1", "v2") to composite over each poster instead of a flat color. When set, image mode wins over color mode. Variants cycle per poster in the order listed. Drop custom PNGs at /config/borders/<holiday>/ to extend the set (user files override bundled ones with the same name). The border_width setting is ignored in image mode.',
                     },
                 ],
             },
