@@ -18,7 +18,6 @@ const __dirname = path.dirname(__filename);
 const SCHEMA_PATHS = [
     '../src/utils/constants/settings_schema.js',
     '../src/utils/constants/general_settings_schema.js',
-    '../src/utils/constants/ui_settings_schema.js',
     '../src/utils/constants/instance_schema.js',
 ].map(p => path.resolve(__dirname, p));
 const REGISTRY_PATH = path.resolve(__dirname, '../src/components/fields/FieldRegistry.jsx');

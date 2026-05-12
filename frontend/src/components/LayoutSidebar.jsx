@@ -72,7 +72,6 @@ const NAV_SECTIONS = [
                 type: 'parent',
                 children: [
                     { id: 'settings-general', label: 'General', path: '/settings/general' },
-                    { id: 'settings-interface', label: 'Interface', path: '/settings/interface' },
                     { id: 'settings-modules', label: 'Modules', path: '/settings/modules' },
                     { id: 'settings-instances', label: 'Instances', path: '/settings/instances' },
                     { id: 'settings-schedule', label: 'Schedule', path: '/settings/schedule' },

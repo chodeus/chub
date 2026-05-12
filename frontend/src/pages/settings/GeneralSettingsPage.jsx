@@ -13,6 +13,7 @@ import { ToolBar } from '../../components/ToolBar';
 import { useApiData } from '../../hooks/useApiData';
 import { configAPI } from '../../utils/api/config';
 import { useToast } from '../../contexts/ToastContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import { useToolbar } from '../../contexts/ToolbarContext';
 import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning';
 
@@ -66,6 +67,7 @@ const normalizeDuplicateExcludeGroups = groups => {
  */
 export const GeneralSettingsPage = () => {
     const toast = useToast();
+    const { setTheme } = useTheme();
     const { registerToolbar, clearToolbar } = useToolbar();
 
     // Load config from backend
@@ -99,6 +101,7 @@ export const GeneralSettingsPage = () => {
             duplicate_exclude_groups: [],
         };
         const initialData = {
+            user_interface: configData.data.user_interface || { theme: 'auto' },
             general: {
                 ...generalData,
                 duplicate_exclude_groups: normalizeDuplicateExcludeGroups(
@@ -111,6 +114,16 @@ export const GeneralSettingsPage = () => {
         setSaveError(null);
     }
 
+    // Sync theme to ThemeContext whenever the loaded config's theme changes
+    // (e.g. another tab saved a different value). setTheme is an external
+    // store update, so it's allowed inside an effect.
+    useEffect(() => {
+        const configTheme = configData?.data?.user_interface?.theme;
+        if (configTheme) {
+            setTheme(configTheme === 'auto' ? 'system' : configTheme);
+        }
+    }, [configData, setTheme]);
+
     // Dirty flag is derived from formData vs. lastSaved — no state or effect needed.
     const isDirty = useMemo(
         () => (formData && lastSaved ? JSON.stringify(formData) !== lastSaved : false),
@@ -119,16 +132,26 @@ export const GeneralSettingsPage = () => {
     useUnsavedChangesWarning(isDirty);
 
     // Handle field changes
-    const handleFieldChange = useCallback((moduleKey, fieldKey, value) => {
-        setFormData(prev => ({
-            ...prev,
-            [moduleKey]: {
-                ...prev[moduleKey],
-                [fieldKey]: value,
-            },
-        }));
-        setSaveError(null);
-    }, []);
+    const handleFieldChange = useCallback(
+        (moduleKey, fieldKey, value) => {
+            setFormData(prev => ({
+                ...prev,
+                [moduleKey]: {
+                    ...prev[moduleKey],
+                    [fieldKey]: value,
+                },
+            }));
+            setSaveError(null);
+
+            // Live-preview theme switches so the user sees the swap before
+            // hitting Save. The persisted value is the actual config field
+            // (saved in handleSave); ThemeContext maps "auto" → "system".
+            if (moduleKey === 'user_interface' && fieldKey === 'theme') {
+                setTheme(value === 'auto' ? 'system' : value);
+            }
+        },
+        [setTheme]
+    );
 
     // Save configuration
     const handleSave = useCallback(async () => {
@@ -161,9 +184,14 @@ export const GeneralSettingsPage = () => {
 
     // Reset to last saved state — isDirty auto-clears via derivation.
     const handleReset = useCallback(() => {
-        setFormData(JSON.parse(lastSaved));
+        const restored = JSON.parse(lastSaved);
+        setFormData(restored);
         setSaveError(null);
-    }, [lastSaved]);
+        const restoredTheme = restored.user_interface?.theme;
+        if (restoredTheme) {
+            setTheme(restoredTheme === 'auto' ? 'system' : restoredTheme);
+        }
+    }, [lastSaved, setTheme]);
 
     // Register toolbar with Save/Reset buttons
     useEffect(() => {
@@ -239,8 +267,7 @@ export const GeneralSettingsPage = () => {
             {/* Header */}
             <PageHeader
                 title="General Settings"
-                description="Global preferences and defaults for CHUB."
-                badge={1}
+                description="Theme and global preferences for CHUB."
                 icon="tune"
             />
 

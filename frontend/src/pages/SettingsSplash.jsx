@@ -13,15 +13,8 @@ const SETTINGS_CARDS = [
         to: '/settings/general',
         icon: 'tune',
         title: 'General',
-        description: 'Global preferences and defaults.',
+        description: 'Theme and global preferences.',
         badge: 1,
-    },
-    {
-        to: '/settings/interface',
-        icon: 'palette',
-        title: 'Interface',
-        description: 'Theme, density, and UI behaviour.',
-        badge: 5,
     },
     {
         to: '/settings/modules',

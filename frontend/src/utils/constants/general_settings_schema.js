@@ -1,5 +1,25 @@
-// General settings schema - separated from modules
+// General settings schema - separated from modules.
+//
+// The page renders one card per top-level entry; each entry's `key` is the
+// config section it edits. ``user_interface`` lives here (rather than on a
+// dedicated page) because it's a single setting — splitting it out earned
+// its own page back when more UI knobs were planned, but in practice only
+// the theme stuck.
 export const GENERAL_SETTINGS_SCHEMA = [
+    {
+        key: 'user_interface',
+        label: 'Interface',
+        fields: [
+            {
+                key: 'theme',
+                label: 'Theme',
+                type: 'dropdown',
+                options: ['auto', 'dark', 'light'],
+                required: true,
+                description: 'Choose the UI theme. Auto follows your system preference.',
+            },
+        ],
+    },
     {
         key: 'general',
         label: 'General',
