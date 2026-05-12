@@ -2,6 +2,13 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.12.0](https://github.com/chodeus/chub/compare/v1.11.0...v1.12.0) (2026-05-12)
+
+
+### Features
+
+* **webhooks:** expose poster/add URL builder, drop UI duplicates ([7cc8070](https://github.com/chodeus/chub/commit/7cc80707f12c58379d545b72f9d86878c1c6f092))
+
 ## [1.11.0](https://github.com/chodeus/chub/compare/v1.10.2...v1.11.0) (2026-05-11)
 
 
