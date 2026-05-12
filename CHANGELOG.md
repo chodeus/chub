@@ -2,6 +2,13 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.13.1](https://github.com/chodeus/chub/compare/v1.13.0...v1.13.1) (2026-05-12)
+
+
+### Bug Fixes
+
+* upgradinatorr Lidarr and reporting flows ([9d1b338](https://github.com/chodeus/chub/commit/9d1b3382d18f504bd0ae8bf635ec0035d75f8a06))
+
 ## [1.13.0](https://github.com/chodeus/chub/compare/v1.12.0...v1.13.0) (2026-05-12)
 
 
