@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Verifies every field `type:` string declared in settings_schema.js is known
+ * Verifies every field `type:` string declared in settings schemas is known
  * to FieldRegistry.jsx. Prevents the regression where a new field type ships
  * in the schema but the bundle has no renderer for it (see object_array
  * regression, 2026-04-19).
@@ -15,7 +15,12 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const SCHEMA_PATH = path.resolve(__dirname, '../src/utils/constants/settings_schema.js');
+const SCHEMA_PATHS = [
+    '../src/utils/constants/settings_schema.js',
+    '../src/utils/constants/general_settings_schema.js',
+    '../src/utils/constants/ui_settings_schema.js',
+    '../src/utils/constants/instance_schema.js',
+].map(p => path.resolve(__dirname, p));
 const REGISTRY_PATH = path.resolve(__dirname, '../src/components/fields/FieldRegistry.jsx');
 
 const read = p => fs.readFileSync(p, 'utf8');
@@ -54,17 +59,21 @@ const extractRegistryTypes = src => {
     return types;
 };
 
-const schemaSrc = read(SCHEMA_PATH);
 const registrySrc = read(REGISTRY_PATH);
 
-const schemaTypes = extractSchemaTypes(schemaSrc);
+const schemaTypes = new Set();
+for (const schemaPath of SCHEMA_PATHS) {
+    for (const type of extractSchemaTypes(read(schemaPath))) {
+        schemaTypes.add(type);
+    }
+}
 const registryTypes = extractRegistryTypes(registrySrc);
 
 const unknown = [...schemaTypes].filter(t => !registryTypes.has(t));
 
 if (unknown.length > 0) {
     console.error(
-        '\n✖ settings_schema.js references field type(s) not known to FieldRegistry:\n'
+        '\n✖ settings schemas reference field type(s) not known to FieldRegistry:\n'
     );
     for (const t of unknown) {
         console.error(`  - ${t}`);
@@ -76,5 +85,5 @@ if (unknown.length > 0) {
 }
 
 console.log(
-    `✓ settings_schema field types all registered (${schemaTypes.size} types verified).`
+    `✓ settings schema field types all registered (${schemaTypes.size} types verified).`
 );

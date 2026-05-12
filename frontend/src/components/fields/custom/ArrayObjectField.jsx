@@ -367,6 +367,20 @@ const DISPLAY_TEMPLATES = {
             badge: null,
         }),
     },
+    qualityGroup: {
+        itemName: 'Quality Group',
+        display: item => {
+            const instances = Array.isArray(item.instances) ? item.instances : [];
+            return {
+                primary: instances.length ? instances.join(' + ') : 'Empty quality group',
+                secondary:
+                    instances.length >= 2
+                        ? 'Excluded from duplicate detection'
+                        : 'Add at least 2 instances',
+                badge: instances.length ? `${instances.length} instances` : null,
+            };
+        },
+    },
 };
 
 /**

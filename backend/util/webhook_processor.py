@@ -23,8 +23,8 @@ class WebhookProcessor:
         self.config = load_config()
         general = getattr(self.config, "general", None)
         self.initial_delay = getattr(general, "webhook_initial_delay", 30)
-        self.retry_delay = getattr(general, "webhook_retry_delay", 60)
-        self.max_retries = getattr(general, "webhook_max_retries", 3)
+        self.retry_delay = getattr(general, "webhook_retry_delay", 30)
+        self.max_retries = getattr(general, "webhook_max_retries", 10)
 
     def _validate_webhook(
         self, webhook_data: dict, client_info: Optional[dict] = None

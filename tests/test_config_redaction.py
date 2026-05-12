@@ -115,6 +115,35 @@ def test_load_config_validation_error_for_wrong_type(tmp_path):
         load_config(str(path))
 
 
+def test_general_config_rejects_negative_runtime_values(tmp_path):
+    path = tmp_path / "config.yml"
+    path.write_text(
+        "general:\n"
+        "  max_logs: -1\n"
+        "  webhook_initial_delay: -1\n"
+        "  webhook_retry_delay: -1\n"
+        "  webhook_max_retries: -1\n"
+    )
+
+    with pytest.raises(ConfigValidationError):
+        load_config(str(path))
+
+
+def test_general_config_rejects_unknown_log_level(tmp_path):
+    path = tmp_path / "config.yml"
+    path.write_text("general:\n  log_level: verbose\n")
+
+    with pytest.raises(ConfigValidationError):
+        load_config(str(path))
+
+
+def test_general_config_normalizes_uppercase_log_level(tmp_path):
+    path = tmp_path / "config.yml"
+    path.write_text("general:\n  log_level: INFO\n")
+
+    assert load_config(str(path)).general.log_level == "info"
+
+
 def test_save_and_load_config_round_trip(tmp_path):
     path = tmp_path / "config.yml"
     config = ChubConfig()

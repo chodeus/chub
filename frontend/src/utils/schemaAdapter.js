@@ -11,7 +11,7 @@ const SECRET_FIELD_PATTERNS = [/^api$/, /api[_-]?key/i, /secret/i, /token/i, /pa
 
 // Fields that should be rendered as log-level dropdowns
 const LOG_LEVEL_FIELDS = ['log_level'];
-const LOG_LEVEL_OPTIONS = ['debug', 'info', 'warning', 'error'];
+const LOG_LEVEL_OPTIONS = ['debug', 'info', 'warning', 'error', 'critical'];
 
 // Pydantic fields that are runtime-only overrides and must never render on
 // the Modules config page. Keyed by "moduleKey.fieldKey". Add entries here

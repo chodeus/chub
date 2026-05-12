@@ -1036,31 +1036,6 @@ export const SETTINGS_SCHEMA = [
             },
         ],
     },
-    {
-        key: 'general',
-        label: 'General',
-        fields: [
-            {
-                key: 'duplicate_exclude_groups',
-                label: 'Quality Instance Groups',
-                type: 'object_array',
-                description:
-                    'Group instances that intentionally share the same content at different qualities (e.g. radarr + radarr4k). Items found across instances within the same group will not be flagged as duplicates.',
-                fields: [
-                    {
-                        key: 'instances',
-                        label: 'Instances',
-                        type: 'tag_input',
-                        required: true,
-                        allowCustom: true,
-                        placeholder: 'Type instance name and press Enter...',
-                        description:
-                            'Enter the names of 2 or more instances that share content (e.g. radarr, radarr4k).',
-                    },
-                ],
-            },
-        ],
-    },
 ];
 
 export const SETTINGS_MODULES = [
@@ -1126,10 +1101,5 @@ export const SETTINGS_MODULES = [
         name: 'Unmatched Assets',
         key: 'unmatched_assets',
         description: 'Handle and review assets that couldn\u2019t be matched.',
-    },
-    {
-        name: 'General',
-        key: 'general',
-        description: 'General application settings including duplicate detection and logging.',
     },
 ];

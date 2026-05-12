@@ -8,7 +8,6 @@ import { SETTINGS_SCHEMA } from '../utils/constants/settings_schema.js';
  * Matches the fields in ChubConfig (backend/util/config.py).
  */
 const CONFIG_MODULE_KEYS = [
-    'general',
     'sync_gdrive',
     'poster_renamerr',
     'border_replacerr',
@@ -24,6 +23,10 @@ const CONFIG_MODULE_KEYS = [
     'unmatched_assets',
 ];
 
+const MODULE_SETTINGS_SCHEMA = SETTINGS_SCHEMA.filter(schema =>
+    CONFIG_MODULE_KEYS.includes(schema.key)
+);
+
 /**
  * Hook that fetches module schemas from the backend and merges them
  * with the static SETTINGS_SCHEMA as a fallback.
@@ -31,11 +34,10 @@ const CONFIG_MODULE_KEYS = [
  * @returns {{ schemas: Array, loading: boolean, error: string|null }}
  */
 // Sort the static fallback up-front so the initial render uses the same
-// canonical order as the eventual backend merge. Otherwise General renders
-// last for the first paint and pops to the top once the schemas resolve.
+// canonical order as the eventual backend merge.
 const SORTED_SETTINGS_SCHEMA = (() => {
     const keyOrder = new Map(CONFIG_MODULE_KEYS.map((k, i) => [k, i]));
-    return [...SETTINGS_SCHEMA].sort((a, b) => {
+    return [...MODULE_SETTINGS_SCHEMA].sort((a, b) => {
         const idxA = keyOrder.get(a.key) ?? Infinity;
         const idxB = keyOrder.get(b.key) ?? Infinity;
         return idxA - idxB;
@@ -74,7 +76,7 @@ export function useModuleSchema() {
 
                     if (backendSchemas.length > 0) {
                         setSchemas(
-                            mergeSchemas(backendSchemas, SETTINGS_SCHEMA, CONFIG_MODULE_KEYS)
+                            mergeSchemas(backendSchemas, MODULE_SETTINGS_SCHEMA, CONFIG_MODULE_KEYS)
                         );
                     }
                     // If all fetches failed, we keep the static fallback
