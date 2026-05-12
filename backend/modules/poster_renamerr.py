@@ -492,7 +492,8 @@ class PosterRenamerr(ChubModule):
         stamp each poster_cache row with the curator style it came from.
         """
         out: dict = {}
-        sync_cfg = getattr(self.full_config, "sync_gdrive", None)
+        full_config = getattr(self, "full_config", None)
+        sync_cfg = getattr(full_config, "sync_gdrive", None)
         gdrive_list = getattr(sync_cfg, "gdrive_list", None) or []
         for entry in gdrive_list:
             loc = (getattr(entry, "location", "") or "").strip()
