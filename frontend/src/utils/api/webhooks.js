@@ -1,48 +1,37 @@
 /**
  * CHUB Webhooks API Module
  *
- * Handles webhook status monitoring and manual processing triggers
- * for unmatched assets and cleanarr operations.
+ * Wiring + observability for the inbound poster webhook. Module-run trigger
+ * endpoints (cleanarr/unmatched) are still served by the backend for external
+ * automation callers but are not surfaced in the UI; no frontend wrapper is
+ * required for them.
  */
 
 import { apiCore } from './core.js';
 
 export const webhooksAPI = {
     /**
-     * Get unmatched assets webhook status
-     * @returns {Promise<Object>} Status with summary and active state
+     * Get poster-webhook wiring details (path + optional secret) so the UI
+     * can build ready-to-paste URLs for Sonarr/Radarr/Tautulli.
+     * @returns {Promise<Object>} { poster_add_path, secret_configured, secret }
      */
-    getUnmatchedStatus: () => {
-        return apiCore.get('/webhooks/unmatched/status', {
+    getWiring: () => {
+        return apiCore.get('/webhooks/wiring', {
             useCache: true,
             cacheTTL: 60 * 1000,
         });
     },
 
     /**
-     * Trigger unmatched assets processing
-     * @returns {Promise<Object>} Processing response with job_id
+     * Summarize recent inbound webhook calls by origin + status.
+     * Backed by GET /api/jobs/webhook-origins.
+     * @param {number} days - Lookback window (1..90)
+     * @returns {Promise<Object>} { total, by_origin: [...], by_status: {...} }
      */
-    processUnmatched: () => {
-        return apiCore.post('/webhooks/unmatched/process');
-    },
-
-    /**
-     * Get cleanarr (orphaned poster cleanup) webhook status
-     * @returns {Promise<Object>} Status with orphaned_count and summary
-     */
-    getCleanarrStatus: () => {
-        return apiCore.get('/webhooks/cleanarr/status', {
+    getWebhookOrigins: (days = 7) => {
+        return apiCore.get(`/jobs/webhook-origins?days=${encodeURIComponent(days)}`, {
             useCache: true,
             cacheTTL: 60 * 1000,
         });
-    },
-
-    /**
-     * Trigger cleanarr orphaned poster cleanup
-     * @returns {Promise<Object>} Processing response
-     */
-    processCleanarr: () => {
-        return apiCore.post('/webhooks/cleanarr/process');
     },
 };
