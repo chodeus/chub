@@ -2,6 +2,23 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.14.0](https://github.com/chodeus/chub/compare/v1.13.1...v1.14.0) (2026-05-12)
+
+
+### Features
+
+* **border_replacerr:** move visual config to dedicated page ([59911cf](https://github.com/chodeus/chub/commit/59911cfbe0c474d7c31c7f5dc85c586e4f64a7ea))
+
+
+### Bug Fixes
+
+* **upgradinatorr:** treat empty episode_data as monitored for Lidarr albums ([78d658e](https://github.com/chodeus/chub/commit/78d658edbe483f84a4c9eb606edf4dc7dfad438d))
+
+
+### Refactoring
+
+* **settings:** merge Interface page into General settings ([48bcc88](https://github.com/chodeus/chub/commit/48bcc886c68caa88efb904b6dfc807ca29f766fc))
+
 ## [1.13.1](https://github.com/chodeus/chub/compare/v1.13.0...v1.13.1) (2026-05-12)
 
 
