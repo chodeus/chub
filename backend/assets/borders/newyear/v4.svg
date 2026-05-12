@@ -1,0 +1,279 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1500" width="1000" height="1500">
+  <defs>
+    <linearGradient id="frameBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#04040a"/>
+      <stop offset="50%" stop-color="#020205"/>
+      <stop offset="100%" stop-color="#010103"/>
+    </linearGradient>
+    <linearGradient id="silverH" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#3a4858"/>
+      <stop offset="50%" stop-color="#eef3f8"/>
+      <stop offset="100%" stop-color="#3a4858"/>
+    </linearGradient>
+    <linearGradient id="silverV" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#3a4858"/>
+      <stop offset="50%" stop-color="#eef3f8"/>
+      <stop offset="100%" stop-color="#3a4858"/>
+    </linearGradient>
+    <radialGradient id="silverFlat" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="60%" stop-color="#a8b2c0"/>
+      <stop offset="100%" stop-color="#404858"/>
+    </radialGradient>
+  </defs>
+
+  <path d="M 0,0 L 1000,0 L 1000,1500 L 0,1500 Z M 60,60 L 60,1440 L 940,1440 L 940,60 Z" fill="url(#frameBg)" fill-rule="evenodd"/>
+
+  <g id="prismConfetti">
+    <path d="M0,0 L4,-3 L8,0 L4,3 Z" fill="#ff5050"/>
+  </g>
+  <g id="prismConfettiOrange">
+    <path d="M0,0 L4,-3 L8,0 L4,3 Z" fill="#ff9020"/>
+  </g>
+  <g id="prismConfettiYellow">
+    <path d="M0,0 L4,-3 L8,0 L4,3 Z" fill="#f4d040"/>
+  </g>
+  <g id="prismConfettiGreen">
+    <path d="M0,0 L4,-3 L8,0 L4,3 Z" fill="#3ad068"/>
+  </g>
+  <g id="prismConfettiBlue">
+    <path d="M0,0 L4,-3 L8,0 L4,3 Z" fill="#3a7adc"/>
+  </g>
+  <g id="prismConfettiPurple">
+    <path d="M0,0 L4,-3 L8,0 L4,3 Z" fill="#9040c8"/>
+  </g>
+  <g id="prismConfettiPink">
+    <path d="M0,0 L4,-3 L8,0 L4,3 Z" fill="#ff60a8"/>
+  </g>
+
+  <g id="silverStreamer">
+    <path d="M0,0 C8,-12 24,4 32,-8 C40,-20 56,-2 64,-14 C72,-26 88,-8 96,-20" stroke="url(#silverH)" stroke-width="2" fill="none"/>
+    <path d="M0,4 C8,-8 24,8 32,-4 C40,-16 56,2 64,-10 C72,-22 88,-4 96,-16" stroke="#3a4858" stroke-width="0.3" fill="none" opacity="0.5"/>
+  </g>
+
+  <g id="silverStreamerV">
+    <path d="M0,0 C-12,8 4,24 -8,32 C-20,40 -2,56 -14,64 C-26,72 -8,88 -20,96" stroke="url(#silverV)" stroke-width="2" fill="none"/>
+  </g>
+
+  <g id="silverDotG">
+    <circle cx="0" cy="0" r="1.6" fill="url(#silverFlat)"/>
+  </g>
+
+  <g id="prismBurst">
+    <use href="#prismConfetti" transform="translate(-20,0) rotate(0)"/>
+    <use href="#prismConfettiOrange" transform="translate(-15,-15) rotate(45)"/>
+    <use href="#prismConfettiYellow" transform="translate(0,-20) rotate(90)"/>
+    <use href="#prismConfettiGreen" transform="translate(15,-15) rotate(135)"/>
+    <use href="#prismConfettiBlue" transform="translate(20,0) rotate(180)"/>
+    <use href="#prismConfettiPurple" transform="translate(15,15) rotate(225)"/>
+    <use href="#prismConfettiPink" transform="translate(0,20) rotate(270)"/>
+    <use href="#prismConfetti" transform="translate(-15,15) rotate(315)"/>
+    <circle cx="0" cy="0" r="3" fill="url(#silverFlat)"/>
+    <circle cx="0" cy="0" r="1" fill="#ffffff"/>
+  </g>
+
+  <g id="prismCircle">
+    <circle cx="-12" cy="0" r="2.5" fill="#ff5050"/>
+    <circle cx="-6" cy="-10" r="2.5" fill="#ff9020"/>
+    <circle cx="6" cy="-10" r="2.5" fill="#f4d040"/>
+    <circle cx="12" cy="0" r="2.5" fill="#3ad068"/>
+    <circle cx="6" cy="10" r="2.5" fill="#3a7adc"/>
+    <circle cx="-6" cy="10" r="2.5" fill="#9040c8"/>
+  </g>
+
+  <!-- TOP -->
+  <use href="#silverStreamer" transform="translate(60,38)"/>
+  <use href="#silverStreamer" transform="translate(220,38)"/>
+  <use href="#silverStreamer" transform="translate(380,38)"/>
+  <use href="#silverStreamer" transform="translate(540,38)"/>
+  <use href="#silverStreamer" transform="translate(700,38)"/>
+  <use href="#silverStreamer" transform="translate(820,38)"/>
+  <use href="#prismConfetti" transform="translate(110,18) rotate(15)"/>
+  <use href="#prismConfettiOrange" transform="translate(160,16) rotate(-20)"/>
+  <use href="#prismConfettiYellow" transform="translate(210,18) rotate(10)"/>
+  <use href="#prismConfettiGreen" transform="translate(260,16) rotate(-15)"/>
+  <use href="#prismConfettiBlue" transform="translate(310,18) rotate(25)"/>
+  <use href="#prismConfettiPurple" transform="translate(360,16) rotate(-10)"/>
+  <use href="#prismConfettiPink" transform="translate(410,18) rotate(20)"/>
+  <use href="#prismConfetti" transform="translate(460,16) rotate(-25)"/>
+  <use href="#prismConfettiOrange" transform="translate(510,18) rotate(15)"/>
+  <use href="#prismConfettiYellow" transform="translate(560,16) rotate(-20)"/>
+  <use href="#prismConfettiGreen" transform="translate(610,18) rotate(30)"/>
+  <use href="#prismConfettiBlue" transform="translate(660,16) rotate(-5)"/>
+  <use href="#prismConfettiPurple" transform="translate(710,18) rotate(20)"/>
+  <use href="#prismConfettiPink" transform="translate(760,16) rotate(-15)"/>
+  <use href="#prismConfetti" transform="translate(810,18) rotate(25)"/>
+  <use href="#prismConfettiOrange" transform="translate(860,16) rotate(-10)"/>
+  <use href="#prismConfettiYellow" transform="translate(910,18) rotate(15)"/>
+  <use href="#prismCircle" transform="translate(150,42)"/>
+  <use href="#prismCircle" transform="translate(300,42)"/>
+  <use href="#prismCircle" transform="translate(450,42)"/>
+  <use href="#prismCircle" transform="translate(600,42)"/>
+  <use href="#prismCircle" transform="translate(750,42)"/>
+  <use href="#prismCircle" transform="translate(900,42)"/>
+  <use href="#silverDotG" transform="translate(180,30)"/>
+  <use href="#silverDotG" transform="translate(280,30)"/>
+  <use href="#silverDotG" transform="translate(380,30)"/>
+  <use href="#silverDotG" transform="translate(480,30)"/>
+  <use href="#silverDotG" transform="translate(580,30)"/>
+  <use href="#silverDotG" transform="translate(680,30)"/>
+  <use href="#silverDotG" transform="translate(780,30)"/>
+  <use href="#silverDotG" transform="translate(880,30)"/>
+
+  <!-- BOTTOM -->
+  <use href="#silverStreamer" transform="translate(60,1462) scale(1,-1)"/>
+  <use href="#silverStreamer" transform="translate(220,1462) scale(1,-1)"/>
+  <use href="#silverStreamer" transform="translate(380,1462) scale(1,-1)"/>
+  <use href="#silverStreamer" transform="translate(540,1462) scale(1,-1)"/>
+  <use href="#silverStreamer" transform="translate(700,1462) scale(1,-1)"/>
+  <use href="#silverStreamer" transform="translate(820,1462) scale(1,-1)"/>
+  <use href="#prismConfetti" transform="translate(110,1482) rotate(15)"/>
+  <use href="#prismConfettiOrange" transform="translate(160,1484) rotate(-20)"/>
+  <use href="#prismConfettiYellow" transform="translate(210,1482) rotate(10)"/>
+  <use href="#prismConfettiGreen" transform="translate(260,1484) rotate(-15)"/>
+  <use href="#prismConfettiBlue" transform="translate(310,1482) rotate(25)"/>
+  <use href="#prismConfettiPurple" transform="translate(360,1484) rotate(-10)"/>
+  <use href="#prismConfettiPink" transform="translate(410,1482) rotate(20)"/>
+  <use href="#prismConfetti" transform="translate(460,1484) rotate(-25)"/>
+  <use href="#prismConfettiOrange" transform="translate(510,1482) rotate(15)"/>
+  <use href="#prismConfettiYellow" transform="translate(560,1484) rotate(-20)"/>
+  <use href="#prismConfettiGreen" transform="translate(610,1482) rotate(30)"/>
+  <use href="#prismConfettiBlue" transform="translate(660,1484) rotate(-5)"/>
+  <use href="#prismConfettiPurple" transform="translate(710,1482) rotate(20)"/>
+  <use href="#prismConfettiPink" transform="translate(760,1484) rotate(-15)"/>
+  <use href="#prismConfetti" transform="translate(810,1482) rotate(25)"/>
+  <use href="#prismConfettiOrange" transform="translate(860,1484) rotate(-10)"/>
+  <use href="#prismConfettiYellow" transform="translate(910,1482) rotate(15)"/>
+  <use href="#prismCircle" transform="translate(150,1458)"/>
+  <use href="#prismCircle" transform="translate(300,1458)"/>
+  <use href="#prismCircle" transform="translate(450,1458)"/>
+  <use href="#prismCircle" transform="translate(600,1458)"/>
+  <use href="#prismCircle" transform="translate(750,1458)"/>
+  <use href="#prismCircle" transform="translate(900,1458)"/>
+
+  <!-- LEFT -->
+  <use href="#silverStreamerV" transform="translate(38,60)"/>
+  <use href="#silverStreamerV" transform="translate(38,220)"/>
+  <use href="#silverStreamerV" transform="translate(38,380)"/>
+  <use href="#silverStreamerV" transform="translate(38,540)"/>
+  <use href="#silverStreamerV" transform="translate(38,700)"/>
+  <use href="#silverStreamerV" transform="translate(38,860)"/>
+  <use href="#silverStreamerV" transform="translate(38,1020)"/>
+  <use href="#silverStreamerV" transform="translate(38,1180)"/>
+  <use href="#silverStreamerV" transform="translate(38,1340)"/>
+  <use href="#prismConfetti" transform="translate(18,110) rotate(45)"/>
+  <use href="#prismConfettiOrange" transform="translate(16,160) rotate(75)"/>
+  <use href="#prismConfettiYellow" transform="translate(18,210) rotate(60)"/>
+  <use href="#prismConfettiGreen" transform="translate(16,260) rotate(90)"/>
+  <use href="#prismConfettiBlue" transform="translate(18,310) rotate(50)"/>
+  <use href="#prismConfettiPurple" transform="translate(16,360) rotate(70)"/>
+  <use href="#prismConfettiPink" transform="translate(18,410) rotate(55)"/>
+  <use href="#prismConfetti" transform="translate(16,460) rotate(85)"/>
+  <use href="#prismConfettiOrange" transform="translate(18,510) rotate(40)"/>
+  <use href="#prismConfettiYellow" transform="translate(16,560) rotate(95)"/>
+  <use href="#prismConfettiGreen" transform="translate(18,610) rotate(60)"/>
+  <use href="#prismConfettiBlue" transform="translate(16,660) rotate(80)"/>
+  <use href="#prismConfettiPurple" transform="translate(18,710) rotate(50)"/>
+  <use href="#prismConfettiPink" transform="translate(16,760) rotate(70)"/>
+  <use href="#prismConfetti" transform="translate(18,810) rotate(85)"/>
+  <use href="#prismConfettiOrange" transform="translate(16,860) rotate(45)"/>
+  <use href="#prismConfettiYellow" transform="translate(18,910) rotate(75)"/>
+  <use href="#prismConfettiGreen" transform="translate(16,960) rotate(60)"/>
+  <use href="#prismConfettiBlue" transform="translate(18,1010) rotate(90)"/>
+  <use href="#prismConfettiPurple" transform="translate(16,1060) rotate(50)"/>
+  <use href="#prismConfettiPink" transform="translate(18,1110) rotate(70)"/>
+  <use href="#prismConfetti" transform="translate(16,1160) rotate(55)"/>
+  <use href="#prismConfettiOrange" transform="translate(18,1210) rotate(85)"/>
+  <use href="#prismConfettiYellow" transform="translate(16,1260) rotate(40)"/>
+  <use href="#prismConfettiGreen" transform="translate(18,1310) rotate(95)"/>
+  <use href="#prismConfettiBlue" transform="translate(16,1360) rotate(60)"/>
+  <use href="#prismConfettiPurple" transform="translate(18,1410) rotate(80)"/>
+  <use href="#prismCircle" transform="translate(46,140)"/>
+  <use href="#prismCircle" transform="translate(46,300)"/>
+  <use href="#prismCircle" transform="translate(46,460)"/>
+  <use href="#prismCircle" transform="translate(46,620)"/>
+  <use href="#prismCircle" transform="translate(46,780)"/>
+  <use href="#prismCircle" transform="translate(46,940)"/>
+  <use href="#prismCircle" transform="translate(46,1100)"/>
+  <use href="#prismCircle" transform="translate(46,1260)"/>
+  <use href="#prismCircle" transform="translate(46,1400)"/>
+
+  <!-- RIGHT -->
+  <use href="#silverStreamerV" transform="translate(962,60) scale(-1,1)"/>
+  <use href="#silverStreamerV" transform="translate(962,220) scale(-1,1)"/>
+  <use href="#silverStreamerV" transform="translate(962,380) scale(-1,1)"/>
+  <use href="#silverStreamerV" transform="translate(962,540) scale(-1,1)"/>
+  <use href="#silverStreamerV" transform="translate(962,700) scale(-1,1)"/>
+  <use href="#silverStreamerV" transform="translate(962,860) scale(-1,1)"/>
+  <use href="#silverStreamerV" transform="translate(962,1020) scale(-1,1)"/>
+  <use href="#silverStreamerV" transform="translate(962,1180) scale(-1,1)"/>
+  <use href="#silverStreamerV" transform="translate(962,1340) scale(-1,1)"/>
+  <use href="#prismConfetti" transform="translate(982,110) rotate(45)"/>
+  <use href="#prismConfettiOrange" transform="translate(984,160) rotate(75)"/>
+  <use href="#prismConfettiYellow" transform="translate(982,210) rotate(60)"/>
+  <use href="#prismConfettiGreen" transform="translate(984,260) rotate(90)"/>
+  <use href="#prismConfettiBlue" transform="translate(982,310) rotate(50)"/>
+  <use href="#prismConfettiPurple" transform="translate(984,360) rotate(70)"/>
+  <use href="#prismConfettiPink" transform="translate(982,410) rotate(55)"/>
+  <use href="#prismConfetti" transform="translate(984,460) rotate(85)"/>
+  <use href="#prismConfettiOrange" transform="translate(982,510) rotate(40)"/>
+  <use href="#prismConfettiYellow" transform="translate(984,560) rotate(95)"/>
+  <use href="#prismConfettiGreen" transform="translate(982,610) rotate(60)"/>
+  <use href="#prismConfettiBlue" transform="translate(984,660) rotate(80)"/>
+  <use href="#prismConfettiPurple" transform="translate(982,710) rotate(50)"/>
+  <use href="#prismConfettiPink" transform="translate(984,760) rotate(70)"/>
+  <use href="#prismConfetti" transform="translate(982,810) rotate(85)"/>
+  <use href="#prismConfettiOrange" transform="translate(984,860) rotate(45)"/>
+  <use href="#prismConfettiYellow" transform="translate(982,910) rotate(75)"/>
+  <use href="#prismConfettiGreen" transform="translate(984,960) rotate(60)"/>
+  <use href="#prismConfettiBlue" transform="translate(982,1010) rotate(90)"/>
+  <use href="#prismConfettiPurple" transform="translate(984,1060) rotate(50)"/>
+  <use href="#prismConfettiPink" transform="translate(982,1110) rotate(70)"/>
+  <use href="#prismConfetti" transform="translate(984,1160) rotate(55)"/>
+  <use href="#prismConfettiOrange" transform="translate(982,1210) rotate(85)"/>
+  <use href="#prismConfettiYellow" transform="translate(984,1260) rotate(40)"/>
+  <use href="#prismConfettiGreen" transform="translate(982,1310) rotate(95)"/>
+  <use href="#prismConfettiBlue" transform="translate(984,1360) rotate(60)"/>
+  <use href="#prismConfettiPurple" transform="translate(982,1410) rotate(80)"/>
+  <use href="#prismCircle" transform="translate(954,140)"/>
+  <use href="#prismCircle" transform="translate(954,300)"/>
+  <use href="#prismCircle" transform="translate(954,460)"/>
+  <use href="#prismCircle" transform="translate(954,620)"/>
+  <use href="#prismCircle" transform="translate(954,780)"/>
+  <use href="#prismCircle" transform="translate(954,940)"/>
+  <use href="#prismCircle" transform="translate(954,1100)"/>
+  <use href="#prismCircle" transform="translate(954,1260)"/>
+  <use href="#prismCircle" transform="translate(954,1400)"/>
+
+  <!-- CORNERS: prism bursts -->
+  <g transform="translate(40,40)">
+    <use href="#prismBurst" transform="translate(30,30) scale(1.4)"/>
+    <use href="#prismCircle" transform="translate(64,18)"/>
+    <use href="#prismCircle" transform="translate(18,64)"/>
+    <use href="#silverDotG" transform="translate(76,40)"/>
+    <use href="#silverDotG" transform="translate(40,76)"/>
+  </g>
+  <g transform="translate(960,40)">
+    <use href="#prismBurst" transform="translate(-30,30) scale(1.4)"/>
+    <use href="#prismCircle" transform="translate(-64,18)"/>
+    <use href="#prismCircle" transform="translate(-18,64)"/>
+    <use href="#silverDotG" transform="translate(-76,40)"/>
+    <use href="#silverDotG" transform="translate(-40,76)"/>
+  </g>
+  <g transform="translate(40,1460)">
+    <use href="#prismBurst" transform="translate(30,-30) scale(1.4)"/>
+    <use href="#prismCircle" transform="translate(64,-18)"/>
+    <use href="#prismCircle" transform="translate(18,-64)"/>
+    <use href="#silverDotG" transform="translate(76,-40)"/>
+    <use href="#silverDotG" transform="translate(40,-76)"/>
+  </g>
+  <g transform="translate(960,1460)">
+    <use href="#prismBurst" transform="translate(-30,-30) scale(1.4)"/>
+    <use href="#prismCircle" transform="translate(-64,-18)"/>
+    <use href="#prismCircle" transform="translate(-18,-64)"/>
+    <use href="#silverDotG" transform="translate(-76,-40)"/>
+    <use href="#silverDotG" transform="translate(-40,-76)"/>
+  </g>
+
+  <path d="M60,55 L940,55 M60,1445 L940,1445 M55,60 L55,1440 M945,60 L945,1440" stroke="url(#silverH)" stroke-width="1.4" fill="none"/>
+</svg>

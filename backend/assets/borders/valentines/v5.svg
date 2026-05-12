@@ -1,0 +1,382 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1500" width="1000" height="1500">
+  <defs>
+    <linearGradient id="frameBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#2a1a1f"/>
+      <stop offset="50%" stop-color="#1a0e12"/>
+      <stop offset="100%" stop-color="#0a0608"/>
+    </linearGradient>
+    <radialGradient id="palePinkRose" cx="40%" cy="35%" r="80%">
+      <stop offset="0%" stop-color="#ffeae8"/>
+      <stop offset="50%" stop-color="#f0b8c0"/>
+      <stop offset="100%" stop-color="#a0707a"/>
+    </radialGradient>
+    <radialGradient id="palePinkCore" cx="50%" cy="50%" r="60%">
+      <stop offset="0%" stop-color="#d490a0"/>
+      <stop offset="100%" stop-color="#683040"/>
+    </radialGradient>
+    <radialGradient id="sageGreen" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#c8d4b8"/>
+      <stop offset="55%" stop-color="#7a9078"/>
+      <stop offset="100%" stop-color="#3a4a3a"/>
+    </radialGradient>
+    <radialGradient id="laceCream" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffeae8"/>
+      <stop offset="100%" stop-color="#dac0c0"/>
+    </radialGradient>
+    <radialGradient id="palePinkHeart" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#ffeae8"/>
+      <stop offset="55%" stop-color="#f0b8c0"/>
+      <stop offset="100%" stop-color="#a0707a"/>
+    </radialGradient>
+  </defs>
+
+  <path d="M 0,0 L 1000,0 L 1000,1500 L 0,1500 Z M 60,60 L 60,1440 L 940,1440 L 940,60 Z" fill="url(#frameBg)" fill-rule="evenodd"/>
+
+  <g id="rose">
+    <circle cx="0" cy="0" r="14" fill="url(#palePinkRose)" stroke="#a0707a" stroke-width="0.4"/>
+    <path d="M0,-12 C-6,-10 -10,-6 -10,0 C-10,6 -6,10 0,12 C6,10 10,6 10,0 C10,-6 6,-10 0,-12 Z" fill="url(#palePinkRose)" opacity="0.85"/>
+    <path d="M0,-9 C-4,-7 -7,-4 -7,0 C-7,4 -4,7 0,9 C4,7 7,4 7,0 C7,-4 4,-7 0,-9 Z" fill="url(#palePinkRose)"/>
+    <path d="M0,-6 C-3,-5 -5,-3 -5,0 C-5,3 -3,5 0,6 C3,5 5,3 5,0 C5,-3 3,-5 0,-6 Z" fill="url(#palePinkCore)"/>
+  </g>
+
+  <g id="heart">
+    <path d="M0,-2 C-4,-10 -16,-12 -16,-2 C-16,8 -4,14 0,18 C4,14 16,8 16,-2 C16,-12 4,-10 0,-2 Z" fill="url(#palePinkHeart)" stroke="#a0707a" stroke-width="0.6"/>
+  </g>
+
+  <g id="leafG">
+    <path d="M0,0 C-4,-5 -10,-7 -14,-12 C-12,-18 -8,-22 -4,-26 C-8,-30 -10,-34 -8,-38 C-4,-36 -2,-32 0,-30 C2,-32 4,-36 8,-38 C10,-34 8,-30 4,-26 C8,-22 12,-18 14,-12 C10,-7 4,-5 0,0 Z" fill="url(#sageGreen)" stroke="#3a4a3a" stroke-width="0.5"/>
+    <path d="M0,-2 L0,-34" stroke="#3a4a3a" stroke-width="0.4"/>
+  </g>
+
+  <g id="laceMotif">
+    <circle cx="0" cy="0" r="8" fill="none" stroke="url(#laceCream)" stroke-width="1.1"/>
+    <circle cx="0" cy="0" r="5" fill="none" stroke="url(#laceCream)" stroke-width="0.7"/>
+    <circle cx="0" cy="0" r="2" fill="url(#laceCream)"/>
+    <path d="M0,-8 L0,-12 M0,8 L0,12 M-8,0 L-12,0 M8,0 L12,0 M-5.6,-5.6 L-8.4,-8.4 M5.6,5.6 L8.4,8.4 M-5.6,5.6 L-8.4,8.4 M5.6,-5.6 L8.4,-8.4" stroke="url(#laceCream)" stroke-width="0.7"/>
+    <circle cx="0" cy="-12" r="1.4" fill="url(#laceCream)"/>
+    <circle cx="0" cy="12" r="1.4" fill="url(#laceCream)"/>
+    <circle cx="-12" cy="0" r="1.4" fill="url(#laceCream)"/>
+    <circle cx="12" cy="0" r="1.4" fill="url(#laceCream)"/>
+    <circle cx="-8.4" cy="-8.4" r="1.1" fill="url(#laceCream)"/>
+    <circle cx="8.4" cy="8.4" r="1.1" fill="url(#laceCream)"/>
+    <circle cx="-8.4" cy="8.4" r="1.1" fill="url(#laceCream)"/>
+    <circle cx="8.4" cy="-8.4" r="1.1" fill="url(#laceCream)"/>
+  </g>
+
+  <g id="laceScallop">
+    <path d="M-15,0 A5,5 0 0,1 -5,0 A5,5 0 0,1 5,0 A5,5 0 0,1 15,0" stroke="url(#laceCream)" stroke-width="1.2" fill="none"/>
+    <circle cx="-10" cy="-2" r="1.4" fill="url(#laceCream)"/>
+    <circle cx="0" cy="-2" r="1.4" fill="url(#laceCream)"/>
+    <circle cx="10" cy="-2" r="1.4" fill="url(#laceCream)"/>
+    <path d="M-15,0 L-15,4 M15,0 L15,4" stroke="url(#laceCream)" stroke-width="0.6"/>
+  </g>
+
+  <!-- TOP: lace ribbon -->
+  <g>
+    <use href="#laceScallop" transform="translate(75,36)"/>
+    <use href="#laceScallop" transform="translate(105,36)"/>
+    <use href="#laceScallop" transform="translate(135,36)"/>
+    <use href="#laceScallop" transform="translate(165,36)"/>
+    <use href="#laceScallop" transform="translate(195,36)"/>
+    <use href="#laceScallop" transform="translate(225,36)"/>
+    <use href="#laceScallop" transform="translate(255,36)"/>
+    <use href="#laceScallop" transform="translate(285,36)"/>
+    <use href="#laceScallop" transform="translate(315,36)"/>
+    <use href="#laceScallop" transform="translate(345,36)"/>
+    <use href="#laceScallop" transform="translate(375,36)"/>
+    <use href="#laceScallop" transform="translate(405,36)"/>
+    <use href="#laceScallop" transform="translate(435,36)"/>
+    <use href="#laceScallop" transform="translate(465,36)"/>
+    <use href="#laceScallop" transform="translate(495,36)"/>
+    <use href="#laceScallop" transform="translate(525,36)"/>
+    <use href="#laceScallop" transform="translate(555,36)"/>
+    <use href="#laceScallop" transform="translate(585,36)"/>
+    <use href="#laceScallop" transform="translate(615,36)"/>
+    <use href="#laceScallop" transform="translate(645,36)"/>
+    <use href="#laceScallop" transform="translate(675,36)"/>
+    <use href="#laceScallop" transform="translate(705,36)"/>
+    <use href="#laceScallop" transform="translate(735,36)"/>
+    <use href="#laceScallop" transform="translate(765,36)"/>
+    <use href="#laceScallop" transform="translate(795,36)"/>
+    <use href="#laceScallop" transform="translate(825,36)"/>
+    <use href="#laceScallop" transform="translate(855,36)"/>
+    <use href="#laceScallop" transform="translate(885,36)"/>
+    <use href="#laceScallop" transform="translate(915,36)"/>
+  </g>
+  <use href="#leafG" transform="translate(140,52) rotate(180)"/>
+  <use href="#leafG" transform="translate(240,52) rotate(180)"/>
+  <use href="#leafG" transform="translate(340,52) rotate(180)"/>
+  <use href="#leafG" transform="translate(440,52) rotate(180)"/>
+  <use href="#leafG" transform="translate(540,52) rotate(180)"/>
+  <use href="#leafG" transform="translate(640,52) rotate(180)"/>
+  <use href="#leafG" transform="translate(740,52) rotate(180)"/>
+  <use href="#leafG" transform="translate(840,52) rotate(180)"/>
+  <use href="#rose" transform="translate(180,28) scale(1.05)"/>
+  <use href="#rose" transform="translate(320,28) scale(1.15)"/>
+  <use href="#rose" transform="translate(460,28) scale(1.05)"/>
+  <use href="#rose" transform="translate(600,28) scale(1.15)"/>
+  <use href="#rose" transform="translate(740,28) scale(1.05)"/>
+  <use href="#rose" transform="translate(860,28) scale(1.15)"/>
+  <use href="#heart" transform="translate(250,20) scale(0.7)"/>
+  <use href="#heart" transform="translate(390,20) scale(0.7)"/>
+  <use href="#heart" transform="translate(530,20) scale(0.7)"/>
+  <use href="#heart" transform="translate(670,20) scale(0.7)"/>
+  <use href="#heart" transform="translate(810,20) scale(0.7)"/>
+  <use href="#laceMotif" transform="translate(120,20)"/>
+  <use href="#laceMotif" transform="translate(280,18)"/>
+  <use href="#laceMotif" transform="translate(440,20)"/>
+  <use href="#laceMotif" transform="translate(600,18)"/>
+  <use href="#laceMotif" transform="translate(760,20)"/>
+  <use href="#laceMotif" transform="translate(880,18)"/>
+
+  <!-- BOTTOM -->
+  <g>
+    <use href="#laceScallop" transform="translate(75,1464) rotate(180,75,1464)"/>
+    <use href="#laceScallop" transform="translate(105,1464) rotate(180,105,1464)"/>
+    <use href="#laceScallop" transform="translate(135,1464) rotate(180,135,1464)"/>
+    <use href="#laceScallop" transform="translate(165,1464) rotate(180,165,1464)"/>
+    <use href="#laceScallop" transform="translate(195,1464) rotate(180,195,1464)"/>
+    <use href="#laceScallop" transform="translate(225,1464) rotate(180,225,1464)"/>
+    <use href="#laceScallop" transform="translate(255,1464) rotate(180,255,1464)"/>
+    <use href="#laceScallop" transform="translate(285,1464) rotate(180,285,1464)"/>
+    <use href="#laceScallop" transform="translate(315,1464) rotate(180,315,1464)"/>
+    <use href="#laceScallop" transform="translate(345,1464) rotate(180,345,1464)"/>
+    <use href="#laceScallop" transform="translate(375,1464) rotate(180,375,1464)"/>
+    <use href="#laceScallop" transform="translate(405,1464) rotate(180,405,1464)"/>
+    <use href="#laceScallop" transform="translate(435,1464) rotate(180,435,1464)"/>
+    <use href="#laceScallop" transform="translate(465,1464) rotate(180,465,1464)"/>
+    <use href="#laceScallop" transform="translate(495,1464) rotate(180,495,1464)"/>
+    <use href="#laceScallop" transform="translate(525,1464) rotate(180,525,1464)"/>
+    <use href="#laceScallop" transform="translate(555,1464) rotate(180,555,1464)"/>
+    <use href="#laceScallop" transform="translate(585,1464) rotate(180,585,1464)"/>
+    <use href="#laceScallop" transform="translate(615,1464) rotate(180,615,1464)"/>
+    <use href="#laceScallop" transform="translate(645,1464) rotate(180,645,1464)"/>
+    <use href="#laceScallop" transform="translate(675,1464) rotate(180,675,1464)"/>
+    <use href="#laceScallop" transform="translate(705,1464) rotate(180,705,1464)"/>
+    <use href="#laceScallop" transform="translate(735,1464) rotate(180,735,1464)"/>
+    <use href="#laceScallop" transform="translate(765,1464) rotate(180,765,1464)"/>
+    <use href="#laceScallop" transform="translate(795,1464) rotate(180,795,1464)"/>
+    <use href="#laceScallop" transform="translate(825,1464) rotate(180,825,1464)"/>
+    <use href="#laceScallop" transform="translate(855,1464) rotate(180,855,1464)"/>
+    <use href="#laceScallop" transform="translate(885,1464) rotate(180,885,1464)"/>
+    <use href="#laceScallop" transform="translate(915,1464) rotate(180,915,1464)"/>
+  </g>
+  <use href="#leafG" transform="translate(140,1448)"/>
+  <use href="#leafG" transform="translate(240,1448)"/>
+  <use href="#leafG" transform="translate(340,1448)"/>
+  <use href="#leafG" transform="translate(440,1448)"/>
+  <use href="#leafG" transform="translate(540,1448)"/>
+  <use href="#leafG" transform="translate(640,1448)"/>
+  <use href="#leafG" transform="translate(740,1448)"/>
+  <use href="#leafG" transform="translate(840,1448)"/>
+  <use href="#rose" transform="translate(180,1472) scale(1.05)"/>
+  <use href="#rose" transform="translate(320,1472) scale(1.15)"/>
+  <use href="#rose" transform="translate(460,1472) scale(1.05)"/>
+  <use href="#rose" transform="translate(600,1472) scale(1.15)"/>
+  <use href="#rose" transform="translate(740,1472) scale(1.05)"/>
+  <use href="#rose" transform="translate(860,1472) scale(1.15)"/>
+  <use href="#heart" transform="translate(250,1462) scale(0.7)"/>
+  <use href="#heart" transform="translate(390,1462) scale(0.7)"/>
+  <use href="#heart" transform="translate(530,1462) scale(0.7)"/>
+  <use href="#heart" transform="translate(670,1462) scale(0.7)"/>
+  <use href="#heart" transform="translate(810,1462) scale(0.7)"/>
+  <use href="#laceMotif" transform="translate(120,1482)"/>
+  <use href="#laceMotif" transform="translate(280,1482)"/>
+  <use href="#laceMotif" transform="translate(440,1482)"/>
+  <use href="#laceMotif" transform="translate(600,1482)"/>
+  <use href="#laceMotif" transform="translate(760,1482)"/>
+  <use href="#laceMotif" transform="translate(880,1482)"/>
+
+  <!-- LEFT -->
+  <g>
+    <use href="#laceScallop" transform="translate(36,75) rotate(90,36,75)"/>
+    <use href="#laceScallop" transform="translate(36,105) rotate(90,36,105)"/>
+    <use href="#laceScallop" transform="translate(36,135) rotate(90,36,135)"/>
+    <use href="#laceScallop" transform="translate(36,165) rotate(90,36,165)"/>
+    <use href="#laceScallop" transform="translate(36,195) rotate(90,36,195)"/>
+    <use href="#laceScallop" transform="translate(36,225) rotate(90,36,225)"/>
+    <use href="#laceScallop" transform="translate(36,255) rotate(90,36,255)"/>
+    <use href="#laceScallop" transform="translate(36,285) rotate(90,36,285)"/>
+    <use href="#laceScallop" transform="translate(36,315) rotate(90,36,315)"/>
+    <use href="#laceScallop" transform="translate(36,345) rotate(90,36,345)"/>
+    <use href="#laceScallop" transform="translate(36,375) rotate(90,36,375)"/>
+    <use href="#laceScallop" transform="translate(36,405) rotate(90,36,405)"/>
+    <use href="#laceScallop" transform="translate(36,435) rotate(90,36,435)"/>
+    <use href="#laceScallop" transform="translate(36,465) rotate(90,36,465)"/>
+    <use href="#laceScallop" transform="translate(36,495) rotate(90,36,495)"/>
+    <use href="#laceScallop" transform="translate(36,525) rotate(90,36,525)"/>
+    <use href="#laceScallop" transform="translate(36,555) rotate(90,36,555)"/>
+    <use href="#laceScallop" transform="translate(36,585) rotate(90,36,585)"/>
+    <use href="#laceScallop" transform="translate(36,615) rotate(90,36,615)"/>
+    <use href="#laceScallop" transform="translate(36,645) rotate(90,36,645)"/>
+    <use href="#laceScallop" transform="translate(36,675) rotate(90,36,675)"/>
+    <use href="#laceScallop" transform="translate(36,705) rotate(90,36,705)"/>
+    <use href="#laceScallop" transform="translate(36,735) rotate(90,36,735)"/>
+    <use href="#laceScallop" transform="translate(36,765) rotate(90,36,765)"/>
+    <use href="#laceScallop" transform="translate(36,795) rotate(90,36,795)"/>
+    <use href="#laceScallop" transform="translate(36,825) rotate(90,36,825)"/>
+    <use href="#laceScallop" transform="translate(36,855) rotate(90,36,855)"/>
+    <use href="#laceScallop" transform="translate(36,885) rotate(90,36,885)"/>
+    <use href="#laceScallop" transform="translate(36,915) rotate(90,36,915)"/>
+    <use href="#laceScallop" transform="translate(36,945) rotate(90,36,945)"/>
+    <use href="#laceScallop" transform="translate(36,975) rotate(90,36,975)"/>
+    <use href="#laceScallop" transform="translate(36,1005) rotate(90,36,1005)"/>
+    <use href="#laceScallop" transform="translate(36,1035) rotate(90,36,1035)"/>
+    <use href="#laceScallop" transform="translate(36,1065) rotate(90,36,1065)"/>
+    <use href="#laceScallop" transform="translate(36,1095) rotate(90,36,1095)"/>
+    <use href="#laceScallop" transform="translate(36,1125) rotate(90,36,1125)"/>
+    <use href="#laceScallop" transform="translate(36,1155) rotate(90,36,1155)"/>
+    <use href="#laceScallop" transform="translate(36,1185) rotate(90,36,1185)"/>
+    <use href="#laceScallop" transform="translate(36,1215) rotate(90,36,1215)"/>
+    <use href="#laceScallop" transform="translate(36,1245) rotate(90,36,1245)"/>
+    <use href="#laceScallop" transform="translate(36,1275) rotate(90,36,1275)"/>
+    <use href="#laceScallop" transform="translate(36,1305) rotate(90,36,1305)"/>
+    <use href="#laceScallop" transform="translate(36,1335) rotate(90,36,1335)"/>
+    <use href="#laceScallop" transform="translate(36,1365) rotate(90,36,1365)"/>
+    <use href="#laceScallop" transform="translate(36,1395) rotate(90,36,1395)"/>
+  </g>
+  <use href="#rose" transform="translate(28,140) scale(1.05)"/>
+  <use href="#rose" transform="translate(28,290) scale(1.15)"/>
+  <use href="#rose" transform="translate(28,440) scale(1.05)"/>
+  <use href="#rose" transform="translate(28,590) scale(1.15)"/>
+  <use href="#rose" transform="translate(28,740) scale(1.05)"/>
+  <use href="#rose" transform="translate(28,890) scale(1.15)"/>
+  <use href="#rose" transform="translate(28,1040) scale(1.05)"/>
+  <use href="#rose" transform="translate(28,1190) scale(1.15)"/>
+  <use href="#rose" transform="translate(28,1340) scale(1.05)"/>
+  <use href="#leafG" transform="translate(52,210) rotate(90)"/>
+  <use href="#leafG" transform="translate(52,360) rotate(90)"/>
+  <use href="#leafG" transform="translate(52,510) rotate(90)"/>
+  <use href="#leafG" transform="translate(52,660) rotate(90)"/>
+  <use href="#leafG" transform="translate(52,810) rotate(90)"/>
+  <use href="#leafG" transform="translate(52,960) rotate(90)"/>
+  <use href="#leafG" transform="translate(52,1110) rotate(90)"/>
+  <use href="#leafG" transform="translate(52,1260) rotate(90)"/>
+  <use href="#heart" transform="translate(20,220) scale(0.7)"/>
+  <use href="#heart" transform="translate(20,420) scale(0.7)"/>
+  <use href="#heart" transform="translate(20,620) scale(0.7)"/>
+  <use href="#heart" transform="translate(20,820) scale(0.7)"/>
+  <use href="#heart" transform="translate(20,1020) scale(0.7)"/>
+  <use href="#heart" transform="translate(20,1220) scale(0.7)"/>
+  <use href="#laceMotif" transform="translate(18,180)"/>
+  <use href="#laceMotif" transform="translate(18,380)"/>
+  <use href="#laceMotif" transform="translate(18,580)"/>
+  <use href="#laceMotif" transform="translate(18,780)"/>
+  <use href="#laceMotif" transform="translate(18,980)"/>
+  <use href="#laceMotif" transform="translate(18,1180)"/>
+  <use href="#laceMotif" transform="translate(18,1380)"/>
+
+  <!-- RIGHT -->
+  <g>
+    <use href="#laceScallop" transform="translate(964,75) rotate(270,964,75)"/>
+    <use href="#laceScallop" transform="translate(964,105) rotate(270,964,105)"/>
+    <use href="#laceScallop" transform="translate(964,135) rotate(270,964,135)"/>
+    <use href="#laceScallop" transform="translate(964,165) rotate(270,964,165)"/>
+    <use href="#laceScallop" transform="translate(964,195) rotate(270,964,195)"/>
+    <use href="#laceScallop" transform="translate(964,225) rotate(270,964,225)"/>
+    <use href="#laceScallop" transform="translate(964,255) rotate(270,964,255)"/>
+    <use href="#laceScallop" transform="translate(964,285) rotate(270,964,285)"/>
+    <use href="#laceScallop" transform="translate(964,315) rotate(270,964,315)"/>
+    <use href="#laceScallop" transform="translate(964,345) rotate(270,964,345)"/>
+    <use href="#laceScallop" transform="translate(964,375) rotate(270,964,375)"/>
+    <use href="#laceScallop" transform="translate(964,405) rotate(270,964,405)"/>
+    <use href="#laceScallop" transform="translate(964,435) rotate(270,964,435)"/>
+    <use href="#laceScallop" transform="translate(964,465) rotate(270,964,465)"/>
+    <use href="#laceScallop" transform="translate(964,495) rotate(270,964,495)"/>
+    <use href="#laceScallop" transform="translate(964,525) rotate(270,964,525)"/>
+    <use href="#laceScallop" transform="translate(964,555) rotate(270,964,555)"/>
+    <use href="#laceScallop" transform="translate(964,585) rotate(270,964,585)"/>
+    <use href="#laceScallop" transform="translate(964,615) rotate(270,964,615)"/>
+    <use href="#laceScallop" transform="translate(964,645) rotate(270,964,645)"/>
+    <use href="#laceScallop" transform="translate(964,675) rotate(270,964,675)"/>
+    <use href="#laceScallop" transform="translate(964,705) rotate(270,964,705)"/>
+    <use href="#laceScallop" transform="translate(964,735) rotate(270,964,735)"/>
+    <use href="#laceScallop" transform="translate(964,765) rotate(270,964,765)"/>
+    <use href="#laceScallop" transform="translate(964,795) rotate(270,964,795)"/>
+    <use href="#laceScallop" transform="translate(964,825) rotate(270,964,825)"/>
+    <use href="#laceScallop" transform="translate(964,855) rotate(270,964,855)"/>
+    <use href="#laceScallop" transform="translate(964,885) rotate(270,964,885)"/>
+    <use href="#laceScallop" transform="translate(964,915) rotate(270,964,915)"/>
+    <use href="#laceScallop" transform="translate(964,945) rotate(270,964,945)"/>
+    <use href="#laceScallop" transform="translate(964,975) rotate(270,964,975)"/>
+    <use href="#laceScallop" transform="translate(964,1005) rotate(270,964,1005)"/>
+    <use href="#laceScallop" transform="translate(964,1035) rotate(270,964,1035)"/>
+    <use href="#laceScallop" transform="translate(964,1065) rotate(270,964,1065)"/>
+    <use href="#laceScallop" transform="translate(964,1095) rotate(270,964,1095)"/>
+    <use href="#laceScallop" transform="translate(964,1125) rotate(270,964,1125)"/>
+    <use href="#laceScallop" transform="translate(964,1155) rotate(270,964,1155)"/>
+    <use href="#laceScallop" transform="translate(964,1185) rotate(270,964,1185)"/>
+    <use href="#laceScallop" transform="translate(964,1215) rotate(270,964,1215)"/>
+    <use href="#laceScallop" transform="translate(964,1245) rotate(270,964,1245)"/>
+    <use href="#laceScallop" transform="translate(964,1275) rotate(270,964,1275)"/>
+    <use href="#laceScallop" transform="translate(964,1305) rotate(270,964,1305)"/>
+    <use href="#laceScallop" transform="translate(964,1335) rotate(270,964,1335)"/>
+    <use href="#laceScallop" transform="translate(964,1365) rotate(270,964,1365)"/>
+    <use href="#laceScallop" transform="translate(964,1395) rotate(270,964,1395)"/>
+  </g>
+  <use href="#rose" transform="translate(972,140) scale(1.05)"/>
+  <use href="#rose" transform="translate(972,290) scale(1.15)"/>
+  <use href="#rose" transform="translate(972,440) scale(1.05)"/>
+  <use href="#rose" transform="translate(972,590) scale(1.15)"/>
+  <use href="#rose" transform="translate(972,740) scale(1.05)"/>
+  <use href="#rose" transform="translate(972,890) scale(1.15)"/>
+  <use href="#rose" transform="translate(972,1040) scale(1.05)"/>
+  <use href="#rose" transform="translate(972,1190) scale(1.15)"/>
+  <use href="#rose" transform="translate(972,1340) scale(1.05)"/>
+  <use href="#leafG" transform="translate(948,210) rotate(270)"/>
+  <use href="#leafG" transform="translate(948,360) rotate(270)"/>
+  <use href="#leafG" transform="translate(948,510) rotate(270)"/>
+  <use href="#leafG" transform="translate(948,660) rotate(270)"/>
+  <use href="#leafG" transform="translate(948,810) rotate(270)"/>
+  <use href="#leafG" transform="translate(948,960) rotate(270)"/>
+  <use href="#leafG" transform="translate(948,1110) rotate(270)"/>
+  <use href="#leafG" transform="translate(948,1260) rotate(270)"/>
+  <use href="#heart" transform="translate(980,220) scale(0.7)"/>
+  <use href="#heart" transform="translate(980,420) scale(0.7)"/>
+  <use href="#heart" transform="translate(980,620) scale(0.7)"/>
+  <use href="#heart" transform="translate(980,820) scale(0.7)"/>
+  <use href="#heart" transform="translate(980,1020) scale(0.7)"/>
+  <use href="#heart" transform="translate(980,1220) scale(0.7)"/>
+  <use href="#laceMotif" transform="translate(982,180)"/>
+  <use href="#laceMotif" transform="translate(982,380)"/>
+  <use href="#laceMotif" transform="translate(982,580)"/>
+  <use href="#laceMotif" transform="translate(982,780)"/>
+  <use href="#laceMotif" transform="translate(982,980)"/>
+  <use href="#laceMotif" transform="translate(982,1180)"/>
+  <use href="#laceMotif" transform="translate(982,1380)"/>
+
+  <g transform="translate(38,38)">
+    <use href="#rose" transform="translate(0,0) scale(1.4)"/>
+    <use href="#laceMotif" transform="translate(36,36)"/>
+    <use href="#leafG" transform="translate(20,4) rotate(120)"/>
+    <use href="#leafG" transform="translate(4,20) rotate(210)"/>
+    <use href="#heart" transform="translate(40,18) scale(0.9)"/>
+    <use href="#heart" transform="translate(18,40) scale(0.9)"/>
+  </g>
+  <g transform="translate(962,38)">
+    <use href="#rose" transform="translate(0,0) scale(1.4)"/>
+    <use href="#laceMotif" transform="translate(-36,36)"/>
+    <use href="#leafG" transform="translate(-20,4) rotate(240)"/>
+    <use href="#leafG" transform="translate(-4,20) rotate(150)"/>
+    <use href="#heart" transform="translate(-40,18) scale(0.9)"/>
+    <use href="#heart" transform="translate(-18,40) scale(0.9)"/>
+  </g>
+  <g transform="translate(38,1462)">
+    <use href="#rose" transform="translate(0,0) scale(1.4)"/>
+    <use href="#laceMotif" transform="translate(36,-36)"/>
+    <use href="#leafG" transform="translate(20,-4) rotate(60)"/>
+    <use href="#leafG" transform="translate(4,-20) rotate(330)"/>
+    <use href="#heart" transform="translate(40,-18) scale(0.9)"/>
+    <use href="#heart" transform="translate(18,-40) scale(0.9)"/>
+  </g>
+  <g transform="translate(962,1462)">
+    <use href="#rose" transform="translate(0,0) scale(1.4)"/>
+    <use href="#laceMotif" transform="translate(-36,-36)"/>
+    <use href="#leafG" transform="translate(-20,-4) rotate(300)"/>
+    <use href="#leafG" transform="translate(-4,-20) rotate(30)"/>
+    <use href="#heart" transform="translate(-40,-18) scale(0.9)"/>
+    <use href="#heart" transform="translate(-18,-40) scale(0.9)"/>
+  </g>
+
+  <path d="M60,55 L940,55 M60,1445 L940,1445 M55,60 L55,1440 M945,60 L945,1440" stroke="url(#laceCream)" stroke-width="1.4" fill="none"/>
+</svg>

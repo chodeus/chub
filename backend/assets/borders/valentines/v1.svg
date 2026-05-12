@@ -1,0 +1,273 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1500" width="1000" height="1500">
+  <defs>
+    <linearGradient id="frameBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#2a0814"/>
+      <stop offset="50%" stop-color="#14040a"/>
+      <stop offset="100%" stop-color="#080204"/>
+    </linearGradient>
+    <radialGradient id="redRose" cx="40%" cy="35%" r="80%">
+      <stop offset="0%" stop-color="#ff7088"/>
+      <stop offset="40%" stop-color="#d4172a"/>
+      <stop offset="100%" stop-color="#54040c"/>
+    </radialGradient>
+    <radialGradient id="redRoseCore" cx="50%" cy="50%" r="60%">
+      <stop offset="0%" stop-color="#7a0810"/>
+      <stop offset="100%" stop-color="#1a0202"/>
+    </radialGradient>
+    <radialGradient id="heartG" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#ff8aa0"/>
+      <stop offset="55%" stop-color="#d4172a"/>
+      <stop offset="100%" stop-color="#54040c"/>
+    </radialGradient>
+    <radialGradient id="greenLeaf" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#7ac882"/>
+      <stop offset="55%" stop-color="#1f6028"/>
+      <stop offset="100%" stop-color="#082010"/>
+    </radialGradient>
+    <linearGradient id="pinkRibbonH" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#a0405a"/>
+      <stop offset="50%" stop-color="#ffc8d0"/>
+      <stop offset="100%" stop-color="#a0405a"/>
+    </linearGradient>
+    <linearGradient id="pinkRibbonV" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#a0405a"/>
+      <stop offset="50%" stop-color="#ffc8d0"/>
+      <stop offset="100%" stop-color="#a0405a"/>
+    </linearGradient>
+    <radialGradient id="babysBreath" cx="50%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#dac9d2"/>
+    </radialGradient>
+  </defs>
+
+  <path d="M 0,0 L 1000,0 L 1000,1500 L 0,1500 Z M 60,60 L 60,1440 L 940,1440 L 940,60 Z" fill="url(#frameBg)" fill-rule="evenodd"/>
+
+  <g id="rose">
+    <circle cx="0" cy="0" r="14" fill="url(#redRose)"/>
+    <path d="M-14,0 C-14,-10 -8,-14 0,-14 C8,-14 14,-10 14,0 C14,10 8,14 0,14 C-8,14 -14,10 -14,0 Z" fill="none" stroke="#54040c" stroke-width="0.6"/>
+    <path d="M0,-12 C-6,-10 -10,-6 -10,0 C-10,6 -6,10 0,12 C6,10 10,6 10,0 C10,-6 6,-10 0,-12 Z" fill="url(#redRose)" opacity="0.85"/>
+    <path d="M0,-9 C-4,-7 -7,-4 -7,0 C-7,4 -4,7 0,9 C4,7 7,4 7,0 C7,-4 4,-7 0,-9 Z" fill="url(#redRose)"/>
+    <path d="M0,-6 C-3,-5 -5,-3 -5,0 C-5,3 -3,5 0,6 C3,5 5,3 5,0 C5,-3 3,-5 0,-6 Z" fill="url(#redRoseCore)"/>
+    <path d="M-14,0 Q-8,4 0,0 Q8,4 14,0 M0,-14 Q4,-8 0,0 Q4,8 0,14" stroke="#54040c" stroke-width="0.4" fill="none" opacity="0.7"/>
+  </g>
+
+  <g id="heart">
+    <path d="M0,-2 C-4,-10 -16,-12 -16,-2 C-16,8 -4,14 0,18 C4,14 16,8 16,-2 C16,-12 4,-10 0,-2 Z" fill="url(#heartG)" stroke="#54040c" stroke-width="0.6"/>
+    <ellipse cx="-6" cy="-2" rx="4" ry="3" fill="#ff8aa0" opacity="0.6"/>
+  </g>
+
+  <g id="leafG">
+    <path d="M0,0 C-4,-5 -10,-7 -14,-12 C-12,-18 -8,-22 -4,-26 C-8,-30 -10,-34 -8,-38 C-4,-36 -2,-32 0,-30 C2,-32 4,-36 8,-38 C10,-34 8,-30 4,-26 C8,-22 12,-18 14,-12 C10,-7 4,-5 0,0 Z" fill="url(#greenLeaf)" stroke="#082010" stroke-width="0.6"/>
+    <path d="M0,-2 L0,-34" stroke="#062010" stroke-width="0.5"/>
+    <path d="M-6,-12 Q-2,-14 0,-20 M6,-12 Q2,-14 0,-20" stroke="#9adba0" stroke-width="0.4" fill="none"/>
+  </g>
+
+  <g id="babys">
+    <circle cx="0" cy="0" r="2.4" fill="url(#babysBreath)"/>
+    <circle cx="5" cy="2" r="2" fill="url(#babysBreath)"/>
+    <circle cx="-4" cy="3" r="1.8" fill="url(#babysBreath)"/>
+    <circle cx="2" cy="-4" r="2" fill="url(#babysBreath)"/>
+    <circle cx="-3" cy="-3" r="1.4" fill="url(#babysBreath)"/>
+    <circle cx="0" cy="0" r="0.6" fill="#fff"/>
+  </g>
+
+  <path d="M60,30 Q150,12 250,30 Q350,48 450,28 Q550,8 650,30 Q750,52 850,30 Q920,18 940,30" stroke="url(#pinkRibbonH)" stroke-width="9" fill="none"/>
+  <use href="#leafG" transform="translate(120,52) rotate(180)"/>
+  <use href="#leafG" transform="translate(170,48) rotate(170)"/>
+  <use href="#leafG" transform="translate(220,54) rotate(195)"/>
+  <use href="#leafG" transform="translate(280,46) rotate(175)"/>
+  <use href="#leafG" transform="translate(340,52) rotate(185)"/>
+  <use href="#leafG" transform="translate(400,48) rotate(170)"/>
+  <use href="#leafG" transform="translate(460,54) rotate(195)"/>
+  <use href="#leafG" transform="translate(520,48) rotate(175)"/>
+  <use href="#leafG" transform="translate(580,52) rotate(190)"/>
+  <use href="#leafG" transform="translate(640,46) rotate(170)"/>
+  <use href="#leafG" transform="translate(700,52) rotate(200)"/>
+  <use href="#leafG" transform="translate(760,48) rotate(180)"/>
+  <use href="#leafG" transform="translate(820,52) rotate(195)"/>
+  <use href="#leafG" transform="translate(880,48) rotate(170)"/>
+  <use href="#rose" transform="translate(150,30)"/>
+  <use href="#rose" transform="translate(280,30) scale(1.15)"/>
+  <use href="#rose" transform="translate(420,30)"/>
+  <use href="#rose" transform="translate(580,30) scale(1.15)"/>
+  <use href="#rose" transform="translate(720,30)"/>
+  <use href="#rose" transform="translate(860,30) scale(1.15)"/>
+  <use href="#heart" transform="translate(200,38) scale(0.8)"/>
+  <use href="#heart" transform="translate(380,38) scale(0.8)"/>
+  <use href="#heart" transform="translate(540,38) scale(0.8)"/>
+  <use href="#heart" transform="translate(680,38) scale(0.8)"/>
+  <use href="#babys" transform="translate(180,18)"/>
+  <use href="#babys" transform="translate(340,16)"/>
+  <use href="#babys" transform="translate(500,18)"/>
+  <use href="#babys" transform="translate(660,16)"/>
+  <use href="#babys" transform="translate(820,18)"/>
+
+  <path d="M60,1470 Q150,1488 250,1470 Q350,1452 450,1472 Q550,1492 650,1470 Q750,1448 850,1470 Q920,1482 940,1470" stroke="url(#pinkRibbonH)" stroke-width="9" fill="none"/>
+  <use href="#leafG" transform="translate(120,1448)"/>
+  <use href="#leafG" transform="translate(170,1452) rotate(10)"/>
+  <use href="#leafG" transform="translate(220,1446) rotate(-15)"/>
+  <use href="#leafG" transform="translate(280,1454) rotate(5)"/>
+  <use href="#leafG" transform="translate(340,1448)"/>
+  <use href="#leafG" transform="translate(400,1452) rotate(10)"/>
+  <use href="#leafG" transform="translate(460,1446) rotate(-15)"/>
+  <use href="#leafG" transform="translate(520,1452) rotate(5)"/>
+  <use href="#leafG" transform="translate(580,1448) rotate(-10)"/>
+  <use href="#leafG" transform="translate(640,1454) rotate(10)"/>
+  <use href="#leafG" transform="translate(700,1448) rotate(-20)"/>
+  <use href="#leafG" transform="translate(760,1452)"/>
+  <use href="#leafG" transform="translate(820,1448) rotate(15)"/>
+  <use href="#leafG" transform="translate(880,1452) rotate(-10)"/>
+  <use href="#rose" transform="translate(150,1470)"/>
+  <use href="#rose" transform="translate(280,1470) scale(1.15)"/>
+  <use href="#rose" transform="translate(420,1470)"/>
+  <use href="#rose" transform="translate(580,1470) scale(1.15)"/>
+  <use href="#rose" transform="translate(720,1470)"/>
+  <use href="#rose" transform="translate(860,1470) scale(1.15)"/>
+  <use href="#heart" transform="translate(200,1462) scale(0.8)"/>
+  <use href="#heart" transform="translate(380,1462) scale(0.8)"/>
+  <use href="#heart" transform="translate(540,1462) scale(0.8)"/>
+  <use href="#heart" transform="translate(680,1462) scale(0.8)"/>
+  <use href="#babys" transform="translate(180,1486)"/>
+  <use href="#babys" transform="translate(340,1488)"/>
+  <use href="#babys" transform="translate(500,1486)"/>
+  <use href="#babys" transform="translate(660,1488)"/>
+  <use href="#babys" transform="translate(820,1486)"/>
+
+  <path d="M30,60 Q12,150 30,250 Q48,350 28,450 Q8,550 30,650 Q52,750 30,850 Q18,920 30,940 Q42,1050 30,1150 Q12,1250 30,1350 Q48,1420 30,1440" stroke="url(#pinkRibbonV)" stroke-width="9" fill="none"/>
+  <use href="#leafG" transform="translate(48,120) rotate(90)"/>
+  <use href="#leafG" transform="translate(52,180) rotate(80)"/>
+  <use href="#leafG" transform="translate(46,240) rotate(105)"/>
+  <use href="#leafG" transform="translate(54,300) rotate(85)"/>
+  <use href="#leafG" transform="translate(48,360) rotate(95)"/>
+  <use href="#leafG" transform="translate(52,420) rotate(80)"/>
+  <use href="#leafG" transform="translate(46,480) rotate(105)"/>
+  <use href="#leafG" transform="translate(54,540) rotate(85)"/>
+  <use href="#leafG" transform="translate(48,600) rotate(100)"/>
+  <use href="#leafG" transform="translate(52,660) rotate(80)"/>
+  <use href="#leafG" transform="translate(46,720) rotate(110)"/>
+  <use href="#leafG" transform="translate(54,780) rotate(85)"/>
+  <use href="#leafG" transform="translate(48,840) rotate(95)"/>
+  <use href="#leafG" transform="translate(52,900) rotate(80)"/>
+  <use href="#leafG" transform="translate(46,960) rotate(105)"/>
+  <use href="#leafG" transform="translate(54,1020) rotate(85)"/>
+  <use href="#leafG" transform="translate(48,1080) rotate(100)"/>
+  <use href="#leafG" transform="translate(52,1140) rotate(80)"/>
+  <use href="#leafG" transform="translate(46,1200) rotate(110)"/>
+  <use href="#leafG" transform="translate(54,1260) rotate(85)"/>
+  <use href="#leafG" transform="translate(48,1320) rotate(95)"/>
+  <use href="#leafG" transform="translate(52,1380) rotate(80)"/>
+  <use href="#rose" transform="translate(30,150)"/>
+  <use href="#rose" transform="translate(30,290) scale(1.15)"/>
+  <use href="#rose" transform="translate(30,430)"/>
+  <use href="#rose" transform="translate(30,570) scale(1.15)"/>
+  <use href="#rose" transform="translate(30,710)"/>
+  <use href="#rose" transform="translate(30,850) scale(1.15)"/>
+  <use href="#rose" transform="translate(30,990)"/>
+  <use href="#rose" transform="translate(30,1130) scale(1.15)"/>
+  <use href="#rose" transform="translate(30,1270)"/>
+  <use href="#rose" transform="translate(30,1390) scale(1.15)"/>
+  <use href="#heart" transform="translate(38,220) scale(0.8)"/>
+  <use href="#heart" transform="translate(38,360) scale(0.8)"/>
+  <use href="#heart" transform="translate(38,500) scale(0.8)"/>
+  <use href="#heart" transform="translate(38,640) scale(0.8)"/>
+  <use href="#heart" transform="translate(38,780) scale(0.8)"/>
+  <use href="#heart" transform="translate(38,920) scale(0.8)"/>
+  <use href="#heart" transform="translate(38,1060) scale(0.8)"/>
+  <use href="#heart" transform="translate(38,1200) scale(0.8)"/>
+  <use href="#heart" transform="translate(38,1340) scale(0.8)"/>
+  <use href="#babys" transform="translate(18,190)"/>
+  <use href="#babys" transform="translate(18,350)"/>
+  <use href="#babys" transform="translate(18,510)"/>
+  <use href="#babys" transform="translate(18,670)"/>
+  <use href="#babys" transform="translate(18,830)"/>
+  <use href="#babys" transform="translate(18,990)"/>
+  <use href="#babys" transform="translate(18,1150)"/>
+  <use href="#babys" transform="translate(18,1310)"/>
+
+  <path d="M970,60 Q988,150 970,250 Q952,350 972,450 Q992,550 970,650 Q948,750 970,850 Q982,920 970,940 Q958,1050 970,1150 Q988,1250 970,1350 Q952,1420 970,1440" stroke="url(#pinkRibbonV)" stroke-width="9" fill="none"/>
+  <use href="#leafG" transform="translate(952,120) rotate(270)"/>
+  <use href="#leafG" transform="translate(948,180) rotate(280)"/>
+  <use href="#leafG" transform="translate(954,240) rotate(255)"/>
+  <use href="#leafG" transform="translate(946,300) rotate(275)"/>
+  <use href="#leafG" transform="translate(952,360) rotate(265)"/>
+  <use href="#leafG" transform="translate(948,420) rotate(280)"/>
+  <use href="#leafG" transform="translate(954,480) rotate(255)"/>
+  <use href="#leafG" transform="translate(946,540) rotate(275)"/>
+  <use href="#leafG" transform="translate(952,600) rotate(260)"/>
+  <use href="#leafG" transform="translate(948,660) rotate(280)"/>
+  <use href="#leafG" transform="translate(954,720) rotate(250)"/>
+  <use href="#leafG" transform="translate(946,780) rotate(275)"/>
+  <use href="#leafG" transform="translate(952,840) rotate(265)"/>
+  <use href="#leafG" transform="translate(948,900) rotate(280)"/>
+  <use href="#leafG" transform="translate(954,960) rotate(255)"/>
+  <use href="#leafG" transform="translate(946,1020) rotate(275)"/>
+  <use href="#leafG" transform="translate(952,1080) rotate(260)"/>
+  <use href="#leafG" transform="translate(948,1140) rotate(280)"/>
+  <use href="#leafG" transform="translate(954,1200) rotate(250)"/>
+  <use href="#leafG" transform="translate(946,1260) rotate(275)"/>
+  <use href="#leafG" transform="translate(952,1320) rotate(265)"/>
+  <use href="#leafG" transform="translate(948,1380) rotate(280)"/>
+  <use href="#rose" transform="translate(970,150)"/>
+  <use href="#rose" transform="translate(970,290) scale(1.15)"/>
+  <use href="#rose" transform="translate(970,430)"/>
+  <use href="#rose" transform="translate(970,570) scale(1.15)"/>
+  <use href="#rose" transform="translate(970,710)"/>
+  <use href="#rose" transform="translate(970,850) scale(1.15)"/>
+  <use href="#rose" transform="translate(970,990)"/>
+  <use href="#rose" transform="translate(970,1130) scale(1.15)"/>
+  <use href="#rose" transform="translate(970,1270)"/>
+  <use href="#rose" transform="translate(970,1390) scale(1.15)"/>
+  <use href="#heart" transform="translate(962,220) scale(0.8)"/>
+  <use href="#heart" transform="translate(962,360) scale(0.8)"/>
+  <use href="#heart" transform="translate(962,500) scale(0.8)"/>
+  <use href="#heart" transform="translate(962,640) scale(0.8)"/>
+  <use href="#heart" transform="translate(962,780) scale(0.8)"/>
+  <use href="#heart" transform="translate(962,920) scale(0.8)"/>
+  <use href="#heart" transform="translate(962,1060) scale(0.8)"/>
+  <use href="#heart" transform="translate(962,1200) scale(0.8)"/>
+  <use href="#heart" transform="translate(962,1340) scale(0.8)"/>
+  <use href="#babys" transform="translate(982,190)"/>
+  <use href="#babys" transform="translate(982,350)"/>
+  <use href="#babys" transform="translate(982,510)"/>
+  <use href="#babys" transform="translate(982,670)"/>
+  <use href="#babys" transform="translate(982,830)"/>
+  <use href="#babys" transform="translate(982,990)"/>
+  <use href="#babys" transform="translate(982,1150)"/>
+  <use href="#babys" transform="translate(982,1310)"/>
+
+  <g transform="translate(38,38)">
+    <use href="#rose" transform="translate(0,0) scale(1.4)"/>
+    <use href="#leafG" transform="translate(20,4) rotate(120)"/>
+    <use href="#leafG" transform="translate(4,20) rotate(210)"/>
+    <use href="#heart" transform="translate(40,18) scale(0.9)"/>
+    <use href="#heart" transform="translate(18,40) scale(0.9)"/>
+    <use href="#babys" transform="translate(34,34)"/>
+  </g>
+  <g transform="translate(962,38)">
+    <use href="#rose" transform="translate(0,0) scale(1.4)"/>
+    <use href="#leafG" transform="translate(-20,4) rotate(240)"/>
+    <use href="#leafG" transform="translate(-4,20) rotate(150)"/>
+    <use href="#heart" transform="translate(-40,18) scale(0.9)"/>
+    <use href="#heart" transform="translate(-18,40) scale(0.9)"/>
+    <use href="#babys" transform="translate(-34,34)"/>
+  </g>
+  <g transform="translate(38,1462)">
+    <use href="#rose" transform="translate(0,0) scale(1.4)"/>
+    <use href="#leafG" transform="translate(20,-4) rotate(60)"/>
+    <use href="#leafG" transform="translate(4,-20) rotate(330)"/>
+    <use href="#heart" transform="translate(40,-18) scale(0.9)"/>
+    <use href="#heart" transform="translate(18,-40) scale(0.9)"/>
+    <use href="#babys" transform="translate(34,-34)"/>
+  </g>
+  <g transform="translate(962,1462)">
+    <use href="#rose" transform="translate(0,0) scale(1.4)"/>
+    <use href="#leafG" transform="translate(-20,-4) rotate(300)"/>
+    <use href="#leafG" transform="translate(-4,-20) rotate(30)"/>
+    <use href="#heart" transform="translate(-40,-18) scale(0.9)"/>
+    <use href="#heart" transform="translate(-18,-40) scale(0.9)"/>
+    <use href="#babys" transform="translate(-34,-34)"/>
+  </g>
+
+  <path d="M60,55 L940,55 M60,1445 L940,1445 M55,60 L55,1440 M945,60 L945,1440" stroke="#d4172a" stroke-width="1.4" fill="none" opacity="0.9"/>
+  <path d="M60,57 L940,57 M60,1443 L940,1443 M57,60 L57,1440 M943,60 L943,1440" stroke="#ffc8d0" stroke-width="0.5" fill="none" opacity="0.7"/>
+</svg>

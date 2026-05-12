@@ -83,12 +83,14 @@ def _get_config() -> Any:
 
 def _resolve_palette(
     config: ChubConfig, choice: str, db: ChubDB
-) -> tuple[List[tuple[int, int, int]], Optional[str]]:
-    """Resolve the user's holiday choice to an RGB palette + active label.
+) -> tuple[List[tuple[int, int, int]], List[str], Optional[str]]:
+    """Resolve the user's holiday choice to its render inputs.
 
-    Returns ``(palette, active_holiday_name)``. ``palette`` is empty when
-    "default" is requested and no default colors are configured — callers
-    should treat that as "remove the border" rather than "abort".
+    Returns ``(palette, border_paths, active_holiday_name)``. When
+    ``border_paths`` is non-empty the caller should render via the
+    image-composite path; otherwise it falls back to ``palette``. Either
+    can be empty — empty palette + empty border_paths means "remove the
+    border" rather than "abort".
     """
     br = BorderReplacerr()
     cfg = config.border_replacerr
@@ -97,7 +99,11 @@ def _resolve_palette(
         # Mirror what a real run would do: respect the existing holiday
         # parser including year-crossover rules.
         status = br.get_holiday_status(db=db)
-        return list(status.get("border_colors") or []), status.get("active_holiday")
+        return (
+            list(status.get("border_colors") or []),
+            list(status.get("border_paths") or []),
+            status.get("active_holiday"),
+        )
 
     if choice and choice != "default":
         # Match by name against configured holidays first — saved entries win
@@ -107,18 +113,20 @@ def _resolve_palette(
             if holiday.name == choice:
                 hex_colors = list(getattr(holiday, "colors", None) or cfg.border_colors or [])
                 rgb = [br.convert_to_rgb(c) for c in hex_colors]
-                return rgb, holiday.name
+                names = list(getattr(holiday, "borders", None) or [])
+                borders = br._resolve_border_paths(holiday.name, names)
+                return rgb, borders, holiday.name
 
         # Fall back to the built-in preset catalogue so the user can preview
         # any holiday palette without first saving it to their config.
         for preset in _HOLIDAY_PRESETS:
             if preset["name"] == choice:
                 rgb = [br.convert_to_rgb(c) for c in preset["colors"]]
-                return rgb, preset["name"]
+                return rgb, [], preset["name"]
 
     # default / unknown choice → fall through to configured defaults
     rgb = [br.convert_to_rgb(c) for c in (cfg.border_colors or [])]
-    return rgb, None
+    return rgb, [], None
 
 
 def _sample_assets(db: ChubDB, count: int) -> list[dict]:
@@ -175,18 +183,22 @@ def _render_composite(
     output_path: Path,
     color: Optional[tuple[int, int, int]],
     border_width: int,
+    border_image: Optional[str] = None,
 ) -> None:
     """Write a 2000x1500 side-by-side ``original | bordered`` composite.
 
-    When ``color`` is None the right side shows the cropped+resized result
-    that BorderReplacerr would produce in "remove" mode.
+    Precedence: ``border_image`` (PNG path) > ``color`` (RGB tuple) >
+    None (remove-border mode). Reusing BorderReplacerr's own helpers
+    keeps the preview faithful to a real run.
     """
     br = BorderReplacerr()
 
     # The bordered side is whatever a real run would write — reuse the
     # module's own helper so the preview can never drift from production.
     bordered_tmp = PREVIEW_DIR / f"_bordered_{uuid.uuid4().hex}.jpg"
-    if color is not None:
+    if border_image is not None:
+        br.replace_borders_with_image(original_file, str(bordered_tmp), border_image)
+    elif color is not None:
         br.replace_borders(original_file, str(bordered_tmp), color, border_width)
     else:
         br.remove_borders(original_file, str(bordered_tmp), border_width)
@@ -271,7 +283,7 @@ async def generate_preview(
     config = load_config()
     cfg = config.border_replacerr
 
-    palette, active_holiday = _resolve_palette(config, holiday, db)
+    palette, border_paths, active_holiday = _resolve_palette(config, holiday, db)
     border_width = int(cfg.border_width or 26)
 
     # Wipe previous previews so /tmp doesn't grow unboundedly across refreshes.
@@ -304,18 +316,24 @@ async def generate_preview(
                 "active_holiday": active_holiday,
                 "border_width": border_width,
                 "palette_size": len(palette),
+                "border_count": len(border_paths),
+                "mode": "image" if border_paths else ("color" if palette else "remove"),
             },
         )
 
     previews = []
+    mode = "image" if border_paths else ("color" if palette else "remove")
     for index, asset in enumerate(assets):
         token = uuid.uuid4().hex
         output_path = PREVIEW_DIR / f"{token}.jpg"
 
-        # Cycle the palette so the user sees how each configured color lands
-        # on different artwork. Empty palette → preview the "remove" path.
+        # Image-mode cycles through resolved PNG paths; color-mode cycles
+        # through the palette; otherwise we preview the "remove" path.
+        border_image: Optional[str] = (
+            border_paths[index % len(border_paths)] if border_paths else None
+        )
         color: Optional[tuple[int, int, int]] = (
-            palette[index % len(palette)] if palette else None
+            palette[index % len(palette)] if (palette and not border_paths) else None
         )
 
         try:
@@ -324,6 +342,7 @@ async def generate_preview(
                 output_path,
                 color,
                 border_width,
+                border_image=border_image,
             )
         except Exception as exc:
             logger.warning(
@@ -337,6 +356,7 @@ async def generate_preview(
         color_hex = (
             "#" + "".join(f"{c:02x}" for c in color) if color is not None else None
         )
+        border_name = Path(border_image).stem if border_image else None
         previews.append(
             {
                 "token": token,
@@ -344,6 +364,7 @@ async def generate_preview(
                 "kind": asset.get("_kind", "media"),
                 "season_number": asset.get("season_number"),
                 "color": color_hex,
+                "border": border_name,
             }
         )
 
@@ -354,6 +375,8 @@ async def generate_preview(
             "active_holiday": active_holiday,
             "border_width": border_width,
             "palette_size": len(palette),
+            "border_count": len(border_paths),
+            "mode": mode,
         },
     )
 

@@ -1,0 +1,249 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1500" width="1000" height="1500">
+  <defs>
+    <linearGradient id="frameBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0a1020"/>
+      <stop offset="50%" stop-color="#050814"/>
+      <stop offset="100%" stop-color="#020308"/>
+    </linearGradient>
+    <linearGradient id="bannerRed" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#5a0810"/>
+      <stop offset="50%" stop-color="#c81828"/>
+      <stop offset="100%" stop-color="#5a0810"/>
+    </linearGradient>
+    <linearGradient id="bannerBlue" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0a1448"/>
+      <stop offset="50%" stop-color="#1f3890"/>
+      <stop offset="100%" stop-color="#0a1448"/>
+    </linearGradient>
+    <linearGradient id="bannerCream" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#a0a8b8"/>
+      <stop offset="50%" stop-color="#fff4d8"/>
+      <stop offset="100%" stop-color="#a0a8b8"/>
+    </linearGradient>
+    <radialGradient id="goldAcc" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#fff0a8"/>
+      <stop offset="55%" stop-color="#d4a020"/>
+      <stop offset="100%" stop-color="#604010"/>
+    </radialGradient>
+    <radialGradient id="leafL" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#80a878"/>
+      <stop offset="55%" stop-color="#385838"/>
+      <stop offset="100%" stop-color="#0a200a"/>
+    </radialGradient>
+  </defs>
+
+  <path d="M 0,0 L 1000,0 L 1000,1500 L 0,1500 Z M 60,60 L 60,1440 L 940,1440 L 940,60 Z" fill="url(#frameBg)" fill-rule="evenodd"/>
+
+  <g id="ribbonBannerRed">
+    <path d="M0,0 L36,0 L40,5 L36,10 L0,10 L4,5 Z" fill="url(#bannerRed)" stroke="#3a0408" stroke-width="0.4"/>
+    <path d="M4,5 L36,5" stroke="#fff4d8" stroke-width="0.4" opacity="0.4"/>
+    <path d="M0,0 L4,5 L0,10" fill="#3a0408" opacity="0.4"/>
+  </g>
+
+  <g id="ribbonBannerBlue">
+    <path d="M0,0 L36,0 L40,5 L36,10 L0,10 L4,5 Z" fill="url(#bannerBlue)" stroke="#020a30" stroke-width="0.4"/>
+    <path d="M4,5 L36,5" stroke="#fff4d8" stroke-width="0.4" opacity="0.4"/>
+    <path d="M0,0 L4,5 L0,10" fill="#020a30" opacity="0.4"/>
+  </g>
+
+  <g id="ribbonBannerCream">
+    <path d="M0,0 L36,0 L40,5 L36,10 L0,10 L4,5 Z" fill="url(#bannerCream)" stroke="#5a5a5a" stroke-width="0.4"/>
+    <path d="M0,0 L4,5 L0,10" fill="#5a5a5a" opacity="0.3"/>
+  </g>
+
+  <g id="starCluster">
+    <path d="M0,-9 L2.6,-2.8 L9,-2.8 L4,1.2 L6,7.2 L0,3.6 L-6,7.2 L-4,1.2 L-9,-2.8 L-2.6,-2.8 Z" fill="url(#goldAcc)" stroke="#604010" stroke-width="0.3"/>
+    <path d="M-14,-2 L-12,-4 L-10,-6 L-8,-4 L-10,-2 L-12,0 Z" fill="url(#goldAcc)" stroke="#604010" stroke-width="0.2"/>
+    <path d="M14,-2 L12,-4 L10,-6 L8,-4 L10,-2 L12,0 Z" fill="url(#goldAcc)" stroke="#604010" stroke-width="0.2"/>
+    <circle cx="-10" cy="4" r="1.4" fill="url(#goldAcc)"/>
+    <circle cx="10" cy="4" r="1.4" fill="url(#goldAcc)"/>
+    <circle cx="0" cy="-12" r="0.8" fill="url(#goldAcc)"/>
+  </g>
+
+  <g id="wreathSimple">
+    <circle cx="0" cy="0" r="22" fill="none" stroke="url(#leafL)" stroke-width="2.5"/>
+    <ellipse cx="-22" cy="0" rx="4" ry="2.5" fill="url(#leafL)" transform="rotate(-30,-22,0)"/>
+    <ellipse cx="-15.6" cy="-15.6" rx="4" ry="2.5" fill="url(#leafL)" transform="rotate(15,-15.6,-15.6)"/>
+    <ellipse cx="0" cy="-22" rx="4" ry="2.5" fill="url(#leafL)" transform="rotate(60,0,-22)"/>
+    <ellipse cx="15.6" cy="-15.6" rx="4" ry="2.5" fill="url(#leafL)" transform="rotate(105,15.6,-15.6)"/>
+    <ellipse cx="22" cy="0" rx="4" ry="2.5" fill="url(#leafL)" transform="rotate(150,22,0)"/>
+    <ellipse cx="15.6" cy="15.6" rx="4" ry="2.5" fill="url(#leafL)" transform="rotate(195,15.6,15.6)"/>
+    <ellipse cx="0" cy="22" rx="4" ry="2.5" fill="url(#leafL)" transform="rotate(240,0,22)"/>
+    <ellipse cx="-15.6" cy="15.6" rx="4" ry="2.5" fill="url(#leafL)" transform="rotate(285,-15.6,15.6)"/>
+    <path d="M-4,18 C-4,22 4,22 4,18 L0,16 Z" fill="url(#bannerRed)" stroke="#3a0408" stroke-width="0.4"/>
+    <path d="M-6,20 L-12,28 M6,20 L12,28" stroke="url(#bannerRed)" stroke-width="1.4"/>
+  </g>
+
+  <g id="starSm">
+    <path d="M0,-5 L1.5,-1.5 L5,-1.5 L2.3,0.6 L3.3,4 L0,2 L-3.3,4 L-2.3,0.6 L-5,-1.5 L-1.5,-1.5 Z" fill="url(#goldAcc)"/>
+  </g>
+
+  <!-- TOP: alternating banners with notched ends -->
+  <use href="#ribbonBannerRed" transform="translate(60,32)"/>
+  <use href="#ribbonBannerCream" transform="translate(110,32)"/>
+  <use href="#ribbonBannerBlue" transform="translate(160,32)"/>
+  <use href="#ribbonBannerRed" transform="translate(210,32)"/>
+  <use href="#ribbonBannerCream" transform="translate(260,32)"/>
+  <use href="#ribbonBannerBlue" transform="translate(310,32)"/>
+  <use href="#ribbonBannerRed" transform="translate(360,32)"/>
+  <use href="#ribbonBannerCream" transform="translate(410,32)"/>
+  <use href="#ribbonBannerBlue" transform="translate(460,32)"/>
+  <use href="#ribbonBannerRed" transform="translate(510,32)"/>
+  <use href="#ribbonBannerCream" transform="translate(560,32)"/>
+  <use href="#ribbonBannerBlue" transform="translate(610,32)"/>
+  <use href="#ribbonBannerRed" transform="translate(660,32)"/>
+  <use href="#ribbonBannerCream" transform="translate(710,32)"/>
+  <use href="#ribbonBannerBlue" transform="translate(760,32)"/>
+  <use href="#ribbonBannerRed" transform="translate(810,32)"/>
+  <use href="#ribbonBannerCream" transform="translate(860,32)"/>
+  <use href="#ribbonBannerBlue" transform="translate(900,32)"/>
+  <use href="#starCluster" transform="translate(120,18)"/>
+  <use href="#starCluster" transform="translate(280,18)"/>
+  <use href="#starCluster" transform="translate(440,18)"/>
+  <use href="#starCluster" transform="translate(600,18)"/>
+  <use href="#starCluster" transform="translate(760,18)"/>
+  <use href="#starCluster" transform="translate(900,18)"/>
+  <use href="#starSm" transform="translate(80,52)"/>
+  <use href="#starSm" transform="translate(180,52)"/>
+  <use href="#starSm" transform="translate(280,52)"/>
+  <use href="#starSm" transform="translate(380,52)"/>
+  <use href="#starSm" transform="translate(480,52)"/>
+  <use href="#starSm" transform="translate(580,52)"/>
+  <use href="#starSm" transform="translate(680,52)"/>
+  <use href="#starSm" transform="translate(780,52)"/>
+  <use href="#starSm" transform="translate(880,52)"/>
+
+  <!-- BOTTOM -->
+  <use href="#ribbonBannerRed" transform="translate(60,1458)"/>
+  <use href="#ribbonBannerCream" transform="translate(110,1458)"/>
+  <use href="#ribbonBannerBlue" transform="translate(160,1458)"/>
+  <use href="#ribbonBannerRed" transform="translate(210,1458)"/>
+  <use href="#ribbonBannerCream" transform="translate(260,1458)"/>
+  <use href="#ribbonBannerBlue" transform="translate(310,1458)"/>
+  <use href="#ribbonBannerRed" transform="translate(360,1458)"/>
+  <use href="#ribbonBannerCream" transform="translate(410,1458)"/>
+  <use href="#ribbonBannerBlue" transform="translate(460,1458)"/>
+  <use href="#ribbonBannerRed" transform="translate(510,1458)"/>
+  <use href="#ribbonBannerCream" transform="translate(560,1458)"/>
+  <use href="#ribbonBannerBlue" transform="translate(610,1458)"/>
+  <use href="#ribbonBannerRed" transform="translate(660,1458)"/>
+  <use href="#ribbonBannerCream" transform="translate(710,1458)"/>
+  <use href="#ribbonBannerBlue" transform="translate(760,1458)"/>
+  <use href="#ribbonBannerRed" transform="translate(810,1458)"/>
+  <use href="#ribbonBannerCream" transform="translate(860,1458)"/>
+  <use href="#ribbonBannerBlue" transform="translate(900,1458)"/>
+  <use href="#starCluster" transform="translate(120,1482)"/>
+  <use href="#starCluster" transform="translate(280,1482)"/>
+  <use href="#starCluster" transform="translate(440,1482)"/>
+  <use href="#starCluster" transform="translate(600,1482)"/>
+  <use href="#starCluster" transform="translate(760,1482)"/>
+  <use href="#starCluster" transform="translate(900,1482)"/>
+
+  <!-- LEFT -->
+  <use href="#ribbonBannerRed" transform="translate(32,60) rotate(90)"/>
+  <use href="#ribbonBannerCream" transform="translate(32,110) rotate(90)"/>
+  <use href="#ribbonBannerBlue" transform="translate(32,160) rotate(90)"/>
+  <use href="#ribbonBannerRed" transform="translate(32,210) rotate(90)"/>
+  <use href="#ribbonBannerCream" transform="translate(32,260) rotate(90)"/>
+  <use href="#ribbonBannerBlue" transform="translate(32,310) rotate(90)"/>
+  <use href="#ribbonBannerRed" transform="translate(32,360) rotate(90)"/>
+  <use href="#ribbonBannerCream" transform="translate(32,410) rotate(90)"/>
+  <use href="#ribbonBannerBlue" transform="translate(32,460) rotate(90)"/>
+  <use href="#ribbonBannerRed" transform="translate(32,510) rotate(90)"/>
+  <use href="#ribbonBannerCream" transform="translate(32,560) rotate(90)"/>
+  <use href="#ribbonBannerBlue" transform="translate(32,610) rotate(90)"/>
+  <use href="#ribbonBannerRed" transform="translate(32,660) rotate(90)"/>
+  <use href="#ribbonBannerCream" transform="translate(32,710) rotate(90)"/>
+  <use href="#ribbonBannerBlue" transform="translate(32,760) rotate(90)"/>
+  <use href="#ribbonBannerRed" transform="translate(32,810) rotate(90)"/>
+  <use href="#ribbonBannerCream" transform="translate(32,860) rotate(90)"/>
+  <use href="#ribbonBannerBlue" transform="translate(32,910) rotate(90)"/>
+  <use href="#ribbonBannerRed" transform="translate(32,960) rotate(90)"/>
+  <use href="#ribbonBannerCream" transform="translate(32,1010) rotate(90)"/>
+  <use href="#ribbonBannerBlue" transform="translate(32,1060) rotate(90)"/>
+  <use href="#ribbonBannerRed" transform="translate(32,1110) rotate(90)"/>
+  <use href="#ribbonBannerCream" transform="translate(32,1160) rotate(90)"/>
+  <use href="#ribbonBannerBlue" transform="translate(32,1210) rotate(90)"/>
+  <use href="#ribbonBannerRed" transform="translate(32,1260) rotate(90)"/>
+  <use href="#ribbonBannerCream" transform="translate(32,1310) rotate(90)"/>
+  <use href="#ribbonBannerBlue" transform="translate(32,1360) rotate(90)"/>
+  <use href="#starCluster" transform="translate(18,120)"/>
+  <use href="#starCluster" transform="translate(18,280)"/>
+  <use href="#starCluster" transform="translate(18,440)"/>
+  <use href="#starCluster" transform="translate(18,600)"/>
+  <use href="#starCluster" transform="translate(18,760)"/>
+  <use href="#starCluster" transform="translate(18,920)"/>
+  <use href="#starCluster" transform="translate(18,1080)"/>
+  <use href="#starCluster" transform="translate(18,1240)"/>
+  <use href="#starCluster" transform="translate(18,1400)"/>
+  <use href="#starSm" transform="translate(52,180)"/>
+  <use href="#starSm" transform="translate(52,340)"/>
+  <use href="#starSm" transform="translate(52,500)"/>
+  <use href="#starSm" transform="translate(52,660)"/>
+  <use href="#starSm" transform="translate(52,820)"/>
+  <use href="#starSm" transform="translate(52,980)"/>
+  <use href="#starSm" transform="translate(52,1140)"/>
+  <use href="#starSm" transform="translate(52,1300)"/>
+
+  <!-- RIGHT -->
+  <use href="#ribbonBannerRed" transform="translate(968,60) rotate(90)"/>
+  <use href="#ribbonBannerCream" transform="translate(968,110) rotate(90)"/>
+  <use href="#ribbonBannerBlue" transform="translate(968,160) rotate(90)"/>
+  <use href="#ribbonBannerRed" transform="translate(968,210) rotate(90)"/>
+  <use href="#ribbonBannerCream" transform="translate(968,260) rotate(90)"/>
+  <use href="#ribbonBannerBlue" transform="translate(968,310) rotate(90)"/>
+  <use href="#ribbonBannerRed" transform="translate(968,360) rotate(90)"/>
+  <use href="#ribbonBannerCream" transform="translate(968,410) rotate(90)"/>
+  <use href="#ribbonBannerBlue" transform="translate(968,460) rotate(90)"/>
+  <use href="#ribbonBannerRed" transform="translate(968,510) rotate(90)"/>
+  <use href="#ribbonBannerCream" transform="translate(968,560) rotate(90)"/>
+  <use href="#ribbonBannerBlue" transform="translate(968,610) rotate(90)"/>
+  <use href="#ribbonBannerRed" transform="translate(968,660) rotate(90)"/>
+  <use href="#ribbonBannerCream" transform="translate(968,710) rotate(90)"/>
+  <use href="#ribbonBannerBlue" transform="translate(968,760) rotate(90)"/>
+  <use href="#ribbonBannerRed" transform="translate(968,810) rotate(90)"/>
+  <use href="#ribbonBannerCream" transform="translate(968,860) rotate(90)"/>
+  <use href="#ribbonBannerBlue" transform="translate(968,910) rotate(90)"/>
+  <use href="#ribbonBannerRed" transform="translate(968,960) rotate(90)"/>
+  <use href="#ribbonBannerCream" transform="translate(968,1010) rotate(90)"/>
+  <use href="#ribbonBannerBlue" transform="translate(968,1060) rotate(90)"/>
+  <use href="#ribbonBannerRed" transform="translate(968,1110) rotate(90)"/>
+  <use href="#ribbonBannerCream" transform="translate(968,1160) rotate(90)"/>
+  <use href="#ribbonBannerBlue" transform="translate(968,1210) rotate(90)"/>
+  <use href="#ribbonBannerRed" transform="translate(968,1260) rotate(90)"/>
+  <use href="#ribbonBannerCream" transform="translate(968,1310) rotate(90)"/>
+  <use href="#ribbonBannerBlue" transform="translate(968,1360) rotate(90)"/>
+  <use href="#starCluster" transform="translate(982,120)"/>
+  <use href="#starCluster" transform="translate(982,280)"/>
+  <use href="#starCluster" transform="translate(982,440)"/>
+  <use href="#starCluster" transform="translate(982,600)"/>
+  <use href="#starCluster" transform="translate(982,760)"/>
+  <use href="#starCluster" transform="translate(982,920)"/>
+  <use href="#starCluster" transform="translate(982,1080)"/>
+  <use href="#starCluster" transform="translate(982,1240)"/>
+  <use href="#starCluster" transform="translate(982,1400)"/>
+
+  <!-- CORNERS: wreath -->
+  <g transform="translate(40,40)">
+    <use href="#wreathSimple" transform="translate(32,32) scale(1.2)"/>
+    <use href="#starCluster" transform="translate(64,16) scale(1.2)"/>
+    <use href="#ribbonBannerRed" transform="translate(48,72) scale(0.9)"/>
+  </g>
+  <g transform="translate(960,40)">
+    <use href="#wreathSimple" transform="translate(-32,32) scale(1.2)"/>
+    <use href="#starCluster" transform="translate(-64,16) scale(1.2)"/>
+    <use href="#ribbonBannerRed" transform="translate(-88,72) scale(0.9)"/>
+  </g>
+  <g transform="translate(40,1460)">
+    <use href="#wreathSimple" transform="translate(32,-32) scale(1.2)"/>
+    <use href="#starCluster" transform="translate(64,-16) scale(1.2)"/>
+    <use href="#ribbonBannerBlue" transform="translate(48,-22) scale(0.9)"/>
+  </g>
+  <g transform="translate(960,1460)">
+    <use href="#wreathSimple" transform="translate(-32,-32) scale(1.2)"/>
+    <use href="#starCluster" transform="translate(-64,-16) scale(1.2)"/>
+    <use href="#ribbonBannerBlue" transform="translate(-88,-22) scale(0.9)"/>
+  </g>
+
+  <path d="M60,55 L940,55 M60,1445 L940,1445 M55,60 L55,1440 M945,60 L945,1440" stroke="url(#bannerCream)" stroke-width="1.4" fill="none" opacity="0.7"/>
+</svg>

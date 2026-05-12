@@ -1,0 +1,258 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1500" width="1000" height="1500">
+  <defs>
+    <linearGradient id="frameBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#2a1218"/>
+      <stop offset="50%" stop-color="#160a0e"/>
+      <stop offset="100%" stop-color="#080406"/>
+    </linearGradient>
+    <radialGradient id="peonyPink" cx="40%" cy="35%" r="80%">
+      <stop offset="0%" stop-color="#ffe0e8"/>
+      <stop offset="40%" stop-color="#f098b0"/>
+      <stop offset="100%" stop-color="#8a3858"/>
+    </radialGradient>
+    <radialGradient id="peonyCore" cx="50%" cy="50%" r="55%">
+      <stop offset="0%" stop-color="#f4b0c4"/>
+      <stop offset="100%" stop-color="#6a1830"/>
+    </radialGradient>
+    <radialGradient id="creamRose" cx="40%" cy="35%" r="75%">
+      <stop offset="0%" stop-color="#fff8ea"/>
+      <stop offset="55%" stop-color="#f0d8c0"/>
+      <stop offset="100%" stop-color="#9a7058"/>
+    </radialGradient>
+    <radialGradient id="fernG" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#a8c898"/>
+      <stop offset="55%" stop-color="#587858"/>
+      <stop offset="100%" stop-color="#1a2a1a"/>
+    </radialGradient>
+    <radialGradient id="heartPink" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#ffaabb"/>
+      <stop offset="55%" stop-color="#e0708a"/>
+      <stop offset="100%" stop-color="#8a3050"/>
+    </radialGradient>
+    <linearGradient id="satinPink" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#8a3858"/>
+      <stop offset="50%" stop-color="#fac0d0"/>
+      <stop offset="100%" stop-color="#8a3858"/>
+    </linearGradient>
+    <linearGradient id="satinPinkV" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#8a3858"/>
+      <stop offset="50%" stop-color="#fac0d0"/>
+      <stop offset="100%" stop-color="#8a3858"/>
+    </linearGradient>
+  </defs>
+
+  <path d="M 0,0 L 1000,0 L 1000,1500 L 0,1500 Z M 60,60 L 60,1440 L 940,1440 L 940,60 Z" fill="url(#frameBg)" fill-rule="evenodd"/>
+
+  <g id="peony">
+    <circle cx="0" cy="0" r="18" fill="url(#peonyPink)"/>
+    <path d="M-18,0 C-16,-12 -10,-18 0,-18 C10,-18 16,-12 18,0 C16,12 10,18 0,18 C-10,18 -16,12 -18,0 Z" fill="none" stroke="#8a3858" stroke-width="0.5"/>
+    <path d="M0,-14 C-8,-12 -12,-6 -12,0 C-12,6 -8,12 0,14 C8,12 12,6 12,0 C12,-6 8,-12 0,-14 Z" fill="url(#peonyPink)" opacity="0.85"/>
+    <path d="M0,-10 C-6,-8 -8,-4 -8,0 C-8,4 -6,8 0,10 C6,8 8,4 8,0 C8,-4 6,-8 0,-10 Z" fill="url(#peonyPink)"/>
+    <path d="M-12,-4 Q-4,-2 0,-8 M12,-4 Q4,-2 0,-8 M-12,4 Q-4,2 0,8 M12,4 Q4,2 0,8" stroke="#c47080" stroke-width="0.4" fill="none"/>
+    <circle cx="0" cy="0" r="5" fill="url(#peonyCore)"/>
+    <circle cx="-2" cy="-2" r="2" fill="#fac0d0" opacity="0.7"/>
+    <path d="M-2,-3 L-2,3 M2,-3 L2,3 M-3,0 L3,0" stroke="#6a1830" stroke-width="0.3"/>
+  </g>
+
+  <g id="whiteRose">
+    <circle cx="0" cy="0" r="13" fill="url(#creamRose)" stroke="#9a7058" stroke-width="0.4"/>
+    <path d="M0,-11 C-5,-9 -9,-5 -9,0 C-9,5 -5,9 0,11 C5,9 9,5 9,0 C9,-5 5,-9 0,-11 Z" fill="url(#creamRose)" opacity="0.85"/>
+    <path d="M0,-8 C-4,-6 -6,-3 -6,0 C-6,3 -4,6 0,8 C4,6 6,3 6,0 C6,-3 4,-6 0,-8 Z" fill="url(#creamRose)" stroke="#9a7058" stroke-width="0.3"/>
+    <circle cx="0" cy="0" r="3" fill="url(#peonyCore)" opacity="0.6"/>
+  </g>
+
+  <g id="fernFrond">
+    <path d="M0,0 L0,30" stroke="#587858" stroke-width="1.4" fill="none"/>
+    <ellipse cx="-3" cy="2" rx="2" ry="5" fill="url(#fernG)" transform="rotate(-40,-3,2)"/>
+    <ellipse cx="3" cy="0" rx="2" ry="5" fill="url(#fernG)" transform="rotate(40,3,0)"/>
+    <ellipse cx="-4" cy="-4" rx="2" ry="6" fill="url(#fernG)" transform="rotate(-45,-4,-4)"/>
+    <ellipse cx="4" cy="-6" rx="2" ry="6" fill="url(#fernG)" transform="rotate(45,4,-6)"/>
+    <ellipse cx="-4" cy="-12" rx="2" ry="6" fill="url(#fernG)" transform="rotate(-50,-4,-12)"/>
+    <ellipse cx="4" cy="-14" rx="2" ry="6" fill="url(#fernG)" transform="rotate(50,4,-14)"/>
+    <ellipse cx="-3" cy="-20" rx="1.8" ry="5" fill="url(#fernG)" transform="rotate(-55,-3,-20)"/>
+    <ellipse cx="3" cy="-22" rx="1.8" ry="5" fill="url(#fernG)" transform="rotate(55,3,-22)"/>
+    <ellipse cx="-2" cy="-26" rx="1.6" ry="4" fill="url(#fernG)" transform="rotate(-60,-2,-26)"/>
+    <ellipse cx="2" cy="-28" rx="1.6" ry="4" fill="url(#fernG)" transform="rotate(60,2,-28)"/>
+  </g>
+
+  <g id="smallHeart">
+    <path d="M0,-2 C-3,-7 -10,-8 -10,-2 C-10,4 -3,9 0,12 C3,9 10,4 10,-2 C10,-8 3,-7 0,-2 Z" fill="url(#heartPink)" stroke="#8a3050" stroke-width="0.4"/>
+    <ellipse cx="-4" cy="-2" rx="2.5" ry="2" fill="#ffaabb" opacity="0.6"/>
+  </g>
+
+  <g id="satinTrim">
+    <path d="M0,0 C40,8 80,8 120,0 C160,-8 200,-8 240,0" stroke="url(#satinPink)" stroke-width="6" fill="none"/>
+    <path d="M0,0 C40,8 80,8 120,0 C160,-8 200,-8 240,0" stroke="#fac0d0" stroke-width="0.5" fill="none" opacity="0.7"/>
+    <path d="M0,3 C40,11 80,11 120,3 C160,-5 200,-5 240,3" stroke="#6a1830" stroke-width="0.5" fill="none" opacity="0.5"/>
+  </g>
+
+  <g id="satinTrimV">
+    <path d="M0,0 C8,40 8,80 0,120 C-8,160 -8,200 0,240" stroke="url(#satinPinkV)" stroke-width="6" fill="none"/>
+  </g>
+
+  <!-- TOP -->
+  <use href="#satinTrim" transform="translate(60,20)"/>
+  <use href="#satinTrim" transform="translate(300,20)"/>
+  <use href="#satinTrim" transform="translate(540,20)"/>
+  <use href="#satinTrim" transform="translate(780,20)"/>
+  <use href="#peony" transform="translate(150,38)"/>
+  <use href="#peony" transform="translate(330,38) scale(1.1)"/>
+  <use href="#peony" transform="translate(510,38)"/>
+  <use href="#peony" transform="translate(690,38) scale(1.1)"/>
+  <use href="#peony" transform="translate(850,38)"/>
+  <use href="#whiteRose" transform="translate(220,40)"/>
+  <use href="#whiteRose" transform="translate(400,40)"/>
+  <use href="#whiteRose" transform="translate(580,40)"/>
+  <use href="#whiteRose" transform="translate(760,40)"/>
+  <use href="#fernFrond" transform="translate(120,55) rotate(180)"/>
+  <use href="#fernFrond" transform="translate(260,55) rotate(180)"/>
+  <use href="#fernFrond" transform="translate(440,55) rotate(180)"/>
+  <use href="#fernFrond" transform="translate(620,55) rotate(180)"/>
+  <use href="#fernFrond" transform="translate(800,55) rotate(180)"/>
+  <use href="#fernFrond" transform="translate(900,55) rotate(180)"/>
+  <use href="#smallHeart" transform="translate(180,20) scale(0.7)"/>
+  <use href="#smallHeart" transform="translate(360,20) scale(0.7)"/>
+  <use href="#smallHeart" transform="translate(540,20) scale(0.7)"/>
+  <use href="#smallHeart" transform="translate(720,20) scale(0.7)"/>
+  <use href="#smallHeart" transform="translate(900,20) scale(0.7)"/>
+
+  <!-- BOTTOM -->
+  <use href="#satinTrim" transform="translate(60,1480) scale(1,-1)"/>
+  <use href="#satinTrim" transform="translate(300,1480) scale(1,-1)"/>
+  <use href="#satinTrim" transform="translate(540,1480) scale(1,-1)"/>
+  <use href="#satinTrim" transform="translate(780,1480) scale(1,-1)"/>
+  <use href="#peony" transform="translate(150,1462)"/>
+  <use href="#peony" transform="translate(330,1462) scale(1.1)"/>
+  <use href="#peony" transform="translate(510,1462)"/>
+  <use href="#peony" transform="translate(690,1462) scale(1.1)"/>
+  <use href="#peony" transform="translate(850,1462)"/>
+  <use href="#whiteRose" transform="translate(220,1460)"/>
+  <use href="#whiteRose" transform="translate(400,1460)"/>
+  <use href="#whiteRose" transform="translate(580,1460)"/>
+  <use href="#whiteRose" transform="translate(760,1460)"/>
+  <use href="#fernFrond" transform="translate(120,1445)"/>
+  <use href="#fernFrond" transform="translate(260,1445)"/>
+  <use href="#fernFrond" transform="translate(440,1445)"/>
+  <use href="#fernFrond" transform="translate(620,1445)"/>
+  <use href="#fernFrond" transform="translate(800,1445)"/>
+  <use href="#fernFrond" transform="translate(900,1445)"/>
+  <use href="#smallHeart" transform="translate(180,1478) scale(0.7)"/>
+  <use href="#smallHeart" transform="translate(360,1478) scale(0.7)"/>
+  <use href="#smallHeart" transform="translate(540,1478) scale(0.7)"/>
+  <use href="#smallHeart" transform="translate(720,1478) scale(0.7)"/>
+  <use href="#smallHeart" transform="translate(900,1478) scale(0.7)"/>
+
+  <!-- LEFT -->
+  <use href="#satinTrimV" transform="translate(20,60)"/>
+  <use href="#satinTrimV" transform="translate(20,300)"/>
+  <use href="#satinTrimV" transform="translate(20,540)"/>
+  <use href="#satinTrimV" transform="translate(20,780)"/>
+  <use href="#satinTrimV" transform="translate(20,1020)"/>
+  <use href="#satinTrimV" transform="translate(20,1260)"/>
+  <use href="#peony" transform="translate(38,150)"/>
+  <use href="#peony" transform="translate(38,330) scale(1.1)"/>
+  <use href="#peony" transform="translate(38,510)"/>
+  <use href="#peony" transform="translate(38,690) scale(1.1)"/>
+  <use href="#peony" transform="translate(38,870)"/>
+  <use href="#peony" transform="translate(38,1050) scale(1.1)"/>
+  <use href="#peony" transform="translate(38,1230)"/>
+  <use href="#peony" transform="translate(38,1390) scale(1.1)"/>
+  <use href="#whiteRose" transform="translate(40,240)"/>
+  <use href="#whiteRose" transform="translate(40,420)"/>
+  <use href="#whiteRose" transform="translate(40,600)"/>
+  <use href="#whiteRose" transform="translate(40,780)"/>
+  <use href="#whiteRose" transform="translate(40,960)"/>
+  <use href="#whiteRose" transform="translate(40,1140)"/>
+  <use href="#whiteRose" transform="translate(40,1320)"/>
+  <use href="#fernFrond" transform="translate(55,120) rotate(90)"/>
+  <use href="#fernFrond" transform="translate(55,260) rotate(90)"/>
+  <use href="#fernFrond" transform="translate(55,440) rotate(90)"/>
+  <use href="#fernFrond" transform="translate(55,620) rotate(90)"/>
+  <use href="#fernFrond" transform="translate(55,800) rotate(90)"/>
+  <use href="#fernFrond" transform="translate(55,980) rotate(90)"/>
+  <use href="#fernFrond" transform="translate(55,1160) rotate(90)"/>
+  <use href="#fernFrond" transform="translate(55,1340) rotate(90)"/>
+  <use href="#smallHeart" transform="translate(20,180) scale(0.7)"/>
+  <use href="#smallHeart" transform="translate(20,360) scale(0.7)"/>
+  <use href="#smallHeart" transform="translate(20,540) scale(0.7)"/>
+  <use href="#smallHeart" transform="translate(20,720) scale(0.7)"/>
+  <use href="#smallHeart" transform="translate(20,900) scale(0.7)"/>
+  <use href="#smallHeart" transform="translate(20,1080) scale(0.7)"/>
+  <use href="#smallHeart" transform="translate(20,1260) scale(0.7)"/>
+  <use href="#smallHeart" transform="translate(20,1400) scale(0.7)"/>
+
+  <!-- RIGHT -->
+  <use href="#satinTrimV" transform="translate(980,60) scale(-1,1)"/>
+  <use href="#satinTrimV" transform="translate(980,300) scale(-1,1)"/>
+  <use href="#satinTrimV" transform="translate(980,540) scale(-1,1)"/>
+  <use href="#satinTrimV" transform="translate(980,780) scale(-1,1)"/>
+  <use href="#satinTrimV" transform="translate(980,1020) scale(-1,1)"/>
+  <use href="#satinTrimV" transform="translate(980,1260) scale(-1,1)"/>
+  <use href="#peony" transform="translate(962,150)"/>
+  <use href="#peony" transform="translate(962,330) scale(1.1)"/>
+  <use href="#peony" transform="translate(962,510)"/>
+  <use href="#peony" transform="translate(962,690) scale(1.1)"/>
+  <use href="#peony" transform="translate(962,870)"/>
+  <use href="#peony" transform="translate(962,1050) scale(1.1)"/>
+  <use href="#peony" transform="translate(962,1230)"/>
+  <use href="#peony" transform="translate(962,1390) scale(1.1)"/>
+  <use href="#whiteRose" transform="translate(960,240)"/>
+  <use href="#whiteRose" transform="translate(960,420)"/>
+  <use href="#whiteRose" transform="translate(960,600)"/>
+  <use href="#whiteRose" transform="translate(960,780)"/>
+  <use href="#whiteRose" transform="translate(960,960)"/>
+  <use href="#whiteRose" transform="translate(960,1140)"/>
+  <use href="#whiteRose" transform="translate(960,1320)"/>
+  <use href="#fernFrond" transform="translate(945,120) rotate(270)"/>
+  <use href="#fernFrond" transform="translate(945,260) rotate(270)"/>
+  <use href="#fernFrond" transform="translate(945,440) rotate(270)"/>
+  <use href="#fernFrond" transform="translate(945,620) rotate(270)"/>
+  <use href="#fernFrond" transform="translate(945,800) rotate(270)"/>
+  <use href="#fernFrond" transform="translate(945,980) rotate(270)"/>
+  <use href="#fernFrond" transform="translate(945,1160) rotate(270)"/>
+  <use href="#fernFrond" transform="translate(945,1340) rotate(270)"/>
+  <use href="#smallHeart" transform="translate(980,180) scale(0.7)"/>
+  <use href="#smallHeart" transform="translate(980,360) scale(0.7)"/>
+  <use href="#smallHeart" transform="translate(980,540) scale(0.7)"/>
+  <use href="#smallHeart" transform="translate(980,720) scale(0.7)"/>
+  <use href="#smallHeart" transform="translate(980,900) scale(0.7)"/>
+  <use href="#smallHeart" transform="translate(980,1080) scale(0.7)"/>
+  <use href="#smallHeart" transform="translate(980,1260) scale(0.7)"/>
+  <use href="#smallHeart" transform="translate(980,1400) scale(0.7)"/>
+
+  <!-- CORNERS: bouquet clusters -->
+  <g transform="translate(38,38)">
+    <use href="#peony" transform="translate(20,20) scale(1.4)"/>
+    <use href="#whiteRose" transform="translate(56,18) scale(1.2)"/>
+    <use href="#whiteRose" transform="translate(18,56) scale(1.2)"/>
+    <use href="#fernFrond" transform="translate(50,52) rotate(135)"/>
+    <use href="#fernFrond" transform="translate(72,40) rotate(110)"/>
+    <use href="#smallHeart" transform="translate(64,64)"/>
+  </g>
+  <g transform="translate(962,38)">
+    <use href="#peony" transform="translate(-20,20) scale(1.4)"/>
+    <use href="#whiteRose" transform="translate(-56,18) scale(1.2)"/>
+    <use href="#whiteRose" transform="translate(-18,56) scale(1.2)"/>
+    <use href="#fernFrond" transform="translate(-50,52) rotate(225)"/>
+    <use href="#fernFrond" transform="translate(-72,40) rotate(250)"/>
+    <use href="#smallHeart" transform="translate(-64,64)"/>
+  </g>
+  <g transform="translate(38,1462)">
+    <use href="#peony" transform="translate(20,-20) scale(1.4)"/>
+    <use href="#whiteRose" transform="translate(56,-18) scale(1.2)"/>
+    <use href="#whiteRose" transform="translate(18,-56) scale(1.2)"/>
+    <use href="#fernFrond" transform="translate(50,-52) rotate(45)"/>
+    <use href="#fernFrond" transform="translate(72,-40) rotate(70)"/>
+    <use href="#smallHeart" transform="translate(64,-64)"/>
+  </g>
+  <g transform="translate(962,1462)">
+    <use href="#peony" transform="translate(-20,-20) scale(1.4)"/>
+    <use href="#whiteRose" transform="translate(-56,-18) scale(1.2)"/>
+    <use href="#whiteRose" transform="translate(-18,-56) scale(1.2)"/>
+    <use href="#fernFrond" transform="translate(-50,-52) rotate(315)"/>
+    <use href="#fernFrond" transform="translate(-72,-40) rotate(290)"/>
+    <use href="#smallHeart" transform="translate(-64,-64)"/>
+  </g>
+
+  <path d="M60,55 L940,55 M60,1445 L940,1445 M55,60 L55,1440 M945,60 L945,1440" stroke="url(#satinPink)" stroke-width="1.4" fill="none"/>
+</svg>

@@ -1,0 +1,274 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1500" width="1000" height="1500">
+  <defs>
+    <linearGradient id="frameBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#04140a"/>
+      <stop offset="50%" stop-color="#020a05"/>
+      <stop offset="100%" stop-color="#010402"/>
+    </linearGradient>
+    <radialGradient id="coinGold" cx="35%" cy="30%" r="75%">
+      <stop offset="0%" stop-color="#fff4b0"/>
+      <stop offset="40%" stop-color="#f0c640"/>
+      <stop offset="100%" stop-color="#604010"/>
+    </radialGradient>
+    <radialGradient id="coinRim" cx="50%" cy="50%" r="55%">
+      <stop offset="0%" stop-color="#f0c640" stop-opacity="0"/>
+      <stop offset="90%" stop-color="#604010"/>
+      <stop offset="100%" stop-color="#3a2008"/>
+    </radialGradient>
+    <radialGradient id="emerald" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#7ad078"/>
+      <stop offset="55%" stop-color="#1a8028"/>
+      <stop offset="100%" stop-color="#04401c"/>
+    </radialGradient>
+    <linearGradient id="goldStroke" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6b4f15"/>
+      <stop offset="50%" stop-color="#f0d05a"/>
+      <stop offset="100%" stop-color="#8a6520"/>
+    </linearGradient>
+    <radialGradient id="potG" cx="50%" cy="60%" r="55%">
+      <stop offset="0%" stop-color="#3a2820"/>
+      <stop offset="100%" stop-color="#0a0604"/>
+    </radialGradient>
+  </defs>
+
+  <path d="M 0,0 L 1000,0 L 1000,1500 L 0,1500 Z M 60,60 L 60,1440 L 940,1440 L 940,60 Z" fill="url(#frameBg)" fill-rule="evenodd"/>
+
+  <g id="goldCoin">
+    <circle cx="0" cy="0" r="10" fill="url(#coinGold)"/>
+    <circle cx="0" cy="0" r="10" fill="url(#coinRim)" opacity="0.6"/>
+    <circle cx="0" cy="0" r="10" fill="none" stroke="#604010" stroke-width="0.6"/>
+    <circle cx="0" cy="0" r="7" fill="none" stroke="#604010" stroke-width="0.4"/>
+    <path d="M-3,-3 L3,3 M3,-3 L-3,3" stroke="#604010" stroke-width="0.4"/>
+    <circle cx="-3" cy="-3" r="1.4" fill="#fff4b0" opacity="0.8"/>
+  </g>
+
+  <g id="goldCoinSm">
+    <circle cx="0" cy="0" r="6" fill="url(#coinGold)" stroke="#604010" stroke-width="0.4"/>
+    <circle cx="-2" cy="-2" r="1" fill="#fff4b0" opacity="0.8"/>
+  </g>
+
+  <g id="coinStack">
+    <ellipse cx="0" cy="6" rx="14" ry="3" fill="url(#coinGold)" stroke="#604010" stroke-width="0.5"/>
+    <ellipse cx="0" cy="2" rx="14" ry="3" fill="url(#coinGold)" stroke="#604010" stroke-width="0.5"/>
+    <ellipse cx="0" cy="-2" rx="14" ry="3" fill="url(#coinGold)" stroke="#604010" stroke-width="0.5"/>
+    <ellipse cx="0" cy="-6" rx="14" ry="3" fill="url(#coinGold)" stroke="#604010" stroke-width="0.5"/>
+    <ellipse cx="0" cy="-9" rx="14" ry="3.4" fill="url(#coinGold)" stroke="#604010" stroke-width="0.6"/>
+    <path d="M-14,-9 Q-14,8 -14,8 M14,-9 Q14,8 14,8" stroke="#604010" stroke-width="0.3"/>
+    <ellipse cx="-6" cy="-9" rx="5" ry="1.4" fill="#fff4b0" opacity="0.6"/>
+  </g>
+
+  <g id="pot">
+    <path d="M-22,4 L-26,-2 L26,-2 L22,4 Z" fill="url(#potG)" stroke="#604010" stroke-width="0.8"/>
+    <path d="M-22,4 Q-26,18 -16,26 L16,26 Q26,18 22,4 Z" fill="url(#potG)" stroke="#604010" stroke-width="0.8"/>
+    <path d="M-26,-2 L26,-2 L26,-6 L-26,-6 Z" fill="url(#goldStroke)" stroke="#604010" stroke-width="0.6"/>
+    <use href="#goldCoinSm" transform="translate(-12,-8)"/>
+    <use href="#goldCoinSm" transform="translate(0,-10)"/>
+    <use href="#goldCoinSm" transform="translate(12,-8)"/>
+    <use href="#goldCoinSm" transform="translate(-6,-12) scale(0.8)"/>
+    <use href="#goldCoinSm" transform="translate(6,-12) scale(0.8)"/>
+    <path d="M-24,2 Q0,10 24,2" stroke="#604010" stroke-width="0.4" fill="none" opacity="0.5"/>
+  </g>
+
+  <g id="shamrock">
+    <path d="M0,4 C-2,-4 -10,-6 -10,2 C-10,8 -4,8 0,4 Z" fill="url(#emerald)" stroke="#04401c" stroke-width="0.4"/>
+    <path d="M0,4 C2,-4 10,-6 10,2 C10,8 4,8 0,4 Z" fill="url(#emerald)" stroke="#04401c" stroke-width="0.4"/>
+    <path d="M0,4 C-4,-2 -6,-10 0,-12 C6,-10 4,-2 0,4 Z" fill="url(#emerald)" stroke="#04401c" stroke-width="0.4"/>
+    <path d="M0,4 L0,18" stroke="#04401c" stroke-width="1.2"/>
+  </g>
+
+  <g id="knotwork">
+    <path d="M0,0 C8,-8 24,-8 32,0 C40,8 56,8 64,0 C72,-8 88,-8 96,0" stroke="url(#goldStroke)" stroke-width="3" fill="none"/>
+    <path d="M0,8 C8,16 24,16 32,8 C40,0 56,0 64,8 C72,16 88,16 96,8" stroke="url(#goldStroke)" stroke-width="3" fill="none"/>
+    <path d="M0,4 C8,12 24,12 32,4 M32,4 C40,-4 56,-4 64,4 M64,4 C72,12 88,12 96,4" stroke="#604010" stroke-width="0.6" fill="none" opacity="0.7"/>
+  </g>
+
+  <g id="coinTrail">
+    <use href="#goldCoinSm" transform="translate(0,0) rotate(15)"/>
+    <use href="#goldCoinSm" transform="translate(10,-4) rotate(30)"/>
+    <use href="#goldCoinSm" transform="translate(22,-2) rotate(-10)"/>
+    <use href="#goldCoinSm" transform="translate(32,2) rotate(20)"/>
+    <use href="#goldCoinSm" transform="translate(40,-2) rotate(-15)"/>
+  </g>
+
+  <!-- TOP -->
+  <use href="#knotwork" transform="translate(60,30)"/>
+  <use href="#knotwork" transform="translate(252,30)"/>
+  <use href="#knotwork" transform="translate(444,30)"/>
+  <use href="#knotwork" transform="translate(636,30)"/>
+  <use href="#knotwork" transform="translate(828,30)"/>
+  <use href="#shamrock" transform="translate(140,46) scale(1.4)"/>
+  <use href="#shamrock" transform="translate(280,46) scale(1.4)"/>
+  <use href="#shamrock" transform="translate(420,46) scale(1.4)"/>
+  <use href="#shamrock" transform="translate(560,46) scale(1.4)"/>
+  <use href="#shamrock" transform="translate(700,46) scale(1.4)"/>
+  <use href="#shamrock" transform="translate(840,46) scale(1.4)"/>
+  <use href="#goldCoin" transform="translate(100,30)"/>
+  <use href="#goldCoin" transform="translate(200,28) scale(1.2)"/>
+  <use href="#goldCoin" transform="translate(320,30)"/>
+  <use href="#goldCoin" transform="translate(380,28) scale(1.2)"/>
+  <use href="#goldCoin" transform="translate(480,30)"/>
+  <use href="#goldCoin" transform="translate(540,28) scale(1.2)"/>
+  <use href="#goldCoin" transform="translate(620,30)"/>
+  <use href="#goldCoin" transform="translate(720,28) scale(1.2)"/>
+  <use href="#goldCoin" transform="translate(800,30)"/>
+  <use href="#goldCoin" transform="translate(900,28) scale(1.2)"/>
+  <use href="#goldCoinSm" transform="translate(160,16)"/>
+  <use href="#goldCoinSm" transform="translate(260,18)"/>
+  <use href="#goldCoinSm" transform="translate(360,16)"/>
+  <use href="#goldCoinSm" transform="translate(460,18)"/>
+  <use href="#goldCoinSm" transform="translate(560,16)"/>
+  <use href="#goldCoinSm" transform="translate(660,18)"/>
+  <use href="#goldCoinSm" transform="translate(760,16)"/>
+  <use href="#goldCoinSm" transform="translate(860,18)"/>
+
+  <!-- BOTTOM -->
+  <use href="#knotwork" transform="translate(60,1460)"/>
+  <use href="#knotwork" transform="translate(252,1460)"/>
+  <use href="#knotwork" transform="translate(444,1460)"/>
+  <use href="#knotwork" transform="translate(636,1460)"/>
+  <use href="#knotwork" transform="translate(828,1460)"/>
+  <use href="#shamrock" transform="translate(140,1452) scale(1.4)"/>
+  <use href="#shamrock" transform="translate(280,1452) scale(1.4)"/>
+  <use href="#shamrock" transform="translate(420,1452) scale(1.4)"/>
+  <use href="#shamrock" transform="translate(560,1452) scale(1.4)"/>
+  <use href="#shamrock" transform="translate(700,1452) scale(1.4)"/>
+  <use href="#shamrock" transform="translate(840,1452) scale(1.4)"/>
+  <use href="#goldCoin" transform="translate(100,1470)"/>
+  <use href="#goldCoin" transform="translate(200,1472) scale(1.2)"/>
+  <use href="#goldCoin" transform="translate(320,1470)"/>
+  <use href="#goldCoin" transform="translate(380,1472) scale(1.2)"/>
+  <use href="#goldCoin" transform="translate(480,1470)"/>
+  <use href="#goldCoin" transform="translate(540,1472) scale(1.2)"/>
+  <use href="#goldCoin" transform="translate(620,1470)"/>
+  <use href="#goldCoin" transform="translate(720,1472) scale(1.2)"/>
+  <use href="#goldCoin" transform="translate(800,1470)"/>
+  <use href="#goldCoin" transform="translate(900,1472) scale(1.2)"/>
+  <use href="#goldCoinSm" transform="translate(160,1484)"/>
+  <use href="#goldCoinSm" transform="translate(260,1486)"/>
+  <use href="#goldCoinSm" transform="translate(360,1484)"/>
+  <use href="#goldCoinSm" transform="translate(460,1486)"/>
+  <use href="#goldCoinSm" transform="translate(560,1484)"/>
+  <use href="#goldCoinSm" transform="translate(660,1486)"/>
+  <use href="#goldCoinSm" transform="translate(760,1484)"/>
+  <use href="#goldCoinSm" transform="translate(860,1486)"/>
+
+  <!-- LEFT -->
+  <use href="#knotwork" transform="translate(30,60) rotate(90)"/>
+  <use href="#knotwork" transform="translate(30,252) rotate(90)"/>
+  <use href="#knotwork" transform="translate(30,444) rotate(90)"/>
+  <use href="#knotwork" transform="translate(30,636) rotate(90)"/>
+  <use href="#knotwork" transform="translate(30,828) rotate(90)"/>
+  <use href="#knotwork" transform="translate(30,1020) rotate(90)"/>
+  <use href="#knotwork" transform="translate(30,1212) rotate(90)"/>
+  <use href="#shamrock" transform="translate(46,140) scale(1.4)"/>
+  <use href="#shamrock" transform="translate(46,280) scale(1.4)"/>
+  <use href="#shamrock" transform="translate(46,420) scale(1.4)"/>
+  <use href="#shamrock" transform="translate(46,560) scale(1.4)"/>
+  <use href="#shamrock" transform="translate(46,700) scale(1.4)"/>
+  <use href="#shamrock" transform="translate(46,840) scale(1.4)"/>
+  <use href="#shamrock" transform="translate(46,980) scale(1.4)"/>
+  <use href="#shamrock" transform="translate(46,1120) scale(1.4)"/>
+  <use href="#shamrock" transform="translate(46,1260) scale(1.4)"/>
+  <use href="#shamrock" transform="translate(46,1400) scale(1.4)"/>
+  <use href="#goldCoin" transform="translate(30,100)"/>
+  <use href="#goldCoin" transform="translate(30,200) scale(1.2)"/>
+  <use href="#goldCoin" transform="translate(30,320)"/>
+  <use href="#goldCoin" transform="translate(30,380) scale(1.2)"/>
+  <use href="#goldCoin" transform="translate(30,480)"/>
+  <use href="#goldCoin" transform="translate(30,540) scale(1.2)"/>
+  <use href="#goldCoin" transform="translate(30,620)"/>
+  <use href="#goldCoin" transform="translate(30,720) scale(1.2)"/>
+  <use href="#goldCoin" transform="translate(30,800)"/>
+  <use href="#goldCoin" transform="translate(30,900) scale(1.2)"/>
+  <use href="#goldCoin" transform="translate(30,1000)"/>
+  <use href="#goldCoin" transform="translate(30,1100) scale(1.2)"/>
+  <use href="#goldCoin" transform="translate(30,1200)"/>
+  <use href="#goldCoin" transform="translate(30,1300) scale(1.2)"/>
+  <use href="#goldCoinSm" transform="translate(16,160)"/>
+  <use href="#goldCoinSm" transform="translate(16,260)"/>
+  <use href="#goldCoinSm" transform="translate(16,360)"/>
+  <use href="#goldCoinSm" transform="translate(16,460)"/>
+  <use href="#goldCoinSm" transform="translate(16,560)"/>
+  <use href="#goldCoinSm" transform="translate(16,660)"/>
+  <use href="#goldCoinSm" transform="translate(16,760)"/>
+  <use href="#goldCoinSm" transform="translate(16,860)"/>
+  <use href="#goldCoinSm" transform="translate(16,960)"/>
+  <use href="#goldCoinSm" transform="translate(16,1060)"/>
+  <use href="#goldCoinSm" transform="translate(16,1160)"/>
+  <use href="#goldCoinSm" transform="translate(16,1260)"/>
+  <use href="#goldCoinSm" transform="translate(16,1360)"/>
+
+  <!-- RIGHT -->
+  <use href="#knotwork" transform="translate(970,60) rotate(90)"/>
+  <use href="#knotwork" transform="translate(970,252) rotate(90)"/>
+  <use href="#knotwork" transform="translate(970,444) rotate(90)"/>
+  <use href="#knotwork" transform="translate(970,636) rotate(90)"/>
+  <use href="#knotwork" transform="translate(970,828) rotate(90)"/>
+  <use href="#knotwork" transform="translate(970,1020) rotate(90)"/>
+  <use href="#knotwork" transform="translate(970,1212) rotate(90)"/>
+  <use href="#shamrock" transform="translate(954,140) scale(1.4)"/>
+  <use href="#shamrock" transform="translate(954,280) scale(1.4)"/>
+  <use href="#shamrock" transform="translate(954,420) scale(1.4)"/>
+  <use href="#shamrock" transform="translate(954,560) scale(1.4)"/>
+  <use href="#shamrock" transform="translate(954,700) scale(1.4)"/>
+  <use href="#shamrock" transform="translate(954,840) scale(1.4)"/>
+  <use href="#shamrock" transform="translate(954,980) scale(1.4)"/>
+  <use href="#shamrock" transform="translate(954,1120) scale(1.4)"/>
+  <use href="#shamrock" transform="translate(954,1260) scale(1.4)"/>
+  <use href="#shamrock" transform="translate(954,1400) scale(1.4)"/>
+  <use href="#goldCoin" transform="translate(970,100)"/>
+  <use href="#goldCoin" transform="translate(970,200) scale(1.2)"/>
+  <use href="#goldCoin" transform="translate(970,320)"/>
+  <use href="#goldCoin" transform="translate(970,380) scale(1.2)"/>
+  <use href="#goldCoin" transform="translate(970,480)"/>
+  <use href="#goldCoin" transform="translate(970,540) scale(1.2)"/>
+  <use href="#goldCoin" transform="translate(970,620)"/>
+  <use href="#goldCoin" transform="translate(970,720) scale(1.2)"/>
+  <use href="#goldCoin" transform="translate(970,800)"/>
+  <use href="#goldCoin" transform="translate(970,900) scale(1.2)"/>
+  <use href="#goldCoin" transform="translate(970,1000)"/>
+  <use href="#goldCoin" transform="translate(970,1100) scale(1.2)"/>
+  <use href="#goldCoin" transform="translate(970,1200)"/>
+  <use href="#goldCoin" transform="translate(970,1300) scale(1.2)"/>
+  <use href="#goldCoinSm" transform="translate(984,160)"/>
+  <use href="#goldCoinSm" transform="translate(984,260)"/>
+  <use href="#goldCoinSm" transform="translate(984,360)"/>
+  <use href="#goldCoinSm" transform="translate(984,460)"/>
+  <use href="#goldCoinSm" transform="translate(984,560)"/>
+  <use href="#goldCoinSm" transform="translate(984,660)"/>
+  <use href="#goldCoinSm" transform="translate(984,760)"/>
+  <use href="#goldCoinSm" transform="translate(984,860)"/>
+  <use href="#goldCoinSm" transform="translate(984,960)"/>
+  <use href="#goldCoinSm" transform="translate(984,1060)"/>
+  <use href="#goldCoinSm" transform="translate(984,1160)"/>
+  <use href="#goldCoinSm" transform="translate(984,1260)"/>
+  <use href="#goldCoinSm" transform="translate(984,1360)"/>
+
+  <!-- CORNERS: pot of gold + coin spill -->
+  <g transform="translate(40,40)">
+    <use href="#pot" transform="translate(28,28) scale(0.9)"/>
+    <use href="#coinTrail" transform="translate(4,12) rotate(45)"/>
+    <use href="#shamrock" transform="translate(56,14) scale(1.4)"/>
+    <use href="#coinStack" transform="translate(20,56) scale(0.7)"/>
+  </g>
+  <g transform="translate(960,40)">
+    <use href="#pot" transform="translate(-28,28) scale(0.9)"/>
+    <use href="#coinTrail" transform="translate(-4,12) rotate(135) scale(-1,1)"/>
+    <use href="#shamrock" transform="translate(-56,14) scale(1.4)"/>
+    <use href="#coinStack" transform="translate(-20,56) scale(0.7)"/>
+  </g>
+  <g transform="translate(40,1460)">
+    <use href="#coinStack" transform="translate(28,-12)"/>
+    <use href="#coinTrail" transform="translate(4,-24)"/>
+    <use href="#shamrock" transform="translate(56,-14) scale(1.4)"/>
+    <use href="#goldCoin" transform="translate(20,-44) scale(1.3)"/>
+  </g>
+  <g transform="translate(960,1460)">
+    <use href="#coinStack" transform="translate(-28,-12)"/>
+    <use href="#coinTrail" transform="translate(-4,-24) scale(-1,1)"/>
+    <use href="#shamrock" transform="translate(-56,-14) scale(1.4)"/>
+    <use href="#goldCoin" transform="translate(-20,-44) scale(1.3)"/>
+  </g>
+
+  <path d="M60,55 L940,55 M60,1445 L940,1445 M55,60 L55,1440 M945,60 L945,1440" stroke="url(#goldStroke)" stroke-width="1.4" fill="none"/>
+</svg>

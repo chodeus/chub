@@ -1,0 +1,216 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1500" width="1000" height="1500">
+  <defs>
+    <linearGradient id="frameBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0a1a0e"/>
+      <stop offset="50%" stop-color="#040a05"/>
+      <stop offset="100%" stop-color="#020403"/>
+    </linearGradient>
+    <radialGradient id="pineG" cx="50%" cy="60%" r="55%">
+      <stop offset="0%" stop-color="#3a704a"/>
+      <stop offset="100%" stop-color="#0a2818"/>
+    </radialGradient>
+    <linearGradient id="trunkG" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#5a3818"/>
+      <stop offset="100%" stop-color="#1a0c04"/>
+    </linearGradient>
+    <radialGradient id="antlerG" cx="50%" cy="50%" r="60%">
+      <stop offset="0%" stop-color="#d4b890"/>
+      <stop offset="100%" stop-color="#604018"/>
+    </radialGradient>
+    <radialGradient id="lureFly" cx="40%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#f4d050"/>
+      <stop offset="55%" stop-color="#a04020"/>
+      <stop offset="100%" stop-color="#4a1808"/>
+    </radialGradient>
+    <linearGradient id="redPlaid" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#5a0810"/>
+      <stop offset="100%" stop-color="#8a1828"/>
+    </linearGradient>
+    <linearGradient id="greenPlaid" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0a3818"/>
+      <stop offset="100%" stop-color="#1a5028"/>
+    </linearGradient>
+  </defs>
+
+  <path d="M 0,0 L 1000,0 L 1000,1500 L 0,1500 Z M 60,60 L 60,1440 L 940,1440 L 940,60 Z" fill="url(#frameBg)" fill-rule="evenodd"/>
+
+  <g id="pineTree">
+    <path d="M-2,12 L2,12 L2,18 L-2,18 Z" fill="url(#trunkG)"/>
+    <path d="M-14,12 L14,12 L0,-4 Z" fill="url(#pineG)" stroke="#0a2818" stroke-width="0.4"/>
+    <path d="M-12,2 L12,2 L0,-12 Z" fill="url(#pineG)" stroke="#0a2818" stroke-width="0.4"/>
+    <path d="M-10,-6 L10,-6 L0,-20 Z" fill="url(#pineG)" stroke="#0a2818" stroke-width="0.4"/>
+    <path d="M-8,-14 L8,-14 L0,-26 Z" fill="url(#pineG)" stroke="#0a2818" stroke-width="0.4"/>
+    <ellipse cx="-4" cy="-4" rx="2" ry="6" fill="#5aa070" opacity="0.4"/>
+    <ellipse cx="-3" cy="6" rx="2" ry="5" fill="#5aa070" opacity="0.4"/>
+  </g>
+
+  <g id="antlerRack">
+    <path d="M-2,18 L-2,2 L-6,-6 L-12,-12 L-10,-18 L-6,-14 L-4,-18 M-2,2 L-10,-2 L-16,-4 L-14,-10 L-8,-8" stroke="url(#antlerG)" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+    <path d="M2,18 L2,2 L6,-6 L12,-12 L10,-18 L6,-14 L4,-18 M2,2 L10,-2 L16,-4 L14,-10 L8,-8" stroke="url(#antlerG)" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+    <path d="M-2,2 L2,2 M-2,18 L2,18" stroke="url(#antlerG)" stroke-width="2.2"/>
+    <circle cx="-12" cy="-12" r="1.2" fill="url(#antlerG)"/>
+    <circle cx="12" cy="-12" r="1.2" fill="url(#antlerG)"/>
+    <circle cx="-10" cy="-18" r="1.4" fill="url(#antlerG)"/>
+    <circle cx="10" cy="-18" r="1.4" fill="url(#antlerG)"/>
+    <circle cx="-16" cy="-4" r="1.4" fill="url(#antlerG)"/>
+    <circle cx="16" cy="-4" r="1.4" fill="url(#antlerG)"/>
+  </g>
+
+  <g id="fishingLure">
+    <ellipse cx="0" cy="0" rx="6" ry="3" fill="url(#lureFly)" stroke="#4a1808" stroke-width="0.4"/>
+    <path d="M-2,-4 L-6,-8 L-2,-4 M2,-4 L6,-8 M-2,4 L-6,8 M2,4 L6,8" stroke="url(#lureFly)" stroke-width="0.8" fill="none"/>
+    <path d="M-6,-8 L-8,-12 M-6,-8 L-4,-12 M6,-8 L8,-12 M6,-8 L4,-12 M-6,8 L-8,12 M-6,8 L-4,12 M6,8 L8,12 M6,8 L4,12" stroke="url(#lureFly)" stroke-width="0.5" fill="none"/>
+    <circle cx="-4" cy="0" r="1.4" fill="#604018"/>
+    <circle cx="4" cy="0" r="1.4" fill="#604018"/>
+    <path d="M6,0 L12,2 L14,-2 L8,-2 Z" fill="url(#antlerG)" stroke="#604018" stroke-width="0.4"/>
+  </g>
+
+  <g id="plaidDiamond">
+    <path d="M0,-10 L10,0 L0,10 L-10,0 Z" fill="url(#redPlaid)" stroke="#2a0408" stroke-width="0.4"/>
+    <path d="M0,-6 L6,0 L0,6 L-6,0 Z" fill="url(#greenPlaid)"/>
+    <path d="M0,-10 L0,10 M-10,0 L10,0" stroke="#fff" stroke-width="0.4" opacity="0.4"/>
+  </g>
+
+  <g id="plaidStrip">
+    <use href="#plaidDiamond" transform="translate(0,0)"/>
+    <use href="#plaidDiamond" transform="translate(20,0) scale(0.7)"/>
+    <use href="#plaidDiamond" transform="translate(35,0)"/>
+    <use href="#plaidDiamond" transform="translate(55,0) scale(0.7)"/>
+    <use href="#plaidDiamond" transform="translate(70,0)"/>
+    <use href="#plaidDiamond" transform="translate(90,0) scale(0.7)"/>
+    <use href="#plaidDiamond" transform="translate(105,0)"/>
+  </g>
+
+  <!-- TOP -->
+  <use href="#plaidStrip" transform="translate(60,42)"/>
+  <use href="#plaidStrip" transform="translate(180,42)"/>
+  <use href="#plaidStrip" transform="translate(300,42)"/>
+  <use href="#plaidStrip" transform="translate(420,42)"/>
+  <use href="#plaidStrip" transform="translate(540,42)"/>
+  <use href="#plaidStrip" transform="translate(660,42)"/>
+  <use href="#plaidStrip" transform="translate(780,42)"/>
+  <use href="#plaidStrip" transform="translate(820,42)"/>
+  <use href="#pineTree" transform="translate(140,52) rotate(180)"/>
+  <use href="#pineTree" transform="translate(260,52) rotate(180)"/>
+  <use href="#pineTree" transform="translate(380,52) rotate(180)"/>
+  <use href="#pineTree" transform="translate(500,52) rotate(180)"/>
+  <use href="#pineTree" transform="translate(620,52) rotate(180)"/>
+  <use href="#pineTree" transform="translate(740,52) rotate(180)"/>
+  <use href="#pineTree" transform="translate(860,52) rotate(180)"/>
+  <use href="#fishingLure" transform="translate(200,22)"/>
+  <use href="#fishingLure" transform="translate(360,22)"/>
+  <use href="#fishingLure" transform="translate(520,22)"/>
+  <use href="#fishingLure" transform="translate(680,22)"/>
+  <use href="#fishingLure" transform="translate(840,22)"/>
+
+  <!-- BOTTOM -->
+  <use href="#plaidStrip" transform="translate(60,1458)"/>
+  <use href="#plaidStrip" transform="translate(180,1458)"/>
+  <use href="#plaidStrip" transform="translate(300,1458)"/>
+  <use href="#plaidStrip" transform="translate(420,1458)"/>
+  <use href="#plaidStrip" transform="translate(540,1458)"/>
+  <use href="#plaidStrip" transform="translate(660,1458)"/>
+  <use href="#plaidStrip" transform="translate(780,1458)"/>
+  <use href="#plaidStrip" transform="translate(820,1458)"/>
+  <use href="#pineTree" transform="translate(140,1448)"/>
+  <use href="#pineTree" transform="translate(260,1448)"/>
+  <use href="#pineTree" transform="translate(380,1448)"/>
+  <use href="#pineTree" transform="translate(500,1448)"/>
+  <use href="#pineTree" transform="translate(620,1448)"/>
+  <use href="#pineTree" transform="translate(740,1448)"/>
+  <use href="#pineTree" transform="translate(860,1448)"/>
+  <use href="#fishingLure" transform="translate(200,1478)"/>
+  <use href="#fishingLure" transform="translate(360,1478)"/>
+  <use href="#fishingLure" transform="translate(520,1478)"/>
+  <use href="#fishingLure" transform="translate(680,1478)"/>
+  <use href="#fishingLure" transform="translate(840,1478)"/>
+
+  <!-- LEFT -->
+  <use href="#plaidStrip" transform="translate(42,60) rotate(90)"/>
+  <use href="#plaidStrip" transform="translate(42,180) rotate(90)"/>
+  <use href="#plaidStrip" transform="translate(42,300) rotate(90)"/>
+  <use href="#plaidStrip" transform="translate(42,420) rotate(90)"/>
+  <use href="#plaidStrip" transform="translate(42,540) rotate(90)"/>
+  <use href="#plaidStrip" transform="translate(42,660) rotate(90)"/>
+  <use href="#plaidStrip" transform="translate(42,780) rotate(90)"/>
+  <use href="#plaidStrip" transform="translate(42,900) rotate(90)"/>
+  <use href="#plaidStrip" transform="translate(42,1020) rotate(90)"/>
+  <use href="#plaidStrip" transform="translate(42,1140) rotate(90)"/>
+  <use href="#plaidStrip" transform="translate(42,1260) rotate(90)"/>
+  <use href="#plaidStrip" transform="translate(42,1320) rotate(90)"/>
+  <use href="#pineTree" transform="translate(52,140) rotate(90)"/>
+  <use href="#pineTree" transform="translate(52,280) rotate(90)"/>
+  <use href="#pineTree" transform="translate(52,420) rotate(90)"/>
+  <use href="#pineTree" transform="translate(52,560) rotate(90)"/>
+  <use href="#pineTree" transform="translate(52,700) rotate(90)"/>
+  <use href="#pineTree" transform="translate(52,840) rotate(90)"/>
+  <use href="#pineTree" transform="translate(52,980) rotate(90)"/>
+  <use href="#pineTree" transform="translate(52,1120) rotate(90)"/>
+  <use href="#pineTree" transform="translate(52,1260) rotate(90)"/>
+  <use href="#pineTree" transform="translate(52,1400) rotate(90)"/>
+  <use href="#fishingLure" transform="translate(22,220)"/>
+  <use href="#fishingLure" transform="translate(22,380)"/>
+  <use href="#fishingLure" transform="translate(22,540)"/>
+  <use href="#fishingLure" transform="translate(22,700)"/>
+  <use href="#fishingLure" transform="translate(22,860)"/>
+  <use href="#fishingLure" transform="translate(22,1020)"/>
+  <use href="#fishingLure" transform="translate(22,1180)"/>
+  <use href="#fishingLure" transform="translate(22,1340)"/>
+
+  <!-- RIGHT -->
+  <use href="#plaidStrip" transform="translate(958,60) rotate(90)"/>
+  <use href="#plaidStrip" transform="translate(958,180) rotate(90)"/>
+  <use href="#plaidStrip" transform="translate(958,300) rotate(90)"/>
+  <use href="#plaidStrip" transform="translate(958,420) rotate(90)"/>
+  <use href="#plaidStrip" transform="translate(958,540) rotate(90)"/>
+  <use href="#plaidStrip" transform="translate(958,660) rotate(90)"/>
+  <use href="#plaidStrip" transform="translate(958,780) rotate(90)"/>
+  <use href="#plaidStrip" transform="translate(958,900) rotate(90)"/>
+  <use href="#plaidStrip" transform="translate(958,1020) rotate(90)"/>
+  <use href="#plaidStrip" transform="translate(958,1140) rotate(90)"/>
+  <use href="#plaidStrip" transform="translate(958,1260) rotate(90)"/>
+  <use href="#plaidStrip" transform="translate(958,1320) rotate(90)"/>
+  <use href="#pineTree" transform="translate(948,140) rotate(270)"/>
+  <use href="#pineTree" transform="translate(948,280) rotate(270)"/>
+  <use href="#pineTree" transform="translate(948,420) rotate(270)"/>
+  <use href="#pineTree" transform="translate(948,560) rotate(270)"/>
+  <use href="#pineTree" transform="translate(948,700) rotate(270)"/>
+  <use href="#pineTree" transform="translate(948,840) rotate(270)"/>
+  <use href="#pineTree" transform="translate(948,980) rotate(270)"/>
+  <use href="#pineTree" transform="translate(948,1120) rotate(270)"/>
+  <use href="#pineTree" transform="translate(948,1260) rotate(270)"/>
+  <use href="#pineTree" transform="translate(948,1400) rotate(270)"/>
+  <use href="#fishingLure" transform="translate(978,220)"/>
+  <use href="#fishingLure" transform="translate(978,380)"/>
+  <use href="#fishingLure" transform="translate(978,540)"/>
+  <use href="#fishingLure" transform="translate(978,700)"/>
+  <use href="#fishingLure" transform="translate(978,860)"/>
+  <use href="#fishingLure" transform="translate(978,1020)"/>
+  <use href="#fishingLure" transform="translate(978,1180)"/>
+  <use href="#fishingLure" transform="translate(978,1340)"/>
+
+  <!-- CORNERS: antlers -->
+  <g transform="translate(40,40)">
+    <use href="#antlerRack" transform="translate(30,40) scale(1.4)"/>
+    <use href="#pineTree" transform="translate(60,52) scale(1.2)"/>
+    <use href="#fishingLure" transform="translate(70,20)"/>
+  </g>
+  <g transform="translate(960,40)">
+    <use href="#antlerRack" transform="translate(-30,40) scale(1.4)"/>
+    <use href="#pineTree" transform="translate(-60,52) scale(1.2)"/>
+    <use href="#fishingLure" transform="translate(-70,20)"/>
+  </g>
+  <g transform="translate(40,1460)">
+    <use href="#antlerRack" transform="translate(30,-40) scale(1.4) scale(1,-1)"/>
+    <use href="#pineTree" transform="translate(60,-30) scale(1.2)"/>
+    <use href="#fishingLure" transform="translate(70,-20)"/>
+  </g>
+  <g transform="translate(960,1460)">
+    <use href="#antlerRack" transform="translate(-30,-40) scale(1.4) scale(1,-1)"/>
+    <use href="#pineTree" transform="translate(-60,-30) scale(1.2)"/>
+    <use href="#fishingLure" transform="translate(-70,-20)"/>
+  </g>
+
+  <path d="M60,55 L940,55 M60,1445 L940,1445 M55,60 L55,1440 M945,60 L945,1440" stroke="#3a704a" stroke-width="1.4" fill="none"/>
+  <path d="M60,57 L940,57 M60,1443 L940,1443 M57,60 L57,1440 M943,60 L943,1440" stroke="#8a1828" stroke-width="0.4" fill="none"/>
+</svg>

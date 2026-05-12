@@ -1,0 +1,316 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1500" width="1000" height="1500">
+  <defs>
+    <linearGradient id="frameBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#2a0820"/>
+      <stop offset="50%" stop-color="#160410"/>
+      <stop offset="100%" stop-color="#080208"/>
+    </linearGradient>
+    <radialGradient id="hotPink" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#ffa8d0"/>
+      <stop offset="55%" stop-color="#e8408a"/>
+      <stop offset="100%" stop-color="#80104a"/>
+    </radialGradient>
+    <radialGradient id="coral" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#ffb898"/>
+      <stop offset="55%" stop-color="#f06848"/>
+      <stop offset="100%" stop-color="#8a2018"/>
+    </radialGradient>
+    <radialGradient id="goldBold" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#fff4b0"/>
+      <stop offset="55%" stop-color="#e8c440"/>
+      <stop offset="100%" stop-color="#604010"/>
+    </radialGradient>
+    <radialGradient id="centerPink" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#fff4b0"/>
+      <stop offset="100%" stop-color="#80104a"/>
+    </radialGradient>
+    <linearGradient id="goldStroke" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#604010"/>
+      <stop offset="50%" stop-color="#f0d050"/>
+      <stop offset="100%" stop-color="#8a6520"/>
+    </linearGradient>
+    <radialGradient id="leafBold" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#a0d090"/>
+      <stop offset="55%" stop-color="#487848"/>
+      <stop offset="100%" stop-color="#1a3018"/>
+    </radialGradient>
+  </defs>
+
+  <path d="M 0,0 L 1000,0 L 1000,1500 L 0,1500 Z M 60,60 L 60,1440 L 940,1440 L 940,60 Z" fill="url(#frameBg)" fill-rule="evenodd"/>
+
+  <g id="stylizedBloom">
+    <g>
+      <ellipse cx="0" cy="-14" rx="7" ry="11" fill="url(#hotPink)" stroke="#80104a" stroke-width="0.6"/>
+      <ellipse cx="0" cy="-14" rx="7" ry="11" fill="url(#hotPink)" stroke="#80104a" stroke-width="0.6" transform="rotate(72)"/>
+      <ellipse cx="0" cy="-14" rx="7" ry="11" fill="url(#hotPink)" stroke="#80104a" stroke-width="0.6" transform="rotate(144)"/>
+      <ellipse cx="0" cy="-14" rx="7" ry="11" fill="url(#hotPink)" stroke="#80104a" stroke-width="0.6" transform="rotate(216)"/>
+      <ellipse cx="0" cy="-14" rx="7" ry="11" fill="url(#hotPink)" stroke="#80104a" stroke-width="0.6" transform="rotate(288)"/>
+    </g>
+    <circle cx="0" cy="0" r="6" fill="url(#goldBold)" stroke="#604010" stroke-width="0.6"/>
+    <circle cx="0" cy="0" r="4" fill="url(#centerPink)"/>
+    <path d="M0,-3 L0,3 M-3,0 L3,0 M-2,-2 L2,2 M-2,2 L2,-2" stroke="#604010" stroke-width="0.4"/>
+  </g>
+
+  <g id="stylizedBloomCoral">
+    <g>
+      <ellipse cx="0" cy="-12" rx="6" ry="10" fill="url(#coral)" stroke="#8a2018" stroke-width="0.5"/>
+      <ellipse cx="0" cy="-12" rx="6" ry="10" fill="url(#coral)" stroke="#8a2018" stroke-width="0.5" transform="rotate(72)"/>
+      <ellipse cx="0" cy="-12" rx="6" ry="10" fill="url(#coral)" stroke="#8a2018" stroke-width="0.5" transform="rotate(144)"/>
+      <ellipse cx="0" cy="-12" rx="6" ry="10" fill="url(#coral)" stroke="#8a2018" stroke-width="0.5" transform="rotate(216)"/>
+      <ellipse cx="0" cy="-12" rx="6" ry="10" fill="url(#coral)" stroke="#8a2018" stroke-width="0.5" transform="rotate(288)"/>
+    </g>
+    <circle cx="0" cy="0" r="5" fill="url(#goldBold)" stroke="#604010" stroke-width="0.5"/>
+  </g>
+
+  <g id="geomLeaf">
+    <path d="M0,18 L0,0 L-10,-8 L-12,-22 L0,-26 L12,-22 L10,-8 Z" fill="url(#leafBold)" stroke="#1a3018" stroke-width="0.6"/>
+    <path d="M0,-26 L0,18" stroke="#1a3018" stroke-width="0.5"/>
+    <path d="M0,-16 L-10,-12 M0,-16 L10,-12 M0,-6 L-10,-8 M0,-6 L10,-8 M0,4 L-8,0 M0,4 L8,0" stroke="#1a3018" stroke-width="0.4"/>
+  </g>
+
+  <g id="geomLeafSm">
+    <path d="M0,12 L0,0 L-6,-4 L-8,-14 L0,-16 L8,-14 L6,-4 Z" fill="url(#leafBold)" stroke="#1a3018" stroke-width="0.4"/>
+    <path d="M0,-16 L0,12" stroke="#1a3018" stroke-width="0.3"/>
+  </g>
+
+  <g id="goldAccent">
+    <path d="M0,-10 L3,-3 L10,0 L3,3 L0,10 L-3,3 L-10,0 L-3,-3 Z" fill="url(#goldBold)" stroke="#604010" stroke-width="0.5"/>
+    <circle cx="0" cy="0" r="1" fill="#fff4b0"/>
+  </g>
+
+  <g id="goldAccentRound">
+    <circle cx="0" cy="0" r="6" fill="url(#goldBold)" stroke="#604010" stroke-width="0.5"/>
+    <circle cx="0" cy="0" r="4" fill="none" stroke="#604010" stroke-width="0.4"/>
+    <circle cx="-2" cy="-2" r="1.4" fill="#fff4b0" opacity="0.8"/>
+  </g>
+
+  <g id="goldStripe">
+    <rect x="0" y="-1.5" width="40" height="3" fill="url(#goldBold)" stroke="#604010" stroke-width="0.3"/>
+  </g>
+
+  <!-- TOP -->
+  <use href="#goldStripe" transform="translate(60,40)"/>
+  <use href="#goldStripe" transform="translate(120,40)"/>
+  <use href="#goldStripe" transform="translate(180,40)"/>
+  <use href="#goldStripe" transform="translate(240,40)"/>
+  <use href="#goldStripe" transform="translate(300,40)"/>
+  <use href="#goldStripe" transform="translate(360,40)"/>
+  <use href="#goldStripe" transform="translate(420,40)"/>
+  <use href="#goldStripe" transform="translate(480,40)"/>
+  <use href="#goldStripe" transform="translate(540,40)"/>
+  <use href="#goldStripe" transform="translate(600,40)"/>
+  <use href="#goldStripe" transform="translate(660,40)"/>
+  <use href="#goldStripe" transform="translate(720,40)"/>
+  <use href="#goldStripe" transform="translate(780,40)"/>
+  <use href="#goldStripe" transform="translate(840,40)"/>
+  <use href="#goldStripe" transform="translate(900,40)"/>
+  <use href="#stylizedBloom" transform="translate(140,28)"/>
+  <use href="#stylizedBloomCoral" transform="translate(260,30)"/>
+  <use href="#stylizedBloom" transform="translate(380,28)"/>
+  <use href="#stylizedBloomCoral" transform="translate(500,30)"/>
+  <use href="#stylizedBloom" transform="translate(620,28)"/>
+  <use href="#stylizedBloomCoral" transform="translate(740,30)"/>
+  <use href="#stylizedBloom" transform="translate(860,28)"/>
+  <use href="#geomLeaf" transform="translate(200,52) rotate(180)"/>
+  <use href="#geomLeaf" transform="translate(320,52) rotate(180)"/>
+  <use href="#geomLeaf" transform="translate(440,52) rotate(180)"/>
+  <use href="#geomLeaf" transform="translate(560,52) rotate(180)"/>
+  <use href="#geomLeaf" transform="translate(680,52) rotate(180)"/>
+  <use href="#geomLeaf" transform="translate(800,52) rotate(180)"/>
+  <use href="#goldAccent" transform="translate(180,18)"/>
+  <use href="#goldAccent" transform="translate(300,18)"/>
+  <use href="#goldAccent" transform="translate(420,18)"/>
+  <use href="#goldAccent" transform="translate(540,18)"/>
+  <use href="#goldAccent" transform="translate(660,18)"/>
+  <use href="#goldAccent" transform="translate(780,18)"/>
+  <use href="#goldAccent" transform="translate(900,18)"/>
+
+  <!-- BOTTOM -->
+  <use href="#goldStripe" transform="translate(60,1460)"/>
+  <use href="#goldStripe" transform="translate(120,1460)"/>
+  <use href="#goldStripe" transform="translate(180,1460)"/>
+  <use href="#goldStripe" transform="translate(240,1460)"/>
+  <use href="#goldStripe" transform="translate(300,1460)"/>
+  <use href="#goldStripe" transform="translate(360,1460)"/>
+  <use href="#goldStripe" transform="translate(420,1460)"/>
+  <use href="#goldStripe" transform="translate(480,1460)"/>
+  <use href="#goldStripe" transform="translate(540,1460)"/>
+  <use href="#goldStripe" transform="translate(600,1460)"/>
+  <use href="#goldStripe" transform="translate(660,1460)"/>
+  <use href="#goldStripe" transform="translate(720,1460)"/>
+  <use href="#goldStripe" transform="translate(780,1460)"/>
+  <use href="#goldStripe" transform="translate(840,1460)"/>
+  <use href="#goldStripe" transform="translate(900,1460)"/>
+  <use href="#stylizedBloom" transform="translate(140,1472)"/>
+  <use href="#stylizedBloomCoral" transform="translate(260,1470)"/>
+  <use href="#stylizedBloom" transform="translate(380,1472)"/>
+  <use href="#stylizedBloomCoral" transform="translate(500,1470)"/>
+  <use href="#stylizedBloom" transform="translate(620,1472)"/>
+  <use href="#stylizedBloomCoral" transform="translate(740,1470)"/>
+  <use href="#stylizedBloom" transform="translate(860,1472)"/>
+  <use href="#geomLeaf" transform="translate(200,1448)"/>
+  <use href="#geomLeaf" transform="translate(320,1448)"/>
+  <use href="#geomLeaf" transform="translate(440,1448)"/>
+  <use href="#geomLeaf" transform="translate(560,1448)"/>
+  <use href="#geomLeaf" transform="translate(680,1448)"/>
+  <use href="#geomLeaf" transform="translate(800,1448)"/>
+  <use href="#goldAccent" transform="translate(180,1482)"/>
+  <use href="#goldAccent" transform="translate(300,1482)"/>
+  <use href="#goldAccent" transform="translate(420,1482)"/>
+  <use href="#goldAccent" transform="translate(540,1482)"/>
+  <use href="#goldAccent" transform="translate(660,1482)"/>
+  <use href="#goldAccent" transform="translate(780,1482)"/>
+  <use href="#goldAccent" transform="translate(900,1482)"/>
+
+  <!-- LEFT -->
+  <use href="#goldStripe" transform="translate(40,60) rotate(90)"/>
+  <use href="#goldStripe" transform="translate(40,120) rotate(90)"/>
+  <use href="#goldStripe" transform="translate(40,180) rotate(90)"/>
+  <use href="#goldStripe" transform="translate(40,240) rotate(90)"/>
+  <use href="#goldStripe" transform="translate(40,300) rotate(90)"/>
+  <use href="#goldStripe" transform="translate(40,360) rotate(90)"/>
+  <use href="#goldStripe" transform="translate(40,420) rotate(90)"/>
+  <use href="#goldStripe" transform="translate(40,480) rotate(90)"/>
+  <use href="#goldStripe" transform="translate(40,540) rotate(90)"/>
+  <use href="#goldStripe" transform="translate(40,600) rotate(90)"/>
+  <use href="#goldStripe" transform="translate(40,660) rotate(90)"/>
+  <use href="#goldStripe" transform="translate(40,720) rotate(90)"/>
+  <use href="#goldStripe" transform="translate(40,780) rotate(90)"/>
+  <use href="#goldStripe" transform="translate(40,840) rotate(90)"/>
+  <use href="#goldStripe" transform="translate(40,900) rotate(90)"/>
+  <use href="#goldStripe" transform="translate(40,960) rotate(90)"/>
+  <use href="#goldStripe" transform="translate(40,1020) rotate(90)"/>
+  <use href="#goldStripe" transform="translate(40,1080) rotate(90)"/>
+  <use href="#goldStripe" transform="translate(40,1140) rotate(90)"/>
+  <use href="#goldStripe" transform="translate(40,1200) rotate(90)"/>
+  <use href="#goldStripe" transform="translate(40,1260) rotate(90)"/>
+  <use href="#goldStripe" transform="translate(40,1320) rotate(90)"/>
+  <use href="#goldStripe" transform="translate(40,1380) rotate(90)"/>
+  <use href="#stylizedBloom" transform="translate(28,140)"/>
+  <use href="#stylizedBloomCoral" transform="translate(30,260)"/>
+  <use href="#stylizedBloom" transform="translate(28,380)"/>
+  <use href="#stylizedBloomCoral" transform="translate(30,500)"/>
+  <use href="#stylizedBloom" transform="translate(28,620)"/>
+  <use href="#stylizedBloomCoral" transform="translate(30,740)"/>
+  <use href="#stylizedBloom" transform="translate(28,860)"/>
+  <use href="#stylizedBloomCoral" transform="translate(30,980)"/>
+  <use href="#stylizedBloom" transform="translate(28,1100)"/>
+  <use href="#stylizedBloomCoral" transform="translate(30,1220)"/>
+  <use href="#stylizedBloom" transform="translate(28,1340)"/>
+  <use href="#geomLeaf" transform="translate(52,200) rotate(90)"/>
+  <use href="#geomLeaf" transform="translate(52,320) rotate(90)"/>
+  <use href="#geomLeaf" transform="translate(52,440) rotate(90)"/>
+  <use href="#geomLeaf" transform="translate(52,560) rotate(90)"/>
+  <use href="#geomLeaf" transform="translate(52,680) rotate(90)"/>
+  <use href="#geomLeaf" transform="translate(52,800) rotate(90)"/>
+  <use href="#geomLeaf" transform="translate(52,920) rotate(90)"/>
+  <use href="#geomLeaf" transform="translate(52,1040) rotate(90)"/>
+  <use href="#geomLeaf" transform="translate(52,1160) rotate(90)"/>
+  <use href="#geomLeaf" transform="translate(52,1280) rotate(90)"/>
+  <use href="#geomLeaf" transform="translate(52,1400) rotate(90)"/>
+  <use href="#goldAccentRound" transform="translate(18,200)"/>
+  <use href="#goldAccentRound" transform="translate(18,400)"/>
+  <use href="#goldAccentRound" transform="translate(18,600)"/>
+  <use href="#goldAccentRound" transform="translate(18,800)"/>
+  <use href="#goldAccentRound" transform="translate(18,1000)"/>
+  <use href="#goldAccentRound" transform="translate(18,1200)"/>
+  <use href="#goldAccentRound" transform="translate(18,1400)"/>
+  <use href="#geomLeafSm" transform="translate(14,300) rotate(90)"/>
+  <use href="#geomLeafSm" transform="translate(14,500) rotate(90)"/>
+  <use href="#geomLeafSm" transform="translate(14,700) rotate(90)"/>
+  <use href="#geomLeafSm" transform="translate(14,900) rotate(90)"/>
+  <use href="#geomLeafSm" transform="translate(14,1100) rotate(90)"/>
+  <use href="#geomLeafSm" transform="translate(14,1300) rotate(90)"/>
+
+  <!-- RIGHT -->
+  <use href="#goldStripe" transform="translate(960,60) rotate(90)"/>
+  <use href="#goldStripe" transform="translate(960,120) rotate(90)"/>
+  <use href="#goldStripe" transform="translate(960,180) rotate(90)"/>
+  <use href="#goldStripe" transform="translate(960,240) rotate(90)"/>
+  <use href="#goldStripe" transform="translate(960,300) rotate(90)"/>
+  <use href="#goldStripe" transform="translate(960,360) rotate(90)"/>
+  <use href="#goldStripe" transform="translate(960,420) rotate(90)"/>
+  <use href="#goldStripe" transform="translate(960,480) rotate(90)"/>
+  <use href="#goldStripe" transform="translate(960,540) rotate(90)"/>
+  <use href="#goldStripe" transform="translate(960,600) rotate(90)"/>
+  <use href="#goldStripe" transform="translate(960,660) rotate(90)"/>
+  <use href="#goldStripe" transform="translate(960,720) rotate(90)"/>
+  <use href="#goldStripe" transform="translate(960,780) rotate(90)"/>
+  <use href="#goldStripe" transform="translate(960,840) rotate(90)"/>
+  <use href="#goldStripe" transform="translate(960,900) rotate(90)"/>
+  <use href="#goldStripe" transform="translate(960,960) rotate(90)"/>
+  <use href="#goldStripe" transform="translate(960,1020) rotate(90)"/>
+  <use href="#goldStripe" transform="translate(960,1080) rotate(90)"/>
+  <use href="#goldStripe" transform="translate(960,1140) rotate(90)"/>
+  <use href="#goldStripe" transform="translate(960,1200) rotate(90)"/>
+  <use href="#goldStripe" transform="translate(960,1260) rotate(90)"/>
+  <use href="#goldStripe" transform="translate(960,1320) rotate(90)"/>
+  <use href="#goldStripe" transform="translate(960,1380) rotate(90)"/>
+  <use href="#stylizedBloom" transform="translate(972,140)"/>
+  <use href="#stylizedBloomCoral" transform="translate(970,260)"/>
+  <use href="#stylizedBloom" transform="translate(972,380)"/>
+  <use href="#stylizedBloomCoral" transform="translate(970,500)"/>
+  <use href="#stylizedBloom" transform="translate(972,620)"/>
+  <use href="#stylizedBloomCoral" transform="translate(970,740)"/>
+  <use href="#stylizedBloom" transform="translate(972,860)"/>
+  <use href="#stylizedBloomCoral" transform="translate(970,980)"/>
+  <use href="#stylizedBloom" transform="translate(972,1100)"/>
+  <use href="#stylizedBloomCoral" transform="translate(970,1220)"/>
+  <use href="#stylizedBloom" transform="translate(972,1340)"/>
+  <use href="#geomLeaf" transform="translate(948,200) rotate(270)"/>
+  <use href="#geomLeaf" transform="translate(948,320) rotate(270)"/>
+  <use href="#geomLeaf" transform="translate(948,440) rotate(270)"/>
+  <use href="#geomLeaf" transform="translate(948,560) rotate(270)"/>
+  <use href="#geomLeaf" transform="translate(948,680) rotate(270)"/>
+  <use href="#geomLeaf" transform="translate(948,800) rotate(270)"/>
+  <use href="#geomLeaf" transform="translate(948,920) rotate(270)"/>
+  <use href="#geomLeaf" transform="translate(948,1040) rotate(270)"/>
+  <use href="#geomLeaf" transform="translate(948,1160) rotate(270)"/>
+  <use href="#geomLeaf" transform="translate(948,1280) rotate(270)"/>
+  <use href="#geomLeaf" transform="translate(948,1400) rotate(270)"/>
+  <use href="#goldAccentRound" transform="translate(982,200)"/>
+  <use href="#goldAccentRound" transform="translate(982,400)"/>
+  <use href="#goldAccentRound" transform="translate(982,600)"/>
+  <use href="#goldAccentRound" transform="translate(982,800)"/>
+  <use href="#goldAccentRound" transform="translate(982,1000)"/>
+  <use href="#goldAccentRound" transform="translate(982,1200)"/>
+  <use href="#goldAccentRound" transform="translate(982,1400)"/>
+  <use href="#geomLeafSm" transform="translate(986,300) rotate(270)"/>
+  <use href="#geomLeafSm" transform="translate(986,500) rotate(270)"/>
+  <use href="#geomLeafSm" transform="translate(986,700) rotate(270)"/>
+  <use href="#geomLeafSm" transform="translate(986,900) rotate(270)"/>
+  <use href="#geomLeafSm" transform="translate(986,1100) rotate(270)"/>
+  <use href="#geomLeafSm" transform="translate(986,1300) rotate(270)"/>
+
+  <!-- CORNERS -->
+  <g transform="translate(40,40)">
+    <use href="#stylizedBloom" transform="translate(20,20) scale(1.4)"/>
+    <use href="#stylizedBloomCoral" transform="translate(58,18) scale(1.1)"/>
+    <use href="#geomLeaf" transform="translate(58,52) rotate(135)"/>
+    <use href="#geomLeaf" transform="translate(18,58) rotate(225)"/>
+    <use href="#goldAccent" transform="translate(72,40)"/>
+  </g>
+  <g transform="translate(960,40)">
+    <use href="#stylizedBloom" transform="translate(-20,20) scale(1.4)"/>
+    <use href="#stylizedBloomCoral" transform="translate(-58,18) scale(1.1)"/>
+    <use href="#geomLeaf" transform="translate(-58,52) rotate(225)"/>
+    <use href="#geomLeaf" transform="translate(-18,58) rotate(135)"/>
+    <use href="#goldAccent" transform="translate(-72,40)"/>
+  </g>
+  <g transform="translate(40,1460)">
+    <use href="#stylizedBloom" transform="translate(20,-20) scale(1.4)"/>
+    <use href="#stylizedBloomCoral" transform="translate(58,-18) scale(1.1)"/>
+    <use href="#geomLeaf" transform="translate(58,-52) rotate(45)"/>
+    <use href="#geomLeaf" transform="translate(18,-58) rotate(315)"/>
+    <use href="#goldAccent" transform="translate(72,-40)"/>
+  </g>
+  <g transform="translate(960,1460)">
+    <use href="#stylizedBloom" transform="translate(-20,-20) scale(1.4)"/>
+    <use href="#stylizedBloomCoral" transform="translate(-58,-18) scale(1.1)"/>
+    <use href="#geomLeaf" transform="translate(-58,-52) rotate(315)"/>
+    <use href="#geomLeaf" transform="translate(-18,-58) rotate(45)"/>
+    <use href="#goldAccent" transform="translate(-72,-40)"/>
+  </g>
+
+  <path d="M60,55 L940,55 M60,1445 L940,1445 M55,60 L55,1440 M945,60 L945,1440" stroke="url(#goldBold)" stroke-width="1.6" fill="none"/>
+</svg>

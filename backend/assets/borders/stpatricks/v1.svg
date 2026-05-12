@@ -1,0 +1,216 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1500" width="1000" height="1500">
+  <defs>
+    <linearGradient id="frameBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#04200c"/>
+      <stop offset="50%" stop-color="#021006"/>
+      <stop offset="100%" stop-color="#010803"/>
+    </linearGradient>
+    <radialGradient id="emerald" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#90e090"/>
+      <stop offset="55%" stop-color="#1f9028"/>
+      <stop offset="100%" stop-color="#04401c"/>
+    </radialGradient>
+    <linearGradient id="goldStroke" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6b4f15"/>
+      <stop offset="50%" stop-color="#f0d05a"/>
+      <stop offset="100%" stop-color="#8a6520"/>
+    </linearGradient>
+    <radialGradient id="gold" cx="50%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#fff0a8"/>
+      <stop offset="55%" stop-color="#d4a824"/>
+      <stop offset="100%" stop-color="#604010"/>
+    </radialGradient>
+    <radialGradient id="horseshoe" cx="50%" cy="30%" r="65%">
+      <stop offset="0%" stop-color="#fff0a8"/>
+      <stop offset="55%" stop-color="#d4a824"/>
+      <stop offset="100%" stop-color="#604010"/>
+    </radialGradient>
+  </defs>
+
+  <path d="M 0,0 L 1000,0 L 1000,1500 L 0,1500 Z M 60,60 L 60,1440 L 940,1440 L 940,60 Z" fill="url(#frameBg)" fill-rule="evenodd"/>
+
+  <g id="shamrock">
+    <path d="M0,4 C-2,-4 -10,-6 -10,2 C-10,8 -4,8 0,4 Z" fill="url(#emerald)" stroke="#04401c" stroke-width="0.4"/>
+    <path d="M0,4 C2,-4 10,-6 10,2 C10,8 4,8 0,4 Z" fill="url(#emerald)" stroke="#04401c" stroke-width="0.4"/>
+    <path d="M0,4 C-4,-2 -6,-10 0,-12 C6,-10 4,-2 0,4 Z" fill="url(#emerald)" stroke="#04401c" stroke-width="0.4"/>
+    <path d="M0,4 L0,18" stroke="#04401c" stroke-width="1.2"/>
+    <path d="M-4,1 Q-2,2 0,4 M4,1 Q2,2 0,4 M0,-4 Q0,0 0,4" stroke="#04401c" stroke-width="0.3" fill="none"/>
+  </g>
+
+  <g id="fourLeaf">
+    <path d="M0,0 C-2,-8 -10,-10 -10,-2 C-10,4 -4,4 0,0 Z" fill="url(#emerald)" stroke="#04401c" stroke-width="0.4"/>
+    <path d="M0,0 C2,-8 10,-10 10,-2 C10,4 4,4 0,0 Z" fill="url(#emerald)" stroke="#04401c" stroke-width="0.4"/>
+    <path d="M0,0 C-2,8 -10,10 -10,2 C-10,-4 -4,-4 0,0 Z" fill="url(#emerald)" stroke="#04401c" stroke-width="0.4"/>
+    <path d="M0,0 C2,8 10,10 10,2 C10,-4 4,-4 0,0 Z" fill="url(#emerald)" stroke="#04401c" stroke-width="0.4"/>
+    <circle cx="0" cy="0" r="1.4" fill="#04401c"/>
+  </g>
+
+  <g id="knotwork">
+    <path d="M0,0 C8,-8 24,-8 32,0 C40,8 56,8 64,0 C72,-8 88,-8 96,0" stroke="url(#goldStroke)" stroke-width="3" fill="none"/>
+    <path d="M0,8 C8,16 24,16 32,8 C40,0 56,0 64,8 C72,16 88,16 96,8" stroke="url(#goldStroke)" stroke-width="3" fill="none"/>
+    <path d="M0,4 C8,12 24,12 32,4 M32,4 C40,-4 56,-4 64,4 M64,4 C72,12 88,12 96,4" stroke="#604010" stroke-width="0.6" fill="none" opacity="0.7"/>
+  </g>
+
+  <g id="horseshoeG">
+    <path d="M-12,-8 C-12,8 -8,18 0,18 C8,18 12,8 12,-8 L8,-8 C8,8 4,14 0,14 C-4,14 -8,8 -8,-8 Z" fill="url(#horseshoe)" stroke="#604010" stroke-width="0.6"/>
+    <circle cx="-10" cy="-6" r="1.2" fill="#604010"/>
+    <circle cx="-10" cy="0" r="1.2" fill="#604010"/>
+    <circle cx="-10" cy="6" r="1.2" fill="#604010"/>
+    <circle cx="10" cy="-6" r="1.2" fill="#604010"/>
+    <circle cx="10" cy="0" r="1.2" fill="#604010"/>
+    <circle cx="10" cy="6" r="1.2" fill="#604010"/>
+    <ellipse cx="-3" cy="-4" rx="2" ry="6" fill="#fff0a8" opacity="0.4"/>
+  </g>
+
+  <!-- TOP knotwork rail -->
+  <use href="#knotwork" transform="translate(60,30)"/>
+  <use href="#knotwork" transform="translate(156,30)"/>
+  <use href="#knotwork" transform="translate(252,30)"/>
+  <use href="#knotwork" transform="translate(348,30)"/>
+  <use href="#knotwork" transform="translate(444,30)"/>
+  <use href="#knotwork" transform="translate(540,30)"/>
+  <use href="#knotwork" transform="translate(636,30)"/>
+  <use href="#knotwork" transform="translate(732,30)"/>
+  <use href="#knotwork" transform="translate(828,30)"/>
+
+  <use href="#shamrock" transform="translate(120,46) scale(1.5)"/>
+  <use href="#shamrock" transform="translate(220,46) scale(1.5)"/>
+  <use href="#shamrock" transform="translate(320,46) scale(1.5)"/>
+  <use href="#shamrock" transform="translate(420,46) scale(1.5)"/>
+  <use href="#shamrock" transform="translate(520,46) scale(1.5)"/>
+  <use href="#shamrock" transform="translate(620,46) scale(1.5)"/>
+  <use href="#shamrock" transform="translate(720,46) scale(1.5)"/>
+  <use href="#shamrock" transform="translate(820,46) scale(1.5)"/>
+  <use href="#fourLeaf" transform="translate(170,40) scale(1.1)"/>
+  <use href="#fourLeaf" transform="translate(370,40) scale(1.1)"/>
+  <use href="#fourLeaf" transform="translate(570,40) scale(1.1)"/>
+  <use href="#fourLeaf" transform="translate(770,40) scale(1.1)"/>
+  <use href="#fourLeaf" transform="translate(870,40) scale(1.1)"/>
+
+  <!-- BOTTOM -->
+  <use href="#knotwork" transform="translate(60,1460)"/>
+  <use href="#knotwork" transform="translate(156,1460)"/>
+  <use href="#knotwork" transform="translate(252,1460)"/>
+  <use href="#knotwork" transform="translate(348,1460)"/>
+  <use href="#knotwork" transform="translate(444,1460)"/>
+  <use href="#knotwork" transform="translate(540,1460)"/>
+  <use href="#knotwork" transform="translate(636,1460)"/>
+  <use href="#knotwork" transform="translate(732,1460)"/>
+  <use href="#knotwork" transform="translate(828,1460)"/>
+
+  <use href="#shamrock" transform="translate(120,1454) scale(1.5)"/>
+  <use href="#shamrock" transform="translate(220,1454) scale(1.5)"/>
+  <use href="#shamrock" transform="translate(320,1454) scale(1.5)"/>
+  <use href="#shamrock" transform="translate(420,1454) scale(1.5)"/>
+  <use href="#shamrock" transform="translate(520,1454) scale(1.5)"/>
+  <use href="#shamrock" transform="translate(620,1454) scale(1.5)"/>
+  <use href="#shamrock" transform="translate(720,1454) scale(1.5)"/>
+  <use href="#shamrock" transform="translate(820,1454) scale(1.5)"/>
+  <use href="#fourLeaf" transform="translate(170,1480) scale(1.1)"/>
+  <use href="#fourLeaf" transform="translate(370,1480) scale(1.1)"/>
+  <use href="#fourLeaf" transform="translate(570,1480) scale(1.1)"/>
+  <use href="#fourLeaf" transform="translate(770,1480) scale(1.1)"/>
+  <use href="#fourLeaf" transform="translate(870,1480) scale(1.1)"/>
+
+  <!-- LEFT -->
+  <use href="#knotwork" transform="translate(30,60) rotate(90)"/>
+  <use href="#knotwork" transform="translate(30,156) rotate(90)"/>
+  <use href="#knotwork" transform="translate(30,252) rotate(90)"/>
+  <use href="#knotwork" transform="translate(30,348) rotate(90)"/>
+  <use href="#knotwork" transform="translate(30,444) rotate(90)"/>
+  <use href="#knotwork" transform="translate(30,540) rotate(90)"/>
+  <use href="#knotwork" transform="translate(30,636) rotate(90)"/>
+  <use href="#knotwork" transform="translate(30,732) rotate(90)"/>
+  <use href="#knotwork" transform="translate(30,828) rotate(90)"/>
+  <use href="#knotwork" transform="translate(30,924) rotate(90)"/>
+  <use href="#knotwork" transform="translate(30,1020) rotate(90)"/>
+  <use href="#knotwork" transform="translate(30,1116) rotate(90)"/>
+  <use href="#knotwork" transform="translate(30,1212) rotate(90)"/>
+  <use href="#knotwork" transform="translate(30,1308) rotate(90)"/>
+
+  <use href="#shamrock" transform="translate(46,120) scale(1.5)"/>
+  <use href="#shamrock" transform="translate(46,220) scale(1.5)"/>
+  <use href="#shamrock" transform="translate(46,320) scale(1.5)"/>
+  <use href="#shamrock" transform="translate(46,420) scale(1.5)"/>
+  <use href="#shamrock" transform="translate(46,520) scale(1.5)"/>
+  <use href="#shamrock" transform="translate(46,620) scale(1.5)"/>
+  <use href="#shamrock" transform="translate(46,720) scale(1.5)"/>
+  <use href="#shamrock" transform="translate(46,820) scale(1.5)"/>
+  <use href="#shamrock" transform="translate(46,920) scale(1.5)"/>
+  <use href="#shamrock" transform="translate(46,1020) scale(1.5)"/>
+  <use href="#shamrock" transform="translate(46,1120) scale(1.5)"/>
+  <use href="#shamrock" transform="translate(46,1220) scale(1.5)"/>
+  <use href="#shamrock" transform="translate(46,1320) scale(1.5)"/>
+  <use href="#fourLeaf" transform="translate(40,170) scale(1.1)"/>
+  <use href="#fourLeaf" transform="translate(40,370) scale(1.1)"/>
+  <use href="#fourLeaf" transform="translate(40,570) scale(1.1)"/>
+  <use href="#fourLeaf" transform="translate(40,770) scale(1.1)"/>
+  <use href="#fourLeaf" transform="translate(40,970) scale(1.1)"/>
+  <use href="#fourLeaf" transform="translate(40,1170) scale(1.1)"/>
+  <use href="#fourLeaf" transform="translate(40,1370) scale(1.1)"/>
+
+  <!-- RIGHT -->
+  <use href="#knotwork" transform="translate(970,60) rotate(90)"/>
+  <use href="#knotwork" transform="translate(970,156) rotate(90)"/>
+  <use href="#knotwork" transform="translate(970,252) rotate(90)"/>
+  <use href="#knotwork" transform="translate(970,348) rotate(90)"/>
+  <use href="#knotwork" transform="translate(970,444) rotate(90)"/>
+  <use href="#knotwork" transform="translate(970,540) rotate(90)"/>
+  <use href="#knotwork" transform="translate(970,636) rotate(90)"/>
+  <use href="#knotwork" transform="translate(970,732) rotate(90)"/>
+  <use href="#knotwork" transform="translate(970,828) rotate(90)"/>
+  <use href="#knotwork" transform="translate(970,924) rotate(90)"/>
+  <use href="#knotwork" transform="translate(970,1020) rotate(90)"/>
+  <use href="#knotwork" transform="translate(970,1116) rotate(90)"/>
+  <use href="#knotwork" transform="translate(970,1212) rotate(90)"/>
+  <use href="#knotwork" transform="translate(970,1308) rotate(90)"/>
+
+  <use href="#shamrock" transform="translate(954,120) scale(1.5)"/>
+  <use href="#shamrock" transform="translate(954,220) scale(1.5)"/>
+  <use href="#shamrock" transform="translate(954,320) scale(1.5)"/>
+  <use href="#shamrock" transform="translate(954,420) scale(1.5)"/>
+  <use href="#shamrock" transform="translate(954,520) scale(1.5)"/>
+  <use href="#shamrock" transform="translate(954,620) scale(1.5)"/>
+  <use href="#shamrock" transform="translate(954,720) scale(1.5)"/>
+  <use href="#shamrock" transform="translate(954,820) scale(1.5)"/>
+  <use href="#shamrock" transform="translate(954,920) scale(1.5)"/>
+  <use href="#shamrock" transform="translate(954,1020) scale(1.5)"/>
+  <use href="#shamrock" transform="translate(954,1120) scale(1.5)"/>
+  <use href="#shamrock" transform="translate(954,1220) scale(1.5)"/>
+  <use href="#shamrock" transform="translate(954,1320) scale(1.5)"/>
+  <use href="#fourLeaf" transform="translate(960,170) scale(1.1)"/>
+  <use href="#fourLeaf" transform="translate(960,370) scale(1.1)"/>
+  <use href="#fourLeaf" transform="translate(960,570) scale(1.1)"/>
+  <use href="#fourLeaf" transform="translate(960,770) scale(1.1)"/>
+  <use href="#fourLeaf" transform="translate(960,970) scale(1.1)"/>
+  <use href="#fourLeaf" transform="translate(960,1170) scale(1.1)"/>
+  <use href="#fourLeaf" transform="translate(960,1370) scale(1.1)"/>
+
+  <g transform="translate(40,40)">
+    <use href="#horseshoeG" transform="translate(20,20) scale(1.6) rotate(-45)"/>
+    <use href="#shamrock" transform="translate(46,10) scale(1.6)"/>
+    <use href="#shamrock" transform="translate(10,46) scale(1.6)"/>
+    <use href="#fourLeaf" transform="translate(40,40)"/>
+  </g>
+  <g transform="translate(960,40)">
+    <use href="#horseshoeG" transform="translate(-20,20) scale(1.6) rotate(45)"/>
+    <use href="#shamrock" transform="translate(-46,10) scale(1.6)"/>
+    <use href="#shamrock" transform="translate(-10,46) scale(1.6)"/>
+    <use href="#fourLeaf" transform="translate(-40,40)"/>
+  </g>
+  <g transform="translate(40,1460)">
+    <use href="#horseshoeG" transform="translate(20,-20) scale(1.6) rotate(-135)"/>
+    <use href="#shamrock" transform="translate(46,-10) scale(1.6)"/>
+    <use href="#shamrock" transform="translate(10,-46) scale(1.6)"/>
+    <use href="#fourLeaf" transform="translate(40,-40)"/>
+  </g>
+  <g transform="translate(960,1460)">
+    <use href="#horseshoeG" transform="translate(-20,-20) scale(1.6) rotate(135)"/>
+    <use href="#shamrock" transform="translate(-46,-10) scale(1.6)"/>
+    <use href="#shamrock" transform="translate(-10,-46) scale(1.6)"/>
+    <use href="#fourLeaf" transform="translate(-40,-40)"/>
+  </g>
+
+  <path d="M60,55 L940,55 M60,1445 L940,1445 M55,60 L55,1440 M945,60 L945,1440" stroke="url(#goldStroke)" stroke-width="1.4" fill="none"/>
+  <path d="M60,57 L940,57 M60,1443 L940,1443 M57,60 L57,1440 M943,60 L943,1440" stroke="#04401c" stroke-width="0.4" fill="none"/>
+</svg>
