@@ -105,8 +105,8 @@ class Upgradinatorr(ChubModule):
                     )
                     continue
             filtered_media_dict.append(item)
-            self.logger.info(
-                f"Queued for upgrade: {item['title']} ({item['year']}) [ID: {item['media_id']}]"
+            self.logger.debug(
+                f"Candidate: {item['title']} ({item['year']}) [ID: {item['media_id']}]"
             )
             filter_count += 1
         return filtered_media_dict
@@ -355,7 +355,7 @@ class Upgradinatorr(ChubModule):
                         progress_db.clear_for_media(app.instance_name, item["media_id"])
                 else:
                     self.logger.warning(
-                        f"Not tagging {item['title']} ({item['year']}) because one or more "
+                        f"Not tagging {self._format_item_title(item)} because one or more "
                         "season searches failed."
                     )
             return search_count, search_count >= count
@@ -385,8 +385,8 @@ class Upgradinatorr(ChubModule):
 
         for season in remaining:
             season_number = season["season_number"]
-            self.logger.debug(
-                f"  [SEASON] {season_number}: Searching..."
+            self.logger.info(
+                f"  [SEASON] {item['title']} S{season_number}: Searching..."
             )
             before_downloads = self._get_grabbed_downloads(
                 app, item["media_id"], "sonarr", season_number
@@ -421,7 +421,7 @@ class Upgradinatorr(ChubModule):
 
         if failed_searches and failed_searches.get(item["media_id"]):
             self.logger.warning(
-                f"Not tagging {item['title']} ({item['year']}) because one or more "
+                f"Not tagging {self._format_item_title(item)} because one or more "
                 "season searches failed."
             )
             return search_count, False
@@ -531,7 +531,7 @@ class Upgradinatorr(ChubModule):
             album_title = album.get(
                 "album_title", f"Album #{album.get('season_number', '?')}"
             )
-            self.logger.debug(f"  [ALBUM] {album_title}: Searching...")
+            self.logger.info(f"  [ALBUM] {item['title']} — {album_title}: Searching...")
             before_downloads = self._get_grabbed_downloads(
                 app, item["media_id"], "lidarr", album_id=album_id
             )
@@ -770,13 +770,12 @@ class Upgradinatorr(ChubModule):
             f"[mode: {search_mode}]"
         )
 
+        wanted_count: Optional[int] = None
         if search_mode in ("missing", "cutoff"):
             wanted_records = self._get_all_wanted(app, search_mode)
             if wanted_records is None:
                 return None
-            self.logger.info(
-                f"Found {len(wanted_records)} {search_mode} items from {app.instance_name}"
-            )
+            wanted_count = len(wanted_records)
             media_dict = self._convert_wanted_to_media_dict(
                 wanted_records, instance_type, app
             )
@@ -852,7 +851,16 @@ class Upgradinatorr(ChubModule):
             )
             return None
 
-        self.logger.debug(f"Filtered media count: {len(filtered_media_dict)}")
+        if wanted_count is not None:
+            self.logger.info(
+                f"Found {wanted_count} {search_mode} item(s); "
+                f"selected {len(filtered_media_dict)} candidate(s) (search budget: {count})."
+            )
+        else:
+            self.logger.info(
+                f"Selected {len(filtered_media_dict)} candidate(s) from "
+                f"{len(media_dict)} total (search budget: {count})."
+            )
         if media_dict:
             total_count = len(media_dict)
             for item in media_dict:
@@ -874,7 +882,7 @@ class Upgradinatorr(ChubModule):
 
         if not self.config.dry_run:
             search_count: int = 0
-            media_ids: List[int] = [item["media_id"] for item in filtered_media_dict]
+            searched_items: List[Dict[str, Any]] = []
             grabbed_downloads: Dict[int, List[Dict[str, Any]]] = {}
             failed_searches: Dict[int, List[str]] = {}
             search_stats: Dict[str, int] = {
@@ -902,6 +910,10 @@ class Upgradinatorr(ChubModule):
                         f"[PROCESSING] {item['title']} ({item['year']}) | ID: {item['media_id']}"
                     )
                     self.logger.debug("═" * 70)
+                    self.logger.info(
+                        f"Processing: {self._format_item_title(item)} [ID: {item['media_id']}]"
+                    )
+                    searched_items.append(item)
 
                     budget_hit = False
 
@@ -937,7 +949,7 @@ class Upgradinatorr(ChubModule):
                                 failed_searches, item["media_id"], "Media search"
                             )
                             self.logger.warning(
-                                f"Not tagging {item['title']} ({item['year']}) "
+                                f"Not tagging {self._format_item_title(item)} "
                                 "because the media search failed."
                             )
                         search_count += 1
@@ -988,21 +1000,19 @@ class Upgradinatorr(ChubModule):
                     )
                     self.logger.debug("─" * 70)
                     self.logger.debug("")  # Blank line after block
-                    self.logger.info(
-                        f"Finished processing: {item['title']} ({item['year']})"
-                    )
             finally:
                 if db_ctx is not None:
                     db_ctx.__exit__(None, None, None)
 
-            self.logger.info(
+            self.logger.debug(
                 f"Completed upgrade operations for {app.instance_name}. "
                 "Now reconciling grabbed downloads and current queue..."
             )
+            searched_ids = [item["media_id"] for item in searched_items]
             queue = app.get_queue()
             self.logger.debug(f"Queue item count: {len(queue.get('records', []))}")
             queue_dict: List[Dict[str, Any]] = self.process_queue(
-                queue, instance_type, media_ids
+                queue, instance_type, searched_ids
             )
             self.logger.debug(f"Queue dict item count: {len(queue_dict)}")
 
@@ -1010,7 +1020,7 @@ class Upgradinatorr(ChubModule):
             for q in queue_dict:
                 queue_map.setdefault(q["media_id"], []).append(q)
 
-            for item in filtered_media_dict:
+            for item in searched_items:
                 downloads = {}
                 for q in grabbed_downloads.get(item["media_id"], []):
                     downloads[q["download"]] = q["torrent_custom_format_score"]
@@ -1042,43 +1052,70 @@ class Upgradinatorr(ChubModule):
                 )
         return output_dict
 
+    @staticmethod
+    def _format_item_title(item: Dict[str, Any]) -> str:
+        year = item.get("year")
+        if year:
+            return f"{item['title']} ({year})"
+        return str(item["title"])
+
     def print_output(self, output_dict: Dict[str, Any]) -> None:
         for instance, run_data in output_dict.items():
-            if run_data:
-                instance_data = run_data.get("data", None)
-                if instance_data:
-                    table = [[f"{run_data['server_name']}"]]
-                    self.logger.info(create_table(table))
-                    self.logger.info(
-                        f"Upgrade summary for {run_data['server_name']}: "
-                        f"{run_data.get('untagged_count', 0)} untagged parents, "
-                        f"{run_data.get('tagged_count', 0)} tagged parents, "
-                        f"{run_data.get('total_count', 0)} total parents. "
-                        f"Searches: {run_data.get('searches_attempted', 0)} attempted, "
-                        f"{run_data.get('searches_succeeded', 0)} completed, "
-                        f"{run_data.get('searches_failed', 0)} failed."
+            if not run_data:
+                continue
+            instance_data = run_data.get("data", None)
+            if not instance_data:
+                self.logger.info(f"No items found for {instance}.")
+                continue
+
+            table = [[f"{run_data['server_name']}"]]
+            self.logger.info(create_table(table))
+            self.logger.info(
+                f"Searches: {run_data.get('searches_attempted', 0)} attempted, "
+                f"{run_data.get('searches_succeeded', 0)} completed, "
+                f"{run_data.get('searches_failed', 0)} failed | "
+                f"Parents: {run_data.get('untagged_count', 0)} untagged, "
+                f"{run_data.get('tagged_count', 0)} tagged, "
+                f"{run_data.get('total_count', 0)} total."
+            )
+
+            with_grabs = [it for it in instance_data if it.get("download")]
+            with_failures = [
+                it for it in instance_data if it.get("search_failures")
+            ]
+            no_grabs = [
+                it
+                for it in instance_data
+                if not it.get("download") and not it.get("search_failures")
+            ]
+
+            if with_grabs:
+                grab_total = sum(len(it["download"]) for it in with_grabs)
+                self.logger.info(
+                    f"[GRABBED] {grab_total} download(s) across {len(with_grabs)} item(s):"
+                )
+                for item in with_grabs:
+                    self.logger.info(f"  {self._format_item_title(item)}")
+                    for download, format_score in item["download"].items():
+                        self.logger.info(
+                            f"    Score {format_score} — {download}"
+                        )
+
+            if with_failures:
+                self.logger.info(f"[FAILED] {len(with_failures)} item(s):")
+                for item in with_failures:
+                    failures = ", ".join(item["search_failures"])
+                    self.logger.warning(
+                        f"  {self._format_item_title(item)} — {failures}"
                     )
-                    for item in instance_data:
-                        self.logger.info(f"{item['title']} ({item['year']})")
-                        search_failures = item.get("search_failures") or []
-                        if search_failures:
-                            self.logger.warning(
-                                "\tSearch failed for: " + ", ".join(search_failures)
-                            )
-                        if item["download"]:
-                            for download, format_score in item["download"].items():
-                                self.logger.info(f"\t{download}\tScore: {format_score}")
-                        elif search_failures:
-                            self.logger.info(
-                                "\tNo grabs reported because one or more searches failed."
-                            )
-                        else:
-                            self.logger.info(
-                                "\tSearch completed; no grabbed downloads were observed."
-                            )
-                        self.logger.info("")
-                else:
-                    self.logger.info(f"No items found for {instance}.")
+
+            if no_grabs:
+                titles = ", ".join(
+                    self._format_item_title(it) for it in no_grabs
+                )
+                self.logger.info(
+                    f"[NO GRABS] {len(no_grabs)} item(s) searched, nothing grabbed: {titles}"
+                )
 
     def run(self):
         try:
