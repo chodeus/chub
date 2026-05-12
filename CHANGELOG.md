@@ -2,6 +2,18 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.15.0](https://github.com/chodeus/chub/compare/v1.14.1...v1.15.0) (2026-05-12)
+
+
+### Features
+
+* **posters:** redesign Asset Search + GDrive pages, add style tracking ([3d50f0a](https://github.com/chodeus/chub/commit/3d50f0a510bb248eeb31b5b0c03b370919517c51))
+
+
+### Bug Fixes
+
+* **poster_renamerr:** tolerate missing full_config in _get_assets_files ([685ab35](https://github.com/chodeus/chub/commit/685ab35261ff00cd501f1ee2cbc78db1489499c9))
+
 ## [1.14.1](https://github.com/chodeus/chub/compare/v1.14.0...v1.14.1) (2026-05-12)
 
 
