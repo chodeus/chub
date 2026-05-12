@@ -277,6 +277,10 @@ class SchemaManager:
                 ColumnDefinition("season_number", "INTEGER"),
                 ColumnDefinition("folder", "TEXT"),
                 ColumnDefinition("file", "TEXT"),
+                # Style prefix derived from the matching gdrive_list entry's
+                # name (e.g. "CL2K Solen" -> "CL2K"). NULL if the source dir
+                # didn't match any configured gdrive entry.
+                ColumnDefinition("style", "TEXT"),
                 # Backfilled lazily (on first read) by the posters API —
                 # populated via PIL.Image.open so there's no extra
                 # scan-all-posters migration step.
@@ -293,6 +297,7 @@ class SchemaManager:
                 "CREATE INDEX IF NOT EXISTS poster_cache_tvdb_id_idx ON poster_cache (tvdb_id)",
                 "CREATE INDEX IF NOT EXISTS poster_cache_imdb_id_idx ON poster_cache (imdb_id)",
                 "CREATE INDEX IF NOT EXISTS poster_cache_asset_type_idx ON poster_cache (asset_type)",
+                "CREATE INDEX IF NOT EXISTS poster_cache_style_idx ON poster_cache (style)",
                 "CREATE INDEX IF NOT EXISTS poster_cache_created_at_idx ON poster_cache (created_at)",
                 "CREATE INDEX IF NOT EXISTS poster_cache_resolution_idx ON poster_cache (width, height)",
             ],

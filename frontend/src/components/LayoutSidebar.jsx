@@ -47,7 +47,7 @@ const NAV_SECTIONS = [
                 icon: 'image',
                 type: 'parent',
                 children: [
-                    { id: 'gdrive-search', label: 'GDrive Search', path: '/poster/search/gdrive' },
+                    { id: 'gdrive-search', label: 'GDrive Sources', path: '/poster/search/gdrive' },
                     { id: 'assets-search', label: 'Assets Search', path: '/poster/search/assets' },
                     { id: 'poster-cleanarr', label: 'Poster Cleanarr', path: '/poster/cleanarr' },
                     {

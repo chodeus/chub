@@ -39,7 +39,7 @@ def get_cleanarr_logger(request: Request) -> Any:
     return get_module_logger(request, "poster_cleanarr")
 
 
-# --- New endpoints: search, stats, browse, collections, duplicates ---
+# --- New endpoints: search, stats, browse, collections ---
 
 
 @router.get(
@@ -416,63 +416,6 @@ async def search_asset_sources(
         )
 
 
-@router.get(
-    "/duplicates",
-    summary="Find duplicate posters",
-    description="Find poster entries with duplicate title, year, and season combinations.",
-    responses={
-        200: {
-            "description": "Duplicate poster groups retrieved successfully",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "success": True,
-                        "message": "Found 3 duplicate groups",
-                        "data": {
-                            "duplicates": [
-                                {
-                                    "key": "The Matrix-1999",
-                                    "count": 2,
-                                    "posters": [],
-                                }
-                            ],
-                            "total": 3,
-                        },
-                    }
-                }
-            },
-        }
-    },
-)
-async def get_poster_duplicates(
-    logger: Any = Depends(get_logger),
-    db: ChubDB = Depends(get_database),
-) -> JSONResponse:
-    """
-    Find poster entries with the same title, year, and season.
-
-    Scans the poster cache for duplicate entries that share
-    identical metadata, useful for cleanup and deduplication.
-
-    Returns:
-        List of duplicate groups with poster details and total count
-    """
-    try:
-        logger.debug("Serving GET /api/posters/duplicates")
-        duplicates = db.poster.find_duplicates()
-        return ok(
-            f"Found {len(duplicates)} duplicate groups",
-            {"duplicates": duplicates, "total": len(duplicates)},
-        )
-    except Exception as e:
-        logger.error(f"Error finding poster duplicates: {e}")
-        return error(
-            f"Error finding duplicates: {str(e)}",
-            code="POSTER_DUPLICATES_ERROR",
-            status_code=500,
-        )
-
-
 @router.post(
     "/auto-match",
     summary="Auto-match posters to media",
@@ -551,8 +494,14 @@ async def auto_match_posters(
 )
 async def browse_posters(
     owner: Optional[str] = Query(None, description="Filter by GDrive owner name"),
-    type: Optional[str] = Query(None, description="Filter by asset type: movie, season"),
+    type: Optional[str] = Query(
+        None, description="Filter by asset type: movie, show, season, collection"
+    ),
     query: Optional[str] = Query(None, description="Search by title"),
+    style: Optional[str] = Query(
+        None,
+        description="Filter by poster style (e.g. CL2K, MM2K). Use 'other' for rows whose source dir didn't match a configured gdrive entry.",
+    ),
     limit: int = Query(60, ge=0, le=200, description="Results per page (0 for owners only)"),
     offset: int = Query(0, ge=0, description="Pagination offset"),
     logger: Any = Depends(get_logger),
@@ -563,21 +512,27 @@ async def browse_posters(
 
     Args:
         owner: Filter by GDrive owner (derived from folder path)
-        type: Filter by asset type (movie or season)
+        type: Filter by asset type (movie, show, season, collection)
         query: Search by title
+        style: Filter by poster style (CL2K, MM2K, or 'other' for unclassified)
         limit: Results per page
         offset: Pagination offset
 
     Returns:
-        Paginated poster list with available owner names for filtering
+        Paginated poster list with available owner and style values for filtering
     """
     try:
         logger.debug("Serving GET /api/posters/browse")
         result = db.poster.browse(
-            owner=owner, asset_type=type, query=query, limit=limit, offset=offset
+            owner=owner,
+            asset_type=type,
+            query=query,
+            style=style,
+            limit=limit,
+            offset=offset,
         )
-        owners = db.poster.get_distinct_owners()
-        result["owners"] = owners
+        result["owners"] = db.poster.get_distinct_owners()
+        result["styles"] = db.poster.get_distinct_styles()
         return ok(
             f"Retrieved {len(result['items'])} of {result['total']} posters", result
         )
@@ -1085,92 +1040,6 @@ async def optimize_posters(
         return error(
             f"Error optimizing posters: {str(e)}",
             code="OPTIMIZE_ERROR",
-            status_code=500,
-        )
-
-
-@router.post(
-    "/duplicates/{group_id}/resolve",
-    summary="Resolve poster duplicates",
-    description="Resolve a group of duplicate posters by selecting the preferred version.",
-    responses={
-        200: {
-            "description": "Duplicate resolution result",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "success": True,
-                        "message": "Duplicate resolution not yet implemented",
-                        "data": {"status": "not_implemented"},
-                    }
-                }
-            },
-        }
-    },
-)
-async def resolve_poster_duplicates(
-    group_id: str,
-    request: Request,
-    logger: Any = Depends(get_logger),
-    db: ChubDB = Depends(get_database),
-) -> JSONResponse:
-    """
-    Resolve a group of duplicate posters.
-
-    Keeps the specified poster and removes the others from the cache.
-    The group_id is a comma-separated list of poster IDs from the
-    duplicates endpoint. The request body should contain keepId.
-
-    Args:
-        group_id: Comma-separated poster IDs in the duplicate group
-        request: Request containing keepId and optional removeIds
-
-    Returns:
-        Resolution result with kept and removed poster details
-    """
-    try:
-        logger.debug(f"Serving POST /api/posters/duplicates/{group_id}/resolve")
-
-        payload = await request.json()
-        keep_id = payload.get("keepId")
-        remove_ids = payload.get("removeIds", [])
-
-        if not keep_id:
-            return error(
-                "keepId is required",
-                code="MISSING_KEEP_ID",
-                status_code=400,
-            )
-
-        # If removeIds not specified, parse from group_id
-        if not remove_ids:
-            try:
-                all_ids = [int(i.strip()) for i in group_id.split(",")]
-                remove_ids = [i for i in all_ids if i != int(keep_id)]
-            except ValueError:
-                return error(
-                    "Invalid group_id format",
-                    code="INVALID_GROUP_ID",
-                    status_code=400,
-                )
-
-        removed = []
-        for rid in remove_ids:
-            record = db.poster.delete_by_integer_id(int(rid))
-            if record:
-                removed.append(rid)
-
-        logger.info(f"Resolved duplicates: kept {keep_id}, removed {removed}")
-        return ok(
-            f"Resolved {len(removed)} duplicate posters",
-            {"kept_id": keep_id, "removed_ids": removed, "removed_count": len(removed)},
-        )
-
-    except Exception as e:
-        logger.error(f"Error resolving poster duplicates: {e}")
-        return error(
-            f"Error resolving duplicates: {str(e)}",
-            code="DUPLICATE_RESOLVE_ERROR",
             status_code=500,
         )
 

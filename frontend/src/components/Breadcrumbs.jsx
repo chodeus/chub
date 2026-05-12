@@ -22,7 +22,7 @@ const ROUTE_CRUMBS = {
     '/media/labelarr': [{ label: 'Library' }, { label: 'Label Sync' }],
 
     '/poster/search/assets': [{ label: 'Assets' }, { label: 'Assets Search' }],
-    '/poster/search/gdrive': [{ label: 'Assets' }, { label: 'GDrive Search' }],
+    '/poster/search/gdrive': [{ label: 'Assets' }, { label: 'GDrive Sources' }],
     '/poster/cleanarr': [{ label: 'Assets' }, { label: 'Poster Cleanarr' }],
     '/poster/statistics': [{ label: 'Assets' }, { label: 'Statistics' }],
 

@@ -209,35 +209,6 @@ export const postersAPI = {
     },
 
     /**
-     * Fetch poster duplicates
-     * @param {Object} options - Detection options
-     * @param {number} options.similarity - Similarity threshold
-     * @param {string} options.method - Detection method (hash, visual)
-     * @returns {Promise<Array>} List of duplicate groups
-     */
-    fetchDuplicates: (options = {}) => {
-        const params = new URLSearchParams(options);
-        const url = params.toString() ? `/posters/duplicates?${params}` : '/posters/duplicates';
-
-        return apiCore.get(url, {
-            useCache: true,
-            cacheTTL: 10 * 60 * 1000,
-        });
-    },
-
-    /**
-     * Resolve poster duplicates
-     * @param {string} duplicateGroupId - Duplicate group identifier
-     * @param {Object} resolution - Resolution action
-     * @param {string} resolution.keepId - Poster ID to keep
-     * @param {Array} resolution.removeIds - Poster IDs to remove
-     * @returns {Promise<Object>} Resolution response
-     */
-    resolveDuplicates: (duplicateGroupId, resolution) => {
-        return apiCore.post(`/posters/duplicates/${duplicateGroupId}/resolve`, resolution);
-    },
-
-    /**
      * Sync poster metadata
      * @param {string} posterId - Poster identifier (optional for all)
      * @param {Object} options - Sync options
@@ -278,17 +249,19 @@ export const postersAPI = {
      * Browse cached posters with optional filtering and pagination
      * @param {Object} options - Filter options
      * @param {string} [options.owner] - Filter by GDrive owner
-     * @param {string} [options.type] - Filter by asset type (movie, season)
+     * @param {string} [options.type] - Filter by asset type (movie, show, season, collection)
      * @param {string} [options.query] - Search by title
+     * @param {string} [options.style] - Filter by poster style (CL2K, MM2K, or 'other')
      * @param {number} [options.limit=60] - Results per page
      * @param {number} [options.offset=0] - Pagination offset
-     * @returns {Promise<Object>} Paginated poster results with owners list
+     * @returns {Promise<Object>} Paginated poster results with owners and styles
      */
     browsePosters: (options = {}) => {
         const params = new URLSearchParams();
         if (options.owner) params.set('owner', options.owner);
         if (options.type) params.set('type', options.type);
         if (options.query) params.set('query', options.query);
+        if (options.style) params.set('style', options.style);
         if (options.limit) params.set('limit', options.limit);
         if (options.offset) params.set('offset', options.offset);
         const url = params.toString() ? `/posters/browse?${params}` : '/posters/browse';

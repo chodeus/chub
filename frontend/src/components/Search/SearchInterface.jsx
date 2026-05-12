@@ -20,7 +20,7 @@ import { useDebounce } from '../../hooks/useDebounce.js';
  *
  * @param {Object} props - Component props
  * @param {string} props.searchPageType - Type of search page ('media', 'posters')
- * @param {string} [props.searchSubtype] - Search subtype ('assets', 'gdrive') or null for basic search
+ * @param {string} [props.searchSubtype] - Search subtype ('assets') or null for basic search
  * @param {Function} props.onSearch - Callback function for search events, receives search term as parameter
  * @param {string} [props.placeholder] - Custom placeholder text, falls back to contextual placeholder
  */
@@ -108,9 +108,6 @@ const SearchInterface = React.memo(
             if (searchPageType === 'posters') {
                 if (searchSubtype === 'assets') {
                     return 'Search poster assets...';
-                }
-                if (searchSubtype === 'gdrive') {
-                    return 'Search Google Drive...';
                 }
             }
             return placeholder;

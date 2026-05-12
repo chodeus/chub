@@ -14,7 +14,7 @@ const ROUTE_TITLES = {
     '/media/statistics': 'Library Statistics',
     '/media/labelarr': 'Label Sync',
     '/poster/search/assets': 'Assets Search',
-    '/poster/search/gdrive': 'GDrive Search',
+    '/poster/search/gdrive': 'GDrive Sources',
     '/poster/cleanarr': 'Poster Cleanarr',
     '/poster/manage': 'Poster Cleanarr', // legacy redirect target
     '/poster/statistics': 'Poster Statistics',

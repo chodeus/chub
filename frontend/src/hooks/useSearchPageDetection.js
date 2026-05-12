@@ -28,14 +28,6 @@ const useSearchPageDetection = () => {
             };
         }
 
-        if (path === '/poster/search/gdrive') {
-            return {
-                isSearchPage: true,
-                searchPageType: 'posters',
-                searchSubtype: 'gdrive',
-            };
-        }
-
         // Not a search page
         return {
             isSearchPage: false,
