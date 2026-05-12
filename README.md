@@ -101,6 +101,12 @@ The GitHub Wiki is the full source:
 
 ---
 
+## A note on AI-assisted development
+
+I write large portions of CHUB's source, tests, and documentation with the help of an AI coding assistant (Anthropic's Claude). I review every change before it lands, but you should know what you're running: if a behavior, doc, or config option looks wrong, trust what the code actually does and [open an issue](https://github.com/chodeus/chub/issues).
+
+---
+
 ## Credits
 
 CHUB is a fork of [DAPS](https://github.com/Drazzilb08/daps) by **Drazzilb08** — thank you for the scripts and inspiration that made this possible.
