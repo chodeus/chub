@@ -2,6 +2,13 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.14.1](https://github.com/chodeus/chub/compare/v1.14.0...v1.14.1) (2026-05-12)
+
+
+### Bug Fixes
+
+* **upgradinatorr:** reduce log noise and surface grabs clearly ([150d572](https://github.com/chodeus/chub/commit/150d572dda872df4def2e8e554aaafd246ae5252))
+
 ## [1.14.0](https://github.com/chodeus/chub/compare/v1.13.1...v1.14.0) (2026-05-12)
 
 
