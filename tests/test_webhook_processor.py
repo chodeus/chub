@@ -1,5 +1,6 @@
 """Tests for backend/util/webhook_processor.py — webhook parsing & instance routing."""
 
+from types import SimpleNamespace
 
 import pytest
 
@@ -47,6 +48,17 @@ def test_extract_media_block_series(wp):
     block, type_, id_ = wp._extract_media_block(payload)
     assert type_ == "series"
     assert id_ == 42
+
+
+def test_processor_fallback_retry_defaults_match_general_config(monkeypatch):
+    cfg = SimpleNamespace(instances=InstancesConfig())
+    monkeypatch.setattr("backend.util.webhook_processor.load_config", lambda: cfg)
+
+    processor = WebhookProcessor(logger=StubLogger())
+
+    assert processor.initial_delay == 30
+    assert processor.retry_delay == 30
+    assert processor.max_retries == 10
 
 
 def test_extract_media_block_movie(wp):

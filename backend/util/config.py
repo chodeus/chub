@@ -2,10 +2,10 @@ import os
 import pathlib
 import sys
 import tempfile
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Literal, Optional, Union
 
 import yaml
-from pydantic import BaseModel, Field, ValidationError, model_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
 # ==== SECTION: MODELS FOR CONFIG STRUCTURE ====
 
@@ -254,17 +254,27 @@ class UserInterfaceConfig(BaseModel):
 
 
 class GeneralConfig(BaseModel):
-    log_level: str = "info"
+    log_level: Literal["debug", "info", "warning", "error", "critical"] = "info"
+    # Deprecated config key kept for existing config.yml compatibility. The
+    # frontend no longer exposes it because update checks are not wired at
+    # runtime.
     update_notifications: bool = False
-    max_logs: int = 9
+    max_logs: int = Field(default=9, ge=1, le=100)
     # Plex's recently-added scan can lag 5+ minutes behind a Sonarr/Radarr
     # import under load. Defaults give ~5.5 min of total search:
     #   30s warmup + 10 attempts × 30s = 330s
-    webhook_initial_delay: int = 30
-    webhook_retry_delay: int = 30
-    webhook_max_retries: int = 10
+    webhook_initial_delay: int = Field(default=30, ge=0, le=3600)
+    webhook_retry_delay: int = Field(default=30, ge=1, le=3600)
+    webhook_max_retries: int = Field(default=10, ge=0, le=100)
     webhook_secret: str = ""
     duplicate_exclude_groups: List[Any] = Field(default_factory=list)
+
+    @field_validator("log_level", mode="before")
+    @classmethod
+    def normalize_log_level(cls, value: Any) -> Any:
+        if isinstance(value, str):
+            return value.lower()
+        return value
 
 
 class PosterCleanarrConfig(BaseModel):

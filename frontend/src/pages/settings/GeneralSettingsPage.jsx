@@ -47,6 +47,18 @@ const MemoizedFieldComponent = React.memo(
 
 MemoizedFieldComponent.displayName = 'MemoizedFieldComponent';
 
+const normalizeDuplicateExcludeGroups = groups => {
+    if (!Array.isArray(groups)) return [];
+    return groups
+        .map(group => {
+            if (Array.isArray(group)) {
+                return { instances: group };
+            }
+            return group && typeof group === 'object' ? group : null;
+        })
+        .filter(Boolean);
+};
+
 /**
  * GeneralSettingsPage component for managing general CHUB configuration
  * @returns {JSX.Element} General settings page component
@@ -76,15 +88,21 @@ export const GeneralSettingsPage = () => {
     const [lastConfigData, setLastConfigData] = useState(null);
     if (configData?.data && configData !== lastConfigData) {
         setLastConfigData(configData);
+        const generalData = configData.data.general || {
+            log_level: 'info',
+            max_logs: 9,
+            webhook_initial_delay: 30,
+            webhook_retry_delay: 30,
+            webhook_max_retries: 10,
+            webhook_secret: '',
+            duplicate_exclude_groups: [],
+        };
         const initialData = {
-            general: configData.data.general || {
-                log_level: 'info',
-                max_logs: 5,
-                update_notifications: false,
-                webhook_initial_delay: 30,
-                webhook_retry_delay: 30,
-                webhook_max_retries: 10,
-                webhook_secret: '',
+            general: {
+                ...generalData,
+                duplicate_exclude_groups: normalizeDuplicateExcludeGroups(
+                    generalData.duplicate_exclude_groups
+                ),
             },
         };
         setFormData(initialData);

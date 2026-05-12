@@ -8,7 +8,7 @@ export const GENERAL_SETTINGS_SCHEMA = [
                 key: 'log_level',
                 label: 'Log Level',
                 type: 'dropdown',
-                options: ['debug', 'info'],
+                options: ['debug', 'info', 'warning', 'error', 'critical'],
                 required: true,
                 description: 'Set the logging verbosity for general settings.',
             },
@@ -17,20 +17,18 @@ export const GENERAL_SETTINGS_SCHEMA = [
                 label: 'Maximum Logs',
                 type: 'number',
                 placeholder: '9',
+                min: 1,
+                max: 100,
                 required: true,
                 description: 'Set the maximum number of logs to keep.',
-            },
-            {
-                key: 'update_notifications',
-                label: 'Update Notifications',
-                type: 'check_box',
-                description: 'Enable notifications for available updates.',
             },
             {
                 key: 'webhook_initial_delay',
                 label: 'Webhook initial delay (seconds)',
                 type: 'number',
                 placeholder: '30',
+                min: 0,
+                max: 3600,
                 description:
                     'How long to wait after a webhook fires before the first Plex recently-added check. Gives Plex time to scan the new file.',
             },
@@ -39,6 +37,8 @@ export const GENERAL_SETTINGS_SCHEMA = [
                 label: 'Webhook retry delay (seconds)',
                 type: 'number',
                 placeholder: '30',
+                min: 1,
+                max: 3600,
                 description:
                     "How long to sleep between Plex recently-added checks if the new item still isn't visible.",
             },
@@ -47,6 +47,8 @@ export const GENERAL_SETTINGS_SCHEMA = [
                 label: 'Webhook max retries',
                 type: 'number',
                 placeholder: '10',
+                min: 0,
+                max: 100,
                 description:
                     'Maximum Plex recently-added checks per webhook before the upload step is skipped for this run.',
             },
@@ -57,6 +59,26 @@ export const GENERAL_SETTINGS_SCHEMA = [
                 placeholder: 'Leave blank to accept unauthenticated webhooks',
                 description:
                     'Optional shared secret. When set, every inbound webhook must send `X-Webhook-Secret: <value>` (or `?secret=<value>`) or it is rejected with 401. Recommended if your webhook URL is reachable outside your LAN.',
+            },
+            {
+                key: 'duplicate_exclude_groups',
+                label: 'Quality Instance Groups',
+                type: 'object_array',
+                displayType: 'qualityGroup',
+                description:
+                    'Group instances that intentionally share the same content at different qualities. Items found across instances within the same group will not be flagged as duplicates.',
+                fields: [
+                    {
+                        key: 'instances',
+                        label: 'Instances',
+                        type: 'tag_input',
+                        required: true,
+                        allowCustom: true,
+                        placeholder: 'Type instance name and press Enter...',
+                        description:
+                            'Enter the names of 2 or more instances that share content, such as radarr and radarr4k.',
+                    },
+                ],
             },
         ],
     },
