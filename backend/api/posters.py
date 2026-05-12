@@ -532,7 +532,25 @@ async def browse_posters(
             offset=offset,
         )
         result["owners"] = db.poster.get_distinct_owners()
-        result["styles"] = db.poster.get_distinct_styles()
+        # Merge styles already stamped on rows with styles derivable from the
+        # current gdrive_list config so the dropdown is useful even before
+        # poster_renamerr has re-upserted existing rows with the new column.
+        db_styles = set(db.poster.get_distinct_styles())
+        configured_styles = set()
+        try:
+            from backend.util.config import load_config
+
+            config = load_config()
+            sync_cfg = getattr(config, "sync_gdrive", None)
+            for entry in getattr(sync_cfg, "gdrive_list", None) or []:
+                name = (getattr(entry, "name", "") or "").strip()
+                if name:
+                    head = name.split(None, 1)[0]
+                    if head:
+                        configured_styles.add(head)
+        except Exception as e:
+            logger.debug(f"Could not derive configured styles from config: {e}")
+        result["styles"] = sorted(db_styles | configured_styles)
         return ok(
             f"Retrieved {len(result['items'])} of {result['total']} posters", result
         )

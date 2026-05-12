@@ -111,6 +111,9 @@ const PosterAssetsSearchPage = () => {
     } = useApiData({
         apiFunction: useCallback(() => postersAPI.browsePosters(browseParams), [browseParams]),
         options: { showErrorToast: false },
+        // useApiData re-runs its effect on `dependencies` changes, not on
+        // apiFunction reference changes — without this it fires only on mount.
+        dependencies: [browseParams],
     });
 
     const { execute: autoMatch, isLoading: isAutoMatching } = useApiMutation(
@@ -545,27 +548,16 @@ const PosterAssetsSearchPage = () => {
                                             onClick={() => setDeleteTarget(item)}
                                         />
                                     </div>
-                                    <div className="p-1.5 flex flex-col gap-0.5">
-                                        <h4
-                                            className="font-medium text-primary text-xs line-clamp-2 break-words leading-tight text-center"
-                                            title={displayTitle}
-                                        >
+                                    <div
+                                        className="p-1.5 flex flex-col gap-0.5"
+                                        title={fileBase || displayTitle}
+                                    >
+                                        <h4 className="font-medium text-primary text-xs line-clamp-2 break-words leading-tight text-center">
                                             {displayTitle}
                                         </h4>
                                         {driveName && (
-                                            <p
-                                                className="text-[10px] text-tertiary text-center truncate"
-                                                title={`Drive: ${driveName}`}
-                                            >
+                                            <p className="text-[10px] text-secondary text-center truncate">
                                                 {driveName}
-                                            </p>
-                                        )}
-                                        {fileBase && (
-                                            <p
-                                                className="text-[10px] text-tertiary text-center truncate"
-                                                title={fileBase}
-                                            >
-                                                {fileBase}
                                             </p>
                                         )}
                                     </div>
@@ -633,24 +625,55 @@ const PosterAssetsSearchPage = () => {
                 </Modal.Header>
                 <Modal.Body>
                     {lightboxItem && (
-                        <div className="flex items-center justify-center bg-surface-alt rounded-lg p-2">
-                            <img
-                                // Full-resolution original. Backend thumbnail
-                                // endpoint caps width at 500 and 422s anything
-                                // larger, so the lightbox uses the preview path
-                                // (serves the raw file, no resize) instead.
-                                src={
-                                    lightboxItem.folder && lightboxItem.file
-                                        ? postersAPI.getPreviewUrl(
-                                              lightboxItem.folder,
-                                              lightboxItem.file
-                                          )
-                                        : postersAPI.getThumbnailUrl(lightboxItem.id, 500)
-                                }
-                                alt={lightboxItem.title}
-                                className="w-auto object-contain"
-                                style={{ maxHeight: '75vh' }}
-                            />
+                        <div className="flex flex-col gap-3">
+                            <div className="flex items-center justify-center bg-surface-alt rounded-lg p-2">
+                                <img
+                                    // Full-resolution original. Backend thumbnail
+                                    // endpoint caps width at 500 and 422s anything
+                                    // larger, so the lightbox uses the preview path
+                                    // (serves the raw file, no resize) instead.
+                                    src={
+                                        lightboxItem.folder && lightboxItem.file
+                                            ? postersAPI.getPreviewUrl(
+                                                  lightboxItem.folder,
+                                                  lightboxItem.file
+                                              )
+                                            : postersAPI.getThumbnailUrl(lightboxItem.id, 500)
+                                    }
+                                    alt={lightboxItem.title}
+                                    className="w-auto object-contain"
+                                    style={{ maxHeight: '70vh' }}
+                                />
+                            </div>
+                            <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+                                {lightboxItem.style && (
+                                    <>
+                                        <dt className="text-secondary">Style</dt>
+                                        <dd className="text-primary font-medium">
+                                            {lightboxItem.style}
+                                        </dd>
+                                    </>
+                                )}
+                                {lightboxItem.folder && (
+                                    <>
+                                        <dt className="text-secondary">Drive</dt>
+                                        <dd className="text-primary break-all">
+                                            {lightboxItem.folder
+                                                .replace(/\/$/, '')
+                                                .split('/')
+                                                .pop()}
+                                        </dd>
+                                    </>
+                                )}
+                                {lightboxItem.file && (
+                                    <>
+                                        <dt className="text-secondary">File name</dt>
+                                        <dd className="text-primary break-all font-mono text-xs">
+                                            {lightboxItem.file.replace(/\\/g, '/').split('/').pop()}
+                                        </dd>
+                                    </>
+                                )}
+                            </dl>
                         </div>
                     )}
                 </Modal.Body>
