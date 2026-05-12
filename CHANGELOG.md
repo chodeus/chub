@@ -2,6 +2,23 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.13.0](https://github.com/chodeus/chub/compare/v1.12.0...v1.13.0) (2026-05-12)
+
+
+### Features
+
+* **border_replacerr:** themed image borders per holiday ([ffcb652](https://github.com/chodeus/chub/commit/ffcb6527e57e454a33829d6411a5bb9c1cb72734))
+
+
+### Bug Fixes
+
+* **settings:** consolidate general settings ([4e6ce3c](https://github.com/chodeus/chub/commit/4e6ce3cfe62006ffd553b6a9397fe75bb4bfe905))
+
+
+### Documentation
+
+* add AI disclaimer to README ([a07ae22](https://github.com/chodeus/chub/commit/a07ae22b7d17c2a8538b2ca502fd1bcea7aff010))
+
 ## [1.12.0](https://github.com/chodeus/chub/compare/v1.11.0...v1.12.0) (2026-05-12)
 
 
