@@ -1,7 +1,6 @@
 import { useEffect } from 'react';
 
-const DEFAULT_MESSAGE =
-    'You have unsaved changes. Leave this page and discard them?';
+const DEFAULT_MESSAGE = 'You have unsaved changes. Leave this page and discard them?';
 
 const isPlainLeftClick = event =>
     event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
