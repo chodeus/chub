@@ -79,6 +79,11 @@ class Upgradinatorr(ChubModule):
                         monitored_percentage = (
                             monitored_count / len(season["episode_data"])
                         ) * 100
+                    elif season.get("monitored"):
+                        # Lidarr albums (and other leaf-level seasons) carry no
+                        # sub-items — the season's own monitored flag is the
+                        # authoritative signal.
+                        monitored_percentage = 100
                     else:
                         self.logger.debug(
                             f"Skipping {item['title']} ({item['year']}), Season {season.get('season_number', i)} unmonitored. Reason: No episodes in season."
