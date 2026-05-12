@@ -15,6 +15,7 @@ import { configAPI } from '../../utils/api/config';
 import { useToast } from '../../contexts/ToastContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useToolbar } from '../../contexts/ToolbarContext';
+import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning';
 
 /**
  * Memoized field component for better performance
@@ -101,6 +102,7 @@ export const UISettingsPage = () => {
         () => (formData && lastSaved ? JSON.stringify(formData) !== lastSaved : false),
         [formData, lastSaved]
     );
+    useUnsavedChangesWarning(isDirty);
 
     // Handle field changes
     const handleFieldChange = useCallback(
@@ -154,9 +156,14 @@ export const UISettingsPage = () => {
 
     // Reset to last saved state — isDirty auto-clears via derivation.
     const handleReset = useCallback(() => {
-        setFormData(JSON.parse(lastSaved));
+        const restoredData = JSON.parse(lastSaved);
+        setFormData(restoredData);
         setSaveError(null);
-    }, [lastSaved]);
+        const restoredTheme = restoredData.user_interface?.theme;
+        if (restoredTheme) {
+            setTheme(restoredTheme === 'auto' ? 'system' : restoredTheme);
+        }
+    }, [lastSaved, setTheme]);
 
     // Register toolbar with Save/Reset buttons
     useEffect(() => {
@@ -164,7 +171,7 @@ export const UISettingsPage = () => {
             <ToolBar>
                 <ToolBar.Section alignContent="right">
                     <ToolBar.Button
-                        label="Reset"
+                        label="Cancel Changes"
                         iconName="restore"
                         isDisabled={!isDirty || isSaving}
                         onPress={handleReset}
