@@ -20,7 +20,6 @@ const ROUTE_TITLES = {
     '/poster/statistics': 'Poster Statistics',
     '/settings': 'Settings',
     '/settings/general': 'General Settings',
-    '/settings/interface': 'Interface Settings',
     '/settings/modules': 'Modules',
     '/settings/instances': 'Instances',
     '/settings/schedule': 'Schedule',

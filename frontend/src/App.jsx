@@ -17,7 +17,6 @@ const ModuleSettingsPage = React.lazy(
     () => import('./pages/settings/modules/ModuleSettingsPage.jsx')
 );
 const GeneralSettingsPage = React.lazy(() => import('./pages/settings/GeneralSettingsPage.jsx'));
-const UISettingsPage = React.lazy(() => import('./pages/settings/UISettingsPage.jsx'));
 const SchedulePage = React.lazy(() =>
     import('./pages/settings/SchedulePage.jsx').then(m => ({ default: m.SchedulePage }))
 );
@@ -335,15 +334,14 @@ const App = () => {
                                                             </PageErrorBoundary>
                                                         }
                                                     />
+                                                    {/* Back-compat redirect — the Interface page merged into General. */}
                                                     <Route
                                                         path="settings/interface"
                                                         element={
-                                                            <PageErrorBoundary
-                                                                pageName="User Interface Settings"
-                                                                pageDescription="UI theme and appearance settings"
-                                                            >
-                                                                <UISettingsPage />
-                                                            </PageErrorBoundary>
+                                                            <Navigate
+                                                                to="/settings/general"
+                                                                replace
+                                                            />
                                                         }
                                                     />
                                                     <Route

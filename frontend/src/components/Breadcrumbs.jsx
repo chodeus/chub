@@ -27,7 +27,6 @@ const ROUTE_CRUMBS = {
     '/poster/statistics': [{ label: 'Assets' }, { label: 'Statistics' }],
 
     '/settings/general': [{ label: 'Settings' }, { label: 'General' }],
-    '/settings/interface': [{ label: 'Settings' }, { label: 'Interface' }],
     '/settings/modules': [{ label: 'Settings' }, { label: 'Modules' }],
     '/settings/instances': [{ label: 'Settings' }, { label: 'Instances' }],
     '/settings/schedule': [{ label: 'Settings' }, { label: 'Schedule' }],
