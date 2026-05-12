@@ -14,6 +14,7 @@ import { useApiData } from '../../hooks/useApiData';
 import { configAPI } from '../../utils/api/config';
 import { useToast } from '../../contexts/ToastContext';
 import { useToolbar } from '../../contexts/ToolbarContext';
+import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning';
 
 /**
  * Memoized field component for better performance
@@ -115,6 +116,7 @@ export const GeneralSettingsPage = () => {
         () => (formData && lastSaved ? JSON.stringify(formData) !== lastSaved : false),
         [formData, lastSaved]
     );
+    useUnsavedChangesWarning(isDirty);
 
     // Handle field changes
     const handleFieldChange = useCallback((moduleKey, fieldKey, value) => {
@@ -169,7 +171,7 @@ export const GeneralSettingsPage = () => {
             <ToolBar>
                 <ToolBar.Section alignContent="right">
                     <ToolBar.Button
-                        label="Reset"
+                        label="Cancel Changes"
                         iconName="restore"
                         isDisabled={!isDirty || isSaving}
                         onPress={handleReset}

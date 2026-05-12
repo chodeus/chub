@@ -259,7 +259,10 @@ class BaseARRClient:
         return self.make_get_request(endpoint)
 
     def make_get_request(
-        self, endpoint: str, headers: Optional[Dict[str, str]] = None
+        self,
+        endpoint: str,
+        headers: Optional[Dict[str, str]] = None,
+        params: Optional[dict] = None,
     ) -> Any:
         """
         Make a GET request to endpoint.
@@ -267,10 +270,13 @@ class BaseARRClient:
         Args:
             endpoint (str): API endpoint.
             headers (Optional[Dict[str, str]]): Headers.
+            params (Optional[dict]): Query parameters.
         Returns:
             Any: Response or JSON.
         """
-        return self._request_with_retries("GET", endpoint, headers=headers)
+        return self._request_with_retries(
+            "GET", endpoint, headers=headers, params=params
+        )
 
     def make_post_request(
         self, endpoint: str, headers: Optional[Dict[str, str]] = None, json: Any = None
@@ -486,6 +492,7 @@ class BaseARRClient:
                         e,
                         response if "response" in locals() else None,
                         json,
+                        params,
                     )
                     return None
 
@@ -510,6 +517,7 @@ class BaseARRClient:
         exception: Exception,
         response: Any = None,
         payload: Any = None,
+        params: Optional[dict] = None,
     ) -> None:
         """Comprehensive logging for request failures"""
         status_code = (
@@ -527,6 +535,8 @@ class BaseARRClient:
 
         if payload:
             self.logger.error(f"Payload: {payload}")
+        if params:
+            self.logger.error(f"Query Params: {params}")
 
         if response and hasattr(response, "text"):
             # Truncate very long responses
@@ -887,21 +897,27 @@ class RadarrClient(BaseARRClient):
 
     def get_wanted_missing(self, page: int = 1, page_size: int = 100) -> Any:
         """Get missing (wanted) movies from Radarr."""
-        endpoint = (
-            f"{self.api_base}/wanted/missing"
-            f"?page={page}&pageSize={page_size}"
-            f"&sortKey=releaseDate&sortDirection=desc&monitored=true"
-        )
-        return self.make_get_request(endpoint)
+        endpoint = f"{self.api_base}/wanted/missing"
+        params = {
+            "page": page,
+            "pageSize": page_size,
+            "sortKey": "releaseDate",
+            "sortDirection": "desc",
+            "monitored": "true",
+        }
+        return self.make_get_request(endpoint, params=params)
 
     def get_wanted_cutoff(self, page: int = 1, page_size: int = 100) -> Any:
         """Get cutoff-unmet movies from Radarr."""
-        endpoint = (
-            f"{self.api_base}/wanted/cutoff"
-            f"?page={page}&pageSize={page_size}"
-            f"&sortKey=releaseDate&sortDirection=desc&monitored=true"
-        )
-        return self.make_get_request(endpoint)
+        endpoint = f"{self.api_base}/wanted/cutoff"
+        params = {
+            "page": page,
+            "pageSize": page_size,
+            "sortKey": "releaseDate",
+            "sortDirection": "desc",
+            "monitored": "true",
+        }
+        return self.make_get_request(endpoint, params=params)
 
     def get_all_media(self, include_episode: bool = False) -> List[Dict[str, Any]]:
         items = self.get_media()
@@ -1303,23 +1319,29 @@ class SonarrClient(BaseARRClient):
 
     def get_wanted_missing(self, page: int = 1, page_size: int = 100) -> Any:
         """Get missing (wanted) episodes from Sonarr."""
-        endpoint = (
-            f"{self.api_base}/wanted/missing"
-            f"?page={page}&pageSize={page_size}"
-            f"&sortKey=releaseDate&sortDirection=desc&monitored=true"
-            f"&includeSeries=true"
-        )
-        return self.make_get_request(endpoint)
+        endpoint = f"{self.api_base}/wanted/missing"
+        params = {
+            "page": page,
+            "pageSize": page_size,
+            "sortKey": "releaseDate",
+            "sortDirection": "desc",
+            "monitored": "true",
+            "includeSeries": "true",
+        }
+        return self.make_get_request(endpoint, params=params)
 
     def get_wanted_cutoff(self, page: int = 1, page_size: int = 100) -> Any:
         """Get cutoff-unmet episodes from Sonarr."""
-        endpoint = (
-            f"{self.api_base}/wanted/cutoff"
-            f"?page={page}&pageSize={page_size}"
-            f"&sortKey=releaseDate&sortDirection=desc&monitored=true"
-            f"&includeSeries=true"
-        )
-        return self.make_get_request(endpoint)
+        endpoint = f"{self.api_base}/wanted/cutoff"
+        params = {
+            "page": page,
+            "pageSize": page_size,
+            "sortKey": "releaseDate",
+            "sortDirection": "desc",
+            "monitored": "true",
+            "includeSeries": "true",
+        }
+        return self.make_get_request(endpoint, params=params)
 
     def get_all_media(self, include_episode: bool = False) -> List[Dict[str, Any]]:
         items = self.get_media()
@@ -1451,6 +1473,34 @@ class LidarrClient(BaseARRClient):
         endpoint = f"{self.api_base}/queue?{url_addon}"
         return self.make_get_request(endpoint, headers=self.headers)
 
+    def get_grab_history(self, media_id: int) -> Any:
+        """Get grab history for an artist."""
+        endpoint = f"{self.api_base}/history/artist"
+        params = {
+            "artistId": media_id,
+            "eventType": "grabbed",
+            "includeArtist": "false",
+            "includeAlbum": "true",
+            "includeTrack": "false",
+        }
+        return self.make_get_request(endpoint, headers=self.headers, params=params)
+
+    def get_album_grab_history(self, album_id: int) -> Any:
+        """Get grab history for a specific album."""
+        endpoint = f"{self.api_base}/history"
+        params = {
+            "page": 1,
+            "pageSize": 200,
+            "sortKey": "date",
+            "sortDirection": "descending",
+            "filterKey": "albumId",
+            "filterValue": album_id,
+            "includeArtist": "false",
+            "includeAlbum": "true",
+            "includeTrack": "false",
+        }
+        return self.make_get_request(endpoint, headers=self.headers, params=params)
+
     def get_all_media(self, include_episode: bool = False) -> List[Dict[str, Any]]:
         """Get all artists, optionally with album data."""
         items = self.get_media()
@@ -1475,21 +1525,25 @@ class LidarrClient(BaseARRClient):
 
     def get_wanted_missing(self, page: int = 1, page_size: int = 100) -> Any:
         """Get missing (wanted) albums from Lidarr."""
-        endpoint = (
-            f"{self.api_base}/wanted/missing"
-            f"?page={page}&pageSize={page_size}"
-            f"&sortKey=releaseDate&sortDirection=desc&monitored=true"
-        )
-        return self.make_get_request(endpoint)
+        endpoint = f"{self.api_base}/wanted/missing"
+        params = {
+            "page": page,
+            "pageSize": page_size,
+            "includeArtist": "true",
+            "monitored": "true",
+        }
+        return self.make_get_request(endpoint, params=params)
 
     def get_wanted_cutoff(self, page: int = 1, page_size: int = 100) -> Any:
         """Get cutoff-unmet albums from Lidarr."""
-        endpoint = (
-            f"{self.api_base}/wanted/cutoff"
-            f"?page={page}&pageSize={page_size}"
-            f"&sortKey=releaseDate&sortDirection=desc&monitored=true"
-        )
-        return self.make_get_request(endpoint)
+        endpoint = f"{self.api_base}/wanted/cutoff"
+        params = {
+            "page": page,
+            "pageSize": page_size,
+            "includeArtist": "true",
+            "monitored": "true",
+        }
+        return self.make_get_request(endpoint, params=params)
 
     def refresh_items(self, media_ids: Union[int, List[int]]) -> Any:
         """Refresh metadata for one or more artists."""

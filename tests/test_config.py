@@ -10,6 +10,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 import backend.util.scheduler as scheduler
 from backend.modules.upgradinatorr import Upgradinatorr
+from backend.util.arr import LidarrClient
 from backend.util.config import (
     ChubConfig,
     InstanceDetail,
@@ -221,6 +222,9 @@ def test_monthly_schedule_accepts_multiple_days(monkeypatch):
 
 
 class StubLogger:
+    def __init__(self):
+        self.warnings = []
+
     def debug(self, *args, **kwargs):
         pass
 
@@ -228,7 +232,7 @@ class StubLogger:
         pass
 
     def warning(self, *args, **kwargs):
-        pass
+        self.warnings.append(" ".join(str(arg) for arg in args))
 
     def error(self, *args, **kwargs):
         pass
@@ -295,6 +299,25 @@ class FakeARR:
         return {"records": []}
 
 
+class FakeFailingARR(FakeARR):
+    def wait_for_command(self, command_id):
+        return False
+
+
+class FakeQueueARR(FakeARR):
+    def get_queue(self):
+        return {
+            "records": [
+                {
+                    "downloadId": "download-7",
+                    "movieId": 7,
+                    "title": "Movie.2024.1080p.WEB-DL",
+                    "customFormatScore": 7777,
+                }
+            ]
+        }
+
+
 def test_upgradinatorr_instance_count_mode_defaults_to_series_artist():
     inst = UpgradinatorrInstance()
     assert inst.count_mode == "series_artist"
@@ -303,6 +326,132 @@ def test_upgradinatorr_instance_count_mode_defaults_to_series_artist():
 def test_upgradinatorr_instance_count_mode_accepts_season_album():
     inst = UpgradinatorrInstance(count_mode="season_album")
     assert inst.count_mode == "season_album"
+
+
+class CaptureLidarrClient(LidarrClient):
+    def make_get_request(self, endpoint, headers=None, params=None):
+        self.captured_request = {
+            "endpoint": endpoint,
+            "headers": headers,
+            "params": params,
+        }
+        return {"records": [], "totalRecords": 0}
+
+
+def test_lidarr_wanted_requests_use_album_safe_params():
+    client = object.__new__(CaptureLidarrClient)
+    client.url = "http://lidarr:8686"
+
+    client.get_wanted_missing(page=3, page_size=50)
+
+    assert client.captured_request == {
+        "endpoint": "http://lidarr:8686/api/v1/wanted/missing",
+        "headers": None,
+        "params": {
+            "page": 3,
+            "pageSize": 50,
+            "includeArtist": "true",
+            "monitored": "true",
+        },
+    }
+    assert "sortKey" not in client.captured_request["params"]
+
+    client.get_wanted_cutoff(page=2, page_size=25)
+
+    assert client.captured_request == {
+        "endpoint": "http://lidarr:8686/api/v1/wanted/cutoff",
+        "headers": None,
+        "params": {
+            "page": 2,
+            "pageSize": 25,
+            "includeArtist": "true",
+            "monitored": "true",
+        },
+    }
+    assert "sortKey" not in client.captured_request["params"]
+
+
+class FakeLidarrWantedApp:
+    def get_all_tags(self):
+        return [{"id": 1, "label": "checked"}]
+
+
+def test_upgradinatorr_lidarr_wanted_records_group_by_artist():
+    module = make_upgradinatorr()
+    records = [
+        {
+            "id": 101,
+            "title": "First Album",
+            "foreignAlbumId": "mb-album-1",
+            "monitored": True,
+            "artist": {
+                "id": 21,
+                "artistName": "The Artist",
+                "monitored": True,
+                "status": "continuing",
+                "tags": [],
+                "path": "/music/The Artist",
+            },
+        },
+        {
+            "id": 102,
+            "title": "Second Album",
+            "foreignAlbumId": "mb-album-2",
+            "monitored": True,
+            "artist": {
+                "id": 21,
+                "artistName": "The Artist",
+                "monitored": True,
+                "status": "continuing",
+                "tags": [],
+                "path": "/music/The Artist",
+            },
+        },
+    ]
+
+    result = module._convert_wanted_to_media_dict(
+        records, "lidarr", FakeLidarrWantedApp()
+    )
+
+    assert len(result) == 1
+    assert result[0]["media_id"] == 21
+    assert result[0]["title"] == "The Artist"
+    assert result[0]["seasons"] == [
+        {
+            "season_number": 0,
+            "album_id": 101,
+            "album_title": "First Album",
+            "foreign_album_id": "mb-album-1",
+            "monitored": True,
+            "episode_data": [],
+        },
+        {
+            "season_number": 1,
+            "album_id": 102,
+            "album_title": "Second Album",
+            "foreign_album_id": "mb-album-2",
+            "monitored": True,
+            "episode_data": [],
+        },
+    ]
+
+
+class FailingWantedApp:
+    instance_name = "lidarr"
+
+    def get_wanted_missing(self, page=1, page_size=100):
+        return None
+
+
+def test_upgradinatorr_wanted_fetch_failure_is_not_empty_list():
+    module = make_upgradinatorr()
+
+    result = module._get_all_wanted(FailingWantedApp(), "missing")
+
+    assert result is None
+    assert any(
+        "Failed to fetch missing page 1" in msg for msg in module.logger.warnings
+    )
 
 
 class FakeProgress:
@@ -349,6 +498,32 @@ class FakeSonarrApp:
         self.tag_calls.append((media_id, tag_id))
 
 
+class FakeSonarrHistoryApp(FakeSonarrApp):
+    def __init__(self):
+        super().__init__()
+        self.grab_history = {}
+
+    def search_season(self, media_id, season_number):
+        response = super().search_season(media_id, season_number)
+        self.grab_history[season_number] = [
+            {
+                "id": season_number,
+                "downloadId": f"download-{season_number}",
+                "sourceTitle": f"Gen.V.S{season_number:02}.1080p.WEB-DL",
+                "customFormatScore": 8000 + season_number,
+            }
+        ]
+        return response
+
+    def get_season_grab_history(self, _media_id, season_number):
+        return {"records": self.grab_history.get(season_number, [])}
+
+
+class FakeFailingSonarrApp(FakeSonarrApp):
+    def wait_for_command(self, _cmd_id):
+        return False
+
+
 class FakeLidarrApp:
     instance_name = "lidarr_main"
     instance_type = "Lidarr"
@@ -366,6 +541,33 @@ class FakeLidarrApp:
 
     def add_tags(self, media_id, tag_id):
         self.tag_calls.append((media_id, tag_id))
+
+
+class FakeLidarrHistoryApp(FakeLidarrApp):
+    def __init__(self):
+        super().__init__()
+        self.grab_history = {}
+
+    def search_album(self, album_id):
+        response = super().search_album(album_id)
+        self.grab_history[album_id] = [
+            {
+                "id": album_id,
+                "downloadId": f"download-{album_id}",
+                "sourceTitle": f"Artist.Album.{album_id}.FLAC",
+                "customFormatScore": 9000 + album_id,
+                "eventType": "grabbed",
+            }
+        ]
+        return response
+
+    def get_album_grab_history(self, album_id):
+        return {"records": self.grab_history.get(album_id, [])}
+
+
+class FakeFailingLidarrApp(FakeLidarrApp):
+    def wait_for_command(self, _cmd_id):
+        return False
 
 
 def _sonarr_item():
@@ -467,6 +669,67 @@ def test_upgradinatorr_legacy_sonarr_tags_once_and_clears_stale_progress():
     assert progress.get_processed_children("sonarr_main", 11) == set()
 
 
+def test_upgradinatorr_sonarr_captures_all_grabbed_seasons():
+    module = make_upgradinatorr(dry_run=False)
+    app = FakeSonarrHistoryApp()
+    grabbed = {}
+    stats = {}
+
+    new_count, hit = module._process_sonarr_item(
+        _sonarr_item(),
+        app,
+        checked_tag_id=99,
+        count=5,
+        granular=False,
+        progress_db=None,
+        search_count=0,
+        grabbed_downloads=grabbed,
+        search_stats=stats,
+    )
+
+    assert hit is False
+    assert new_count == 1
+    assert stats == {
+        "searches_attempted": 3,
+        "searches_succeeded": 3,
+    }
+    assert [download["download"] for download in grabbed[11]] == [
+        "Gen.V.S01.1080p.WEB-DL",
+        "Gen.V.S02.1080p.WEB-DL",
+        "Gen.V.S03.1080p.WEB-DL",
+    ]
+
+
+def test_upgradinatorr_sonarr_failure_does_not_tag_or_record_progress():
+    module = make_upgradinatorr(dry_run=False)
+    app = FakeFailingSonarrApp()
+    progress = FakeProgress()
+    failed = {}
+    stats = {}
+
+    new_count, hit = module._process_sonarr_item(
+        _sonarr_item(),
+        app,
+        checked_tag_id=99,
+        count=5,
+        granular=True,
+        progress_db=progress,
+        search_count=0,
+        failed_searches=failed,
+        search_stats=stats,
+    )
+
+    assert hit is False
+    assert new_count == 3
+    assert app.tag_calls == []
+    assert progress.get_processed_children("sonarr_main", 11) == set()
+    assert failed[11] == ["Season 1", "Season 2", "Season 3"]
+    assert stats == {
+        "searches_attempted": 3,
+        "searches_failed": 3,
+    }
+
+
 def test_upgradinatorr_granular_lidarr_resumes_across_runs():
     module = make_upgradinatorr(dry_run=False)
     app = FakeLidarrApp()
@@ -492,6 +755,67 @@ def test_upgradinatorr_granular_lidarr_resumes_across_runs():
     assert app.album_searches == [101, 102, 103]
     assert app.tag_calls == [(21, 99)]
     assert progress.get_processed_children("lidarr_main", 21) == set()
+
+
+def test_upgradinatorr_lidarr_captures_all_grabbed_albums():
+    module = make_upgradinatorr(dry_run=False)
+    app = FakeLidarrHistoryApp()
+    grabbed = {}
+    stats = {}
+
+    new_count, hit = module._process_lidarr_item(
+        _lidarr_item(),
+        app,
+        checked_tag_id=99,
+        count=5,
+        granular=False,
+        progress_db=None,
+        search_count=0,
+        grabbed_downloads=grabbed,
+        search_stats=stats,
+    )
+
+    assert hit is False
+    assert new_count == 1
+    assert [download["download"] for download in grabbed[21]] == [
+        "Artist.Album.101.FLAC",
+        "Artist.Album.102.FLAC",
+        "Artist.Album.103.FLAC",
+    ]
+    assert stats == {
+        "searches_attempted": 3,
+        "searches_succeeded": 3,
+    }
+
+
+def test_upgradinatorr_lidarr_failure_does_not_tag_or_record_progress():
+    module = make_upgradinatorr(dry_run=False)
+    app = FakeFailingLidarrApp()
+    progress = FakeProgress()
+    failed = {}
+    stats = {}
+
+    new_count, hit = module._process_lidarr_item(
+        _lidarr_item(),
+        app,
+        checked_tag_id=99,
+        count=5,
+        granular=True,
+        progress_db=progress,
+        search_count=0,
+        failed_searches=failed,
+        search_stats=stats,
+    )
+
+    assert hit is False
+    assert new_count == 3
+    assert app.tag_calls == []
+    assert progress.get_processed_children("lidarr_main", 21) == set()
+    assert failed[21] == ["Album A", "Album B", "Album C"]
+    assert stats == {
+        "searches_attempted": 3,
+        "searches_failed": 3,
+    }
 
 
 def test_upgradinatorr_filter_skips_checked_tag_name():
@@ -557,6 +881,51 @@ def test_upgradinatorr_unattended_resets_checked_tag_then_processes_next_cycle()
     assert app.search_calls == [7]
     assert app.add_calls == [(7, 1)]
     assert result["data"][0]["media_id"] == 7
+
+
+def test_upgradinatorr_radarr_failure_does_not_tag():
+    module = make_upgradinatorr(dry_run=False)
+    app = FakeFailingARR([[upgradinatorr_media_item([])]])
+
+    result = module.process_instance(
+        "radarr",
+        SimpleNamespace(
+            count=10,
+            tag_name="checked",
+            ignore_tag="ignore",
+            unattended=False,
+            season_monitored_threshold=0,
+            search_mode="upgrade",
+        ),
+        app,
+    )
+
+    assert app.search_calls == [7]
+    assert app.add_calls == []
+    assert result["searches_attempted"] == 1
+    assert result["searches_failed"] == 1
+    assert result["data"][0]["search_failures"] == ["Media search"]
+
+
+def test_upgradinatorr_queue_fallback_still_reports_downloads():
+    module = make_upgradinatorr(dry_run=False)
+    app = FakeQueueARR([[upgradinatorr_media_item([])]])
+
+    result = module.process_instance(
+        "radarr",
+        SimpleNamespace(
+            count=10,
+            tag_name="checked",
+            ignore_tag="ignore",
+            unattended=False,
+            season_monitored_threshold=0,
+            search_mode="upgrade",
+        ),
+        app,
+    )
+
+    assert app.add_calls == [(7, 1)]
+    assert result["data"][0]["download"] == {"Movie.2024.1080p.WEB-DL": 7777}
 
 
 def test_upgradinatorr_run_skips_disabled_profiles(monkeypatch):

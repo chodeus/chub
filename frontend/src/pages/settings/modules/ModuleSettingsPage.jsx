@@ -9,6 +9,7 @@ import { ConfigProvider, useConfig } from '../../../contexts/ConfigContext.jsx';
 import { PageHeader } from '../../../components/ui/PageHeader';
 import { ToolBar } from '../../../components/ToolBar';
 import { useToolbar } from '../../../contexts/ToolbarContext';
+import { useUnsavedChangesWarning } from '../../../hooks/useUnsavedChangesWarning';
 
 /**
  * Memoized field component for better performance
@@ -64,6 +65,7 @@ const ModuleSettingsContent = () => {
         () => (formData && lastSaved ? JSON.stringify(formData) !== lastSaved : false),
         [formData, lastSaved]
     );
+    useUnsavedChangesWarning(isDirty);
 
     // Module description lookup
     const moduleDescriptions = useMemo(() => {
@@ -133,9 +135,9 @@ const ModuleSettingsContent = () => {
 
     // Reset to last saved state - simplified with Context
     const handleReset = useCallback(() => {
-        setFormData(config);
+        setFormData(JSON.parse(lastSaved));
         setSaveError(null);
-    }, [config]);
+    }, [lastSaved]);
 
     // Handle field changes following main UI pattern
     const handleFieldChange = useCallback((moduleKey, fieldKey, value) => {
@@ -155,7 +157,7 @@ const ModuleSettingsContent = () => {
             <ToolBar>
                 <ToolBar.Section alignContent="right">
                     <ToolBar.Button
-                        label="Reset"
+                        label="Cancel Changes"
                         iconName="restore"
                         isDisabled={!isDirty || isSaving}
                         onPress={handleReset}
