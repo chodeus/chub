@@ -57,13 +57,14 @@ class PosterCache(DatabaseBase):
             """
             INSERT INTO poster_cache
                 (asset_type, title, normalized_title, year,
-                 tmdb_id, tvdb_id, imdb_id, season_number, folder, file, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 tmdb_id, tvdb_id, imdb_id, season_number, folder, file, style, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(title, year, tmdb_id, tvdb_id, imdb_id, season_number, file)
             DO UPDATE SET
                 asset_type=excluded.asset_type,
                 normalized_title=excluded.normalized_title,
-                folder=excluded.folder
+                folder=excluded.folder,
+                style=excluded.style
             """,
             (
                 record.get("asset_type"),
@@ -76,6 +77,7 @@ class PosterCache(DatabaseBase):
                 record["season_number"],
                 record["folder"],
                 record["file"],
+                record.get("style"),
                 created_at,
             ),
         )
@@ -264,25 +266,6 @@ class PosterCache(DatabaseBase):
 
         return {"items": items, "total": total, "limit": limit, "offset": offset}
 
-    def find_duplicates(self) -> list:
-        """Find poster entries with the same title/year/season."""
-        return (
-            self.execute_query(
-                """
-                SELECT normalized_title, year, season_number,
-                       COUNT(*) as count,
-                       GROUP_CONCAT(id) as ids,
-                       GROUP_CONCAT(file) as files
-                FROM poster_cache
-                GROUP BY normalized_title, year, season_number
-                HAVING COUNT(*) > 1
-                ORDER BY count DESC
-                """,
-                fetch_all=True,
-            )
-            or []
-        )
-
     def get_all_grouped(self) -> dict:
         """Return all poster_cache records grouped by type."""
         all_records = self.get_all()
@@ -317,15 +300,24 @@ class PosterCache(DatabaseBase):
                 owners.add(parts[-1])
         return sorted(owners)
 
+    def get_distinct_styles(self) -> list:
+        """Return distinct non-empty style values stored on poster_cache rows."""
+        rows = self.execute_query(
+            "SELECT DISTINCT style FROM poster_cache WHERE style IS NOT NULL AND style != ''",
+            fetch_all=True,
+        ) or []
+        return sorted({row["style"] for row in rows if row.get("style")})
+
     def browse(
         self,
         owner: Optional[str] = None,
         asset_type: Optional[str] = None,
         query: Optional[str] = None,
+        style: Optional[str] = None,
         limit: int = 60,
         offset: int = 0,
     ) -> dict:
-        """Browse poster_cache with optional owner, type, and search filters."""
+        """Browse poster_cache with optional owner, type, style, and search filters."""
         conditions = []
         params: list = []
 
@@ -346,6 +338,14 @@ class PosterCache(DatabaseBase):
             conditions.append("asset_type = ?")
             params.append("show")
             conditions.append("season_number IS NOT NULL")
+
+        # "other" matches rows whose source dir didn't resolve to a known
+        # gdrive_list entry (style IS NULL).
+        if style == "other":
+            conditions.append("style IS NULL")
+        elif style:
+            conditions.append("style = ?")
+            params.append(style)
 
         where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
 

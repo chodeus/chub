@@ -3,6 +3,7 @@ import PropTypes from 'prop-types';
 import { useApiData, useApiMutation } from '../../hooks/useApiData.js';
 import { useModuleExecution } from '../../hooks/useModuleExecution.js';
 import { useToast } from '../../contexts/ToastContext.jsx';
+import { useSearch, SEARCH_TYPES } from '../../contexts/SearchCoordinatorContext.jsx';
 import { postersAPI } from '../../utils/api/posters.js';
 import { Modal } from '../../components/modals/Modal';
 import { Button, LoadingButton, IconButton, PageHeader } from '../../components/ui/index.js';
@@ -60,7 +61,6 @@ const PosterAssetsSearchPage = () => {
     const fileInputRef = useRef(null);
 
     const [deleteTarget, setDeleteTarget] = useState(null);
-    const [resolveTarget, setResolveTarget] = useState(null);
     const [isUploading, setIsUploading] = useState(false);
     const [analyzeModal, setAnalyzeModal] = useState(null);
     const [showCreateCollection, setShowCreateCollection] = useState(false);
@@ -72,25 +72,36 @@ const PosterAssetsSearchPage = () => {
     const [expandedCollection, setExpandedCollection] = useState(null);
     const [lightboxItem, setLightboxItem] = useState(null);
 
-    // Filter state — restore from localStorage if available
+    // Owner/Type/Style persist across reloads; the search term is driven by
+    // the global top-bar input and intentionally not persisted.
     const saved = useMemo(() => loadSavedFilters(), []);
     const [owner, setOwner] = useState(saved?.owner || '');
     const [type, setType] = useState(saved?.type || '');
-    const [search, setSearch] = useState(saved?.search || '');
+    const [style, setStyle] = useState(saved?.style || '');
     const [offset, setOffset] = useState(0);
 
-    // Track whether the user has active filters (page is blank without them)
-    const hasFilters = !!(owner || type || search);
+    // Top-bar search input → SearchCoordinator (SEARCH_TYPES.POSTERS) → this term.
+    // No searchFunction is registered; we just consume the term as a filter value.
+    const { term: search } = useSearch(SEARCH_TYPES.POSTERS);
+
+    // Reset to page 1 whenever the search term changes from the top bar.
+    // Done at render time (not in an effect) to avoid a cascading render.
+    const [prevSearch, setPrevSearch] = useState(search);
+    if (prevSearch !== search) {
+        setPrevSearch(search);
+        setOffset(0);
+    }
 
     const browseParams = useMemo(
         () => ({
             owner: owner || undefined,
             type: type || undefined,
             query: search || undefined,
+            style: style || undefined,
             limit: PAGE_SIZE,
             offset,
         }),
-        [owner, type, search, offset]
+        [owner, type, style, search, offset]
     );
 
     const {
@@ -98,18 +109,7 @@ const PosterAssetsSearchPage = () => {
         isLoading,
         refresh: refreshBrowse,
     } = useApiData({
-        apiFunction: useCallback(
-            () =>
-                hasFilters
-                    ? postersAPI.browsePosters(browseParams)
-                    : postersAPI.browsePosters({ limit: 0 }),
-            [browseParams, hasFilters]
-        ),
-        options: { showErrorToast: false },
-    });
-
-    const { data: dupData, refresh: refreshDups } = useApiData({
-        apiFunction: postersAPI.fetchDuplicates,
+        apiFunction: useCallback(() => postersAPI.browsePosters(browseParams), [browseParams]),
         options: { showErrorToast: false },
     });
 
@@ -121,11 +121,6 @@ const PosterAssetsSearchPage = () => {
     const { execute: deleteItem, isLoading: isDeleting } = useApiMutation(
         () => postersAPI.deletePoster(deleteTarget?.id),
         { successMessage: 'Poster deleted' }
-    );
-
-    const { execute: resolveGroup, isLoading: isResolving } = useApiMutation(
-        () => postersAPI.resolveDuplicates(resolveTarget?.id, { action: 'auto' }),
-        { successMessage: 'Duplicate group resolved' }
     );
 
     const { execute: runAnalyze, isLoading: isAnalyzing } = useApiMutation(
@@ -164,7 +159,7 @@ const PosterAssetsSearchPage = () => {
     const items = useMemo(() => browseData?.data?.items || [], [browseData]);
     const total = useMemo(() => browseData?.data?.total || 0, [browseData]);
     const owners = useMemo(() => browseData?.data?.owners || [], [browseData]);
-    const duplicates = useMemo(() => dupData?.data?.duplicates || [], [dupData]);
+    const styles = useMemo(() => browseData?.data?.styles || [], [browseData]);
     const collections = useMemo(
         () => collectionsData?.data?.collections || collectionsData?.data || [],
         [collectionsData]
@@ -179,18 +174,6 @@ const PosterAssetsSearchPage = () => {
         setOffset(0);
         const current = loadSavedFilters() || {};
         saveFilters({ ...current, [key]: val });
-    };
-
-    const handleSearchChange = e => {
-        setSearch(e.target.value);
-    };
-
-    const handleSearchKeyDown = e => {
-        if (e.key === 'Enter') {
-            setOffset(0);
-            const current = loadSavedFilters() || {};
-            saveFilters({ ...current, search });
-        }
     };
 
     const handleAutoMatch = async () => {
@@ -229,17 +212,6 @@ const PosterAssetsSearchPage = () => {
             refreshBrowse();
         } catch {
             toast.error('Failed to delete poster');
-        }
-    };
-
-    const handleResolve = async () => {
-        if (!resolveTarget) return;
-        try {
-            await resolveGroup();
-            setResolveTarget(null);
-            refreshDups();
-        } catch {
-            toast.error('Failed to resolve duplicates');
         }
     };
 
@@ -352,70 +324,28 @@ const PosterAssetsSearchPage = () => {
                     >
                         <option value="">All</option>
                         <option value="movie">Movies</option>
+                        <option value="show">Shows</option>
                         <option value="season">Seasons</option>
+                        <option value="collection">Collections</option>
                     </select>
                 </div>
-                <div
-                    className="flex items-center gap-2 flex-1 max-w-sm"
-                    style={{ minWidth: '200px' }}
-                >
-                    <label className="text-sm text-secondary">Search</label>
-                    <input
-                        type="text"
-                        value={search}
-                        onChange={handleSearchChange}
-                        onKeyDown={handleSearchKeyDown}
-                        placeholder="Search by title..."
-                        className="w-full px-3 py-1.5 rounded-lg bg-surface border border-border text-primary text-sm placeholder:text-tertiary"
-                    />
+                <div className="flex items-center gap-2">
+                    <label className="text-sm text-secondary">Style</label>
+                    <select
+                        value={style}
+                        onChange={handleFilterChange(setStyle, 'style')}
+                        className="px-3 py-1.5 rounded-lg bg-surface border border-border text-primary text-sm"
+                    >
+                        <option value="">All</option>
+                        {styles.map(s => (
+                            <option key={s} value={s}>
+                                {s}
+                            </option>
+                        ))}
+                        <option value="other">Other</option>
+                    </select>
                 </div>
             </div>
-
-            {/* Duplicates */}
-            {duplicates.length > 0 && (
-                <section>
-                    <h3 className="text-lg font-semibold text-primary mb-3 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-warning">content_copy</span>
-                        Duplicates ({duplicates.length} groups)
-                    </h3>
-                    <div className="grid gap-2">
-                        {duplicates.slice(0, 10).map((dup, i) => (
-                            <div
-                                key={dup.id || i}
-                                className="p-3 rounded-lg bg-surface border border-border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2"
-                            >
-                                <div className="flex items-center flex-wrap gap-2 min-w-0">
-                                    <span className="font-medium text-primary truncate">
-                                        {dup.normalized_title}
-                                    </span>
-                                    {dup.year && (
-                                        <span className="text-secondary flex-shrink-0">
-                                            ({dup.year})
-                                        </span>
-                                    )}
-                                    {dup.season_number != null && (
-                                        <span className="text-tertiary flex-shrink-0">
-                                            S{String(dup.season_number).padStart(2, '0')}
-                                        </span>
-                                    )}
-                                </div>
-                                <div className="flex items-center flex-wrap gap-2 sm:gap-3">
-                                    <span className="text-sm font-medium text-warning">
-                                        {dup.count} copies
-                                    </span>
-                                    <Button
-                                        variant="ghost"
-                                        icon="auto_fix_high"
-                                        onClick={() => setResolveTarget(dup)}
-                                    >
-                                        Resolve
-                                    </Button>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </section>
-            )}
 
             {/* Collections */}
             {Array.isArray(collections) && collections.length > 0 && (
@@ -549,6 +479,12 @@ const PosterAssetsSearchPage = () => {
                             const displayTitle = suffixParts.length
                                 ? `${item.title} (${suffixParts.join(' ')})`
                                 : item.title;
+                            const driveName = item.folder
+                                ? item.folder.replace(/\/$/, '').split('/').pop()
+                                : '';
+                            const fileBase = item.file
+                                ? item.file.replace(/\\/g, '/').split('/').pop()
+                                : '';
                             return (
                                 <div
                                     key={item.id}
@@ -574,6 +510,14 @@ const PosterAssetsSearchPage = () => {
                                                 alt={displayTitle}
                                             />
                                         </button>
+                                    )}
+                                    {item.style && (
+                                        <span
+                                            className="absolute top-1.5 left-1.5 z-10 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-black/65 text-white backdrop-blur-sm pointer-events-none"
+                                            title={`Style: ${item.style}`}
+                                        >
+                                            {item.style}
+                                        </span>
                                     )}
                                     <div className="absolute top-1.5 right-1.5 z-10 flex items-center gap-0.5 rounded-lg bg-black/55 backdrop-blur-sm p-0.5 opacity-0 group-hover:opacity-100 transition-fast">
                                         <IconButton
@@ -601,13 +545,29 @@ const PosterAssetsSearchPage = () => {
                                             onClick={() => setDeleteTarget(item)}
                                         />
                                     </div>
-                                    <div className="p-1.5">
+                                    <div className="p-1.5 flex flex-col gap-0.5">
                                         <h4
                                             className="font-medium text-primary text-xs line-clamp-2 break-words leading-tight text-center"
                                             title={displayTitle}
                                         >
                                             {displayTitle}
                                         </h4>
+                                        {driveName && (
+                                            <p
+                                                className="text-[10px] text-tertiary text-center truncate"
+                                                title={`Drive: ${driveName}`}
+                                            >
+                                                {driveName}
+                                            </p>
+                                        )}
+                                        {fileBase && (
+                                            <p
+                                                className="text-[10px] text-tertiary text-center truncate"
+                                                title={fileBase}
+                                            >
+                                                {fileBase}
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
                             );
@@ -641,15 +601,11 @@ const PosterAssetsSearchPage = () => {
             ) : (
                 <div className="text-center py-16 text-tertiary">
                     <span className="material-symbols-outlined text-5xl mb-4 block opacity-40">
-                        {hasFilters ? 'search_off' : 'filter_alt'}
+                        search_off
                     </span>
-                    <p className="text-lg">
-                        {hasFilters ? 'No posters found' : 'Select a filter to browse posters'}
-                    </p>
+                    <p className="text-lg">No posters found</p>
                     <p className="text-sm mt-2">
-                        {hasFilters
-                            ? 'Try adjusting your filters'
-                            : 'Use the owner, type, or search filters above to get started'}
+                        Try clearing the search or changing the owner/type filter
                     </p>
                 </div>
             )}
@@ -737,32 +693,6 @@ const PosterAssetsSearchPage = () => {
                         disabled={isDeleting}
                     >
                         {isDeleting ? 'Deleting...' : 'Delete'}
-                    </Button>
-                </Modal.Footer>
-            </Modal>
-
-            <Modal isOpen={!!resolveTarget} onClose={() => setResolveTarget(null)} size="small">
-                <Modal.Header>Resolve Duplicates</Modal.Header>
-                <Modal.Body>
-                    <p className="text-secondary">
-                        Resolve the duplicate group for{' '}
-                        <span className="font-semibold text-primary">
-                            {resolveTarget?.normalized_title}
-                        </span>
-                        ? This will automatically keep the best match and remove extras.
-                    </p>
-                </Modal.Body>
-                <Modal.Footer align="right">
-                    <Button variant="ghost" onClick={() => setResolveTarget(null)}>
-                        Cancel
-                    </Button>
-                    <Button
-                        variant="primary"
-                        icon="auto_fix_high"
-                        onClick={handleResolve}
-                        disabled={isResolving}
-                    >
-                        {isResolving ? 'Resolving...' : 'Resolve'}
                     </Button>
                 </Modal.Footer>
             </Modal>

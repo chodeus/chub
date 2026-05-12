@@ -1,54 +1,81 @@
-import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import { useSearch, SEARCH_TYPES } from '../../contexts/SearchCoordinatorContext.jsx';
+import React, { useState, useMemo } from 'react';
+import { useApiData, useApiMutation } from '../../hooks/useApiData.js';
 import { useToast } from '../../contexts/ToastContext.jsx';
-import { useApiMutation } from '../../hooks/useApiData.js';
 import { postersAPI } from '../../utils/api/posters.js';
-import { LoadingButton, PageHeader } from '../../components/ui/index.js';
+import { Button, LoadingButton, PageHeader } from '../../components/ui/index.js';
 import Spinner from '../../components/ui/Spinner.jsx';
-import RecentQueries, { useRecentQueries } from '../../components/RecentQueries.jsx';
+
+const SORT_OPTIONS = [
+    { value: 'name', label: 'Name' },
+    { value: 'last_synced', label: 'Last synced' },
+    { value: 'size', label: 'Size' },
+];
+
+const FILTER_OPTIONS = [
+    { value: 'all', label: 'All' },
+    { value: 'stale', label: 'Stale (>7 days)' },
+    { value: 'never', label: 'Never synced' },
+];
+
+const STALE_DAYS = 7;
+const STALE_MS = STALE_DAYS * 24 * 60 * 60 * 1000;
+
+// `last_updated` arrives as either YYYYMMDD or an ISO-ish string.
+// Returns ms-since-epoch, or null if missing/unparseable.
+const parseLastSynced = value => {
+    if (!value) return null;
+    if (typeof value === 'string' && value.length === 8 && /^\d{8}$/.test(value)) {
+        const iso = `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}`;
+        const ms = Date.parse(iso);
+        return Number.isNaN(ms) ? null : ms;
+    }
+    const ms = Date.parse(value);
+    return Number.isNaN(ms) ? null : ms;
+};
+
+const formatSize = bytes => {
+    if (!bytes || bytes <= 0) return null;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+    return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
+};
+
+const formatLastSynced = ms => {
+    if (ms == null) return 'Never synced';
+    return new Date(ms).toLocaleDateString();
+};
 
 const PosterGDriveSearchPage = () => {
     const toast = useToast();
     const [syncingFolders, setSyncingFolders] = useState(new Set());
-    const initialLoadDone = useRef(false);
+    const [pickerSelection, setPickerSelection] = useState('');
+    const [sortBy, setSortBy] = useState('name');
+    const [filterBy, setFilterBy] = useState('all');
+    // Frozen at mount so the staleness threshold is stable across re-renders.
+    const [now] = useState(() => Date.now());
 
-    const searchFunction = useCallback(term => postersAPI.searchGoogleDrive({ query: term }), []);
+    const { data, isLoading, refresh } = useApiData({
+        apiFunction: () => postersAPI.searchGoogleDrive({}),
+        options: { showErrorToast: false },
+    });
 
-    const { term, results, isSearching, hasResults, search } = useSearch(
-        SEARCH_TYPES.POSTERS,
-        searchFunction
-    );
+    const sources = useMemo(() => data?.data?.sources || [], [data]);
 
-    // Load all GDrive sources on mount (no search term = show all)
-    useEffect(() => {
-        if (!initialLoadDone.current) {
-            initialLoadDone.current = true;
-            search('');
-        }
-    }, [search]);
-
-    const sources = useMemo(() => results?.data?.sources || [], [results]);
-
-    const recent = useRecentQueries('chub_gdrive_search_recent');
-    useEffect(() => {
-        if (term && hasResults) recent.record(term);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [term, hasResults]);
-
-    // Declared after `sources` so the sync-all closure references a bound value.
     const { execute: syncAll, isLoading: isSyncingAll } = useApiMutation(
-        () => {
-            const allNames = sources.map(s => s.name);
-            return postersAPI.syncGDriveFolders(allNames);
-        },
-        { successMessage: 'All folders synced' }
+        () => postersAPI.syncGDriveFolders(sources.map(s => s.name)),
+        {
+            successMessage: 'All folders synced',
+            onSuccess: () => refresh(),
+        }
     );
 
-    const handleSyncFolder = async folderName => {
+    const syncOne = async folderName => {
+        if (!folderName) return;
         setSyncingFolders(prev => new Set([...prev, folderName]));
         try {
             await postersAPI.syncGDriveFolders([folderName]);
             toast.success(`Synced "${folderName}"`);
+            refresh();
         } catch {
             toast.error(`Failed to sync "${folderName}"`);
         } finally {
@@ -60,36 +87,49 @@ const PosterGDriveSearchPage = () => {
         }
     };
 
-    const handleSyncAll = async () => {
-        try {
-            await syncAll();
-        } catch {
-            toast.error('Failed to sync all folders');
-        }
-    };
+    const displayedSources = useMemo(() => {
+        const enriched = sources.map(s => ({
+            ...s,
+            _lastSyncedMs: parseLastSynced(s.last_updated),
+        }));
 
-    const formatSize = bytes => {
-        if (!bytes || bytes <= 0) return null;
-        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-        if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-        return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
-    };
+        const filtered = enriched.filter(s => {
+            if (filterBy === 'never') return s._lastSyncedMs == null;
+            if (filterBy === 'stale') {
+                return s._lastSyncedMs == null || now - s._lastSyncedMs > STALE_MS;
+            }
+            return true;
+        });
+
+        const sorted = [...filtered].sort((a, b) => {
+            if (sortBy === 'size') return (b.size_bytes || 0) - (a.size_bytes || 0);
+            if (sortBy === 'last_synced') {
+                // Most-recent first; "never synced" sinks to the bottom.
+                const av = a._lastSyncedMs ?? -Infinity;
+                const bv = b._lastSyncedMs ?? -Infinity;
+                return bv - av;
+            }
+            return (a.name || '').localeCompare(b.name || '');
+        });
+
+        return sorted;
+    }, [sources, filterBy, sortBy, now]);
 
     return (
         <div className="flex flex-col gap-6">
             <PageHeader
-                title="GDrive Posters"
-                description="Search for posters in your synced Google Drive folders."
+                title="GDrive Sources"
+                description="Browse your configured Google Drive folders and trigger a sync to pull their contents into your local asset cache."
                 badge={1}
                 icon="cloud"
                 actions={
-                    hasResults && sources.length > 0 ? (
+                    sources.length > 0 ? (
                         <LoadingButton
                             loading={isSyncingAll}
                             loadingText="Syncing All..."
                             variant="primary"
                             icon="sync"
-                            onClick={handleSyncAll}
+                            onClick={() => syncAll()}
                         >
                             Sync All
                         </LoadingButton>
@@ -97,42 +137,98 @@ const PosterGDriveSearchPage = () => {
                 }
             />
 
-            {isSearching && <Spinner size="large" text="Searching GDrive..." center />}
-
-            {!isSearching && !term && (
-                <div className="flex flex-col items-center gap-6 py-10 text-tertiary">
-                    <div className="text-center">
-                        <span className="material-symbols-outlined text-5xl mb-4 block opacity-40">
-                            cloud_search
-                        </span>
-                        <p className="text-lg">Use the search bar above to search GDrive folders</p>
-                        <p className="text-sm mt-2">Search by folder name or location</p>
+            {/* Toolbar: quick-sync picker + sort + filter */}
+            {sources.length > 0 && (
+                <div className="flex flex-wrap items-center gap-3 p-3 rounded-lg bg-surface border border-border">
+                    <div className="flex items-center gap-2">
+                        <label className="text-sm text-secondary">Sync folder</label>
+                        <select
+                            value={pickerSelection}
+                            onChange={e => setPickerSelection(e.target.value)}
+                            className="px-3 py-1.5 rounded-lg bg-surface border border-border text-primary text-sm min-w-[200px]"
+                        >
+                            <option value="">Select a folder...</option>
+                            {[...sources]
+                                .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+                                .map(s => (
+                                    <option key={s.name} value={s.name}>
+                                        {s.name}
+                                    </option>
+                                ))}
+                        </select>
+                        <LoadingButton
+                            loading={pickerSelection ? syncingFolders.has(pickerSelection) : false}
+                            loadingText="Syncing..."
+                            variant="primary"
+                            icon="sync"
+                            disabled={!pickerSelection}
+                            onClick={() => syncOne(pickerSelection)}
+                        >
+                            Sync
+                        </LoadingButton>
                     </div>
-                    {recent.entries.length > 0 && (
-                        <RecentQueries
-                            entries={recent.entries}
-                            onSelect={q => search(q, { immediate: true })}
-                            onClear={recent.clear}
-                            label="Recent searches"
-                        />
-                    )}
+
+                    <div className="flex items-center gap-2">
+                        <label className="text-sm text-secondary">Sort</label>
+                        <select
+                            value={sortBy}
+                            onChange={e => setSortBy(e.target.value)}
+                            className="px-3 py-1.5 rounded-lg bg-surface border border-border text-primary text-sm"
+                        >
+                            {SORT_OPTIONS.map(o => (
+                                <option key={o.value} value={o.value}>
+                                    {o.label}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                        <label className="text-sm text-secondary">Show</label>
+                        <div className="flex gap-1">
+                            {FILTER_OPTIONS.map(o => (
+                                <Button
+                                    key={o.value}
+                                    variant={filterBy === o.value ? 'primary' : 'ghost'}
+                                    size="small"
+                                    onClick={() => setFilterBy(o.value)}
+                                >
+                                    {o.label}
+                                </Button>
+                            ))}
+                        </div>
+                    </div>
                 </div>
             )}
 
-            {!isSearching && term && !hasResults && (
+            {isLoading && <Spinner size="large" text="Loading GDrive sources..." center />}
+
+            {!isLoading && sources.length === 0 && (
                 <div className="text-center py-16 text-tertiary">
                     <span className="material-symbols-outlined text-5xl mb-4 block opacity-40">
-                        search_off
+                        cloud_off
                     </span>
-                    <p className="text-lg">No GDrive sources found for &quot;{term}&quot;</p>
+                    <p className="text-lg">No GDrive sources configured</p>
+                    <p className="text-sm mt-2">
+                        Add a Google Drive folder in module settings to see it here.
+                    </p>
                 </div>
             )}
 
-            {hasResults && (
+            {!isLoading && sources.length > 0 && displayedSources.length === 0 && (
+                <div className="text-center py-16 text-tertiary">
+                    <span className="material-symbols-outlined text-5xl mb-4 block opacity-40">
+                        filter_alt_off
+                    </span>
+                    <p className="text-lg">No folders match the current filter</p>
+                </div>
+            )}
+
+            {!isLoading && displayedSources.length > 0 && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {sources.map((source, i) => (
+                    {displayedSources.map((source, i) => (
                         <div
-                            key={source.id || i}
+                            key={source.id || source.name || i}
                             className="p-4 rounded-xl bg-surface border border-border hover:border-brand-primary/50 transition-fast"
                         >
                             <div className="flex items-start gap-3">
@@ -162,21 +258,16 @@ const PosterGDriveSearchPage = () => {
                                             </span>
                                         )}
                                     </div>
-                                    {source.last_updated && (
-                                        <p className="text-xs text-tertiary mt-1">
-                                            Last synced:{' '}
-                                            {source.last_updated?.length === 8
-                                                ? `${source.last_updated.slice(0, 4)}-${source.last_updated.slice(4, 6)}-${source.last_updated.slice(6, 8)}`
-                                                : source.last_updated}
-                                        </p>
-                                    )}
+                                    <p className="text-xs text-tertiary mt-1">
+                                        Last synced: {formatLastSynced(source._lastSyncedMs)}
+                                    </p>
                                     <div className="mt-3">
                                         <LoadingButton
                                             loading={syncingFolders.has(source.name)}
                                             loadingText="Syncing..."
                                             variant="ghost"
                                             icon="sync"
-                                            onClick={() => handleSyncFolder(source.name)}
+                                            onClick={() => syncOne(source.name)}
                                         >
                                             Sync
                                         </LoadingButton>

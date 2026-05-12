@@ -483,10 +483,49 @@ class PosterRenamerr(ChubModule):
 
         return "movie"
 
+    def _build_gdrive_style_map(self) -> dict:
+        """
+        Map normalized gdrive `location` -> style prefix from its `name`.
+
+        e.g. config entry name="CL2K Solen", location="/kometa/posters/CL2K/Solen"
+        -> {"/kometa/posters/CL2K/Solen": "CL2K"}. Used at scan time to
+        stamp each poster_cache row with the curator style it came from.
+        """
+        out: dict = {}
+        sync_cfg = getattr(self.full_config, "sync_gdrive", None)
+        gdrive_list = getattr(sync_cfg, "gdrive_list", None) or []
+        for entry in gdrive_list:
+            loc = (getattr(entry, "location", "") or "").strip()
+            name = (getattr(entry, "name", "") or "").strip()
+            if not loc or not name:
+                continue
+            head = name.split(None, 1)[0]
+            if head:
+                out[os.path.realpath(loc).rstrip("/")] = head
+        return out
+
+    @staticmethod
+    def _resolve_style_for_path(path: str, style_map: dict) -> Optional[str]:
+        """Return the style of the longest gdrive_list location that is an
+        ancestor of `path`. None if no entry matches."""
+        if not style_map:
+            return None
+        real = os.path.realpath(path).rstrip("/")
+        best_style = None
+        best_len = -1
+        for loc, style in style_map.items():
+            if real == loc or real.startswith(loc + "/"):
+                if len(loc) > best_len:
+                    best_style = style
+                    best_len = len(loc)
+        return best_style
+
     def _get_assets_files(self, source_dir: str):
+        style_map = self._build_gdrive_style_map()
         asset_records = []
         for root, dirs, files in os.walk(source_dir):
             dirs.sort(key=str.lower)
+            style = self._resolve_style_for_path(root, style_map)
             for fname in sorted(files, key=str.lower):
                 if not fname.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
                     continue
@@ -523,6 +562,7 @@ class PosterRenamerr(ChubModule):
                     "season_number": season_number,
                     "folder": folder,
                     "file": fpath,
+                    "style": style,
                 }
                 asset_records.append(record)
 
