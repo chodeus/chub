@@ -269,6 +269,62 @@ def _is_test_event(data: Dict[str, Any]) -> bool:
 
 
 @router.get(
+    "/wiring",
+    summary="Get webhook wiring details",
+    description=(
+        "Return the path + optional shared secret the UI needs to build "
+        "ready-to-paste poster-webhook URLs for Sonarr/Radarr/Tautulli. "
+        "Returns the raw secret only when one is configured; this is the "
+        "same value already required to call the poster/add endpoint, so "
+        "exposing it inside the UI does not widen the threat model."
+    ),
+    responses={
+        200: {
+            "description": "Wiring details retrieved",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "success": True,
+                        "message": "Webhook wiring retrieved",
+                        "data": {
+                            "poster_add_path": "/api/webhooks/poster/add",
+                            "secret_configured": True,
+                            "secret": "your-secret-value",
+                        },
+                    }
+                }
+            },
+        }
+    },
+)
+async def get_webhook_wiring(
+    logger: Any = Depends(get_logger),
+) -> JSONResponse:
+    try:
+        logger.debug("Serving GET /api/webhooks/wiring")
+        try:
+            secret = (load_config().general.webhook_secret or "").strip()
+        except ConfigError:
+            secret = ""
+
+        return ok(
+            "Webhook wiring retrieved",
+            {
+                "poster_add_path": "/api/webhooks/poster/add",
+                "secret_configured": bool(secret),
+                "secret": secret,
+            },
+        )
+    except Exception as e:
+        logger.error(f"Error retrieving webhook wiring: {e}")
+        return error(
+            f"Error retrieving webhook wiring: {str(e)}",
+            code="WEBHOOK_WIRING_ERROR",
+            status_code=500,
+        )
+
+
+@router.get(
     "/unmatched/status",
     summary="Get unmatched assets status",
     description="Retrieve current unmatched asset counts and summary statistics.",
