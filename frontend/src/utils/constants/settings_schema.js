@@ -182,7 +182,7 @@ export const SETTINGS_SCHEMA = [
                 type: 'check_box',
                 section: 'Pipeline',
                 description:
-                    'After renaming, walk the source + destination directories and act on every poster file whose title doesn\'t match any media in the configured instances — i.e. an asset with no parent media. (Not to be confused with the Unmatched Assets module, which reports media missing a poster — the opposite direction.) Default action is "report" — set a stronger mode in the Poster Cleanarr module to move or remove.',
+                    "After renaming, walk the source + destination directories and act on every poster file whose title doesn't match any media in the configured instances — i.e. an asset with no parent media. (Not to be confused with the Unmatched Assets module, which reports media missing a poster — the opposite direction.) The action taken (report / move / remove) follows the Orphan Assets Mode set in the Poster Cleanarr module, so a single setting governs both this post-rename pass and a standalone Cleanarr run.",
             },
             {
                 key: 'report_unmatched_assets',
@@ -227,6 +227,23 @@ export const SETTINGS_SCHEMA = [
                 description:
                     'Walk the full pipeline and log every poster that would be re-bordered — but write nothing to disk.',
             },
+            // ─── Paths ─────────────────────────────────────────────────
+            {
+                key: 'source_dirs',
+                label: 'Source Directories',
+                type: 'dirlist_dragdrop',
+                section: 'Paths',
+                description:
+                    'Folders scanned for poster assets when Border Replacerr is run on its own (not via Poster Renamerr). Drag to set priority — earlier directories win when multiple sources have a poster for the same item.',
+            },
+            {
+                key: 'destination_dir',
+                label: 'Destination Directory',
+                type: 'dir',
+                section: 'Paths',
+                description:
+                    'Where re-bordered posters are written when Border Replacerr is run on its own. When triggered via Poster Renamerr, the manifest path is used instead and this field is ignored.',
+            },
             // ─── Border ────────────────────────────────────────────────
             {
                 key: 'border_width',
@@ -237,6 +254,14 @@ export const SETTINGS_SCHEMA = [
                 placeholder: '26',
                 description:
                     'Pixels cropped from each edge before re-bordering. Posters that follow the TPDB standard ship with a 26px white border, so 26 is the right value for almost every library. Posters without a matching border will lose this much real artwork.',
+            },
+            {
+                key: 'border_colors',
+                label: 'Border Colors',
+                type: 'color_list',
+                section: 'Border',
+                description:
+                    'Default border colors used when no holiday window is active. Rotates through the list as posters are processed. Pick richer per-holiday palettes and themed border art on the Border Replacerr page.',
             },
             // ─── Holidays ──────────────────────────────────────────────
             {
