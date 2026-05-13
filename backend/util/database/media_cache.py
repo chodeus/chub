@@ -3,7 +3,7 @@ import json
 from typing import Any, List, Optional
 
 from .db_base import DatabaseBase
-from .orphaned_posters import _path_under_any_root
+from .pending_deletions import _path_under_any_root
 
 
 class MediaCache(DatabaseBase):
@@ -283,14 +283,14 @@ class MediaCache(DatabaseBase):
         logger: Optional[Any] = None,
         allowed_roots: Optional[List[str]] = None,
     ) -> None:
-        """Delete a single record by its identity key; records orphaned poster if applicable.
+        """Delete a single record by its identity key; queues a pending deletion
+        for the previously-placed poster if applicable.
 
         When `allowed_roots` is provided, any `renamed_file` path that is not
         under one of those roots is skipped — the media_cache row still gets
-        deleted, but we do not insert a stale orphaned_posters entry that the
-        orphan-cleanup pass would later ignore anyway.
+        deleted, but we do not insert a stale pending_deletions entry that the
+        cleanup pass would later ignore anyway.
         """
-        # Handle orphaned poster if applicable
         renamed_file = item.get("renamed_file")
         if renamed_file:
             out_of_scope = bool(allowed_roots) and not _path_under_any_root(
@@ -299,14 +299,14 @@ class MediaCache(DatabaseBase):
             if out_of_scope:
                 if logger:
                     logger.debug(
-                        f"[SKIPPED out-of-scope orphan insert] {renamed_file}"
+                        f"[SKIPPED out-of-scope pending insert] {renamed_file}"
                     )
             else:
                 now = datetime.datetime.now(datetime.timezone.utc).isoformat()
                 self.execute_query(
                     """
-                    INSERT OR IGNORE INTO orphaned_posters
-                        (asset_type, title, year, season, file_path, date_orphaned)
+                    INSERT OR IGNORE INTO pending_deletions
+                        (asset_type, title, year, season, file_path, date_queued)
                     VALUES (?, ?, ?, ?, ?, ?)
                     """,
                     (
@@ -903,7 +903,7 @@ class MediaCache(DatabaseBase):
         Adds/updates as needed, deletes stale records not present in fresh_media.
 
         When `allowed_roots` is provided, stale rows whose `renamed_file` is
-        outside those roots won't produce an `orphaned_posters` insert.
+        outside those roots won't produce a `pending_deletions` insert.
         """
         db_rows = (
             self.execute_query(

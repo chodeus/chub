@@ -216,8 +216,10 @@ const PosterStatsPage = () => {
                     </p>
                 </div>
                 <div className="p-5 rounded-xl bg-surface border border-border">
-                    <p className="text-sm text-secondary mb-1">Orphaned Posters</p>
-                    <p className="text-3xl font-bold text-warning">{stats.orphaned_count || 0}</p>
+                    <p className="text-sm text-secondary mb-1">Pending Deletions</p>
+                    <p className="text-3xl font-bold text-warning">
+                        {stats.pending_deletion_count || 0}
+                    </p>
                 </div>
                 <div className="p-5 rounded-xl bg-surface border border-border">
                     <p className="text-sm text-secondary mb-1">GDrive Sources</p>

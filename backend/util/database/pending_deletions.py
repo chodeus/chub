@@ -24,50 +24,57 @@ def _path_under_any_root(path: str, allowed_roots: List[str]) -> bool:
     return False
 
 
-class OrphanedPosters(DatabaseBase):
+class PendingDeletions(DatabaseBase):
     """
-    Handles querying and cleaning up orphaned posters.
+    Queue of poster files marked for deletion (path-precise cleanup).
+
+    Rows are written when CHUB observes that the media a poster was placed for
+    has been removed from Plex/Radarr/Sonarr. Consumers (webhooks, manual
+    triggers) process the queue and delete the files + rows.
+
+    Distinct from the filesystem-walk "orphan asset cleanup" in
+    `poster_cleanarr` — that one re-discovers stranded files by comparing
+    titles against the current library; this one is an event-driven ledger.
     """
 
-    def list_orphaned_posters(self) -> list:
-        """Returns all orphaned posters as a list of dicts."""
+    def list_pending(self) -> list:
+        """Returns all queued deletions as a list of dicts."""
         return (
-            self.execute_query("SELECT * FROM orphaned_posters", fetch_all=True) or []
+            self.execute_query("SELECT * FROM pending_deletions", fetch_all=True) or []
         )
 
-    def report_orphaned_posters(self, logger: Optional[Any] = None) -> dict:
+    def report_pending(self, logger: Optional[Any] = None) -> dict:
         """
-        Logs all orphaned posters and returns a JSON-ready summary for the frontend.
+        Logs all queued deletions and returns a JSON-ready summary for the frontend.
         """
-        rows = self.list_orphaned_posters()
+        rows = self.list_pending()
         if not rows:
             if logger:
-                logger.info("No orphaned posters found.")
+                logger.info("No pending deletions found.")
             return {
                 "total": 0,
-                "orphaned": [],
+                "pending": [],
                 "summary": {"by_type": {}, "by_year": {}, "by_season": {}},
             }
 
-        header = ["ID", "Type", "Title", "Year", "Season", "File Path", "Date Orphaned"]
+        header = ["ID", "Type", "Title", "Year", "Season", "File Path", "Date Queued"]
         if logger:
-            logger.info(f"Orphaned posters: {len(rows)} entries queued")
-            # Per-row table dump at DEBUG only; INFO carries the summary.
-            logger.debug("Orphaned Posters:")
+            logger.info(f"Pending deletions: {len(rows)} entries queued")
+            logger.debug("Pending Deletions:")
             logger.debug(" | ".join(header))
             logger.debug("-" * 80)
             for row in rows:
                 logger.debug(
                     f"{row['id']:>3} | {row['asset_type']:<8} | {row['title']:<40} | {str(row['year'] or ''):<6} | "
-                    f"{str(row['season'] or ''):<6} | {row['file_path']:<60} | {row['date_orphaned']}"
+                    f"{str(row['season'] or ''):<6} | {row['file_path']:<60} | {row['date_queued']}"
                 )
 
-        orphaned = []
+        pending = []
         by_type = {}
         by_year = {}
         by_season = {}
         for row in rows:
-            orphaned.append(row)
+            pending.append(row)
             typ = row.get("asset_type", "unknown")
             by_type[typ] = by_type.get(typ, 0) + 1
             year = row.get("year") or "unknown"
@@ -77,8 +84,8 @@ class OrphanedPosters(DatabaseBase):
                 by_season[season] = by_season.get(season, 0) + 1
 
         return {
-            "total": len(orphaned),
-            "orphaned": orphaned,
+            "total": len(pending),
+            "pending": pending,
             "summary": {
                 "by_type": by_type,
                 "by_year": by_year,
@@ -86,14 +93,14 @@ class OrphanedPosters(DatabaseBase):
             },
         }
 
-    def handle_orphaned_posters(
+    def process_pending(
         self,
         logger: Optional[Any] = None,
         dry_run: bool = False,
         allowed_roots: Optional[List[str]] = None,
     ) -> None:
         """
-        Deletes (or reports) orphaned posters from the file system and database.
+        Deletes (or reports) queued posters from the file system and database.
 
         If `allowed_roots` is a non-empty list, any row whose `file_path` does not
         resolve to a location under one of those roots is treated as out-of-scope:
@@ -101,32 +108,30 @@ class OrphanedPosters(DatabaseBase):
         doesn't keep triggering the check. Without `allowed_roots` the legacy
         unscoped behavior applies.
         """
-        rows = self.list_orphaned_posters()
+        rows = self.list_pending()
         if not rows:
             if logger:
-                logger.info("No orphaned posters found.")
+                logger.info("No pending deletions found.")
             return
 
         scoped = bool(allowed_roots)
 
-        header = ["ID", "Type", "Title", "Year", "Season", "File Path", "Date Orphaned"]
+        header = ["ID", "Type", "Title", "Year", "Season", "File Path", "Date Queued"]
         if logger:
-            logger.info(f"Orphaned posters: {len(rows)} entries queued")
-            # Per-row table dump at DEBUG only; INFO carries the summary.
-            logger.debug("Orphaned Posters:")
+            logger.info(f"Pending deletions: {len(rows)} entries queued")
+            logger.debug("Pending Deletions:")
             logger.debug(" | ".join(header))
             logger.debug("-" * 80)
             for row in rows:
                 logger.debug(
                     f"{row['id']:>3} | {row['asset_type']:<8} | {row['title']:<40} | {str(row['year'] or ''):<6} | "
-                    f"{str(row['season'] or ''):<6} | {row['file_path']:<60} | {row['date_orphaned']}"
+                    f"{str(row['season'] or ''):<6} | {row['file_path']:<60} | {row['date_queued']}"
                 )
 
         deleted = 0
         kept = 0
         skipped_out_of_scope = 0
 
-        # Process each orphaned poster
         operations = []
         for row in rows:
             file_path = row["file_path"]
@@ -145,9 +150,8 @@ class OrphanedPosters(DatabaseBase):
                         f"[SKIPPED out-of-scope] Refusing to delete file outside configured roots: {summary}"
                     )
                 skipped_out_of_scope += 1
-                # Prune the stale record so it stops triggering on every run.
                 operations.append(
-                    ("DELETE FROM orphaned_posters WHERE id=?", (row["id"],))
+                    ("DELETE FROM pending_deletions WHERE id=?", (row["id"],))
                 )
                 continue
 
@@ -155,7 +159,7 @@ class OrphanedPosters(DatabaseBase):
                 if file_path and os.path.exists(file_path):
                     os.remove(file_path)
                     if logger:
-                        logger.debug(f"Deleted orphaned poster: {summary}")
+                        logger.debug(f"Deleted queued poster: {summary}")
                     deleted += 1
                 else:
                     if logger:
@@ -164,22 +168,20 @@ class OrphanedPosters(DatabaseBase):
                 if logger:
                     logger.error(f"Failed to delete {file_path}: {e}")
 
-            # Queue database deletion
             operations.append(
-                ("DELETE FROM orphaned_posters WHERE id=?", (row["id"],))
+                ("DELETE FROM pending_deletions WHERE id=?", (row["id"],))
             )
 
-        # Execute all database deletions in a transaction
         if operations:
             self.execute_transaction(operations)
 
         if logger:
             logger.info(
-                f"Orphaned posters handled: {deleted} deleted, "
+                f"Pending deletions handled: {deleted} deleted, "
                 f"{skipped_out_of_scope} skipped (out of scope), "
                 f"{kept} kept (dry run)"
             )
 
-    def clear_orphaned_posters(self) -> None:
-        """Delete all rows from orphaned_posters."""
-        self.execute_query("DELETE FROM orphaned_posters")
+    def clear_pending(self) -> None:
+        """Delete all rows from pending_deletions."""
+        self.execute_query("DELETE FROM pending_deletions")

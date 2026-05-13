@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 
 from backend.util.base_module import ChubModule
 from backend.util.connector import Connector
-from backend.util.constants import id_content_regex, season_number_regex, year_regex
+from backend.util.constants import season_number_regex
 from backend.util.database import ChubDB
 from backend.util.helper import (
     create_table,
@@ -20,6 +20,7 @@ from backend.util.helper import (
     print_settings,
     progress,
 )
+from backend.util.normalization import parse_asset_filename
 from backend.util.logger import Logger
 from backend.util.notification import NotificationManager
 from backend.util.upload_posters import PosterUploader
@@ -534,9 +535,7 @@ class PosterRenamerr(ChubModule):
                 folder = os.path.basename(root)
                 filename, _ = os.path.splitext(fname)
 
-                title_base = id_content_regex.sub("", filename).strip()
-                title = year_regex.sub("", title_base).strip()
-                title = season_number_regex.sub("", title).strip(" -_")
+                title = parse_asset_filename(fname)
 
                 year = (
                     extract_year(fname) or extract_year(title) or extract_year(folder)
@@ -795,7 +794,11 @@ class PosterRenamerr(ChubModule):
                     with ChubDB(logger=self.logger) as unmatched_db:
                         unmatched_reporter.print_stats(unmatched_db)
 
-                if self.config.run_cleanarr:
+                if self.config.clean_orphan_assets:
+                    from backend.modules.poster_cleanarr import (
+                        run_orphan_assets_pass,
+                    )
+
                     cleanarr_logger = Logger(self.config.log_level, "cleanarr")
                     allowed_roots = [
                         r for r in (
@@ -803,10 +806,27 @@ class PosterRenamerr(ChubModule):
                             + list(self.config.source_dirs or [])
                         ) if r
                     ]
-                    db.orphaned.handle_orphaned_posters(
-                        cleanarr_logger,
-                        self.config.dry_run,
-                        allowed_roots=allowed_roots,
+                    # In dry-run, force report mode regardless of configured
+                    # action — never delete during a dry-run.
+                    mode = (
+                        "report"
+                        if self.config.dry_run
+                        else (self.config.orphan_assets_mode or "report")
+                    )
+                    instance_names = [
+                        name
+                        for entry in (self.config.instances or [])
+                        for name in (
+                            [entry] if isinstance(entry, str) else list(entry.keys())
+                        )
+                    ]
+                    run_orphan_assets_pass(
+                        db=db,
+                        instances=instance_names,
+                        asset_dirs=allowed_roots,
+                        mode=mode,
+                        logger=cleanarr_logger,
+                        include_collections=True,
                     )
 
                 if self.config.run_border_replacerr:

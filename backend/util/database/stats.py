@@ -67,12 +67,12 @@ class Stats(DatabaseBase):
         )
         return result["cnt"] if result else 0
 
-    def count_orphaned_posters(self) -> int:
+    def count_pending_deletions(self) -> int:
         """
-        Returns the number of orphaned posters.
+        Returns the number of queued pending deletions.
         """
         result = self.execute_query(
-            "SELECT COUNT(*) as cnt FROM orphaned_posters", fetch_one=True
+            "SELECT COUNT(*) as cnt FROM pending_deletions", fetch_one=True
         )
         return result["cnt"] if result else 0
 

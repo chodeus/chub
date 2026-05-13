@@ -154,12 +154,12 @@ export const SETTINGS_SCHEMA = [
                     'After files are renamed, hand the manifest to Border Replacerr so it can recolor or strip the white TPDB border on just those posters. Configure colors in the Border Replacerr module.',
             },
             {
-                key: 'run_cleanarr',
-                label: 'Run Poster Cleanarr after rename',
+                key: 'clean_orphan_assets',
+                label: 'Clean orphan assets after rename',
                 type: 'check_box',
                 section: 'Pipeline',
                 description:
-                    'After renaming, sweep the destination for orphaned posters whose media no longer exists in Radarr/Sonarr/Plex. Configure scope in the Poster Cleanarr module.',
+                    'After renaming, walk the source + destination directories and act on every poster file whose title doesn\'t match any media in the configured instances — i.e. an asset with no parent media. (Not to be confused with the Unmatched Assets module, which reports media missing a poster — the opposite direction.) Default action is "report" — set a stronger mode in the Poster Cleanarr module to move or remove.',
             },
             {
                 key: 'report_unmatched_assets',
@@ -859,12 +859,43 @@ export const SETTINGS_SCHEMA = [
             },
             {
                 key: 'instances',
-                label: 'Plex Instances',
+                label: 'Instances',
                 type: 'instances',
                 required: true,
-                instance_types: ['plex'],
+                instance_types: ['plex', 'radarr', 'sonarr'],
                 valueFormat: 'string',
-                description: 'Plex instance used to retrieve the library database.',
+                description:
+                    'Pick at least one Plex instance for bloat-image cleanup. Add Radarr/Sonarr instances here too if you enable Unmatched Asset Cleanup — those libraries widen the comparison set.',
+            },
+            // ─── Orphan Asset Cleanup ──────────────────────────────────────
+            {
+                key: 'orphan_assets_enabled',
+                label: 'Enable Orphan Asset Cleanup',
+                type: 'check_box',
+                description:
+                    "Walk Asset Directories and act on poster files whose title doesn't match any media in the configured instances — orphan = asset with no parent media. (Inverse direction of the Unmatched Assets module, which reports media missing a poster.) Comparison set is read from CHUB's media cache (populated by poster_renamerr) — run renamerr first if the cache is stale.",
+            },
+            {
+                key: 'orphan_assets_mode',
+                label: 'Orphan Mode',
+                type: 'dropdown',
+                options: ['report', 'move', 'remove'],
+                description:
+                    'report (log only), move (relocate to a hidden .chub_orphan_restore subdir inside each asset_dir, fully recoverable), remove (permanent delete).',
+            },
+            {
+                key: 'asset_dirs',
+                label: 'Asset Directories',
+                type: 'dirlist_dragdrop',
+                description:
+                    'Directories to scan for orphan assets. Typically the same paths poster_renamerr writes to. Each is walked recursively; the hidden .chub_orphan_restore subdir is skipped.',
+            },
+            {
+                key: 'include_collections',
+                label: 'Include Collections',
+                type: 'check_box',
+                description:
+                    "Treat Plex collection titles as part of the comparison set so collection posters aren't flagged as orphans. Default on.",
             },
         ],
     },
