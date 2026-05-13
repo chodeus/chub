@@ -1,6 +1,7 @@
 # modules/poster_cleanarr.py
 
 import glob
+import json
 import os
 import shutil
 import sqlite3
@@ -16,6 +17,7 @@ from backend.util.database import ChubDB
 from backend.util.helper import create_table
 from backend.util.logger import Logger
 from backend.util.notification import NotificationManager
+from backend.util.normalization import normalize_titles, parse_asset_filename
 
 # EXIF tag id Kometa writes onto its generated overlay images. Used by the
 # overlays_only mode to skip user-uploaded customs (which lack the tag).
@@ -32,7 +34,10 @@ def format_bytes(size: int) -> str:
     return f"{size:.1f} PB"
 
 VALID_MODES = {"report", "move", "remove", "restore", "clear", "nothing"}
+VALID_ORPHAN_MODES = {"report", "move", "remove"}
+ASSET_IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".webp")
 RESTORE_DIR_NAME = "Poster Cleanarr Restore"
+ORPHAN_RESTORE_DIR_NAME = ".chub_orphan_restore"
 PLEX_DB_NAME = "com.plexapp.plugins.library.db"
 DB_MAX_AGE_HOURS = 2
 
@@ -162,11 +167,20 @@ class PosterCleanarr(ChubModule):
             elif self.mode == "clear":
                 bloat_stats = self._execute_clear(restore_dir)
 
-            # === CHUB orphaned poster cleanup ===
-            with ChubDB(logger=self.logger) as db:
-                orphaned_stats = self._clean_chub_orphaned(
-                    db, self.mode in ("report", "nothing")
-                )
+            # === Orphan asset cleanup ===
+            orphan_stats: Dict[str, Any] = {"count": 0, "total_size": 0}
+            if getattr(self.config, "orphan_assets_enabled", False):
+                with ChubDB(logger=self.logger) as db:
+                    orphan_stats = self._run_orphan_pass(
+                        db=db,
+                        instances=self.config.instances,
+                        asset_dirs=list(getattr(self.config, "asset_dirs", []) or []),
+                        mode=getattr(self.config, "orphan_assets_mode", "report"),
+                        include_collections=bool(
+                            getattr(self.config, "include_collections", True)
+                        ),
+                        logger=self.logger,
+                    )
 
             # === Clean empty directories ===
             empty_dirs = 0
@@ -176,14 +190,14 @@ class PosterCleanarr(ChubModule):
             # === Report ===
             elapsed = time.time() - start_time
             output = self._build_output(
-                bloat_stats, orphaned_stats, empty_dirs, elapsed
+                bloat_stats, orphan_stats, empty_dirs, elapsed
             )
             self._print_report(output)
 
             # === Notify ===
             has_activity = (
                 bloat_stats.get("count", 0) > 0
-                or orphaned_stats.get("count", 0) > 0
+                or orphan_stats.get("count", 0) > 0
             )
             if has_activity:
                 try:
@@ -250,10 +264,16 @@ class PosterCleanarr(ChubModule):
                 f"(available: {sorted(plex_instances) or 'none'})."
             )
             return None
-        instance_name = instances[0]
 
-        if instance_name not in plex_instances:
-            self.logger.error(f"Plex instance '{instance_name}' not found in CHUB instances config.")
+        # Pick the first configured instance that is a Plex one. Lets users add
+        # Radarr/Sonarr entries to the same `instances` list for the orphan-
+        # asset comparison set without breaking bloat-image flow.
+        instance_name = next((n for n in instances if n in plex_instances), None)
+        if instance_name is None:
+            self.logger.error(
+                "No Plex instance found among the selected instances "
+                f"{list(instances)}. Available Plex instances: {sorted(plex_instances) or 'none'}."
+            )
             return None
 
         instance_detail = plex_instances[instance_name]
@@ -704,32 +724,192 @@ class PosterCleanarr(ChubModule):
         shutil.move(src, dest)
 
     # =========================================================================
-    # CHUB orphaned poster cleanup
+    # Orphan asset cleanup
     # =========================================================================
 
-    def _clean_chub_orphaned(self, db: ChubDB, dry_run: bool) -> Dict[str, Any]:
-        """Clean orphaned posters tracked by CHUB."""
-        orphaned = db.orphaned.list_orphaned_posters()
-        count = len(orphaned)
+    def _run_orphan_pass(
+        self,
+        db: ChubDB,
+        instances: List[str],
+        asset_dirs: List[str],
+        mode: str,
+        include_collections: bool,
+        logger: Logger,
+    ) -> Dict[str, Any]:
+        """Walk `asset_dirs` and report/move/remove files whose title doesn't
+        match any media row cached for the configured `instances`.
 
-        if count == 0:
-            self.logger.info("No CHUB orphaned posters found.")
-            return {"count": 0}
+        The comparison set is whatever poster_renamerr's last sync wrote to
+        media_cache + collection_cache — no live Plex/*arr calls here.
+        """
+        if mode not in VALID_ORPHAN_MODES:
+            logger.error(
+                f"Invalid orphan_assets_mode '{mode}'. "
+                f"Must be one of: {', '.join(sorted(VALID_ORPHAN_MODES))}"
+            )
+            return {"count": 0, "total_size": 0, "mode": mode}
 
-        self.logger.info(f"Found {count} CHUB orphaned posters.")
-        pr_cfg = getattr(self.full_config, "poster_renamerr", None)
-        allowed_roots = []
-        if pr_cfg is not None:
-            allowed_roots = [
-                r for r in (
-                    [getattr(pr_cfg, "destination_dir", "")]
-                    + list(getattr(pr_cfg, "source_dirs", []) or [])
-                ) if r
-            ]
-        db.orphaned.handle_orphaned_posters(
-            self.logger, dry_run, allowed_roots=allowed_roots
+        if not asset_dirs:
+            logger.warning(
+                "Orphan asset cleanup enabled but asset_dirs is empty; skipping."
+            )
+            return {"count": 0, "total_size": 0, "mode": mode}
+
+        if not instances:
+            logger.error(
+                "Orphan asset cleanup enabled but no instances selected; "
+                "cannot build a comparison set."
+            )
+            return {"count": 0, "total_size": 0, "mode": mode}
+
+        valid_dirs = [d for d in asset_dirs if os.path.isdir(d)]
+        for d in asset_dirs:
+            if not os.path.isdir(d):
+                logger.warning(f"asset_dir does not exist, skipping: {d}")
+        if not valid_dirs:
+            return {"count": 0, "total_size": 0, "mode": mode}
+
+        titles = self._build_library_title_set(db, instances, include_collections)
+        if not titles:
+            logger.warning(
+                "Library title set is empty for the configured instances — "
+                "run poster_renamerr at least once to populate media_cache "
+                "before enabling orphan cleanup. Skipping to avoid mass deletion."
+            )
+            return {"count": 0, "total_size": 0, "mode": mode}
+
+        logger.info(
+            f"Comparison set: {len(titles)} normalized titles across "
+            f"{len(instances)} instance(s)."
         )
-        return {"count": count}
+
+        orphans = self._scan_orphan_assets(valid_dirs, titles)
+        total_size = sum(item["size"] for item in orphans)
+        logger.info(
+            f"Found {len(orphans)} orphan assets ({format_bytes(total_size)})."
+        )
+
+        return self._execute_orphan_mode(orphans, mode, logger)
+
+    def _build_library_title_set(
+        self, db: ChubDB, instances: List[str], include_collections: bool
+    ) -> Set[str]:
+        """Union of normalized titles across media_cache + collection_cache
+        filtered to the configured instances. Includes alternate titles when
+        present so renames/translations don't false-positive into deletion."""
+        wanted = set(instances)
+        titles: Set[str] = set()
+
+        def _absorb(row: dict) -> None:
+            if row.get("instance_name") not in wanted:
+                return
+            nt = row.get("normalized_title")
+            if nt:
+                titles.add(nt)
+            raw_alt = row.get("normalized_alternate_titles")
+            if not raw_alt:
+                return
+            try:
+                parsed_alt = json.loads(raw_alt) if isinstance(raw_alt, str) else raw_alt
+            except (ValueError, TypeError):
+                parsed_alt = []
+            if isinstance(parsed_alt, list):
+                for piece in parsed_alt:
+                    if isinstance(piece, str) and piece:
+                        titles.add(piece)
+
+        for row in db.media.get_all():
+            _absorb(row)
+        if include_collections:
+            for row in db.collection.get_all():
+                _absorb(row)
+
+        return titles
+
+    def _scan_orphan_assets(
+        self, asset_dirs: List[str], library_titles: Set[str]
+    ) -> List[Dict[str, Any]]:
+        """Walk each asset_dir, parse every image's filename to a normalized
+        title, and collect entries whose title is not in `library_titles`."""
+        orphans: List[Dict[str, Any]] = []
+        for asset_dir in asset_dirs:
+            restore_real = os.path.realpath(
+                os.path.join(asset_dir, ORPHAN_RESTORE_DIR_NAME)
+            )
+            for root, dirs, files in os.walk(asset_dir):
+                # Don't scan the restore subdir itself.
+                root_real = os.path.realpath(root)
+                if root_real == restore_real or root_real.startswith(restore_real + os.sep):
+                    dirs[:] = []
+                    continue
+                for fname in files:
+                    if not fname.lower().endswith(ASSET_IMAGE_EXTS):
+                        continue
+                    parsed = parse_asset_filename(fname)
+                    key = normalize_titles(parsed)
+                    if not key or key in library_titles:
+                        continue
+                    fpath = os.path.join(root, fname)
+                    try:
+                        size = os.path.getsize(fpath)
+                    except OSError:
+                        size = 0
+                    orphans.append({
+                        "path": fpath,
+                        "asset_dir": asset_dir,
+                        "parsed": parsed,
+                        "key": key,
+                        "size": size,
+                    })
+        return orphans
+
+    def _execute_orphan_mode(
+        self, orphans: List[Dict[str, Any]], mode: str, logger: Logger
+    ) -> Dict[str, Any]:
+        """Dispatch report/move/remove on the orphan-asset list."""
+        count = 0
+        total_size = 0
+        touched_dirs: Set[str] = set()
+
+        for item in orphans:
+            path = item["path"]
+            size = item["size"]
+            if mode == "report":
+                logger.info(f"  [ORPHAN] {path} (parsed='{item['parsed']}')")
+                count += 1
+                total_size += size
+                continue
+
+            if mode == "move":
+                dest_root = os.path.join(item["asset_dir"], ORPHAN_RESTORE_DIR_NAME)
+                rel = os.path.relpath(path, item["asset_dir"])
+                dest = os.path.join(dest_root, rel)
+                try:
+                    os.makedirs(os.path.dirname(dest), exist_ok=True)
+                    shutil.move(path, dest)
+                    logger.info(f"  [MOVED] {path} -> {dest}")
+                    count += 1
+                    total_size += size
+                    touched_dirs.add(item["asset_dir"])
+                except OSError as e:
+                    logger.error(f"Failed to move {path}: {e}")
+                continue
+
+            if mode == "remove":
+                try:
+                    os.remove(path)
+                    logger.info(f"  [REMOVED] {path}")
+                    count += 1
+                    total_size += size
+                    touched_dirs.add(item["asset_dir"])
+                except OSError as e:
+                    logger.error(f"Failed to remove {path}: {e}")
+
+        # Prune empty dirs left behind by move/remove.
+        for d in touched_dirs:
+            self._clean_empty_dirs(d)
+
+        return {"count": count, "total_size": total_size, "mode": mode}
 
     # =========================================================================
     # Empty directory cleanup
@@ -756,7 +936,7 @@ class PosterCleanarr(ChubModule):
     def _build_output(
         self,
         bloat_stats: Dict[str, Any],
-        orphaned_stats: Dict[str, Any],
+        orphan_stats: Dict[str, Any],
         empty_dirs: int,
         elapsed: float,
     ) -> Dict[str, Any]:
@@ -769,8 +949,11 @@ class PosterCleanarr(ChubModule):
                 "size_human": format_bytes(bloat_stats.get("total_size", 0)),
                 "ignored_non_overlay": bloat_stats.get("ignored_non_overlay", 0),
             },
-            "orphaned": {
-                "count": orphaned_stats.get("count", 0),
+            "orphan": {
+                "count": orphan_stats.get("count", 0),
+                "size": orphan_stats.get("total_size", 0),
+                "size_human": format_bytes(orphan_stats.get("total_size", 0)),
+                "mode": orphan_stats.get("mode", ""),
             },
             "empty_dirs": empty_dirs,
             "elapsed": round(elapsed, 1),
@@ -787,12 +970,17 @@ class PosterCleanarr(ChubModule):
                 str(output["bloat"]["count"]),
                 output["bloat"]["size_human"],
             ],
-            [
-                "CHUB Orphaned Posters",
-                str(output["orphaned"]["count"]),
-                "—",
-            ],
         ]
+
+        if output["orphan"]["count"] > 0 or output["orphan"].get("mode"):
+            orphan_label = MODE_LABELS.get(
+                output["orphan"].get("mode", "report"), {}
+            ).get("ed", "Processed")
+            summary_rows.append([
+                f"Orphan Assets ({orphan_label})",
+                str(output["orphan"]["count"]),
+                output["orphan"]["size_human"],
+            ])
 
         if output["empty_dirs"] > 0:
             summary_rows.append([
@@ -812,3 +1000,29 @@ class PosterCleanarr(ChubModule):
         self.logger.info(create_table(summary_rows))
 
         self.logger.info(f"\nCompleted in {output['elapsed']}s")
+
+
+def run_orphan_assets_pass(
+    db: ChubDB,
+    instances: List[str],
+    asset_dirs: List[str],
+    mode: str,
+    logger: Logger,
+    include_collections: bool = True,
+) -> Dict[str, Any]:
+    """Shared entry point used by poster_renamerr (and any future caller) to
+    invoke the orphan-asset cleanup without spinning up a full PosterCleanarr
+    instance. Reuses the same implementation by binding a minimal shim that
+    exposes the helper methods.
+    """
+    cleanarr = PosterCleanarr.__new__(PosterCleanarr)
+    cleanarr.logger = logger
+    return cleanarr._run_orphan_pass(
+        db=db,
+        instances=instances,
+        asset_dirs=asset_dirs,
+        mode=mode,
+        include_collections=include_collections,
+        logger=logger,
+    )
+

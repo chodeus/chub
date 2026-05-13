@@ -9,6 +9,7 @@ from backend.util.constants import (
     id_content_regex,
     illegal_chars_regex,
     remove_special_chars,
+    season_number_regex,
     words_to_remove,
     year_regex,
 )
@@ -72,6 +73,20 @@ def normalize_file_names(file_name: str) -> str:
     cleaned = remove_common_words(cleaned)
     cleaned = cleaned.replace(" ", "").lower()
     return cleaned.strip()
+
+
+def parse_asset_filename(file_name: str) -> str:
+    """Strip extension, ID blocks, year, and season tags from an asset filename
+    to yield the bare title used for media matching.
+
+    Mirrors the inline triplet historically used by poster_renamerr's
+    `_get_assets_files()` so callers needing the same key share one source.
+    """
+    base, _ = os.path.splitext(file_name)
+    base = id_content_regex.sub("", base).strip()
+    base = year_regex.sub("", base).strip()
+    base = season_number_regex.sub("", base).strip(" -_")
+    return base
 
 
 def normalize_titles(title: str) -> str:

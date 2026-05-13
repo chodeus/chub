@@ -435,17 +435,17 @@ async def process_unmatched_webhook(
 
 @router.get(
     "/cleanarr/status",
-    summary="Get orphaned poster status",
-    description="Retrieve counts of orphaned posters tracked for cleanup.",
+    summary="Get pending-deletion status",
+    description="Retrieve counts of poster files queued for deletion.",
     responses={
         200: {
-            "description": "Orphaned poster status retrieved",
+            "description": "Pending deletion status retrieved",
             "content": {
                 "application/json": {
                     "example": {
                         "success": True,
-                        "message": "Orphaned poster status retrieved",
-                        "data": {"orphaned_count": 5},
+                        "message": "Pending deletion status retrieved",
+                        "data": {"pending_deletion_count": 5},
                     }
                 }
             },
@@ -457,23 +457,23 @@ async def get_cleanarr_webhook_status(
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
     """
-    Retrieve orphaned poster cleanup status.
+    Retrieve pending-deletion queue status.
 
-    Returns the current count and details of orphaned posters
-    that are tracked for cleanup by the cleanarr system.
+    Returns the current count and details of poster files queued for
+    deletion by the cleanarr system.
 
     Returns:
-        Orphaned poster count and summary
+        Pending deletion count and summary
     """
     try:
         logger.debug("Serving GET /api/webhooks/cleanarr/status")
 
-        report = db.orphaned.report_orphaned_posters()
+        report = db.pending_deletions.report_pending()
 
         return ok(
             "Cleanarr status retrieved",
             {
-                "orphaned_count": report.get("total", 0),
+                "pending_deletion_count": report.get("total", 0),
                 "summary": report.get("summary", {}),
                 "status": "active",
             },
@@ -489,8 +489,8 @@ async def get_cleanarr_webhook_status(
 
 @router.post(
     "/cleanarr/process",
-    summary="Process orphaned poster cleanup",
-    description="Trigger cleanup of orphaned poster files from disk and database.",
+    summary="Process pending poster deletions",
+    description="Trigger cleanup of queued poster files from disk and database.",
     responses={
         200: {
             "description": "Cleanup processing completed",
@@ -513,13 +513,13 @@ async def process_cleanarr_webhook(
     _secret: None = Depends(verify_webhook_secret),
 ) -> JSONResponse:
     """
-    Trigger orphaned poster cleanup.
+    Trigger pending-deletion processing.
 
-    Runs the cleanarr process which deletes orphaned poster files
+    Runs the cleanarr process which deletes queued poster files
     from disk and removes their tracking records from the database.
 
     Returns:
-        Cleanup result with count of processed orphaned posters
+        Cleanup result with count of processed deletions
     """
     try:
         logger.debug("Serving POST /api/webhooks/cleanarr/process")
@@ -537,7 +537,7 @@ async def process_cleanarr_webhook(
                 ]
         except ConfigError:
             allowed_roots = []
-        db.orphaned.handle_orphaned_posters(
+        db.pending_deletions.process_pending(
             cleanarr_logger, dry_run=False, allowed_roots=allowed_roots
         )
 

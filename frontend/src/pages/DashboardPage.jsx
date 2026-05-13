@@ -291,7 +291,7 @@ const DashboardPage = () => {
         const s = posterStatsData?.data || {};
         return {
             cached: s.poster_cache_count ?? 0,
-            orphaned: s.orphaned_count ?? 0,
+            pendingDeletions: s.pending_deletion_count ?? 0,
         };
     }, [posterStatsData]);
 
@@ -650,16 +650,16 @@ const DashboardPage = () => {
                                 <div className="text-xs text-tertiary">In local asset cache</div>
                             </Link>
                         )}
-                        {posterStats.orphaned > 0 && (
+                        {posterStats.pendingDeletions > 0 && (
                             <Link
                                 to="/poster/cleanarr"
                                 className="no-underline bg-surface border border-border-light rounded-lg p-4 flex flex-col gap-1 hover:border-border border-warning/30"
                             >
                                 <div className="text-tertiary text-xs uppercase tracking-wider">
-                                    Orphaned posters
+                                    Pending deletions
                                 </div>
                                 <div className="text-2xl font-bold text-warning">
-                                    {posterStats.orphaned.toLocaleString()}
+                                    {posterStats.pendingDeletions.toLocaleString()}
                                 </div>
                                 <div className="text-xs text-tertiary">
                                     Review in Poster Cleanarr

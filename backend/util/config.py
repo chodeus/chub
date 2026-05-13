@@ -66,7 +66,8 @@ class PosterRenamerrConfig(BaseModel):
     asset_folders: bool = False
     print_only_renames: bool = False
     run_border_replacerr: bool = False
-    run_cleanarr: bool = False
+    clean_orphan_assets: bool = False
+    orphan_assets_mode: str = "report"  # report | move | remove
     report_unmatched_assets: bool = False
     source_dirs: List[str] = Field(default_factory=list)
     destination_dir: str = ""
@@ -290,6 +291,15 @@ class PosterCleanarrConfig(BaseModel):
     # Populated only by per-job overrides from the Poster Cleanarr UI when the
     # user selects specific tiles. None => full library. Never persisted.
     target_paths: Optional[List[str]] = None
+    # Orphan-asset cleanup: walk `asset_dirs` and report/move/remove asset
+    # files whose title doesn't appear in any configured instance's library
+    # (the asset has no "parent" media). The comparison set is read from
+    # media_cache + collection_cache (populated by poster_renamerr's instance
+    # sync), so freshness inherits whatever the last renamerr run produced.
+    orphan_assets_enabled: bool = False
+    orphan_assets_mode: str = "report"  # report | move | remove
+    asset_dirs: List[str] = Field(default_factory=list)
+    include_collections: bool = True
 
 
 class PlexMaintenanceConfig(BaseModel):

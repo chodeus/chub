@@ -127,7 +127,7 @@ async def search_posters(
                                 "uploaded": 120,
                             },
                             "poster_cache_count": 500,
-                            "orphaned_count": 12,
+                            "pending_deletion_count": 12,
                             "gdrive_stats": {},
                         },
                     }
@@ -161,13 +161,13 @@ async def get_poster_stats(
         logger.debug(f"Serving GET /api/posters/stats groupBy={groupBy}")
         matched = db.stats.get_matched_posters_stats()
         poster_count = db.stats.count_poster_cache()
-        orphaned_count = db.stats.count_orphaned_posters()
+        pending_deletion_count = db.stats.count_pending_deletions()
         gdrive = db.stats.get_gdrive_stats()
 
         data = {
             "matched_stats": matched,
             "poster_cache_count": poster_count,
-            "orphaned_count": orphaned_count,
+            "pending_deletion_count": pending_deletion_count,
             "gdrive_stats": gdrive,
         }
 
@@ -2139,8 +2139,11 @@ async def run_plex_metadata_cleanup(
     """
     Enqueue a `poster_cleanarr` job. Request body:
         {
-          "mode": "report" | "move" | "remove",
-          "target_paths": [str, ...]   # optional; if present, only these files are processed
+          "mode": "report" | "move" | "remove",          # bloat-image mode
+          "target_paths": [str, ...],                    # optional bloat subset
+          "orphan_assets_enabled": bool,                 # optional, default config value
+          "orphan_assets_mode": "report"|"move"|"remove",
+          "asset_dirs": [str, ...]                       # optional override
         }
     """
     try:
@@ -2154,13 +2157,34 @@ async def run_plex_metadata_cleanup(
             return error(
                 f"Invalid mode '{mode}'", code="INVALID_MODE", status_code=400
             )
-        payload = {
-            "module_name": "poster_cleanarr",
-            "overrides": {"mode": mode},
-        }
+        overrides: dict = {"mode": mode}
+
         target_paths = body.get("target_paths")
         if isinstance(target_paths, list) and target_paths:
-            payload["overrides"]["target_paths"] = [str(p) for p in target_paths]
+            overrides["target_paths"] = [str(p) for p in target_paths]
+
+        if "orphan_assets_enabled" in body:
+            overrides["orphan_assets_enabled"] = bool(
+                body.get("orphan_assets_enabled")
+            )
+        orphan_mode = body.get("orphan_assets_mode")
+        if isinstance(orphan_mode, str):
+            orphan_mode = orphan_mode.lower()
+            if orphan_mode not in ("report", "move", "remove"):
+                return error(
+                    f"Invalid orphan_assets_mode '{orphan_mode}'",
+                    code="INVALID_MODE",
+                    status_code=400,
+                )
+            overrides["orphan_assets_mode"] = orphan_mode
+        asset_dirs = body.get("asset_dirs")
+        if isinstance(asset_dirs, list):
+            overrides["asset_dirs"] = [str(p) for p in asset_dirs]
+
+        payload = {
+            "module_name": "poster_cleanarr",
+            "overrides": overrides,
+        }
 
         result = db.worker.enqueue_job("jobs", payload, job_type="module_run")
         if result.get("success"):
@@ -2690,28 +2714,28 @@ async def delete_poster(
             os.remove(full_path)
             logger.info(f"Deleted poster file: {full_path}")
 
-        # Record as orphaned poster for tracking (scoped to configured roots so
-        # the table doesn't accumulate rows that the cleanup pass would reject).
+        # Queue a pending deletion entry (scoped to configured roots so the
+        # table doesn't accumulate rows the cleanup pass would reject).
         import datetime
 
         now = datetime.datetime.now(datetime.timezone.utc).isoformat()
-        orphan_path = full_path or file_path
+        pending_path = full_path or file_path
         try:
             from backend.util.config import load_config
             from backend.util.path_safety import get_allowed_roots
-            from backend.util.database.orphaned_posters import _path_under_any_root
+            from backend.util.database.pending_deletions import _path_under_any_root
 
             cfg = load_config()
             allowed_roots = [str(r) for r in get_allowed_roots(cfg)]
-            if allowed_roots and not _path_under_any_root(orphan_path, allowed_roots):
+            if allowed_roots and not _path_under_any_root(pending_path, allowed_roots):
                 logger.debug(
-                    f"[SKIPPED out-of-scope orphan insert] {orphan_path}"
+                    f"[SKIPPED out-of-scope pending insert] {pending_path}"
                 )
             else:
-                db.orphaned.execute_query(
+                db.pending_deletions.execute_query(
                     """
-                    INSERT OR IGNORE INTO orphaned_posters
-                        (asset_type, title, year, season, file_path, date_orphaned)
+                    INSERT OR IGNORE INTO pending_deletions
+                        (asset_type, title, year, season, file_path, date_queued)
                     VALUES (?, ?, ?, ?, ?, ?)
                     """,
                     (
@@ -2719,12 +2743,12 @@ async def delete_poster(
                         record.get("title"),
                         record.get("year"),
                         record.get("season_number"),
-                        orphan_path,
+                        pending_path,
                         now,
                     ),
                 )
-        except Exception as orphan_err:
-            logger.debug(f"Could not record orphaned poster: {orphan_err}")
+        except Exception as pending_err:
+            logger.debug(f"Could not queue pending deletion: {pending_err}")
 
         # Mark associated media items as unmatched
         unmatched_count = 0

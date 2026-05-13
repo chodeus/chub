@@ -370,7 +370,7 @@ class Connector:
                 # when genres or cast_data are present in the media items
                 try:
                     # Load allowed roots once so stale rows outside configured
-                    # roots don't accumulate orphaned_posters entries the
+                    # roots don't accumulate pending_deletions entries the
                     # cleanup pass would later reject anyway.
                     allowed_roots: Optional[List[str]] = None
                     try:

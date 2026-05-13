@@ -224,8 +224,8 @@ class SchemaManager:
         self._add_table(gdrive_stats)
 
         # Orphaned Posters
-        orphaned_posters = TableDefinition(
-            name="orphaned_posters",
+        pending_deletions = TableDefinition(
+            name="pending_deletions",
             columns=[
                 ColumnDefinition("id", "INTEGER", primary_key=True, nullable=False),
                 ColumnDefinition("asset_type", "TEXT"),
@@ -233,10 +233,10 @@ class SchemaManager:
                 ColumnDefinition("year", "TEXT"),
                 ColumnDefinition("season", "INTEGER"),
                 ColumnDefinition("file_path", "TEXT", unique=True),
-                ColumnDefinition("date_orphaned", "TEXT"),
+                ColumnDefinition("date_queued", "TEXT"),
             ],
         )
-        self._add_table(orphaned_posters)
+        self._add_table(pending_deletions)
 
         # Poster Collections
         poster_collections = TableDefinition(
@@ -563,6 +563,34 @@ class SchemaManager:
 
         return changes
 
+    def _run_rename_migrations(self, conn: sqlite3.Connection) -> None:
+        """One-shot data migrations for tables that were renamed in-place.
+
+        Each block: if the legacy table exists, copy its rows into the new
+        table (already created by add_missing_tables) and drop the legacy
+        table. Idempotent — safe to call on every startup.
+        """
+        cursor = conn.cursor()
+        existing = self.get_existing_tables(conn)
+
+        # orphaned_posters -> pending_deletions (date_orphaned -> date_queued)
+        if "orphaned_posters" in existing and "pending_deletions" in existing:
+            try:
+                cursor.execute(
+                    """
+                    INSERT OR IGNORE INTO pending_deletions
+                        (asset_type, title, year, season, file_path, date_queued)
+                    SELECT asset_type, title, year, season, file_path, date_orphaned
+                    FROM orphaned_posters
+                    """
+                )
+                cursor.execute("DROP TABLE orphaned_posters")
+                logger.info(
+                    "Migrated orphaned_posters -> pending_deletions and dropped legacy table"
+                )
+            except sqlite3.Error as e:
+                logger.error(f"Failed to migrate orphaned_posters: {e}")
+
     def add_missing_tables(self, conn: sqlite3.Connection) -> List[str]:
         """Create tables that exist in schema but not in database."""
         changes = []
@@ -647,6 +675,9 @@ class SchemaManager:
         with conn:
             # Add missing tables
             changes["tables_added"] = self.add_missing_tables(conn)
+
+            # One-shot rename migrations (legacy table -> new table)
+            self._run_rename_migrations(conn)
 
             # Add missing columns (if enabled)
             if add_missing_columns:
