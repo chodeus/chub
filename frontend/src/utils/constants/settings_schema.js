@@ -337,7 +337,7 @@ export const SETTINGS_SCHEMA = [
                         type: 'check_box',
                         defaultValue: true,
                         description:
-                            'Temporarily opt this profile out without deleting its settings.',
+                            'Uncheck to temporarily opt this profile out without deleting its settings. Disabled profiles are skipped on both scheduled and manual runs.',
                     },
                     {
                         key: 'label',
