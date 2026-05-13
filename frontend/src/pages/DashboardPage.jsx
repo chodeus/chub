@@ -342,7 +342,7 @@ const DashboardPage = () => {
             if (!latestByInstance.has(name)) latestByInstance.set(name, snap);
             const bucket = samplesByInstance.get(name) || { ok: 0, total: 0 };
             bucket.total += 1;
-            if (snap.status === 'ok') bucket.ok += 1;
+            if (snap.status === 'healthy') bucket.ok += 1;
             samplesByInstance.set(name, bucket);
         }
 
@@ -354,7 +354,7 @@ const DashboardPage = () => {
             const latest = latestByInstance.get(name);
             if (latest) {
                 probedCount += 1;
-                if (latest.status === 'ok') reachable += 1;
+                if (latest.status === 'healthy') reachable += 1;
             }
             const samples = samplesByInstance.get(name);
             if (samples) {
