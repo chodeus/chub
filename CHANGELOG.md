@@ -2,6 +2,24 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.0.1](https://github.com/chodeus/chub/compare/v2.0.0...v2.0.1) (2026-05-13)
+
+
+### Bug Fixes
+
+* **dashboard:** compare health snapshot status to 'healthy', not 'ok' ([40e132b](https://github.com/chodeus/chub/commit/40e132b0adf6d719a8cf0e47131fb3a4524aaf22))
+* **instances_field:** handle config-style Plex items in toggle/library handlers ([add2f5b](https://github.com/chodeus/chub/commit/add2f5b402584b75440ce7dcd192c268c418f7c3))
+
+
+### Refactoring
+
+* **settings:** move log_level/dry_run to top of poster_renamerr + border_replacerr ([77d0396](https://github.com/chodeus/chub/commit/77d03969e989a472e185ddbd332b9eee016a88bd))
+
+
+### Documentation
+
+* **upgradinatorr:** clarify the Enabled profile toggle copy ([ea73080](https://github.com/chodeus/chub/commit/ea73080caadba41174c5a850bc5c165016031a72))
+
 ## [2.0.0](https://github.com/chodeus/chub/compare/v1.15.4...v2.0.0) (2026-05-13)
 
 
