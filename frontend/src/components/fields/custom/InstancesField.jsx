@@ -630,6 +630,59 @@ const PlexInstanceSelector = React.memo(
             });
         }, [selectedInstances]);
 
+        // Items reach this component in three shapes — plain string, the
+        // {instance, add_posters, library_names} object the form emits on
+        // first-toggle, and the config-style {plex_name: {library_names,
+        // add_posters}} dict that PosterRenamerrConfig stores on disk.
+        // All three handlers below need to identify items by instance name
+        // regardless of which shape they're in, otherwise toggles silently
+        // no-op on config-loaded data.
+        const getItemName = item => {
+            if (typeof item === 'string') return item;
+            if (typeof item !== 'object' || item === null) return null;
+            if (item.instance || item.name) return item.instance || item.name;
+            const keys = Object.keys(item);
+            return keys.length === 1 ? keys[0] : null;
+        };
+
+        const getItemAddPosters = item => {
+            if (typeof item !== 'object' || item === null) return false;
+            if (item.instance || item.name) {
+                return item.add_posters || item.upload_posters || false;
+            }
+            const keys = Object.keys(item);
+            if (keys.length === 1) return item[keys[0]]?.add_posters || false;
+            return false;
+        };
+
+        const getItemLibraries = item => {
+            if (typeof item !== 'object' || item === null) return [];
+            if (item.instance || item.name) {
+                return item.library_names || item.libraries || [];
+            }
+            const keys = Object.keys(item);
+            if (keys.length === 1) return item[keys[0]]?.library_names || [];
+            return [];
+        };
+
+        // Emit shape depends on the backend pydantic model:
+        //   showPosterOption=true  → poster_renamerr expects
+        //     List[Union[str, Dict[plex_name, {library_names, add_posters}]]]
+        //     (config-style dict keyed by instance name)
+        //   showPosterOption=false → labelarr / nestarr expect
+        //     List[{instance, library_names}] (object-with-instance)
+        // The wrong shape silently round-trips to empty values or rejects on
+        // ChubConfig.model_validate, so this distinction matters.
+        const buildPlexItem = (instanceName, libraries, addPosters) =>
+            showPosterOption
+                ? {
+                      [instanceName]: {
+                          library_names: libraries,
+                          add_posters: addPosters,
+                      },
+                  }
+                : { instance: instanceName, library_names: libraries };
+
         const handleInstanceToggle = useCallback(
             (instanceName, checked) => {
                 if (checked) {
@@ -637,71 +690,42 @@ const PlexInstanceSelector = React.memo(
                     // List[str] pydantic model accepts the payload.
                     const newInstance = emitAsString
                         ? instanceName
-                        : showPosterOption
-                          ? { instance: instanceName, add_posters: false, library_names: [] }
-                          : { instance: instanceName, library_names: [] };
+                        : buildPlexItem(instanceName, [], false);
                     onSelectionChange([...(selectedInstances || []), newInstance]);
                 } else {
-                    // Remove instance
-                    const newSelection = (selectedInstances || []).filter(item =>
-                        typeof item === 'string'
-                            ? item !== instanceName
-                            : (item.instance || item.name) !== instanceName
+                    // Remove instance — match across all three item shapes.
+                    const newSelection = (selectedInstances || []).filter(
+                        item => getItemName(item) !== instanceName
                     );
                     onSelectionChange(newSelection);
                 }
             },
+            // eslint-disable-next-line react-hooks/exhaustive-deps
             [selectedInstances, onSelectionChange, showPosterOption, emitAsString]
         );
 
         const handlePosterUploadToggle = useCallback(
             (instanceName, addPosters) => {
                 const newSelection = (selectedInstances || []).map(item => {
-                    const itemName = typeof item === 'object' ? item.instance || item.name : item;
-                    if (itemName === instanceName) {
-                        if (typeof item === 'string') {
-                            return {
-                                instance: instanceName,
-                                add_posters: addPosters,
-                                library_names: [],
-                            };
-                        }
-                        return {
-                            ...item,
-                            instance: item.instance || item.name,
-                            add_posters: addPosters,
-                        };
-                    }
-                    return item;
+                    if (getItemName(item) !== instanceName) return item;
+                    return buildPlexItem(instanceName, getItemLibraries(item), addPosters);
                 });
                 onSelectionChange(newSelection);
             },
-            [selectedInstances, onSelectionChange]
+            // eslint-disable-next-line react-hooks/exhaustive-deps
+            [selectedInstances, onSelectionChange, showPosterOption]
         );
 
         const handleLibrariesChange = useCallback(
             (instanceName, libraries) => {
                 const newSelection = (selectedInstances || []).map(item => {
-                    const itemName = typeof item === 'object' ? item.instance || item.name : item;
-                    if (itemName === instanceName) {
-                        if (typeof item === 'string') {
-                            return {
-                                instance: instanceName,
-                                add_posters: false,
-                                library_names: libraries,
-                            };
-                        }
-                        return {
-                            ...item,
-                            instance: item.instance || item.name,
-                            library_names: libraries,
-                        };
-                    }
-                    return item;
+                    if (getItemName(item) !== instanceName) return item;
+                    return buildPlexItem(instanceName, libraries, getItemAddPosters(item));
                 });
                 onSelectionChange(newSelection);
             },
-            [selectedInstances, onSelectionChange]
+            // eslint-disable-next-line react-hooks/exhaustive-deps
+            [selectedInstances, onSelectionChange, showPosterOption]
         );
 
         if (plexInstances.length === 0) {
