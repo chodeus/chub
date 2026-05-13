@@ -484,11 +484,6 @@ class UnmatchedAssets(ChubModule):
 
     def run(self) -> None:
         try:
-            if getattr(self.config, "dry_run", False):
-                from backend.util.helper import create_table
-                table = [["Dry Run"], ["REPORT ONLY — NO NOTIFICATIONS WILL BE SENT"]]
-                self.logger.info(create_table(table))
-
             if self.is_cancelled():
                 self.logger.info("Cancellation requested, stopping unmatched_assets.")
                 return
@@ -498,8 +493,7 @@ class UnmatchedAssets(ChubModule):
                 if self.is_cancelled():
                     self.logger.info("Cancelled before notifications.")
                     return
-                if not getattr(self.config, "dry_run", False):
-                    self.send_notification(db)
+                self.send_notification(db)
 
         except KeyboardInterrupt:
             print("Keyboard Interrupt detected. Exiting...")

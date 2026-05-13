@@ -662,13 +662,8 @@ export const SETTINGS_SCHEMA = [
                 key: 'dry_run',
                 label: 'Dry Run',
                 type: 'check_box',
-                description: 'Simulate health checks without making changes.',
-            },
-            {
-                key: 'report_only',
-                label: 'Report Only',
-                type: 'check_box',
-                description: 'Report removed TMDB/TVDB entries without deleting them.',
+                description:
+                    'Log what would be deleted from Radarr/Sonarr without actually deleting. Turn off to actually clean up media flagged as removed from TMDB/TVDB.',
             },
             {
                 key: 'instances',
@@ -955,12 +950,6 @@ export const SETTINGS_SCHEMA = [
                 options: ['info', 'debug'],
                 required: true,
                 description: 'Set the logging verbosity for unmatched asset detection.',
-            },
-            {
-                key: 'dry_run',
-                label: 'Dry Run',
-                type: 'check_box',
-                description: 'Report unmatched assets without making changes.',
             },
             {
                 key: 'ignore_unmonitored',
