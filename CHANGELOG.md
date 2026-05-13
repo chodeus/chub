@@ -2,6 +2,13 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.15.2](https://github.com/chodeus/chub/compare/v1.15.1...v1.15.2) (2026-05-13)
+
+
+### Bug Fixes
+
+* **assets:** show full filename and pin owner name to card bottom ([bf7f980](https://github.com/chodeus/chub/commit/bf7f9809526de8e5fba568fd0f998928f89cf036))
+
 ## [1.15.1](https://github.com/chodeus/chub/compare/v1.15.0...v1.15.1) (2026-05-12)
 
 
