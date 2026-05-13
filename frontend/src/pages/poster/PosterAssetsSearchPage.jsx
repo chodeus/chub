@@ -488,6 +488,8 @@ const PosterAssetsSearchPage = () => {
                             const fileBase = item.file
                                 ? item.file.replace(/\\/g, '/').split('/').pop()
                                 : '';
+                            const fileNameNoExt = fileBase ? fileBase.replace(/\.[^./]+$/, '') : '';
+                            const cardLabel = fileNameNoExt || displayTitle;
                             return (
                                 <div
                                     key={item.id}
@@ -549,14 +551,14 @@ const PosterAssetsSearchPage = () => {
                                         />
                                     </div>
                                     <div
-                                        className="p-1.5 flex flex-col gap-0.5"
+                                        className="p-1.5 flex flex-col gap-1 flex-1"
                                         title={fileBase || displayTitle}
                                     >
-                                        <h4 className="font-medium text-primary text-xs line-clamp-2 break-words leading-tight text-center">
-                                            {displayTitle}
+                                        <h4 className="font-medium text-primary text-[11px] break-all leading-tight text-center">
+                                            {cardLabel}
                                         </h4>
                                         {driveName && (
-                                            <p className="text-[10px] text-secondary text-center truncate">
+                                            <p className="text-[10px] text-secondary text-center truncate mt-auto pt-1">
                                                 {driveName}
                                             </p>
                                         )}
