@@ -122,6 +122,51 @@ const PosterStatsPage = () => {
         options: { showErrorToast: false },
     });
 
+    // "Recent posters" surfaces freshly-added rows by poster_cache.created_at.
+    // 14 days is a reasonable window — long enough to be useful after a quiet
+    // period, short enough that the count doesn't grow unbounded.
+    // `useState` (not `useMemo`) so the cutoff is locked at mount time —
+    // useMemo([]) re-evaluates Date.now() on every render which the
+    // purity check rejects.
+    const [recentCutoff] = useState(() =>
+        new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString()
+    );
+    const { data: recentPostersData } = useApiData({
+        apiFunction: useCallback(
+            () => postersAPI.fetchPostersAddedSince(recentCutoff, 50),
+            [recentCutoff]
+        ),
+        options: { showErrorToast: false },
+    });
+    const recentPosters = useMemo(() => recentPostersData?.data?.items || [], [recentPostersData]);
+
+    // Low-resolution posters. 1000px is the existing backend default and
+    // matches what most poster-source guidance considers the minimum for
+    // a 16:9 / 2:3 display without obvious blurring.
+    const [lowResThreshold, setLowResThreshold] = useState(1000);
+    const { data: lowResData, refresh: refreshLowRes } = useApiData({
+        apiFunction: useCallback(
+            () => postersAPI.fetchLowResolutionPosters(lowResThreshold, 100),
+            [lowResThreshold]
+        ),
+        options: { showErrorToast: false },
+        dependencies: [lowResThreshold],
+    });
+    const lowResPosters = useMemo(() => lowResData?.data?.items || [], [lowResData]);
+    const [isBackfilling, setIsBackfilling] = useState(false);
+    const handleBackfillDimensions = useCallback(async () => {
+        setIsBackfilling(true);
+        try {
+            await postersAPI.backfillPosterDimensions();
+            toast.success('Dimension backfill triggered');
+            refreshLowRes();
+        } catch {
+            toast.error('Backfill failed');
+        } finally {
+            setIsBackfilling(false);
+        }
+    }, [toast, refreshLowRes]);
+
     const stats = useMemo(() => statsData?.data || {}, [statsData]);
     const matchedStats = useMemo(
         () =>
@@ -327,6 +372,106 @@ const PosterStatsPage = () => {
                     </div>
                 </section>
             )}
+
+            {/* Recently Added Posters */}
+            {recentPosters.length > 0 && (
+                <section>
+                    <h3 className="text-lg font-semibold text-primary mb-3 flex items-center gap-2">
+                        <span className="material-symbols-outlined text-brand-primary">
+                            new_releases
+                        </span>
+                        Recently added ({recentPosters.length})
+                        <span className="text-xs font-normal text-tertiary ml-2">past 14 days</span>
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                        {recentPosters.slice(0, 18).map(p => (
+                            <div
+                                key={p.id}
+                                className="flex items-center gap-2 p-2 rounded-lg bg-surface border border-border text-sm"
+                                title={p.file || p.folder}
+                            >
+                                <span className="material-symbols-outlined text-tertiary text-base">
+                                    image
+                                </span>
+                                <span className="flex-1 min-w-0 truncate text-primary">
+                                    {p.title || p.file || `#${p.id}`}
+                                </span>
+                                {p.year && <span className="text-xs text-tertiary">{p.year}</span>}
+                            </div>
+                        ))}
+                    </div>
+                    {recentPosters.length > 18 && (
+                        <p className="text-xs text-tertiary mt-2">
+                            …and {recentPosters.length - 18} more.
+                        </p>
+                    )}
+                </section>
+            )}
+
+            {/* Low-resolution Posters */}
+            <section>
+                <h3 className="text-lg font-semibold text-primary mb-3 flex items-center gap-2">
+                    <span className="material-symbols-outlined text-warning">
+                        photo_size_select_small
+                    </span>
+                    Low-resolution posters
+                </h3>
+                <div className="flex flex-wrap items-center gap-3 mb-3">
+                    <label className="flex items-center gap-2 text-sm text-secondary">
+                        Below
+                        <input
+                            type="number"
+                            min={100}
+                            step={100}
+                            value={lowResThreshold}
+                            onChange={e =>
+                                setLowResThreshold(Math.max(100, Number(e.target.value) || 100))
+                            }
+                            className="w-20 p-1.5 bg-input border border-border rounded-md text-primary text-sm"
+                        />
+                        px wide
+                    </label>
+                    <LoadingButton
+                        variant="ghost"
+                        icon="auto_fix_high"
+                        loading={isBackfilling}
+                        onClick={handleBackfillDimensions}
+                    >
+                        Backfill dimensions
+                    </LoadingButton>
+                </div>
+                {lowResPosters.length === 0 ? (
+                    <p className="text-sm text-secondary">
+                        None found at this threshold. Run &ldquo;Backfill dimensions&rdquo; if you
+                        haven&apos;t already — rows without recorded width are excluded.
+                    </p>
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                        {lowResPosters.slice(0, 30).map(p => (
+                            <div
+                                key={p.id}
+                                className="flex items-center gap-2 p-2 rounded-lg bg-surface border border-border text-sm"
+                                title={p.file || p.folder}
+                            >
+                                <span className="material-symbols-outlined text-warning text-base">
+                                    warning
+                                </span>
+                                <span className="flex-1 min-w-0 truncate text-primary">
+                                    {p.title || p.file || `#${p.id}`}
+                                </span>
+                                <span className="text-xs text-tertiary">
+                                    {p.width ? `${p.width}px` : '—'}
+                                </span>
+                            </div>
+                        ))}
+                        {lowResPosters.length > 30 && (
+                            <p className="col-span-full text-xs text-tertiary mt-1">
+                                …and {lowResPosters.length - 30} more.
+                            </p>
+                        )}
+                    </div>
+                )}
+            </section>
 
             {/* GDrive Sync Status */}
             {gdriveStats.length > 0 && (

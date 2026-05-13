@@ -85,7 +85,9 @@ async def search_media(
     matched: Optional[int] = Query(
         None, description="Filter by matched status: 0 or 1"
     ),
-    sort: str = Query("title", description="Sort field: title, year, rating"),
+    sort: str = Query(
+        "title", description="Sort field: title, year, rating, runtime"
+    ),
     order: str = Query("asc", description="Sort order: asc, desc"),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),

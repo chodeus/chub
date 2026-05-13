@@ -179,6 +179,7 @@ const INCOMPLETE_FIELDS = [
     { key: 'rating', label: 'Rating' },
     { key: 'studio', label: 'Studio' },
     { key: 'language', label: 'Language' },
+    { key: 'runtime', label: 'Runtime' },
     { key: 'genre', label: 'Genre' },
 ];
 
