@@ -2,6 +2,13 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.15.4](https://github.com/chodeus/chub/compare/v1.15.3...v1.15.4) (2026-05-13)
+
+
+### Bug Fixes
+
+* **poster_cleanarr:** bump scan timeout to 120s, prune deleted paths on job success ([d8b11ba](https://github.com/chodeus/chub/commit/d8b11bacf996faa9c3f4911ed7abad3c2b214ca2))
+
 ## [1.15.3](https://github.com/chodeus/chub/compare/v1.15.2...v1.15.3) (2026-05-13)
 
 
