@@ -488,8 +488,9 @@ const PosterAssetsSearchPage = () => {
                             const fileBase = item.file
                                 ? item.file.replace(/\\/g, '/').split('/').pop()
                                 : '';
-                            const fileNameNoExt = fileBase ? fileBase.replace(/\.[^./]+$/, '') : '';
-                            const cardLabel = fileNameNoExt || displayTitle;
+                            const idTags = fileBase
+                                ? (fileBase.match(/\{[^}]+\}/g) || []).join(' ')
+                                : '';
                             return (
                                 <div
                                     key={item.id}
@@ -551,14 +552,25 @@ const PosterAssetsSearchPage = () => {
                                         />
                                     </div>
                                     <div
-                                        className="p-1.5 flex flex-col gap-1 flex-1"
+                                        className="p-1.5 flex flex-col gap-0.5 flex-1"
                                         title={fileBase || displayTitle}
                                     >
-                                        <h4 className="font-medium text-primary text-[11px] break-all leading-tight text-center">
-                                            {cardLabel}
+                                        <h4 className="font-medium text-primary text-xs line-clamp-2 break-words leading-tight text-center">
+                                            {displayTitle}
                                         </h4>
+                                        {idTags && (
+                                            <p
+                                                className="text-tertiary text-center break-all line-clamp-2 font-mono"
+                                                style={{ fontSize: '9px', lineHeight: '1.2' }}
+                                            >
+                                                {idTags}
+                                            </p>
+                                        )}
                                         {driveName && (
-                                            <p className="text-[10px] text-secondary text-center truncate mt-auto pt-1">
+                                            <p
+                                                className="text-secondary text-center truncate mt-auto pt-1"
+                                                style={{ fontSize: '10px' }}
+                                            >
                                                 {driveName}
                                             </p>
                                         )}
