@@ -807,11 +807,16 @@ class PosterRenamerr(ChubModule):
                         ) if r
                     ]
                     # In dry-run, force report mode regardless of configured
-                    # action — never delete during a dry-run.
+                    # action — never delete during a dry-run. Otherwise defer
+                    # to Poster Cleanarr's mode so a single setting governs
+                    # both the standalone Cleanarr run and Renamerr's
+                    # post-rename orphan pass (mirrors how Renamerr triggers
+                    # Border Replacerr — downstream module owns its policy).
+                    cleanarr_cfg = getattr(self.full_config, "poster_cleanarr", None)
                     mode = (
                         "report"
                         if self.config.dry_run
-                        else (self.config.orphan_assets_mode or "report")
+                        else (getattr(cleanarr_cfg, "orphan_assets_mode", "report") or "report")
                     )
                     instance_names = [
                         name

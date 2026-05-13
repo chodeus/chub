@@ -67,7 +67,6 @@ class PosterRenamerrConfig(BaseModel):
     print_only_renames: bool = False
     run_border_replacerr: bool = False
     clean_orphan_assets: bool = False
-    orphan_assets_mode: str = "report"  # report | move | remove
     report_unmatched_assets: bool = False
     source_dirs: List[str] = Field(default_factory=list)
     destination_dir: str = ""
