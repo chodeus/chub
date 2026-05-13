@@ -1,9 +1,7 @@
-import datetime
 import json
 from typing import Any, List, Optional
 
 from .db_base import DatabaseBase
-from .pending_deletions import _path_under_any_root
 
 
 class MediaCache(DatabaseBase):
@@ -281,43 +279,10 @@ class MediaCache(DatabaseBase):
         instance_name: str,
         asset_type: str,
         logger: Optional[Any] = None,
-        allowed_roots: Optional[List[str]] = None,
     ) -> None:
-        """Delete a single record by its identity key; queues a pending deletion
-        for the previously-placed poster if applicable.
-
-        When `allowed_roots` is provided, any `renamed_file` path that is not
-        under one of those roots is skipped — the media_cache row still gets
-        deleted, but we do not insert a stale pending_deletions entry that the
-        cleanup pass would later ignore anyway.
-        """
+        """Delete a single record by its identity key."""
         renamed_file = item.get("renamed_file")
         if renamed_file:
-            out_of_scope = bool(allowed_roots) and not _path_under_any_root(
-                renamed_file, allowed_roots
-            )
-            if out_of_scope:
-                if logger:
-                    logger.debug(
-                        f"[SKIPPED out-of-scope pending insert] {renamed_file}"
-                    )
-            else:
-                now = datetime.datetime.now(datetime.timezone.utc).isoformat()
-                self.execute_query(
-                    """
-                    INSERT OR IGNORE INTO pending_deletions
-                        (asset_type, title, year, season, file_path, date_queued)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        item.get("asset_type"),
-                        item.get("title"),
-                        item.get("year"),
-                        item.get("season_number"),
-                        renamed_file,
-                        now,
-                    ),
-                )
             identity_key = self._identity_key(item, asset_type, instance_name)
             self.execute_query(
                 "DELETE FROM media_cache WHERE identity_key = ?",
@@ -896,14 +861,10 @@ class MediaCache(DatabaseBase):
         asset_type: str,
         fresh_media: list,
         logger: Optional[Any] = None,
-        allowed_roots: Optional[List[str]] = None,
     ) -> None:
         """
         Syncs the media_cache table for a specific instance and asset_type to match fresh_media.
         Adds/updates as needed, deletes stale records not present in fresh_media.
-
-        When `allowed_roots` is provided, stale rows whose `renamed_file` is
-        outside those roots won't produce a `pending_deletions` insert.
         """
         db_rows = (
             self.execute_query(
@@ -939,7 +900,7 @@ class MediaCache(DatabaseBase):
         keys_to_remove = set(db_map.keys()) - set(fresh_map.keys())
         for key in keys_to_remove:
             row = db_map[key]
-            self.delete(row, instance_name, asset_type, logger, allowed_roots=allowed_roots)
+            self.delete(row, instance_name, asset_type, logger)
 
         if logger:
             logger.debug(

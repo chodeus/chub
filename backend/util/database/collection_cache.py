@@ -1,4 +1,3 @@
-import datetime
 import json
 from typing import Any, Optional
 
@@ -136,8 +135,7 @@ class CollectionCache(DatabaseBase):
     def delete(
         self, item: dict, instance_name: str, logger: Optional[Any] = None
     ) -> None:
-        """Delete a single record by its unique key; queues a pending deletion
-        for the previously-placed poster if applicable."""
+        """Delete a single record by its unique key."""
         key_params = self._canonical_collection_key(
             {**item, "instance_name": instance_name}
         )
@@ -145,26 +143,6 @@ class CollectionCache(DatabaseBase):
             DELETE FROM collections_cache
             WHERE title=? AND year IS ? AND tmdb_id IS ? AND tvdb_id IS ? AND imdb_id IS ? AND library_name IS ? AND instance_name=?
         """
-
-        renamed_file = item.get("renamed_file")
-        if renamed_file:
-            now = datetime.datetime.now(datetime.timezone.utc).isoformat()
-            self.execute_query(
-                """
-                INSERT OR IGNORE INTO pending_deletions
-                    (asset_type, title, year, season, file_path, date_queued)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    "collection",
-                    item.get("title"),
-                    item.get("year"),
-                    None,
-                    renamed_file,
-                    now,
-                ),
-            )
-
         rows_deleted = self.execute_query(sql, key_params)
         if logger:
             logger.info(

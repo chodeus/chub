@@ -127,7 +127,6 @@ async def search_posters(
                                 "uploaded": 120,
                             },
                             "poster_cache_count": 500,
-                            "pending_deletion_count": 12,
                             "gdrive_stats": {},
                         },
                     }
@@ -161,13 +160,11 @@ async def get_poster_stats(
         logger.debug(f"Serving GET /api/posters/stats groupBy={groupBy}")
         matched = db.stats.get_matched_posters_stats()
         poster_count = db.stats.count_poster_cache()
-        pending_deletion_count = db.stats.count_pending_deletions()
         gdrive = db.stats.get_gdrive_stats()
 
         data = {
             "matched_stats": matched,
             "poster_cache_count": poster_count,
-            "pending_deletion_count": pending_deletion_count,
             "gdrive_stats": gdrive,
         }
 
@@ -2713,42 +2710,6 @@ async def delete_poster(
         if delete_file and full_path and os.path.exists(full_path):
             os.remove(full_path)
             logger.info(f"Deleted poster file: {full_path}")
-
-        # Queue a pending deletion entry (scoped to configured roots so the
-        # table doesn't accumulate rows the cleanup pass would reject).
-        import datetime
-
-        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
-        pending_path = full_path or file_path
-        try:
-            from backend.util.config import load_config
-            from backend.util.path_safety import get_allowed_roots
-            from backend.util.database.pending_deletions import _path_under_any_root
-
-            cfg = load_config()
-            allowed_roots = [str(r) for r in get_allowed_roots(cfg)]
-            if allowed_roots and not _path_under_any_root(pending_path, allowed_roots):
-                logger.debug(
-                    f"[SKIPPED out-of-scope pending insert] {pending_path}"
-                )
-            else:
-                db.pending_deletions.execute_query(
-                    """
-                    INSERT OR IGNORE INTO pending_deletions
-                        (asset_type, title, year, season, file_path, date_queued)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        "poster",
-                        record.get("title"),
-                        record.get("year"),
-                        record.get("season_number"),
-                        pending_path,
-                        now,
-                    ),
-                )
-        except Exception as pending_err:
-            logger.debug(f"Could not queue pending deletion: {pending_err}")
 
         # Mark associated media items as unmatched
         unmatched_count = 0

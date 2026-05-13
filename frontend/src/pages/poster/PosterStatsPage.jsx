@@ -208,17 +208,11 @@ const PosterStatsPage = () => {
             </div>
 
             {/* Summary Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="p-5 rounded-xl bg-surface border border-border">
                     <p className="text-sm text-secondary mb-1">Cached Posters</p>
                     <p className="text-3xl font-bold text-primary">
                         {stats.poster_cache_count || 0}
-                    </p>
-                </div>
-                <div className="p-5 rounded-xl bg-surface border border-border">
-                    <p className="text-sm text-secondary mb-1">Pending Deletions</p>
-                    <p className="text-3xl font-bold text-warning">
-                        {stats.pending_deletion_count || 0}
                     </p>
                 </div>
                 <div className="p-5 rounded-xl bg-surface border border-border">

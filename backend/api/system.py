@@ -718,12 +718,6 @@ async def get_system_digest(
         )
         latest_health = [dict(r) for r in health_rows or []]
 
-        # Pending-deletion queue count (space recoverable signal)
-        pending_row = db.worker.execute_query(
-            "SELECT COUNT(*) AS total FROM pending_deletions", fetch_one=True
-        )
-        pending_count = pending_row["total"] if pending_row else 0
-
         return ok(
             f"Digest for last {days}d",
             {
@@ -732,7 +726,6 @@ async def get_system_digest(
                 "job_counts": job_counts,
                 "recent_failures": recent_failures,
                 "latest_instance_health": latest_health,
-                "pending_deletions": pending_count,
             },
         )
     except Exception as e:
@@ -747,17 +740,14 @@ async def get_system_digest(
 @router.get(
     "/system/cleanup-candidates",
     summary="Cleanup candidates report",
-    description="Surface items worth cleaning up: queued pending deletions, "
-    "old errored jobs, stale scan cache entries. Read-only — no mutations.",
+    description="Surface items worth cleaning up: old errored jobs, stale "
+    "scan cache entries, unmatched media/collections counts. Read-only — no mutations.",
 )
 async def get_cleanup_candidates(
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
     try:
-        pending_row = db.worker.execute_query(
-            "SELECT COUNT(*) AS total FROM pending_deletions", fetch_one=True
-        )
         old_jobs_row = db.worker.execute_query(
             "SELECT COUNT(*) AS total FROM jobs WHERE status='error'",
             fetch_one=True,
@@ -773,7 +763,6 @@ async def get_cleanup_candidates(
         return ok(
             "Cleanup candidates",
             {
-                "pending_deletions": pending_row["total"] if pending_row else 0,
                 "errored_jobs": old_jobs_row["total"] if old_jobs_row else 0,
                 "unmatched_media": unmatched_media_row["total"]
                 if unmatched_media_row

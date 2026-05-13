@@ -67,15 +67,6 @@ class Stats(DatabaseBase):
         )
         return result["cnt"] if result else 0
 
-    def count_pending_deletions(self) -> int:
-        """
-        Returns the number of queued pending deletions.
-        """
-        result = self.execute_query(
-            "SELECT COUNT(*) as cnt FROM pending_deletions", fetch_one=True
-        )
-        return result["cnt"] if result else 0
-
     def upsert_gdrive_stat(
         self, location, folder_name, owner, file_count, size_bytes, last_updated
     ):
