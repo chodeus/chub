@@ -82,14 +82,13 @@ class FakeARR:
         self.deleted.append(media_id)
 
 
-def make_module(dry_run=False, report_only=False, instances=None):
+def make_module(dry_run=False, instances=None):
     m = object.__new__(HealthCheckarr)
     m._cancel_event = None
     m.logger = StubLogger()
     m.config = SimpleNamespace(
         log_level="info",
         dry_run=dry_run,
-        report_only=report_only,
         instances=["main"] if instances is None else instances,
     )
     m.full_config = ChubConfig(
@@ -137,17 +136,6 @@ def test_run_respects_dry_run(monkeypatch):
         media=[{"tmdb_id": 100, "title": "X", "media_id": 1}],
     )
     module = make_module(dry_run=True)
-    _patch_arr(monkeypatch, fake)
-    module.run()
-    assert fake.deleted == []
-
-
-def test_run_respects_report_only(monkeypatch):
-    fake = FakeARR(
-        health=[{"source": "RemovedMovieCheck", "message": "tmdb 100"}],
-        media=[{"tmdb_id": 100, "title": "X", "media_id": 1}],
-    )
-    module = make_module(dry_run=False, report_only=True)
     _patch_arr(monkeypatch, fake)
     module.run()
     assert fake.deleted == []
