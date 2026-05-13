@@ -169,6 +169,13 @@ const DashboardPage = () => {
         options: { showErrorToast: false },
     });
 
+    // Scheduler-written health snapshots — used to compute uptime % per
+    // instance over the last 7 days and the most-recent reachability state.
+    const { data: healthSnapshotsData } = useApiData({
+        apiFunction: useCallback(() => systemAPI.getHealthSnapshots({ limit: 500 }), []),
+        options: { showErrorToast: false },
+    });
+
     const handleStatusChange = useCallback(() => {
         refreshRunStates();
         refreshJobStats();
@@ -304,25 +311,63 @@ const DashboardPage = () => {
     }, [lastFailureData]);
 
     const instanceHealth = useMemo(() => {
-        // Backend returns data shaped as { radarr: { name: {enabled}, ... },
-        // sonarr: {...}, lidarr: {...}, plex: {...} }. Flatten and count
-        // enabled entries. Live connection status requires per-instance
-        // testing; that would be N round-trips on every dashboard render, so
-        // the card reports "configured/enabled" instead.
+        // Combine configured-instances state (from /api/instances) with the
+        // scheduler's periodic reachability snapshots (system_health_snapshots).
+        // The static config tells us how many instances exist and which are
+        // enabled; the snapshots tell us which were actually reachable in the
+        // last probe and what the 7-day uptime % looks like.
         const byType = instancesRaw?.data || instancesRaw || {};
         let total = 0;
         let enabled = 0;
+        const enabledNames = new Set();
         for (const typeName of ['radarr', 'sonarr', 'lidarr', 'plex']) {
             const bucket = byType[typeName] || {};
             if (bucket && typeof bucket === 'object') {
-                for (const entry of Object.values(bucket)) {
+                for (const [name, entry] of Object.entries(bucket)) {
                     total += 1;
-                    if (entry && entry.enabled !== false) enabled += 1;
+                    if (entry && entry.enabled !== false) {
+                        enabled += 1;
+                        enabledNames.add(name);
+                    }
                 }
             }
         }
-        return { total, enabled };
-    }, [instancesRaw]);
+
+        const snapshots = healthSnapshotsData?.data?.snapshots || [];
+        const latestByInstance = new Map();
+        const samplesByInstance = new Map();
+        for (const snap of snapshots) {
+            const name = snap.instance_name;
+            if (!enabledNames.has(name)) continue;
+            if (!latestByInstance.has(name)) latestByInstance.set(name, snap);
+            const bucket = samplesByInstance.get(name) || { ok: 0, total: 0 };
+            bucket.total += 1;
+            if (snap.status === 'ok') bucket.ok += 1;
+            samplesByInstance.set(name, bucket);
+        }
+
+        let reachable = 0;
+        let probedCount = 0;
+        let uptimeNumerator = 0;
+        let uptimeDenominator = 0;
+        for (const name of enabledNames) {
+            const latest = latestByInstance.get(name);
+            if (latest) {
+                probedCount += 1;
+                if (latest.status === 'ok') reachable += 1;
+            }
+            const samples = samplesByInstance.get(name);
+            if (samples) {
+                uptimeNumerator += samples.ok;
+                uptimeDenominator += samples.total;
+            }
+        }
+
+        const uptimePct =
+            uptimeDenominator > 0 ? Math.round((uptimeNumerator / uptimeDenominator) * 100) : null;
+
+        return { total, enabled, reachable, probedCount, uptimePct };
+    }, [instancesRaw, healthSnapshotsData]);
 
     const upcomingRuns = useMemo(() => {
         const now = new Date(tick);
@@ -582,30 +627,68 @@ const DashboardPage = () => {
                         </p>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                        {instanceHealth.total > 0 && (
-                            <Link
-                                to="/settings/instances"
-                                className="no-underline bg-surface border border-border-light rounded-lg p-4 flex flex-col gap-1 hover:border-border"
-                            >
-                                <div className="text-tertiary text-xs uppercase tracking-wider">
-                                    Instances
-                                </div>
-                                <div className="text-2xl font-bold text-primary">
-                                    {instanceHealth.enabled} / {instanceHealth.total}
-                                </div>
-                                <div
-                                    className={`text-xs ${
-                                        instanceHealth.enabled === instanceHealth.total
-                                            ? 'text-success'
-                                            : 'text-warning'
-                                    }`}
-                                >
-                                    {instanceHealth.enabled === instanceHealth.total
-                                        ? 'All enabled'
-                                        : `${instanceHealth.total - instanceHealth.enabled} disabled`}
-                                </div>
-                            </Link>
-                        )}
+                        {instanceHealth.total > 0 &&
+                            (() => {
+                                // Tile prioritizes the most actionable signal:
+                                // 1. If we have probe samples, show reachable-now + 7-day uptime%
+                                // 2. Otherwise fall back to configured/enabled counts
+                                const hasProbes = instanceHealth.probedCount > 0;
+                                const allReachable =
+                                    hasProbes &&
+                                    instanceHealth.reachable === instanceHealth.probedCount;
+                                const headlineTone = !hasProbes
+                                    ? instanceHealth.enabled === instanceHealth.total
+                                        ? 'text-success'
+                                        : 'text-warning'
+                                    : allReachable
+                                      ? 'text-success'
+                                      : instanceHealth.reachable === 0
+                                        ? 'text-error'
+                                        : 'text-warning';
+                                const borderTone =
+                                    hasProbes && !allReachable
+                                        ? instanceHealth.reachable === 0
+                                            ? 'border-error/30'
+                                            : 'border-warning/30'
+                                        : '';
+                                return (
+                                    <Link
+                                        to="/settings/instances"
+                                        className={`no-underline bg-surface border border-border-light rounded-lg p-4 flex flex-col gap-1 hover:border-border ${borderTone}`}
+                                    >
+                                        <div className="text-tertiary text-xs uppercase tracking-wider">
+                                            Instances
+                                        </div>
+                                        {hasProbes ? (
+                                            <>
+                                                <div className="text-2xl font-bold text-primary">
+                                                    {instanceHealth.reachable} /{' '}
+                                                    {instanceHealth.probedCount} up
+                                                </div>
+                                                <div className={`text-xs ${headlineTone}`}>
+                                                    {instanceHealth.uptimePct != null
+                                                        ? `${instanceHealth.uptimePct}% uptime over recent probes`
+                                                        : allReachable
+                                                          ? 'All reachable'
+                                                          : 'Some unreachable'}
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <div className="text-2xl font-bold text-primary">
+                                                    {instanceHealth.enabled} /{' '}
+                                                    {instanceHealth.total}
+                                                </div>
+                                                <div className={`text-xs ${headlineTone}`}>
+                                                    {instanceHealth.enabled === instanceHealth.total
+                                                        ? 'All enabled'
+                                                        : `${instanceHealth.total - instanceHealth.enabled} disabled`}
+                                                </div>
+                                            </>
+                                        )}
+                                    </Link>
+                                );
+                            })()}
                         <Link
                             to={
                                 lastFailure

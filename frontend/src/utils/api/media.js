@@ -97,6 +97,18 @@ export const mediaAPI = {
     },
 
     /**
+     * Fetch the metadata-edit audit trail for a single media item.
+     * @param {string|number} mediaId - Media identifier
+     * @param {number} limit - Max entries (default 50, server caps at 500)
+     * @returns {Promise<Object>} { history: [{ id, media_id, field, old_value, new_value, edited_by, edited_at }] }
+     */
+    fetchMediaHistory: (mediaId, limit = 50) => {
+        return apiCore.get(`/media/${mediaId}/history?limit=${limit}`, {
+            useCache: false,
+        });
+    },
+
+    /**
      * Delete media item
      * @param {string} mediaId - Media identifier
      * @param {Object} options - Deletion options

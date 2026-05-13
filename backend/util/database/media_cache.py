@@ -577,6 +577,7 @@ class MediaCache(DatabaseBase):
             "title": "normalized_title",
             "year": "CAST(year AS INTEGER)",
             "rating": "rating",
+            "runtime": "CAST(runtime AS INTEGER)",
         }.get(sort, "normalized_title")
         order_dir = "DESC" if order == "desc" else "ASC"
 

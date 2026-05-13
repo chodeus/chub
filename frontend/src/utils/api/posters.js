@@ -134,6 +134,47 @@ export const postersAPI = {
     },
 
     /**
+     * Posters whose `created_at` is at or after the given ISO cutoff.
+     * @param {string} cutoff - ISO-8601 timestamp
+     * @param {number} limit - Max rows (default 100)
+     * @returns {Promise<Object>} { items, cutoff }
+     */
+    fetchPostersAddedSince: (cutoff, limit = 100) => {
+        const params = new URLSearchParams({ cutoff, limit: String(limit) });
+        return apiCore.get(`/posters/added-since?${params}`, {
+            useCache: true,
+            cacheTTL: 60 * 1000,
+        });
+    },
+
+    /**
+     * Posters with recorded width below `min_width`. Run /backfill-dimensions
+     * first to populate unset rows or results will be empty/incomplete.
+     * @param {number} minWidth - Width threshold in pixels (default 1000)
+     * @param {number} limit - Max rows (default 200)
+     * @returns {Promise<Object>} { items, min_width }
+     */
+    fetchLowResolutionPosters: (minWidth = 1000, limit = 200) => {
+        const params = new URLSearchParams({
+            min_width: String(minWidth),
+            limit: String(limit),
+        });
+        return apiCore.get(`/posters/low-resolution?${params}`, {
+            useCache: true,
+            cacheTTL: 60 * 1000,
+        });
+    },
+
+    /**
+     * Trigger backfill of width/height for poster_cache rows where dimensions
+     * aren't yet recorded. Returns counts of populated/skipped.
+     * @returns {Promise<Object>}
+     */
+    backfillPosterDimensions: () => {
+        return apiCore.post('/posters/backfill-dimensions', {});
+    },
+
+    /**
      * Fetch poster statistics
      * @param {Object} options - Statistics options
      * @param {string} options.groupBy - Group by (type, source, quality)

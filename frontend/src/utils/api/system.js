@@ -81,4 +81,24 @@ export const systemAPI = {
     createDirectory: (path, options = {}) => {
         return apiCore.post('/folder', { path }, options);
     },
+
+    /**
+     * Recent instance health snapshots (Plex / Radarr / Sonarr / Lidarr probes).
+     * @param {Object} options - Request options
+     * @param {number} options.limit - Max snapshots to return (default 200)
+     * @param {string} options.instance - Optional instance_name filter
+     * @returns {Promise<Object>} { snapshots: [{ snapshot_at, service, instance_name, status, response_time_ms, error }] }
+     */
+    getHealthSnapshots: (options = {}) => {
+        const params = new URLSearchParams();
+        if (options.limit != null) params.set('limit', options.limit);
+        if (options.instance) params.set('instance', options.instance);
+        const qs = params.toString();
+        const url = qs ? `/system/health/snapshots?${qs}` : '/system/health/snapshots';
+        return apiCore.get(url, {
+            useCache: true,
+            cacheTTL: 30 * 1000,
+            ...options,
+        });
+    },
 };

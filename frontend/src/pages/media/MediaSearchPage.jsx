@@ -157,6 +157,7 @@ const MediaSearchPage = () => {
                             <option value="title">Title</option>
                             <option value="year">Year</option>
                             <option value="rating">Rating</option>
+                            <option value="runtime">Runtime</option>
                         </select>
                     </div>
                 }
@@ -247,6 +248,13 @@ const MediaSearchPage = () => {
                                             {item.rating != null && (
                                                 <span className="text-tertiary">
                                                     ★ {item.rating}
+                                                </span>
+                                            )}
+                                            {item.runtime != null && item.runtime > 0 && (
+                                                <span className="text-tertiary">
+                                                    {item.runtime >= 60
+                                                        ? `${Math.floor(item.runtime / 60)}h ${item.runtime % 60}m`
+                                                        : `${item.runtime}m`}
                                                 </span>
                                             )}
                                         </div>
