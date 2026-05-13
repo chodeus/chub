@@ -371,7 +371,13 @@ export const postersAPI = {
         if (params.library_id) qs.set('library_id', params.library_id);
         if (params.variant_kind && params.variant_kind !== 'all')
             qs.set('variant_kind', params.variant_kind);
-        return apiCore.get(`/posters/plex-metadata/by-media?${qs.toString()}`);
+        // Cold scans of large libraries (~30k+ variants) can run past the
+        // default 30s request timeout. Give the scan endpoint headroom so the
+        // UI doesn't surface a misleading "Request timeout" when the backend
+        // is still happily scanning.
+        return apiCore.get(`/posters/plex-metadata/by-media?${qs.toString()}`, {
+            timeout: 120000,
+        });
     },
 
     /** Flat list of bloat variants, largest first. */
