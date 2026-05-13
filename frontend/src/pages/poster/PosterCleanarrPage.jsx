@@ -250,11 +250,15 @@ const VariantTile = ({ variant, selected, onToggleSelect, onPreview }) => {
 // ---------------------------------------------------------------------------
 // Live cleanup log modal (polling)
 // ---------------------------------------------------------------------------
-const LiveLogModal = ({ jobId, onClose }) => {
+const LiveLogModal = ({ jobId, onClose, onCompleted }) => {
     const [text, setText] = useState('');
     const [status, setStatus] = useState('running');
     const offsetRef = useRef(0);
     const preRef = useRef(null);
+    // Guard so onCompleted fires exactly once per job — the polling loop
+    // exits as soon as it sees a terminal status, but we still want a single
+    // notification edge for the parent.
+    const completedFiredRef = useRef(false);
 
     const [prevJobId, setPrevJobId] = useState(jobId);
     if (prevJobId !== jobId) {
@@ -268,6 +272,7 @@ const LiveLogModal = ({ jobId, onClose }) => {
         let cancelled = false;
         let timer = null;
         offsetRef.current = 0;
+        completedFiredRef.current = false;
         const poll = () =>
             postersAPI
                 .tailJobLog(jobId, offsetRef.current)
@@ -283,7 +288,13 @@ const LiveLogModal = ({ jobId, onClose }) => {
                         }, 0);
                     }
                     if (data.status) setStatus(data.status);
-                    if (TERMINAL_STATUSES.includes(data.status)) return;
+                    if (TERMINAL_STATUSES.includes(data.status)) {
+                        if (!completedFiredRef.current && onCompleted) {
+                            completedFiredRef.current = true;
+                            onCompleted(jobId, data.status);
+                        }
+                        return;
+                    }
                     timer = setTimeout(poll, 1500);
                 })
                 .catch(() => {
@@ -294,7 +305,7 @@ const LiveLogModal = ({ jobId, onClose }) => {
             cancelled = true;
             if (timer) clearTimeout(timer);
         };
-    }, [jobId]);
+    }, [jobId, onCompleted]);
 
     const terminal = TERMINAL_STATUSES.includes(status);
 
@@ -424,6 +435,11 @@ const PosterCleanarrPage = () => {
     // /by-media rescan (which walks every .bundle under /plex). Cleared by
     // refreshScan — a real scan is the source of truth.
     const [deletedPaths, setDeletedPaths] = useState(new Set());
+
+    // Paths targeted by the currently-running cleanup job. Populated at enqueue
+    // and applied to deletedPaths when the job lands `success`, so the bloat
+    // counts and tiles update without forcing a 30s+ rescan.
+    const pendingCleanupTargetsRef = useRef(null);
 
     // ---- Scan data ----
     const byMedia = useApiData({
@@ -609,6 +625,11 @@ const PosterCleanarrPage = () => {
                 return;
             }
             toast.success(`${meta.label} started (job #${jobId})`);
+            // Stash the targeted paths so the LiveLogModal's onCompleted hook
+            // can optimistically remove them from the UI when the job succeeds.
+            // Null = full-library run; we don't know what got deleted, so we
+            // leave deletedPaths alone (user re-scans for a fresh count).
+            pendingCleanupTargetsRef.current = body.target_paths || null;
             setLiveJobId(jobId);
             setSelectedPaths(new Set());
         } catch {
@@ -1207,7 +1228,24 @@ const PosterCleanarrPage = () => {
                     </Button>
                 </Modal.Footer>
             </Modal>
-            <LiveLogModal jobId={liveJobId} onClose={() => setLiveJobId(null)} />
+            <LiveLogModal
+                jobId={liveJobId}
+                onClose={() => setLiveJobId(null)}
+                onCompleted={(_jobId, jobStatus) => {
+                    if (jobStatus !== 'success') {
+                        pendingCleanupTargetsRef.current = null;
+                        return;
+                    }
+                    const targets = pendingCleanupTargetsRef.current;
+                    pendingCleanupTargetsRef.current = null;
+                    if (!targets || targets.length === 0) return;
+                    setDeletedPaths(prev => {
+                        const next = new Set(prev);
+                        for (const p of targets) next.add(p);
+                        return next;
+                    });
+                }}
+            />
         </div>
     );
 };
