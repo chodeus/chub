@@ -2,6 +2,30 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.0.0](https://github.com/chodeus/chub/compare/v1.15.4...v2.0.0) (2026-05-13)
+
+
+### ⚠ BREAKING CHANGES
+
+* **db:** /api/webhooks/cleanarr/status and /api/webhooks/cleanarr/process are removed. External callers wired to those URLs will now 404.
+* **poster_cleanarr:** poster_renamerr.run_cleanarr is removed (no backcompat alias). Existing configs need to set clean_orphan_assets instead.
+
+### Features
+
+* **poster_cleanarr:** add orphan-asset cleanup; rename ledger to pending_deletions ([777a991](https://github.com/chodeus/chub/commit/777a9912883e2f68c70cc580ea451e65fa177668))
+* surface previously-unused DB data across dashboard, posters, and media ([28e22c6](https://github.com/chodeus/chub/commit/28e22c67cb0713a148343344977fd730ad74edf6))
+
+
+### Bug Fixes
+
+* **poster_collections:** finish the half-wired integration ([3e6da88](https://github.com/chodeus/chub/commit/3e6da88a16d11ec7834c30a90ca0e6be58cd9712))
+
+
+### Refactoring
+
+* **db:** rip out the pending-deletions ledger ([c5c1a1e](https://github.com/chodeus/chub/commit/c5c1a1eec8f5fce82d34efb6425f707147648c55))
+* **modules:** simplify dry-run controls for health_checkarr and unmatched_assets ([bb33707](https://github.com/chodeus/chub/commit/bb33707e7f79bec4bdb7d41a2bb35a0b77e36bd5))
+
 ## [1.15.4](https://github.com/chodeus/chub/compare/v1.15.3...v1.15.4) (2026-05-13)
 
 
