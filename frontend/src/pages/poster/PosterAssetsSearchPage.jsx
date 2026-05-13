@@ -81,8 +81,11 @@ const PosterAssetsSearchPage = () => {
     const [offset, setOffset] = useState(0);
 
     // Top-bar search input → SearchCoordinator (SEARCH_TYPES.POSTERS) → this term.
-    // No searchFunction is registered; we just consume the term as a filter value.
-    const { term: search } = useSearch(SEARCH_TYPES.POSTERS);
+    // We use the term as a filter passed to the browse endpoint; the no-op
+    // handler is registered only to satisfy the coordinator (which otherwise
+    // warns + sets an error state when no handler exists for an active type).
+    const postersNoopSearch = useCallback(async () => ({ data: { items: [] } }), []);
+    const { term: search } = useSearch(SEARCH_TYPES.POSTERS, postersNoopSearch);
 
     // Reset to page 1 whenever the search term changes from the top bar.
     // Done at render time (not in an effect) to avoid a cascading render.
@@ -488,9 +491,6 @@ const PosterAssetsSearchPage = () => {
                             const fileBase = item.file
                                 ? item.file.replace(/\\/g, '/').split('/').pop()
                                 : '';
-                            const idTags = fileBase
-                                ? (fileBase.match(/\{[^}]+\}/g) || []).join(' ')
-                                : '';
                             return (
                                 <div
                                     key={item.id}
@@ -552,24 +552,28 @@ const PosterAssetsSearchPage = () => {
                                         />
                                     </div>
                                     <div
-                                        className="p-1.5 flex flex-col gap-0.5 flex-1"
+                                        className="p-1.5 flex flex-col gap-1 flex-1"
                                         title={fileBase || displayTitle}
                                     >
-                                        <h4 className="font-medium text-primary text-xs line-clamp-2 break-words leading-tight text-center">
-                                            {displayTitle}
-                                        </h4>
-                                        {idTags && (
+                                        {fileBase && (
                                             <p
-                                                className="text-tertiary text-center break-all line-clamp-2 font-mono"
-                                                style={{ fontSize: '9px', lineHeight: '1.2' }}
+                                                className="text-secondary font-mono"
+                                                style={{
+                                                    fontSize: '10px',
+                                                    lineHeight: '1.35',
+                                                    wordBreak: 'break-word',
+                                                    overflowWrap: 'anywhere',
+                                                    textAlign: 'left',
+                                                    margin: 0,
+                                                }}
                                             >
-                                                {idTags}
+                                                {fileBase}
                                             </p>
                                         )}
                                         {driveName && (
                                             <p
-                                                className="text-secondary text-center truncate mt-auto pt-1"
-                                                style={{ fontSize: '10px' }}
+                                                className="text-tertiary text-center truncate mt-auto pt-1"
+                                                style={{ fontSize: '9px' }}
                                             >
                                                 {driveName}
                                             </p>
