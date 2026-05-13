@@ -98,6 +98,29 @@ export const SETTINGS_SCHEMA = [
         key: 'poster_renamerr',
         label: 'Poster Renamerr',
         fields: [
+            {
+                key: 'log_level',
+                label: 'Log Level',
+                type: 'dropdown',
+                options: ['debug', 'info'],
+                required: true,
+                description:
+                    '"debug" prints per-file decisions and is useful when investigating a missing match; "info" is the normal cron-friendly level.',
+            },
+            {
+                key: 'dry_run',
+                label: 'Dry Run',
+                type: 'check_box',
+                description:
+                    'Walk the full pipeline and log every action that would be taken — but write nothing to disk and upload nothing to Plex.',
+            },
+            {
+                key: 'print_only_renames',
+                label: 'Log only renamed files',
+                type: 'check_box',
+                description:
+                    'Quiet the log by suppressing entries for files that are already up to date. Only newly renamed/copied files are logged.',
+            },
             // ─── Source ────────────────────────────────────────────────
             {
                 key: 'source_dirs',
@@ -181,33 +204,6 @@ export const SETTINGS_SCHEMA = [
                 description:
                     'Radarr/Sonarr/Lidarr instances supply the media list to match against. Plex instances additionally receive uploaded posters when "Upload posters to this Plex instance" is enabled per-instance.',
             },
-            // ─── Operation ─────────────────────────────────────────────
-            {
-                key: 'log_level',
-                label: 'Log Level',
-                type: 'dropdown',
-                section: 'Operation',
-                options: ['debug', 'info'],
-                required: true,
-                description:
-                    '"debug" prints per-file decisions and is useful when investigating a missing match; "info" is the normal cron-friendly level.',
-            },
-            {
-                key: 'dry_run',
-                label: 'Dry Run',
-                type: 'check_box',
-                section: 'Operation',
-                description:
-                    'Walk the full pipeline and log every action that would be taken — but write nothing to disk and upload nothing to Plex.',
-            },
-            {
-                key: 'print_only_renames',
-                label: 'Log only renamed files',
-                type: 'check_box',
-                section: 'Operation',
-                description:
-                    'Quiet the log by suppressing entries for files that are already up to date. Only newly renamed/copied files are logged.',
-            },
         ],
     },
 
@@ -215,6 +211,22 @@ export const SETTINGS_SCHEMA = [
         key: 'border_replacerr',
         label: 'Border Replacerr',
         fields: [
+            {
+                key: 'log_level',
+                label: 'Log Level',
+                type: 'dropdown',
+                options: ['debug', 'info'],
+                required: true,
+                description:
+                    '"debug" prints per-poster crop/replace decisions; "info" is the normal cron-friendly level.',
+            },
+            {
+                key: 'dry_run',
+                label: 'Dry Run',
+                type: 'check_box',
+                description:
+                    'Walk the full pipeline and log every poster that would be re-bordered — but write nothing to disk.',
+            },
             // ─── Border ────────────────────────────────────────────────
             {
                 key: 'border_width',
@@ -288,25 +300,6 @@ export const SETTINGS_SCHEMA = [
                 section: 'Filters',
                 description:
                     'Source folder names to skip (one per line). Posters whose source folder matches any entry are left untouched.',
-            },
-            // ─── Operation ─────────────────────────────────────────────
-            {
-                key: 'log_level',
-                label: 'Log Level',
-                type: 'dropdown',
-                section: 'Operation',
-                options: ['debug', 'info'],
-                required: true,
-                description:
-                    '"debug" prints per-poster crop/replace decisions; "info" is the normal cron-friendly level.',
-            },
-            {
-                key: 'dry_run',
-                label: 'Dry Run',
-                type: 'check_box',
-                section: 'Operation',
-                description:
-                    'Walk the full pipeline and log every poster that would be re-bordered — but write nothing to disk.',
             },
         ],
     },
