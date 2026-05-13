@@ -2,6 +2,14 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.15.3](https://github.com/chodeus/chub/compare/v1.15.2...v1.15.3) (2026-05-13)
+
+
+### Bug Fixes
+
+* **assets:** keep title on card, show IDs on tighter second line ([f2cd43b](https://github.com/chodeus/chub/commit/f2cd43bd3dc529c1b7d902c50adda817fd2b829b))
+* **assets:** show full filename under poster, register no-op search handler ([e69ee45](https://github.com/chodeus/chub/commit/e69ee451b88eff1d5f946212a66ca5a46a38e56d))
+
 ## [1.15.2](https://github.com/chodeus/chub/compare/v1.15.1...v1.15.2) (2026-05-13)
 
 
