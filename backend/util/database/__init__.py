@@ -10,7 +10,6 @@ from .collection_cache import CollectionCache
 from .db_base import DatabaseBase
 from .holiday import HolidayStatus
 from .media_cache import MediaCache
-from .pending_deletions import PendingDeletions
 from .plex_cache import PlexCache
 from .poster_cache import PosterCache
 from .run_state import RunState
@@ -167,11 +166,6 @@ class ChubDB:
         return self._get_interface("poster", PosterCache)
 
     @property
-    def pending_deletions(self) -> PendingDeletions:
-        """Access to the pending-deletion queue (path-precise cleanup ledger)."""
-        return self._get_interface("pending_deletions", PendingDeletions)
-
-    @property
     def run_state(self) -> RunState:
         """Access to run state operations."""
         return self._get_interface("run_state", RunState)
@@ -294,7 +288,6 @@ __all__ = [
     "PlexCache",
     "CollectionCache",
     "PosterCache",
-    "PendingDeletions",
     "RunState",
     "Stats",
     "ChubDB",

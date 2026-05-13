@@ -224,20 +224,6 @@ class SchemaManager:
         self._add_table(gdrive_stats)
 
         # Orphaned Posters
-        pending_deletions = TableDefinition(
-            name="pending_deletions",
-            columns=[
-                ColumnDefinition("id", "INTEGER", primary_key=True, nullable=False),
-                ColumnDefinition("asset_type", "TEXT"),
-                ColumnDefinition("title", "TEXT"),
-                ColumnDefinition("year", "TEXT"),
-                ColumnDefinition("season", "INTEGER"),
-                ColumnDefinition("file_path", "TEXT", unique=True),
-                ColumnDefinition("date_queued", "TEXT"),
-            ],
-        )
-        self._add_table(pending_deletions)
-
         # Poster Collections
         poster_collections = TableDefinition(
             name="poster_collections",
@@ -564,32 +550,23 @@ class SchemaManager:
         return changes
 
     def _run_rename_migrations(self, conn: sqlite3.Connection) -> None:
-        """One-shot data migrations for tables that were renamed in-place.
+        """One-shot data migrations for tables that were renamed or removed.
 
-        Each block: if the legacy table exists, copy its rows into the new
-        table (already created by add_missing_tables) and drop the legacy
-        table. Idempotent — safe to call on every startup.
+        Idempotent — safe to call on every startup.
         """
         cursor = conn.cursor()
         existing = self.get_existing_tables(conn)
 
-        # orphaned_posters -> pending_deletions (date_orphaned -> date_queued)
-        if "orphaned_posters" in existing and "pending_deletions" in existing:
-            try:
-                cursor.execute(
-                    """
-                    INSERT OR IGNORE INTO pending_deletions
-                        (asset_type, title, year, season, file_path, date_queued)
-                    SELECT asset_type, title, year, season, file_path, date_orphaned
-                    FROM orphaned_posters
-                    """
-                )
-                cursor.execute("DROP TABLE orphaned_posters")
-                logger.info(
-                    "Migrated orphaned_posters -> pending_deletions and dropped legacy table"
-                )
-            except sqlite3.Error as e:
-                logger.error(f"Failed to migrate orphaned_posters: {e}")
+        # Drop the legacy deletion-queue tables. The feature they powered was
+        # removed; the queue never auto-drained (only a webhook fired it), so
+        # any rows still in either table are effectively abandoned.
+        for legacy in ("orphaned_posters", "pending_deletions"):
+            if legacy in existing:
+                try:
+                    cursor.execute(f"DROP TABLE {legacy}")
+                    logger.info(f"Dropped legacy {legacy} table")
+                except sqlite3.Error as e:
+                    logger.error(f"Failed to drop {legacy}: {e}")
 
     def add_missing_tables(self, conn: sqlite3.Connection) -> List[str]:
         """Create tables that exist in schema but not in database."""
