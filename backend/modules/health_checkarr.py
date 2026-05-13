@@ -45,7 +45,7 @@ class HealthCheckarr(ChubModule):
     def run(self) -> None:
         """
         Process Radarr and Sonarr instances to identify and delete media items flagged by health checks
-        as removed from TMDB or TVDB. Supports dry run mode and logs all actions.
+        as removed from TMDB or TVDB. Supports dry-run mode and logs all actions.
         """
         try:
             if self.config.log_level.lower() == "debug":
@@ -53,11 +53,6 @@ class HealthCheckarr(ChubModule):
 
             if self.config.dry_run:
                 table = [["Dry Run"], ["NO CHANGES WILL BE MADE"]]
-                self.logger.info(create_table(table))
-                self.logger.info("")
-
-            if self.config.report_only:
-                table = [["Report Only Mode"], ["ITEMS WILL NOT BE DELETED"]]
                 self.logger.info(create_table(table))
                 self.logger.info("")
 
@@ -143,7 +138,6 @@ class HealthCheckarr(ChubModule):
                                         "instance_type": instance_type,
                                         "db_id": db_id,
                                         "dry_run": bool(self.config.dry_run),
-                                        "report_only": bool(self.config.report_only),
                                     }
                                 )
                                 output.append(enriched_item)
@@ -159,9 +153,6 @@ class HealthCheckarr(ChubModule):
                         if self.config.dry_run:
                             action = "Would delete"
                             progress_desc = f"Reviewing {instance_type} items"
-                        elif self.config.report_only:
-                            action = "Reporting"
-                            progress_desc = f"Reviewing {instance_type} items"
                         else:
                             action = "Deleting"
                             progress_desc = f"Deleting {instance_type} items"
@@ -170,7 +161,6 @@ class HealthCheckarr(ChubModule):
                             f"{action} {len(output)} {instance_type} items from "
                             f"{app.instance_name or instance_name}"
                         )
-                        # Delete each matched item unless dry run/report only is enabled.
                         with progress(
                             output,
                             desc=progress_desc,
@@ -190,11 +180,7 @@ class HealthCheckarr(ChubModule):
                                     continue
                                 if self.config.dry_run:
                                     self.logger.info(
-                                        f"{item['title']} would have been deleted with id: {media_id}"
-                                    )
-                                elif self.config.report_only:
-                                    self.logger.info(
-                                        f"[REPORT] {item['title']} flagged for deletion "
+                                        f"{item['title']} would have been deleted "
                                         f"with id: {media_id} and tvdb/tmdb id: "
                                         f"{item.get('db_id', '')}"
                                     )

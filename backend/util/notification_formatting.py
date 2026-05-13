@@ -280,11 +280,8 @@ def format_for_discord(
             fields.extend(chunk_code_fields(instance, text))
         if fields:
             dry_run = any(item.get("dry_run") for item in o)
-            report_only = any(item.get("report_only") for item in o)
             if dry_run:
                 summary = "🔍 The following items were flagged as removed from TMDB/TVDB and would be deleted."
-            elif report_only:
-                summary = "🔍 The following items were flagged as removed from TMDB/TVDB and were not deleted."
             else:
                 summary = "🧹 The following items were deleted as they were removed from TMDB/TVDB."
             fields.insert(0, {"name": "Summary", "value": f"```{summary}```"})

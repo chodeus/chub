@@ -165,7 +165,6 @@ class LabelarrConfig(BaseModel):
 class HealthCheckarrConfig(BaseModel):
     log_level: str = "info"
     dry_run: bool = False
-    report_only: bool = False
     instances: Optional[List[str]] = None
 
 
@@ -309,7 +308,6 @@ class PlexMaintenanceConfig(BaseModel):
 
 class UnmatchedAssetsConfig(BaseModel):
     log_level: str = "info"
-    dry_run: bool = False
     ignore_folders: List[str] = Field(default_factory=list)
     ignore_profiles: List[str] = Field(default_factory=list)
     ignore_titles: List[str] = Field(default_factory=list)
