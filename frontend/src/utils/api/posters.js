@@ -108,7 +108,7 @@ export const postersAPI = {
      */
     addToCollection: (collectionId, posterId, options = {}) => {
         return apiCore.post(`/posters/collections/${collectionId}/add`, {
-            posterId,
+            poster_id: posterId,
             ...options,
         });
     },
@@ -121,6 +121,16 @@ export const postersAPI = {
      */
     removeFromCollection: (collectionId, posterId) => {
         return apiCore.delete(`/posters/collections/${collectionId}/remove/${posterId}`);
+    },
+
+    /**
+     * Delete a whole poster collection (and its membership rows).
+     * Underlying poster files are not touched.
+     * @param {string|number} collectionId - Collection identifier
+     * @returns {Promise<Object>} Deletion response
+     */
+    deleteCollection: collectionId => {
+        return apiCore.delete(`/posters/collections/${collectionId}`);
     },
 
     /**

@@ -236,6 +236,25 @@ async def get_poster_collections(
         collections = db.poster.execute_query(
             "SELECT * FROM poster_collections ORDER BY name", fetch_all=True
         ) or []
+
+        # Hydrate each collection with its poster contents + count. One join
+        # per collection is fine — the table is small and rarely fetched.
+        for col in collections:
+            posters = db.poster.execute_query(
+                """
+                SELECT p.id, p.asset_type, p.title, p.year, p.season_number,
+                       p.folder, p.file, p.style
+                FROM poster_collection_items pci
+                JOIN poster_cache p ON p.id = pci.poster_id
+                WHERE pci.collection_id = ?
+                ORDER BY p.title
+                """,
+                (col["id"],),
+                fetch_all=True,
+            ) or []
+            col["posters"] = posters
+            col["poster_count"] = len(posters)
+
         return ok(
             f"Retrieved {len(collections)} collections", {"collections": collections}
         )
@@ -886,6 +905,54 @@ async def remove_from_collection(
         return error(
             f"Error removing poster from collection: {str(e)}",
             code="POSTER_COLLECTION_REMOVE_ERROR",
+            status_code=500,
+        )
+
+
+@router.delete(
+    "/collections/{collection_id}",
+    summary="Delete poster collection",
+    description="Delete a poster collection and all of its membership rows. "
+    "The underlying poster files are not touched.",
+)
+async def delete_poster_collection(
+    collection_id: int,
+    logger: Any = Depends(get_logger),
+    db: ChubDB = Depends(get_database),
+) -> JSONResponse:
+    try:
+        logger.debug(f"Serving DELETE /api/posters/collections/{collection_id}")
+
+        existing = db.poster.execute_query(
+            "SELECT id FROM poster_collections WHERE id=?",
+            (collection_id,),
+            fetch_one=True,
+        )
+        if not existing:
+            return error(
+                f"Poster collection {collection_id} not found",
+                code="COLLECTION_NOT_FOUND",
+                status_code=404,
+            )
+
+        db.poster.execute_query(
+            "DELETE FROM poster_collection_items WHERE collection_id=?",
+            (collection_id,),
+        )
+        db.poster.execute_query(
+            "DELETE FROM poster_collections WHERE id=?", (collection_id,)
+        )
+
+        return ok(
+            "Poster collection deleted",
+            {"collection_id": collection_id},
+        )
+
+    except Exception as e:
+        logger.error(f"Error deleting poster collection: {e}")
+        return error(
+            f"Error deleting poster collection: {str(e)}",
+            code="POSTER_COLLECTION_DELETE_ERROR",
             status_code=500,
         )
 

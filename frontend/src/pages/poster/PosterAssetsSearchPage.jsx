@@ -395,6 +395,33 @@ const PosterAssetsSearchPage = () => {
                                             </span>
                                         )}
                                     </div>
+                                    <IconButton
+                                        icon="delete"
+                                        aria-label="Delete collection"
+                                        title="Delete this collection (poster files are not removed)"
+                                        variant="ghost"
+                                        size="small"
+                                        onClick={async e => {
+                                            e.stopPropagation();
+                                            if (
+                                                !window.confirm(
+                                                    `Delete collection "${col.name || col.title}"? Poster files will not be removed.`
+                                                )
+                                            ) {
+                                                return;
+                                            }
+                                            try {
+                                                await postersAPI.deleteCollection(col.id);
+                                                toast.success('Collection deleted');
+                                                if (expandedCollection === col.id) {
+                                                    setExpandedCollection(null);
+                                                }
+                                                refreshCollections();
+                                            } catch {
+                                                toast.error('Failed to delete collection');
+                                            }
+                                        }}
+                                    />
                                 </div>
                                 {expandedCollection === col.id &&
                                     Array.isArray(col.posters) &&
