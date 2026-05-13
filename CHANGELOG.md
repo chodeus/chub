@@ -2,6 +2,18 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.1.0](https://github.com/chodeus/chub/compare/v2.0.1...v2.1.0) (2026-05-13)
+
+
+### Features
+
+* **settings:** surface Border Replacerr path + color fields, update Renamerr orphan copy ([edd699c](https://github.com/chodeus/chub/commit/edd699c9da67f345735817a4f6a32e51d56402b4))
+
+
+### Refactoring
+
+* **poster_renamerr:** drop duplicate orphan_assets_mode, defer to poster_cleanarr ([c243726](https://github.com/chodeus/chub/commit/c24372603e53656b36c6599e072d35407afe99b0))
+
 ## [2.0.1](https://github.com/chodeus/chub/compare/v2.0.0...v2.0.1) (2026-05-13)
 
 
