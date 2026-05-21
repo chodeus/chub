@@ -499,9 +499,17 @@ def load_config(path: Optional[str] = None) -> ChubConfig:
     """
     Load and validate configuration from YAML.
 
+    If the file is detected as a legacy-format config (see
+    config_migrator.is_legacy_config), the original is backed up alongside
+    the live path as ``config.yml.legacy-<ISO-timestamp>.yml`` and the
+    migrated YAML is written back to ``config.yml`` before validation.
+    Migration notes are emitted to stdout so users see what changed.
+
     Raises ConfigError subclasses on failure so callers can handle
     errors appropriately (API returns HTTP errors, CLI prints and exits).
     """
+    from backend.util.config_migrator import is_legacy_config
+
     config_path = path or get_config_path()
 
     if not os.path.exists(config_path):
@@ -518,6 +526,9 @@ def load_config(path: Optional[str] = None) -> ChubConfig:
     if raw is None:
         raise ConfigParseError(f"Configuration file is empty: {config_path}")
 
+    if is_legacy_config(raw):
+        raw = _auto_migrate_and_persist(raw, config_path)
+
     try:
         return ChubConfig.model_validate(raw)
     except ValidationError as e:
@@ -527,6 +538,42 @@ def load_config(path: Optional[str] = None) -> ChubConfig:
         ) from e
     except Exception as e:
         raise ConfigError(f"Unexpected configuration error: {e}") from e
+
+
+def _auto_migrate_and_persist(raw: dict, config_path: str) -> dict:
+    """Back up the original, migrate, write the migrated YAML back, log notes.
+
+    Returns the migrated dict. If anything goes wrong writing files, the
+    in-memory migration still takes effect so the load can proceed.
+    """
+    from datetime import datetime
+
+    from backend.util.config_migrator import migrate
+
+    migrated, notes = migrate(raw)
+    timestamp = datetime.now().strftime("%Y%m%dT%H%M%S")
+    backup_path = f"{config_path}.legacy-{timestamp}.yml"
+
+    try:
+        with open(backup_path, "w") as f:
+            yaml.safe_dump(raw, f, sort_keys=False)
+    except Exception as e:  # pragma: no cover - best-effort backup
+        print(f"⚠️  Failed to write legacy backup {backup_path}: {e}")
+        backup_path = "(backup write failed)"
+
+    try:
+        with open(config_path, "w") as f:
+            yaml.safe_dump(migrated, f, sort_keys=False)
+    except Exception as e:  # pragma: no cover - best-effort write
+        print(f"⚠️  Failed to rewrite migrated config to {config_path}: {e}")
+
+    print(f"🔄 Legacy config detected at {config_path}. Migrated automatically.")
+    print(f"   Original preserved at {backup_path}")
+    for note in notes:
+        icon = "⚠️ " if note.level == "warning" else "•"
+        print(f"   {icon} {note.message}")
+
+    return migrated
 
 
 def load_config_cli(path: Optional[str] = None) -> ChubConfig:
