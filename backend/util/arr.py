@@ -1181,7 +1181,9 @@ class SonarrClient(BaseARRClient):
         Returns:
             Any: API response.
         """
-        endpoint = f"{self.api_base}/episode?seriesId={media_id}&seasonNumber={season_number}"
+        endpoint = (
+            f"{self.api_base}/episode?seriesId={media_id}&seasonNumber={season_number}"
+        )
         return self.make_get_request(endpoint, headers=self.headers)
 
     def get_season_data(self, media_id: int) -> Any:
@@ -1446,7 +1448,9 @@ class LidarrClient(BaseARRClient):
         for artist_id in media_ids:
             payload = {"name": "ArtistSearch", "artistId": artist_id}
             self.logger.debug(f"Search payload: {payload}")
-            result = self.make_post_request(endpoint, headers=self.headers, json=payload)
+            result = self.make_post_request(
+                endpoint, headers=self.headers, json=payload
+            )
         if result:
             return result
         else:
@@ -1508,6 +1512,7 @@ class LidarrClient(BaseARRClient):
 
         album_lookup = None
         if include_episode:
+
             def album_lookup(artist_id, _season_number=None):
                 return self.get_albums(artist_id)
 
@@ -1629,10 +1634,12 @@ def create_arr_client(
     try:
         clean_url = url.rstrip("/")
         session = requests.Session()
-        session.headers.update({
-            "X-Api-Key": api,
-            "Accept": "application/json",
-        })
+        session.headers.update(
+            {
+                "X-Api-Key": api,
+                "Accept": "application/json",
+            }
+        )
         resp = session.get(f"{clean_url}/api/v1/system/status", timeout=10)
         if resp.ok:
             data = resp.json()
@@ -1792,6 +1799,7 @@ def normalize_arr_media(
             "folder": folder,
             "normalized_folder": normalize_titles(folder or ""),
             "has_file": item.get("hasFile"),
+            "has_content": bool(item.get("hasFile")),
             "tags": tag_names,
             "seasons": None,
             "season_numbers": None,
@@ -1854,7 +1862,8 @@ def normalize_arr_media(
             "monitored": item.get("monitored"),
             "status": item.get("status"),
             "root_folder": item.get("rootFolderPath"),
-            "quality_profile": item.get("qualityProfileId") or item.get("metadataProfileId"),
+            "quality_profile": item.get("qualityProfileId")
+            or item.get("metadataProfileId"),
             "normalized_title": normalize_titles(artist_name),
             "path_name": os.path.basename(item.get("path", "") or ""),
             "original_title": None,
@@ -1978,6 +1987,9 @@ def normalize_arr_media(
             "folder": folder,
             "normalized_folder": normalize_titles(folder or ""),
             "has_file": None,
+            "has_content": any(
+                (s.get("season_has_episodes") or 0) > 0 for s in season_list
+            ),
             "tags": tag_names,
             "season_number": None,
             "media_folder": None,

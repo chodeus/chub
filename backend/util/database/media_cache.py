@@ -94,6 +94,7 @@ class MediaCache(DatabaseBase):
             "runtime",
             "language",
             "monitored",
+            "has_content",
             "genre",
         ]
         record = {k: item.get(k) for k in required_keys}
@@ -145,8 +146,8 @@ class MediaCache(DatabaseBase):
                 alternate_titles, normalized_alternate_titles,
                 year, tmdb_id, tvdb_id, imdb_id, musicbrainz_id, folder, root_folder, tags,
                 season_number, matched, instance_name, source, poster_url, arr_id,
-                status, rating, studio, edition, runtime, language, monitored, genre)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                status, rating, studio, edition, runtime, language, monitored, has_content, genre)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(identity_key)
             DO UPDATE SET
                 normalized_title=excluded.normalized_title,
@@ -166,6 +167,7 @@ class MediaCache(DatabaseBase):
                 runtime=excluded.runtime,
                 language=excluded.language,
                 monitored=excluded.monitored,
+                has_content=excluded.has_content,
                 genre=excluded.genre
                 -- Preserve: matched, original_file, renamed_file, file_hash, plex_mapping_id
                 -- These fields should only be updated by specific operations, not ARR sync
@@ -198,6 +200,7 @@ class MediaCache(DatabaseBase):
                 record.get("runtime") or None,
                 record.get("language") or None,
                 record.get("monitored", True),  # Default to True if not specified
+                int(bool(record.get("has_content", True))),
                 record.get("genre") or None,
             ),
         )
@@ -593,7 +596,9 @@ class MediaCache(DatabaseBase):
 
         return {"items": items, "total": total, "limit": limit, "offset": offset}
 
-    def get_stats(self, asset_type: Optional[str] = None, period_days: int = None) -> dict:
+    def get_stats(
+        self, asset_type: Optional[str] = None, period_days: int = None
+    ) -> dict:
         """Aggregate statistics from media_cache."""
         conditions = []
         params: list = []
@@ -642,7 +647,9 @@ class MediaCache(DatabaseBase):
             else 0,
         }
 
-    def get_detailed_stats(self, asset_type: Optional[str] = None, period_days: int = None) -> dict:
+    def get_detailed_stats(
+        self, asset_type: Optional[str] = None, period_days: int = None
+    ) -> dict:
         """Extended statistics with breakdowns by multiple dimensions."""
         conditions = []
         params_list: list = []
@@ -660,58 +667,87 @@ class MediaCache(DatabaseBase):
         base = self.get_stats(asset_type=asset_type, period_days=period_days)
 
         # By instance
-        by_instance = self.execute_query(
-            f"""SELECT instance_name, COUNT(*) as total,
+        by_instance = (
+            self.execute_query(
+                f"""SELECT instance_name, COUNT(*) as total,
                        SUM(CASE WHEN matched=1 THEN 1 ELSE 0 END) as matched
                 FROM media_cache {where}
                 GROUP BY instance_name ORDER BY total DESC""",
-            params, fetch_all=True,
-        ) or []
+                params,
+                fetch_all=True,
+            )
+            or []
+        )
 
         # By status
-        by_status = self.execute_query(
-            f"""SELECT status, COUNT(*) as count
-                FROM media_cache {where + (' AND' if where else 'WHERE')} status IS NOT NULL AND status != ''
+        by_status = (
+            self.execute_query(
+                f"""SELECT status, COUNT(*) as count
+                FROM media_cache {where + (" AND" if where else "WHERE")} status IS NOT NULL AND status != ''
                 GROUP BY status ORDER BY count DESC""",
-            params, fetch_all=True,
-        ) or []
+                params,
+                fetch_all=True,
+            )
+            or []
+        )
 
         # By language
-        by_language = self.execute_query(
-            f"""SELECT language, COUNT(*) as count
-                FROM media_cache {where + (' AND' if where else 'WHERE')} language IS NOT NULL AND language != ''
+        by_language = (
+            self.execute_query(
+                f"""SELECT language, COUNT(*) as count
+                FROM media_cache {where + (" AND" if where else "WHERE")} language IS NOT NULL AND language != ''
                 GROUP BY language ORDER BY count DESC""",
-            params, fetch_all=True,
-        ) or []
+                params,
+                fetch_all=True,
+            )
+            or []
+        )
 
         # By rating (content ratings like PG, R, TV-MA)
-        by_rating = self.execute_query(
-            f"""SELECT rating, COUNT(*) as count
-                FROM media_cache {where + (' AND' if where else 'WHERE')} rating IS NOT NULL AND rating != ''
+        by_rating = (
+            self.execute_query(
+                f"""SELECT rating, COUNT(*) as count
+                FROM media_cache {where + (" AND" if where else "WHERE")} rating IS NOT NULL AND rating != ''
                 GROUP BY rating ORDER BY count DESC""",
-            params, fetch_all=True,
-        ) or []
+                params,
+                fetch_all=True,
+            )
+            or []
+        )
 
         # By studio (top 50)
-        by_studio = self.execute_query(
-            f"""SELECT studio, COUNT(*) as count
-                FROM media_cache {where + (' AND' if where else 'WHERE')} studio IS NOT NULL AND studio != ''
+        by_studio = (
+            self.execute_query(
+                f"""SELECT studio, COUNT(*) as count
+                FROM media_cache {where + (" AND" if where else "WHERE")} studio IS NOT NULL AND studio != ''
                 GROUP BY studio ORDER BY count DESC LIMIT 50""",
-            params, fetch_all=True,
-        ) or []
+                params,
+                fetch_all=True,
+            )
+            or []
+        )
 
         # By year/decade
-        by_decade = self.execute_query(
-            f"""SELECT (CAST(year AS INTEGER) / 10) * 10 as decade, COUNT(*) as count
-                FROM media_cache {where + (' AND' if where else 'WHERE')} year IS NOT NULL AND year != ''
+        by_decade = (
+            self.execute_query(
+                f"""SELECT (CAST(year AS INTEGER) / 10) * 10 as decade, COUNT(*) as count
+                FROM media_cache {where + (" AND" if where else "WHERE")} year IS NOT NULL AND year != ''
                 GROUP BY decade ORDER BY decade DESC""",
-            params, fetch_all=True,
-        ) or []
-        by_decade = [{"decade": f"{r['decade']}s", "count": r["count"]} for r in by_decade if r.get("decade")]
+                params,
+                fetch_all=True,
+            )
+            or []
+        )
+        by_decade = [
+            {"decade": f"{r['decade']}s", "count": r["count"]}
+            for r in by_decade
+            if r.get("decade")
+        ]
 
         # By runtime buckets
-        by_runtime = self.execute_query(
-            f"""SELECT
+        by_runtime = (
+            self.execute_query(
+                f"""SELECT
                     CASE
                         WHEN CAST(runtime AS INTEGER) < 30 THEN 'Under 30m'
                         WHEN CAST(runtime AS INTEGER) < 60 THEN '30-60m'
@@ -721,10 +757,13 @@ class MediaCache(DatabaseBase):
                         ELSE '150m+'
                     END as bucket,
                     COUNT(*) as count
-                FROM media_cache {where + (' AND' if where else 'WHERE')} runtime IS NOT NULL AND runtime != '' AND CAST(runtime AS INTEGER) > 0
+                FROM media_cache {where + (" AND" if where else "WHERE")} runtime IS NOT NULL AND runtime != '' AND CAST(runtime AS INTEGER) > 0
                 GROUP BY bucket ORDER BY MIN(CAST(runtime AS INTEGER))""",
-            params, fetch_all=True,
-        ) or []
+                params,
+                fetch_all=True,
+            )
+            or []
+        )
 
         # Monitored counts
         mon_row = self.execute_query(
@@ -732,7 +771,8 @@ class MediaCache(DatabaseBase):
                     SUM(CASE WHEN monitored = 1 THEN 1 ELSE 0 END) as monitored,
                     SUM(CASE WHEN monitored = 0 THEN 1 ELSE 0 END) as unmonitored
                 FROM media_cache {where}""",
-            params, fetch_one=True,
+            params,
+            fetch_one=True,
         )
         monitored = {
             "monitored": mon_row["monitored"] or 0 if mon_row else 0,
@@ -740,10 +780,14 @@ class MediaCache(DatabaseBase):
         }
 
         # By genre (Python-side aggregation since genre is JSON array)
-        genre_rows = self.execute_query(
-            f"SELECT genre FROM media_cache {where + (' AND' if where else 'WHERE')} genre IS NOT NULL AND genre != ''",
-            params, fetch_all=True,
-        ) or []
+        genre_rows = (
+            self.execute_query(
+                f"SELECT genre FROM media_cache {where + (' AND' if where else 'WHERE')} genre IS NOT NULL AND genre != ''",
+                params,
+                fetch_all=True,
+            )
+            or []
+        )
         genre_counts: dict = {}
         for row in genre_rows:
             raw = row.get("genre", "")
@@ -760,7 +804,8 @@ class MediaCache(DatabaseBase):
                 genre_counts[g] = genre_counts.get(g, 0) + 1
         by_genre = sorted(
             [{"genre": k, "count": v} for k, v in genre_counts.items()],
-            key=lambda x: x["count"], reverse=True,
+            key=lambda x: x["count"],
+            reverse=True,
         )
 
         return {
