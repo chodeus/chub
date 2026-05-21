@@ -41,6 +41,16 @@ const CONDITION_TYPES = {
         console.log('[conditionalFields] Evaluating not_in:', { selectedValue, targetValues });
         return Array.isArray(targetValues) && !targetValues.includes(selectedValue);
     },
+    is_empty: selectedValue =>
+        selectedValue === undefined ||
+        selectedValue === null ||
+        selectedValue === '' ||
+        (Array.isArray(selectedValue) && selectedValue.length === 0),
+    is_not_empty: selectedValue =>
+        selectedValue !== undefined &&
+        selectedValue !== null &&
+        selectedValue !== '' &&
+        !(Array.isArray(selectedValue) && selectedValue.length === 0),
 };
 
 /**
