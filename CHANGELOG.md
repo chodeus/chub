@@ -2,6 +2,14 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.2.1](https://github.com/chodeus/chub/compare/v2.2.0...v2.2.1) (2026-05-21)
+
+
+### Bug Fixes
+
+* **tests:** silence py/empty-except via contextlib.suppress in teardown ([f3ff39c](https://github.com/chodeus/chub/commit/f3ff39c3d993bc7ca32c512d4b587ff051aadbb1))
+* **unmatched_assets:** track tmdb-vs-tvdb via return value, not URL substring ([8e1ddfb](https://github.com/chodeus/chub/commit/8e1ddfbaa2d4da997af5b854e1823276308d0f46))
+
 ## [2.2.0](https://github.com/chodeus/chub/compare/v2.1.0...v2.2.0) (2026-05-21)
 
 
