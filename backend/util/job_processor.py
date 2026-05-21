@@ -470,9 +470,7 @@ def _process_upload_posters_job(
 
     force = bool(payload.get("force", False))
     with ChubDB(logger=logger) as db:
-        uploader = PosterUploader(
-            db=db, logger=logger, manifest=manifest, force=force
-        )
+        uploader = PosterUploader(db=db, logger=logger, manifest=manifest, force=force)
         result = uploader.run()
 
     if result.get("success"):
@@ -637,7 +635,9 @@ def _process_module_run_job(
         try:
             full_config = load_config()
             module_config = getattr(full_config, module_name, None)
-            module_log_level = getattr(module_config, "log_level", "INFO") if module_config else "INFO"
+            module_log_level = (
+                getattr(module_config, "log_level", "INFO") if module_config else "INFO"
+            )
             max_logs = getattr(full_config.general, "max_logs", 9)
             module_logger = Logger(
                 log_level=module_log_level,
@@ -1003,6 +1003,7 @@ def _process_cache_refresh_job(
         # When both are empty, auto-discover all configured instances
         if not arr_instances and not plex_instances:
             from backend.util.config import load_config
+
             cfg = load_config()
             for svc_type in ("radarr", "sonarr", "lidarr"):
                 svc_instances = getattr(cfg.instances, svc_type, {})

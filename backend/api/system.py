@@ -20,7 +20,13 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 from backend.api.utils import error, get_database, get_logger, ok
-from backend.util.config import ConfigError, ChubConfig, get_config_path, load_config, save_config
+from backend.util.config import (
+    ConfigError,
+    ChubConfig,
+    get_config_path,
+    load_config,
+    save_config,
+)
 from backend.util.database import ChubDB
 from backend.util.path_safety import is_path_allowed
 from backend.util.version import get_version
@@ -126,7 +132,9 @@ async def health_check(request: Request) -> JSONResponse:
     for name in ("webhook_worker", "background_worker"):
         worker = getattr(request.app.state, name, None)
         if worker:
-            stats = worker.get_worker_stats() if hasattr(worker, "get_worker_stats") else {}
+            stats = (
+                worker.get_worker_stats() if hasattr(worker, "get_worker_stats") else {}
+            )
             checks[name] = stats.get("status", "unknown")
             if stats.get("status") != "running":
                 status = "degraded"
@@ -511,11 +519,13 @@ async def list_backups(logger: Any = Depends(get_logger)) -> JSONResponse:
         backups = []
         for f in sorted(backup_dir.glob("chub-backup-*.zip"), reverse=True):
             stat = f.stat()
-            backups.append({
-                "filename": f.name,
-                "size_bytes": stat.st_size,
-                "created": datetime.fromtimestamp(stat.st_mtime).isoformat(),
-            })
+            backups.append(
+                {
+                    "filename": f.name,
+                    "size_bytes": stat.st_size,
+                    "created": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                }
+            )
         return ok(f"Found {len(backups)} backups", {"backups": backups})
     except Exception as e:
         logger.error(f"Error listing backups: {e}")
@@ -547,7 +557,11 @@ async def restore_backup(
         buf = io.BytesIO(content)
 
         if not zipfile.is_zipfile(buf):
-            return error("Uploaded file is not a valid zip", code="INVALID_BACKUP", status_code=400)
+            return error(
+                "Uploaded file is not a valid zip",
+                code="INVALID_BACKUP",
+                status_code=400,
+            )
 
         buf.seek(0)
         with zipfile.ZipFile(buf, "r") as zf:
@@ -563,6 +577,7 @@ async def restore_backup(
             # Validate the config.yml inside the zip
             raw_config = zf.read("config.yml")
             import yaml
+
             try:
                 parsed = yaml.safe_load(raw_config)
                 ChubConfig.model_validate(parsed)
@@ -686,6 +701,7 @@ async def get_system_digest(
         )
         recent_failures = []
         import json as _json
+
         for r in failed_runs or []:
             payload = r["payload"]
             try:

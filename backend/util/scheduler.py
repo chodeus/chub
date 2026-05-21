@@ -343,8 +343,7 @@ class ChubScheduler:
 
         if self.logger:
             self.logger.get_adapter("SCHEDULER").info(
-                "Running scheduled Upgradinatorr profile(s): "
-                + ", ".join(due_labels)
+                "Running scheduled Upgradinatorr profile(s): " + ", ".join(due_labels)
             )
         else:
             print(

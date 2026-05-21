@@ -94,22 +94,28 @@ class PosterCache(DatabaseBase):
         Return posters whose stored width falls below `min_width`. Rows
         with no recorded width are excluded — use record_dimensions first.
         """
-        rows = self.execute_query(
-            "SELECT * FROM poster_cache WHERE width IS NOT NULL AND width < ? "
-            "ORDER BY width ASC LIMIT ?",
-            (int(min_width), int(limit)),
-            fetch_all=True,
-        ) or []
+        rows = (
+            self.execute_query(
+                "SELECT * FROM poster_cache WHERE width IS NOT NULL AND width < ? "
+                "ORDER BY width ASC LIMIT ?",
+                (int(min_width), int(limit)),
+                fetch_all=True,
+            )
+            or []
+        )
         return [dict(r) for r in rows]
 
     def added_since(self, iso_cutoff: str, limit: int = 500) -> list:
         """Return poster_cache rows added at or after the ISO-8601 cutoff."""
-        rows = self.execute_query(
-            "SELECT * FROM poster_cache WHERE created_at >= ? "
-            "ORDER BY created_at DESC LIMIT ?",
-            (iso_cutoff, int(limit)),
-            fetch_all=True,
-        ) or []
+        rows = (
+            self.execute_query(
+                "SELECT * FROM poster_cache WHERE created_at >= ? "
+                "ORDER BY created_at DESC LIMIT ?",
+                (iso_cutoff, int(limit)),
+                fetch_all=True,
+            )
+            or []
+        )
         return [dict(r) for r in rows]
 
     def get_all(self) -> list:
@@ -117,7 +123,11 @@ class PosterCache(DatabaseBase):
         return self.execute_query("SELECT * FROM poster_cache", fetch_all=True) or []
 
     def get_by_id(
-        self, id_field: str, id_val, season_number=None, asset_type: Optional[str] = None
+        self,
+        id_field: str,
+        id_val,
+        season_number=None,
+        asset_type: Optional[str] = None,
     ) -> Optional[dict]:
         """Get poster cache record by ID field."""
         sql = f"SELECT * FROM poster_cache WHERE {id_field}=?"
@@ -289,10 +299,13 @@ class PosterCache(DatabaseBase):
 
     def get_distinct_owners(self) -> list:
         """Return distinct owner names derived from the folder path."""
-        rows = self.execute_query(
-            "SELECT DISTINCT folder FROM poster_cache WHERE folder IS NOT NULL AND folder != ''",
-            fetch_all=True,
-        ) or []
+        rows = (
+            self.execute_query(
+                "SELECT DISTINCT folder FROM poster_cache WHERE folder IS NOT NULL AND folder != ''",
+                fetch_all=True,
+            )
+            or []
+        )
         owners = set()
         for row in rows:
             parts = row["folder"].rstrip("/").split("/")
@@ -302,10 +315,13 @@ class PosterCache(DatabaseBase):
 
     def get_distinct_styles(self) -> list:
         """Return distinct non-empty style values stored on poster_cache rows."""
-        rows = self.execute_query(
-            "SELECT DISTINCT style FROM poster_cache WHERE style IS NOT NULL AND style != ''",
-            fetch_all=True,
-        ) or []
+        rows = (
+            self.execute_query(
+                "SELECT DISTINCT style FROM poster_cache WHERE style IS NOT NULL AND style != ''",
+                fetch_all=True,
+            )
+            or []
+        )
         return sorted({row["style"] for row in rows if row.get("style")})
 
     def browse(
@@ -357,11 +373,14 @@ class PosterCache(DatabaseBase):
         total = count_result["total"] if count_result else 0
 
         data_params = list(params) + [limit, offset]
-        items = self.execute_query(
-            f"SELECT * FROM poster_cache {where} ORDER BY normalized_title ASC LIMIT ? OFFSET ?",
-            tuple(data_params),
-            fetch_all=True,
-        ) or []
+        items = (
+            self.execute_query(
+                f"SELECT * FROM poster_cache {where} ORDER BY normalized_title ASC LIMIT ? OFFSET ?",
+                tuple(data_params),
+                fetch_all=True,
+            )
+            or []
+        )
 
         return {"items": items, "total": total, "limit": limit, "offset": offset}
 

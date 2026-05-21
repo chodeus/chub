@@ -52,9 +52,9 @@ def get_plex_metadata_dir(plex_path: str) -> str:
 
 def _plex_is_running(plex_path: str) -> bool:
     db_dir = os.path.join(plex_path, "Plug-in Support", "Databases")
-    return os.path.exists(os.path.join(db_dir, f"{PLEX_DB_NAME}-shm")) or os.path.exists(
-        os.path.join(db_dir, f"{PLEX_DB_NAME}-wal")
-    )
+    return os.path.exists(
+        os.path.join(db_dir, f"{PLEX_DB_NAME}-shm")
+    ) or os.path.exists(os.path.join(db_dir, f"{PLEX_DB_NAME}-wal"))
 
 
 def copy_plex_db(plex_path: str, dest: str) -> Optional[str]:
@@ -290,7 +290,16 @@ def scan_bundles(plex_path: str, *, force: bool = False) -> Dict[str, Any]:
 
     metadata_dir = get_plex_metadata_dir(plex_path)
     if not os.path.isdir(metadata_dir):
-        return {"bundles": [], "stats": {"bundle_count": 0, "variant_count": 0, "bloat_count": 0, "bloat_size": 0, "scanned_at": time.time()}}
+        return {
+            "bundles": [],
+            "stats": {
+                "bundle_count": 0,
+                "variant_count": 0,
+                "bloat_count": 0,
+                "bloat_size": 0,
+                "scanned_at": time.time(),
+            },
+        }
 
     # Take a quick copy of the DB so we don't contend with Plex.
     # The sibling-of-plex_path location used to live at `/.chub_plex_db` when
@@ -434,7 +443,9 @@ def scan_bundles(plex_path: str, *, force: bool = False) -> Dict[str, Any]:
                 "title": info["title"],
                 "year": info["year"],
                 "metadata_type": mtype,
-                "metadata_type_label": METADATA_TYPE_LABELS.get(mtype) if mtype else None,
+                "metadata_type_label": METADATA_TYPE_LABELS.get(mtype)
+                if mtype
+                else None,
                 "library_section_id": section_id,
                 "library_name": section["name"] if section else None,
                 "variants": variants,
@@ -491,7 +502,9 @@ def scan_bundles(plex_path: str, *, force: bool = False) -> Dict[str, Any]:
 
     # Include libraries referenced by at least one bundle — lets the frontend
     # populate a filter dropdown without a second call.
-    referenced_lib_ids = {b["library_section_id"] for b in bundles if b["library_section_id"]}
+    referenced_lib_ids = {
+        b["library_section_id"] for b in bundles if b["library_section_id"]
+    }
     libraries = [
         {
             "id": lib_id,
@@ -505,7 +518,9 @@ def scan_bundles(plex_path: str, *, force: bool = False) -> Dict[str, Any]:
     # Distinct media types + variant kinds present in this scan. Frontend
     # uses these to hide filter-dropdown options that would produce zero
     # results (e.g. hide "artist" when the user has no Lidarr library).
-    present_media_types = sorted({b["metadata_type_label"] for b in bundles if b.get("metadata_type_label")})
+    present_media_types = sorted(
+        {b["metadata_type_label"] for b in bundles if b.get("metadata_type_label")}
+    )
     present_variant_kinds = sorted(
         {v["kind"] for b in bundles for v in b["variants"] if v.get("kind")}
     )
@@ -542,15 +557,17 @@ def get_bloat_flat(plex_path: str, *, force: bool = False) -> List[Dict[str, Any
             # not deletable and so don't belong in the bloat-cleanup list.
             if v.get("source") == "plex":
                 continue
-            flat.append({
-                "filename": v["filename"],
-                "path": v["path"],
-                "size": v["size"],
-                "bundle_path": b["bundle_path"],
-                "rating_key": b["rating_key"],
-                "title": b["title"],
-                "year": b["year"],
-            })
+            flat.append(
+                {
+                    "filename": v["filename"],
+                    "path": v["path"],
+                    "size": v["size"],
+                    "bundle_path": b["bundle_path"],
+                    "rating_key": b["rating_key"],
+                    "title": b["title"],
+                    "year": b["year"],
+                }
+            )
     flat.sort(key=lambda e: -e["size"])
     return flat
 

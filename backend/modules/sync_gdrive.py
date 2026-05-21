@@ -164,7 +164,9 @@ class SyncGDrive(ChubModule):
         # Respect dry_run config — rclone will show what would change without doing it
         if self.config.dry_run:
             cmd.append("--dry-run")
-            self.logger.info("[Dry Run] Rclone will report changes without applying them")
+            self.logger.info(
+                "[Dry Run] Rclone will report changes without applying them"
+            )
 
         # Use service account if configured, otherwise use OAuth token
         sa_path = getattr(self.config, "gdrive_sa_location", None)
@@ -174,24 +176,26 @@ class SyncGDrive(ChubModule):
                 return False
             cmd.extend(["--drive-service-account-file", sa_path])
         else:
-            cmd.extend([
-                "--drive-client-id",
-                self.config.client_id or "",
-                "--drive-client-secret",
-                self.config.client_secret or "",
-                "--drive-token",
-                (
-                    self.config.token
-                    if isinstance(self.config.token, str)
-                    else json.dumps(
-                        self.config.token.model_dump()
-                        if hasattr(self.config.token, "model_dump")
-                        else dict(self.config.token)
+            cmd.extend(
+                [
+                    "--drive-client-id",
+                    self.config.client_id or "",
+                    "--drive-client-secret",
+                    self.config.client_secret or "",
+                    "--drive-token",
+                    (
+                        self.config.token
+                        if isinstance(self.config.token, str)
+                        else json.dumps(
+                            self.config.token.model_dump()
+                            if hasattr(self.config.token, "model_dump")
+                            else dict(self.config.token)
+                        )
                     )
-                )
-                if self.config.token
-                else "",
-            ])
+                    if self.config.token
+                    else "",
+                ]
+            )
 
         cmd.extend(["posters:", sync_location])
 
@@ -413,6 +417,7 @@ class SyncGDrive(ChubModule):
 
                 if self.config.dry_run:
                     from backend.util.helper import create_table
+
                     table = [["Dry Run"], ["NO FILES WILL BE MODIFIED"]]
                     self.logger.info(create_table(table))
 
@@ -438,7 +443,9 @@ class SyncGDrive(ChubModule):
 
                 for idx, sync_item in enumerate(sync_list, 1):
                     if self.is_cancelled():
-                        self.logger.info("Cancellation requested, stopping sync_gdrive.")
+                        self.logger.info(
+                            "Cancellation requested, stopping sync_gdrive."
+                        )
                         break
                     progress_pct = int(10 + 80 * (idx - 1) / total)
                     progress_cb(progress_pct)  # Start for each
@@ -452,7 +459,9 @@ class SyncGDrive(ChubModule):
 
                     sync_location = sync_item.location
                     sync_id = sync_item.id
-                    success = self.sync_folder(sync_location, sync_id, progress_cb=progress_cb)
+                    success = self.sync_folder(
+                        sync_location, sync_id, progress_cb=progress_cb
+                    )
                     if not success:
                         failed_count += 1
 
@@ -482,13 +491,15 @@ class SyncGDrive(ChubModule):
                     self.logger.info(
                         f"Updated gdrive_stats for {sync_location}: {file_count} files, {size_bytes} bytes, last updated {last_updated}"
                     )
-                    synced_items.append({
-                        "location": sync_location,
-                        "owner": owner,
-                        "file_count": file_count,
-                        "size_bytes": size_bytes,
-                        "success": success,
-                    })
+                    synced_items.append(
+                        {
+                            "location": sync_location,
+                            "owner": owner,
+                            "file_count": file_count,
+                            "size_bytes": size_bytes,
+                            "success": success,
+                        }
+                    )
 
                     progress_pct = int(10 + 80 * idx / total)
                     progress_cb(progress_pct)  # Step up after folder done
@@ -518,13 +529,15 @@ class SyncGDrive(ChubModule):
                         manager = NotificationManager(
                             self.config, self.logger, module_name="sync_gdrive"
                         )
-                        manager.send_notification({
-                            "total": total,
-                            "succeeded": total - failed_count,
-                            "failed": failed_count,
-                            "elapsed": f"{time.time() - start_time:.1f}s",
-                            "items": synced_items,
-                        })
+                        manager.send_notification(
+                            {
+                                "total": total,
+                                "succeeded": total - failed_count,
+                                "failed": failed_count,
+                                "elapsed": f"{time.time() - start_time:.1f}s",
+                                "items": synced_items,
+                            }
+                        )
                     except Exception as e:
                         self.logger.debug(f"sync_gdrive notification failed: {e}")
 

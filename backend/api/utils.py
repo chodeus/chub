@@ -30,7 +30,9 @@ def get_module_logger(request: Request, module_name: str) -> Any:
 
         config = load_config()
         module_config = getattr(config, module_name, None)
-        log_level = getattr(module_config, "log_level", "info") if module_config else "info"
+        log_level = (
+            getattr(module_config, "log_level", "info") if module_config else "info"
+        )
         _module_loggers[module_name] = Logger(
             log_level=log_level,
             module_name=module_name,

@@ -52,7 +52,8 @@ async def list_logs(logger: Any = Depends(get_logger)) -> Dict[str, Any]:
             disk_modules = {
                 module
                 for module in os.listdir(LOG_BASE_DIR)
-                if os.path.isdir(os.path.join(LOG_BASE_DIR, module)) and module != "debug"
+                if os.path.isdir(os.path.join(LOG_BASE_DIR, module))
+                and module != "debug"
             }
 
         # Union with all known modules so they appear even before first run
@@ -178,7 +179,10 @@ async def read_log(
         # Verify the file is within our allowed directory
         resolved_path = os.path.realpath(log_path)
         resolved_base = os.path.realpath(LOG_BASE_DIR)
-        if not resolved_path.startswith(resolved_base + os.sep) and resolved_path != resolved_base:
+        if (
+            not resolved_path.startswith(resolved_base + os.sep)
+            and resolved_path != resolved_base
+        ):
             return error(
                 "Access denied",
                 code="LOG_ACCESS_DENIED",

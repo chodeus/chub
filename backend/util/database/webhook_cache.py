@@ -34,15 +34,11 @@ class WebhookCache(DatabaseBase):
         (race window between two concurrent webhook calls for the same item).
         """
         now = datetime.datetime.now(datetime.timezone.utc)
-        cutoff_iso = (
-            now - datetime.timedelta(seconds=ttl_seconds)
-        ).isoformat()
+        cutoff_iso = (now - datetime.timedelta(seconds=ttl_seconds)).isoformat()
         now_iso = now.isoformat()
 
         with self.get_connection() as conn:
-            conn.execute(
-                "DELETE FROM webhook_cache WHERE timestamp < ?", (cutoff_iso,)
-            )
+            conn.execute("DELETE FROM webhook_cache WHERE timestamp < ?", (cutoff_iso,))
 
             existing = conn.execute(
                 "SELECT id FROM webhook_cache WHERE item_type = ? AND item_name = ?",
@@ -77,8 +73,7 @@ class WebhookCache(DatabaseBase):
 
     def last_seen(self, item_type: str, item_name: str) -> Optional[str]:
         row = self.execute_query(
-            "SELECT timestamp FROM webhook_cache "
-            "WHERE item_type = ? AND item_name = ?",
+            "SELECT timestamp FROM webhook_cache WHERE item_type = ? AND item_name = ?",
             (item_type, item_name),
             fetch_one=True,
         )

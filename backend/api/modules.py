@@ -393,9 +393,7 @@ async def get_all_run_states(
                             "job_id": job_status.get("job_id"),
                         }
 
-        return ok(
-            f"Retrieved {len(run_states)} run states", data=states_by_name
-        )
+        return ok(f"Retrieved {len(run_states)} run states", data=states_by_name)
 
     except Exception as e:
         logger.error(f"Error getting run states: {e}")
@@ -404,7 +402,6 @@ async def get_all_run_states(
             code="RUN_STATE_ERROR",
             status_code=500,
         )
-
 
 
 @router.get(
@@ -455,7 +452,11 @@ async def module_events(request: Request):
                                 job_status = orchestrator.get_module_status(mod_name)
                                 if job_status.get("running"):
                                     job_id = job_status.get("job_id")
-                                    job = db.worker.get_job_by_id("jobs", job_id) if job_id else None
+                                    job = (
+                                        db.worker.get_job_by_id("jobs", job_id)
+                                        if job_id
+                                        else None
+                                    )
                                     progress = job.get("progress", 0) if job else 0
                                     states_by_name[mod_name] = {
                                         "status": "running",
@@ -467,11 +468,13 @@ async def module_events(request: Request):
                     for name, state in states_by_name.items():
                         prev = previous_states.get(name, {})
                         if state != prev:
-                            event_data = json.dumps({
-                                "event": "status_change",
-                                "module": name,
-                                **state,
-                            })
+                            event_data = json.dumps(
+                                {
+                                    "event": "status_change",
+                                    "module": name,
+                                    **state,
+                                }
+                            )
                             yield f"data: {event_data}\n\n"
 
                     previous_states = states_by_name
@@ -1149,7 +1152,11 @@ async def get_module_specific_stats(
                     "example": {
                         "success": True,
                         "message": "Cancellation requested for module poster_renamerr job 42",
-                        "data": {"module": "poster_renamerr", "job_id": 42, "status": "cancelling"},
+                        "data": {
+                            "module": "poster_renamerr",
+                            "job_id": 42,
+                            "status": "cancelling",
+                        },
                     }
                 }
             },

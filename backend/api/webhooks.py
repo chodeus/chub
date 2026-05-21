@@ -41,6 +41,7 @@ def verify_webhook_secret(request: Request) -> None:
     if not provided or not hmac.compare_digest(expected, provided):
         raise HTTPException(status_code=401, detail="Invalid webhook secret")
 
+
 # Persistent webhook dedup TTL (seconds). Sonarr/Radarr retry on minute-long
 # intervals; the previous in-memory 5s window never caught those and was wiped
 # on restart. Backed by the `webhook_cache` table via `db.webhook_cache`.
@@ -207,9 +208,7 @@ async def process_poster_webhook(
         )
 
 
-def _is_duplicate_webhook(
-    data: Dict[str, Any], db: ChubDB, logger: Any = None
-) -> bool:
+def _is_duplicate_webhook(data: Dict[str, Any], db: ChubDB, logger: Any = None) -> bool:
     """
     Check if this webhook is a duplicate against the persistent cache.
 
@@ -431,5 +430,3 @@ async def process_unmatched_webhook(
             code="UNMATCHED_PROCESS_ERROR",
             status_code=500,
         )
-
-

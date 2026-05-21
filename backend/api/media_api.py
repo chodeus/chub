@@ -85,9 +85,7 @@ async def search_media(
     matched: Optional[int] = Query(
         None, description="Filter by matched status: 0 or 1"
     ),
-    sort: str = Query(
-        "title", description="Sort field: title, year, rating, runtime"
-    ),
+    sort: str = Query("title", description="Sort field: title, year, rating, runtime"),
     order: str = Query("asc", description="Sort order: asc, desc"),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
@@ -409,9 +407,11 @@ async def get_collections(
 async def get_duplicates(
     type: Optional[str] = Query(None, description="Filter by asset type"),
     similarity: Optional[float] = Query(
-        None, ge=0.0, le=1.0,
+        None,
+        ge=0.0,
+        le=1.0,
         description="Fuzzy match threshold (0-1). When set, uses title similarity "
-        "instead of exact match. 0.8 = 80% similar."
+        "instead of exact match. 0.8 = 80% similar.",
     ),
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
@@ -445,7 +445,8 @@ async def get_duplicates(
             from difflib import SequenceMatcher
 
             all_media = [
-                m for m in db.media.get_all(asset_type=type)
+                m
+                for m in db.media.get_all(asset_type=type)
                 if m.get("season_number") is None
             ]
             groups = []
@@ -454,7 +455,9 @@ async def get_duplicates(
             for i, item_a in enumerate(all_media):
                 if i in used:
                     continue
-                title_a = (item_a.get("normalized_title") or item_a.get("title", "")).lower()
+                title_a = (
+                    item_a.get("normalized_title") or item_a.get("title", "")
+                ).lower()
                 year_a = item_a.get("year")
                 instance_a = item_a.get("instance_name")
                 group = [item_a]
@@ -465,7 +468,9 @@ async def get_duplicates(
                     # Must be same instance — cross-instance isn't a dupe
                     if item_b.get("instance_name") != instance_a:
                         continue
-                    title_b = (item_b.get("normalized_title") or item_b.get("title", "")).lower()
+                    title_b = (
+                        item_b.get("normalized_title") or item_b.get("title", "")
+                    ).lower()
                     year_b = item_b.get("year")
 
                     # Year must match (or both be None)
@@ -480,21 +485,36 @@ async def get_duplicates(
                 if len(group) > 1:
                     used.add(i)
                     import json as _json
-                    groups.append({
-                        "normalized_title": title_a,
-                        "year": year_a,
-                        "instance_name": instance_a,
-                        "count": len(group),
-                        "ids": ",".join(str(g.get("id", "")) for g in group),
-                        "instances": ",".join(g.get("instance_name", "") for g in group),
-                        "folders": _json.dumps([g.get("folder") or "" for g in group]),
-                        "similarity": round(min(
-                            SequenceMatcher(None, title_a,
-                                (g.get("normalized_title") or g.get("title", "")).lower()
-                            ).ratio()
-                            for g in group[1:]
-                        ), 2),
-                    })
+
+                    groups.append(
+                        {
+                            "normalized_title": title_a,
+                            "year": year_a,
+                            "instance_name": instance_a,
+                            "count": len(group),
+                            "ids": ",".join(str(g.get("id", "")) for g in group),
+                            "instances": ",".join(
+                                g.get("instance_name", "") for g in group
+                            ),
+                            "folders": _json.dumps(
+                                [g.get("folder") or "" for g in group]
+                            ),
+                            "similarity": round(
+                                min(
+                                    SequenceMatcher(
+                                        None,
+                                        title_a,
+                                        (
+                                            g.get("normalized_title")
+                                            or g.get("title", "")
+                                        ).lower(),
+                                    ).ratio()
+                                    for g in group[1:]
+                                ),
+                                2,
+                            ),
+                        }
+                    )
 
             duplicates = groups
         else:
@@ -506,6 +526,7 @@ async def get_duplicates(
         # are intentional quality copies, not real duplicates.
         try:
             from backend.util.config import load_config
+
             raw_groups = load_config().general.duplicate_exclude_groups
             if raw_groups:
                 # Normalise: accept both [["a","b"]] and [{"instances":["a","b"]}]
@@ -880,11 +901,17 @@ async def create_collection(
 
         title = payload.get("title")
         if not title:
-            return error("Field 'title' is required", code="MISSING_TITLE", status_code=400)
+            return error(
+                "Field 'title' is required", code="MISSING_TITLE", status_code=400
+            )
 
         instance_name = payload.get("instance_name")
         if not instance_name:
-            return error("Field 'instance_name' is required", code="MISSING_INSTANCE", status_code=400)
+            return error(
+                "Field 'instance_name' is required",
+                code="MISSING_INSTANCE",
+                status_code=400,
+            )
 
         record = {
             "title": title,
@@ -896,7 +923,9 @@ async def create_collection(
             "folder": payload.get("folder"),
             "library_name": payload.get("library_name"),
             "alternate_titles": payload.get("alternate_titles", []),
-            "normalized_alternate_titles": payload.get("normalized_alternate_titles", []),
+            "normalized_alternate_titles": payload.get(
+                "normalized_alternate_titles", []
+            ),
         }
 
         db.collection.upsert(record, instance_name)
@@ -931,7 +960,9 @@ async def create_collection(
                     "example": {
                         "success": True,
                         "message": "Collection updated successfully",
-                        "data": {"collection": {"id": 1, "title": "Updated Collection"}},
+                        "data": {
+                            "collection": {"id": 1, "title": "Updated Collection"}
+                        },
                     }
                 }
             },
@@ -958,7 +989,9 @@ async def update_collection(
     """
     try:
         payload = await request.json()
-        logger.debug(f"Serving PUT /api/media/collections/{collection_id} with payload: {payload}")
+        logger.debug(
+            f"Serving PUT /api/media/collections/{collection_id} with payload: {payload}"
+        )
 
         existing = db.collection.get_by_id(collection_id)
         if not existing:
@@ -970,8 +1003,14 @@ async def update_collection(
 
         # Merge updates into existing record
         updatable_fields = [
-            "title", "year", "tmdb_id", "tvdb_id", "imdb_id",
-            "folder", "library_name", "alternate_titles",
+            "title",
+            "year",
+            "tmdb_id",
+            "tvdb_id",
+            "imdb_id",
+            "folder",
+            "library_name",
+            "alternate_titles",
             "normalized_alternate_titles",
         ]
         for field in updatable_fields:
@@ -980,7 +1019,9 @@ async def update_collection(
 
         # Update normalized_title if title changed
         if "title" in payload:
-            existing["normalized_title"] = payload["title"].lower().strip() if payload["title"] else None
+            existing["normalized_title"] = (
+                payload["title"].lower().strip() if payload["title"] else None
+            )
 
         instance_name = existing.get("instance_name")
         db.collection.upsert(existing, instance_name)
@@ -1061,7 +1102,9 @@ async def resolve_duplicates(
     if not keep_id:
         return error("keepId is required", code="MISSING_KEEP_ID", status_code=400)
     if not remove_ids:
-        return error("removeIds is required", code="MISSING_REMOVE_IDS", status_code=400)
+        return error(
+            "removeIds is required", code="MISSING_REMOVE_IDS", status_code=400
+        )
 
     # Verify the kept item exists
     kept_item = db.media.get_by_id(keep_id)
@@ -1112,7 +1155,9 @@ async def resolve_duplicates(
                         params = f"deleteFiles={'true' if delete_files else 'false'}"
                         if add_exclusion:
                             params += "&addImportExclusion=true"
-                        endpoint = f"{arr_client.url}/api/v3/{endpoint_type}/{arr_id}?{params}"
+                        endpoint = (
+                            f"{arr_client.url}/api/v3/{endpoint_type}/{arr_id}?{params}"
+                        )
                         arr_client.make_delete_request(endpoint)
                         logger.info(
                             f"Deleted ARR media {arr_id} from {instance_name} "
@@ -1137,11 +1182,14 @@ async def resolve_duplicates(
     if failed:
         msg += f", {len(failed)} failed"
 
-    return ok(msg, {
-        "kept": {"id": keep_id, "title": kept_item.get("title", "")},
-        "removed": removed,
-        "failed": failed,
-    })
+    return ok(
+        msg,
+        {
+            "kept": {"id": keep_id, "title": kept_item.get("title", "")},
+            "removed": removed,
+            "failed": failed,
+        },
+    )
 
 
 @router.post(
@@ -1239,12 +1287,15 @@ async def get_low_rated(
             clauses.append("asset_type=?")
             params.append(asset_type)
         where = "WHERE " + " AND ".join(clauses)
-        rows = db.worker.execute_query(
-            f"SELECT * FROM media_cache {where} "
-            "ORDER BY CAST(rating AS REAL) ASC LIMIT ? OFFSET ?",
-            tuple(params) + (limit, offset),
-            fetch_all=True,
-        ) or []
+        rows = (
+            db.worker.execute_query(
+                f"SELECT * FROM media_cache {where} "
+                "ORDER BY CAST(rating AS REAL) ASC LIMIT ? OFFSET ?",
+                tuple(params) + (limit, offset),
+                fetch_all=True,
+            )
+            or []
+        )
         return ok(
             f"Found {len(rows)} low-rated items",
             {"items": [dict(r) for r in rows], "limit": limit, "offset": offset},
@@ -1263,10 +1314,17 @@ async def get_low_rated(
 # Sonarr has no tmdbId, Lidarr (artist) uses MusicBrainz IDs and leaves
 # tmdb/tvdb/imdb + rating/runtime/language/edition as None by design.
 _NEVER_POPULATED_FIELDS = {
-    "movie":  {"tvdb_id"},
-    "show":   {"tmdb_id"},
-    "artist": {"tmdb_id", "tvdb_id", "imdb_id",
-               "rating", "runtime", "language", "edition"},
+    "movie": {"tvdb_id"},
+    "show": {"tmdb_id"},
+    "artist": {
+        "tmdb_id",
+        "tvdb_id",
+        "imdb_id",
+        "rating",
+        "runtime",
+        "language",
+        "edition",
+    },
 }
 
 
@@ -1280,8 +1338,16 @@ async def get_incomplete_metadata(
 ) -> JSONResponse:
     try:
         allowed = {
-            "rating", "studio", "language", "genre", "runtime", "edition",
-            "tmdb_id", "tvdb_id", "imdb_id", "year",
+            "rating",
+            "studio",
+            "language",
+            "genre",
+            "runtime",
+            "edition",
+            "tmdb_id",
+            "tvdb_id",
+            "imdb_id",
+            "year",
         }
         requested = [f.strip() for f in fields.split(",") if f.strip() in allowed]
         if not requested:
@@ -1314,9 +1380,7 @@ async def get_incomplete_metadata(
                     field_clauses.append(f"({f} IS NULL OR {f} = 0)")
                 else:
                     field_clauses.append(f"({f} IS NULL OR {f} = '')")
-            subclauses.append(
-                f"(asset_type = ? AND ({' OR '.join(field_clauses)}))"
-            )
+            subclauses.append(f"(asset_type = ? AND ({' OR '.join(field_clauses)}))")
             params.append(atype)
 
         # Fallback for any asset_type outside the known set — apply the full
@@ -1335,12 +1399,15 @@ async def get_incomplete_metadata(
         params.extend(known_types)
 
         where = " OR ".join(subclauses)
-        rows = db.worker.execute_query(
-            f"SELECT * FROM media_cache WHERE {where} "
-            "ORDER BY title ASC LIMIT ? OFFSET ?",
-            (*params, limit, offset),
-            fetch_all=True,
-        ) or []
+        rows = (
+            db.worker.execute_query(
+                f"SELECT * FROM media_cache WHERE {where} "
+                "ORDER BY title ASC LIMIT ? OFFSET ?",
+                (*params, limit, offset),
+                fetch_all=True,
+            )
+            or []
+        )
 
         # Compute per-row `missing` server-side using the same expected-field
         # map, so the UI doesn't have to replicate the logic.
@@ -1393,7 +1460,9 @@ def _live_arr_ids_by_instance(config, logger) -> dict:
             if not client or not client.connect_status:
                 continue
             items = client.get_all_media() or []
-            live[name] = {it.get("arr_id") for it in items if it.get("arr_id") is not None}
+            live[name] = {
+                it.get("arr_id") for it in items if it.get("arr_id") is not None
+            }
     return live
 
 
@@ -1405,14 +1474,19 @@ async def get_orphaned_cache(
     try:
         config = load_config()
         live = _live_arr_ids_by_instance(config, logger)
-        rows = db.worker.execute_query(
-            "SELECT id, title, asset_type, instance_name, arr_id, folder, root_folder "
-            "FROM media_cache WHERE arr_id IS NOT NULL AND instance_name IS NOT NULL",
-            fetch_all=True,
-        ) or []
+        rows = (
+            db.worker.execute_query(
+                "SELECT id, title, asset_type, instance_name, arr_id, folder, root_folder "
+                "FROM media_cache WHERE arr_id IS NOT NULL AND instance_name IS NOT NULL",
+                fetch_all=True,
+            )
+            or []
+        )
         orphaned = [
-            dict(r) for r in rows
-            if r["instance_name"] in live and r["arr_id"] not in live[r["instance_name"]]
+            dict(r)
+            for r in rows
+            if r["instance_name"] in live
+            and r["arr_id"] not in live[r["instance_name"]]
         ]
         return ok(
             f"Found {len(orphaned)} orphaned cache row(s)",
@@ -1512,14 +1586,19 @@ def _fetch_duplicate_member(cache_row: dict, config, logger) -> dict:
             raw = client.make_get_request(f"{client.api_base}/series/{arr_id}") or {}
             stats = raw.get("statistics") or {}
             size = stats.get("sizeOnDisk")
-            files = client.make_get_request(
-                f"{client.api_base}/episodefile?seriesId={arr_id}"
-            ) or []
-            qualities = sorted({
-                ((f.get("quality") or {}).get("quality") or {}).get("name")
-                for f in files
-                if ((f.get("quality") or {}).get("quality") or {}).get("name")
-            })
+            files = (
+                client.make_get_request(
+                    f"{client.api_base}/episodefile?seriesId={arr_id}"
+                )
+                or []
+            )
+            qualities = sorted(
+                {
+                    ((f.get("quality") or {}).get("quality") or {}).get("name")
+                    for f in files
+                    if ((f.get("quality") or {}).get("quality") or {}).get("name")
+                }
+            )
             out["live"] = {
                 "title": raw.get("title"),
                 "path": raw.get("path"),
@@ -1527,7 +1606,10 @@ def _fetch_duplicate_member(cache_row: dict, config, logger) -> dict:
                 "size_human": _format_bytes(size),
                 "file_count": stats.get("episodeFileCount"),
                 "total_count": stats.get("totalEpisodeCount"),
-                "quality": ", ".join(qualities[:3]) + ("…" if len(qualities) > 3 else "") if qualities else None,
+                "quality": ", ".join(qualities[:3])
+                + ("…" if len(qualities) > 3 else "")
+                if qualities
+                else None,
                 "monitored": raw.get("monitored"),
                 "status": raw.get("status"),
                 "added": raw.get("added"),
@@ -1537,14 +1619,19 @@ def _fetch_duplicate_member(cache_row: dict, config, logger) -> dict:
             raw = client.make_get_request(f"{client.api_base}/artist/{arr_id}") or {}
             stats = raw.get("statistics") or {}
             size = stats.get("sizeOnDisk")
-            trackfiles = client.make_get_request(
-                f"{client.api_base}/trackfile?artistId={arr_id}"
-            ) or []
-            qualities = sorted({
-                ((f.get("quality") or {}).get("quality") or {}).get("name")
-                for f in trackfiles
-                if ((f.get("quality") or {}).get("quality") or {}).get("name")
-            })
+            trackfiles = (
+                client.make_get_request(
+                    f"{client.api_base}/trackfile?artistId={arr_id}"
+                )
+                or []
+            )
+            qualities = sorted(
+                {
+                    ((f.get("quality") or {}).get("quality") or {}).get("name")
+                    for f in trackfiles
+                    if ((f.get("quality") or {}).get("quality") or {}).get("name")
+                }
+            )
             out["live"] = {
                 "title": raw.get("artistName") or raw.get("title"),
                 "path": raw.get("path"),
@@ -1552,7 +1639,10 @@ def _fetch_duplicate_member(cache_row: dict, config, logger) -> dict:
                 "size_human": _format_bytes(size),
                 "file_count": stats.get("trackFileCount"),
                 "total_count": stats.get("trackCount"),
-                "quality": ", ".join(qualities[:3]) + ("…" if len(qualities) > 3 else "") if qualities else None,
+                "quality": ", ".join(qualities[:3])
+                + ("…" if len(qualities) > 3 else "")
+                if qualities
+                else None,
                 "monitored": raw.get("monitored"),
                 "status": raw.get("status"),
                 "added": raw.get("added"),
@@ -1567,7 +1657,9 @@ def _fetch_duplicate_member(cache_row: dict, config, logger) -> dict:
     return out
 
 
-@router.post("/duplicates/members", summary="Fetch live per-member info for a duplicate group")
+@router.post(
+    "/duplicates/members", summary="Fetch live per-member info for a duplicate group"
+)
 async def get_duplicate_members(
     body: DuplicateMembersRequest,
     logger: Any = Depends(get_logger),
@@ -1959,11 +2051,12 @@ async def delete_media_item(
                 # Look up instance URL/API from config (check radarr, sonarr, lidarr)
                 instance_detail = None
                 for arr_type in ("radarr", "sonarr", "lidarr"):
-                    if (
-                        hasattr(config.instances, arr_type)
-                        and instance_name in getattr(config.instances, arr_type, {})
+                    if hasattr(config.instances, arr_type) and instance_name in getattr(
+                        config.instances, arr_type, {}
                     ):
-                        instance_detail = getattr(config.instances, arr_type)[instance_name]
+                        instance_detail = getattr(config.instances, arr_type)[
+                            instance_name
+                        ]
                         break
 
                 if instance_detail and instance_detail.url and instance_detail.api:
@@ -2105,12 +2198,15 @@ async def generate_collection_from_tag(
         # media_cache.tags is stored as serialized JSON in most paths, so we
         # match with LIKE on the raw string — good enough for a low-cardinality
         # tag list, and avoids requiring JSON1 extension support.
-        media_rows = db.worker.execute_query(
-            "SELECT id, tmdb_id, tvdb_id, imdb_id, season_number, title, year "
-            "FROM media_cache WHERE tags LIKE ?",
-            (f"%{tag}%",),
-            fetch_all=True,
-        ) or []
+        media_rows = (
+            db.worker.execute_query(
+                "SELECT id, tmdb_id, tvdb_id, imdb_id, season_number, title, year "
+                "FROM media_cache WHERE tags LIKE ?",
+                (f"%{tag}%",),
+                fetch_all=True,
+            )
+            or []
+        )
         if not media_rows:
             return ok(
                 f"No media tagged '{tag}'",
@@ -2138,6 +2234,7 @@ async def generate_collection_from_tag(
             )
 
         from datetime import datetime as _dt
+
         created_at = _dt.utcnow().isoformat()
         db.worker.execute_query(
             "INSERT INTO poster_collections (name, description, created_at) VALUES (?, ?, ?)",
@@ -2192,12 +2289,15 @@ async def get_media_history(
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
     try:
-        rows = db.worker.execute_query(
-            "SELECT * FROM media_edit_history WHERE media_id=? "
-            "ORDER BY edited_at DESC LIMIT ?",
-            (media_id, max(1, min(limit, 500))),
-            fetch_all=True,
-        ) or []
+        rows = (
+            db.worker.execute_query(
+                "SELECT * FROM media_edit_history WHERE media_id=? "
+                "ORDER BY edited_at DESC LIMIT ?",
+                (media_id, max(1, min(limit, 500))),
+                fetch_all=True,
+            )
+            or []
+        )
         return ok(
             f"Retrieved {len(rows)} history entries for media {media_id}",
             {"history": [dict(r) for r in rows]},
@@ -2225,7 +2325,9 @@ async def get_import_exclusion(
     try:
         item = db.media.get_by_id(media_id)
         if not item:
-            return error("Media item not found", code="MEDIA_NOT_FOUND", status_code=404)
+            return error(
+                "Media item not found", code="MEDIA_NOT_FOUND", status_code=404
+            )
         instance_name = item.get("instance_name")
         cfg = load_config()
         inst_cfg = None
@@ -2252,6 +2354,7 @@ async def get_import_exclusion(
         api_ver = "v1" if service == "lidarr" else "v3"
         exclusion_url = f"{inst_cfg.url.rstrip('/')}/api/{api_ver}/importlistexclusion"
         import requests as _rq
+
         resp = _rq.get(
             exclusion_url,
             headers={"X-Api-Key": inst_cfg.api},
@@ -2267,8 +2370,7 @@ async def get_import_exclusion(
         tmdb = item.get("tmdb_id")
         tvdb = item.get("tvdb_id")
         excluded = any(
-            (tmdb and e.get("tmdbId") == tmdb)
-            or (tvdb and e.get("tvdbId") == tvdb)
+            (tmdb and e.get("tmdbId") == tmdb) or (tvdb and e.get("tvdbId") == tvdb)
             for e in entries or []
         )
         return ok(
@@ -2287,5 +2389,3 @@ async def get_import_exclusion(
             code="EXCLUSION_ERROR",
             status_code=500,
         )
-
-

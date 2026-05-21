@@ -9,14 +9,15 @@ class UpgradinatorrProgress(DatabaseBase):
     season_album count_mode runs. Lets rotations resume mid-parent rather than
     re-searching the same children on every run."""
 
-    def get_processed_children(
-        self, instance_name: str, media_id: int
-    ) -> Set[str]:
-        rows = self.execute_query(
-            "SELECT child_id FROM upgradinatorr_progress WHERE instance_name=? AND media_id=?",
-            (instance_name, media_id),
-            fetch_all=True,
-        ) or []
+    def get_processed_children(self, instance_name: str, media_id: int) -> Set[str]:
+        rows = (
+            self.execute_query(
+                "SELECT child_id FROM upgradinatorr_progress WHERE instance_name=? AND media_id=?",
+                (instance_name, media_id),
+                fetch_all=True,
+            )
+            or []
+        )
         return {str(r["child_id"]) for r in rows}
 
     def record_processed_child(

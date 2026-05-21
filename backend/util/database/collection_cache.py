@@ -182,7 +182,7 @@ class CollectionCache(DatabaseBase):
         if id is not None:
             query = f"""
                 UPDATE collections_cache
-                SET {', '.join(set_clauses)}
+                SET {", ".join(set_clauses)}
                 WHERE id=?
             """
             params.append(id)
@@ -191,7 +191,7 @@ class CollectionCache(DatabaseBase):
 
         query = f"""
             UPDATE collections_cache
-            SET {', '.join(set_clauses)}
+            SET {", ".join(set_clauses)}
             WHERE title=? AND instance_name=?
         """
         params.extend([title, instance_name])

@@ -355,7 +355,7 @@ class DBWorker(DatabaseBase):
                 target=self.process_pending_jobs,
                 args=(table_name, process_fn),
                 daemon=True,
-                name=f"{self.worker_name}-Worker-{i+1}",
+                name=f"{self.worker_name}-Worker-{i + 1}",
             )
             t.start()
             self._threads.append(t)
@@ -640,7 +640,10 @@ class DBWorker(DatabaseBase):
                             payload = json.loads(payload)
                         except (json.JSONDecodeError, TypeError):
                             payload = {}
-                    if isinstance(payload, dict) and payload.get("module_name") == module_name:
+                    if (
+                        isinstance(payload, dict)
+                        and payload.get("module_name") == module_name
+                    ):
                         matched.append(dict(row))
                 jobs = matched[offset : offset + limit]
             else:
@@ -655,9 +658,7 @@ class DBWorker(DatabaseBase):
             total: Optional[int] = None
             if not module_name:
                 count_sql = f"SELECT COUNT(*) AS total FROM jobs {where}"
-                total_row = self.execute_query(
-                    count_sql, tuple(params), fetch_one=True
-                )
+                total_row = self.execute_query(count_sql, tuple(params), fetch_one=True)
                 total = total_row["total"] if total_row else 0
 
             return {

@@ -173,7 +173,9 @@ def _resolve_palette(
         # version, not the preset default.
         for holiday in cfg.holidays or []:
             if holiday.name == choice:
-                hex_colors = list(getattr(holiday, "colors", None) or cfg.border_colors or [])
+                hex_colors = list(
+                    getattr(holiday, "colors", None) or cfg.border_colors or []
+                )
                 rgb = [br.convert_to_rgb(c) for c in hex_colors]
                 names = list(getattr(holiday, "borders", None) or [])
                 borders = br._resolve_border_paths(holiday.name, names)
@@ -207,7 +209,9 @@ def _sample_assets(db: ChubDB, count: int) -> list[dict]:
     movies = [row for row in media if row.get("asset_type") == "movie"]
     series = [row for row in media if row.get("asset_type") != "movie"]
     collections = [
-        row for row in db.collection.get_all() if row.get("matched") == 1 and row.get("original_file")
+        row
+        for row in db.collection.get_all()
+        if row.get("matched") == 1 and row.get("original_file")
     ]
 
     target_each = max(1, count // 3)
@@ -229,7 +233,10 @@ def _sample_assets(db: ChubDB, count: int) -> list[dict]:
     leftovers = (
         [(row, "movie") for row in movies[target_each:]]
         + [(row, "series") for row in series[target_each:]]
-        + [(row, "collection") for row in collections[max(0, count - 2 * target_each):]]
+        + [
+            (row, "collection")
+            for row in collections[max(0, count - 2 * target_each) :]
+        ]
     )
     while len(picks) < count and leftovers:
         row, kind = leftovers.pop(0)
@@ -267,7 +274,9 @@ def _render_composite(
 
     try:
         with Image.open(original_file) as left_src:
-            left = left_src.convert("RGB").resize((1000, 1500), Image.Resampling.LANCZOS)
+            left = left_src.convert("RGB").resize(
+                (1000, 1500), Image.Resampling.LANCZOS
+            )
         with Image.open(bordered_tmp) as right_src:
             right = right_src.convert("RGB")
             # bordered_tmp is already 1000x1500 from BorderReplacerr, but
@@ -456,7 +465,9 @@ async def preview_file(token: str, logger: Any = Depends(get_logger)):
     # Token is uuid4 hex so anything else is rejected upfront — keeps the
     # endpoint from doubling as a generic /tmp peeker.
     if not token or len(token) != 32 or not all(c in "0123456789abcdef" for c in token):
-        return error("Invalid preview token", code="BORDER_PREVIEW_BAD_TOKEN", status_code=404)
+        return error(
+            "Invalid preview token", code="BORDER_PREVIEW_BAD_TOKEN", status_code=404
+        )
 
     # Defense in depth: resolve the candidate path and confirm it lives
     # inside PREVIEW_DIR before serving. The hex-token validator above
@@ -467,7 +478,9 @@ async def preview_file(token: str, logger: Any = Depends(get_logger)):
     preview_root = PREVIEW_DIR.resolve()
     file_path = (PREVIEW_DIR / f"{token}.jpg").resolve()
     if not file_path.is_relative_to(preview_root):
-        return error("Invalid preview path", code="BORDER_PREVIEW_BAD_TOKEN", status_code=404)
+        return error(
+            "Invalid preview path", code="BORDER_PREVIEW_BAD_TOKEN", status_code=404
+        )
 
     if not file_path.exists():
         return error(
@@ -587,7 +600,9 @@ async def border_thumbnail(
 ):
     folder = _safe_holiday_folder(holiday)
     if not folder:
-        return error("Unknown holiday", code="BORDER_THUMB_UNKNOWN_HOLIDAY", status_code=404)
+        return error(
+            "Unknown holiday", code="BORDER_THUMB_UNKNOWN_HOLIDAY", status_code=404
+        )
 
     source_dir = _resolve_variant_source_dir(source, folder)
     if source_dir is None:
@@ -598,12 +613,16 @@ async def border_thumbnail(
     # cannot. Stem-strip again as belt-and-braces.
     stem = Path(variant).stem
     if not stem or not all(c.isalnum() or c in "-_." for c in stem):
-        return error("Invalid variant name", code="BORDER_THUMB_BAD_VARIANT", status_code=404)
+        return error(
+            "Invalid variant name", code="BORDER_THUMB_BAD_VARIANT", status_code=404
+        )
 
     source_root = source_dir.resolve()
     full_png = (source_dir / f"{stem}.png").resolve()
     if not full_png.is_relative_to(source_root) or not full_png.is_file():
-        return error("Variant not found", code="BORDER_THUMB_NOT_FOUND", status_code=404)
+        return error(
+            "Variant not found", code="BORDER_THUMB_NOT_FOUND", status_code=404
+        )
 
     cache_dir = _THUMB_DIR / folder
     cache_dir.mkdir(parents=True, exist_ok=True)

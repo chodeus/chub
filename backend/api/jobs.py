@@ -21,6 +21,7 @@ def _enrich_jobs(jobs):
                 job["module_name"] = payload.get("module_name", "")
     return jobs
 
+
 router = APIRouter(
     prefix="/api",
     tags=["Jobs"],
@@ -115,12 +116,15 @@ async def list_webhook_origins(
     try:
         days = max(1, min(days, 90))
         cutoff = (datetime.utcnow() - timedelta(days=days)).isoformat()
-        rows = db.worker.execute_query(
-            "SELECT id, payload, status, received_at FROM jobs "
-            "WHERE type='webhook' AND received_at >= ? ORDER BY received_at DESC",
-            (cutoff,),
-            fetch_all=True,
-        ) or []
+        rows = (
+            db.worker.execute_query(
+                "SELECT id, payload, status, received_at FROM jobs "
+                "WHERE type='webhook' AND received_at >= ? ORDER BY received_at DESC",
+                (cutoff,),
+                fetch_all=True,
+            )
+            or []
+        )
         from collections import Counter
 
         by_origin: Counter = Counter()
@@ -230,7 +234,9 @@ async def get_job_log_tail(
                 payload = json.loads(payload)
             except (json.JSONDecodeError, TypeError):
                 payload = {}
-        module_name = (payload or {}).get("module_name") if isinstance(payload, dict) else None
+        module_name = (
+            (payload or {}).get("module_name") if isinstance(payload, dict) else None
+        )
         if not module_name:
             return ok(
                 "No module log for this job type",
@@ -257,7 +263,9 @@ async def get_job_log_tail(
             repo_root = os.path.abspath(
                 os.path.join(os.path.dirname(__file__), "..", "..")
             )
-            log_path = os.path.join(repo_root, "logs", module_name, f"{module_name}.log")
+            log_path = os.path.join(
+                repo_root, "logs", module_name, f"{module_name}.log"
+            )
         if not os.path.isfile(log_path):
             return ok(
                 "Log file not yet present",
@@ -283,9 +291,7 @@ async def get_job_log_tail(
         )
     except Exception as e:
         logger.error(f"Error tailing log for job {job_id}: {e}")
-        return error(
-            f"Error tailing log: {str(e)}", "LOG_TAIL_ERROR", status_code=500
-        )
+        return error(f"Error tailing log: {str(e)}", "LOG_TAIL_ERROR", status_code=500)
 
 
 @router.post("/jobs/{job_id}/retry")

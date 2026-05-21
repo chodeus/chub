@@ -57,10 +57,9 @@ class Labelarr(ChubModule):
         """
         # Check ARR instances (Radarr, Sonarr, Lidarr)
         for arr_type in ("radarr", "sonarr", "lidarr"):
-            if (
-                hasattr(self.full_config.instances, arr_type)
-                and instance_name in getattr(self.full_config.instances, arr_type, {})
-            ):
+            if hasattr(
+                self.full_config.instances, arr_type
+            ) and instance_name in getattr(self.full_config.instances, arr_type, {}):
                 return getattr(self.full_config.instances, arr_type)[instance_name]
 
         return None
@@ -141,7 +140,9 @@ class Labelarr(ChubModule):
             Dictionary containing title, year, and add_remove changes if any occurred,
             None if no changes were made
         """
-        dry_run = override_dry_run if override_dry_run is not None else self.config.dry_run
+        dry_run = (
+            override_dry_run if override_dry_run is not None else self.config.dry_run
+        )
         # Only label root items: movies or root show rows (no season context)
         asset_type = plex_item.get("asset_type")
         if (
@@ -189,9 +190,7 @@ class Labelarr(ChubModule):
                 f"Sync '{plex_item.get('title')}' ({plex_item.get('year')}) [NO MAPPING]: {add_remove}"
             )
 
-            plex_client.batch_update_labels(
-                plex_item, [], labels_to_remove, dry_run
-            )
+            plex_client.batch_update_labels(plex_item, [], labels_to_remove, dry_run)
 
             if not dry_run:
                 updated_item = dict(plex_item)
@@ -213,9 +212,7 @@ class Labelarr(ChubModule):
         # merge labels from every arr_item, but needs a product decision on
         # how to resolve conflicts between copies.
         if len(arr_items) > 1:
-            other_instances = [
-                a.get("instance_name") for a in arr_items[1:]
-            ]
+            other_instances = [a.get("instance_name") for a in arr_items[1:]]
             self.logger.warning(
                 f"labelarr: plex_id={plex_item_id} "
                 f"('{plex_item.get('title')}') has {len(arr_items)} ARR rows; "
@@ -426,7 +423,9 @@ class Labelarr(ChubModule):
 
                         for plex_item in plex_data:
                             if self.is_cancelled():
-                                self.logger.info("Cancellation requested, stopping label sync")
+                                self.logger.info(
+                                    "Cancellation requested, stopping label sync"
+                                )
                                 break
                             result = self.sync_to_plex(
                                 plex_client=plex_client,

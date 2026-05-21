@@ -130,9 +130,7 @@ class NotificationManager:
                         "color": color,
                         "timestamp": timestamp,
                         "fields": part.get("fields", []),
-                        "footer": {
-                            "text": f"Powered by: CHUB | {get_random_joke()}"
-                        },
+                        "footer": {"text": f"Powered by: CHUB | {get_random_joke()}"},
                     }
                 ]
             if "content" in part:
@@ -232,7 +230,7 @@ class NotificationManager:
                     for f in part.get("fields", [])
                 ]
                 pt_payload["discord"]["text"] = {
-                    "title": f"{module_title} Notification{part.get('part','')}",
+                    "title": f"{module_title} Notification{part.get('part', '')}",
                     "fields": fields,
                     "footer": get_random_joke(),
                 }
