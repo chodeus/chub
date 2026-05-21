@@ -13,6 +13,13 @@ export const SETTINGS_SCHEMA = [
                 description: 'Set the logging verbosity for Google Drive sync.',
             },
             {
+                key: 'dry_run',
+                label: 'Dry Run',
+                type: 'check_box',
+                description:
+                    'Pass --dry-run to rclone — log every file that would be copied or deleted without touching the local filesystem.',
+            },
+            {
                 key: 'gdrive_sa_location',
                 label: 'Service Account Location',
                 type: 'text',
