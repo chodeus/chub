@@ -142,12 +142,16 @@ class Renameinatorr(ChubModule):
         if getattr(config, "tag_name", None):
             tag_id = app.get_tag_id_from_name(config.tag_name)
             if tag_id:
-                chunk_size = count if count else (default_batch_size if enable_batching else 0)
+                chunk_size = (
+                    count if count else (default_batch_size if enable_batching else 0)
+                )
                 all_in_single_run = not enable_batching and not count
                 chunks_to_process_this_run = self.get_untagged_chunks_for_run(
                     media_dict, tag_id, chunk_size, all_in_single_run, logger
                 )
-                if not chunks_to_process_this_run or not any(chunks_to_process_this_run):
+                if not chunks_to_process_this_run or not any(
+                    chunks_to_process_this_run
+                ):
                     # All tagged — clear tags and re-fetch
                     media_ids = [item["media_id"] for item in media_dict]
                     logger.info("All media is tagged. Removing tags...")
@@ -166,7 +170,9 @@ class Renameinatorr(ChubModule):
             # No tagging — chunk all media
             if not enable_batching:
                 if not count:
-                    chunks_to_process_this_run: List[List[Dict[str, Any]]] = [media_dict]
+                    chunks_to_process_this_run: List[List[Dict[str, Any]]] = [
+                        media_dict
+                    ]
                 else:
                     chunks_to_process_this_run = self.get_chunks_for_run(
                         media_dict, count, logger
@@ -272,7 +278,11 @@ class Renameinatorr(ChubModule):
                         logger.info(f"Refreshing {app.instance_name}...")
                         response = app.refresh_items(media_ids)
                         logger.info(f"Waiting for {app.instance_name} to refresh...")
-                        ready = response and "id" in response and app.wait_for_command(response["id"])
+                        ready = (
+                            response
+                            and "id" in response
+                            and app.wait_for_command(response["id"])
+                        )
                         logger.info(f"Folders renamed in {app.instance_name}...")
                         # Update items with new path names if changed
                         if ready:

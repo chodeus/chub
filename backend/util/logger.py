@@ -87,7 +87,10 @@ class SmartRedactionFilter(logging.Filter):
             ),
             (r"webhook\s*[:=]\s*['\"]?https://[^'\"\s]+['\"]?", "webhook: [redacted]"),
             # API keys - short form keys (min 16) plus legacy long form (32+)
-            (r"\bapi(?:_?key)?\s*[:=]\s*['\"]?[A-Za-z0-9]{16,}['\"]?", "api: [redacted]"),
+            (
+                r"\bapi(?:_?key)?\s*[:=]\s*['\"]?[A-Za-z0-9]{16,}['\"]?",
+                "api: [redacted]",
+            ),
             # Bearer tokens in Authorization headers
             (
                 r"(Authorization\s*:\s*Bearer\s+)[A-Za-z0-9._\-]{16,}",

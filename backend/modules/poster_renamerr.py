@@ -270,7 +270,9 @@ class PosterRenamerr(ChubModule):
             real_dest = os.path.realpath(dest_dir)
             real_base = os.path.realpath(config.destination_dir)
             if not real_dest.startswith(real_base + os.sep) and real_dest != real_base:
-                self.logger.warning(f"Path traversal detected for folder '{folder}', skipping")
+                self.logger.warning(
+                    f"Path traversal detected for folder '{folder}', skipping"
+                )
                 return None
             if (
                 not os.path.exists(dest_dir)
@@ -348,7 +350,9 @@ class PosterRenamerr(ChubModule):
                         os.remove(new_file_path)
                     success = self.process_file(file, new_file_path, config.action_type)
                     if not success:
-                        self.logger.warning(f"File operation failed for {file} -> {new_file_path}")
+                        self.logger.warning(
+                            f"File operation failed for {file} -> {new_file_path}"
+                        )
                         return None
         else:
             if file_name != new_file_name:
@@ -361,7 +365,9 @@ class PosterRenamerr(ChubModule):
             if file_ops_enabled and not config.dry_run:
                 success = self.process_file(file, new_file_path, config.action_type)
                 if not success:
-                    self.logger.warning(f"File operation failed for {file} -> {new_file_path}")
+                    self.logger.warning(
+                        f"File operation failed for {file} -> {new_file_path}"
+                    )
                     return None
 
         if messages or discord_message:
@@ -589,7 +595,6 @@ class PosterRenamerr(ChubModule):
                 continue
 
             for asset in assets:
-
                 for id_field in ["imdb_id", "tmdb_id", "tvdb_id"]:
                     id_val = asset.get(id_field)
                     if id_val:
@@ -686,9 +691,7 @@ class PosterRenamerr(ChubModule):
 
                 # Clear and rebuild poster cache for current session
                 db.poster.clear()
-                self.merge_assets(
-                    source_dirs=self.config.source_dirs, db=db
-                )
+                self.merge_assets(source_dirs=self.config.source_dirs, db=db)
 
                 # Process each media item
                 output = {"collection": [], "movie": [], "show": []}
@@ -766,9 +769,7 @@ class PosterRenamerr(ChubModule):
                 self.sync_posters()
 
                 db.poster.clear()
-                self.merge_assets(
-                    source_dirs=self.config.source_dirs, db=db
-                )
+                self.merge_assets(source_dirs=self.config.source_dirs, db=db)
                 instance_map = {
                     "arrs": [i for i in self.config.instances if isinstance(i, str)],
                     "plex": {
@@ -801,10 +802,12 @@ class PosterRenamerr(ChubModule):
 
                     cleanarr_logger = Logger(self.config.log_level, "cleanarr")
                     allowed_roots = [
-                        r for r in (
+                        r
+                        for r in (
                             [self.config.destination_dir]
                             + list(self.config.source_dirs or [])
-                        ) if r
+                        )
+                        if r
                     ]
                     # In dry-run, force report mode regardless of configured
                     # action — never delete during a dry-run. Otherwise defer
@@ -816,7 +819,10 @@ class PosterRenamerr(ChubModule):
                     mode = (
                         "report"
                         if self.config.dry_run
-                        else (getattr(cleanarr_cfg, "orphan_assets_mode", "report") or "report")
+                        else (
+                            getattr(cleanarr_cfg, "orphan_assets_mode", "report")
+                            or "report"
+                        )
                     )
                     instance_names = [
                         name

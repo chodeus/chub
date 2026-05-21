@@ -33,6 +33,7 @@ def format_bytes(size: int) -> str:
         size /= 1024
     return f"{size:.1f} PB"
 
+
 VALID_MODES = {"report", "move", "remove", "restore", "clear", "nothing"}
 VALID_ORPHAN_MODES = {"report", "move", "remove"}
 ASSET_IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".webp")
@@ -86,8 +87,12 @@ class PosterCleanarr(ChubModule):
             if self.mode not in ("nothing",) and not self._validate_plex_path():
                 return
 
-            metadata_dir = os.path.join(self.plex_path, "Metadata") if self.plex_path else ""
-            restore_dir = os.path.join(self.plex_path, RESTORE_DIR_NAME) if self.plex_path else ""
+            metadata_dir = (
+                os.path.join(self.plex_path, "Metadata") if self.plex_path else ""
+            )
+            restore_dir = (
+                os.path.join(self.plex_path, RESTORE_DIR_NAME) if self.plex_path else ""
+            )
 
             # Check restore dir conflict
             if self.mode in ("move", "remove", "report") and os.path.isdir(restore_dir):
@@ -99,7 +104,12 @@ class PosterCleanarr(ChubModule):
 
             # Banner
             label = MODE_LABELS.get(self.mode, {})
-            table = [["Poster Cleanarr"], [f"Mode: {self.mode.capitalize()} — {label.get('ing', '')} bloat images"]]
+            table = [
+                ["Poster Cleanarr"],
+                [
+                    f"Mode: {self.mode.capitalize()} — {label.get('ing', '')} bloat images"
+                ],
+            ]
             self.logger.info(create_table(table))
 
             # Get Plex connection if needed (only for DB retrieval via API now;
@@ -123,13 +133,17 @@ class PosterCleanarr(ChubModule):
                 # Retrieve Plex database
                 db_path = self._get_plex_database(plex_server)
                 if db_path is None:
-                    self.logger.error("Failed to retrieve Plex database. Aborting image scan.")
+                    self.logger.error(
+                        "Failed to retrieve Plex database. Aborting image scan."
+                    )
                 else:
                     # Query in-use images
                     db_start = time.time()
                     in_use = self._query_in_use_images(db_path)
                     db_elapsed = time.time() - db_start
-                    self.logger.info(f"Found {len(in_use)} in-use images in Plex DB ({db_elapsed:.1f}s)")
+                    self.logger.info(
+                        f"Found {len(in_use)} in-use images in Plex DB ({db_elapsed:.1f}s)"
+                    )
 
                     # Scan for bloat
                     scan_start = time.time()
@@ -145,7 +159,8 @@ class PosterCleanarr(ChubModule):
                         wanted = {os.path.realpath(p) for p in target_paths}
                         before = len(bloat_list)
                         bloat_list = [
-                            b for b in bloat_list
+                            b
+                            for b in bloat_list
                             if os.path.realpath(b["path"]) in wanted
                         ]
                         self.logger.info(
@@ -159,7 +174,9 @@ class PosterCleanarr(ChubModule):
                     )
 
                     # Execute mode
-                    bloat_stats = self._execute_mode(bloat_list, self.mode, metadata_dir, restore_dir)
+                    bloat_stats = self._execute_mode(
+                        bloat_list, self.mode, metadata_dir, restore_dir
+                    )
 
             elif self.mode == "restore":
                 bloat_stats = self._execute_restore(restore_dir, metadata_dir)
@@ -189,15 +206,12 @@ class PosterCleanarr(ChubModule):
 
             # === Report ===
             elapsed = time.time() - start_time
-            output = self._build_output(
-                bloat_stats, orphan_stats, empty_dirs, elapsed
-            )
+            output = self._build_output(bloat_stats, orphan_stats, empty_dirs, elapsed)
             self._print_report(output)
 
             # === Notify ===
             has_activity = (
-                bloat_stats.get("count", 0) > 0
-                or orphan_stats.get("count", 0) > 0
+                bloat_stats.get("count", 0) > 0 or orphan_stats.get("count", 0) > 0
             )
             if has_activity:
                 try:
@@ -223,7 +237,9 @@ class PosterCleanarr(ChubModule):
     def _validate_plex_path(self) -> bool:
         """Validate plex_path exists and has expected structure."""
         if not self.plex_path:
-            self.logger.error("plex_path is not configured. Set it in poster_cleanarr config.")
+            self.logger.error(
+                "plex_path is not configured. Set it in poster_cleanarr config."
+            )
             return False
         if not os.path.isdir(self.plex_path):
             self.logger.error(f"Plex path does not exist: {self.plex_path}")
@@ -302,7 +318,9 @@ class PosterCleanarr(ChubModule):
             except Exception as e:
                 err_msg = str(e).lower()
                 if "unauthorized" in err_msg or "401" in err_msg:
-                    self.logger.error(f"Authentication failed for Plex '{instance_name}'. Check your API token.")
+                    self.logger.error(
+                        f"Authentication failed for Plex '{instance_name}'. Check your API token."
+                    )
                     return None
                 if attempt < max_retries:
                     wait = backoff * attempt
@@ -311,7 +329,9 @@ class PosterCleanarr(ChubModule):
                     )
                     time.sleep(wait)
                 else:
-                    self.logger.error(f"Failed to connect to Plex after {max_retries} attempts: {e}")
+                    self.logger.error(
+                        f"Failed to connect to Plex after {max_retries} attempts: {e}"
+                    )
                     return None
 
         return None
@@ -400,7 +420,10 @@ class PosterCleanarr(ChubModule):
             }
 
             import requests
-            response = requests.get(url, headers=headers, stream=True, timeout=self.config.timeout)
+
+            response = requests.get(
+                url, headers=headers, stream=True, timeout=self.config.timeout
+            )
             response.raise_for_status()
 
             # Save to temp file
@@ -424,15 +447,22 @@ class PosterCleanarr(ChubModule):
                 with zipfile.ZipFile(temp_file, "r") as zf:
                     # Find the database file in the ZIP
                     db_files = [
-                        n for n in zf.namelist()
+                        n
+                        for n in zf.namelist()
                         if "com.plexapp.plugins.library.db" in n
                         or n.startswith("databaseBackup")
                     ]
                     if db_files:
                         # Validate extracted path stays within temp_dir (zip traversal protection)
-                        target_path = os.path.realpath(os.path.join(temp_dir, db_files[0]))
-                        if not target_path.startswith(os.path.realpath(temp_dir) + os.sep):
-                            self.logger.error(f"Zip path traversal detected: {db_files[0]}")
+                        target_path = os.path.realpath(
+                            os.path.join(temp_dir, db_files[0])
+                        )
+                        if not target_path.startswith(
+                            os.path.realpath(temp_dir) + os.sep
+                        ):
+                            self.logger.error(
+                                f"Zip path traversal detected: {db_files[0]}"
+                            )
                             shutil.rmtree(temp_dir, ignore_errors=True)
                             return None
                         zf.extract(db_files[0], temp_dir)
@@ -488,7 +518,9 @@ class PosterCleanarr(ChubModule):
                         for (url_value,) in cursor.fetchall():
                             if url_value:
                                 parsed = urlparse(url_value)
-                                filename = parsed.path.split("/")[-1] if parsed.path else ""
+                                filename = (
+                                    parsed.path.split("/")[-1] if parsed.path else ""
+                                )
                                 if filename:
                                     in_use.add(filename)
                     except sqlite3.OperationalError as e:
@@ -573,7 +605,9 @@ class PosterCleanarr(ChubModule):
                 f"overlays_only enabled — only files with the Kometa overlay "
                 f"EXIF tag (0x{KOMETA_OVERLAY_EXIF_TAG:04x} == '{KOMETA_OVERLAY_EXIF_VALUE}') will be {label.get('ed', 'processed').lower()}."
             )
-        self.logger.info(f"{label.get('ing', 'Processing')} {len(bloat_list)} bloat images...")
+        self.logger.info(
+            f"{label.get('ing', 'Processing')} {len(bloat_list)} bloat images..."
+        )
 
         for item in bloat_list:
             if self.is_cancelled():
@@ -631,12 +665,16 @@ class PosterCleanarr(ChubModule):
     def _execute_restore(self, restore_dir: str, metadata_dir: str) -> Dict[str, Any]:
         """Restore previously moved files from restore directory."""
         if not os.path.isdir(restore_dir):
-            self.logger.info(f"No '{RESTORE_DIR_NAME}' directory found. Nothing to restore.")
+            self.logger.info(
+                f"No '{RESTORE_DIR_NAME}' directory found. Nothing to restore."
+            )
             return {"count": 0, "total_size": 0, "mode": "restore"}
 
         count = 0
         total_size = 0
-        restore_files = list(glob.iglob(os.path.join(restore_dir, "**", "*.jpg"), recursive=True))
+        restore_files = list(
+            glob.iglob(os.path.join(restore_dir, "**", "*.jpg"), recursive=True)
+        )
 
         if not restore_files:
             self.logger.info("Restore directory is empty. Nothing to restore.")
@@ -675,7 +713,9 @@ class PosterCleanarr(ChubModule):
     def _execute_clear(self, restore_dir: str) -> Dict[str, Any]:
         """Permanently delete the restore directory."""
         if not os.path.isdir(restore_dir):
-            self.logger.info(f"No '{RESTORE_DIR_NAME}' directory found. Nothing to clear.")
+            self.logger.info(
+                f"No '{RESTORE_DIR_NAME}' directory found. Nothing to clear."
+            )
             return {"count": 0, "total_size": 0, "mode": "clear"}
 
         count = 0
@@ -785,9 +825,7 @@ class PosterCleanarr(ChubModule):
 
         orphans = self._scan_orphan_assets(valid_dirs, titles)
         total_size = sum(item["size"] for item in orphans)
-        logger.info(
-            f"Found {len(orphans)} orphan assets ({format_bytes(total_size)})."
-        )
+        logger.info(f"Found {len(orphans)} orphan assets ({format_bytes(total_size)}).")
 
         return self._execute_orphan_mode(orphans, mode, logger)
 
@@ -810,7 +848,9 @@ class PosterCleanarr(ChubModule):
             if not raw_alt:
                 return
             try:
-                parsed_alt = json.loads(raw_alt) if isinstance(raw_alt, str) else raw_alt
+                parsed_alt = (
+                    json.loads(raw_alt) if isinstance(raw_alt, str) else raw_alt
+                )
             except (ValueError, TypeError):
                 parsed_alt = []
             if isinstance(parsed_alt, list):
@@ -839,7 +879,9 @@ class PosterCleanarr(ChubModule):
             for root, dirs, files in os.walk(asset_dir):
                 # Don't scan the restore subdir itself.
                 root_real = os.path.realpath(root)
-                if root_real == restore_real or root_real.startswith(restore_real + os.sep):
+                if root_real == restore_real or root_real.startswith(
+                    restore_real + os.sep
+                ):
                     dirs[:] = []
                     continue
                 for fname in files:
@@ -854,13 +896,15 @@ class PosterCleanarr(ChubModule):
                         size = os.path.getsize(fpath)
                     except OSError:
                         size = 0
-                    orphans.append({
-                        "path": fpath,
-                        "asset_dir": asset_dir,
-                        "parsed": parsed,
-                        "key": key,
-                        "size": size,
-                    })
+                    orphans.append(
+                        {
+                            "path": fpath,
+                            "asset_dir": asset_dir,
+                            "parsed": parsed,
+                            "key": key,
+                            "size": size,
+                        }
+                    )
         return orphans
 
     def _execute_orphan_mode(
@@ -976,26 +1020,32 @@ class PosterCleanarr(ChubModule):
             orphan_label = MODE_LABELS.get(
                 output["orphan"].get("mode", "report"), {}
             ).get("ed", "Processed")
-            summary_rows.append([
-                f"Orphan Assets ({orphan_label})",
-                str(output["orphan"]["count"]),
-                output["orphan"]["size_human"],
-            ])
+            summary_rows.append(
+                [
+                    f"Orphan Assets ({orphan_label})",
+                    str(output["orphan"]["count"]),
+                    output["orphan"]["size_human"],
+                ]
+            )
 
         if output["empty_dirs"] > 0:
-            summary_rows.append([
-                "Empty Directories",
-                str(output["empty_dirs"]),
-                "—",
-            ])
+            summary_rows.append(
+                [
+                    "Empty Directories",
+                    str(output["empty_dirs"]),
+                    "—",
+                ]
+            )
 
         ignored_non_overlay = output["bloat"].get("ignored_non_overlay", 0)
         if ignored_non_overlay:
-            summary_rows.append([
-                "Skipped (non-overlay)",
-                str(ignored_non_overlay),
-                "—",
-            ])
+            summary_rows.append(
+                [
+                    "Skipped (non-overlay)",
+                    str(ignored_non_overlay),
+                    "—",
+                ]
+            )
 
         self.logger.info(create_table(summary_rows))
 
@@ -1025,4 +1075,3 @@ def run_orphan_assets_pass(
         include_collections=include_collections,
         logger=logger,
     )
-

@@ -91,7 +91,6 @@ def print_settings(logger: Any, module_config: Any) -> None:
         if isinstance(obj, dict):
             out = {}
             for k, v in obj.items():
-
                 if parent_keys[-1:] == ["gdrive_list"] and k == "id":
                     out[k] = v
                 else:
@@ -262,7 +261,6 @@ def create_bar(middle_text: str) -> str:
     """
     total_length = 80
     if len(middle_text) == 1:
-
         remaining_length = total_length - len(middle_text) - 2
         left_side_length = 0
         right_side_length = remaining_length
@@ -520,15 +518,11 @@ def is_match(
             "Asset normalized title equals media folder normalized",
         ),
         (
-            asset.get("normalized_title")
-            in media_norm_alt_titles,
+            asset.get("normalized_title") in media_norm_alt_titles,
             "Asset normalized title found in media's normalized alternate titles",
         ),
         (
-            any(
-                assets == media.get("title")
-                for assets in asset_alt_titles
-            ),
+            any(assets == media.get("title") for assets in asset_alt_titles),
             "One of asset's alternate_titles matches media title",
         ),
         (
@@ -539,10 +533,7 @@ def is_match(
             "One of asset's normalized_alternate_titles matches media normalized title",
         ),
         (
-            any(
-                media_alt == asset.get("title")
-                for media_alt in media_alt_titles
-            ),
+            any(media_alt == asset.get("title") for media_alt in media_alt_titles),
             "One of media's alternate_titles matches asset title",
         ),
         (
@@ -656,7 +647,6 @@ def get_prefix(title: str, length: int = 3) -> str:
     if words:
         prefix = "".join(words)[:length]
     else:
-
         prefix = "".join(title.split())[:length]
 
     return prefix.lower()

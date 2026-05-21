@@ -20,7 +20,12 @@ class Jduparr(ChubModule):
 
     @staticmethod
     def _is_unsafe_path_value(value: Any) -> bool:
-        return not isinstance(value, str) or not value or "\x00" in value or value.startswith("-")
+        return (
+            not isinstance(value, str)
+            or not value
+            or "\x00" in value
+            or value.startswith("-")
+        )
 
     @staticmethod
     def _is_summary_line(line: str) -> bool:
@@ -67,14 +72,18 @@ class Jduparr(ChubModule):
         linked = sum(1 for line in stdout.splitlines() if "---->" in line)
         return linked or fallback
 
-    def _build_scan_command(self, source_dirs: List[str], hash_db: Optional[str]) -> List[str]:
+    def _build_scan_command(
+        self, source_dirs: List[str], hash_db: Optional[str]
+    ) -> List[str]:
         cmd = ["jdupes", "-r", "-M", "-X", VIDEO_EXT_FILTER]
         if hash_db:
             cmd.extend(["-y", hash_db])
         cmd.extend(source_dirs)
         return cmd
 
-    def _build_link_command(self, source_dirs: List[str], hash_db: Optional[str]) -> List[str]:
+    def _build_link_command(
+        self, source_dirs: List[str], hash_db: Optional[str]
+    ) -> List[str]:
         cmd = ["jdupes", "-r", "-L", "-X", VIDEO_EXT_FILTER]
         if hash_db:
             cmd.extend(["-y", hash_db])
@@ -252,7 +261,9 @@ class Jduparr(ChubModule):
 
                 if link_result.returncode != 0:
                     status = "error"
-                    error_text = (link_result.stderr or link_result.stdout or "").strip()
+                    error_text = (
+                        link_result.stderr or link_result.stdout or ""
+                    ).strip()
                     error_message = (
                         f"jdupes hardlink failed with exit code {link_result.returncode}: "
                         f"{error_text or 'no error output'}"
@@ -266,9 +277,7 @@ class Jduparr(ChubModule):
             if not duplicate_groups:
                 field_message = "✅ No duplicate files discovered..."
             elif self.config.dry_run:
-                field_message = (
-                    f"❌ Duplicate files discovered; {candidate_count} files would be relinked..."
-                )
+                field_message = f"❌ Duplicate files discovered; {candidate_count} files would be relinked..."
             elif status == "error":
                 field_message = "❌ Duplicate files discovered, but relinking failed..."
             else:

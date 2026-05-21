@@ -121,7 +121,10 @@ class PlexClient:
                 # is safe across Linux + Windows + Samba shares (handles
                 # reserved names like CON/AUX, max-length truncation, and
                 # trailing dots/spaces on top of the illegal-char strip).
-                folder = sanitize_filename(title_unescaped, platform="universal") or title_unescaped
+                folder = (
+                    sanitize_filename(title_unescaped, platform="universal")
+                    or title_unescaped
+                )
                 year = getattr(collection, "year", None)
                 tmdb_id = getattr(collection, "tmdb_id", None)
                 imdb_id = getattr(collection, "imdb_id", None)

@@ -132,9 +132,10 @@ async def sync_tags_to_plex(
         # Check if ARR instance exists (Radarr, Sonarr, or Lidarr)
         arr_found = False
         for arr_type in ("radarr", "sonarr", "lidarr"):
-            if (
-                hasattr(config.instances, arr_type)
-                and request_data.source_instance in getattr(config.instances, arr_type, {})
+            if hasattr(
+                config.instances, arr_type
+            ) and request_data.source_instance in getattr(
+                config.instances, arr_type, {}
             ):
                 arr_found = True
                 break
@@ -240,9 +241,7 @@ async def bulk_sync_tags(
         # Validate ARR instance once instead of per-item.
         arr_found = False
         for arr_type in ("radarr", "sonarr", "lidarr"):
-            if request_data.source_instance in getattr(
-                config.instances, arr_type, {}
-            ):
+            if request_data.source_instance in getattr(config.instances, arr_type, {}):
                 arr_found = True
                 break
         if not arr_found:
@@ -290,9 +289,7 @@ async def bulk_sync_tags(
                     {"media_cache_id": media_id, "error": result.get("message")}
                 )
 
-        logger.info(
-            f"Bulk labelarr: enqueued {len(enqueued)}, failed {len(failures)}"
-        )
+        logger.info(f"Bulk labelarr: enqueued {len(enqueued)}, failed {len(failures)}")
         return ok(
             f"Enqueued {len(enqueued)} labelarr sync jobs",
             {

@@ -226,9 +226,7 @@ class Upgradinatorr(ChubModule):
                 and season_number is not None
                 and hasattr(app, "get_season_grab_history")
             ):
-                history_response = app.get_season_grab_history(
-                    media_id, season_number
-                )
+                history_response = app.get_season_grab_history(media_id, season_number)
             elif (
                 instance_type == "lidarr"
                 and album_id is not None
@@ -314,15 +312,11 @@ class Upgradinatorr(ChubModule):
             for season in item["seasons"]:
                 if season["monitored"]:
                     season_number = season["season_number"]
-                    self.logger.debug(
-                        f"  [SEASON] {season_number}: Searching..."
-                    )
+                    self.logger.debug(f"  [SEASON] {season_number}: Searching...")
                     before_downloads = self._get_grabbed_downloads(
                         app, item["media_id"], "sonarr", season_number
                     )
-                    search_response = app.search_season(
-                        item["media_id"], season_number
-                    )
+                    search_response = app.search_season(item["media_id"], season_number)
                     success = self.process_search_response(
                         search_response, item["media_id"], app
                     )
@@ -370,7 +364,9 @@ class Upgradinatorr(ChubModule):
             (s for s in item["seasons"] if s.get("monitored")),
             key=lambda s: s.get("season_number", 0),
         )
-        remaining = [s for s in monitored_seasons if str(s["season_number"]) not in processed]
+        remaining = [
+            s for s in monitored_seasons if str(s["season_number"]) not in processed
+        ]
         if not monitored_seasons:
             return search_count, False
         if not remaining:
@@ -391,10 +387,10 @@ class Upgradinatorr(ChubModule):
             before_downloads = self._get_grabbed_downloads(
                 app, item["media_id"], "sonarr", season_number
             )
-            search_response = app.search_season(
-                item["media_id"], season_number
+            search_response = app.search_season(item["media_id"], season_number)
+            success = self.process_search_response(
+                search_response, item["media_id"], app
             )
-            success = self.process_search_response(search_response, item["media_id"], app)
             self._record_search_attempt(search_stats, success)
             if success:
                 after_downloads = self._get_grabbed_downloads(
@@ -512,9 +508,7 @@ class Upgradinatorr(ChubModule):
         monitored_albums = [
             a for a in item["seasons"] if a.get("monitored") and a.get("album_id")
         ]
-        remaining = [
-            a for a in monitored_albums if str(a["album_id"]) not in processed
-        ]
+        remaining = [a for a in monitored_albums if str(a["album_id"]) not in processed]
         if not monitored_albums:
             return search_count, False
         if not remaining:
@@ -536,7 +530,9 @@ class Upgradinatorr(ChubModule):
                 app, item["media_id"], "lidarr", album_id=album_id
             )
             search_response = app.search_album(album_id)
-            success = self.process_search_response(search_response, item["media_id"], app)
+            success = self.process_search_response(
+                search_response, item["media_id"], app
+            )
             self._record_search_attempt(search_stats, success)
             if success:
                 after_downloads = self._get_grabbed_downloads(
@@ -577,7 +573,9 @@ class Upgradinatorr(ChubModule):
     def process_queue(
         self, queue: Dict[str, Any], instance_type: str, media_ids: List[int]
     ) -> List[Dict[str, Any]]:
-        id_type = {"radarr": "movieId", "sonarr": "seriesId", "lidarr": "artistId"}[instance_type]
+        id_type = {"radarr": "movieId", "sonarr": "seriesId", "lidarr": "artistId"}[
+            instance_type
+        ]
         queue_dict: List[Dict[str, Any]] = []
         records = queue.get("records", [])
         for item in records:
@@ -639,6 +637,7 @@ class Upgradinatorr(ChubModule):
         if instance_type == "radarr":
             tags = app.get_all_tags() or []
             from backend.util.arr import normalize_arr_media
+
             return [
                 normalize_arr_media(item, tags, arr_type="radarr", logger=self.logger)
                 for item in wanted_records
@@ -662,12 +661,18 @@ class Upgradinatorr(ChubModule):
             # Normalize each unique series
             tags = app.get_all_tags() or []
             from backend.util.arr import normalize_arr_media
+
             result = []
             for series_data in series_map.values():
                 wanted_seasons = series_data.pop("_wanted_seasons", set())
                 normalized = normalize_arr_media(
-                    series_data, tags, arr_type="sonarr", include_episode=True,
-                    episode_lookup=lambda sid, sn, _app=app: _app.get_episode_data_by_season(sid, sn),
+                    series_data,
+                    tags,
+                    arr_type="sonarr",
+                    include_episode=True,
+                    episode_lookup=lambda sid, sn, _app=app: (
+                        _app.get_episode_data_by_season(sid, sn)
+                    ),
                     logger=self.logger,
                 )
                 # Mark only the wanted seasons as monitored, rest as unmonitored
@@ -693,22 +698,28 @@ class Upgradinatorr(ChubModule):
 
             tags = app.get_all_tags() or []
             from backend.util.arr import normalize_arr_media
+
             result = []
             for artist_data in artist_map.values():
                 wanted_albums = artist_data.pop("_wanted_albums", [])
                 # Build album list for the normalize function
                 album_list = []
                 for idx, album in enumerate(wanted_albums):
-                    album_list.append({
-                        "season_number": idx,
-                        "album_id": album.get("id"),
-                        "album_title": album.get("title", ""),
-                        "foreign_album_id": album.get("foreignAlbumId", ""),
-                        "monitored": album.get("monitored", True),
-                        "episode_data": [],
-                    })
+                    album_list.append(
+                        {
+                            "season_number": idx,
+                            "album_id": album.get("id"),
+                            "album_title": album.get("title", ""),
+                            "foreign_album_id": album.get("foreignAlbumId", ""),
+                            "monitored": album.get("monitored", True),
+                            "episode_data": [],
+                        }
+                    )
                 normalized = normalize_arr_media(
-                    artist_data, tags, arr_type="lidarr", logger=self.logger,
+                    artist_data,
+                    tags,
+                    arr_type="lidarr",
+                    logger=self.logger,
                 )
                 normalized["seasons"] = album_list if album_list else None
                 result.append(normalized)
@@ -732,9 +743,12 @@ class Upgradinatorr(ChubModule):
         ignore_tag_name: str = (
             self._get_setting(instance_settings, "ignore_tag", "") or "ignore"
         ).strip()
-        unattended: bool = bool(self._get_setting(instance_settings, "unattended", False))
+        unattended: bool = bool(
+            self._get_setting(instance_settings, "unattended", False)
+        )
         season_monitored_threshold = (
-            self._get_setting(instance_settings, "season_monitored_threshold", None) or 0
+            self._get_setting(instance_settings, "season_monitored_threshold", None)
+            or 0
         )
         search_mode: str = (
             self._get_setting(instance_settings, "search_mode", "upgrade") or "upgrade"
@@ -763,7 +777,10 @@ class Upgradinatorr(ChubModule):
             count_mode = "series_artist"
         # Granular mode only meaningful for sonarr/lidarr; radarr items always
         # cost 1 search regardless.
-        granular = count_mode == "season_album" and instance_type in ("sonarr", "lidarr")
+        granular = count_mode == "season_album" and instance_type in (
+            "sonarr",
+            "lidarr",
+        )
 
         self.logger.info(
             f"Gathering media from {app.instance_name} ({instance_type}) "
@@ -1080,9 +1097,7 @@ class Upgradinatorr(ChubModule):
             )
 
             with_grabs = [it for it in instance_data if it.get("download")]
-            with_failures = [
-                it for it in instance_data if it.get("search_failures")
-            ]
+            with_failures = [it for it in instance_data if it.get("search_failures")]
             no_grabs = [
                 it
                 for it in instance_data
@@ -1097,9 +1112,7 @@ class Upgradinatorr(ChubModule):
                 for item in with_grabs:
                     self.logger.info(f"  {self._format_item_title(item)}")
                     for download, format_score in item["download"].items():
-                        self.logger.info(
-                            f"    Score {format_score} — {download}"
-                        )
+                        self.logger.info(f"    Score {format_score} — {download}")
 
             if with_failures:
                 self.logger.info(f"[FAILED] {len(with_failures)} item(s):")
@@ -1110,9 +1123,7 @@ class Upgradinatorr(ChubModule):
                     )
 
             if no_grabs:
-                titles = ", ".join(
-                    self._format_item_title(it) for it in no_grabs
-                )
+                titles = ", ".join(self._format_item_title(it) for it in no_grabs)
                 self.logger.info(
                     f"[NO GRABS] {len(no_grabs)} item(s) searched, nothing grabbed: {titles}"
                 )
@@ -1130,10 +1141,12 @@ class Upgradinatorr(ChubModule):
             output: Dict[str, Any] = {}
             for instance_entry in self.config.instances_list:
                 if not self._get_setting(instance_entry, "enabled", True):
-                    label = self._get_setting(instance_entry, "label", "") or self._get_setting(
-                        instance_entry, "instance", "unknown"
+                    label = self._get_setting(
+                        instance_entry, "label", ""
+                    ) or self._get_setting(instance_entry, "instance", "unknown")
+                    self.logger.info(
+                        f"Skipping disabled Upgradinatorr profile: {label}"
                     )
-                    self.logger.info(f"Skipping disabled Upgradinatorr profile: {label}")
                     continue
 
                 instance_name = self._get_setting(instance_entry, "instance", "")

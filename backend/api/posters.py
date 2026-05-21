@@ -233,15 +233,19 @@ async def get_poster_collections(
     """
     try:
         logger.debug("Serving GET /api/posters/collections")
-        collections = db.poster.execute_query(
-            "SELECT * FROM poster_collections ORDER BY name", fetch_all=True
-        ) or []
+        collections = (
+            db.poster.execute_query(
+                "SELECT * FROM poster_collections ORDER BY name", fetch_all=True
+            )
+            or []
+        )
 
         # Hydrate each collection with its poster contents + count. One join
         # per collection is fine — the table is small and rarely fetched.
         for col in collections:
-            posters = db.poster.execute_query(
-                """
+            posters = (
+                db.poster.execute_query(
+                    """
                 SELECT p.id, p.asset_type, p.title, p.year, p.season_number,
                        p.folder, p.file, p.style
                 FROM poster_collection_items pci
@@ -249,9 +253,11 @@ async def get_poster_collections(
                 WHERE pci.collection_id = ?
                 ORDER BY p.title
                 """,
-                (col["id"],),
-                fetch_all=True,
-            ) or []
+                    (col["id"],),
+                    fetch_all=True,
+                )
+                or []
+            )
             col["posters"] = posters
             col["poster_count"] = len(posters)
 
@@ -518,7 +524,9 @@ async def browse_posters(
         None,
         description="Filter by poster style (e.g. CL2K, MM2K). Use 'other' for rows whose source dir didn't match a configured gdrive entry.",
     ),
-    limit: int = Query(60, ge=0, le=200, description="Results per page (0 for owners only)"),
+    limit: int = Query(
+        60, ge=0, le=200, description="Results per page (0 for owners only)"
+    ),
     offset: int = Query(0, ge=0, description="Pagination offset"),
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
@@ -625,9 +633,9 @@ async def upload_poster(
     # we already check the extension, because an attacker can rename anything
     # to `.jpg`.
     IMAGE_MAGIC = (
-        b"\xff\xd8\xff",              # JPEG
-        b"\x89PNG\r\n\x1a\n",         # PNG
-        b"RIFF",                      # WEBP (followed by 4-byte size + "WEBP")
+        b"\xff\xd8\xff",  # JPEG
+        b"\x89PNG\r\n\x1a\n",  # PNG
+        b"RIFF",  # WEBP (followed by 4-byte size + "WEBP")
     )
 
     try:
@@ -737,7 +745,9 @@ async def create_poster_collection(
 
         name = payload.get("name")
         if not name:
-            return error("Field 'name' is required", code="MISSING_NAME", status_code=400)
+            return error(
+                "Field 'name' is required", code="MISSING_NAME", status_code=400
+            )
 
         description = payload.get("description", "")
         created_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -804,11 +814,17 @@ async def add_to_collection(
     """
     try:
         payload = await request.json()
-        logger.debug(f"Serving POST /api/posters/collections/{collection_id}/add with payload: {payload}")
+        logger.debug(
+            f"Serving POST /api/posters/collections/{collection_id}/add with payload: {payload}"
+        )
 
         poster_id = payload.get("poster_id")
         if not poster_id:
-            return error("Field 'poster_id' is required", code="MISSING_POSTER_ID", status_code=400)
+            return error(
+                "Field 'poster_id' is required",
+                code="MISSING_POSTER_ID",
+                status_code=400,
+            )
 
         # Verify collection exists
         collection = db.poster.execute_query(
@@ -881,7 +897,9 @@ async def remove_from_collection(
         Confirmation of the removal
     """
     try:
-        logger.debug(f"Serving DELETE /api/posters/collections/{collection_id}/remove/{poster_id}")
+        logger.debug(
+            f"Serving DELETE /api/posters/collections/{collection_id}/remove/{poster_id}"
+        )
 
         rows_deleted = db.poster.execute_query(
             "DELETE FROM poster_collection_items WHERE collection_id=? AND poster_id=?",
@@ -1025,10 +1043,16 @@ async def optimize_posters(
         # Get all posters from cache
         posters = db.poster.get_all()
         if not posters:
-            return ok("No posters found to optimize", {
-                "processed": 0, "skipped": 0, "failed": 0,
-                "bytes_saved": 0, "mode": mode,
-            })
+            return ok(
+                "No posters found to optimize",
+                {
+                    "processed": 0,
+                    "skipped": 0,
+                    "failed": 0,
+                    "bytes_saved": 0,
+                    "mode": mode,
+                },
+            )
 
         processed = 0
         skipped = 0
@@ -1058,13 +1082,15 @@ async def optimize_posters(
                         continue
 
                     if mode == "report":
-                        details.append({
-                            "file": full_path,
-                            "size": original_size,
-                            "dimensions": f"{w}x{h}",
-                            "needs_resize": needs_resize,
-                            "needs_convert": needs_convert,
-                        })
+                        details.append(
+                            {
+                                "file": full_path,
+                                "size": original_size,
+                                "dimensions": f"{w}x{h}",
+                                "needs_resize": needs_resize,
+                                "needs_convert": needs_convert,
+                            }
+                        )
                         processed += 1
                         continue
 
@@ -1076,6 +1102,7 @@ async def optimize_posters(
 
                     # Save to temp file, then replace
                     import tempfile
+
                     with tempfile.NamedTemporaryFile(
                         suffix=target_ext, delete=False, dir=os.path.dirname(full_path)
                     ) as tmp:
@@ -1088,6 +1115,7 @@ async def optimize_posters(
 
                         if new_size < original_size:
                             import shutil
+
                             shutil.move(tmp.name, full_path)
                             bytes_saved += original_size - new_size
                             processed += 1
@@ -1364,7 +1392,9 @@ async def get_unmatched_assets_stats(logger: Any = Depends(get_logger)) -> JSONR
     summary="Get detailed unmatched assets list",
     description="Retrieve per-item unmatched assets with external IDs for poster lookup.",
 )
-async def get_unmatched_assets_details(logger: Any = Depends(get_logger)) -> JSONResponse:
+async def get_unmatched_assets_details(
+    logger: Any = Depends(get_logger),
+) -> JSONResponse:
     """Return the full unmatched items list with summary and external IDs."""
     try:
         logger.debug("Serving GET /api/posters/unmatched/details")
@@ -1942,12 +1972,15 @@ async def backfill_poster_dimensions(
 ) -> JSONResponse:
     try:
         limit = max(1, min(limit, 2000))
-        rows = db.worker.execute_query(
-            "SELECT id, file FROM poster_cache WHERE width IS NULL OR height IS NULL "
-            "LIMIT ?",
-            (limit,),
-            fetch_all=True,
-        ) or []
+        rows = (
+            db.worker.execute_query(
+                "SELECT id, file FROM poster_cache WHERE width IS NULL OR height IS NULL "
+                "LIMIT ?",
+                (limit,),
+                fetch_all=True,
+            )
+            or []
+        )
 
         from PIL import Image
 
@@ -2070,7 +2103,9 @@ async def list_plex_metadata_by_media(
         "all",
         description="Filter by metadata_type label: movie, show, season, episode, artist, album, collection, all.",
     ),
-    library_id: int = Query(0, description="Filter by Plex library_section_id. 0 = all."),
+    library_id: int = Query(
+        0, description="Filter by Plex library_section_id. 0 = all."
+    ),
     variant_kind: str = Query(
         "all",
         description="Filter to variants of a single kind (poster/art/banner/thumb/chapter/theme/other). Bundles with no matching variants are hidden.",
@@ -2119,7 +2154,9 @@ async def list_plex_metadata_by_media(
         variant_kind = (variant_kind or "all").lower()
 
         if media_type != "all":
-            bundles = [b for b in bundles if (b.get("metadata_type_label") or "") == media_type]
+            bundles = [
+                b for b in bundles if (b.get("metadata_type_label") or "") == media_type
+            ]
         if library_id:
             bundles = [b for b in bundles if b.get("library_section_id") == library_id]
         if variant_kind != "all":
@@ -2130,7 +2167,9 @@ async def list_plex_metadata_by_media(
                     trimmed.append({**b, "variants": kept})
             bundles = trimmed
         if only_bloat:
-            bundles = [b for b in bundles if any(not v["active"] for v in b["variants"])]
+            bundles = [
+                b for b in bundles if any(not v["active"] for v in b["variants"])
+            ]
         total = len(bundles)
         page = bundles[offset : offset + limit]
         return ok(
@@ -2170,7 +2209,9 @@ async def list_plex_metadata_bloat(
 
         plex_path = _get_plex_path(request)
         if not plex_path:
-            return error("Plex path is not configured", code="PLEX_PATH_UNSET", status_code=400)
+            return error(
+                "Plex path is not configured", code="PLEX_PATH_UNSET", status_code=400
+            )
         items = get_bloat_flat(plex_path, force=force)
         total = len(items)
         page = items[offset : offset + limit]
@@ -2218,9 +2259,7 @@ async def run_plex_metadata_cleanup(
             body = {}
         mode = (body.get("mode") or "report").lower()
         if mode not in ("report", "move", "remove"):
-            return error(
-                f"Invalid mode '{mode}'", code="INVALID_MODE", status_code=400
-            )
+            return error(f"Invalid mode '{mode}'", code="INVALID_MODE", status_code=400)
         overrides: dict = {"mode": mode}
 
         target_paths = body.get("target_paths")
@@ -2228,9 +2267,7 @@ async def run_plex_metadata_cleanup(
             overrides["target_paths"] = [str(p) for p in target_paths]
 
         if "orphan_assets_enabled" in body:
-            overrides["orphan_assets_enabled"] = bool(
-                body.get("orphan_assets_enabled")
-            )
+            overrides["orphan_assets_enabled"] = bool(body.get("orphan_assets_enabled"))
         orphan_mode = body.get("orphan_assets_mode")
         if isinstance(orphan_mode, str):
             orphan_mode = orphan_mode.lower()
@@ -2253,9 +2290,13 @@ async def run_plex_metadata_cleanup(
         result = db.worker.enqueue_job("jobs", payload, job_type="module_run")
         if result.get("success"):
             job_id = result.get("data", {}).get("job_id")
-            logger.info(f"Poster cleanarr cleanup enqueued (mode={mode}, job_id={job_id})")
+            logger.info(
+                f"Poster cleanarr cleanup enqueued (mode={mode}, job_id={job_id})"
+            )
             return ok("Cleanup job enqueued", {"job_id": job_id, "mode": mode})
-        return error("Failed to enqueue cleanup", code="ENQUEUE_FAILED", status_code=500)
+        return error(
+            "Failed to enqueue cleanup", code="ENQUEUE_FAILED", status_code=500
+        )
     except Exception as e:
         logger.error(f"Error enqueuing cleanup: {e}")
         return error(
@@ -2280,10 +2321,14 @@ async def delete_plex_metadata_variant(
             return error("Missing 'path'", code="MISSING_PATH", status_code=400)
         plex_path = _get_plex_path(request)
         if not plex_path:
-            return error("Plex path is not configured", code="PLEX_PATH_UNSET", status_code=400)
+            return error(
+                "Plex path is not configured", code="PLEX_PATH_UNSET", status_code=400
+            )
         ok_ = delete_variant(path, plex_path=plex_path)
         if not ok_:
-            logger.warning(f"UI delete rejected (outside metadata or I/O error): {path}")
+            logger.warning(
+                f"UI delete rejected (outside metadata or I/O error): {path}"
+            )
             return error(
                 "Failed to delete variant (path outside Plex metadata or I/O error)",
                 code="VARIANT_DELETE_FAILED",
@@ -2331,22 +2376,28 @@ async def set_plex_metadata_active(
         # Plex poster by passing an arbitrary filesystem path.
         plex_path = _get_plex_path(request)
         if not plex_path:
-            return error("Plex path is not configured", code="PLEX_PATH_UNSET", status_code=400)
+            return error(
+                "Plex path is not configured", code="PLEX_PATH_UNSET", status_code=400
+            )
         metadata_dir = os.path.realpath(os.path.join(plex_path, "Metadata"))
         safe_path = os.path.realpath(path)
         if not safe_path.startswith(metadata_dir + os.sep):
-            return error("Path outside Plex metadata dir", code="INVALID_PATH", status_code=400)
+            return error(
+                "Path outside Plex metadata dir", code="INVALID_PATH", status_code=400
+            )
         if not os.path.isfile(safe_path):
-            return error("Variant file not found on disk", code="FILE_NOT_FOUND", status_code=404)
+            return error(
+                "Variant file not found on disk", code="FILE_NOT_FOUND", status_code=404
+            )
 
         from backend.util.config import load_config
 
         cfg = load_config()
         # Pick the first configured Plex instance — CHUB typically has one.
-        plex_instances = (
-            getattr(getattr(cfg, "instances", None), "plex", None) or {}
+        plex_instances = getattr(getattr(cfg, "instances", None), "plex", None) or {}
+        instance_cfg = (
+            next(iter(plex_instances.values()), None) if plex_instances else None
         )
-        instance_cfg = next(iter(plex_instances.values()), None) if plex_instances else None
         if instance_cfg is None:
             return error(
                 "No Plex instance configured",
@@ -2362,10 +2413,10 @@ async def set_plex_metadata_active(
             return error("Plex item not found", code="ITEM_NOT_FOUND", status_code=404)
         item.uploadPoster(filepath=safe_path)
         invalidate_cache()
-        logger.info(
-            f"UI set-active: rating_key={rating_key} path={safe_path}"
+        logger.info(f"UI set-active: rating_key={rating_key} path={safe_path}")
+        return ok(
+            "Active poster updated", {"rating_key": rating_key, "path": safe_path}
         )
-        return ok("Active poster updated", {"rating_key": rating_key, "path": safe_path})
     except Exception as e:
         logger.error(f"Error setting active poster: {e}")
         return error(
@@ -2387,13 +2438,14 @@ async def get_plex_variant_thumbnail(
     """
     plex_path = _get_plex_path(request)
     if not plex_path:
-        return error("Plex path is not configured", code="PLEX_PATH_UNSET", status_code=400)
+        return error(
+            "Plex path is not configured", code="PLEX_PATH_UNSET", status_code=400
+        )
     metadata_dir = os.path.realpath(os.path.join(plex_path, "Metadata"))
     real = os.path.realpath(path)
     if not real.startswith(metadata_dir + os.sep) or not os.path.isfile(real):
         return error("Invalid path", code="INVALID_PATH", status_code=400)
     return FileResponse(real, media_type="image/jpeg")
-
 
 
 # --- Parameterized poster ID endpoints ---
@@ -2556,9 +2608,13 @@ async def get_poster_thumbnail(
 )
 async def download_poster(
     poster_id: int,
-    size: Optional[int] = Query(None, ge=100, le=4000, description="Max dimension in pixels"),
+    size: Optional[int] = Query(
+        None, ge=100, le=4000, description="Max dimension in pixels"
+    ),
     format: Optional[str] = Query(None, description="Target format: jpeg, webp, png"),
-    quality: Optional[int] = Query(None, ge=1, le=100, description="Compression quality"),
+    quality: Optional[int] = Query(
+        None, ge=1, le=100, description="Compression quality"
+    ),
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
 ) -> Any:
@@ -2690,7 +2746,9 @@ async def sync_poster_metadata(
         )
         if result.get("success"):
             job_id = result.get("data", {}).get("job_id")
-            return ok("Metadata sync initiated", {"job_id": job_id, "poster_id": poster_id})
+            return ok(
+                "Metadata sync initiated", {"job_id": job_id, "poster_id": poster_id}
+            )
         return error(
             "Error enqueuing metadata sync",
             code="METADATA_SYNC_ERROR",
@@ -2823,4 +2881,3 @@ async def delete_poster(
             code="POSTER_DELETE_ERROR",
             status_code=500,
         )
-

@@ -113,9 +113,7 @@ class BorderReplacerr(ChubModule):
         # Best-effort fallback: alphanumeric only, no spaces
         return re.sub(r"[^a-z0-9]", "", cleaned) or None
 
-    def _resolve_border_paths(
-        self, holiday_name: str, names: List[str]
-    ) -> List[str]:
+    def _resolve_border_paths(self, holiday_name: str, names: List[str]) -> List[str]:
         """Resolve user-supplied border names to absolute file paths.
 
         For each name, check /config/borders/<holiday>/<name>.png first
@@ -381,7 +379,7 @@ class BorderReplacerr(ChubModule):
             elif border_colors:
                 self.logger.debug(
                     f"Border mode: color — "
-                    f"{', '.join(f'#{r:02x}{g:02x}{b:02x}' for (r,g,b) in border_colors)}"
+                    f"{', '.join(f'#{r:02x}{g:02x}{b:02x}' for (r, g, b) in border_colors)}"
                 )
             else:
                 self.logger.debug("Border mode: removing borders")
@@ -495,12 +493,14 @@ class BorderReplacerr(ChubModule):
                     manager = NotificationManager(
                         self.config, self.logger, module_name="border_replacerr"
                     )
-                    manager.send_notification({
-                        "processed": processed,
-                        "skipped": skipped,
-                        "replaced": replaced,
-                        "removed": removed,
-                        "active_holiday": active_holiday,
-                    })
+                    manager.send_notification(
+                        {
+                            "processed": processed,
+                            "skipped": skipped,
+                            "replaced": replaced,
+                            "removed": removed,
+                            "active_holiday": active_holiday,
+                        }
+                    )
                 except Exception as e:
                     self.logger.debug(f"border_replacerr notification failed: {e}")
