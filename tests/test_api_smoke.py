@@ -4,6 +4,7 @@ Each test mounts an individual router on a fresh app to avoid the heavy
 lifespan startup (database, workers) of the production app.
 """
 
+import contextlib
 import os
 import sys
 
@@ -251,10 +252,10 @@ def test_border_list_returns_bundled_variants(tmp_path, monkeypatch, app_with_ro
         assert body["data"]["user"] == []
     finally:
         for path in created:
-            try:
+            # Teardown is best-effort: the file may already be gone if the
+            # test cleaned it up, or the dir may be readonly in some CI envs.
+            with contextlib.suppress(OSError):
                 path.unlink()
-            except OSError:
-                pass
 
 
 def test_border_list_unknown_holiday_returns_empty(app_with_router):
