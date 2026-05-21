@@ -17,16 +17,19 @@ const PERIOD_OPTIONS = [
 const formatId = val => (val ? String(val) : null);
 
 /** Build a Discord-ready poster-request block for a single unmatched item.
- * Returns null if we can't produce a usable link (no TMDb or TVDb id). */
+ * Returns {text, hasTmdb} or null when no usable id is available. */
 const buildPosterRequestText = (item, type) => {
     const title = item.title || 'Unknown';
     const year = item.year ? ` (${item.year})` : '';
     const lines = [`${title}${year}`];
 
+    let hasTmdb = false;
     if (type === 'movie' && item.tmdb_id) {
         lines.push(`https://www.themoviedb.org/movie/${item.tmdb_id}`);
+        hasTmdb = true;
     } else if (type === 'series' && item.tmdb_id) {
         lines.push(`https://www.themoviedb.org/tv/${item.tmdb_id}`);
+        hasTmdb = true;
     } else if (type === 'series' && item.tvdb_id) {
         lines.push(`https://thetvdb.com/?tab=series&id=${item.tvdb_id}`);
     } else {
@@ -39,7 +42,7 @@ const buildPosterRequestText = (item, type) => {
             lines.push(`Missing seasons: ${item.missing_seasons.join(', ')}`);
         }
     }
-    return lines.join('\n');
+    return { text: lines.join('\n'), hasTmdb };
 };
 
 /** Collapsible table of unmatched items */
@@ -49,16 +52,15 @@ const UnmatchedTable = ({ title, items, type }) => {
     if (!items || items.length === 0) return null;
 
     const handleCopy = async item => {
-        const text = buildPosterRequestText(item, type);
-        if (!text) {
+        const built = buildPosterRequestText(item, type);
+        if (!built) {
             toast.error('No TMDb/TVDb id available — cannot build a request link');
             return;
         }
-        const hasTmdb = text.includes('themoviedb.org');
         try {
-            await navigator.clipboard.writeText(text);
+            await navigator.clipboard.writeText(built.text);
             toast.success(
-                hasTmdb
+                built.hasTmdb
                     ? 'Poster request copied to clipboard'
                     : 'Copied — TVDb link only; add TMDb link manually before posting'
             );
