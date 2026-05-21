@@ -2,6 +2,19 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.2.0](https://github.com/chodeus/chub/compare/v2.1.0...v2.2.0) (2026-05-21)
+
+
+### Features
+
+* **unmatched_assets:** copy Discord poster-request block per row ([3543fd1](https://github.com/chodeus/chub/commit/3543fd1206572eace38b9313393e1860a622100e))
+
+
+### Bug Fixes
+
+* **deps:** update all non-major dependencies ([#126](https://github.com/chodeus/chub/issues/126)) ([77053e0](https://github.com/chodeus/chub/commit/77053e0d2229f67a5419268b727d5055dd47c0dd))
+* **unmatched_assets:** hide unreleased seasons + movies, tighten log output ([c251c58](https://github.com/chodeus/chub/commit/c251c58ae1ddf3cc5a25efa21a58d5297bb48606))
+
 ## [2.1.0](https://github.com/chodeus/chub/compare/v2.0.1...v2.1.0) (2026-05-13)
 
 
