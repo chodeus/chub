@@ -13,19 +13,37 @@ export const SETTINGS_SCHEMA = [
                 description: 'Set the logging verbosity for Google Drive sync.',
             },
             {
+                key: 'gdrive_sa_location',
+                label: 'Service Account Location',
+                type: 'text',
+                required: false,
+                description:
+                    'Path to a Google Drive service-account JSON keyfile. If this is set, the three OAuth fields below are ignored — choose ONE method.',
+            },
+            {
                 key: 'client_id',
                 label: 'Client ID',
                 type: 'password',
                 required: false,
                 placeholder: 'Place Client ID Here',
-                description: 'Google API client ID for authentication.',
+                conditional: {
+                    field: 'gdrive_sa_location',
+                    condition: 'is_empty',
+                },
+                description:
+                    'OAuth client ID. Only used when no service-account file is set above.',
             },
             {
                 key: 'client_secret',
                 label: 'Client Secret',
                 type: 'password',
                 required: false,
-                description: 'Google API client secret for authentication.',
+                conditional: {
+                    field: 'gdrive_sa_location',
+                    condition: 'is_empty',
+                },
+                description:
+                    'OAuth client secret. Only used when no service-account file is set above.',
             },
             {
                 key: 'token',
@@ -34,14 +52,12 @@ export const SETTINGS_SCHEMA = [
                 required: false,
                 placeholder:
                     '{\n  "access_token": "ya29.a0AfH6SMBEXAMPLEEXAMPLETOKEN",\n  "refresh_token": "1",\n  "scope": "https://www.googleapis.com/auth/drive",\n  "token_type": "Bearer",\n  "expiry_date": 1712345678901\n}',
-                description: 'OAuth2 token JSON for authenticating with Google Drive.',
-            },
-            {
-                key: 'gdrive_sa_location',
-                label: 'Service Account Location',
-                type: 'text',
-                required: false,
-                description: 'Path to the Google Drive service account credentials file.',
+                conditional: {
+                    field: 'gdrive_sa_location',
+                    condition: 'is_empty',
+                },
+                description:
+                    'OAuth2 token JSON. Only used when no service-account file is set above.',
             },
             {
                 key: 'gdrive_list',
