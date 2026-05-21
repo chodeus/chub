@@ -572,6 +572,11 @@ def _auto_migrate_and_persist(raw: dict, config_path: str) -> dict:
     for note in notes:
         icon = "⚠️ " if note.level == "warning" else "•"
         print(f"   {icon} {note.message}")
+    print(
+        "   ⚠️  Verify file/directory paths in this config (sync_gdrive.gdrive_sa_location, "
+        "poster_renamerr.source_dirs, poster_cleanarr.asset_dirs, nohl.source_dirs, etc.) "
+        "still resolve inside this container — your volume mounts may differ from the previous setup."
+    )
 
     return migrated
 
