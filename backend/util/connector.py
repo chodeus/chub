@@ -349,7 +349,11 @@ class Connector:
 
         try:
             with self.connection_manager.get_arr_client(instance_config) as client:
-                asset_type = {"Radarr": "movie", "Sonarr": "show", "Lidarr": "artist"}.get(client.instance_type, "show")
+                asset_type = {
+                    "Radarr": "movie",
+                    "Sonarr": "show",
+                    "Lidarr": "artist",
+                }.get(client.instance_type, "show")
 
                 # Get all media with built-in retry logic from improved ARR client
                 raw_media = client.get_all_media()
@@ -431,6 +435,11 @@ class Connector:
                 for season in show.get("seasons", []):
                     season_row = dict(show)  # Copy all parent show metadata
                     season_row["season_number"] = season.get("season_number")
+                    # Override has_content with per-season episode availability
+                    # so unreleased/unaired seasons aren't flagged as unmatched.
+                    season_row["has_content"] = (
+                        season.get("season_has_episodes") or 0
+                    ) > 0
                     # Preserve genres and cast_data from parent show for each season
                     if "genres" in show:
                         season_row["genres"] = show["genres"]
@@ -448,7 +457,7 @@ class Connector:
                 # Album entries - inherit metadata from parent artist.
                 # Lidarr normalize returns seasons=None when include_episode=False,
                 # so coerce to [] to avoid "NoneType is not iterable".
-                for season in (artist.get("seasons") or []):
+                for season in artist.get("seasons") or []:
                     album_row = dict(artist)  # Copy all parent artist metadata
                     album_row["season_number"] = season.get("season_number")
                     album_row["asset_type"] = "artist"
@@ -830,9 +839,7 @@ class Connector:
             if media_root:
                 root_name = media_root.rstrip("/").rsplit("/", 1)[-1]
             discriminator = (
-                f"/{root_name}/{media_folder}/"
-                if root_name
-                else f"/{media_folder}/"
+                f"/{root_name}/{media_folder}/" if root_name else f"/{media_folder}/"
             )
 
             path_winner = None
@@ -851,10 +858,7 @@ class Connector:
                         continue
                     if not isinstance(paths, list):
                         continue
-                    if any(
-                        isinstance(p, str) and discriminator in p
-                        for p in paths
-                    ):
+                    if any(isinstance(p, str) and discriminator in p for p in paths):
                         path_winner = plex_item
                         break
 

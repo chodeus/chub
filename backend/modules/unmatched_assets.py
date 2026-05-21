@@ -75,6 +75,12 @@ class UnmatchedAssets(ChubModule):
 
     def should_include(self, asset: Dict[str, Any]) -> bool:
         cfg = self.config
+        # Hide unreleased/undownloaded items: Radarr movies without a file and
+        # Sonarr seasons with no aired/downloaded episodes. None is treated as
+        # "include" so pre-migration rows (NULL has_content) keep showing.
+        has_content = asset.get("has_content")
+        if has_content is not None and not has_content:
+            return False
         if getattr(cfg, "ignore_unmonitored", False):
             monitored = asset.get("monitored")
             if monitored is not None and not monitored:
@@ -362,41 +368,33 @@ class UnmatchedAssets(ChubModule):
 
             for asset_type in asset_types:
                 data_set = unmatched.get(asset_type, [])
-                if data_set:
-                    table = [[f"Unmatched {asset_type.capitalize()}"]]
-                    self.logger.info(create_table(table))
-                    for idx, item in enumerate(data_set):
-                        if idx % 10 == 0:
-                            self.logger.info(
-                                f"\t*** {asset_type.title()} {idx + 1} - {min(idx + 10, len(data_set))} ***"
+                if not data_set:
+                    continue
+                self.logger.info(
+                    create_table([[f"Unmatched {asset_type.capitalize()}"]])
+                )
+                for item in data_set:
+                    if asset_type == "series":
+                        title = item.get("title", "Unknown")
+                        year = item.get("year", "")
+                        missing_seasons = item.get("missing_seasons", [])
+                        missing_main = item.get("missing_main_poster", False)
+                        parts = []
+                        if missing_main:
+                            parts.append("main")
+                        if missing_seasons:
+                            seasons_str = ", ".join(
+                                f"S{s}" for s in sorted(missing_seasons)
                             )
-                            self.logger.info("")
-                        if asset_type == "series":
-                            title = item.get("title", "Unknown")
-                            year = item.get("year", "")
-                            missing_seasons = item.get("missing_seasons", [])
-                            missing_main = item.get("missing_main_poster", False)
-                            if missing_seasons and missing_main:
-                                self.logger.info(f"\t{title} ({year})")
-                                for season in missing_seasons:
-                                    self.logger.info(f"\t\tSeason: {season}")
-                            elif missing_seasons:
-                                self.logger.info(
-                                    f"\t{title} ({year}) (Seasons listed below have missing posters)"
-                                )
-                                for season in missing_seasons:
-                                    self.logger.info(f"\t\tSeason: {season}")
-                            elif missing_main:
-                                self.logger.info(
-                                    f"\t{title} ({year})  Main series poster missing"
-                                )
-                        else:
-                            year = f" ({item.get('year')})" if item.get("year") else ""
-                            self.logger.info(f"\t{item.get('title')}{year}")
-                        self.logger.info("")
-                    self.logger.info("")
+                            parts.append(seasons_str)
+                        if parts:
+                            self.logger.info(
+                                f"{title} ({year}) — missing: {' + '.join(parts)}"
+                            )
+                    else:
+                        year = f" ({item.get('year')})" if item.get("year") else ""
+                        self.logger.info(f"{item.get('title')}{year}")
 
-            self.logger.info("")
             self.logger.info(create_table([["Statistics"]]))
             table = [
                 ["Type", "Total", "Unmatched", "Percent Complete"],

@@ -165,6 +165,10 @@ class SchemaManager:
                 ColumnDefinition(
                     "monitored", "BOOLEAN", default=1
                 ),  # Whether item is monitored
+                ColumnDefinition(
+                    "has_content", "BOOLEAN", default=1
+                ),  # Movie: hasFile. Season: episodeCount > 0. Used to hide
+                # unreleased/undownloaded items from unmatched-asset reports.
                 ColumnDefinition("genre", "TEXT"),  # JSON array of genres
                 ColumnDefinition(
                     "created_at", "TEXT"
