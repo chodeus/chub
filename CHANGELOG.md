@@ -2,6 +2,21 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.3.0](https://github.com/chodeus/chub/compare/v2.2.1...v2.3.0) (2026-05-21)
+
+
+### Features
+
+* **config:** auto-migrate legacy YAML config shapes on load ([5f057a7](https://github.com/chodeus/chub/commit/5f057a70fb449045a767958d3a752d3de0122fd2))
+* **settings/sync_gdrive:** hide OAuth fields when service-account file is set ([ecf17ca](https://github.com/chodeus/chub/commit/ecf17ca6b71af735a80127025a28ae517557b22f))
+* **settings/sync_gdrive:** surface dry_run at the top of the page ([dd697b6](https://github.com/chodeus/chub/commit/dd697b61ea399df5c84d2b9ee21d9491ce5aca87))
+
+
+### Documentation
+
+* **config-migrator:** remind users to verify path-typed fields after migration ([f59acac](https://github.com/chodeus/chub/commit/f59acac721075f04788bdd9e67fcf88cc5dc3a3a))
+* **readme:** point at the auto-migration section for older configs ([38eabc2](https://github.com/chodeus/chub/commit/38eabc22ce7048640d59bebc0d4fd850d66386b1))
+
 ## [2.2.1](https://github.com/chodeus/chub/compare/v2.2.0...v2.2.1) (2026-05-21)
 
 
