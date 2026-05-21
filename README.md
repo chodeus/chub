@@ -72,6 +72,8 @@ docker compose up -d
 
 Open <http://localhost:8000>, create your admin user, connect your Radarr / Sonarr / Plex under **Settings → Instances**, and enable the modules you want under **Settings → Modules**.
 
+Already have a `config.yml` from an older YAML-based version of this tool? Drop it into the mounted config dir before first launch — CHUB detects the older shape, preserves the original as a timestamped backup, and migrates the file in place. Details: **[Wiki → Configuration → Auto-migration](https://github.com/chodeus/chub/wiki/Configuration#-auto-migration-from-older-config-formats)**.
+
 Full walk-through: **[Wiki → Installation](https://github.com/chodeus/chub/wiki/Installation)**.
 
 ### Other install methods
