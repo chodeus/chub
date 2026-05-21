@@ -1971,6 +1971,7 @@ def normalize_arr_media(
             "year": year,
             "media_id": item.get("id"),
             "arr_id": item.get("id"),  # ARR media ID for direct API operations
+            "tmdb_id": item.get("tmdbId"),
             "tvdb_id": item.get("tvdbId"),
             "imdb_id": item.get("imdbId"),
             "monitored": item.get("monitored"),
