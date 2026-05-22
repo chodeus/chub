@@ -2,6 +2,7 @@ import json
 from typing import Optional
 
 from backend.util.helper import get_prefix
+from backend.util.normalization import normalize_titles
 
 from .db_base import DatabaseBase
 
@@ -252,8 +253,12 @@ class PosterCache(DatabaseBase):
         params: list = []
 
         if query:
-            conditions.append("normalized_title LIKE ?")
-            params.append(f"%{query.lower()}%")
+            # Match the same normalization that built the `normalized_title`
+            # column so hyphenated / special-char searches ("x-men") still
+            # find rows where the stored value collapsed to "xmen". Fall back
+            # to a raw `title LIKE` so exact stored substrings still hit too.
+            conditions.append("(normalized_title LIKE ? OR title LIKE ?)")
+            params.extend([f"%{normalize_titles(query)}%", f"%{query}%"])
 
         where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
 
@@ -338,8 +343,12 @@ class PosterCache(DatabaseBase):
         params: list = []
 
         if query:
-            conditions.append("normalized_title LIKE ?")
-            params.append(f"%{query.lower()}%")
+            # Match the same normalization that built the `normalized_title`
+            # column so hyphenated / special-char searches ("x-men") still
+            # find rows where the stored value collapsed to "xmen". Fall back
+            # to a raw `title LIKE` so exact stored substrings still hit too.
+            conditions.append("(normalized_title LIKE ? OR title LIKE ?)")
+            params.extend([f"%{normalize_titles(query)}%", f"%{query}%"])
 
         if owner:
             conditions.append("(folder = ? OR folder LIKE ?)")
