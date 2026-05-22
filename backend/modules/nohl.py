@@ -357,7 +357,7 @@ class Nohl(ChubModule):
 
     @staticmethod
     def handle_searches(app, search_list, instance_type, logger, config):
-        logger.debug(
+        logger.info(
             f"Initiating search for {len(search_list)} items in {instance_type.title()}."
         )
         searched_for: List[Dict[str, Any]] = []

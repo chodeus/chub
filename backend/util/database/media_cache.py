@@ -949,6 +949,6 @@ class MediaCache(DatabaseBase):
             self.delete(row, instance_name, asset_type, logger)
 
         if logger:
-            logger.debug(
+            logger.info(
                 f"[SYNC] Media cache for {instance_name} ({asset_type}) synchronized. {len(fresh_media)} items present."
             )
