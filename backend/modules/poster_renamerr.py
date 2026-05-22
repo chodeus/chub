@@ -41,14 +41,23 @@ class PosterRenamerr(ChubModule):
                 f"Destination directory already exists: {self.config.destination_dir}"
             )
 
+    # Progress slice for sync_gdrive when invoked from inside poster_renamerr.
+    # The nested SyncGDrive instance reports its own 0..100 internally but
+    # against a stale job_id; clamp the parent job at the slice boundary
+    # before and after so the Jobs page percentage advances visibly during
+    # the sync.
+    _SYNC_PROGRESS_CEILING_PCT = 10
+
     def sync_posters(self):
         if self.config.sync_posters:
             self.logger.info("Running sync_gdrive")
+            self._report_progress(0)
             try:
                 from backend.modules.sync_gdrive import SyncGDrive
 
                 SyncGDrive(logger=self.logger).run()
                 self.logger.info("Finished running sync_gdrive")
+                self._report_progress(self._SYNC_PROGRESS_CEILING_PCT)
             except FileNotFoundError as e:
                 self.logger.warning(
                     f"Skipping GDrive sync: {e}. "
@@ -619,9 +628,9 @@ class PosterRenamerr(ChubModule):
     _MERGE_PROGRESS_EVERY = 2500
 
     # merge_assets is the longest phase of a poster_renamerr run. Report
-    # job progress across 0..PROGRESS_CEILING_PCT so the Jobs page UI
-    # doesn't sit at 0% for the entire scan. Remaining 50%+ of the
-    # progress bar covers the matching + writeback phases after merge.
+    # job progress across _SYNC_PROGRESS_CEILING_PCT..PROGRESS_CEILING_PCT
+    # so the Jobs page UI doesn't sit at 10% for the entire scan. Remaining
+    # 50%+ of the progress bar covers the matching + writeback phases.
     _MERGE_PROGRESS_CEILING_PCT = 50
 
     def merge_assets(self, source_dirs: List[str], db: ChubDB):
@@ -713,12 +722,13 @@ class PosterRenamerr(ChubModule):
                 if idx % self._MERGE_PROGRESS_EVERY == 0 and idx != total:
                     self.logger.heartbeat(f"  Merged {idx} / {total} assets")
                     if total_all > 0:
+                        merge_span = (
+                            self._MERGE_PROGRESS_CEILING_PCT
+                            - self._SYNC_PROGRESS_CEILING_PCT
+                        )
                         self._report_progress(
-                            int(
-                                processed_all
-                                / total_all
-                                * self._MERGE_PROGRESS_CEILING_PCT
-                            )
+                            self._SYNC_PROGRESS_CEILING_PCT
+                            + int(processed_all / total_all * merge_span)
                         )
 
             self.logger.info(f"Finished merging {total} assets from '{source_dir}'")
