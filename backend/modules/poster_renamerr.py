@@ -581,6 +581,11 @@ class PosterRenamerr(ChubModule):
             record["asset_type"] = self._classify_asset_record(record, show_keys)
         return asset_records
 
+    # Asset count between merge-phase progress heartbeats. At ~150 assets/sec
+    # on cold-cache rebuilds this yields one line every ~15-30 seconds, which
+    # is a useful "still working" signal without flooding the log.
+    _MERGE_PROGRESS_EVERY = 2500
+
     def merge_assets(self, source_dirs: List[str], db: ChubDB):
         start_time = datetime.now()
         self.logger.info("Gathering all the posters, please wait...")
@@ -594,7 +599,10 @@ class PosterRenamerr(ChubModule):
                 self.logger.warning(f"No assets found in '{source_dir}'")
                 continue
 
-            for asset in assets:
+            total = len(assets)
+            self.logger.info(f"Processing {total} assets from '{source_dir}'")
+
+            for idx, asset in enumerate(assets, 1):
                 for id_field in ["imdb_id", "tmdb_id", "tvdb_id"]:
                     id_val = asset.get(id_field)
                     if id_val:
@@ -649,11 +657,17 @@ class PosterRenamerr(ChubModule):
                         )
 
                 db.poster.upsert(asset)
+
+                if idx % self._MERGE_PROGRESS_EVERY == 0 and idx != total:
+                    self.logger.info(f"  Merged {idx} / {total} assets")
+
+            self.logger.info(f"Finished merging {total} assets from '{source_dir}'")
+
         duration = datetime.now() - start_time
         hours, remainder = divmod(duration.total_seconds(), 3600)
         minutes, seconds = divmod(remainder, 60)
         formatted_duration = f"{int(hours)}h {int(minutes)}m {int(seconds)}s"
-        self.logger.debug(f"Merge run time: {formatted_duration}")
+        self.logger.info(f"Merge run time: {formatted_duration}")
 
     def run_border_replacerr(self, manifest: dict):
         from backend.modules.border_replacerr import BorderReplacerr
