@@ -23,6 +23,20 @@ except ImportError:
     pass
 
 
+# Lines from rclone's stdout that get demoted to DEBUG. Anything matching
+# stays useful for debugging a slow/stuck run but stops drowning the INFO
+# log during normal operation. Compiled once at import time.
+_RCLONE_NOISE_PATTERN = re.compile(
+    r"^("
+    r"Transferred:"  # progress heartbeat (fires every --stats interval)
+    r"|Checks:"  # check-phase heartbeat
+    r"|Elapsed time:"  # progress heartbeat
+    r"|.*: (Deleted|Copied|Updated|Renamed|Removed|Skipped)\b"  # per-file action
+    r"|.*: Removing( empty)? directory"  # per-directory cleanup
+    r")"
+)
+
+
 class SyncGDrive(ChubModule):
     def __init__(self, logger: Optional[Logger] = None) -> None:
         super().__init__(logger=logger)
@@ -215,13 +229,30 @@ class SyncGDrive(ChubModule):
                     process.terminate()
                     self.logger.info("Sync cancelled during rclone execution.")
                     return False
+                level_match = re.match(
+                    r"^\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2} (INFO|ERROR|DEBUG) *:?",
+                    line,
+                )
+                rclone_level = level_match.group(1) if level_match else "INFO"
                 cleaned_line = re.sub(
                     r"^\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2} (INFO|ERROR|DEBUG) *:?",
                     "",
                     line,
                 ).strip()
                 if cleaned_line:
-                    self.logger.info(cleaned_line)
+                    # Route lines by content. At default INFO level we want the
+                    # one-off setup/completion messages and any errors, not the
+                    # per-second stats heartbeat (Transferred / Checks / Elapsed
+                    # time) or the per-file action spam (": Deleted" /
+                    # ": Copied" / etc). Both classes are noise in aggregate
+                    # but useful when investigating a slow or stuck run, so
+                    # they stay visible at DEBUG.
+                    if rclone_level == "ERROR":
+                        self.logger.error(cleaned_line)
+                    elif _RCLONE_NOISE_PATTERN.match(cleaned_line):
+                        self.logger.debug(cleaned_line)
+                    else:
+                        self.logger.info(cleaned_line)
                     pct = self.parse_rclone_progress(cleaned_line)
                     if pct is not None:
                         guarded_progress_cb(pct)
