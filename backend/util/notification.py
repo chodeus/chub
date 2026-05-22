@@ -5,7 +5,7 @@ import random
 import traceback
 from dataclasses import dataclass
 from types import SimpleNamespace
-from typing import Any, Dict, List, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 from urllib.parse import quote
 
 import requests
@@ -367,10 +367,21 @@ class NotificationManager:
                 elif ttype == "notifiarr":
                     hook = target.get("webhook", "").rstrip("/")
                     cid = target.get("channel_id")
-                    if hook and cid is not None:
+                    # channel_id can arrive as int or str depending on whether
+                    # config was set via the UI (typed input) or hand-edited
+                    # in yaml. Cast defensively — a non-numeric string here
+                    # would otherwise crash the whole notification dispatch
+                    # with an unhandled ValueError.
+                    cid_int: Optional[int] = None
+                    if cid is not None:
+                        try:
+                            cid_int = int(cid)
+                        except (TypeError, ValueError):
+                            cid_int = None
+                    if hook and cid_int is not None:
                         target_data["notifiarr"] = {
                             "webhook": hook,
-                            "channel_id": int(cid),
+                            "channel_id": cid_int,
                         }
                     else:
                         logger.warning("Invalid Notifiarr configuration")
