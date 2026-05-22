@@ -1906,10 +1906,16 @@ def normalize_arr_media(
                 ]
             try:
                 stats = season.get("statistics") or {}
+                # `episodeCount` from Sonarr is the count of AIRED episodes,
+                # not downloaded ones — so a current-season show with no
+                # files still has episodeCount > 0. `episodeFileCount` is
+                # what we actually want for has_content: episodes present
+                # on disk. Without this distinction, unmatched_assets shows
+                # every future season the user hasn't grabbed yet.
                 status = stats.get("episodeCount", 0) == stats.get(
                     "totalEpisodeCount", 0
                 )
-                season_stats = stats.get("episodeCount", 0)
+                season_stats = stats.get("episodeFileCount", 0)
             except Exception:
                 status = False
                 season_stats = 0
