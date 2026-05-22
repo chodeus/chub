@@ -676,6 +676,11 @@ def _process_module_run_job(
             # Record run start in database
             db_context.run_state.record_run_start(module_name, run_by=origin)
 
+            # Hand the module a job-progress channel so long-running phases
+            # (e.g. poster_renamerr.merge_assets) can update the Jobs page
+            # percentage instead of leaving it stuck at 0% until completion.
+            module_instance.set_job_context(job_id, db_context)
+
             # Report initial progress
             if job_id:
                 try:
