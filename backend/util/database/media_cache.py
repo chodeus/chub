@@ -1,6 +1,8 @@
 import json
 from typing import Any, List, Optional
 
+from backend.util.normalization import normalize_titles
+
 from .db_base import DatabaseBase
 
 
@@ -529,8 +531,13 @@ class MediaCache(DatabaseBase):
         params: List[Any] = []
 
         if query:
+            # Normalize the query for the normalized_title column so
+            # hyphenated / special-char searches ("X-Men:") hit the rows
+            # whose normalized form has the punctuation stripped. Raw
+            # title LIKE is the case-insensitive fallback for exact
+            # stored substrings. Same fix as poster_cache.search.
             conditions.append("(normalized_title LIKE ? OR title LIKE ?)")
-            params.extend([f"%{query.lower()}%", f"%{query}%"])
+            params.extend([f"%{normalize_titles(query)}%", f"%{query}%"])
 
         if asset_type and asset_type != "all":
             conditions.append("asset_type = ?")
