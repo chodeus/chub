@@ -2,6 +2,7 @@ import React, { useMemo, useState, useCallback } from 'react';
 import { useApiData } from '../../hooks/useApiData.js';
 import { useToast } from '../../contexts/ToastContext.jsx';
 import { webhooksAPI } from '../../utils/api/webhooks.js';
+import { copyText } from '../../utils/clipboard.js';
 import { Card } from '../../components/ui/card/Card.jsx';
 import { IconButton, PageHeader } from '../../components/ui';
 
@@ -32,7 +33,7 @@ const PosterAddCard = ({ wiringData, originsData, onRefresh }) => {
         async (value, label) => {
             if (!value) return;
             try {
-                await navigator.clipboard.writeText(value);
+                await copyText(value);
                 toast.success(`${label} copied`);
             } catch {
                 toast.error(`Failed to copy ${label.toLowerCase()}`);

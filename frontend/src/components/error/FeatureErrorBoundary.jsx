@@ -3,6 +3,7 @@ import PropTypes from 'prop-types';
 import { useErrorContext } from './ErrorContext.jsx';
 import { useToast } from '../../contexts/ToastContext.jsx';
 import { ErrorContainer, ErrorActions } from './primitives';
+import { copyText } from '../../utils/clipboard.js';
 
 /**
  * FeatureErrorBoundary - Feature-level error boundary
@@ -122,7 +123,7 @@ class FeatureErrorBoundaryBase extends Component {
         };
 
         try {
-            await navigator.clipboard.writeText(JSON.stringify(errorDetails, null, 2));
+            await copyText(JSON.stringify(errorDetails, null, 2));
             this.setState({ copying: false, copySuccess: true });
             setTimeout(() => this.setState({ copySuccess: false }), 2000);
         } catch (clipboardError) {
