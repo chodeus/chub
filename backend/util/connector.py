@@ -816,7 +816,14 @@ class Connector:
 
         if not candidates:
             if self.logger:
-                self.logger.warning(
+                # DEBUG, not WARNING — an ARR row without a Plex counterpart is
+                # expected for any announced / tba / upcoming title (no file
+                # downloaded yet) and for any released item the user simply
+                # hasn't grabbed. Promoting it to WARNING fires for every
+                # such row, drowning the log on big libraries with no
+                # actionable signal. Keep it at DEBUG so it's still
+                # accessible when investigating a specific mapping miss.
+                self.logger.debug(
                     f"✗ No direct match found for '{media_item.get('title')}' season {media_season}"
                 )
             return None
