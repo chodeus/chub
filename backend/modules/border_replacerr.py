@@ -410,7 +410,7 @@ class BorderReplacerr(ChubModule):
                                 original_file, renamed_file, border_path
                             )
                         else:
-                            self.logger.info(
+                            self.logger.debug(
                                 f"[DRY RUN] Would composite "
                                 f"{os.path.basename(border_path)} onto: "
                                 f"{renamed_file}"
@@ -430,7 +430,7 @@ class BorderReplacerr(ChubModule):
                                 self.config.border_width,
                             )
                         else:
-                            self.logger.info(
+                            self.logger.debug(
                                 f"[DRY RUN] Would replace border for: {renamed_file}"
                             )
                             result = True
@@ -446,7 +446,7 @@ class BorderReplacerr(ChubModule):
                                 self.config.border_width,
                             )
                         else:
-                            self.logger.info(
+                            self.logger.debug(
                                 f"[DRY RUN] Would remove border for: {renamed_file}"
                             )
                             result = True

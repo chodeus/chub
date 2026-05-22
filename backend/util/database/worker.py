@@ -128,7 +128,7 @@ class DBWorker(DatabaseBase):
                 job_id = job["id"]
                 job_type = job.get("type", "unknown")
 
-                log.info(f"Processing {table_name} job ID {job_id} (type={job_type})")
+                log.debug(f"Processing {table_name} job ID {job_id} (type={job_type})")
 
                 start_time = time.time()
                 try:
@@ -140,7 +140,7 @@ class DBWorker(DatabaseBase):
                         if result.success:
                             self.mark_job_complete(table_name, job_id, result.__dict__)
                             self._jobs_processed += 1
-                            log.info(
+                            log.debug(
                                 f"Job {job_id} completed successfully in {duration:.2f}s"
                             )
                         else:
@@ -148,7 +148,7 @@ class DBWorker(DatabaseBase):
                     elif isinstance(result, dict) and result.get("success"):
                         self.mark_job_complete(table_name, job_id, result)
                         self._jobs_processed += 1
-                        log.info(
+                        log.debug(
                             f"Job {job_id} completed successfully in {duration:.2f}s"
                         )
                     else:
