@@ -204,6 +204,12 @@ class PosterRenamerr(ChubModule):
             "reasons": reasons,
         }
 
+    # Job-progress slice for match_assets_to_media. Picks up from
+    # _MERGE_PROGRESS_CEILING_PCT (50) and runs to _MATCH_PROGRESS_CEILING_PCT
+    # (90). Rename_files gets the final 90..100 slice.
+    _MATCH_PROGRESS_CEILING_PCT = 90
+    _MATCH_PROGRESS_EVERY = 250
+
     def match_assets_to_media(self, db: ChubDB):
         self.logger.info("Matching assets to media and collections, please wait...")
         all_media = []
@@ -229,10 +235,12 @@ class PosterRenamerr(ChubModule):
             self.logger.warning(
                 "No media or collections found in database for matching."
             )
+            self._report_progress(self._MATCH_PROGRESS_CEILING_PCT)
             return
 
         matches = 0
         non_matches = 0
+        match_span = self._MATCH_PROGRESS_CEILING_PCT - self._MERGE_PROGRESS_CEILING_PCT
 
         with progress(
             all_media,
@@ -241,7 +249,7 @@ class PosterRenamerr(ChubModule):
             unit="media",
             logger=self.logger,
         ) as bar:
-            for media in bar:
+            for idx, media in enumerate(bar, 1):
                 if self.is_cancelled():
                     break
                 is_collection = media.get("asset_type") == "collection"
@@ -251,6 +259,13 @@ class PosterRenamerr(ChubModule):
                 else:
                     non_matches += 1
 
+                if idx % self._MATCH_PROGRESS_EVERY == 0 and idx != total_items:
+                    self._report_progress(
+                        self._MERGE_PROGRESS_CEILING_PCT
+                        + int(idx / total_items * match_span)
+                    )
+
+        self._report_progress(self._MATCH_PROGRESS_CEILING_PCT)
         self.logger.debug(f"Completed matching for all assets: {total_items} items")
         self.logger.debug(f"{matches} total_matches")
         self.logger.debug(f"{non_matches} non_matches")
@@ -408,6 +423,11 @@ class PosterRenamerr(ChubModule):
                                     matched_assets.append(row)
         return matched_assets
 
+    # Rename_files reports across _MATCH_PROGRESS_CEILING_PCT..100. Update
+    # less frequently than match — this phase is much shorter (only matched
+    # assets, not the full media list).
+    _RENAME_PROGRESS_EVERY = 100
+
     def rename_files(self, db: ChubDB) -> tuple:
         output: Dict[str, List[Dict[str, Any]]] = {
             "collection": [],
@@ -419,14 +439,16 @@ class PosterRenamerr(ChubModule):
 
         if matched_assets:
             self.logger.info("Renaming assets please wait...")
+            total = len(matched_assets)
+            rename_span = 100 - self._MATCH_PROGRESS_CEILING_PCT
             with progress(
                 matched_assets,
                 desc="Renaming assets",
-                total=len(matched_assets),
+                total=total,
                 unit="assets",
                 logger=self.logger,
             ) as bar:
-                for item in bar:
+                for idx, item in enumerate(bar, 1):
                     if self.is_cancelled():
                         break
                     result = self.rename_file(item=item, db=db)
@@ -437,6 +459,15 @@ class PosterRenamerr(ChubModule):
                         manifest["collections_cache"].append(item.get("id"))
                     else:
                         manifest["media_cache"].append(item.get("id"))
+
+                    if idx % self._RENAME_PROGRESS_EVERY == 0 and idx != total:
+                        self._report_progress(
+                            self._MATCH_PROGRESS_CEILING_PCT
+                            + int(idx / total * rename_span)
+                        )
+        # Final pin at 100 — covered by job_processor's completion path too,
+        # but explicit here keeps the ladder symmetric with merge/match.
+        self._report_progress(100)
         return output, manifest
 
     def handle_output(self, output: Dict[str, List[Dict[str, Any]]]):
