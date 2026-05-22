@@ -7,7 +7,7 @@ import re
 import shutil
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from PIL import Image
 
@@ -385,6 +385,11 @@ class BorderReplacerr(ChubModule):
                 self.logger.debug("Border mode: removing borders")
 
             self.logger.info(f"Processing {len(assets)} posters, please wait...")
+            # Collect each poster whose border actually changed so the user
+            # can see exactly which titles were touched without flipping to
+            # DEBUG. Skips dry-run because `result=True` there is unconditional
+            # and the list would just be every input.
+            changes: List[Dict[str, str]] = []
             with progress(
                 assets,
                 desc="Processing Posters",
@@ -419,6 +424,14 @@ class BorderReplacerr(ChubModule):
                         border_index = (border_index + 1) % len(border_paths)
                         if result:
                             replaced += 1
+                            if not dry_run:
+                                changes.append(
+                                    {
+                                        "title": title,
+                                        "action": "composited",
+                                        "detail": os.path.basename(border_path),
+                                    }
+                                )
                         processed += 1
                     elif border_colors:
                         color = border_colors[color_index]
@@ -437,6 +450,14 @@ class BorderReplacerr(ChubModule):
                         color_index = (color_index + 1) % len(border_colors)
                         if result:
                             replaced += 1
+                            if not dry_run:
+                                changes.append(
+                                    {
+                                        "title": title,
+                                        "action": "replaced",
+                                        "detail": color,
+                                    }
+                                )
                         processed += 1
                     else:
                         if not dry_run:
@@ -452,7 +473,30 @@ class BorderReplacerr(ChubModule):
                             result = True
                         if result:
                             removed += 1
+                            if not dry_run:
+                                changes.append(
+                                    {
+                                        "title": title,
+                                        "action": "removed",
+                                        "detail": "",
+                                    }
+                                )
                         processed += 1
+
+            if changes:
+                self.logger.info("")  # Spacing
+                self.logger.info(create_table([["Posters Updated"]]))
+                for change in changes:
+                    if change["action"] == "composited":
+                        self.logger.info(
+                            f"  {change['title']} — composited {change['detail']}"
+                        )
+                    elif change["action"] == "replaced":
+                        self.logger.info(
+                            f"  {change['title']} — border replaced ({change['detail']})"
+                        )
+                    elif change["action"] == "removed":
+                        self.logger.info(f"  {change['title']} — border removed")
 
             self.logger.info("")  # Spacing
             self.logger.info(create_table([["Border Replacerr Summary"]]))
