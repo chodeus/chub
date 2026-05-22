@@ -587,15 +587,34 @@ class PosterRenamerr(ChubModule):
     # is a useful "still working" signal without flooding the log.
     _MERGE_PROGRESS_EVERY = 2500
 
+    # merge_assets is the longest phase of a poster_renamerr run. Report
+    # job progress across 0..PROGRESS_CEILING_PCT so the Jobs page UI
+    # doesn't sit at 0% for the entire scan. Remaining 50%+ of the
+    # progress bar covers the matching + writeback phases after merge.
+    _MERGE_PROGRESS_CEILING_PCT = 50
+
     def merge_assets(self, source_dirs: List[str], db: ChubDB):
         start_time = datetime.now()
         self.logger.info("Gathering all the posters, please wait...")
         source_dirs = source_dirs or self.config.source_dirs
 
+        # Plan the progress curve: count total assets across all source_dirs
+        # up front so each per-asset write contributes a proportional slice.
+        # The dir-walk to count is fast (no DB ops) and lets us update job
+        # progress smoothly instead of in big steps per source_dir.
+        per_dir_assets = []
+        total_all = 0
         for source_dir in source_dirs:
             if self.is_cancelled():
                 break
             assets = self._get_assets_files(source_dir)
+            per_dir_assets.append((source_dir, assets))
+            total_all += len(assets)
+
+        processed_all = 0
+        for source_dir, assets in per_dir_assets:
+            if self.is_cancelled():
+                break
             if not assets:
                 self.logger.warning(f"No assets found in '{source_dir}'")
                 continue
@@ -659,10 +678,22 @@ class PosterRenamerr(ChubModule):
 
                 db.poster.upsert(asset)
 
+                processed_all += 1
                 if idx % self._MERGE_PROGRESS_EVERY == 0 and idx != total:
                     self.logger.heartbeat(f"  Merged {idx} / {total} assets")
+                    if total_all > 0:
+                        self._report_progress(
+                            int(
+                                processed_all
+                                / total_all
+                                * self._MERGE_PROGRESS_CEILING_PCT
+                            )
+                        )
 
             self.logger.info(f"Finished merging {total} assets from '{source_dir}'")
+        # Pin progress at the ceiling once all source_dirs are scanned so
+        # subsequent phases visibly resume from a stable known point.
+        self._report_progress(self._MERGE_PROGRESS_CEILING_PCT)
 
         duration = datetime.now() - start_time
         hours, remainder = divmod(duration.total_seconds(), 3600)

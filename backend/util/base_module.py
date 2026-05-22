@@ -78,6 +78,34 @@ class ChubModule(ABC):
         periodically in long-running loops and exit early when True."""
         return self._cancel_event is not None and self._cancel_event.is_set()
 
+    def set_job_context(self, job_id: Optional[int], db: Any) -> None:
+        """Attach a job ID and shared db context so the module can report
+        progress to the jobs queue mid-run.
+
+        Job processor wires this in before calling .run(). Modules that
+        want progress visibility on the Jobs page call _report_progress()
+        at sensible checkpoints; modules that don't can ignore both.
+        """
+        self._job_id = job_id
+        self._job_db = db
+
+    def _report_progress(self, percent: int) -> None:
+        """Update job progress on the Jobs page (clamped to 0..100).
+
+        No-op if set_job_context() wasn't called or supplied a None job_id —
+        modules call this freely without guarding for the unbound case
+        (e.g. CLI runs, ad-hoc invocations).
+        """
+        job_id = getattr(self, "_job_id", None)
+        db = getattr(self, "_job_db", None)
+        if not job_id or db is None:
+            return
+        try:
+            pct = max(0, min(100, int(percent)))
+            db.worker.update_progress("jobs", job_id, pct)
+        except Exception:  # noqa: S110 — progress is non-critical
+            pass
+
     @abstractmethod
     def run(self) -> None:
         pass
