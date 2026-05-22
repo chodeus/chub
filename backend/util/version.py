@@ -8,8 +8,6 @@ from pathlib import Path
 
 import requests
 
-from backend.util.notification import NotificationManager
-
 MANIFEST = Path(__file__).parents[2] / ".release-please-manifest.json"
 
 
@@ -126,6 +124,8 @@ def start_version_check(config, logger, interval=3600):
                     "remote_version": remote_full,
                     "color": "FF0000",
                 }
+                from backend.util.notification import NotificationManager
+
                 config.module_name = "version_check"
                 manager = NotificationManager(
                     config, logger, module_name="version_check"
