@@ -831,6 +831,7 @@ async def get_db_stats(
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
     try:
+        logger.debug("Serving GET /api/system/db-stats")
         tables = []
         existing = {
             row["name"]
@@ -908,6 +909,7 @@ async def vacuum_database(
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
     try:
+        logger.debug("Serving POST /api/system/db/vacuum")
         try:
             bytes_before = os.path.getsize(db.db_path)
         except OSError:
@@ -930,12 +932,17 @@ async def vacuum_database(
         except OSError:
             bytes_after = bytes_before
 
+        reclaimed = max(0, bytes_before - bytes_after)
+        logger.info(
+            f"VACUUM completed in {duration_ms}ms — reclaimed {reclaimed} bytes "
+            f"({bytes_before} -> {bytes_after})"
+        )
         return ok(
             "Database compacted",
             {
                 "bytes_before": bytes_before,
                 "bytes_after": bytes_after,
-                "bytes_reclaimed": max(0, bytes_before - bytes_after),
+                "bytes_reclaimed": reclaimed,
                 "duration_ms": duration_ms,
             },
         )
@@ -961,6 +968,7 @@ async def clear_poster_cache(
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
     try:
+        logger.debug("Serving POST /api/system/db/poster-cache/clear")
         count_row = db.worker.execute_query(
             "SELECT COUNT(*) AS total FROM poster_cache", fetch_one=True
         )
