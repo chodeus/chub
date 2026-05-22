@@ -1,6 +1,7 @@
 import React, { Component } from 'react';
 import PropTypes from 'prop-types';
 import { ErrorContainer, ErrorIcon, ErrorMessage, ErrorActions } from './primitives';
+import { copyText } from '../../utils/clipboard.js';
 
 /**
  * ErrorBoundary - Base error boundary class composing all primitives
@@ -103,7 +104,7 @@ export class ErrorBoundary extends Component {
         };
 
         try {
-            await navigator.clipboard.writeText(JSON.stringify(errorDetails, null, 2));
+            await copyText(JSON.stringify(errorDetails, null, 2));
             this.setState({ copying: false, copySuccess: true });
             setTimeout(() => this.setState({ copySuccess: false }), 2000);
         } catch (clipboardError) {

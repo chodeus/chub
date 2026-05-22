@@ -3,6 +3,7 @@ import { useApiData } from '../../hooks/useApiData.js';
 import { useModuleExecution } from '../../hooks/useModuleExecution.js';
 import { useToast } from '../../contexts/ToastContext.jsx';
 import { postersAPI } from '../../utils/api/posters.js';
+import { copyText } from '../../utils/clipboard.js';
 import { IconButton, LoadingButton, PageHeader } from '../../components/ui/index.js';
 import Spinner from '../../components/ui/Spinner.jsx';
 
@@ -58,7 +59,7 @@ const UnmatchedTable = ({ title, items, type }) => {
             return;
         }
         try {
-            await navigator.clipboard.writeText(built.text);
+            await copyText(built.text);
             toast.success(
                 built.hasTmdb
                     ? 'Poster request copied to clipboard'

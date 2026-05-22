@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
+import { copyText } from '../../../utils/clipboard.js';
 
 /**
  * useUploadState - Manage 3-click upload workflow state machine
@@ -31,7 +32,7 @@ export function useUploadState(logText) {
         // State 3: Copy URL to clipboard
         if (lastUrl && linkOpened) {
             try {
-                await navigator.clipboard.writeText(lastUrl);
+                await copyText(lastUrl);
                 // Reset to state 1
                 setLastUrl(null);
                 setLinkOpened(false);
