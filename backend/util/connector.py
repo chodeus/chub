@@ -440,6 +440,14 @@ class Connector:
                     season_row["has_content"] = (
                         season.get("season_has_episodes") or 0
                     ) > 0
+                    # Override monitored with the per-season flag — Sonarr
+                    # tracks this per season (e.g. user unmonitors Specials
+                    # but keeps the main seasons monitored). Without this
+                    # override, every season inherits the show's monitored
+                    # state and `ignore_unmonitored` can't act on per-season
+                    # decisions.
+                    if season.get("monitored") is not None:
+                        season_row["monitored"] = season.get("monitored")
                     # Preserve genres and cast_data from parent show for each season
                     if "genres" in show:
                         season_row["genres"] = show["genres"]
