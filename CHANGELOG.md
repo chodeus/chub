@@ -2,6 +2,18 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.5.1](https://github.com/chodeus/chub/compare/v2.5.0...v2.5.1) (2026-05-22)
+
+
+### Bug Fixes
+
+* **media_cache:** delete stale rows unconditionally on sync ([11698df](https://github.com/chodeus/chub/commit/11698df04142ba467937036d886cbf976e7b8d36))
+
+
+### Documentation
+
+* **deploy:** add Unraid Community Applications template ([a760938](https://github.com/chodeus/chub/commit/a760938f4ae0e0cd44b425e0a262d095cec64bf9))
+
 ## [2.5.0](https://github.com/chodeus/chub/compare/v2.4.0...v2.5.0) (2026-05-22)
 
 
