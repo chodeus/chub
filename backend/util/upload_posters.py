@@ -95,7 +95,7 @@ class PosterUploader:
             enabled_instances = self._get_enabled_instances()
 
             if not enabled_instances:
-                self.logger.debug("No Plex instances enabled for poster upload")
+                self.logger.info("No Plex instances enabled for poster upload")
                 return self._create_result(
                     success=False,
                     message="No Plex instances enabled for poster upload",

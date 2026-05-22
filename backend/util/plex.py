@@ -147,7 +147,7 @@ class PlexClient:
                 }
                 collections_data.append(media_item)
 
-        self.logger.debug(
+        self.logger.info(
             f"Processed {len(collections)} collections in '{library_name}'"
         )
 
