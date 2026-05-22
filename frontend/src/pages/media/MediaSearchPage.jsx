@@ -211,8 +211,15 @@ const MediaSearchPage = () => {
                                     <PosterThumb mediaId={item.id} />
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-start justify-between gap-3 mb-2">
-                                            <h3 className="font-semibold text-primary text-lg">
-                                                {item.title}
+                                            <h3 className="font-semibold text-primary text-lg flex items-baseline gap-2 flex-wrap">
+                                                <span>{item.title}</span>
+                                                {item.season_number != null && (
+                                                    <span className="px-1.5 py-0.5 rounded bg-brand-primary/15 text-brand-primary text-xs font-medium">
+                                                        {item.season_number === 0
+                                                            ? 'Specials'
+                                                            : `Season ${item.season_number}`}
+                                                    </span>
+                                                )}
                                             </h3>
                                             <div className="flex items-center gap-2 flex-shrink-0">
                                                 {item.matched ? (
