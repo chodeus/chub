@@ -234,13 +234,14 @@ class ChubScheduler:
                 self._system_tick()
                 time.sleep(SCHEDULER_POLL_INTERVAL_SECONDS)
 
-                # Periodic uptime log
+                # Periodic uptime log — emit via heartbeat() so the
+                # frontend Logs page hides it by default.
                 elapsed = int(time.monotonic() - start_time)
                 if elapsed % SCHEDULER_UPTIME_LOG_INTERVAL_SECONDS == 0:
                     minutes = elapsed // 60
                     seconds = elapsed % 60
                     if self.logger:
-                        self.logger.get_adapter("SCHEDULER").debug(
+                        self.logger.get_adapter("SCHEDULER").heartbeat(
                             f"Scheduler is alive. Uptime: {minutes}m {seconds}s"
                         )
         except Exception as e:

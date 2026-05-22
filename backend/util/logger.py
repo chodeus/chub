@@ -343,6 +343,21 @@ class ChubLoggerAdapter(logging.LoggerAdapter):
         new_extra["source"] = (new_extra.get("source") or self.logger.name).upper()
         return ChubLoggerAdapter(self.logger, new_extra)
 
+    def heartbeat(self, msg, *args, **kwargs) -> None:
+        """Emit a repetitive-by-design progress line.
+
+        Lives at INFO level so users who explicitly want to see progress
+        (e.g. log_level=info + Hide-Heartbeat toggle off) can. The frontend
+        Logs page filters lines starting with the [hb] marker out of the
+        default view via the Hide-Heartbeat toggle, so noisy heartbeats
+        don't drown the meaningful log.
+
+        Use for: per-second progress ticks, per-item loop heartbeats, any
+        line that fires N times during a single run with no specific
+        new information per invocation beyond an incremented counter.
+        """
+        self.info(f"[hb] {msg}", *args, **kwargs)
+
 
 def ensure_log_dir_and_rotate(log_file_path: str, max_logs: int = 9) -> None:
     """
