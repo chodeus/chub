@@ -294,7 +294,7 @@ class MediaCache(DatabaseBase):
         if logger:
             season = item.get("season_number")
             season_str = f" Season: {season}," if season is not None else ""
-            logger.info(
+            logger.debug(
                 f"[DELETE] Title: {item.get('title')} ({item.get('year')}) ({asset_type}),{season_str} from {instance_name}"
             )
 

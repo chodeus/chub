@@ -179,14 +179,14 @@ class HealthCheckarr(ChubModule):
                                     )
                                     continue
                                 if self.config.dry_run:
-                                    self.logger.info(
+                                    self.logger.debug(
                                         f"{item['title']} would have been deleted "
                                         f"with id: {media_id} and tvdb/tmdb id: "
                                         f"{item.get('db_id', '')}"
                                     )
                                 else:
                                     app.delete_media(media_id)
-                                    self.logger.info(
+                                    self.logger.debug(
                                         f"{item['title']} deleted with id: {media_id} "
                                         f"and tvdb/tmdb id: {item.get('db_id', '')}"
                                     )

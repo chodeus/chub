@@ -107,15 +107,15 @@ class Jduparr(ChubModule):
             linked_count = item.get("linked_count", 0)
             error = item.get("error")
 
-            self.logger.info(f"Findings for path: {path}")
-            self.logger.info(f"\t{field_message}")
+            self.logger.debug(f"Findings for path: {path}")
+            self.logger.debug(f"\t{field_message}")
             if error:
                 self.logger.error(f"\t{error}")
             for i in files:
-                self.logger.info(f"\t\t{i}")
+                self.logger.debug(f"\t\t{i}")
             total_candidates += sub_count
             total_relinked += linked_count
-            self.logger.info(
+            self.logger.debug(
                 f"\tTotal duplicate relink candidates for '{path}': {sub_count}"
             )
         if self.config.dry_run:
