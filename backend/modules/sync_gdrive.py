@@ -23,20 +23,6 @@ except ImportError:
     pass
 
 
-# Lines from rclone's stdout that get demoted to DEBUG. Anything matching
-# stays useful for debugging a slow/stuck run but stops drowning the INFO
-# log during normal operation. Compiled once at import time.
-_RCLONE_NOISE_PATTERN = re.compile(
-    r"^("
-    r"Transferred:"  # progress heartbeat (fires every --stats interval)
-    r"|Checks:"  # check-phase heartbeat
-    r"|Elapsed time:"  # progress heartbeat
-    r"|.*: (Deleted|Copied|Updated|Renamed|Removed|Skipped)\b"  # per-file action
-    r"|.*: Removing( empty)? directory"  # per-directory cleanup
-    r")"
-)
-
-
 class SyncGDrive(ChubModule):
     def __init__(self, logger: Optional[Logger] = None) -> None:
         super().__init__(logger=logger)
@@ -240,17 +226,14 @@ class SyncGDrive(ChubModule):
                     line,
                 ).strip()
                 if cleaned_line:
-                    # Route lines by content. At default INFO level we want the
-                    # one-off setup/completion messages and any errors, not the
-                    # per-second stats heartbeat (Transferred / Checks / Elapsed
-                    # time) or the per-file action spam (": Deleted" /
-                    # ": Copied" / etc). Both classes are noise in aggregate
-                    # but useful when investigating a slow or stuck run, so
-                    # they stay visible at DEBUG.
+                    # Respect rclone's own level. The progress heartbeats
+                    # (Transferred / Checks / Elapsed time) and per-file
+                    # action lines (": Deleted" / ": Copied" / etc) stay at
+                    # INFO — the frontend Logs page hides them via its
+                    # heartbeat pattern, so they're available when wanted
+                    # without drowning the default view.
                     if rclone_level == "ERROR":
                         self.logger.error(cleaned_line)
-                    elif _RCLONE_NOISE_PATTERN.match(cleaned_line):
-                        self.logger.debug(cleaned_line)
                     else:
                         self.logger.info(cleaned_line)
                     pct = self.parse_rclone_progress(cleaned_line)

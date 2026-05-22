@@ -165,7 +165,7 @@ export default function Logs() {
                         type="button"
                         onClick={() => setHideHeartbeat(prev => !prev)}
                         className={`${pillBase} ${hideHeartbeat ? 'bg-primary/10 text-primary border-primary/30' : pillOff}`}
-                        title="Hide 'Scheduler is alive' heartbeat messages"
+                        title="Hide repetitive progress / heartbeat lines (scheduler tick, rclone stats, merge progress)"
                     >
                         Hide heartbeat
                     </button>
