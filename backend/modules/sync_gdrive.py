@@ -20,6 +20,8 @@ try:
 
     load_dotenv(override=True)
 except ImportError:
+    # python-dotenv is optional; running without it just means env vars
+    # aren't auto-populated from a .env file.
     pass
 
 

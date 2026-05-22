@@ -54,6 +54,8 @@ def db():
         try:
             os.unlink(path)
         except OSError:
+            # Best-effort temp-file cleanup; the tempfile may already be
+            # gone if the test crashed mid-run.
             pass
 
 
