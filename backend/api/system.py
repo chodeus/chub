@@ -795,3 +795,188 @@ async def get_cleanup_candidates(
             code="CLEANUP_CANDIDATES_ERROR",
             status_code=500,
         )
+
+
+# Tables listed in db-stats / vacuum responses. Kept explicit instead of
+# enumerating sqlite_master so we don't surface internal SQLite tables
+# (sqlite_sequence, sqlite_stat1) that users have no reason to see.
+_DB_STATS_TABLES = (
+    "media_cache",
+    "poster_cache",
+    "collections_cache",
+    "plex_media_cache",
+    "jobs",
+    "webhook_cache",
+    "gdrive_stats",
+    "scan_cache",
+    "system_health_snapshots",
+    "media_edit_history",
+    "upgradinatorr_progress",
+    "poster_collections",
+    "poster_collection_items",
+    "holiday_status",
+    "run_state",
+    "schema_migrations",
+)
+
+
+@router.get(
+    "/system/db-stats",
+    summary="Database statistics",
+    description="Per-table row counts plus SQLite page/freelist info and the "
+    "schema_migrations log. Read-only.",
+)
+async def get_db_stats(
+    logger: Any = Depends(get_logger),
+    db: ChubDB = Depends(get_database),
+) -> JSONResponse:
+    try:
+        tables = []
+        existing = {
+            row["name"]
+            for row in (
+                db.worker.execute_query(
+                    "SELECT name FROM sqlite_master WHERE type='table'",
+                    fetch_all=True,
+                )
+                or []
+            )
+        }
+        for name in _DB_STATS_TABLES:
+            if name not in existing:
+                continue
+            count_row = db.worker.execute_query(
+                f"SELECT COUNT(*) AS total FROM {name}", fetch_one=True
+            )
+            tables.append({"name": name, "rows": count_row["total"] if count_row else 0})
+
+        page_size_row = db.worker.execute_query("PRAGMA page_size", fetch_one=True)
+        page_count_row = db.worker.execute_query("PRAGMA page_count", fetch_one=True)
+        freelist_row = db.worker.execute_query("PRAGMA freelist_count", fetch_one=True)
+        page_size = int(page_size_row["page_size"]) if page_size_row else 0
+        page_count = int(page_count_row["page_count"]) if page_count_row else 0
+        freelist_count = int(freelist_row["freelist_count"]) if freelist_row else 0
+        total_bytes = page_size * page_count
+        free_bytes = page_size * freelist_count
+
+        try:
+            file_bytes = os.path.getsize(db.db_path)
+        except OSError:
+            file_bytes = total_bytes
+
+        migrations = []
+        if "schema_migrations" in existing:
+            migrations = (
+                db.worker.execute_query(
+                    "SELECT name, applied_at FROM schema_migrations ORDER BY applied_at DESC, name DESC",
+                    fetch_all=True,
+                )
+                or []
+            )
+
+        return ok(
+            "Database statistics",
+            {
+                "tables": tables,
+                "page_size": page_size,
+                "page_count": page_count,
+                "freelist_count": freelist_count,
+                "total_bytes": total_bytes,
+                "free_bytes": free_bytes,
+                "file_bytes": file_bytes,
+                "schema_migrations": migrations,
+            },
+        )
+    except Exception as e:
+        logger.error(f"Error building db stats: {e}")
+        return error(
+            f"Error building db stats: {str(e)}",
+            code="DB_STATS_ERROR",
+            status_code=500,
+        )
+
+
+@router.post(
+    "/system/db/vacuum",
+    summary="Compact database (SQLite VACUUM)",
+    description="Reclaims space freed by deletions and updates. Safe to run "
+    "any time but holds a write lock for the duration — short on a small "
+    "DB (~1s for 50MB), longer if your DB has grown.",
+)
+async def vacuum_database(
+    logger: Any = Depends(get_logger),
+    db: ChubDB = Depends(get_database),
+) -> JSONResponse:
+    try:
+        try:
+            bytes_before = os.path.getsize(db.db_path)
+        except OSError:
+            bytes_before = 0
+
+        # VACUUM cannot run inside an explicit transaction and ignores the
+        # connection's normal isolation; bypass the worker's helper and use
+        # a raw sqlite3 connection scoped to this call.
+        start = time.time()
+        conn = sqlite3.connect(db.db_path, timeout=60)
+        try:
+            conn.isolation_level = None
+            conn.execute("VACUUM")
+        finally:
+            conn.close()
+        duration_ms = int((time.time() - start) * 1000)
+
+        try:
+            bytes_after = os.path.getsize(db.db_path)
+        except OSError:
+            bytes_after = bytes_before
+
+        return ok(
+            "Database compacted",
+            {
+                "bytes_before": bytes_before,
+                "bytes_after": bytes_after,
+                "bytes_reclaimed": max(0, bytes_before - bytes_after),
+                "duration_ms": duration_ms,
+            },
+        )
+    except Exception as e:
+        logger.error(f"Error running VACUUM: {e}")
+        return error(
+            f"Error running VACUUM: {str(e)}",
+            code="DB_VACUUM_ERROR",
+            status_code=500,
+        )
+
+
+@router.post(
+    "/system/db/poster-cache/clear",
+    summary="Wipe poster_cache for a full rescan",
+    description="Deletes every row in poster_cache. The next poster_renamerr "
+    "run does a fresh scan of all source_dirs and re-populates the table. "
+    "Use when a code change has affected how posters are parsed or matched "
+    "and orphan rows might be lingering.",
+)
+async def clear_poster_cache(
+    logger: Any = Depends(get_logger),
+    db: ChubDB = Depends(get_database),
+) -> JSONResponse:
+    try:
+        count_row = db.worker.execute_query(
+            "SELECT COUNT(*) AS total FROM poster_cache", fetch_one=True
+        )
+        before = int(count_row["total"]) if count_row else 0
+
+        db.poster.clear()
+
+        logger.info(f"Wiped poster_cache via /api/system/db/poster-cache/clear ({before} rows)")
+        return ok(
+            "Poster cache cleared",
+            {"deleted": before},
+        )
+    except Exception as e:
+        logger.error(f"Error clearing poster_cache: {e}")
+        return error(
+            f"Error clearing poster_cache: {str(e)}",
+            code="DB_CLEAR_POSTER_CACHE_ERROR",
+            status_code=500,
+        )
