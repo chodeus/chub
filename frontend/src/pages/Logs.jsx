@@ -117,7 +117,10 @@ export default function Logs() {
         if (level === 'error') return 'bg-error/15 text-error border-error/30';
         if (level === 'warning') return 'bg-warning/15 text-warning border-warning/30';
         if (level === 'info') return 'bg-primary/15 text-primary border-primary/30';
-        return 'bg-surface-alt text-secondary border-border';
+        // Debug — use accent so the "on" state is visually distinct from
+        // pillOff (gray-on-gray previously made it impossible to tell the
+        // toggle state).
+        return 'bg-accent/15 text-accent border-accent/30';
     };
 
     return (
