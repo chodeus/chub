@@ -2,6 +2,24 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.4.0](https://github.com/chodeus/chub/compare/v2.3.0...v2.4.0) (2026-05-22)
+
+
+### Features
+
+* **api:** /system/db-stats, /system/db/vacuum, /system/db/poster-cache/clear ([30b5b22](https://github.com/chodeus/chub/commit/30b5b223b52dcda38d967824e896c04bc3072598))
+* **settings:** System page for DB stats and maintenance ([b2097c1](https://github.com/chodeus/chub/commit/b2097c11d9a56d01cc86dca41d385e52b50e0f84))
+* **ui:** jump-to-page select on paginated list views ([4857db1](https://github.com/chodeus/chub/commit/4857db1d032f3ee912ed648763451f1c9fc36dbf))
+
+
+### Bug Fixes
+
+* **frontend:** clipboard copy works on plain-HTTP LAN deployments ([bb16c44](https://github.com/chodeus/chub/commit/bb16c442d62b52b3383fb6270980441eed76460a))
+* **poster_cache:** normalize search query for hyphenated titles ([75ea2e8](https://github.com/chodeus/chub/commit/75ea2e8367d7fae60dbcb6bb0b40675d07615807))
+* **poster_renamerr:** don't strip singular 'Special' from movie titles ([ed3717d](https://github.com/chodeus/chub/commit/ed3717d58ab0ce3d2c6ba3dc907891eddf7c45ae))
+* **schema:** purge orphan poster_cache rows from the Specials regex bug ([75987b0](https://github.com/chodeus/chub/commit/75987b0392d114c31d32d7cee1f1dd870c200056))
+* **unmatched_assets:** drop announced/tba items via *arr status field ([a014053](https://github.com/chodeus/chub/commit/a0140536cbdd4603ebef5778e222ae6e3e7328f7))
+
 ## [2.3.0](https://github.com/chodeus/chub/compare/v2.2.1...v2.3.0) (2026-05-21)
 
 
