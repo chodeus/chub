@@ -447,7 +447,8 @@ class PosterRenamerr(ChubModule):
             self.logger.info(create_table([[header]]))
 
             if not assets:
-                self.logger.info(f"No {header.lower()}s to rename\n")
+                # `header` is already plural (e.g. 'Shows'), don't double the s.
+                self.logger.info(f"No {header.lower()} to rename\n")
                 continue
 
             if asset_type == "show":
