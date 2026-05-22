@@ -285,14 +285,24 @@ class MediaCache(DatabaseBase):
         asset_type: str,
         logger: Optional[Any] = None,
     ) -> None:
-        """Delete a single record by its identity key."""
-        renamed_file = item.get("renamed_file")
-        if renamed_file:
-            identity_key = self._identity_key(item, asset_type, instance_name)
-            self.execute_query(
-                "DELETE FROM media_cache WHERE identity_key = ?",
-                (identity_key,),
-            )
+        """Delete a single record by its identity key.
+
+        Called from sync_for_instance to drop rows that the *arr no longer
+        reports (e.g. a Sonarr series whose unreleased season vanished from
+        the API response, an unmonitored show pruned from the library, a
+        deleted movie). Used to be gated on `renamed_file` while the
+        pending_deletions ledger was in play — that ledger was ripped out in
+        the cleanarr rewrite but the guard accidentally stayed, which left
+        stale rows lingering forever. In particular, rows that pre-dated
+        the has_content column kept the backfill-migration's NULL value and
+        slipped past the unmatched_assets has_content gate even though the
+        *arr no longer tracks them. Always delete now.
+        """
+        identity_key = self._identity_key(item, asset_type, instance_name)
+        self.execute_query(
+            "DELETE FROM media_cache WHERE identity_key = ?",
+            (identity_key,),
+        )
         if logger:
             season = item.get("season_number")
             season_str = f" Season: {season}," if season is not None else ""
