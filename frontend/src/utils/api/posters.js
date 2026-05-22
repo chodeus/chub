@@ -208,33 +208,6 @@ export const postersAPI = {
     },
 
     /**
-     * Search local assets for posters
-     * @param {Object} searchParams - Assets search parameters
-     * @param {string} searchParams.query - Search query
-     * @param {string} searchParams.path - Specific path to search
-     * @param {Array} searchParams.extensions - File extensions to include
-     * @returns {Promise<Object>} Assets search results
-     */
-    searchAssets: (searchParams = {}) => {
-        const params = new URLSearchParams();
-
-        Object.entries(searchParams).forEach(([key, value]) => {
-            if (value !== undefined && value !== null) {
-                if (Array.isArray(value)) {
-                    value.forEach(item => params.append(key, item));
-                } else {
-                    params.set(key, value.toString());
-                }
-            }
-        });
-
-        return apiCore.get(`/posters/sources/assets/search?${params}`, {
-            useCache: true,
-            cacheTTL: 5 * 60 * 1000,
-        });
-    },
-
-    /**
      * Auto-match posters to media
      * @param {Object} options - Matching options
      * @param {string} options.mediaId - Specific media ID (optional)

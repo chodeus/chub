@@ -376,67 +376,6 @@ async def search_gdrive_sources(
         )
 
 
-@router.get(
-    "/sources/assets/search",
-    summary="Search local asset sources",
-    description="Search local poster assets in the poster cache with pagination.",
-    responses={
-        200: {
-            "description": "Asset search results retrieved successfully",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "success": True,
-                        "message": "Found 25 asset posters",
-                        "data": {
-                            "total": 25,
-                            "posters": [
-                                {
-                                    "id": 1,
-                                    "title": "The Matrix",
-                                    "file": "The Matrix (1999).jpg",
-                                }
-                            ],
-                        },
-                    }
-                }
-            },
-        }
-    },
-)
-async def search_asset_sources(
-    query: Optional[str] = None,
-    limit: int = Query(50, ge=1, le=500),
-    offset: int = Query(0, ge=0),
-    logger: Any = Depends(get_logger),
-    db: ChubDB = Depends(get_database),
-) -> JSONResponse:
-    """
-    Search local poster assets in the poster cache.
-
-    Performs a text search against locally cached poster assets
-    with pagination support for browsing large collections.
-
-    Args:
-        query: Search string to match against asset titles
-        limit: Maximum number of results to return
-        offset: Number of results to skip for pagination
-
-    Returns:
-        Paginated list of matching asset posters with total count
-    """
-    try:
-        logger.debug(f"Serving GET /api/posters/sources/assets/search query={query}")
-        result = db.poster.search(query=query, limit=limit, offset=offset)
-        return ok(f"Found {result['total']} asset posters", result)
-    except Exception as e:
-        logger.error(f"Error searching asset sources: {e}")
-        return error(
-            f"Error searching assets: {str(e)}",
-            code="ASSET_SEARCH_ERROR",
-            status_code=500,
-        )
-
 
 @router.post(
     "/auto-match",
