@@ -372,7 +372,7 @@ class PosterUploader:
                     )
                     results.append(result)
                 except Exception as e:
-                    self.logger.error(
+                    self.logger.warning(
                         f"Error syncing movie '{movie.get('title')}': {e}"
                     )
                     results.append(
@@ -415,7 +415,7 @@ class PosterUploader:
                     )
                     results.append(result)
                 except Exception as e:
-                    self.logger.error(
+                    self.logger.warning(
                         f"Error syncing series '{show.get('title')}': {e}"
                     )
                     results.append(
@@ -465,7 +465,7 @@ class PosterUploader:
                     results.append(result)
                 except Exception as e:
                     season_num = season.get("season_number", "?")
-                    self.logger.error(
+                    self.logger.warning(
                         f"Error syncing season {season_num} of '{season.get('title')}': {e}"
                     )
                     results.append(
@@ -509,7 +509,7 @@ class PosterUploader:
                     )
                     results.append(result)
                 except Exception as e:
-                    self.logger.error(
+                    self.logger.warning(
                         f"Error syncing collection '{collection.get('title')}': {e}"
                     )
                     results.append(
@@ -627,7 +627,7 @@ class PosterUploader:
                 )
 
         except Exception as e:
-            self.logger.error(f"Error processing asset '{asset_title}': {e}")
+            self.logger.warning(f"Error processing asset '{asset_title}': {e}")
             return UploadResult(
                 asset_title=asset_title,
                 asset_type=asset_type,
@@ -712,7 +712,7 @@ class PosterUploader:
                     if upload.action == "failed":
                         failed_details.append(f"{upload.asset_title}: {upload.reason}")
             if failed_details:
-                self.logger.warning(
+                self.logger.info(
                     "Failed uploads:\n"
                     + "\n".join(f"  • {detail}" for detail in failed_details)
                 )

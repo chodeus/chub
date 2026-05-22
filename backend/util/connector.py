@@ -331,7 +331,7 @@ class Connector:
             results.append(result)
 
             if not result.success and logger:
-                logger.error(
+                logger.warning(
                     f"Failed to sync {instance_config.name}: {result.error_message}"
                 )
 
@@ -493,7 +493,7 @@ class Connector:
             results.append(result)
 
             if not result.success and logger:
-                logger.error(
+                logger.warning(
                     f"Failed to sync {instance_config.name}: {result.error_message}"
                 )
 
@@ -599,7 +599,7 @@ class Connector:
             results.append(result)
 
             if not result.success and logger:
-                logger.error(
+                logger.warning(
                     f"Failed to sync collections for {instance_config.name}: {result.error_message}"
                 )
 
