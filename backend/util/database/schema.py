@@ -639,7 +639,43 @@ class SchemaManager:
         sql: str,
         requires_table: Optional[str] = None,
     ) -> None:
-        """Run a one-shot SQL migration if it hasn't been recorded yet."""
+        """Run a one-shot SQL migration if it hasn't been recorded yet.
+
+        Use for data migrations that aren't naturally idempotent — typically
+        UPDATEs or DELETEs that would corrupt state on a second run.
+        Schema-shape changes (ADD COLUMN / CREATE TABLE) don't need this
+        helper because `add_missing_columns` / `add_missing_tables` already
+        skip already-applied changes.
+
+        To add a new migration:
+
+          1. Inside `_run_rename_migrations`, add a call:
+
+             self._apply_once(
+                 conn,
+                 "YYYYMMDD_short_human_label",
+                 "UPDATE foo SET bar = NULL WHERE baz = 1",
+                 requires_table="foo",  # skip if the table isn't there yet
+             )
+
+          2. Pick a unique `name` — the value goes into `schema_migrations`
+             as the de-duplication key. Convention: ISO date + lowercase
+             snake_case label describing the intent.
+
+          3. The SQL runs inside the existing `with conn:` block from
+             `sync_schema`, so it commits atomically with the rest of the
+             schema-sync pass.
+
+          4. If the migration alters a table that needs to exist first,
+             pass `requires_table=` so the migration is a no-op on fresh
+             installs where the table will be created later in the same
+             sync (and so won't have the bad data anyway).
+
+        Each `name` is gated by the `schema_migrations` table — once
+        recorded, the migration is permanently skipped on subsequent
+        startups even if the underlying data drifts back into the
+        triggering shape.
+        """
         cursor = conn.cursor()
         if "schema_migrations" not in self.get_existing_tables(conn):
             return  # Migration table not yet created; nothing to gate on.

@@ -106,11 +106,62 @@ export const LogLine = React.memo(
             const normalizedSearchTerm = searchTerm?.trim().toLowerCase() || '';
             const hasSearch = normalizedSearchTerm.length > 0;
 
+            // For plain-text segments containing the search term, split the
+            // content at match boundaries so only the matching characters
+            // get the highlight rather than the whole segment. Returns null
+            // if the segment doesn't match (caller falls back to its
+            // segment-specific element).
+            const renderTextWithHighlight = (content, key) => {
+                if (!hasSearch) return null;
+                const lower = content.toLowerCase();
+                if (!lower.includes(normalizedSearchTerm)) return null;
+
+                const pieces = [];
+                let cursor = 0;
+                while (cursor < content.length) {
+                    const hit = lower.indexOf(normalizedSearchTerm, cursor);
+                    if (hit === -1) {
+                        pieces.push(content.slice(cursor));
+                        break;
+                    }
+                    if (hit > cursor) {
+                        pieces.push(content.slice(cursor, hit));
+                    }
+                    const matchText = content.slice(hit, hit + normalizedSearchTerm.length);
+                    pieces.push({ match: matchText });
+                    cursor = hit + normalizedSearchTerm.length;
+                }
+                return (
+                    <span key={key}>
+                        {pieces.map((piece, i) =>
+                            typeof piece === 'string' ? (
+                                <span key={i}>{piece}</span>
+                            ) : (
+                                <LogHighlight key={i} searchTerm={normalizedSearchTerm}>
+                                    {piece.match}
+                                </LogHighlight>
+                            )
+                        )}
+                    </span>
+                );
+            };
+
             return segments.map((segment, idx) => {
                 const key = `seg-${idx}`;
                 const content = segment.content;
 
-                // Only apply highlight if segment contains search term
+                // For text segments with a match, split at the match
+                // boundaries so the highlight covers only the matched
+                // characters, not the entire segment.
+                if (segment.type === 'text' || !segment.type) {
+                    const highlighted = renderTextWithHighlight(content, key);
+                    if (highlighted) return highlighted;
+                }
+
+                // Non-text segments (level, url, datetime, etc.) keep
+                // whole-element highlighting — they're typically short
+                // tokens where character-level splitting would mangle the
+                // segment-specific rendering.
                 const shouldHighlight =
                     hasSearch && content.toLowerCase().includes(normalizedSearchTerm);
 

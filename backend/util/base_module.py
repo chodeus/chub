@@ -95,6 +95,16 @@ class ChubModule(ABC):
         No-op if set_job_context() wasn't called or supplied a None job_id —
         modules call this freely without guarding for the unbound case
         (e.g. CLI runs, ad-hoc invocations).
+
+        Wire this in when a module has a multi-minute phase that would
+        otherwise leave the Jobs page stuck at 0% (or stuck at whatever
+        previous-phase ceiling was reported). See poster_renamerr.py for
+        the ladder pattern: define class-level _XYZ_PROGRESS_CEILING_PCT
+        constants per phase, allocate the 0..100 range proportionally to
+        expected wall-clock duration, and update every N iterations
+        (every 250-2500 depending on iteration rate) plus a final pin at
+        the ceiling on phase completion. Don't bother for fast modules
+        where the job already snaps from 0 to 100 in seconds.
         """
         job_id = getattr(self, "_job_id", None)
         db = getattr(self, "_job_db", None)
