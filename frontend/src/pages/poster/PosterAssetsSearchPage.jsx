@@ -6,7 +6,13 @@ import { useToast } from '../../contexts/ToastContext.jsx';
 import { useSearch, SEARCH_TYPES } from '../../contexts/SearchCoordinatorContext.jsx';
 import { postersAPI } from '../../utils/api/posters.js';
 import { Modal } from '../../components/modals/Modal';
-import { Button, LoadingButton, IconButton, PageHeader } from '../../components/ui/index.js';
+import {
+    Button,
+    LoadingButton,
+    IconButton,
+    PageHeader,
+    Pagination,
+} from '../../components/ui/index.js';
 import Spinner from '../../components/ui/Spinner.jsx';
 
 function PosterThumbnail({ src, alt }) {
@@ -477,29 +483,11 @@ const PosterAssetsSearchPage = () => {
                 <section>
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
                         <h3 className="text-lg font-semibold text-primary">Posters ({total})</h3>
-                        {totalPages > 1 && (
-                            <div className="flex flex-wrap items-center gap-2">
-                                <Button
-                                    variant="ghost"
-                                    size="small"
-                                    disabled={offset === 0}
-                                    onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
-                                >
-                                    Previous
-                                </Button>
-                                <span className="text-sm text-secondary">
-                                    Page {currentPage} of {totalPages}
-                                </span>
-                                <Button
-                                    variant="ghost"
-                                    size="small"
-                                    disabled={offset + PAGE_SIZE >= total}
-                                    onClick={() => setOffset(offset + PAGE_SIZE)}
-                                >
-                                    Next
-                                </Button>
-                            </div>
-                        )}
+                        <Pagination
+                            currentPage={currentPage}
+                            totalPages={totalPages}
+                            onPageChange={page => setOffset((page - 1) * PAGE_SIZE)}
+                        />
                     </div>
                     <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-8 gap-3">
                         {items.map(item => {
@@ -610,30 +598,12 @@ const PosterAssetsSearchPage = () => {
                             );
                         })}
                     </div>
-                    {/* Bottom pagination */}
-                    {totalPages > 1 && (
-                        <div className="flex items-center justify-center gap-2 mt-4">
-                            <Button
-                                variant="ghost"
-                                size="small"
-                                disabled={offset === 0}
-                                onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
-                            >
-                                Previous
-                            </Button>
-                            <span className="text-sm text-secondary">
-                                Page {currentPage} of {totalPages}
-                            </span>
-                            <Button
-                                variant="ghost"
-                                size="small"
-                                disabled={offset + PAGE_SIZE >= total}
-                                onClick={() => setOffset(offset + PAGE_SIZE)}
-                            >
-                                Next
-                            </Button>
-                        </div>
-                    )}
+                    <Pagination
+                        className="mt-4"
+                        currentPage={currentPage}
+                        totalPages={totalPages}
+                        onPageChange={page => setOffset((page - 1) * PAGE_SIZE)}
+                    />
                 </section>
             ) : (
                 <div className="text-center py-16 text-tertiary">
