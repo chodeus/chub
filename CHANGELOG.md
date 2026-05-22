@@ -2,6 +2,29 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.5.0](https://github.com/chodeus/chub/compare/v2.4.0...v2.5.0) (2026-05-22)
+
+
+### Features
+
+* **border_replacerr:** surface which posters got their borders changed ([2cb5384](https://github.com/chodeus/chub/commit/2cb5384ab812167e49df9395d3442c80cf74ca9a))
+* **logger:** add heartbeat() helper for repetitive progress lines ([cbc7ab2](https://github.com/chodeus/chub/commit/cbc7ab26937aee3fe281c10ddd67aa72dddedf31))
+* **media-search:** show season badge to distinguish series rows ([cc738e2](https://github.com/chodeus/chub/commit/cc738e2195092cadf99e72aaf8aecb472d9a0128))
+* **modules:** wire job-progress reporting into ChubModule base ([ebf4ce1](https://github.com/chodeus/chub/commit/ebf4ce106813820a84adfcf32649d82b65f713f1))
+* **poster_renamerr:** heartbeat progress during merge_assets phase ([a69be18](https://github.com/chodeus/chub/commit/a69be18a8e8925f64072bafa0b8d3e228a972a6f))
+* **poster_renamerr:** report progress across match + rename phases ([fe8e3e5](https://github.com/chodeus/chub/commit/fe8e3e54d44e1ec43eecebed33abcd85d0cba4dc))
+
+
+### Bug Fixes
+
+* **connector:** propagate per-season monitored flag ([61ec442](https://github.com/chodeus/chub/commit/61ec442458b3063af3e523738c04c9c009b09bb5))
+* **logs:** Debug toggle visible state + per-line search ([4b689ed](https://github.com/chodeus/chub/commit/4b689ed4087b2e5a40167c7280f67bf83e28decc))
+* **logs:** use existing 'Hide heartbeat' toggle instead of DEBUG demotion ([487ad74](https://github.com/chodeus/chub/commit/487ad74b9292722746c4f8d4cb8ebcff3355460f))
+* **media_cache:** normalize search query ([02b6e61](https://github.com/chodeus/chub/commit/02b6e61ef23a9c7e0b806d5c821ea5cb57f51663))
+* **notification:** defensive cast on Notifiarr channel_id ([9dbd1a0](https://github.com/chodeus/chub/commit/9dbd1a0a81774740dd21bf3849ec4a6d6a8ea824))
+* **poster_renamerr:** drop double-s in 'No &lt;type&gt; to rename' log line ([323f4cd](https://github.com/chodeus/chub/commit/323f4cdbe9a07b699892eded8f48633871f1a7e5))
+* **unmatched_assets:** use episodeFileCount, link Discord request to season ([908015a](https://github.com/chodeus/chub/commit/908015a62119a9237166fcac85294a5b96c0e1db))
+
 ## [2.4.0](https://github.com/chodeus/chub/compare/v2.3.0...v2.4.0) (2026-05-22)
 
 
