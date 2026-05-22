@@ -132,6 +132,31 @@ def test_should_include_filters_tags_from_csv_string():
     assert m.should_include({"tags": "skip, other"}) is False
 
 
+def test_should_include_filters_unreleased_status():
+    """Status blocklist drops announced/tba/upcoming/deleted regardless of has_content."""
+    m = make_module()
+    # Even with has_content=1 (e.g. stale cache from before status filtering),
+    # an announced movie should be excluded.
+    assert m.should_include({"status": "announced", "has_content": 1}) is False
+    assert m.should_include({"status": "tba", "has_content": 1}) is False
+    assert m.should_include({"status": "upcoming", "has_content": 1}) is False
+    assert m.should_include({"status": "deleted", "has_content": 1}) is False
+    # Released / continuing / inCinemas / unknown / missing should pass the status gate.
+    assert m.should_include({"status": "released", "has_content": 1}) is True
+    assert m.should_include({"status": "continuing", "has_content": 1}) is True
+    assert m.should_include({"status": "inCinemas", "has_content": 1}) is True
+    assert m.should_include({"status": None, "has_content": 1}) is True
+    assert m.should_include({"has_content": 1}) is True
+
+
+def test_should_include_filters_no_content():
+    """has_content=0 still excludes (and NULL still falls through)."""
+    m = make_module()
+    assert m.should_include({"status": "released", "has_content": 0}) is False
+    # NULL has_content -> include (status above is the only gate)
+    assert m.should_include({"status": "released", "has_content": None}) is True
+
+
 def test_should_include_filters_titles():
     m = make_module()
     m.config.ignore_titles = ["The Bad One"]
