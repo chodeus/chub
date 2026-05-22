@@ -6,25 +6,12 @@ import { LogBlock } from './LogBlock';
 
 // Lines treated as "heartbeat" — repetitive-by-design noise that's only
 // useful when actively diagnosing a slow or stuck run. The Logs page's
-// "Hide heartbeat" toggle (on by default) filters these out so the user
-// can still see real activity. Backend keeps emitting them at INFO so
-// they stay available when the toggle is off.
-const HEARTBEAT_PATTERN = new RegExp(
-    [
-        // Scheduler-loop tick from backend/util/scheduler.py
-        'Scheduler is alive\\. Uptime:',
-        // rclone --stats heartbeat (sync_gdrive)
-        'Transferred: ',
-        'Checks: \\d',
-        'Elapsed time:',
-        // rclone per-file actions during sync_gdrive (Deleted, Copied,
-        // Renamed, Updated, Removed, Skipped). Spammy on big libraries.
-        ': (Deleted|Copied|Renamed|Updated|Removed|Skipped)( |$)',
-        ': Removing( empty)? directory',
-        // poster_renamerr merge_assets progress heartbeat
-        'Merged \\d+ / \\d+ assets',
-    ].join('|')
-);
+// "Hide heartbeat" toggle (on by default) filters these out. Backend
+// chub code marks heartbeats via Logger.heartbeat() which prefixes the
+// message with `[hb]`; matching the prefix alone catches every chub
+// heartbeat without the frontend having to track individual message
+// strings.
+const HEARTBEAT_PATTERN = /\[hb\]/;
 
 // Rough initial height per block in px. The virtualizer re-measures after
 // render so this only affects the initial scrollbar estimate.

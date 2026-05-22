@@ -23,6 +23,20 @@ except ImportError:
     pass
 
 
+# rclone stdout patterns that are repetitive-by-design progress / per-file
+# action noise. Lines matching these go through logger.heartbeat() so the
+# frontend Logs page can hide them with the Hide-Heartbeat toggle.
+_RCLONE_HEARTBEAT_PATTERN = re.compile(
+    r"^("
+    r"Transferred:"  # progress heartbeat (fires every --stats interval)
+    r"|Checks:"  # check-phase heartbeat
+    r"|Elapsed time:"  # progress heartbeat
+    r"|.*: (Deleted|Copied|Updated|Renamed|Removed|Skipped)\b"  # per-file action
+    r"|.*: Removing( empty)? directory"  # per-directory cleanup
+    r")"
+)
+
+
 class SyncGDrive(ChubModule):
     def __init__(self, logger: Optional[Logger] = None) -> None:
         super().__init__(logger=logger)
@@ -226,14 +240,17 @@ class SyncGDrive(ChubModule):
                     line,
                 ).strip()
                 if cleaned_line:
-                    # Respect rclone's own level. The progress heartbeats
-                    # (Transferred / Checks / Elapsed time) and per-file
-                    # action lines (": Deleted" / ": Copied" / etc) stay at
-                    # INFO — the frontend Logs page hides them via its
-                    # heartbeat pattern, so they're available when wanted
-                    # without drowning the default view.
+                    # Respect rclone's own level for ERROR, classify the
+                    # rest. rclone's --stats output (Transferred / Checks /
+                    # Elapsed time) and per-file action lines (": Deleted"
+                    # / ": Copied" / etc) are repetitive-by-design — route
+                    # them through heartbeat() so the frontend hides them
+                    # under the Hide-Heartbeat toggle. One-off setup and
+                    # completion lines stay at INFO so they remain visible.
                     if rclone_level == "ERROR":
                         self.logger.error(cleaned_line)
+                    elif _RCLONE_HEARTBEAT_PATTERN.match(cleaned_line):
+                        self.logger.heartbeat(cleaned_line)
                     else:
                         self.logger.info(cleaned_line)
                     pct = self.parse_rclone_progress(cleaned_line)

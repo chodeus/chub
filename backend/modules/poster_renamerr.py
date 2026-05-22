@@ -660,7 +660,7 @@ class PosterRenamerr(ChubModule):
                 db.poster.upsert(asset)
 
                 if idx % self._MERGE_PROGRESS_EVERY == 0 and idx != total:
-                    self.logger.info(f"  Merged {idx} / {total} assets")
+                    self.logger.heartbeat(f"  Merged {idx} / {total} assets")
 
             self.logger.info(f"Finished merging {total} assets from '{source_dir}'")
 
