@@ -600,6 +600,38 @@ class SchemaManager:
             requires_table="media_cache",
         )
 
+        # Before season_number_regex was tightened to require plural
+        # 'Specials', singular 'Special' in a movie title (e.g. "X-Men
+        # First Class 35mm Special", "Mariah Carey's Magical Christmas
+        # Special") got matched as a season-0 marker. Each affected
+        # poster file landed in poster_cache with asset_type='show',
+        # season_number=0, and a truncated title — so the matcher could
+        # never link it to the corresponding Radarr row. The fix to the
+        # regex prevents new rows from being mis-stored, but existing
+        # rows are keyed under the wrong (asset_type, season_number)
+        # tuple and won't be overwritten by poster_renamerr's
+        # delete-then-insert path on the next scan. Purge them here so
+        # the next scan can insert clean rows without orphan ghosts
+        # lingering. The heuristic distinguishes legitimate season-0
+        # rows (whose files end in 'Specials.<ext>' or use ' - Specials '
+        # / '_ Specials' separators) from movie casualties, verified
+        # against real data: catches the 71 known-bad rows, touches
+        # none of the legitimate ~1,700 Specials season rows.
+        self._apply_once(
+            conn,
+            "20260522_purge_orphan_specials_show_rows",
+            """
+            DELETE FROM poster_cache
+            WHERE asset_type = 'show'
+              AND season_number = 0
+              AND file LIKE '%Special%'
+              AND file NOT LIKE '%Specials.%'
+              AND file NOT LIKE '%- Specials %'
+              AND file NOT LIKE '%_ Specials%'
+            """,
+            requires_table="poster_cache",
+        )
+
     def _apply_once(
         self,
         conn: sqlite3.Connection,
