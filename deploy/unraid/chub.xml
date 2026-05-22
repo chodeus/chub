@@ -1,0 +1,41 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>chub</Name>
+  <Repository>ghcr.io/chodeus/chub:latest</Repository>
+  <Registry>https://github.com/chodeus/chub/pkgs/container/chub</Registry>
+  <Network>bridge</Network>
+  <MyIP/>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/chodeus/chub/wiki/Installation</Support>
+  <Project>https://github.com/chodeus/chub</Project>
+  <ReadMe>https://github.com/chodeus/chub#readme</ReadMe>
+  <Overview>CHUB &#x2014; Chodeus' Media Script Hub. Self-hosted, all-in-one media asset manager for your Plex/ARR stack.&#13;
+&#13;
+Bundles a React web UI and a FastAPI backend that orchestrates scheduled modules (poster_renamerr, jduparr, nohl, unmatched_assets, upgradinatorr, labelarr, sync_gdrive, border_replacerr, nestarr, poster_cleanarr, renameinatorr, health_checkarr) against your libraries, poster trees, and cloud drives.&#13;
+&#13;
+Web UI on container port 8000; login is bcrypt + JWT with rate limiting (first boot prompts you to create the admin account).&#13;
+&#13;
+Config help: https://github.com/chodeus/chub/wiki/Configuration</Overview>
+  <Category>MediaApp:Other</Category>
+  <WebUI>http://[IP]:[PORT:8000]/</WebUI>
+  <TemplateURL>https://raw.githubusercontent.com/chodeus/chub/main/deploy/unraid/chub.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/chodeus/chub/main/assets/chub-logo.png</Icon>
+  <ExtraParams>--restart=unless-stopped</ExtraParams>
+  <PostArgs/>
+  <CPUset/>
+  <DonateText/>
+  <DonateLink/>
+  <Requires/>
+  <Config Name="Config Path" Target="/config" Default="/mnt/user/appdata/chub" Mode="rw" Description="Path where config.yml, chub.db, and logs are stored." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/chub</Config>
+  <Config Name="Kometa Assets Path" Target="/kometa" Default="/mnt/user/appdata/kometa/assets" Mode="rw" Description="Path to your Kometa assets directory (poster_renamerr source tree for collection images)." Type="Path" Display="always" Required="false" Mask="false">/mnt/user/appdata/kometa/assets</Config>
+  <Config Name="Media Path" Target="/media" Default="/mnt/user/data/media" Mode="rw" Description="Path to your media library (root of movies / tv folders)." Type="Path" Display="always" Required="false" Mask="false">/mnt/user/data/media</Config>
+  <Config Name="Data Path" Target="/data" Default="/mnt/user/data" Mode="rw" Description="Shared data mount (useful for nohl / jduparr cross-volume walks)." Type="Path" Display="always" Required="false" Mask="false">/mnt/user/data</Config>
+  <Config Name="Plex Metadata Path" Target="/plex" Default="" Mode="rw" Description="Path to the Plex Media Server metadata directory (required by poster_cleanarr for orphan cleanup)." Type="Path" Display="always" Required="false" Mask="false"/>
+  <Config Name="WebUI Port" Target="8000" Default="8000" Mode="tcp" Description="Container-side is always 8000; change the host side to avoid conflicts." Type="Port" Display="always" Required="true" Mask="false">8000</Config>
+  <Config Name="PUID" Target="PUID" Default="99" Mode="" Description="User ID for file permissions (99 = nobody on Unraid)." Type="Variable" Display="advanced" Required="true" Mask="false">99</Config>
+  <Config Name="PGID" Target="PGID" Default="100" Mode="" Description="Group ID for file permissions (100 = users on Unraid)." Type="Variable" Display="advanced" Required="true" Mask="false">100</Config>
+  <Config Name="UMASK" Target="UMASK" Default="002" Mode="" Description="umask applied to files written by CHUB." Type="Variable" Display="advanced" Required="false" Mask="false">002</Config>
+  <Config Name="TZ" Target="TZ" Default="Etc/UTC" Mode="" Description="Timezone (see https://en.wikipedia.org/wiki/List_of_tz_database_time_zones)." Type="Variable" Display="advanced" Required="true" Mask="false">Etc/UTC</Config>
+  <TailscaleStateDir/>
+</Container>
