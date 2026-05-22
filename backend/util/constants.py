@@ -1,9 +1,15 @@
 import re
 from typing import List, Pattern, Set
 
-# Matches "Season 1", "season_01", etc., and "Specials" (returns 0)
+# Matches "Season 1", "season_01", etc., and "Specials" (returns 0).
+# `Specials` must be the plural form — the canonical Plex/Sonarr season-0
+# folder name. The trailing `\b` prevents bleed into longer words. Singular
+# `Special` is intentionally NOT matched because movie titles legitimately
+# contain it ("X-Men First Class 35mm Special", "Holiday Special", etc.) —
+# matching it ate movie-title suffixes and mis-classified those files as
+# season-0 shows.
 season_number_regex = re.compile(
-    r"(?:[-\s_]+)?Season\s*(\d{1,4})|(?:[-\s_]+)?Specials?", re.IGNORECASE
+    r"(?:[-\s_]+)?Season\s*(\d{1,4})|(?:[-\s_]+)?Specials\b", re.IGNORECASE
 )
 
 # Matches the literal "Season " followed by 1–4 digits (e.g. "Season 1", "Season 12", up to "Season 9999"), capturing those digits as group 1

@@ -214,3 +214,25 @@ def test_get_assets_files_specials_yield_season_zero(tmp_path):
     records = m._get_assets_files(str(tmp_path))
     assert len(records) == 1
     assert records[0]["season_number"] == 0
+
+
+def test_get_assets_files_singular_special_in_movie_title(tmp_path):
+    """Singular 'Special' in a movie title must not be treated as a season marker.
+
+    Regression: 'X-Men First Class 35mm Special (2012)' was being parsed as
+    a season-0 show with title 'X-Men First Class 35mm', which broke both
+    ID-based and title-based matching against the Radarr row.
+    """
+    m = make_module()
+    _make_asset_tree(
+        str(tmp_path),
+        ["X-Men First Class 35mm Special (2012) {tmdb-691677} {imdb-tt1948218}.jpg"],
+    )
+    records = m._get_assets_files(str(tmp_path))
+    assert len(records) == 1
+    record = records[0]
+    assert record["title"] == "X-Men First Class 35mm Special"
+    assert record["season_number"] is None
+    assert record["asset_type"] == "movie"
+    assert record["tmdb_id"] == 691677
+    assert record["imdb_id"] == "tt1948218"
