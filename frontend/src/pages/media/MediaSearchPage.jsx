@@ -5,7 +5,7 @@ import { useToast } from '../../contexts/ToastContext.jsx';
 import { useApiMutation } from '../../hooks/useApiData.js';
 import { mediaAPI } from '../../utils/api/media.js';
 import { Modal } from '../../components/modals/Modal';
-import { Button, IconButton, PageHeader } from '../../components/ui/index.js';
+import { Button, IconButton, PageHeader, Pagination } from '../../components/ui/index.js';
 import Spinner from '../../components/ui/Spinner.jsx';
 import RecentQueries, { useRecentQueries } from '../../components/RecentQueries.jsx';
 
@@ -279,38 +279,17 @@ const MediaSearchPage = () => {
                         ))}
                     </div>
 
-                    {total > filters.limit && (
-                        <div className="flex items-center justify-center gap-4 mt-4">
-                            <Button
-                                variant="ghost"
-                                onClick={() =>
-                                    setFilters(prev => ({
-                                        ...prev,
-                                        offset: Math.max(0, prev.offset - prev.limit),
-                                    }))
-                                }
-                                disabled={filters.offset === 0}
-                            >
-                                Previous
-                            </Button>
-                            <span className="text-sm text-secondary">
-                                Page {Math.floor(filters.offset / filters.limit) + 1} of{' '}
-                                {Math.ceil(total / filters.limit)}
-                            </span>
-                            <Button
-                                variant="ghost"
-                                onClick={() =>
-                                    setFilters(prev => ({
-                                        ...prev,
-                                        offset: prev.offset + prev.limit,
-                                    }))
-                                }
-                                disabled={filters.offset + filters.limit >= total}
-                            >
-                                Next
-                            </Button>
-                        </div>
-                    )}
+                    <Pagination
+                        className="mt-4"
+                        currentPage={Math.floor(filters.offset / filters.limit) + 1}
+                        totalPages={Math.ceil(total / filters.limit)}
+                        onPageChange={page =>
+                            setFilters(prev => ({
+                                ...prev,
+                                offset: (page - 1) * prev.limit,
+                            }))
+                        }
+                    />
                 </>
             )}
 
