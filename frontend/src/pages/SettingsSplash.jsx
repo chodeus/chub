@@ -58,6 +58,12 @@ const SETTINGS_CARDS = [
         description: 'Inbound event sources and cleanup.',
         badge: 3,
     },
+    {
+        to: '/settings/system',
+        icon: 'database',
+        title: 'System',
+        description: 'Database statistics and maintenance.',
+    },
 ];
 
 export const SettingsSplash = React.memo(() => {

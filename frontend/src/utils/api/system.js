@@ -83,6 +83,34 @@ export const systemAPI = {
     },
 
     /**
+     * Database statistics — per-table row counts plus page/freelist info
+     * and the schema_migrations log.
+     * @param {Object} options - Request options
+     * @returns {Promise<Object>} { tables, page_size, page_count, freelist_count, total_bytes, free_bytes, file_bytes, schema_migrations }
+     */
+    getDbStats: (options = {}) => {
+        return apiCore.get('/system/db-stats', { ...options });
+    },
+
+    /**
+     * Run SQLite VACUUM to reclaim freed space.
+     * @param {Object} options - Request options
+     * @returns {Promise<Object>} { bytes_before, bytes_after, bytes_reclaimed, duration_ms }
+     */
+    vacuumDb: (options = {}) => {
+        return apiCore.post('/system/db/vacuum', {}, options);
+    },
+
+    /**
+     * Wipe poster_cache for a full rescan on the next poster_renamerr run.
+     * @param {Object} options - Request options
+     * @returns {Promise<Object>} { deleted }
+     */
+    clearPosterCache: (options = {}) => {
+        return apiCore.post('/system/db/poster-cache/clear', {}, options);
+    },
+
+    /**
      * Recent instance health snapshots (Plex / Radarr / Sonarr / Lidarr probes).
      * @param {Object} options - Request options
      * @param {number} options.limit - Max snapshots to return (default 200)
