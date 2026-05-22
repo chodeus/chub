@@ -35,6 +35,11 @@ const JobsPage = React.lazy(() =>
 const WebhooksPage = React.lazy(() =>
     import('./pages/settings/WebhooksPage.jsx').then(m => ({ default: m.WebhooksPage }))
 );
+const SystemSettingsPage = React.lazy(() =>
+    import('./pages/settings/SystemSettingsPage.jsx').then(m => ({
+        default: m.SystemSettingsPage,
+    }))
+);
 
 // Lazy-loaded pages - other
 const Logs = React.lazy(() => import('./pages/Logs.jsx'));
@@ -404,6 +409,17 @@ const App = () => {
                                                                 pageDescription="Webhook processors and cleanup operations"
                                                             >
                                                                 <WebhooksPage />
+                                                            </PageErrorBoundary>
+                                                        }
+                                                    />
+                                                    <Route
+                                                        path="settings/system"
+                                                        element={
+                                                            <PageErrorBoundary
+                                                                pageName="System"
+                                                                pageDescription="Database statistics and maintenance actions"
+                                                            >
+                                                                <SystemSettingsPage />
                                                             </PageErrorBoundary>
                                                         }
                                                     />

@@ -82,6 +82,7 @@ const NAV_SECTIONS = [
                         path: '/settings/notifications',
                     },
                     { id: 'settings-webhooks', label: 'Webhooks', path: '/settings/webhooks' },
+                    { id: 'settings-system', label: 'System', path: '/settings/system' },
                 ],
             },
             {

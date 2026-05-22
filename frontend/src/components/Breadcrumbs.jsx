@@ -33,6 +33,7 @@ const ROUTE_CRUMBS = {
     '/settings/jobs': [{ label: 'Settings' }, { label: 'Jobs' }],
     '/settings/notifications': [{ label: 'Settings' }, { label: 'Notifications' }],
     '/settings/webhooks': [{ label: 'Settings' }, { label: 'Webhooks' }],
+    '/settings/system': [{ label: 'Settings' }, { label: 'System' }],
 };
 
 // Routes where breadcrumbs add no value (the PageHeader already names them

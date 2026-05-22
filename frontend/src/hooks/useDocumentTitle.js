@@ -26,6 +26,7 @@ const ROUTE_TITLES = {
     '/settings/jobs': 'Jobs',
     '/settings/notifications': 'Notifications',
     '/settings/webhooks': 'Webhooks',
+    '/settings/system': 'System',
     '/logs': 'Logs',
 };
 
