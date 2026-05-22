@@ -166,9 +166,11 @@ class SchemaManager:
                     "monitored", "BOOLEAN", default=1
                 ),  # Whether item is monitored
                 ColumnDefinition(
-                    "has_content", "BOOLEAN", default=1
+                    "has_content", "BOOLEAN"
                 ),  # Movie: hasFile. Season: episodeCount > 0. Used to hide
                 # unreleased/undownloaded items from unmatched-asset reports.
+                # No default — rows that predate this column read as NULL
+                # and rely on the *arr `status` field as a fallback gate.
                 ColumnDefinition("genre", "TEXT"),  # JSON array of genres
                 ColumnDefinition(
                     "created_at", "TEXT"
@@ -447,6 +449,17 @@ class SchemaManager:
         )
         self._add_table(upgradinatorr_progress)
 
+        # Tracks which one-shot data migrations have been applied.
+        # See _run_rename_migrations for usage.
+        schema_migrations = TableDefinition(
+            name="schema_migrations",
+            columns=[
+                ColumnDefinition("name", "TEXT", primary_key=True, nullable=False),
+                ColumnDefinition("applied_at", "TEXT", default="CURRENT_TIMESTAMP"),
+            ],
+        )
+        self._add_table(schema_migrations)
+
         # Calculate schema hash for change detection
         self._calculate_schema_hash()
 
@@ -556,7 +569,9 @@ class SchemaManager:
     def _run_rename_migrations(self, conn: sqlite3.Connection) -> None:
         """One-shot data migrations for tables that were renamed or removed.
 
-        Idempotent — safe to call on every startup.
+        Idempotent — safe to call on every startup. Migrations that aren't
+        naturally idempotent (e.g. unconditional UPDATEs) gate on the
+        `schema_migrations` table so they only run once.
         """
         cursor = conn.cursor()
         existing = self.get_existing_tables(conn)
@@ -571,6 +586,44 @@ class SchemaManager:
                     logger.info(f"Dropped legacy {legacy} table")
                 except sqlite3.Error as e:
                     logger.error(f"Failed to drop {legacy}: {e}")
+
+        # When `has_content` was added to media_cache, the ALTER TABLE used
+        # DEFAULT 1, which back-filled every existing row with True regardless
+        # of whether the *arr instance actually had a file. That made the
+        # `has_content=0` filter in unmatched_assets useless until the next
+        # full sync re-stamped every row. Null those rows out so the filter
+        # falls through to the *arr `status` check until a fresh sync runs.
+        self._apply_once(
+            conn,
+            "20260522_null_has_content_default_rows",
+            "UPDATE media_cache SET has_content = NULL WHERE has_content = 1",
+            requires_table="media_cache",
+        )
+
+    def _apply_once(
+        self,
+        conn: sqlite3.Connection,
+        name: str,
+        sql: str,
+        requires_table: Optional[str] = None,
+    ) -> None:
+        """Run a one-shot SQL migration if it hasn't been recorded yet."""
+        cursor = conn.cursor()
+        if "schema_migrations" not in self.get_existing_tables(conn):
+            return  # Migration table not yet created; nothing to gate on.
+        if requires_table and requires_table not in self.get_existing_tables(conn):
+            return
+        cursor.execute("SELECT 1 FROM schema_migrations WHERE name = ?", (name,))
+        if cursor.fetchone() is not None:
+            return
+        try:
+            cursor.execute(sql)
+            cursor.execute(
+                "INSERT OR IGNORE INTO schema_migrations (name) VALUES (?)", (name,)
+            )
+            logger.info(f"Applied data migration: {name}")
+        except sqlite3.Error as e:
+            logger.error(f"Failed to apply data migration {name}: {e}")
 
     def add_missing_tables(self, conn: sqlite3.Connection) -> List[str]:
         """Create tables that exist in schema but not in database."""

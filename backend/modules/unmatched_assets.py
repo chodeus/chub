@@ -73,11 +73,21 @@ class UnmatchedAssets(ChubModule):
             a for a in self.all_collections if self.allowed_collection(a)
         ]
 
+    # Statuses the *arr reports for items that aren't yet actionable — no
+    # file is expected, and there's nothing in Plex to attach a poster to.
+    # Acts as a release-readiness gate on top of has_content so stale cache
+    # rows (pre-has_content schema, has_content defaulted to 1) don't leak in.
+    _UNRELEASED_STATUSES = frozenset({"announced", "tba", "upcoming", "deleted"})
+
     def should_include(self, asset: Dict[str, Any]) -> bool:
         cfg = self.config
-        # Hide unreleased/undownloaded items: Radarr movies without a file and
-        # Sonarr seasons with no aired/downloaded episodes. None is treated as
-        # "include" so pre-migration rows (NULL has_content) keep showing.
+        status = asset.get("status")
+        if status in self._UNRELEASED_STATUSES:
+            return False
+        # Hide undownloaded items: Radarr movies without a file and Sonarr
+        # seasons with no aired/downloaded episodes. None falls through to
+        # "include" so the status check above is the only gate for rows that
+        # haven't been re-stamped by an ARR sync since has_content was added.
         has_content = asset.get("has_content")
         if has_content is not None and not has_content:
             return False
