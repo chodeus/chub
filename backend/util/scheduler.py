@@ -13,7 +13,7 @@ from backend.util.helper import create_table
 
 # Scheduler configuration constants
 SCHEDULER_POLL_INTERVAL_SECONDS = 5
-SCHEDULER_UPTIME_LOG_INTERVAL_SECONDS = 60
+SCHEDULER_UPTIME_LOG_INTERVAL_SECONDS = 600
 SCHEDULER_HEALTH_CHECK_INTERVAL_SECONDS = 6 * 3600  # every 6h
 SCHEDULER_HEALTH_RETENTION_DAYS = 30
 
@@ -152,13 +152,23 @@ def check_schedule(script_name: str, schedule: str, logger: Optional[Logger]) ->
 
 
 def print_schedule_table(logger: Optional[Any], schedule: Dict[str, str]) -> None:
-    """Print the current schedule table using util.helper.create_table for consistency."""
+    """Print scheduled modules in a table and list unscheduled ones on a single line."""
     if logger is None:
         return
-    table_data = [["Module", "Schedule"]] + [
-        [module_name, schedule_time] for module_name, schedule_time in schedule.items()
+
+    scheduled = [
+        (name, value) for name, value in schedule.items() if value not in (None, "", "None")
     ]
-    logger.info(create_table(table_data))
+    unscheduled = [name for name, value in schedule.items() if value in (None, "", "None")]
+
+    if scheduled:
+        table_data = [["Module", "Schedule"]] + [[name, value] for name, value in scheduled]
+        logger.info(create_table(table_data))
+    else:
+        logger.info("No modules are currently scheduled.")
+
+    if unscheduled:
+        logger.info(f"Unscheduled: {', '.join(unscheduled)}")
 
 
 def _profile_value(profile: Any, key: str, default: Any = None) -> Any:

@@ -10,7 +10,7 @@ BRANCH=${BRANCH:-master}
 
 export RCLONE_CONFIG="${CONFIG_DIR}/rclone/rclone.conf"
 
-VERSION=$(python3 -c "import json, sys; print(json.load(open(sys.argv[1]))['.'])" "$(dirname "$0")/../.release-please-manifest.json")
+VERSION=$(cd "$(dirname "$0")/.." && python3 -c "from backend.util.version import get_version; print(get_version())")
 
 echo "
 ═════════════════════════════════════════════════════════
@@ -37,11 +37,10 @@ echo "
 ═════════════════════════════════════════════════════════
 "
 
-echo "Setting umask to ${UMASK}"
 umask "$UMASK"
 
-echo "Starting CHUB as $(whoami) with UID: $PUID and GID: $PGID"
 if [ "$(id -u)" = "0" ]; then
+  echo "Dropping privileges to dockeruser (PUID=${PUID}, PGID=${PGID})"
   groupmod -o -g "$PGID" dockeruser
   usermod -o -u "$PUID" dockeruser
   chown -R "${PUID}:${PGID}" "${CONFIG_DIR}"
