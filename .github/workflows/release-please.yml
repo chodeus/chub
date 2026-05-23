@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   release:
-    uses: chodeus/chodeus-ops/.github/workflows/release-please.yml@bce9575d63bcd87ba1ff07bb95a08c64130104bd # main
+    uses: chodeus/chodeus-ops/.github/workflows/release-please.yml@a435933268b61484615a8d3e6216d08efdd04a9f # main
 
   docker-version:
     needs: release
