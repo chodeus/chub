@@ -47,8 +47,11 @@ RUN pip3 install --no-cache-dir cairosvg && \
     python3 scripts/rasterize_borders.py && \
     pip3 uninstall -y cairosvg
 
-# Build frontend assets
-RUN cd frontend && npm install && npm run build
+# Build frontend assets.
+# Use `npm ci` so platform-specific optional native bindings
+# (e.g. @rolldown/binding-linux-arm64-gnu) are resolved strictly from the
+# lockfile per buildx target arch — avoids npm/cli#4828 drift with npm install.
+RUN cd frontend && npm ci && npm run build
 
 # -------------------------
 # Stage 2: Final runtime image
