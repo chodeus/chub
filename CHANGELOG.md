@@ -2,6 +2,14 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.5.4](https://github.com/chodeus/chub/compare/v2.5.3...v2.5.4) (2026-05-23)
+
+
+### Bug Fixes
+
+* **deps:** update all non-major dependencies ([#150](https://github.com/chodeus/chub/issues/150)) ([128f3a4](https://github.com/chodeus/chub/commit/128f3a47185bcb55ef13e6087008fadfa94ee3f2))
+* **docker:** use npm ci so per-arch rolldown bindings resolve from the lockfile ([ebc15b8](https://github.com/chodeus/chub/commit/ebc15b8d277ea1e6e73dd699544ae192754d94e2))
+
 ## [2.5.3](https://github.com/chodeus/chub/compare/v2.5.2...v2.5.3) (2026-05-23)
 
 
