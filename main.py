@@ -2,6 +2,7 @@
 
 import argparse
 import atexit
+import logging
 import os
 import signal
 import sys
@@ -12,7 +13,14 @@ from typing import Any, List, Optional
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
-from backend.util.config import ChubConfig, get_config_path, load_config
+from backend.util.config import (
+    ChubConfig,
+    ConfigError,
+    ConfigValidationError,
+    format_validation_errors,
+    get_config_path,
+    load_config,
+)
 from backend.util.logger import Logger
 from backend.util.module_orchestrator import ModuleOrchestrator
 from backend.util.scheduler import ChubScheduler
@@ -146,8 +154,28 @@ class ChubApplication:
         try:
             try:
                 self.config = load_config()
-            except Exception as e:
+            except ConfigValidationError as e:
+                print(
+                    "[CHUB] ERROR loading config: validation failed",
+                    file=sys.stderr,
+                )
+                if e.validation_error:
+                    for line in format_validation_errors(e.validation_error):
+                        print(f"   • {line}", file=sys.stderr)
+                else:
+                    print(f"   • {e}", file=sys.stderr)
+                print(
+                    "[CHUB] Fix the fields above in config.yml and restart.",
+                    file=sys.stderr,
+                )
+                return 1
+            except ConfigError as e:
                 print(f"[CHUB] ERROR loading config: {e}", file=sys.stderr)
+                return 1
+            except Exception as e:
+                print(
+                    f"[CHUB] ERROR loading config (unexpected): {e}", file=sys.stderr
+                )
                 return 1
 
             if args.modules:
@@ -170,6 +198,8 @@ class ChubApplication:
                     module_name="general",
                     max_logs=self.config.general.max_logs,
                 )
+
+            self._install_config_log_bridge()
 
             self.module_orchestrator = ModuleOrchestrator(logger=self.logger)
 
@@ -293,8 +323,47 @@ class ChubApplication:
                     f"Failed to start config watcher: {e}"
                 )
 
+    def _install_config_log_bridge(self) -> None:
+        """Forward `chub.config` stdlib log records into the chub Logger.
+
+        `load_config()` and the migrator emit status through
+        `logging.getLogger("chub.config")` (in addition to print, for very
+        early startup). After the chub Logger is initialised we install a
+        handler so those records also appear in the visible chub log file
+        and via the MAIN adapter the user is watching.
+        """
+        if not self.logger:
+            return
+        adapter = self.logger.get_adapter("MAIN")
+
+        class _Bridge(logging.Handler):
+            def emit(self, record: logging.LogRecord) -> None:
+                try:
+                    msg = self.format(record)
+                except Exception:
+                    msg = record.getMessage()
+                if record.levelno >= logging.ERROR:
+                    adapter.error(f"[CONFIG] {msg}")
+                elif record.levelno >= logging.WARNING:
+                    adapter.warning(f"[CONFIG] {msg}")
+                else:
+                    adapter.info(f"[CONFIG] {msg}")
+
+        config_logger = logging.getLogger("chub.config")
+        # Idempotent — survive multiple Logger inits without stacking handlers.
+        if any(isinstance(h, _Bridge) for h in config_logger.handlers):
+            return
+        bridge = _Bridge()
+        bridge.setFormatter(logging.Formatter("%(message)s"))
+        config_logger.addHandler(bridge)
+        config_logger.setLevel(logging.INFO)
+
     def _on_config_changed(self) -> None:
-        """Reload config on file change. Keeps old config if validation fails."""
+        """Reload config on file change. Keeps old config if validation fails.
+
+        Logs every per-field validation error so the user can see which
+        section of config.yml needs fixing — not just a one-line summary.
+        """
         log = self.logger.get_adapter("MAIN") if self.logger else None
         try:
             new_config = load_config()
@@ -303,15 +372,31 @@ class ChubApplication:
                 self.scheduler.config = new_config
             if log:
                 log.info("Configuration reloaded successfully")
-        except SystemExit:
-            # load_config calls sys.exit on validation errors - catch and keep old config
+        except ConfigValidationError as e:
+            if not log:
+                return
+            log.error(
+                "Config reload rejected: validation failed. "
+                "Keeping previous in-memory config; the file on disk has NOT been reverted."
+            )
+            if e.validation_error:
+                for line in format_validation_errors(e.validation_error):
+                    log.error(f"   • {line}")
+            else:
+                log.error(f"   • {e}")
+            log.error("Fix the fields above in config.yml — chub will auto-reload.")
+        except ConfigError as e:
             if log:
-                log.warning(
-                    "Config reload failed (validation error). Keeping previous config."
+                log.error(
+                    f"Config reload failed: {e}. Keeping previous in-memory config."
                 )
         except Exception as e:
             if log:
-                log.warning(f"Config reload failed: {e}. Keeping previous config.")
+                log.error(
+                    f"Config reload failed (unexpected): {e}. "
+                    f"Keeping previous in-memory config.",
+                    exc_info=True,
+                )
 
     def run_scheduler_loop(self) -> None:
         """Run the scheduler loop with proper shutdown handling"""

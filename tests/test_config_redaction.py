@@ -7,6 +7,7 @@ from backend.util.config import (
     ChubConfig,
     ConfigParseError,
     ConfigValidationError,
+    format_validation_errors,
     load_config,
     redact_secrets,
     save_config,
@@ -135,6 +136,43 @@ def test_general_config_rejects_unknown_log_level(tmp_path):
 
     with pytest.raises(ConfigValidationError):
         load_config(str(path))
+
+
+def test_format_validation_errors_emits_one_line_per_field(tmp_path):
+    """format_validation_errors should produce one humanized line per Pydantic error."""
+    path = tmp_path / "config.yml"
+    # Two distinct violations: max_logs wrong type, log_level out of allowed values
+    path.write_text("general:\n  max_logs: not_an_int\n  log_level: verbose\n")
+    try:
+        load_config(str(path))
+    except ConfigValidationError as e:
+        lines = format_validation_errors(e.validation_error)
+        assert len(lines) >= 2
+        joined = "\n".join(lines)
+        assert "general -> max_logs" in joined
+        assert "general -> log_level" in joined
+        # Got-input snippet present for scalar inputs
+        assert "got:" in joined
+    else:
+        raise AssertionError("expected ConfigValidationError")
+
+
+def test_format_validation_errors_mirrors_real_daps_failure_shape(tmp_path):
+    """The legacy DAPS shape (unmatched_assets.instances containing a dict)
+    must be migrated cleanly; this test exists so the formatter contract is
+    exercised against a realistic structure the migrator now handles."""
+    path = tmp_path / "config.yml"
+    path.write_text(
+        "unmatched_assets:\n"
+        "  instances:\n"
+        "    - radarr\n"
+        "    - sonarr\n"
+        "    - Plex:\n"
+        "        library_names: [Movies]\n"
+    )
+    # Should now load cleanly because the migrator flattens the dict entry
+    cfg = load_config(str(path))
+    assert cfg.unmatched_assets.instances == ["radarr", "sonarr", "Plex"]
 
 
 def test_general_config_normalizes_uppercase_log_level(tmp_path):

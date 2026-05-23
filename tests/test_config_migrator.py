@@ -32,6 +32,11 @@ def _legacy_blob():
             "log_level": "info",
             "ignore_root_folders": ["/mnt/junk"],
             "source_dirs": ["/posters"],
+            "instances": [
+                "radarr",
+                "sonarr",
+                {"Plex": {"library_names": ["Movies", "TV Shows"]}},
+            ],
         },
         "renameinatorr": {
             "ignore_tag": "do-not-touch",
@@ -107,6 +112,22 @@ def test_detection_holidays_dict_triggers():
 
 def test_detection_holidays_list_is_chub_native():
     assert is_legacy_config({"border_replacerr": {"holidays": []}}) is False
+
+
+def test_detection_unmatched_instances_dict_entry_triggers():
+    assert (
+        is_legacy_config(
+            {"unmatched_assets": {"instances": ["radarr", {"Plex": {}}]}}
+        )
+        is True
+    )
+
+
+def test_detection_unmatched_instances_all_strings_is_chub_native():
+    assert (
+        is_legacy_config({"unmatched_assets": {"instances": ["radarr", "sonarr"]}})
+        is False
+    )
 
 
 # ─── Individual rules ───────────────────────────────────────────────────
@@ -209,6 +230,35 @@ def test_rule_cleanarr_existing_mode_wins():
     assert "dry_run" not in out["poster_cleanarr"]
 
 
+def test_rule_flatten_unmatched_instances_dict_entry():
+    out, notes = migrate(
+        {
+            "unmatched_assets": {
+                "instances": [
+                    "radarr",
+                    "sonarr",
+                    {"Plex": {"library_names": ["Movies"]}},
+                ]
+            }
+        }
+    )
+    assert out["unmatched_assets"]["instances"] == ["radarr", "sonarr", "Plex"]
+    assert any(
+        n.rule == "flatten:unmatched_assets.instances" and n.level == "warning"
+        for n in notes
+    )
+
+
+def test_rule_flatten_unmatched_instances_all_strings_is_noop():
+    out, notes = migrate(
+        {"unmatched_assets": {"instances": ["radarr", "sonarr"]}}
+    )
+    assert out["unmatched_assets"]["instances"] == ["radarr", "sonarr"]
+    assert not any(
+        n.rule == "flatten:unmatched_assets.instances" for n in notes
+    )
+
+
 def test_rule_holidays_dict_to_list_single_string_color():
     out, _ = migrate(
         {
@@ -253,6 +303,7 @@ def test_end_to_end_legacy_blob_migrates_cleanly():
     assert out["general"]["log_level"] == "info"
     assert out["user_interface"]["theme"] == "dark"
     assert out["unmatched_assets"]["ignore_folders"] == ["/mnt/junk"]
+    assert out["unmatched_assets"]["instances"] == ["radarr", "sonarr", "Plex"]
     assert out["renameinatorr"]["ignore_tags"] == "do-not-touch"
     assert out["poster_cleanarr"]["asset_dirs"] == ["/posters"]
     assert out["poster_cleanarr"]["mode"] == "report"
