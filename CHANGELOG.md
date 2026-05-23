@@ -2,6 +2,13 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.5.3](https://github.com/chodeus/chub/compare/v2.5.2...v2.5.3) (2026-05-23)
+
+
+### Bug Fixes
+
+* **settings:** correct source_dirs priority tooltip direction ([#143](https://github.com/chodeus/chub/issues/143)) ([08b9223](https://github.com/chodeus/chub/commit/08b9223ff359fc484f0cf8b4dcc53dadb7dfa3d2))
+
 ## [2.5.2](https://github.com/chodeus/chub/compare/v2.5.1...v2.5.2) (2026-05-23)
 
 
