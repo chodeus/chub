@@ -24,7 +24,6 @@ PlexAPI==4.18.1
 pluggy==1.6.0
 prettytable==3.17.0
 pydantic==2.13.4
-pydantic_core==2.46.4
 pytest==9.0.3
 python-dateutil==2.9.0.post0
 python-dotenv==1.2.2
