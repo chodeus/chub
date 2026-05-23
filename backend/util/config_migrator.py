@@ -73,6 +73,15 @@ def is_legacy_config(raw: Dict[str, Any]) -> bool:
     if isinstance(raw.get("border_replacerr", {}).get("holidays"), dict):
         return True
 
+    # `unmatched_assets.instances` allowed mixed [str, {plex_name: {...}}]
+    # entries in the legacy schema. The current schema is `List[str]`, so any
+    # non-string element is a legacy shape signal.
+    unmatched_instances = raw.get("unmatched_assets", {}).get("instances")
+    if isinstance(unmatched_instances, list) and any(
+        not isinstance(item, str) for item in unmatched_instances
+    ):
+        return True
+
     return False
 
 
@@ -235,6 +244,52 @@ def _rule_cleanarr_drytun_to_mode(
     )
 
 
+def _rule_flatten_unmatched_instances(
+    raw: Dict[str, Any], notes: List[MigrationNote]
+) -> None:
+    """Flatten `unmatched_assets.instances` dict entries down to their key.
+
+    Legacy DAPS accepted `{plex_name: {library_names: [...]}}` entries here,
+    matching the `poster_renamerr.instances` shape. The current schema only
+    accepts strings — unmatched_assets derives its library scope from the
+    poster_renamerr config now, so the inner `library_names` filter is
+    discarded. A warning note records which entries were collapsed.
+    """
+    sec = raw.get("unmatched_assets")
+    if not isinstance(sec, dict):
+        return
+    items = sec.get("instances")
+    if not isinstance(items, list):
+        return
+
+    new_items: List[str] = []
+    flattened: List[str] = []
+    for item in items:
+        if isinstance(item, str):
+            new_items.append(item)
+        elif isinstance(item, dict) and item:
+            key = next(iter(item))
+            if isinstance(key, str):
+                new_items.append(key)
+                flattened.append(key)
+        # Anything else (None, list, empty dict) is dropped silently.
+
+    if flattened:
+        sec["instances"] = new_items
+        notes.append(
+            MigrationNote(
+                rule="flatten:unmatched_assets.instances",
+                message=(
+                    f"Flattened legacy dict entries in "
+                    f"`unmatched_assets.instances` to instance names: "
+                    f"{flattened}. Per-library filtering is no longer applied "
+                    f"here — scope is derived from `poster_renamerr`."
+                ),
+                level="warning",
+            )
+        )
+
+
 def _rule_border_holidays_dict_to_list(
     raw: Dict[str, Any], notes: List[MigrationNote]
 ) -> None:
@@ -346,6 +401,9 @@ def migrate(raw: Dict[str, Any]) -> Tuple[Dict[str, Any], List[MigrationNote]]:
         "ignore_media",
         "per-title ignore is now handled via instance-level filters",
     )
+
+    # Shape conversions
+    _rule_flatten_unmatched_instances(out, notes)
 
     # Type conversions
     _rule_cleanarr_drytun_to_mode(out, notes)

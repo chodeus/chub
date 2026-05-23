@@ -1,3 +1,4 @@
+import logging
 import os
 import pathlib
 import sys
@@ -6,6 +7,12 @@ from typing import Any, Dict, List, Literal, Optional, Union
 
 import yaml
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
+
+# Migrator + loader status messages go through this stdlib logger so callers
+# can attach a handler that routes them into their own logging system. The
+# default config of stdlib logging means these also print at WARNING+ unless
+# a handler is installed.
+_config_log = logging.getLogger("chub.config")
 
 # ==== SECTION: MODELS FOR CONFIG STRUCTURE ====
 
@@ -472,26 +479,42 @@ def get_config_path() -> str:
     return config_file_path
 
 
-def _print_cli_validation_errors(validation_error: ValidationError) -> None:
-    """Print simplified validation errors for CLI users."""
-    print("❌ Configuration validation failed:")
+def format_validation_errors(validation_error: ValidationError) -> List[str]:
+    """Return one humanized "loc: msg" line per Pydantic field error.
+
+    Used by both the CLI error printer and runtime loggers so the user sees
+    the same per-field detail regardless of which path surfaced the failure.
+    """
+    lines: List[str] = []
     for error in validation_error.errors():
         location = " -> ".join(str(loc) for loc in error["loc"])
         msg = error["msg"]
 
-        # Simplify common error messages
-        if "field required" in msg:
+        # Simplify common Pydantic phrasing for non-developer readers
+        if "field required" in msg or "Field required" in msg:
             msg = "missing required field"
-        elif "not a valid integer" in msg:
+        elif "not a valid integer" in msg or "valid integer" in msg:
             msg = "must be a number"
-        elif "not a valid boolean" in msg:
+        elif "not a valid boolean" in msg or "valid boolean" in msg:
             msg = "must be true or false"
-        elif "not a valid string" in msg:
+        elif "not a valid string" in msg or "valid string" in msg:
             msg = "must be text"
         elif "invalid or missing URL scheme" in msg:
             msg = "must be a valid URL (http:// or https://)"
 
-        print(f"   • {location}: {msg}")
+        input_value = error.get("input")
+        if input_value is not None and not isinstance(input_value, (dict, list)):
+            lines.append(f"{location}: {msg} (got: {input_value!r})")
+        else:
+            lines.append(f"{location}: {msg}")
+    return lines
+
+
+def _print_cli_validation_errors(validation_error: ValidationError) -> None:
+    """Print simplified validation errors for CLI users."""
+    print("❌ Configuration validation failed:")
+    for line in format_validation_errors(validation_error):
+        print(f"   • {line}")
     print("💡 Check your config.yml file and fix the issues above")
 
 
@@ -545,6 +568,10 @@ def _auto_migrate_and_persist(raw: dict, config_path: str) -> dict:
 
     Returns the migrated dict. If anything goes wrong writing files, the
     in-memory migration still takes effect so the load can proceed.
+
+    Status messages go to both stdout (so they appear in container logs
+    before the chub Logger exists) and the `chub.config` stdlib logger
+    (so they appear in the chub log file once a handler is attached).
     """
     from datetime import datetime
 
@@ -558,27 +585,52 @@ def _auto_migrate_and_persist(raw: dict, config_path: str) -> dict:
         with open(backup_path, "w") as f:
             yaml.safe_dump(raw, f, sort_keys=False)
     except Exception as e:  # pragma: no cover - best-effort backup
-        print(f"⚠️  Failed to write legacy backup {backup_path}: {e}")
+        _emit(f"⚠️  Failed to write legacy backup {backup_path}: {e}", "warning")
         backup_path = "(backup write failed)"
 
     try:
         with open(config_path, "w") as f:
             yaml.safe_dump(migrated, f, sort_keys=False)
     except Exception as e:  # pragma: no cover - best-effort write
-        print(f"⚠️  Failed to rewrite migrated config to {config_path}: {e}")
+        _emit(
+            f"⚠️  Failed to rewrite migrated config to {config_path}: {e}", "warning"
+        )
 
-    print(f"🔄 Legacy config detected at {config_path}. Migrated automatically.")
-    print(f"   Original preserved at {backup_path}")
+    _emit(
+        f"🔄 Legacy config detected at {config_path}. "
+        f"Applying migration rules; validation will run next."
+    )
+    _emit(f"   Original preserved at {backup_path}")
     for note in notes:
+        level = "warning" if note.level == "warning" else "info"
         icon = "⚠️ " if note.level == "warning" else "•"
-        print(f"   {icon} {note.message}")
-    print(
-        "   ⚠️  Verify file/directory paths in this config (sync_gdrive.gdrive_sa_location, "
-        "poster_renamerr.source_dirs, poster_cleanarr.asset_dirs, nohl.source_dirs, etc.) "
-        "still resolve inside this container — your volume mounts may differ from the previous setup."
+        _emit(f"   {icon} {note.message}", level)
+    _emit(
+        "   ⚠️  Verify file/directory paths in this config "
+        "(sync_gdrive.gdrive_sa_location, poster_renamerr.source_dirs, "
+        "poster_cleanarr.asset_dirs, nohl.source_dirs, etc.) still resolve "
+        "inside this container — your volume mounts may differ from the "
+        "previous setup.",
+        "warning",
     )
 
     return migrated
+
+
+def _emit(message: str, level: str = "info") -> None:
+    """Send a config-related status message to both stdout and `chub.config`.
+
+    Stdout keeps the message visible at very early startup (before any
+    chub Logger exists). The stdlib logger lets a handler installed by
+    the main app route the same message into the chub log file.
+    """
+    print(message)
+    if level == "warning":
+        _config_log.warning(message)
+    elif level == "error":
+        _config_log.error(message)
+    else:
+        _config_log.info(message)
 
 
 def load_config_cli(path: Optional[str] = None) -> ChubConfig:
