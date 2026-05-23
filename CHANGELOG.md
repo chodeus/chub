@@ -2,6 +2,13 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.5.2](https://github.com/chodeus/chub/compare/v2.5.1...v2.5.2) (2026-05-23)
+
+
+### Bug Fixes
+
+* **config:** migrate legacy unmatched_assets.instances + surface load failures ([be0e457](https://github.com/chodeus/chub/commit/be0e4572b5cdf7d2094e4208eb8c117e91a329e2))
+
 ## [2.5.1](https://github.com/chodeus/chub/compare/v2.5.0...v2.5.1) (2026-05-22)
 
 
