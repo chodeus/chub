@@ -152,7 +152,7 @@ export const SETTINGS_SCHEMA = [
                 section: 'Source',
                 required: true,
                 description:
-                    'Folders scanned for poster assets. Drag to set priority — earlier directories win when multiple sources have a poster for the same item.',
+                    'Folders scanned for poster assets. Drag to set priority — later directories win when multiple sources have a poster for the same item (bottom of the list takes precedence).',
             },
             {
                 key: 'sync_posters',
@@ -257,7 +257,7 @@ export const SETTINGS_SCHEMA = [
                 type: 'dirlist_dragdrop',
                 section: 'Paths',
                 description:
-                    'Folders scanned for poster assets when Border Replacerr is run on its own (not via Poster Renamerr). Drag to set priority — earlier directories win when multiple sources have a poster for the same item.',
+                    'Folders scanned for poster assets when Border Replacerr is run on its own (not via Poster Renamerr). Drag to set priority — later directories win when multiple sources have a poster for the same item (bottom of the list takes precedence).',
             },
             {
                 key: 'destination_dir',
