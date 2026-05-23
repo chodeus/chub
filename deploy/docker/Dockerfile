@@ -1,7 +1,7 @@
 # -------------------------
 # Stage 1: Builder
 # -------------------------
-FROM python:3.13-slim@sha256:dc1546eefcbe8caaa1f004f16ab76b204b5e1dbd58ff81b899f21cd40541232f AS builder
+FROM python:3.13-slim@sha256:b04b5d7233d2ad9c379e22ea8927cd1378cd15c60d4ef876c065b25ea8fb3bf3 AS builder
 ARG NODE_MAJOR=24
 
 # Install build dependencies (including Node.js 24 and build tools).
@@ -53,7 +53,7 @@ RUN cd frontend && npm install && npm run build
 # -------------------------
 # Stage 2: Final runtime image
 # -------------------------
-FROM python:3.13-slim@sha256:dc1546eefcbe8caaa1f004f16ab76b204b5e1dbd58ff81b899f21cd40541232f
+FROM python:3.13-slim@sha256:b04b5d7233d2ad9c379e22ea8927cd1378cd15c60d4ef876c065b25ea8fb3bf3
 
 WORKDIR /app
 
