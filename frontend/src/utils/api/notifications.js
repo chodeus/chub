@@ -24,8 +24,8 @@ export const notificationsAPI = {
      * {
      *   module_name: {
      *     discord: { bot_name, color, webhook },
-     *     notifiarr: { bot_name, color, webhook, channel_id },
-     *     email: { smtp_server, smtp_port, use_tls, username, password, to, from }
+     *     notifiarr: { color, webhook, channel_id },
+     *     email: { smtp_server, smtp_port, use_tls, username, password, from, to }
      *   }
      * }
      */

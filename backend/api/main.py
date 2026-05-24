@@ -39,6 +39,7 @@ from backend.util.auth import decode_access_token
 from backend.util.config import ConfigError, load_config
 from backend.util.database import ChubDB
 from backend.util.job_processor import process_job
+from backend.util.notification import install_error_notify_handler
 
 
 # Paths that do NOT require authentication
@@ -137,6 +138,20 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             log.debug("Starting FastAPI application...")
 
         app.state.started_at = time.time()
+
+        try:
+            startup_config = load_config()
+            handler = install_error_notify_handler(startup_config, logger=logger)
+            if handler and log:
+                log.info(
+                    "ErrorNotifyHandler attached to root logger — ERROR-level logs "
+                    "will be forwarded to the 'main' notification target."
+                )
+        except ConfigError:
+            if log:
+                log.debug(
+                    "Skipped ErrorNotifyHandler setup — config not loadable yet."
+                )
 
         # CREATE SHARED DATABASE INSTANCE FOR ALL API ENDPOINTS
         try:
