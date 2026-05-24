@@ -38,6 +38,20 @@ _RCLONE_HEARTBEAT_PATTERN = re.compile(
     r")"
 )
 
+# Per-file action lines we count for the sync notification: which files
+# actually moved on disk this run. "Removed" is collapsed into "deleted"
+# since rclone uses both depending on version/operation. "Skipped" is
+# intentionally not counted — it represents files that were already in
+# sync and would inflate the summary without conveying activity.
+_RCLONE_ACTION_PATTERN = re.compile(
+    r": (Copied|Deleted|Updated|Renamed|Removed)\b"
+)
+
+
+def _empty_counters() -> dict:
+    """Zeroed delta counter dict used as the sync_folder default return."""
+    return {"copied": 0, "deleted": 0, "updated": 0, "renamed": 0}
+
 
 class SyncGDrive(ChubModule):
     def __init__(self, logger: Optional[Logger] = None) -> None:
@@ -115,18 +129,26 @@ class SyncGDrive(ChubModule):
         return True
 
     def sync_folder(self, sync_location, sync_id, progress_cb=lambda pct: None):
-        """Run rclone sync for a single folder. Returns True on success, False on failure."""
+        """Run rclone sync for a single folder.
+
+        Returns (success, counters) where counters is a dict with
+        {copied, deleted, updated, renamed} parsed from rclone's per-file
+        action lines. Empty counters dict accompanies all failure paths
+        so the caller can unpack without conditionals.
+        """
+        counters = _empty_counters()
+
         if not sync_location or not sync_id:
             self.logger.error("Sync location or GDrive folder ID not provided.")
             progress_cb(100)
-            return False
+            return False, counters
 
         if not self._reject_unsafe_arg(sync_location, "sync_location", self.logger):
             progress_cb(100)
-            return False
+            return False, counters
         if not self._reject_unsafe_arg(sync_id, "gdrive_id", self.logger):
             progress_cb(100)
-            return False
+            return False, counters
 
         try:
             os.makedirs(sync_location, exist_ok=True)
@@ -134,7 +156,7 @@ class SyncGDrive(ChubModule):
         except OSError as e:
             self.logger.error(f"Could not create sync location '{sync_location}': {e}")
             progress_cb(100)
-            return False
+            return False, counters
 
         # Starting sync
         progress_cb(10)
@@ -189,7 +211,7 @@ class SyncGDrive(ChubModule):
         if sa_path:
             if not self._reject_unsafe_arg(sa_path, "gdrive_sa_location", self.logger):
                 progress_cb(100)
-                return False
+                return False, counters
             cmd.extend(["--drive-service-account-file", sa_path])
         else:
             cmd.extend(
@@ -221,7 +243,7 @@ class SyncGDrive(ChubModule):
             if self.is_cancelled():
                 self.logger.info("Sync cancelled before starting rclone.")
                 progress_cb(100)
-                return False
+                return False, counters
 
             process = subprocess.Popen(
                 cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
@@ -230,7 +252,7 @@ class SyncGDrive(ChubModule):
                 if self.is_cancelled():
                     process.terminate()
                     self.logger.info("Sync cancelled during rclone execution.")
-                    return False
+                    return False, counters
                 level_match = re.match(
                     r"^\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2} (INFO|ERROR|DEBUG) *:?",
                     line,
@@ -255,6 +277,17 @@ class SyncGDrive(ChubModule):
                         self.logger.heartbeat(cleaned_line)
                     else:
                         self.logger.info(cleaned_line)
+                    # Count actual per-file activity for the notification
+                    # summary. "Removed" is normalized to "deleted" since
+                    # rclone uses both labels depending on operation and
+                    # version. Skipped/no-op lines aren't counted — they
+                    # represent files already in sync.
+                    action_match = _RCLONE_ACTION_PATTERN.search(cleaned_line)
+                    if action_match:
+                        action = action_match.group(1).lower()
+                        if action == "removed":
+                            action = "deleted"
+                        counters[action] = counters.get(action, 0) + 1
                     pct = self.parse_rclone_progress(cleaned_line)
                     if pct is not None:
                         guarded_progress_cb(pct)
@@ -262,7 +295,7 @@ class SyncGDrive(ChubModule):
             if process.returncode == 0:
                 self.logger.info("✅ RClone sync completed successfully.")
                 guarded_progress_cb(95)
-                return True
+                return True, counters
             else:
                 self.logger.error(
                     f"❌ RClone sync failed with return code {process.returncode}"
@@ -273,7 +306,7 @@ class SyncGDrive(ChubModule):
                         self.db.worker.update_progress("jobs", self.current_job_id, 100)
                     except Exception as e:
                         self.logger.debug(f"Failed to update progress: {e}")
-                return False
+                return False, counters
         except Exception as e:
             self.logger.error(f"Exception occurred while running rclone: {e}")
             progress_cb(100)
@@ -282,7 +315,7 @@ class SyncGDrive(ChubModule):
                     self.db.worker.update_progress("jobs", self.current_job_id, 100)
                 except Exception as e:
                     self.logger.debug(f"Failed to update progress: {e}")
-            return False
+            return False, counters
 
     def _refresh_poster_cache_for_folder(self, sync_location: str) -> None:
         """Re-index a single source-dir's slice of poster_cache after rclone.
@@ -456,7 +489,7 @@ class SyncGDrive(ChubModule):
 
                     sync_location = sync_item.location
                     sync_id = sync_item.id
-                    success = self.sync_folder(
+                    success, counters = self.sync_folder(
                         sync_location, sync_id, progress_cb=progress_cb
                     )
                     if not success:
@@ -495,6 +528,7 @@ class SyncGDrive(ChubModule):
                             "file_count": file_count,
                             "size_bytes": size_bytes,
                             "success": success,
+                            "counters": counters,
                         }
                     )
 
@@ -526,6 +560,15 @@ class SyncGDrive(ChubModule):
                     except Exception as e:
                         self.logger.debug(f"Failed to update progress: {e}")
 
+                # Aggregate per-folder counters into a single dict for
+                # the notification top-line. Per-item counters stay on
+                # each synced_items entry so the formatter can still
+                # show per-folder activity.
+                agg_counters = _empty_counters()
+                for it in synced_items:
+                    for k, v in (it.get("counters") or {}).items():
+                        agg_counters[k] = agg_counters.get(k, 0) + v
+
                 # Notify — skipped on dry-run, empty lists (nothing to say),
                 # when the user has no sources configured, and when the
                 # caller explicitly opts out (e.g. single-folder UI sync
@@ -547,6 +590,7 @@ class SyncGDrive(ChubModule):
                                 "failed": failed_count,
                                 "elapsed": f"{time.time() - start_time:.1f}s",
                                 "items": synced_items,
+                                "agg_counters": agg_counters,
                             }
                         )
                     except Exception as e:

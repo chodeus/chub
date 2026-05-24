@@ -655,7 +655,20 @@ def format_for_discord(
         return fields
 
     def fmt_sync_gdrive(o: Any) -> List[Dict[str, Any]]:
-        """Format sync_gdrive output for Discord embeds."""
+        """Format sync_gdrive output for Discord embeds.
+
+        Shape expected on `o`:
+            - total, succeeded, failed, elapsed
+            - items: list of {owner, counters: {copied, deleted, updated,
+              renamed}, success, file_count, ...}
+            - agg_counters: aggregate {copied, deleted, updated, renamed}
+
+        The notification surfaces what actually moved on disk this run.
+        Per-folder file_count totals (the disk-wide size of each folder)
+        are intentionally hidden — they're not delta information and
+        used to mislead users into thinking a clean re-sync had
+        transferred tens of thousands of files.
+        """
         fields: List[Dict[str, Any]] = []
         fields.append(
             {
@@ -680,18 +693,56 @@ def format_for_discord(
                     "inline": True,
                 }
             )
+
+        agg = o.get("agg_counters") or {}
+        for label, key in (
+            ("Copied", "copied"),
+            ("Deleted", "deleted"),
+            ("Updated", "updated"),
+            ("Renamed", "renamed"),
+        ):
+            if agg.get(key):
+                fields.append(
+                    {"name": label, "value": str(agg[key]), "inline": True}
+                )
+
         items = o.get("items") or []
-        if items:
-            lines = [
-                f"• **{it.get('owner', '?')}** — {it.get('file_count', 0)} files"
-                for it in items[:15]
-            ]
-            if len(items) > 15:
-                lines.append(f"…and {len(items) - 15} more")
+        # Only surface folders that actually had activity. Folders that
+        # were already in sync would otherwise crowd out the meaningful
+        # rows and inflate the truncation count.
+        active = [
+            it for it in items if any((it.get("counters") or {}).values())
+        ]
+        if active:
+            lines = []
+            for it in active[:15]:
+                c = it.get("counters") or {}
+                parts = []
+                for label, key in (
+                    ("copied", "copied"),
+                    ("deleted", "deleted"),
+                    ("updated", "updated"),
+                    ("renamed", "renamed"),
+                ):
+                    if c.get(key):
+                        parts.append(f"{c[key]} {label}")
+                lines.append(
+                    f"• **{it.get('owner', '?')}** — {', '.join(parts)}"
+                )
+            if len(active) > 15:
+                lines.append(f"…and {len(active) - 15} more with activity")
             fields.append(
                 {
-                    "name": "Sources",
+                    "name": "Activity by folder",
                     "value": "\n".join(lines),
+                    "inline": False,
+                }
+            )
+        else:
+            fields.append(
+                {
+                    "name": "Activity",
+                    "value": "All folders in sync — no files transferred.",
                     "inline": False,
                 }
             )
@@ -1354,7 +1405,12 @@ def format_for_email(config: Any, output: Any) -> Tuple[str, bool]:
         return "".join(sections)
 
     def fmt_sync_gdrive(output: dict) -> str:
-        """Format sync_gdrive output for email (HTML)."""
+        """Format sync_gdrive output for email (HTML).
+
+        Mirrors the Discord embed: show aggregate transfer counters and
+        per-folder activity rather than disk-wide file totals (which are
+        misleading on no-op syncs).
+        """
         sections: List[str] = ["<div class='section'><h3>GDrive Sync</h3>"]
         sections.append(
             f"<p><strong>Folders:</strong> {output.get('succeeded', 0)} / "
@@ -1367,14 +1423,49 @@ def format_for_email(config: Any, output: Any) -> Tuple[str, bool]:
         sections.append("</p>")
         if output.get("elapsed"):
             sections.append(f"<p><em>Elapsed: {output['elapsed']}</em></p>")
+
+        agg = output.get("agg_counters") or {}
+        agg_parts = [
+            f"{agg[k]} {label}"
+            for label, k in (
+                ("copied", "copied"),
+                ("deleted", "deleted"),
+                ("updated", "updated"),
+                ("renamed", "renamed"),
+            )
+            if agg.get(k)
+        ]
+        if agg_parts:
+            sections.append(
+                f"<p><strong>Activity:</strong> {' · '.join(agg_parts)}</p>"
+            )
+
         items = output.get("items") or []
-        if items:
-            sections.append("<p><strong>Sources:</strong></p><ul>")
-            for it in items:
+        active = [
+            it for it in items if any((it.get("counters") or {}).values())
+        ]
+        if active:
+            sections.append("<p><strong>Activity by folder:</strong></p><ul>")
+            for it in active:
+                c = it.get("counters") or {}
+                parts = [
+                    f"{c[k]} {label}"
+                    for label, k in (
+                        ("copied", "copied"),
+                        ("deleted", "deleted"),
+                        ("updated", "updated"),
+                        ("renamed", "renamed"),
+                    )
+                    if c.get(k)
+                ]
                 sections.append(
-                    f"<li>{it.get('owner', '?')} — {it.get('file_count', 0)} files</li>"
+                    f"<li>{it.get('owner', '?')} — {', '.join(parts)}</li>"
                 )
             sections.append("</ul>")
+        else:
+            sections.append(
+                "<p><em>All folders in sync — no files transferred.</em></p>"
+            )
         sections.append("</div>")
         return "".join(sections)
 
