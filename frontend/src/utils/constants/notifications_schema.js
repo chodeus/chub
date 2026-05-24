@@ -123,14 +123,14 @@ export const NOTIFICATIONS_SCHEMA = [
                 placeholder: '••••••••',
             },
             {
-                key: 'to',
+                key: 'from',
                 label: 'From',
                 type: 'text',
                 required: true,
                 placeholder: 'My App <bot@email.com>',
             },
             {
-                key: 'from',
+                key: 'to',
                 label: 'Recipients',
                 type: 'text',
                 required: true,
