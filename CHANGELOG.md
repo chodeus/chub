@@ -2,6 +2,15 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.5.6](https://github.com/chodeus/chub/compare/v2.5.5...v2.5.6) (2026-05-24)
+
+
+### Bug Fixes
+
+* **media:** identity-based duplicate detection, surface folder collisions ([0ca541a](https://github.com/chodeus/chub/commit/0ca541a7f6ba7b137e9a377fef9c89b436cb66cd))
+* **notifications:** pass full ChubConfig to NotificationManager ([7f3c027](https://github.com/chodeus/chub/commit/7f3c0275e92c8f0e3049629fcea0f1a77ca9c452))
+* **poster-cache:** mirror disk 1:1, drop title-based row dedup ([3be5dfe](https://github.com/chodeus/chub/commit/3be5dfe8bba1ce224028dc5c41e9dea77faec601))
+
 ## [2.5.5](https://github.com/chodeus/chub/compare/v2.5.4...v2.5.5) (2026-05-24)
 
 
