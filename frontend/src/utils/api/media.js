@@ -247,11 +247,10 @@ export const mediaAPI = {
     },
 
     /**
-     * Fetch media duplicates
+     * Fetch media duplicates and folder collisions
      * @param {Object} options - Detection options
-     * @param {number} options.similarity - Similarity threshold (0-100)
      * @param {string} options.type - Media type filter
-     * @returns {Promise<Array>} List of duplicate groups
+     * @returns {Promise<Object>} { duplicates, folder_collisions, total, total_collisions }
      */
     fetchDuplicates: (options = {}) => {
         const params = new URLSearchParams(options);

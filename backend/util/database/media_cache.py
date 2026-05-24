@@ -877,17 +877,16 @@ class MediaCache(DatabaseBase):
         return sorted(genres)
 
     def find_duplicates(self, asset_type: Optional[str] = None) -> list:
-        """Find duplicate media entries WITHIN a single instance.
+        """Find genuine duplicate media entries WITHIN a single instance.
 
-        A duplicate is two or more media_cache rows from the SAME ARR
-        instance that share the same normalized_title and year — i.e. the
-        ARR itself has the same title added multiple times. Season rows
-        are excluded so a multi-season show isn't reported as duplicates
-        of itself.
+        Identity-based detection: two or more media_cache rows from the
+        same ARR instance that share the same external ID
+        (tvdb_id / tmdb_id / imdb_id). Rows without any external ID are
+        excluded — they can't be matched safely.
 
-        The same title appearing across two different instances
-        (e.g. Radarr + Radarr4K) is intentional quality coverage and is
-        NOT reported here.
+        Season rows are excluded so a multi-season show isn't reported
+        as duplicates of itself. Cross-instance overlap (Radarr +
+        Radarr4K) is intentional quality coverage and is NOT reported.
         """
         where = ""
         params: tuple = ()
@@ -898,16 +897,26 @@ class MediaCache(DatabaseBase):
         return (
             self.execute_query(
                 f"""
-                SELECT normalized_title, title, year, instance_name,
+                SELECT MIN(normalized_title) as normalized_title,
+                       MIN(title) as title,
+                       MIN(year) as year,
+                       instance_name,
                        COUNT(*) as count,
                        GROUP_CONCAT(id) as ids,
                        GROUP_CONCAT(instance_name) as instances,
-                       json_group_array(folder) as folders
+                       json_group_array(folder) as folders,
+                       COALESCE(
+                           'tvdb:' || tvdb_id,
+                           'tmdb:' || tmdb_id,
+                           'imdb:' || imdb_id
+                       ) as identity
                 FROM media_cache
-                WHERE normalized_title IS NOT NULL
-                  AND season_number IS NULL
+                WHERE season_number IS NULL
+                  AND (tvdb_id IS NOT NULL
+                       OR tmdb_id IS NOT NULL
+                       OR imdb_id IS NOT NULL)
                   {where}
-                GROUP BY instance_name, normalized_title, year
+                GROUP BY instance_name, identity
                 HAVING COUNT(*) > 1
                 ORDER BY count DESC
                 """,
@@ -916,6 +925,96 @@ class MediaCache(DatabaseBase):
             )
             or []
         )
+
+    def find_folder_collisions(self, asset_type: Optional[str] = None) -> list:
+        """Find rows whose folders look like the same show but resolve
+        to different external IDs.
+
+        Two folders within the same instance count as a collision when
+        their basename normalizes to the same key but their external IDs
+        (tvdb / tmdb / imdb) differ. The classic case is international
+        variants like ``Destination X (US)`` vs ``Destination X (UK)`` —
+        same normalized title, different shows.
+
+        These are informational, NOT genuine duplicates: the user should
+        review them before resolving.
+        """
+        where = ""
+        params: tuple = ()
+        if asset_type and asset_type != "all":
+            where = "AND asset_type = ?"
+            params = (asset_type,)
+
+        rows = (
+            self.execute_query(
+                f"""
+                SELECT id, title, normalized_title, year, instance_name,
+                       folder, tvdb_id, tmdb_id, imdb_id
+                FROM media_cache
+                WHERE season_number IS NULL
+                  AND normalized_title IS NOT NULL
+                  AND normalized_title != ''
+                  {where}
+                """,
+                params,
+                fetch_all=True,
+            )
+            or []
+        )
+
+        # Group by (instance, normalized_title, year) and only keep
+        # groups whose external IDs are not all the same — i.e. the
+        # title looks duplicated but the items are different shows.
+        groups: dict = {}
+        for r in rows:
+            key = (r.get("instance_name"), r.get("normalized_title"), r.get("year"))
+            groups.setdefault(key, []).append(r)
+
+        collisions = []
+        for (instance, norm_title, year), members in groups.items():
+            if len(members) < 2:
+                continue
+
+            identities = set()
+            for m in members:
+                tvdb = m.get("tvdb_id")
+                tmdb = m.get("tmdb_id")
+                imdb = m.get("imdb_id")
+                if tvdb is not None:
+                    identities.add(f"tvdb:{tvdb}")
+                elif tmdb is not None:
+                    identities.add(f"tmdb:{tmdb}")
+                elif imdb is not None:
+                    identities.add(f"imdb:{imdb}")
+                else:
+                    identities.add(f"row:{m.get('id')}")
+
+            # All members share the same external ID → it's a genuine
+            # duplicate, handled by find_duplicates(). Skip here.
+            if len(identities) < 2:
+                continue
+
+            collisions.append(
+                {
+                    "normalized_title": norm_title,
+                    "title": members[0].get("title"),
+                    "year": year,
+                    "instance_name": instance,
+                    "count": len(members),
+                    "ids": ",".join(str(m.get("id", "")) for m in members),
+                    "instances": ",".join(
+                        m.get("instance_name", "") for m in members
+                    ),
+                    "folders": json.dumps(
+                        [m.get("folder") or "" for m in members]
+                    ),
+                    "identities": ",".join(sorted(identities)),
+                    "titles": json.dumps([m.get("title") or "" for m in members]),
+                }
+            )
+
+        collisions.sort(key=lambda c: c["count"], reverse=True)
+        return collisions
 
     def sync_for_instance(
         self,

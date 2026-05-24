@@ -376,8 +376,9 @@ async def get_collections(
 @router.get(
     "/duplicates",
     summary="Find duplicate media",
-    description="Identify media items that share the same title and year "
-    "across different instances.",
+    description="Identify media items that share the same external ID "
+    "within a single ARR instance, plus folder-name collisions where "
+    "different shows look alike on disk.",
     responses={
         200: {
             "description": "Duplicate groups returned successfully",
@@ -385,18 +386,24 @@ async def get_collections(
                 "application/json": {
                     "example": {
                         "success": True,
-                        "message": "Found 5 duplicate groups",
+                        "message": "Found 0 duplicate groups, 2 folder collisions",
                         "data": {
-                            "duplicates": [
+                            "duplicates": [],
+                            "folder_collisions": [
                                 {
-                                    "normalized_title": "the matrix",
-                                    "year": 1999,
+                                    "normalized_title": "destinationx",
+                                    "title": "Destination X (US)",
+                                    "year": 2025,
+                                    "instance_name": "sonarr",
                                     "count": 2,
-                                    "ids": "1,42",
-                                    "instances": "radarr,radarr4k",
+                                    "ids": "12,13",
+                                    "identities": "tvdb:449931,tvdb:465530",
+                                    "folders": "[\"/data/media/tv/Destination X (US)\",\"/data/media/tv/Destination X (UK)\"]",
+                                    "titles": "[\"Destination X (US)\",\"Destination X (UK)\"]",
                                 }
                             ],
-                            "total": 5,
+                            "total": 0,
+                            "total_collisions": 2,
                         },
                     }
                 }
@@ -406,119 +413,28 @@ async def get_collections(
 )
 async def get_duplicates(
     type: Optional[str] = Query(None, description="Filter by asset type"),
-    similarity: Optional[float] = Query(
-        None,
-        ge=0.0,
-        le=1.0,
-        description="Fuzzy match threshold (0-1). When set, uses title similarity "
-        "instead of exact match. 0.8 = 80% similar.",
-    ),
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
     """
-    Find duplicate media entries WITHIN a single ARR instance.
+    Find genuine duplicates and folder-name collisions WITHIN a single
+    ARR instance.
 
-    A duplicate is two or more entries from the same instance sharing
-    the same (normalized_title, year). The same title appearing in
-    different instances (e.g. Radarr + Radarr4K) is intentional quality
+    Two-tier detection:
+      * ``duplicates`` — rows that share the same external ID
+        (tvdb / tmdb / imdb). These are real duplicates worth resolving.
+      * ``folder_collisions`` — rows whose normalized titles match but
+        whose external IDs differ. Usually legitimate international
+        variants or remakes; surfaced for review.
+
+    Cross-instance overlap (Radarr + Radarr4K) is intentional quality
     coverage and is not reported.
-
-    When `similarity` is provided, uses fuzzy title matching with
-    difflib.SequenceMatcher instead of exact normalized-title match,
-    still restricted to within-instance comparisons.
-
-    Args:
-        type: Optional asset type filter (movie, show, or all)
-        similarity: Optional fuzzy match threshold (0.0-1.0)
-
-    Returns:
-        List of duplicate groups with item IDs and the offending instance
     """
     try:
         logger.debug("Serving GET /api/media/duplicates")
 
-        if similarity is not None:
-            # Fuzzy matching: group by similarity WITHIN the same instance.
-            # Cross-instance matches are intentional quality coverage and
-            # are not reported as duplicates.
-            from difflib import SequenceMatcher
-
-            all_media = [
-                m
-                for m in db.media.get_all(asset_type=type)
-                if m.get("season_number") is None
-            ]
-            groups = []
-            used = set()
-
-            for i, item_a in enumerate(all_media):
-                if i in used:
-                    continue
-                title_a = (
-                    item_a.get("normalized_title") or item_a.get("title", "")
-                ).lower()
-                year_a = item_a.get("year")
-                instance_a = item_a.get("instance_name")
-                group = [item_a]
-
-                for j, item_b in enumerate(all_media):
-                    if j <= i or j in used:
-                        continue
-                    # Must be same instance — cross-instance isn't a dupe
-                    if item_b.get("instance_name") != instance_a:
-                        continue
-                    title_b = (
-                        item_b.get("normalized_title") or item_b.get("title", "")
-                    ).lower()
-                    year_b = item_b.get("year")
-
-                    # Year must match (or both be None)
-                    if year_a != year_b:
-                        continue
-
-                    ratio = SequenceMatcher(None, title_a, title_b).ratio()
-                    if ratio >= similarity:
-                        group.append(item_b)
-                        used.add(j)
-
-                if len(group) > 1:
-                    used.add(i)
-                    import json as _json
-
-                    groups.append(
-                        {
-                            "normalized_title": title_a,
-                            "year": year_a,
-                            "instance_name": instance_a,
-                            "count": len(group),
-                            "ids": ",".join(str(g.get("id", "")) for g in group),
-                            "instances": ",".join(
-                                g.get("instance_name", "") for g in group
-                            ),
-                            "folders": _json.dumps(
-                                [g.get("folder") or "" for g in group]
-                            ),
-                            "similarity": round(
-                                min(
-                                    SequenceMatcher(
-                                        None,
-                                        title_a,
-                                        (
-                                            g.get("normalized_title")
-                                            or g.get("title", "")
-                                        ).lower(),
-                                    ).ratio()
-                                    for g in group[1:]
-                                ),
-                                2,
-                            ),
-                        }
-                    )
-
-            duplicates = groups
-        else:
-            duplicates = db.media.find_duplicates(asset_type=type)
+        duplicates = db.media.find_duplicates(asset_type=type)
+        folder_collisions = db.media.find_folder_collisions(asset_type=type)
 
         # Filter out groups where all instances belong to the same
         # quality group (configured in general.duplicate_exclude_groups).
@@ -539,22 +455,30 @@ async def get_duplicates(
                 exclude_sets = [s for s in exclude_sets if len(s) >= 2]
 
                 if exclude_sets:
-                    filtered = []
-                    for dup in duplicates:
+
+                    def _not_excluded(dup):
                         raw = dup.get("instances", "")
                         instances = {s.strip() for s in raw.split(",") if s.strip()}
-                        in_same_group = any(
+                        return not any(
                             instances.issubset(group) for group in exclude_sets
                         )
-                        if not in_same_group:
-                            filtered.append(dup)
-                    duplicates = filtered
+
+                    duplicates = [d for d in duplicates if _not_excluded(d)]
+                    folder_collisions = [
+                        d for d in folder_collisions if _not_excluded(d)
+                    ]
         except Exception:
             pass  # Config not loaded — skip filtering
 
         return ok(
-            f"Found {len(duplicates)} duplicate groups",
-            {"duplicates": duplicates, "total": len(duplicates)},
+            f"Found {len(duplicates)} duplicate groups, "
+            f"{len(folder_collisions)} folder collisions",
+            {
+                "duplicates": duplicates,
+                "folder_collisions": folder_collisions,
+                "total": len(duplicates),
+                "total_collisions": len(folder_collisions),
+            },
         )
 
     except Exception as e:
