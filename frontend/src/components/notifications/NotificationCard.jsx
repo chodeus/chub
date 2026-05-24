@@ -55,7 +55,7 @@ export const NotificationCard = ({
                     <div className="text-tertiary">Bot: {config.bot_name || 'Not set'}</div>
                 )}
                 {serviceType === 'notifiarr' && (
-                    <div className="text-tertiary">Bot: {config.bot_name || 'Not set'}</div>
+                    <div className="text-tertiary">Channel: {config.channel_id || 'Not set'}</div>
                 )}
                 {serviceType === 'email' && (
                     <div className="text-tertiary">Server: {config.smtp_server || 'Not set'}</div>

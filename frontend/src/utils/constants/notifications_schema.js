@@ -64,13 +64,6 @@ export const NOTIFICATIONS_SCHEMA = [
         label: 'Notifiarr',
         fields: [
             {
-                key: 'bot_name',
-                label: 'Bot Name',
-                type: 'text',
-                required: true,
-                placeholder: 'My Notifiarr Bot',
-            },
-            {
                 key: 'color',
                 label: 'Embed Color',
                 type: 'color',

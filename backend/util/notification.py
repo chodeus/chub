@@ -18,7 +18,6 @@ from ratelimit import limits, sleep_and_retry
 class NotifiarrConfig:
     webhook: str
     channel_id: int
-    bot_name: Optional[str] = None
     color: Optional[str] = None
 
 
@@ -422,7 +421,6 @@ class NotificationManager:
                         target_data["notifiarr"] = {
                             "webhook": hook,
                             "channel_id": cid_int,
-                            "bot_name": target.get("bot_name") or None,
                             "color": target.get("color") or None,
                         }
                     else:

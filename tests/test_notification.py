@@ -217,18 +217,19 @@ def test_collect_targets_discord_test_path_returns_same_shape_as_prod():
     assert prod["discord"]["webhook"] == test["discord"]["webhook"]
 
 
-def test_collect_targets_notifiarr_preserves_bot_name_and_color():
+def test_collect_targets_notifiarr_preserves_color_and_channel():
     cfg = _cfg_with_notifiarr(
         webhook="https://notifiarr.com/api/v1/notification/passthrough/KEY",
         channel_id="1234567890",
-        bot_name="My Notifiarr Bot",
         color="#FF7300",
     )
     m = make_manager(cfg)
     targets = m.collect_valid_targets()
     assert targets["notifiarr"]["channel_id"] == 1234567890
-    assert targets["notifiarr"]["bot_name"] == "My Notifiarr Bot"
     assert targets["notifiarr"]["color"] == "#FF7300"
+    # Notifiarr has no per-notification bot override, so we don't carry bot_name
+    # through (the UI form doesn't accept it either).
+    assert "bot_name" not in targets["notifiarr"]
 
 
 def test_collect_targets_email_maps_from_and_to_correctly():
@@ -334,7 +335,6 @@ def test_send_notifiarr_test_posts_passthrough_payload_to_webhook():
     cfg = NotifiarrConfig(
         webhook="https://notifiarr.com/api/v1/notification/passthrough/KEY",
         channel_id=42,
-        bot_name="NotifBot",  # CHUB-side label; not sent in payload (see comment above)
     )
     with patch.object(NotificationManager, "safe_post") as post:
         post.return_value = SimpleNamespace(status_code=200, text="")
