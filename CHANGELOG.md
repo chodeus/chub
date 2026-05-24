@@ -2,6 +2,25 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.8.0](https://github.com/chodeus/chub/compare/v2.7.0...v2.8.0) (2026-05-24)
+
+
+### Features
+
+* **notifications:** always notify on poster_renamerr, show real transfer deltas for sync_gdrive ([5d49313](https://github.com/chodeus/chub/commit/5d493136077922818a7adb80f901b9c05de58016))
+
+
+### Bug Fixes
+
+* **media_cache:** use MusicBrainz ID for artist duplicate + collision detection ([a8d43fb](https://github.com/chodeus/chub/commit/a8d43fb05e0a7f1029d3212b8f55a77533a0d223))
+* **sync_gdrive:** refresh poster_cache in bulk run() too, not just adhoc ([d90b2c5](https://github.com/chodeus/chub/commit/d90b2c51476007d8a8f0575c4003f5b4fc69cc50))
+* **ui:** repair broken header buttons, drop duplicates ([d2bd6db](https://github.com/chodeus/chub/commit/d2bd6db11794813385820c1215b7653c79e2ebfe))
+
+
+### Refactoring
+
+* **jobs:** collapse sync_gdrive + labelarr dispatch chains to one path each ([eebb5c8](https://github.com/chodeus/chub/commit/eebb5c8c77ea9dae72dc48e6929a767ca8230cda))
+
 ## [2.7.0](https://github.com/chodeus/chub/compare/v2.6.0...v2.7.0) (2026-05-24)
 
 
