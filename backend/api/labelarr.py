@@ -269,32 +269,38 @@ async def bulk_sync_tags(
                 status_code=500,
             )
 
-        enqueued: List[int] = []
-        failures: List[dict] = []
-        for media_id in request_data.media_cache_ids:
-            payload = {
-                "source_instance": request_data.source_instance,
-                "media_cache_id": media_id,
-                "tag_actions": request_data.tag_actions.model_dump(),
-                "plex_instance": plex_instance,
-                "dry_run": request_data.dry_run,
-            }
-            result = db.worker.enqueue_job(
-                table_name="jobs", payload=payload, job_type="labelarr_sync"
-            )
-            if result.get("success"):
-                enqueued.append(result["data"]["job_id"])
-            else:
-                failures.append(
-                    {"media_cache_id": media_id, "error": result.get("message")}
-                )
+        # Enqueue ONE bulk job covering every requested media_cache_id
+        # instead of N silent per-item jobs. The bulk processor sends a
+        # single aggregate Discord/Notifiarr/Email summary at the end.
+        # Per-item /labelarr/sync is unaffected and still routes through
+        # the silent ad-hoc path (UI gives immediate toast feedback).
+        payload = {
+            "source_instance": request_data.source_instance,
+            "media_cache_ids": request_data.media_cache_ids,
+            "tag_actions": request_data.tag_actions.model_dump(),
+            "plex_instance": plex_instance,
+            "dry_run": request_data.dry_run,
+        }
+        result = db.worker.enqueue_job(
+            table_name="jobs", payload=payload, job_type="labelarr_bulk_sync"
+        )
 
-        logger.info(f"Bulk labelarr: enqueued {len(enqueued)}, failed {len(failures)}")
+        if not result.get("success"):
+            return error(
+                result.get("message", "Failed to enqueue bulk labelarr job"),
+                code="JOB_ENQUEUE_FAILED",
+                status_code=500,
+            )
+
+        job_id = result["data"]["job_id"]
+        logger.info(
+            f"Bulk labelarr: enqueued job {job_id} for {len(request_data.media_cache_ids)} items"
+        )
         return ok(
-            f"Enqueued {len(enqueued)} labelarr sync jobs",
+            f"Enqueued bulk labelarr sync for {len(request_data.media_cache_ids)} items",
             {
-                "job_ids": enqueued,
-                "failures": failures,
+                "job_id": job_id,
+                "queued_count": len(request_data.media_cache_ids),
                 "plex_instance": plex_instance,
                 "source_instance": request_data.source_instance,
                 "dry_run": request_data.dry_run,

@@ -774,6 +774,24 @@ class PosterRenamerr(ChubModule):
                     f"Processed {len(media_items)} media items, {matched_count} matched"
                 )
 
+                # Notify on webhook/API-driven adhoc imports too. The bulk
+                # run() path notifies; without this, ARR webhook imports
+                # would silently complete and the user has no awareness
+                # since the trigger is asynchronous and the UI may not be
+                # open. Same output shape as run() so the existing
+                # formatter handles it. Skips on empty output (nothing to
+                # report) and on notification failure.
+                if any(output.values()):
+                    try:
+                        manager = NotificationManager(
+                            self.full_config,
+                            self.logger,
+                            module_name="poster_renamerr",
+                        )
+                        manager.send_notification(output)
+                    except Exception as e:
+                        log.debug(f"adhoc poster_renamerr notification failed: {e}")
+
                 return {
                     "success": True,
                     "output": output,
