@@ -2,6 +2,13 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.6.0](https://github.com/chodeus/chub/compare/v2.5.6...v2.6.0) (2026-05-24)
+
+
+### Features
+
+* **sync_gdrive:** refresh asset cache per folder, collapse "sync all" to one notifying job ([b436ffd](https://github.com/chodeus/chub/commit/b436ffd266654410ac95de4351ea5c635ef06d9c))
+
 ## [2.5.6](https://github.com/chodeus/chub/compare/v2.5.5...v2.5.6) (2026-05-24)
 
 
