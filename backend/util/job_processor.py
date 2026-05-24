@@ -411,34 +411,45 @@ def _process_sync_gdrive_job(
     from backend.modules.sync_gdrive import SyncGDrive
 
     gdrive_name = payload.get("gdrive_name")
-    if not gdrive_name:
-        return {
-            "status": 400,
-            "success": False,
-            "message": "No gdrive_name provided for sync",
-            "error_code": "MISSING_GDRIVE_NAME",
-        }
-
     syncer = SyncGDrive(logger=logger)
 
     def progress_callback(pct: int) -> None:
         logger.get_adapter("SYNC_GDRIVE").debug(f"[JOB:{job_id}] Sync progress: {pct}%")
 
-    success = syncer.sync_folder_adhoc(
-        gdrive_name, progress_cb=progress_callback, job_id=job_id
-    )
+    # Two dispatch shapes:
+    #   payload has gdrive_name → ad-hoc per-folder sync (no notification;
+    #     caller is treating this as a small targeted action)
+    #   payload omits gdrive_name → bulk sync of all configured folders via
+    #     run(), which sends the aggregate Discord/Notifiarr/Email summary
+    #     at the end. The /api/posters/gdrive/sync endpoint collapses
+    #     "select all folders" to this shape so the user gets one summary
+    #     instead of N silent per-folder jobs.
+    syncer.set_job_id(job_id)
+    if gdrive_name:
+        success = syncer.sync_folder_adhoc(
+            gdrive_name, progress_cb=progress_callback, job_id=job_id
+        )
+        label = gdrive_name
+    else:
+        try:
+            syncer.run(progress_cb=progress_callback)
+            success = True
+        except Exception as e:
+            logger.error(f"Bulk GDrive sync failed: {e}")
+            success = False
+        label = "all folders"
 
     if success:
         return {
             "status": 200,
             "success": True,
-            "message": f"GDrive sync completed for {gdrive_name}",
+            "message": f"GDrive sync completed for {label}",
         }
     else:
         return {
             "status": 500,
             "success": False,
-            "message": f"GDrive sync failed for {gdrive_name}",
+            "message": f"GDrive sync failed for {label}",
             "error_code": "SYNC_FAILED",
         }
 
