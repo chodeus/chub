@@ -144,7 +144,7 @@ jobs:
   # ---- Frontend Lint (reusable) ----
   frontend-lint:
     name: Frontend Lint
-    uses: chodeus/chodeus-ops/.github/workflows/node-ci.yml@a435933268b61484615a8d3e6216d08efdd04a9f # main
+    uses: chodeus/chodeus-ops/.github/workflows/node-ci.yml@0469c75e0002d118473db2aeff288cf7f5fa70de # main
     with:
       node_version: '24'
       package_json_dir: frontend
@@ -251,7 +251,7 @@ jobs:
   notify-failure:
     needs: [codeql-python, codeql-javascript, backend-lint, backend-smoke, frontend-lint, docker-push]
     if: failure() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-    uses: chodeus/chodeus-ops/.github/workflows/notify-discord.yml@a435933268b61484615a8d3e6216d08efdd04a9f # main
+    uses: chodeus/chodeus-ops/.github/workflows/notify-discord.yml@0469c75e0002d118473db2aeff288cf7f5fa70de # main
     with:
       event_type: build
       status: failure
