@@ -466,7 +466,7 @@ class Labelarr(ChubModule):
     ) -> Dict[str, Any]:
         """
         Perform ad-hoc tag sync for a specific media item.
-        Similar to poster_renamerr.run_poster_rename_adhoc() and sync_gdrive.sync_folder_adhoc().
+        Similar to poster_renamerr.run_poster_rename_adhoc().
 
         Args:
             source_instance: ARR instance name
@@ -697,17 +697,20 @@ class Labelarr(ChubModule):
         tag_actions: Dict[str, List[str]],
         plex_instance: Optional[str] = None,
         dry_run: bool = False,
+        notify: bool = True,
     ) -> Dict[str, Any]:
-        """Process many media items in one job and send a single notification.
+        """Process many media items in one job, optionally send one summary.
 
         Mirrors `labelarr_sync_adhoc` for a list of media_cache_ids,
         accumulating per-item results into the same output shape that
-        `run()` builds (list of {title, year, add_remove}). One Discord/
-        Notifiarr/Email summary fires at the end, instead of one silent
-        ad-hoc job per item.
+        `run()` builds (list of {title, year, add_remove}).
 
-        Used by /labelarr/bulk-sync — selecting many items in the UI
-        should produce one summary, not N silent operations.
+        Args:
+            notify: When True (default) send one aggregate Discord/
+                Notifiarr/Email summary at the end. /labelarr/bulk-sync
+                uses the default. /labelarr/sync (single item) sets it
+                False — UI toast is the user's feedback for that path
+                and a per-click Discord ping would be noise.
         """
         log = self.logger.get_adapter("LABELARR_BULK")
         log.info(f"Bulk-syncing tags for {len(media_cache_ids)} media items")
@@ -741,7 +744,7 @@ class Labelarr(ChubModule):
             else:
                 failed += 1
 
-        if output:
+        if output and notify:
             try:
                 self.handle_messages(output)
                 manager = NotificationManager(

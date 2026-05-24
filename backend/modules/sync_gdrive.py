@@ -370,112 +370,27 @@ class SyncGDrive(ChubModule):
                     f"{file_count} files, {size_bytes} bytes, last updated {last_updated}"
                 )
 
-    def sync_folder_adhoc(
-        self, gdrive_name: str, progress_cb=lambda pct: None, job_id=None
+    def run(
+        self,
+        progress_cb=lambda pct: None,
+        only_folders: Optional[List[str]] = None,
+        notify: bool = True,
     ):
-        """
-        Sync a single GDrive folder (by its config 'name') on demand.
+        """Sync configured gdrive folders to local disk.
 
         Args:
-            gdrive_name: Name of the GDrive folder to sync
-            progress_cb: Progress callback function
-            job_id: Job ID for progress tracking
-
-        Returns:
-            bool: Success status
+            progress_cb: Callback for 0-100 progress updates.
+            only_folders: Optional list of gdrive entry names. When set,
+                restricts the sync to entries whose `name` matches one
+                in the list. Used by /api/posters/gdrive/sync to express
+                "sync just these folders" through the same code path as
+                "sync all" — a missing/empty value means sync everything.
+            notify: When True (default) send the aggregate
+                Discord/Notifiarr/Email summary at the end. Callers that
+                represent a single-folder targeted UI action set this to
+                False — UI feedback already covers them and a per-click
+                Discord ping would be noise.
         """
-        try:
-            # Set job ID for progress tracking
-            if job_id:
-                self.set_job_id(job_id)
-
-            with ChubDB(logger=self.logger) as self.db:
-                sync_list = (
-                    self.config.gdrive_list
-                    if isinstance(self.config.gdrive_list, list)
-                    else [self.config.gdrive_list]
-                )
-                for sync_item in sync_list:
-                    owner = sync_item.name
-                    if owner == gdrive_name:
-                        sync_location = sync_item.location
-                        sync_id = sync_item.id
-
-                        progress_cb(5)  # Starting ad-hoc sync
-                        if self.current_job_id and self.db:
-                            try:
-                                self.db.worker.update_progress(
-                                    "jobs", self.current_job_id, 5
-                                )
-                            except Exception as e:
-                                self.logger.debug(f"Failed to update progress: {e}")
-
-                        sync_ok = self.sync_folder(
-                            sync_location, sync_id, progress_cb=progress_cb
-                        )
-
-                        # GATHER STATS AND UPSERT
-                        progress_cb(90)
-                        if self.current_job_id and self.db:
-                            try:
-                                self.db.worker.update_progress(
-                                    "jobs", self.current_job_id, 90
-                                )
-                            except Exception as e:
-                                self.logger.debug(f"Failed to update progress: {e}")
-
-                        file_count, size_bytes, last_updated = self.gather_folder_stats(
-                            sync_location
-                        )
-                        self.db.stats.upsert_gdrive_stat(
-                            location=sync_location,
-                            folder_name=owner,
-                            owner=owner,
-                            file_count=file_count,
-                            size_bytes=size_bytes,
-                            last_updated=last_updated,
-                        )
-                        self.logger.info(
-                            f"Synced and updated gdrive_stats for {sync_location}: "
-                            f"{file_count} files, {size_bytes} bytes, last updated {last_updated}"
-                        )
-
-                        if sync_ok:
-                            self._refresh_poster_cache_for_folder(sync_location)
-
-                        progress_cb(100)
-                        if self.current_job_id and self.db:
-                            try:
-                                self.db.worker.update_progress(
-                                    "jobs", self.current_job_id, 100
-                                )
-                            except Exception as e:
-                                self.logger.debug(f"Failed to update progress: {e}")
-                        return sync_ok
-                self.logger.error(
-                    f"GDrive name '{gdrive_name}' not found in config.gdrive_list."
-                )
-                progress_cb(100)
-                if self.current_job_id and self.db:
-                    try:
-                        self.db.worker.update_progress("jobs", self.current_job_id, 100)
-                    except Exception as e:
-                        self.logger.debug(f"Failed to update progress: {e}")
-                return False
-        except KeyboardInterrupt:
-            print("Keyboard Interrupt detected. Exiting...")
-            return
-        except Exception as exc:
-            self.logger.error(f"\n\nAn error occurred: {exc}\n", exc_info=True)
-            progress_cb(100)
-            if self.current_job_id and self.db:
-                try:
-                    self.db.worker.update_progress("jobs", self.current_job_id, 100)
-                except Exception as e:
-                    self.logger.debug(f"Failed to update progress: {e}")
-            return False
-
-    def run(self, progress_cb=lambda pct: None):
         start_time = time.time()
         try:
             with ChubDB(logger=self.logger) as self.db:
@@ -493,6 +408,21 @@ class SyncGDrive(ChubModule):
                     if isinstance(self.config.gdrive_list, list)
                     else [self.config.gdrive_list]
                 )
+
+                if only_folders:
+                    requested = set(only_folders)
+                    filtered = [s for s in sync_list if s.name in requested]
+                    missing = requested - {s.name for s in sync_list}
+                    if missing:
+                        self.logger.warning(
+                            f"only_folders requested unknown gdrive names: "
+                            f"{sorted(missing)} — ignoring"
+                        )
+                    sync_list = filtered
+                    self.logger.info(
+                        f"Filtered sync_list to {len(sync_list)} folder(s): "
+                        f"{[s.name for s in sync_list]}"
+                    )
 
                 if getattr(
                     self.config, "gdrive_sa_location", None
@@ -597,9 +527,12 @@ class SyncGDrive(ChubModule):
                         self.logger.debug(f"Failed to update progress: {e}")
 
                 # Notify — skipped on dry-run, empty lists (nothing to say),
-                # and when the user has no sources configured.
+                # when the user has no sources configured, and when the
+                # caller explicitly opts out (e.g. single-folder UI sync
+                # where the toast is enough feedback).
                 if (
-                    not getattr(self.config, "dry_run", False)
+                    notify
+                    and not getattr(self.config, "dry_run", False)
                     and total > 0
                     and synced_items
                 ):

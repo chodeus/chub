@@ -156,19 +156,22 @@ async def sync_tags_to_plex(
                 status_code=500,
             )
 
-        # Create job payload for labelarr sync
+        # Single-item sync routes through the same labelarr_bulk_sync
+        # path as multi-item, just with a one-element list and notify
+        # disabled. UI toast is the user's feedback for a single-item
+        # click; one Discord ping per click would be noise. The bulk
+        # processor handles single-element lists identically.
         job_payload = {
             "source_instance": request_data.source_instance,
-            "media_cache_id": request_data.media_cache_id,
-            "plex_mapping_id": request_data.plex_mapping_id,
+            "media_cache_ids": [request_data.media_cache_id],
             "tag_actions": request_data.tag_actions.model_dump(),
-            "plex_instance": plex_instance,  # Use determined plex_instance
+            "plex_instance": plex_instance,
             "dry_run": request_data.dry_run,
+            "notify": False,
         }
 
-        # Queue the labelarr sync job
         result = db.worker.enqueue_job(
-            table_name="jobs", payload=job_payload, job_type="labelarr_sync"
+            table_name="jobs", payload=job_payload, job_type="labelarr_bulk_sync"
         )
 
         if result["success"]:
@@ -214,9 +217,10 @@ class BulkTagRequest(BaseModel):
 @router.post(
     "/labelarr/bulk-sync",
     summary="Bulk sync tags for many media items",
-    description="Enqueue a labelarr_sync job for each media_cache_id. "
-    "Returns the list of enqueued job IDs so the frontend can poll them. "
-    "Mirrors /labelarr/sync payload but takes `media_cache_ids: [int]`.",
+    description="Enqueue one labelarr_bulk_sync job covering every "
+    "media_cache_id. Returns the job ID so the frontend can poll it. "
+    "Mirrors /labelarr/sync payload but takes `media_cache_ids: [int]` "
+    "and sends one aggregate Discord summary at the end.",
 )
 async def bulk_sync_tags(
     request_data: BulkTagRequest,

@@ -714,8 +714,8 @@ class PosterRenamerr(ChubModule):
 
     def run_poster_rename_adhoc(self, media_items: List[dict]) -> dict:
         """
-        Process specific media items directly (like sync_gdrive.sync_folder_adhoc).
-        This is the NEW method for webhook/API processing.
+        Process specific media items directly.
+        This is the method for webhook/API processing.
 
         Args:
             media_items: List of media items to process

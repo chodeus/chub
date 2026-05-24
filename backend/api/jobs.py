@@ -69,7 +69,7 @@ async def list_jobs(
 
     Filters:
     - status: pending / running / success / error / cancelled
-    - job_type: module_run / webhook / sync_gdrive / etc.
+    - job_type: module_run / webhook / etc.
     - module: module_name (applies to module_run jobs)
     """
     try:
