@@ -176,6 +176,10 @@ const MediaManagePage = () => {
     );
 
     const duplicates = useMemo(() => dupData?.data?.duplicates || [], [dupData]);
+    const folderCollisions = useMemo(
+        () => dupData?.data?.folder_collisions || [],
+        [dupData]
+    );
     const collections = useMemo(
         () => collectionsData?.data?.collections || collectionsData?.data || [],
         [collectionsData]
@@ -436,6 +440,114 @@ const MediaManagePage = () => {
                                             </div>
                                         );
                                     })()}
+                                </div>
+                            );
+                        })}
+                    </div>
+                </section>
+            )}
+
+            {folderCollisions.length > 0 && (
+                <section className="mb-4">
+                    <h3 className="text-lg font-semibold text-primary mb-1 flex items-center gap-2">
+                        <span className="material-symbols-outlined text-secondary">
+                            folder_copy
+                        </span>
+                        Folder collisions ({folderCollisions.length} groups)
+                    </h3>
+                    <p className="text-xs text-tertiary mb-3">
+                        Same normalized title, different external IDs — usually legitimate
+                        international variants or remakes. Review before resolving.
+                    </p>
+                    <div className="grid gap-2">
+                        {folderCollisions.slice(0, 10).map((dup, i) => {
+                            const uniqueInstances = dup.instances
+                                ? [...new Set(dup.instances.split(','))]
+                                      .map(s => s.trim())
+                                      .filter(Boolean)
+                                : [];
+                            let folderPaths = [];
+                            try {
+                                folderPaths = JSON.parse(dup.folders || '[]').filter(Boolean);
+                            } catch {
+                                folderPaths = [];
+                            }
+                            let memberTitles = [];
+                            try {
+                                memberTitles = JSON.parse(dup.titles || '[]').filter(Boolean);
+                            } catch {
+                                memberTitles = [];
+                            }
+                            const identities = (dup.identities || '')
+                                .split(',')
+                                .map(s => s.trim())
+                                .filter(Boolean);
+                            return (
+                                <div
+                                    key={dup.id || i}
+                                    className="p-3 rounded-lg bg-surface border border-border flex flex-col gap-2"
+                                >
+                                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                                        <div className="flex items-center gap-2 min-w-0">
+                                            <span className="font-medium text-primary truncate">
+                                                {dup.normalized_title}
+                                            </span>
+                                            {dup.year && (
+                                                <span className="text-secondary flex-shrink-0">
+                                                    ({dup.year})
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center flex-wrap gap-2 sm:gap-3">
+                                            <span className="text-sm font-medium text-secondary">
+                                                {dup.count} similar
+                                            </span>
+                                            <div className="flex items-center flex-wrap gap-1">
+                                                {uniqueInstances.map(inst => (
+                                                    <span
+                                                        key={inst}
+                                                        className="text-xs px-2 py-0.5 rounded-full bg-surface-alt text-secondary"
+                                                    >
+                                                        {inst}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                            <Button
+                                                variant="ghost"
+                                                icon="auto_fix_high"
+                                                onClick={() => setResolveTarget(dup)}
+                                            >
+                                                Resolve
+                                            </Button>
+                                        </div>
+                                    </div>
+                                    {memberTitles.length > 0 && (
+                                        <div className="flex flex-col gap-0.5 text-xs text-secondary">
+                                            {memberTitles.map((t, idx) => (
+                                                <span key={`${t}-${idx}`} className="truncate">
+                                                    {t}
+                                                    {identities[idx] && (
+                                                        <span className="text-tertiary ml-2">
+                                                            [{identities[idx]}]
+                                                        </span>
+                                                    )}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    )}
+                                    {folderPaths.length > 0 && (
+                                        <div className="flex flex-col gap-0.5 text-xs font-mono text-tertiary">
+                                            {folderPaths.map((p, idx) => (
+                                                <span
+                                                    key={`${p}-${idx}`}
+                                                    className="truncate"
+                                                    title={p}
+                                                >
+                                                    {p}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             );
                         })}
