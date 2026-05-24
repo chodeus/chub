@@ -74,6 +74,8 @@ def process_job(job: Dict[str, Any], logger, db: ChubDB = None) -> Dict[str, Any
             return _process_cache_refresh_job(payload, logger, job_id, db)
         elif job_type == "labelarr_sync":
             return _process_labelarr_sync_job(payload, logger, job_id, db)
+        elif job_type == "labelarr_bulk_sync":
+            return _process_labelarr_bulk_sync_job(payload, logger, job_id, db)
         else:
             return {
                 "status": 400,
@@ -979,6 +981,60 @@ def _process_labelarr_sync_job(
             "success": False,
             "message": f"Labelarr sync failed: {str(e)}",
             "error_code": "LABELARR_SYNC_FAILED",
+        }
+
+
+def _process_labelarr_bulk_sync_job(
+    payload: Dict[str, Any], logger, job_id: int, db: Any = None
+) -> Dict[str, Any]:
+    """Bulk labelarr sync — one job processes many media_cache_ids and
+    sends a single aggregate notification. Counterpart to the gdrive
+    "Sync All" collapse: /labelarr/bulk-sync now enqueues one job here
+    instead of N silent per-item labelarr_sync jobs.
+    """
+    log = logger.get_adapter("LABELARR_BULK")
+    log.info(f"[JOB:{job_id}] Starting bulk labelarr sync")
+
+    try:
+        from backend.modules.labelarr import Labelarr
+
+        source_instance = payload.get("source_instance")
+        media_cache_ids = payload.get("media_cache_ids") or []
+        tag_actions = payload.get("tag_actions") or {}
+        plex_instance = payload.get("plex_instance")
+        dry_run = payload.get("dry_run", False)
+
+        if not source_instance or not media_cache_ids:
+            return {
+                "status": 400,
+                "success": False,
+                "message": "Missing required parameters: source_instance or media_cache_ids",
+                "error_code": "MISSING_PARAMETERS",
+            }
+
+        labelarr = Labelarr(logger=logger)
+        result = labelarr.labelarr_bulk_sync_adhoc(
+            source_instance=source_instance,
+            media_cache_ids=media_cache_ids,
+            tag_actions=tag_actions,
+            plex_instance=plex_instance,
+            dry_run=dry_run,
+        )
+
+        return {
+            "status": 200,
+            "success": True,
+            "message": result.get("message", "Bulk labelarr sync completed"),
+            "data": result.get("data", {}),
+        }
+
+    except Exception as e:
+        log.error(f"[JOB:{job_id}] Bulk labelarr sync failed: {e}", exc_info=True)
+        return {
+            "status": 500,
+            "success": False,
+            "message": f"Bulk labelarr sync failed: {str(e)}",
+            "error_code": "LABELARR_BULK_SYNC_FAILED",
         }
 
 

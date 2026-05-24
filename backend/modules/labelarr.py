@@ -689,3 +689,79 @@ class Labelarr(ChubModule):
                 "message": f"Labelarr sync failed: {str(e)}",
                 "error_code": "LABELARR_SYNC_FAILED",
             }
+
+    def labelarr_bulk_sync_adhoc(
+        self,
+        source_instance: str,
+        media_cache_ids: List[int],
+        tag_actions: Dict[str, List[str]],
+        plex_instance: Optional[str] = None,
+        dry_run: bool = False,
+    ) -> Dict[str, Any]:
+        """Process many media items in one job and send a single notification.
+
+        Mirrors `labelarr_sync_adhoc` for a list of media_cache_ids,
+        accumulating per-item results into the same output shape that
+        `run()` builds (list of {title, year, add_remove}). One Discord/
+        Notifiarr/Email summary fires at the end, instead of one silent
+        ad-hoc job per item.
+
+        Used by /labelarr/bulk-sync — selecting many items in the UI
+        should produce one summary, not N silent operations.
+        """
+        log = self.logger.get_adapter("LABELARR_BULK")
+        log.info(f"Bulk-syncing tags for {len(media_cache_ids)} media items")
+
+        output: List[Dict[str, Any]] = []
+        succeeded = 0
+        failed = 0
+
+        for media_cache_id in media_cache_ids:
+            result = self.labelarr_sync_adhoc(
+                source_instance=source_instance,
+                media_cache_id=media_cache_id,
+                tag_actions=tag_actions,
+                plex_instance=plex_instance,
+                dry_run=dry_run,
+            )
+            if result.get("success"):
+                succeeded += 1
+                data = result.get("data") or {}
+                changes = data.get("changes") or {}
+                # Only include items that actually changed; "no changes
+                # needed" rows would inflate the summary without info.
+                if changes:
+                    output.append(
+                        {
+                            "title": data.get("title"),
+                            "year": data.get("year"),
+                            "add_remove": changes,
+                        }
+                    )
+            else:
+                failed += 1
+
+        if output:
+            try:
+                self.handle_messages(output)
+                manager = NotificationManager(
+                    self.full_config, self.logger, module_name="labelarr"
+                )
+                manager.send_notification(output)
+            except Exception as e:
+                log.debug(f"labelarr bulk notification failed: {e}")
+
+        return {
+            "success": True,
+            "message": (
+                f"Bulk labelarr sync complete: "
+                f"{succeeded} succeeded, {failed} failed, "
+                f"{len(output)} items with changes"
+            ),
+            "data": {
+                "total": len(media_cache_ids),
+                "succeeded": succeeded,
+                "failed": failed,
+                "changed": len(output),
+            },
+        }
