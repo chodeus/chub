@@ -163,30 +163,6 @@ export const mediaAPI = {
     },
 
     /**
-     * Scan for new media
-     * @param {Object} options - Scan options
-     * @param {Array} options.paths - Specific paths to scan
-     * @param {boolean} options.recursive - Recursive scan
-     * @returns {Promise<Object>} Scan job information
-     */
-    scanForMedia: (options = {}) => {
-        return apiCore.post('/media/scan', options);
-    },
-
-    /**
-     * Fix media metadata
-     * @param {string} mediaId - Media identifier (optional for all media)
-     * @param {Object} options - Fix options
-     * @param {boolean} options.overwrite - Overwrite existing metadata
-     * @param {Array} options.sources - Metadata sources to use
-     * @returns {Promise<Object>} Fix job information
-     */
-    fixMetadata: (mediaId = null, options = {}) => {
-        const url = mediaId ? `/media/${mediaId}/fix-metadata` : '/media/fix-metadata';
-        return apiCore.post(url, options);
-    },
-
-    /**
      * Fetch media genres
      * @param {Object} options - Request options
      * @param {string} options.type - Media type filter

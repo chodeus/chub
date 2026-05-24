@@ -145,14 +145,6 @@ const PosterAssetsSearchPage = () => {
         { successMessage: 'Poster optimization started' }
     );
 
-    const { execute: runSyncMetadata, isLoading: isSyncingMetadata } = useApiMutation(
-        () => postersAPI.syncMetadata(),
-        {
-            successMessage: 'Metadata sync completed',
-            onSuccess: () => refreshBrowse(),
-        }
-    );
-
     const { execute: createPosterCollection, isLoading: isCreatingPosterCollection } =
         useApiMutation(name => postersAPI.createCollection({ name }), {
             successMessage: 'Collection created',
@@ -278,16 +270,6 @@ const PosterAssetsSearchPage = () => {
                             title="Resize oversized posters and compress images to save disk space"
                         >
                             Optimize
-                        </LoadingButton>
-                        <LoadingButton
-                            loading={isSyncingMetadata}
-                            loadingText="Syncing..."
-                            variant="ghost"
-                            icon="sync"
-                            onClick={() => runSyncMetadata()}
-                            title="Refresh poster metadata by running a full Poster Renamerr sync"
-                        >
-                            Sync Metadata
                         </LoadingButton>
                         <LoadingButton
                             loading={isUploading}

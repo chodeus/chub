@@ -539,21 +539,12 @@ async def refresh_media(
             payload = {}
         logger.debug(f"Serving POST /api/media/refresh with payload: {payload}")
 
-        # Frontend sends {path, deep} -- treat as refresh-all
-        if "path" in payload or "deep" in payload:
-            job_payload = {
-                "arr_instances": [],
-                "plex_instances": [],
-                "libraries": [],
-                "update_mappings": True,
-            }
-        else:
-            job_payload = {
-                "arr_instances": payload.get("arr_instances", []),
-                "plex_instances": payload.get("plex_instances", []),
-                "libraries": payload.get("libraries", []),
-                "update_mappings": payload.get("update_mappings", False),
-            }
+        job_payload = {
+            "arr_instances": payload.get("arr_instances", []),
+            "plex_instances": payload.get("plex_instances", []),
+            "libraries": payload.get("libraries", []),
+            "update_mappings": payload.get("update_mappings", True),
+        }
 
         result = db.worker.enqueue_job("jobs", job_payload, job_type="cache_refresh")
 
@@ -573,74 +564,6 @@ async def refresh_media(
         return error(
             f"Error refreshing media: {str(e)}",
             code="MEDIA_REFRESH_ERROR",
-            status_code=500,
-        )
-
-
-@router.post(
-    "/scan",
-    summary="Scan for new media",
-    description="Scan for new media by triggering a cache refresh with "
-    "optional path filters and recursive flag.",
-    responses={
-        200: {
-            "description": "Scan job enqueued successfully",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "success": True,
-                        "message": "Media scan initiated",
-                        "data": {"job_id": 456},
-                    }
-                }
-            },
-        }
-    },
-)
-async def scan_media(
-    request: Request,
-    logger: Any = Depends(get_logger),
-    db: ChubDB = Depends(get_database),
-) -> JSONResponse:
-    """
-    Scan for new media by triggering a cache refresh.
-
-    Accepts optional path filters to restrict the scan scope and
-    a recursive flag to control directory traversal depth.
-
-    Returns:
-        Job ID for tracking the scan operation
-    """
-    try:
-        payload = (
-            await request.json()
-            if request.headers.get("content-type") == "application/json"
-            else {}
-        )
-        logger.debug("Serving POST /api/media/scan")
-
-        job_payload = {
-            "paths": payload.get("paths", []),
-            "recursive": payload.get("recursive", True),
-        }
-
-        result = db.worker.enqueue_job("jobs", job_payload, job_type="cache_refresh")
-
-        if result.get("success"):
-            job_id = result.get("data", {}).get("job_id")
-            return ok("Media scan initiated", {"job_id": job_id})
-
-        return error(
-            "Error enqueuing scan",
-            code="MEDIA_SCAN_ERROR",
-            status_code=500,
-        )
-
-    except Exception as e:
-        logger.error(f"Error scanning media: {e}")
-        return error(
-            f"Error scanning media: {str(e)}",
-            code="MEDIA_SCAN_ERROR",
             status_code=500,
         )
 
@@ -1114,83 +1037,6 @@ async def resolve_duplicates(
             "failed": failed,
         },
     )
-
-
-@router.post(
-    "/fix-metadata",
-    summary="Bulk fix metadata for all instances",
-    description="Enqueue a cache refresh job for every configured instance "
-    "to re-fetch and repair metadata across the entire library.",
-    responses={
-        200: {
-            "description": "Bulk metadata fix jobs enqueued successfully",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "success": True,
-                        "message": "Bulk metadata fix initiated for 3 instances",
-                        "data": {
-                            "job_ids": [10, 11, 12],
-                            "instances": ["radarr", "radarr4k", "sonarr"],
-                        },
-                    }
-                }
-            },
-        }
-    },
-)
-async def bulk_fix_metadata(
-    logger: Any = Depends(get_logger),
-    db: ChubDB = Depends(get_database),
-) -> JSONResponse:
-    """
-    Bulk fix metadata for all configured instances.
-
-    Enqueues a separate cache_refresh job (with update_mappings enabled)
-    for every unique instance found in the media cache.
-
-    Returns:
-        List of enqueued job IDs and their corresponding instance names
-    """
-    try:
-        logger.debug("Serving POST /api/media/fix-metadata")
-
-        all_media = db.media.get_all()
-        instances = list(
-            {item["instance_name"] for item in all_media if item.get("instance_name")}
-        )
-
-        if not instances:
-            return ok(
-                "No instances found in media cache", {"job_ids": [], "instances": []}
-            )
-
-        job_ids = []
-        for inst in instances:
-            job_payload = {
-                "arr_instances": [inst],
-                "update_mappings": True,
-            }
-            result = db.worker.enqueue_job(
-                "jobs", job_payload, job_type="cache_refresh"
-            )
-            if result.get("success"):
-                job_ids.append(result.get("data", {}).get("job_id"))
-
-        logger.info(f"Bulk metadata fix queued for {len(instances)} instances")
-
-        return ok(
-            f"Bulk metadata fix initiated for {len(instances)} instances",
-            {"job_ids": job_ids, "instances": instances},
-        )
-
-    except Exception as e:
-        logger.error(f"Error initiating bulk metadata fix: {e}")
-        return error(
-            f"Error initiating bulk metadata fix: {str(e)}",
-            code="BULK_FIX_METADATA_ERROR",
-            status_code=500,
-        )
 
 
 @router.get("/low-rated", summary="List media below a rating threshold")
@@ -2016,83 +1862,6 @@ async def delete_media_item(
         return error(
             f"Error deleting media item: {str(e)}",
             code="MEDIA_DELETE_ERROR",
-            status_code=500,
-        )
-
-
-@router.post(
-    "/{media_id}/fix-metadata",
-    summary="Fix media metadata",
-    description="Re-fetch metadata for a single media item by triggering "
-    "a targeted cache refresh against its instance.",
-    responses={
-        200: {
-            "description": "Metadata fix job enqueued successfully",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "success": True,
-                        "message": "Metadata fix initiated",
-                        "data": {"job_id": 789, "instance": "radarr"},
-                    }
-                }
-            },
-        },
-        404: {"description": "Media item not found"},
-    },
-)
-async def fix_metadata(
-    media_id: int,
-    logger: Any = Depends(get_logger),
-    db: ChubDB = Depends(get_database),
-) -> JSONResponse:
-    """
-    Re-fetch metadata for a media item.
-
-    Looks up the item's instance and enqueues a cache_refresh job
-    targeting that instance with mapping updates enabled.
-
-    Args:
-        media_id: The unique identifier of the media item to fix
-
-    Returns:
-        Job ID and instance name for the enqueued refresh
-    """
-    try:
-        logger.debug(f"Serving POST /api/media/{media_id}/fix-metadata")
-
-        item = db.media.get_by_id(media_id)
-        if not item:
-            return error(
-                "Media item not found",
-                code="MEDIA_NOT_FOUND",
-                status_code=404,
-            )
-
-        job_payload = {
-            "arr_instances": [item["instance_name"]],
-            "update_mappings": True,
-        }
-        result = db.worker.enqueue_job("jobs", job_payload, job_type="cache_refresh")
-
-        if result.get("success"):
-            job_id = result.get("data", {}).get("job_id")
-            return ok(
-                "Metadata fix initiated",
-                {"job_id": job_id, "instance": item["instance_name"]},
-            )
-
-        return error(
-            "Error enqueuing metadata fix",
-            code="FIX_METADATA_ERROR",
-            status_code=500,
-        )
-
-    except Exception as e:
-        logger.error(f"Error fixing metadata for {media_id}: {e}")
-        return error(
-            f"Error fixing metadata: {str(e)}",
-            code="FIX_METADATA_ERROR",
             status_code=500,
         )
 

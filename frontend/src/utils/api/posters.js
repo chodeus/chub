@@ -233,19 +233,6 @@ export const postersAPI = {
     },
 
     /**
-     * Sync poster metadata
-     * @param {string} posterId - Poster identifier (optional for all)
-     * @param {Object} options - Sync options
-     * @param {boolean} options.overwrite - Overwrite existing metadata
-     * @param {Array} options.sources - Metadata sources to sync from
-     * @returns {Promise<Object>} Sync job information
-     */
-    syncMetadata: (posterId = null, options = {}) => {
-        const url = posterId ? `/posters/${posterId}/sync-metadata` : '/posters/sync-metadata';
-        return apiCore.post(url, options);
-    },
-
-    /**
      * Fetch list of poster files
      * @param {boolean} forceRefresh - Force refresh cache
      * @returns {Promise<Array>} Array of poster file names

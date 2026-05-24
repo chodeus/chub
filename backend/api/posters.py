@@ -1093,62 +1093,6 @@ async def optimize_posters(
         )
 
 
-@router.post(
-    "/sync-metadata",
-    summary="Bulk sync poster metadata",
-    description="Enqueue a full poster_renamerr job to sync metadata for all posters.",
-    responses={
-        200: {
-            "description": "Bulk metadata sync job enqueued",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "success": True,
-                        "message": "Bulk metadata sync initiated",
-                        "data": {"job_id": 123},
-                    }
-                }
-            },
-        }
-    },
-)
-async def bulk_sync_metadata(
-    logger: Any = Depends(get_logger),
-    db: ChubDB = Depends(get_database),
-) -> JSONResponse:
-    """
-    Trigger bulk metadata synchronization for all posters.
-
-    Enqueues a full poster_renamerr job to refresh metadata
-    for every poster in the cache.
-
-    Returns:
-        Job ID for tracking the bulk sync operation
-    """
-    try:
-        logger.debug("Serving POST /api/posters/sync-metadata")
-        result = db.worker.enqueue_job(
-            "jobs",
-            {"module_name": "poster_renamerr"},
-            job_type="module_run",
-        )
-        if result.get("success"):
-            job_id = result.get("data", {}).get("job_id")
-            return ok("Bulk metadata sync initiated", {"job_id": job_id})
-        return error(
-            "Error enqueuing bulk metadata sync",
-            code="BULK_SYNC_ERROR",
-            status_code=500,
-        )
-    except Exception as e:
-        logger.error(f"Error initiating bulk metadata sync: {e}")
-        return error(
-            f"Error initiating bulk metadata sync: {str(e)}",
-            code="BULK_SYNC_ERROR",
-            status_code=500,
-        )
-
-
 @router.get(
     "/list",
     summary="List available poster files",
@@ -1601,7 +1545,7 @@ async def analyze_poster_directory(
         if not location:
             # Default to poster destination from config
             if config is not None:
-                location = getattr(config.poster_renamerr, "destination", None)
+                location = getattr(config.poster_renamerr, "destination_dir", None)
             if not location:
                 return error(
                     "Location parameter is required and no default destination configured",
@@ -2674,67 +2618,6 @@ async def download_poster(
         return error(
             f"Error downloading poster: {str(e)}",
             code="POSTER_DOWNLOAD_ERROR",
-            status_code=500,
-        )
-
-
-@router.post(
-    "/{poster_id}/sync-metadata",
-    summary="Sync poster metadata",
-    description="Enqueue a poster_renamerr job for a specific poster by ID.",
-    responses={
-        200: {
-            "description": "Metadata sync job enqueued",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "success": True,
-                        "message": "Metadata sync initiated",
-                        "data": {"job_id": 123, "poster_id": 1},
-                    }
-                }
-            },
-        }
-    },
-)
-async def sync_poster_metadata(
-    poster_id: int,
-    logger: Any = Depends(get_logger),
-    db: ChubDB = Depends(get_database),
-) -> JSONResponse:
-    """
-    Synchronize metadata for a specific poster.
-
-    Enqueues a poster_renamerr job scoped to a single media item.
-
-    Args:
-        poster_id: The unique identifier of the poster to sync
-
-    Returns:
-        Job ID for tracking the sync operation
-    """
-    try:
-        logger.debug(f"Serving POST /api/posters/{poster_id}/sync-metadata")
-        result = db.worker.enqueue_job(
-            "jobs",
-            {"module_name": "poster_renamerr", "media_ids": [poster_id]},
-            job_type="module_run",
-        )
-        if result.get("success"):
-            job_id = result.get("data", {}).get("job_id")
-            return ok(
-                "Metadata sync initiated", {"job_id": job_id, "poster_id": poster_id}
-            )
-        return error(
-            "Error enqueuing metadata sync",
-            code="METADATA_SYNC_ERROR",
-            status_code=500,
-        )
-    except Exception as e:
-        logger.error(f"Error syncing poster metadata for {poster_id}: {e}")
-        return error(
-            f"Error syncing poster metadata: {str(e)}",
-            code="METADATA_SYNC_ERROR",
             status_code=500,
         )
 

@@ -46,18 +46,7 @@ const MediaManagePage = () => {
     });
 
     const { execute: runExport, isLoading: isExporting } = useApiMutation(
-        () => mediaAPI.exportMedia({ format: 'json' }),
-        { successMessage: 'Export started successfully' }
-    );
-
-    const { execute: runScan, isLoading: isScanning } = useApiMutation(
-        () => mediaAPI.scanForMedia(),
-        { successMessage: 'Media scan initiated' }
-    );
-
-    const { execute: runFixMetadata, isLoading: isFixing } = useApiMutation(
-        () => mediaAPI.fixMetadata(),
-        { successMessage: 'Metadata fix initiated' }
+        () => mediaAPI.exportMedia({ format: 'json' })
     );
 
     const { execute: createCollection, isLoading: isCreatingCollection } = useApiMutation(
@@ -198,25 +187,22 @@ const MediaManagePage = () => {
 
     const handleExport = async () => {
         try {
-            await runExport();
+            const result = await runExport();
+            const items = result?.data?.data ?? [];
+            const blob = new Blob([JSON.stringify(items, null, 2)], {
+                type: 'application/json',
+            });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `chub-media-${new Date().toISOString().slice(0, 10)}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            toast.success(`Exported ${items.length} media items`);
         } catch {
             toast.error('Export failed');
-        }
-    };
-
-    const handleScan = async () => {
-        try {
-            await runScan();
-        } catch {
-            toast.error('Scan failed');
-        }
-    };
-
-    const handleFixMetadata = async () => {
-        try {
-            await runFixMetadata();
-        } catch {
-            toast.error('Fix metadata failed');
         }
     };
 
@@ -337,26 +323,6 @@ const MediaManagePage = () => {
                             title="Download your media library data as a JSON file"
                         >
                             Export
-                        </LoadingButton>
-                        <LoadingButton
-                            loading={isScanning}
-                            loadingText="Scanning..."
-                            variant="ghost"
-                            icon="radar"
-                            onClick={handleScan}
-                            title="Scan for new media by refreshing the cache from all configured instances"
-                        >
-                            Scan
-                        </LoadingButton>
-                        <LoadingButton
-                            loading={isFixing}
-                            loadingText="Fixing..."
-                            variant="ghost"
-                            icon="build"
-                            onClick={handleFixMetadata}
-                            title="Re-fetch metadata from all instances and update Plex mappings"
-                        >
-                            Fix Metadata
                         </LoadingButton>
                     </div>
                 }
