@@ -2,6 +2,13 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.7.0](https://github.com/chodeus/chub/compare/v2.6.0...v2.7.0) (2026-05-24)
+
+
+### Features
+
+* **notifications:** wire webhook poster_renamerr and bulk labelarr paths ([78734e4](https://github.com/chodeus/chub/commit/78734e433ab4fda28f5bb78a60c46f6cfffe9814))
+
 ## [2.6.0](https://github.com/chodeus/chub/compare/v2.5.6...v2.6.0) (2026-05-24)
 
 
