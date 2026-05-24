@@ -8,7 +8,7 @@ upload operations, and directory analysis functionality.
 import datetime
 import os
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, File, Query, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
@@ -1478,11 +1478,15 @@ async def sync_gdrive_folders(
                 status_code=400,
             )
 
-        # When the caller selects every configured folder, enqueue ONE
-        # bulk job (payload with no gdrive_name) instead of N per-folder
-        # jobs. The bulk path goes through SyncGDrive.run() which sends a
-        # single aggregate Discord/Notifiarr/Email summary at the end;
-        # the per-folder path is silent (would otherwise dump N messages).
+        # All "sync gdrive" UI actions go through the canonical
+        # module_run path — same job_type, same processor, same
+        # SyncGDrive.run() method — with optional kwargs steering the
+        # behavior:
+        #   selecting all configured → no module_args (run all, notify)
+        #   selecting a subset       → only_folders=[...] + notify
+        #   selecting one            → only_folders=[name] + notify=False
+        #                              (UI toast is the user's feedback;
+        #                               a Discord ping per click is noise)
         syncer = SyncGDrive(logger=gdrive_logger)
         configured = {
             item.name
@@ -1492,36 +1496,45 @@ async def sync_gdrive_folders(
                 else [syncer.config.gdrive_list]
             )
         }
-        if configured and set(gdrive_names) == configured:
-            job_result = db.worker.enqueue_job(
-                "jobs", payload={}, job_type="sync_gdrive"
-            )
-            job_id = job_result.get("data", {}).get("job_id")
+
+        requested = set(gdrive_names)
+        is_full_set = bool(configured) and requested == configured
+        is_single = len(requested) == 1
+
+        payload: Dict[str, Any] = {
+            "module_name": "sync_gdrive",
+            "origin": "web",
+        }
+        if not is_full_set:
+            payload["module_args"] = {
+                "only_folders": list(gdrive_names),
+                "notify": not is_single,
+            }
+
+        job_result = db.worker.enqueue_job(
+            "jobs", payload=payload, job_type="module_run"
+        )
+        job_id = job_result.get("data", {}).get("job_id")
+
+        if is_full_set:
             return ok(
                 f"GDrive sync started for all {len(configured)} folders",
                 {"job_id": job_id, "scope": "all"},
             )
-
-        started = []
-        job_ids = []
-
-        for name in gdrive_names:
-            job_result = db.worker.enqueue_job(
-                "jobs", payload={"gdrive_name": name}, job_type="sync_gdrive"
-            )
-            job_id = job_result.get("data", {}).get("job_id")
-            started.append(name)
-            job_ids.append({"name": name, "job_id": job_id})
-
-        if len(job_ids) == 1:
+        if is_single:
+            only = next(iter(requested))
             return ok(
-                f"GDrive sync started for '{started[0]}'",
-                {"job_id": job_ids[0]["job_id"], "name": job_ids[0]["name"]},
+                f"GDrive sync started for '{only}'",
+                {"job_id": job_id, "name": only, "scope": "single"},
             )
-
         return ok(
-            f"GDrive sync started for {len(started)} folders: {', '.join(started)}",
-            {"jobs": job_ids},
+            f"GDrive sync started for {len(requested)} folders: "
+            f"{', '.join(sorted(requested))}",
+            {
+                "job_id": job_id,
+                "queued_count": len(requested),
+                "scope": "subset",
+            },
         )
 
     except Exception as e:

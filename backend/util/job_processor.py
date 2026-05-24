@@ -64,16 +64,12 @@ def process_job(job: Dict[str, Any], logger, db: ChubDB = None) -> Dict[str, Any
             return _process_webhook_job(payload, logger, job_id, db)
         elif job_type == "poster_rename":
             return _process_poster_rename_job(payload, logger, job_id, db)
-        elif job_type == "sync_gdrive":
-            return _process_sync_gdrive_job(payload, logger, job_id, db)
         elif job_type == "upload_posters":
             return _process_upload_posters_job(payload, logger, job_id, db)
         elif job_type == "module_run":
             return _process_module_run_job(payload, logger, job_id, db)
         elif job_type == "cache_refresh":
             return _process_cache_refresh_job(payload, logger, job_id, db)
-        elif job_type == "labelarr_sync":
-            return _process_labelarr_sync_job(payload, logger, job_id, db)
         elif job_type == "labelarr_bulk_sync":
             return _process_labelarr_bulk_sync_job(payload, logger, job_id, db)
         else:
@@ -395,67 +391,6 @@ def _process_poster_rename_job(
     return result
 
 
-def _process_sync_gdrive_job(
-    payload: Dict[str, Any], logger, job_id: int, db: ChubDB = None
-) -> Dict[str, Any]:
-    """
-    Process GDrive sync job with progress tracking.
-
-    Args:
-        payload: Job payload containing gdrive_name
-        logger: Logger instance
-        job_id: Job ID for progress tracking
-        db: Shared database context (unused, kept for call-site compatibility)
-
-    Returns:
-        dict: Processing result
-    """
-    from backend.modules.sync_gdrive import SyncGDrive
-
-    gdrive_name = payload.get("gdrive_name")
-    syncer = SyncGDrive(logger=logger)
-
-    def progress_callback(pct: int) -> None:
-        logger.get_adapter("SYNC_GDRIVE").debug(f"[JOB:{job_id}] Sync progress: {pct}%")
-
-    # Two dispatch shapes:
-    #   payload has gdrive_name → ad-hoc per-folder sync (no notification;
-    #     caller is treating this as a small targeted action)
-    #   payload omits gdrive_name → bulk sync of all configured folders via
-    #     run(), which sends the aggregate Discord/Notifiarr/Email summary
-    #     at the end. The /api/posters/gdrive/sync endpoint collapses
-    #     "select all folders" to this shape so the user gets one summary
-    #     instead of N silent per-folder jobs.
-    syncer.set_job_id(job_id)
-    if gdrive_name:
-        success = syncer.sync_folder_adhoc(
-            gdrive_name, progress_cb=progress_callback, job_id=job_id
-        )
-        label = gdrive_name
-    else:
-        try:
-            syncer.run(progress_cb=progress_callback)
-            success = True
-        except Exception as e:
-            logger.error(f"Bulk GDrive sync failed: {e}")
-            success = False
-        label = "all folders"
-
-    if success:
-        return {
-            "status": 200,
-            "success": True,
-            "message": f"GDrive sync completed for {label}",
-        }
-    else:
-        return {
-            "status": 500,
-            "success": False,
-            "message": f"GDrive sync failed for {label}",
-            "error_code": "SYNC_FAILED",
-        }
-
-
 def _process_upload_posters_job(
     payload: Dict[str, Any], logger, job_id: int, db: ChubDB = None
 ) -> Dict[str, Any]:
@@ -703,9 +638,28 @@ def _process_module_run_job(
 
             start_time = time.time()
 
+            # module_args: optional kwargs forwarded to module.run(). Lets
+            # the generic module_run path express module-specific filters
+            # (e.g. sync_gdrive's only_folders + notify) so we don't need
+            # a dedicated job_type per parametrized invocation. Modules
+            # whose run() doesn't accept these kwargs raise TypeError on
+            # call, which we catch and retry with no args — defensive so
+            # existing modules unaware of the convention keep working.
+            module_args = payload.get("module_args") or {}
+
             try:
                 # Execute the module
-                module_instance.run()
+                try:
+                    module_instance.run(**module_args)
+                except TypeError:
+                    if module_args:
+                        log.warning(
+                            f"[JOB:{job_id}] {module_name}.run() does not accept "
+                            f"module_args {list(module_args)}; retrying without"
+                        )
+                        module_instance.run()
+                    else:
+                        raise
 
                 # Check if cancelled during execution
                 if cancel_event and cancel_event.is_set():
@@ -853,99 +807,15 @@ def _queue_upload_job(
         log.error(f"[JOB:{job_id}] Error queueing upload job: {e}")
 
 
-def _process_labelarr_sync_job(
-    payload: Dict[str, Any], logger, job_id: int, db: Any = None
-) -> Dict[str, Any]:
-    """
-    Process labelarr sync job using the existing labelarr module.
-
-    Args:
-        payload: Job payload containing sync request data
-        logger: Logger instance
-        job_id: Job ID for tracking
-
-    Returns:
-        dict: Processing result
-    """
-    log = logger.get_adapter("LABELARR_SYNC")
-    log.info(f"[JOB:{job_id}] Starting labelarr sync")
-
-    try:
-        from backend.modules.labelarr import Labelarr
-
-        # Extract sync parameters from payload
-        source_instance = payload.get("source_instance")
-        media_cache_id = payload.get("media_cache_id")
-        plex_mapping_id = payload.get("plex_mapping_id")
-        tag_actions = payload.get("tag_actions", {})
-        plex_instance = payload.get("plex_instance", "plex_1")
-        dry_run = payload.get("dry_run", False)
-
-        if not source_instance or not media_cache_id:
-            return {
-                "status": 400,
-                "success": False,
-                "message": "Missing required parameters: source_instance or media_cache_id",
-                "error_code": "MISSING_PARAMETERS",
-            }
-
-        log.info(
-            f"[JOB:{job_id}] Syncing tags for media {media_cache_id} from {source_instance} to {plex_instance}"
-        )
-
-        # Create labelarr instance
-        labelarr = Labelarr(logger=logger)
-
-        # Execute sync using labelarr module's adhoc method - keeps all business logic in the module
-        result = labelarr.labelarr_sync_adhoc(
-            source_instance=source_instance,
-            media_cache_id=media_cache_id,
-            tag_actions=tag_actions,
-            plex_instance=plex_instance,
-            plex_mapping_id=plex_mapping_id,
-            dry_run=dry_run,
-        )
-
-        # Convert to job processor format
-        if result["success"]:
-            return {
-                "status": 200,
-                "success": True,
-                "message": result["message"],
-                "data": result.get("data", {}),
-            }
-        else:
-            # Map error codes to appropriate HTTP status codes
-            status_code = 500  # Default
-            if result.get("error_code") in ["MEDIA_NOT_FOUND", "PLEX_ITEM_NOT_FOUND"]:
-                status_code = 404
-            elif result.get("error_code") == "PLEX_CONNECTION_FAILED":
-                status_code = 503
-
-            return {
-                "status": status_code,
-                "success": False,
-                "message": result["message"],
-                "error_code": result.get("error_code", "LABELARR_SYNC_FAILED"),
-            }
-
-    except Exception as e:
-        log.error(f"[JOB:{job_id}] Labelarr sync failed: {e}", exc_info=True)
-        return {
-            "status": 500,
-            "success": False,
-            "message": f"Labelarr sync failed: {str(e)}",
-            "error_code": "LABELARR_SYNC_FAILED",
-        }
-
-
 def _process_labelarr_bulk_sync_job(
     payload: Dict[str, Any], logger, job_id: int, db: Any = None
 ) -> Dict[str, Any]:
-    """Bulk labelarr sync — one job processes many media_cache_ids and
-    sends a single aggregate notification. Counterpart to the gdrive
-    "Sync All" collapse: /labelarr/bulk-sync now enqueues one job here
-    instead of N silent per-item labelarr_sync jobs.
+    """Bulk labelarr sync — one job processes a list of media_cache_ids.
+
+    Single canonical handler for both /labelarr/sync (single item, with
+    notify=False from the API layer) and /labelarr/bulk-sync (many items,
+    notify=True default). One Discord summary fires at the end when
+    notify is True.
     """
     log = logger.get_adapter("LABELARR_BULK")
     log.info(f"[JOB:{job_id}] Starting bulk labelarr sync")
@@ -958,6 +828,11 @@ def _process_labelarr_bulk_sync_job(
         tag_actions = payload.get("tag_actions") or {}
         plex_instance = payload.get("plex_instance")
         dry_run = payload.get("dry_run", False)
+        # notify: True (default) sends one aggregate Discord summary at
+        # the end of the bulk operation; /labelarr/sync (single-item
+        # path) sets this False so single-click UI actions stay silent
+        # while still going through the canonical bulk processor.
+        notify = payload.get("notify", True)
 
         if not source_instance or not media_cache_ids:
             return {
@@ -974,6 +849,7 @@ def _process_labelarr_bulk_sync_job(
             tag_actions=tag_actions,
             plex_instance=plex_instance,
             dry_run=dry_run,
+            notify=notify,
         )
 
         return {
