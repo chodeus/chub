@@ -3,6 +3,7 @@
 from backend.util.normalization import (
     normalize_file_names,
     normalize_titles,
+    parse_asset_filename,
     remove_common_words,
     remove_tokens,
 )
@@ -39,6 +40,63 @@ def test_remove_tokens_strips_locale_tags():
 
 def test_remove_tokens_strips_dcs():
     assert "DC's" not in remove_tokens("DC's Legends of Tomorrow")
+
+
+def test_remove_tokens_case_insensitive():
+    # Lowercase locale tags should also strip; regression from the
+    # previous case-sensitive str.replace pipeline.
+    assert remove_tokens("The Office (us)") == "The Office "
+    assert remove_tokens("Show (Uk)") == "Show "
+
+
+# --- normalize_titles unicode + ampersand handling ---
+
+
+def test_normalize_titles_ampersand_becomes_and():
+    # Asset side and arr side both normalize, so "Tom & Jerry" and
+    # "Tom and Jerry" should converge.
+    assert normalize_titles("Tom & Jerry") == normalize_titles("Tom and Jerry")
+
+
+def test_normalize_titles_strips_nbsp():
+    # NBSP   must not survive into the matching key.
+    nbsp = "Movie Title"
+    assert normalize_titles(nbsp) == normalize_titles("Movie Title")
+
+
+def test_normalize_titles_strips_zero_width():
+    zwsp = "Movie​Title"
+    assert normalize_titles(zwsp) == normalize_titles("Movie Title")
+
+
+def test_normalize_titles_normalizes_em_dash():
+    # en/em dashes get converted to ASCII hyphen, then stripped by
+    # remove_special_chars; result equals the no-dash form.
+    assert normalize_titles("A — B") == normalize_titles("A B")
+
+
+def test_normalize_titles_strips_emoji():
+    assert normalize_titles("Movie \U0001F3AC") == normalize_titles("Movie")
+
+
+def test_normalize_titles_handles_decomposed_diacritic():
+    # NFD form ("cafe" + combining acute) should normalize to the same
+    # ASCII as the NFC form.
+    nfd = "café"
+    assert normalize_titles(nfd) == normalize_titles("café")
+
+
+# --- parse_asset_filename unicode handling ---
+
+
+def test_parse_asset_filename_strips_emoji():
+    assert parse_asset_filename("Movie \U0001F3AC (2020).jpg") == "Movie"
+
+
+def test_parse_asset_filename_strips_nbsp():
+    out = parse_asset_filename("Show Title (2024) - Season 1.jpg")
+    assert " " not in out
+    assert out == "Show Title"
 
 
 # --- normalize_file_names ---
