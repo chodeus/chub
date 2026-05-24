@@ -518,7 +518,7 @@ def _handle_post_rename_actions(
             from backend.util.notification import NotificationManager
 
             manager = NotificationManager(
-                renamer.config, logger, module_name="poster_renamerr"
+                renamer.full_config, logger, module_name="poster_renamerr"
             )
             manager.send_notification(output)
             log.info(f"[JOB:{job_id}] Notifications sent")

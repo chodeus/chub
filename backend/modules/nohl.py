@@ -1096,7 +1096,7 @@ class Nohl(ChubModule):
             self.handle_messages(
                 final_output, self.logger, print_files=self.config.print_files
             )
-            manager = NotificationManager(self.config, self.logger, module_name="nohl")
+            manager = NotificationManager(self.full_config, self.logger, module_name="nohl")
             manager.send_notification(final_output)
         except KeyboardInterrupt:
             print("Keyboard Interrupt detected. Exiting...")

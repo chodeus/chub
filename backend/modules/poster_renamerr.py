@@ -934,7 +934,7 @@ class PosterRenamerr(ChubModule):
                 if any(output.values()):
                     self.handle_output(output)
                     manager = NotificationManager(
-                        self.config, self.logger, module_name="poster_renamerr"
+                        self.full_config, self.logger, module_name="poster_renamerr"
                     )
                     manager.send_notification(output)
 

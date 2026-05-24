@@ -560,7 +560,7 @@ class SyncGDrive(ChubModule):
                 ):
                     try:
                         manager = NotificationManager(
-                            self.config, self.logger, module_name="sync_gdrive"
+                            self.full_config, self.logger, module_name="sync_gdrive"
                         )
                         manager.send_notification(
                             {

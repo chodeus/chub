@@ -1177,7 +1177,7 @@ class Nestarr(ChubModule):
                             self.logger.info(f"  [{itype}] {path}")
 
                 manager = NotificationManager(
-                    self.config, self.logger, module_name="nestarr"
+                    self.full_config, self.logger, module_name="nestarr"
                 )
                 manager.send_notification(all_issues)
             else:

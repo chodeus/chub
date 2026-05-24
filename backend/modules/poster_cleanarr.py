@@ -216,7 +216,7 @@ class PosterCleanarr(ChubModule):
             if has_activity:
                 try:
                     manager = NotificationManager(
-                        self.config, self.logger, module_name="poster_cleanarr"
+                        self.full_config, self.logger, module_name="poster_cleanarr"
                     )
                     manager.send_notification(output)
                 except Exception as e:
