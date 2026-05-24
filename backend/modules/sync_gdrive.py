@@ -568,6 +568,17 @@ class SyncGDrive(ChubModule):
                         }
                     )
 
+                    # Refresh this folder's slice of poster_cache so a
+                    # standalone bulk run() (e.g. triggered via module_run
+                    # from the Modules or Schedule page) keeps Assets
+                    # Search aligned with disk. When run() is wrapped by
+                    # poster_renamerr, the parent does a full clear() +
+                    # merge_assets afterward, so this per-folder refresh
+                    # becomes redundant — still fine, just briefly
+                    # duplicated work.
+                    if success:
+                        self._refresh_poster_cache_for_folder(sync_location)
+
                     progress_pct = int(10 + 80 * idx / total)
                     progress_cb(progress_pct)  # Step up after folder done
                     if self.current_job_id and self.db:
