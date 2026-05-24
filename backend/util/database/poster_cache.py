@@ -177,6 +177,19 @@ class PosterCache(DatabaseBase):
         """Delete all rows from poster_cache."""
         self.execute_query("DELETE FROM poster_cache")
 
+    def delete_by_path_prefix(self, path_prefix: str) -> int:
+        """Delete all rows whose `file` path lives under `path_prefix`.
+
+        Used to refresh a single source-dir's slice of the cache (e.g. after
+        a per-folder gdrive sync) without touching unrelated rows. Matches
+        on the absolute path so two contributor folders that happen to share
+        a leaf name can't accidentally clobber each other.
+        """
+        prefix = path_prefix.rstrip("/") + "/"
+        return self.execute_query(
+            "DELETE FROM poster_cache WHERE file LIKE ?", (prefix + "%",)
+        )
+
     def get_by_integer_id(self, poster_id: int) -> Optional[dict]:
         """Return a single poster_cache row by its integer primary key."""
         return self.execute_query(

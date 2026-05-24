@@ -284,6 +284,36 @@ class SyncGDrive(ChubModule):
                     self.logger.debug(f"Failed to update progress: {e}")
             return False
 
+    def _refresh_poster_cache_for_folder(self, sync_location: str) -> None:
+        """Re-index a single source-dir's slice of poster_cache after rclone.
+
+        Triggered at the end of an ad-hoc per-folder sync so Assets Search
+        reflects the on-disk state immediately, without waiting for the
+        next scheduled poster_renamerr run. Scoped to this folder's path
+        prefix — other contributors' rows are untouched.
+        """
+        if not self.db:
+            return
+        try:
+            # Reuse poster_renamerr's parser/classifier so per-folder
+            # refresh and the full merge produce byte-identical records.
+            from backend.modules.poster_renamerr import PosterRenamerr
+
+            pr = PosterRenamerr(logger=self.logger)
+            assets = pr._get_assets_files(sync_location)
+            self.db.poster.delete_by_path_prefix(sync_location)
+            for asset in assets:
+                self.db.poster.upsert(asset)
+            self.logger.info(
+                f"Refreshed poster_cache for {sync_location}: {len(assets)} rows"
+            )
+        except Exception as e:
+            # Cache refresh is a best-effort follow-up to the sync; a
+            # failure here mustn't fail the sync job itself.
+            self.logger.error(
+                f"Failed to refresh poster_cache for {sync_location}: {e}"
+            )
+
     def gather_folder_stats(self, folder_path):
         """
         Returns (file_count, size_bytes, last_updated) for all files under folder_path.
@@ -409,6 +439,10 @@ class SyncGDrive(ChubModule):
                             f"Synced and updated gdrive_stats for {sync_location}: "
                             f"{file_count} files, {size_bytes} bytes, last updated {last_updated}"
                         )
+
+                        if sync_ok:
+                            self._refresh_poster_cache_for_folder(sync_location)
+
                         progress_cb(100)
                         if self.current_job_id and self.db:
                             try:

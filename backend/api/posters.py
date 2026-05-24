@@ -1478,6 +1478,30 @@ async def sync_gdrive_folders(
                 status_code=400,
             )
 
+        # When the caller selects every configured folder, enqueue ONE
+        # bulk job (payload with no gdrive_name) instead of N per-folder
+        # jobs. The bulk path goes through SyncGDrive.run() which sends a
+        # single aggregate Discord/Notifiarr/Email summary at the end;
+        # the per-folder path is silent (would otherwise dump N messages).
+        syncer = SyncGDrive(logger=gdrive_logger)
+        configured = {
+            item.name
+            for item in (
+                syncer.config.gdrive_list
+                if isinstance(syncer.config.gdrive_list, list)
+                else [syncer.config.gdrive_list]
+            )
+        }
+        if configured and set(gdrive_names) == configured:
+            job_result = db.worker.enqueue_job(
+                "jobs", payload={}, job_type="sync_gdrive"
+            )
+            job_id = job_result.get("data", {}).get("job_id")
+            return ok(
+                f"GDrive sync started for all {len(configured)} folders",
+                {"job_id": job_id, "scope": "all"},
+            )
+
         started = []
         job_ids = []
 
