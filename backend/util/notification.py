@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import random
+import threading
 import traceback
 from dataclasses import dataclass
 from types import SimpleNamespace
@@ -17,13 +18,23 @@ from ratelimit import limits, sleep_and_retry
 class NotifiarrConfig:
     webhook: str
     channel_id: int
+    color: Optional[str] = None
+
+
+@dataclass
+class DiscordConfig:
+    webhook: str
+    bot_name: Optional[str] = None
+    color: Optional[str] = None
 
 
 class NotificationManager:
-    def __init__(self, config, logger, module_name="main"):
+    def __init__(self, config, logger, module_name="main", format_module_name=None):
         self.config = config
         self.module_config = self._get_module_config(config, module_name)
-        self.format_config = SimpleNamespace(module_name=module_name)
+        self.format_config = SimpleNamespace(
+            module_name=format_module_name or module_name
+        )
         self.logger = logger
         self.module_name = module_name
         self.SEND_HANDLERS = {
@@ -81,7 +92,26 @@ class NotificationManager:
             return resp.text
 
     @staticmethod
+    def resolve_color(
+        output: Any,
+        config_color: Optional[str],
+        default: Union[int, str] = 0x00FF00,
+    ) -> Union[int, str]:
+        """Output-supplied color (e.g. red for errors) wins, then user's UI color, then default."""
+        if isinstance(output, dict):
+            out_color = output.get("color")
+            if out_color is not None and out_color != "":
+                return out_color
+        if config_color:
+            return config_color
+        return default
+
+    @staticmethod
     def build_notifiarr_payload(module_title: str, cid: int) -> Dict[str, Any]:
+        # Notifiarr Passthrough has no documented field for overriding the
+        # Discord bot username — the bot identity is controlled by the user's
+        # Custom Bot setup on the Notifiarr side. CHUB's `bot_name` field is
+        # therefore a CHUB-side label only for the Notifiarr service.
         return {
             "notification": {"update": False, "name": module_title, "event": "0"},
             "discord": {
@@ -107,6 +137,7 @@ class NotificationManager:
         timestamp: str,
         dry_run: bool = False,
         color: Union[int, str] = 0x00FF00,
+        bot_name: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         if isinstance(color, str):
             color = int(color.lstrip("#"), 16)
@@ -141,7 +172,7 @@ class NotificationManager:
                 )
             elif dry_run:
                 payload["content"] = "__**Dry Run**__"
-            payload["username"] = "Notification Bot"
+            payload["username"] = bot_name or "Notification Bot"
             payloads.append(payload)
         return payloads
 
@@ -240,9 +271,7 @@ class NotificationManager:
                     "description": " ",
                     "content": content,
                 }
-            color = "00FF00"
-            if isinstance(output, dict):
-                color = output.get("color", "00FF00")
+            color = self.resolve_color(output, auth_data.color, default="00FF00")
             if isinstance(color, int):
                 color = f"{color:06X}"
             elif isinstance(color, str):
@@ -253,22 +282,41 @@ class NotificationManager:
 
     def send_discord_notification(
         self,
-        hook: str,
+        auth_data: DiscordConfig,
         module_title: str,
         output: Any,
+        test: bool = False,
     ) -> Tuple[bool, str]:
         from datetime import datetime
 
         from backend.util.notification_formatting import format_for_discord
 
-        data, _ = format_for_discord(self.format_config, output)
+        hook = auth_data.webhook.rstrip("/")
+        bot_name = auth_data.bot_name
         timestamp = datetime.utcnow().isoformat()
-        dry_run = getattr(self.module_config, "dry_run", False)
-        color = output.get("color", 0x00FF00) if isinstance(output, dict) else 0x00FF00
+        color = self.resolve_color(output, auth_data.color, default=0x00FF00)
+
+        if test:
+            data = [
+                {
+                    "embed": True,
+                    "fields": [
+                        {
+                            "name": "Test Notification",
+                            "value": "This is a test notification from CHUB.",
+                        }
+                    ],
+                }
+            ]
+            dry_run = False
+        else:
+            data, _ = format_for_discord(self.format_config, output)
+            dry_run = getattr(self.module_config, "dry_run", False)
+
         success = True
         messages = []
         for payload in self.build_discord_payload(
-            module_title, data, timestamp, dry_run=dry_run, color=color
+            module_title, data, timestamp, dry_run=dry_run, color=color, bot_name=bot_name
         ):
             ok, msg = self.send_and_log_response("Discord", hook, payload)
             if not ok:
@@ -344,26 +392,17 @@ class NotificationManager:
                     target_data[ttype] = f"Invalid config for {ttype}"
                     continue
                 if ttype == "discord":
-                    if test:
-                        hook = target.get("webhook", "").rstrip("/")
-                        parts = hook.rstrip("/").split("/")
-                        if len(parts) >= 7 and parts[4] == "webhooks":
-                            webhook_id = parts[5]
-                            token = parts[6]
-                            apprise_url = f"discord://{webhook_id}/{token}"
-                            target_data["discord"] = apprise_url
-                        else:
-                            msg = "Invalid Discord webhook URL"
-                            logger.warning(msg)
-                            target_data["discord"] = msg
+                    hook = target.get("webhook", "").rstrip("/")
+                    if hook:
+                        target_data[ttype] = {
+                            "webhook": hook,
+                            "bot_name": target.get("bot_name") or None,
+                            "color": target.get("color") or None,
+                        }
                     else:
-                        hook = target.get("webhook", "").rstrip("/")
-                        if hook:
-                            target_data[ttype] = hook
-                        else:
-                            msg = "Invalid Discord configuration"
-                            logger.warning(msg)
-                            target_data[ttype] = msg
+                        msg = "Invalid Discord configuration"
+                        logger.warning(msg)
+                        target_data[ttype] = msg
                 elif ttype == "notifiarr":
                     hook = target.get("webhook", "").rstrip("/")
                     cid = target.get("channel_id")
@@ -382,6 +421,7 @@ class NotificationManager:
                         target_data["notifiarr"] = {
                             "webhook": hook,
                             "channel_id": cid_int,
+                            "color": target.get("color") or None,
                         }
                     else:
                         logger.warning("Invalid Notifiarr configuration")
@@ -442,7 +482,8 @@ class NotificationManager:
                         cfg = NotifiarrConfig(**data)
                         ok, msg = handler(cfg, module_title, output)
                     elif target == "discord":
-                        ok, msg = handler(data, module_title, output)
+                        cfg = DiscordConfig(**data)
+                        ok, msg = handler(cfg, module_title, output)
                     elif target == "email":
                         apprise = Apprise()
                         apprise.add(data)
@@ -495,6 +536,11 @@ class NotificationManager:
                 if target == "notifiarr":
                     cfg = NotifiarrConfig(**data)
                     ok, msg = self.send_notifiarr_notification(
+                        cfg, module_title, None, test=True
+                    )
+                elif target == "discord":
+                    cfg = DiscordConfig(**data)
+                    ok, msg = self.send_discord_notification(
                         cfg, module_title, None, test=True
                     )
                 else:
@@ -571,13 +617,32 @@ class NotificationManager:
 
 
 class ErrorNotifyHandler(logging.Handler):
-    """Custom logging handler to send errors to Discord/Notifiarr via notifications."""
+    """Custom logging handler to send errors to Discord/Notifiarr/Email via notifications.
+
+    Reads the notification config from the `main` section but renders using the
+    `error_notify` formatter. Uses a thread-local re-entry guard so log calls made
+    by the notification machinery itself don't recursively trigger more notifications.
+    """
+
+    _reentry = threading.local()
 
     def __init__(self, config, module_name="main", logger=None):
         super().__init__(level=logging.ERROR)
-        self.manager = NotificationManager(config, logger, module_name)
+        self.manager = NotificationManager(
+            config, logger, module_name, format_module_name="error_notify"
+        )
 
     def emit(self, record):
+        if getattr(ErrorNotifyHandler._reentry, "active", False):
+            return
+        # The notification dispatch path itself logs at ERROR on failure; ignore
+        # records originating from it to avoid feedback loops independent of the
+        # thread-local guard (e.g. a different thread reading the same logger).
+        if record.name == "chub.notification" or "notification" in (
+            getattr(record, "module", "") or ""
+        ):
+            return
+        ErrorNotifyHandler._reentry.active = True
         try:
             msg = record.getMessage()
             tb = None
@@ -589,13 +654,8 @@ class ErrorNotifyHandler(logging.Handler):
                     error_type_msg = tb_lines[-1].strip()
             elif record.stack_info:
                 tb = record.stack_info
-            else:
-                tb = None
 
-            if error_type_msg:
-                error_msg = f"{msg}\n{error_type_msg}"
-            else:
-                error_msg = msg
+            error_msg = f"{msg}\n{error_type_msg}" if error_type_msg else msg
 
             output = {
                 "error_message": error_msg,
@@ -610,6 +670,37 @@ class ErrorNotifyHandler(logging.Handler):
                 self.manager.logger.error(
                     f"[ErrorNotifyHandler] Failed to send error notification: {e}"
                 )
+        finally:
+            ErrorNotifyHandler._reentry.active = False
+
+
+def install_error_notify_handler(config, logger=None) -> Optional[ErrorNotifyHandler]:
+    """Attach ErrorNotifyHandler to the root logger if notifications.main is configured.
+
+    Returns the handler instance (or None if not installed). Safe to call multiple
+    times — subsequent calls are no-ops once a handler is attached.
+    """
+    root = logging.getLogger()
+    for existing in root.handlers:
+        if isinstance(existing, ErrorNotifyHandler):
+            return existing
+
+    main_targets: Dict[str, Any] = {}
+    raw = getattr(config, "notifications", None)
+    if raw is not None:
+        if hasattr(raw, "model_dump"):
+            raw = raw.model_dump(mode="python")
+        if isinstance(raw, dict):
+            section = raw.get("main")
+            if isinstance(section, dict):
+                main_targets = section
+
+    if not any(k in main_targets for k in ("discord", "notifiarr", "email")):
+        return None
+
+    handler = ErrorNotifyHandler(config, module_name="main", logger=logger)
+    root.addHandler(handler)
+    return handler
 
 
 def get_random_joke() -> str:

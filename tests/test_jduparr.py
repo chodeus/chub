@@ -221,9 +221,15 @@ def test_notification_manager_reads_jduparr_targets_from_full_config(monkeypatch
     )
     manager = NotificationManager(config, CapturingLogger(), module_name="jduparr")
 
+    from backend.util.notification import DiscordConfig
+
     assert manager.module_config.dry_run is True
     assert manager.collect_valid_targets() == {
-        "discord": "https://discord.com/api/webhooks/1/token"
+        "discord": {
+            "webhook": "https://discord.com/api/webhooks/1/token",
+            "bot_name": None,
+            "color": None,
+        }
     }
 
     monkeypatch.setattr(
@@ -232,7 +238,7 @@ def test_notification_manager_reads_jduparr_targets_from_full_config(monkeypatch
         lambda _label, _hook, _payload: (True, "ok"),
     )
     ok, message = manager.send_discord_notification(
-        "https://discord.com/api/webhooks/1/token",
+        DiscordConfig(webhook="https://discord.com/api/webhooks/1/token"),
         "Jduparr",
         [
             {

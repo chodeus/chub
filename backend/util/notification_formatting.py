@@ -1378,6 +1378,41 @@ def format_for_email(config: Any, output: Any) -> Tuple[str, bool]:
         sections.append("</div>")
         return "".join(sections)
 
+    def fmt_version_check(output: dict) -> str:
+        """Format version_check output for email (HTML)."""
+        from html import escape
+
+        local_version = escape(str(output.get("local_version", "")))
+        remote_version = escape(str(output.get("remote_version", "")))
+        return (
+            "<div class='section'>"
+            "<h3>🚨 Update Available</h3>"
+            f"<p><strong>Your Version:</strong> {local_version}</p>"
+            f"<p><strong>Latest Version:</strong> {remote_version}</p>"
+            "</div>"
+        )
+
+    def fmt_error_notify(output: dict) -> str:
+        """Format error_notify output for email (HTML)."""
+        from html import escape
+
+        error_msg = escape(str(output.get("error_message", "")))
+        source_module = escape(str(output.get("source_module", "")))
+        tb = output.get("traceback")
+        sections = [
+            "<div class='section'>",
+            "<h3>⚠️ Error Notification</h3>",
+            f"<p><strong>Module:</strong> {source_module}</p>",
+            f"<p><strong>Error:</strong> {error_msg}</p>",
+        ]
+        if tb:
+            tb_str = str(tb)
+            if len(tb_str) > 4000:
+                tb_str = tb_str[:4000] + "\n...truncated..."
+            sections.append(f"<pre>{escape(tb_str)}</pre>")
+        sections.append("</div>")
+        return "".join(sections)
+
     registry: Dict[str, Any] = {
         "poster_renamerr": fmt_poster_renamerr,
         "renameinatorr": fmt_renameinatorr,
@@ -1392,6 +1427,8 @@ def format_for_email(config: Any, output: Any) -> Tuple[str, bool]:
         "plex_maintenance": fmt_plex_maintenance,
         "border_replacerr": fmt_border_replacerr,
         "sync_gdrive": fmt_sync_gdrive,
+        "version_check": fmt_version_check,
+        "error_notify": fmt_error_notify,
     }
     formatter = registry.get(config.module_name)
     if not formatter:
