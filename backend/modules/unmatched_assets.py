@@ -485,7 +485,7 @@ class UnmatchedAssets(ChubModule):
 
     def send_notification(self, db: ChubDB) -> None:
         manager = NotificationManager(
-            self.config, self.logger, module_name="unmatched_assets"
+            self.full_config, self.logger, module_name="unmatched_assets"
         )
         output = self.build_output(db)
         manager.send_notification(output)

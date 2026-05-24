@@ -440,7 +440,7 @@ class Labelarr(ChubModule):
                 if output:
                     self.handle_messages(output)
                     manager = NotificationManager(
-                        self.config, self.logger, module_name="labelarr"
+                        self.full_config, self.logger, module_name="labelarr"
                     )
                     manager.send_notification(output)
                 else:

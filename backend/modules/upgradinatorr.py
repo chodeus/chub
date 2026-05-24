@@ -1182,7 +1182,7 @@ class Upgradinatorr(ChubModule):
             if output:
                 self.print_output(output)
                 manager = NotificationManager(
-                    self.config, self.logger, module_name="upgradinatorr"
+                    self.full_config, self.logger, module_name="upgradinatorr"
                 )
                 manager.send_notification(output)
         except KeyboardInterrupt:

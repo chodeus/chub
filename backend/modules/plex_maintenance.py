@@ -107,7 +107,7 @@ class PlexMaintenance(ChubModule):
             if transcoder_stats["count"] or maintenance_results:
                 try:
                     manager = NotificationManager(
-                        self.config, self.logger, module_name="plex_maintenance"
+                        self.full_config, self.logger, module_name="plex_maintenance"
                     )
                     manager.send_notification(output)
                 except Exception as e:

@@ -381,3 +381,66 @@ def test_install_error_notify_handler_idempotent():
     h1 = install_error_notify_handler(cfg)
     h2 = install_error_notify_handler(cfg)
     assert h1 is h2
+
+
+# --- Regression: NotificationManager must receive the full ChubConfig, not a
+# per-module sub-section. Modules used to pass `self.config` (e.g.
+# UpgradinatorrConfig) which has no `notifications` field, so every
+# production notification silently no-op'd. ---
+
+
+def test_send_notification_resolves_targets_from_chubconfig_root():
+    from backend.util.config import ChubConfig
+
+    full_config = ChubConfig.model_validate(
+        {
+            "notifications": {
+                "upgradinatorr": {
+                    "discord": {
+                        "webhook": "https://discord.com/api/webhooks/1/tok",
+                        "bot_name": "ChubBot",
+                        "color": "00FF00",
+                    }
+                }
+            }
+        }
+    )
+
+    manager = NotificationManager(full_config, MagicMock(), module_name="upgradinatorr")
+    with patch.object(NotificationManager, "safe_post") as post, patch(
+        "backend.util.notification_formatting.format_for_discord",
+        return_value=([{"embed": True, "fields": []}], True),
+    ):
+        post.return_value = SimpleNamespace(status_code=204, text="")
+        result = manager.send_notification({"anything": "here"})
+
+    assert result["success"] is True
+    post.assert_called_once()
+    sent_url, _ = post.call_args.args
+    assert sent_url == "https://discord.com/api/webhooks/1/tok"
+
+
+def test_send_notification_silent_noop_when_given_module_subsection():
+    """Guard against the historical regression: if a caller passes the
+    per-module config (no `.notifications` attribute), targets resolve to
+    {} and no post is attempted. This must not raise — it just silently
+    sends nothing — which is exactly why the bug went unnoticed."""
+    from backend.util.config import ChubConfig
+
+    full_config = ChubConfig.model_validate(
+        {
+            "notifications": {
+                "upgradinatorr": {
+                    "discord": {"webhook": "https://discord.com/api/webhooks/1/tok"}
+                }
+            }
+        }
+    )
+    wrong_config = full_config.upgradinatorr  # what modules used to pass
+
+    manager = NotificationManager(wrong_config, MagicMock(), module_name="upgradinatorr")
+    with patch.object(NotificationManager, "safe_post") as post:
+        result = manager.send_notification({"anything": "here"})
+
+    post.assert_not_called()
+    assert result["success"] is False

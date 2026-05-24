@@ -535,7 +535,7 @@ class BorderReplacerr(ChubModule):
             if not getattr(self.config, "dry_run", False) and (replaced or removed):
                 try:
                     manager = NotificationManager(
-                        self.config, self.logger, module_name="border_replacerr"
+                        self.full_config, self.logger, module_name="border_replacerr"
                     )
                     manager.send_notification(
                         {
