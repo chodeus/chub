@@ -774,23 +774,22 @@ class PosterRenamerr(ChubModule):
                     f"Processed {len(media_items)} media items, {matched_count} matched"
                 )
 
-                # Notify on webhook/API-driven adhoc imports too. The bulk
-                # run() path notifies; without this, ARR webhook imports
-                # would silently complete and the user has no awareness
-                # since the trigger is asynchronous and the UI may not be
-                # open. Same output shape as run() so the existing
-                # formatter handles it. Skips on empty output (nothing to
-                # report) and on notification failure.
-                if any(output.values()):
-                    try:
-                        manager = NotificationManager(
-                            self.full_config,
-                            self.logger,
-                            module_name="poster_renamerr",
-                        )
-                        manager.send_notification(output)
-                    except Exception as e:
-                        log.debug(f"adhoc poster_renamerr notification failed: {e}")
+                # Always notify on webhook/API-driven adhoc imports so
+                # the user has awareness — the trigger is asynchronous
+                # and the UI may not be open. The formatter handles the
+                # empty-output case with a clean "No files were renamed."
+                # field, so a webhook that matched zero new media still
+                # produces a small confirmation message rather than
+                # silence.
+                try:
+                    manager = NotificationManager(
+                        self.full_config,
+                        self.logger,
+                        module_name="poster_renamerr",
+                    )
+                    manager.send_notification(output)
+                except Exception as e:
+                    log.debug(f"adhoc poster_renamerr notification failed: {e}")
 
                 return {
                     "success": True,
@@ -905,12 +904,16 @@ class PosterRenamerr(ChubModule):
                     self.run_border_replacerr(manifest)
 
                 PosterUploader(db=db, logger=self.logger, manifest=manifest).run()
+                # Always notify on a successful run, even when nothing
+                # was renamed — gives the user a heartbeat that the
+                # module fired. The formatter handles the empty-output
+                # case with a clean "No files were renamed." field.
                 if any(output.values()):
                     self.handle_output(output)
-                    manager = NotificationManager(
-                        self.full_config, self.logger, module_name="poster_renamerr"
-                    )
-                    manager.send_notification(output)
+                manager = NotificationManager(
+                    self.full_config, self.logger, module_name="poster_renamerr"
+                )
+                manager.send_notification(output)
 
         except KeyboardInterrupt:
             print("Keyboard Interrupt detected. Exiting...")
