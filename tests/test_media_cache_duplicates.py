@@ -53,14 +53,15 @@ def db():
 
 
 def _insert(db, *, identity_key, title, normalized_title, year, instance_name,
-            tvdb_id=None, tmdb_id=None, imdb_id=None, folder=None,
-            asset_type="show", season_number=None):
+            tvdb_id=None, tmdb_id=None, imdb_id=None, musicbrainz_id=None,
+            folder=None, asset_type="show", season_number=None):
     db.media.execute_query(
         """
         INSERT INTO media_cache (
             identity_key, asset_type, title, normalized_title, year,
-            tvdb_id, tmdb_id, imdb_id, folder, instance_name, season_number
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            tvdb_id, tmdb_id, imdb_id, musicbrainz_id, folder,
+            instance_name, season_number
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             identity_key,
@@ -71,6 +72,7 @@ def _insert(db, *, identity_key, title, normalized_title, year, instance_name,
             tvdb_id,
             tmdb_id,
             imdb_id,
+            musicbrainz_id,
             folder,
             instance_name,
             season_number,
@@ -250,3 +252,100 @@ def test_season_rows_excluded_from_both_detectors(db):
 
     assert db.media.find_duplicates() == []
     assert db.media.find_folder_collisions() == []
+
+
+def test_artists_with_distinct_mbids_are_not_folder_collisions(db):
+    """Two Lidarr artists sharing a normalized name but with distinct
+    MusicBrainz IDs are unambiguously different artists (e.g. REZZ the
+    EDM producer vs REZZ the pop artist). They must NOT surface as
+    folder collisions."""
+    _insert(
+        db,
+        identity_key="lidarr|artist|mb:aaaa-1111",
+        title="REZZ",
+        normalized_title="rezz",
+        year=None,
+        musicbrainz_id="aaaa-1111",
+        folder="/data/media/music/REZZ",
+        instance_name="lidarr",
+        asset_type="artist",
+    )
+    _insert(
+        db,
+        identity_key="lidarr|artist|mb:bbbb-2222",
+        title="REZZ (pop)",
+        normalized_title="rezz",
+        year=None,
+        musicbrainz_id="bbbb-2222",
+        folder="/data/media/music/REZZ (pop)",
+        instance_name="lidarr",
+        asset_type="artist",
+    )
+
+    assert db.media.find_folder_collisions() == []
+
+
+def test_artists_sharing_an_mbid_surface_as_duplicates_not_collisions(db):
+    """Two artist rows sharing the same MBID within an instance are a
+    genuine duplicate — owned by find_duplicates(), not surfaced as a
+    folder collision."""
+    _insert(
+        db,
+        identity_key="lidarr|artist|mb:cccc-3333",
+        title="Safia",
+        normalized_title="safia",
+        year=None,
+        musicbrainz_id="cccc-3333",
+        folder="/data/media/music/Safia",
+        instance_name="lidarr",
+        asset_type="artist",
+    )
+    _insert(
+        db,
+        identity_key="lidarr|artist|mb:cccc-3333|alt",
+        title="SAFIA",
+        normalized_title="safia",
+        year=None,
+        musicbrainz_id="cccc-3333",
+        folder="/data/media/music/SAFIA",
+        instance_name="lidarr",
+        asset_type="artist",
+    )
+
+    assert db.media.find_folder_collisions() == []
+
+    dups = db.media.find_duplicates()
+    assert len(dups) == 1
+    assert dups[0]["identity"] == "mb:cccc-3333"
+    assert dups[0]["count"] == 2
+
+
+def test_artists_with_one_missing_mbid_still_collide(db):
+    """If one of two artist rows is missing an MBID, we don't have
+    enough info to suppress — fall back to surfacing the collision so
+    the user can investigate."""
+    _insert(
+        db,
+        identity_key="lidarr|artist|mb:dddd-4444",
+        title="Icarus",
+        normalized_title="icarus",
+        year=None,
+        musicbrainz_id="dddd-4444",
+        folder="/data/media/music/Icarus",
+        instance_name="lidarr",
+        asset_type="artist",
+    )
+    _insert(
+        db,
+        identity_key="lidarr|artist|title:icarus|alt",
+        title="Icarus (garage duo)",
+        normalized_title="icarus",
+        year=None,
+        folder="/data/media/music/Icarus (garage duo)",
+        instance_name="lidarr",
+        asset_type="artist",
+    )
+
+    collisions = db.media.find_folder_collisions()
+    assert len(collisions) == 1
+    assert collisions[0]["normalized_title"] == "icarus"
