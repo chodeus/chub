@@ -880,9 +880,10 @@ class MediaCache(DatabaseBase):
         """Find genuine duplicate media entries WITHIN a single instance.
 
         Identity-based detection: two or more media_cache rows from the
-        same ARR instance that share the same external ID
-        (tvdb_id / tmdb_id / imdb_id). Rows without any external ID are
-        excluded — they can't be matched safely.
+        same ARR instance that share the same external ID (musicbrainz
+        for artists, otherwise tvdb_id / tmdb_id / imdb_id). Rows
+        without any external ID are excluded — they can't be matched
+        safely.
 
         Season rows are excluded so a multi-season show isn't reported
         as duplicates of itself. Cross-instance overlap (Radarr +
@@ -906,13 +907,15 @@ class MediaCache(DatabaseBase):
                        GROUP_CONCAT(instance_name) as instances,
                        json_group_array(folder) as folders,
                        COALESCE(
+                           'mb:' || musicbrainz_id,
                            'tvdb:' || tvdb_id,
                            'tmdb:' || tmdb_id,
                            'imdb:' || imdb_id
                        ) as identity
                 FROM media_cache
                 WHERE season_number IS NULL
-                  AND (tvdb_id IS NOT NULL
+                  AND (musicbrainz_id IS NOT NULL
+                       OR tvdb_id IS NOT NULL
                        OR tmdb_id IS NOT NULL
                        OR imdb_id IS NOT NULL)
                   {where}
@@ -949,7 +952,8 @@ class MediaCache(DatabaseBase):
             self.execute_query(
                 f"""
                 SELECT id, title, normalized_title, year, instance_name,
-                       folder, tvdb_id, tmdb_id, imdb_id
+                       folder, tvdb_id, tmdb_id, imdb_id, musicbrainz_id,
+                       asset_type
                 FROM media_cache
                 WHERE season_number IS NULL
                   AND normalized_title IS NOT NULL
@@ -975,12 +979,23 @@ class MediaCache(DatabaseBase):
             if len(members) < 2:
                 continue
 
+            # Artists are uniquely identified by MusicBrainz ID. When every
+            # member has a distinct MBID, they're deliberately different
+            # artists that happen to share a name (e.g. REZZ the EDM
+            # producer vs REZZ the pop artist) — not worth surfacing.
+            mbids = [m.get("musicbrainz_id") for m in members]
+            if all(mb for mb in mbids) and len(set(mbids)) == len(mbids):
+                continue
+
             identities = set()
             for m in members:
+                mbid = m.get("musicbrainz_id")
                 tvdb = m.get("tvdb_id")
                 tmdb = m.get("tmdb_id")
                 imdb = m.get("imdb_id")
-                if tvdb is not None:
+                if mbid:
+                    identities.add(f"mb:{mbid}")
+                elif tvdb is not None:
                     identities.add(f"tvdb:{tvdb}")
                 elif tmdb is not None:
                     identities.add(f"tmdb:{tmdb}")
