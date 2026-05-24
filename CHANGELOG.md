@@ -2,6 +2,13 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.5.5](https://github.com/chodeus/chub/compare/v2.5.4...v2.5.5) (2026-05-24)
+
+
+### Bug Fixes
+
+* **notifications:** wire Discord/Notifiarr/Email end-to-end ([#160](https://github.com/chodeus/chub/issues/160)) ([ad8ad2f](https://github.com/chodeus/chub/commit/ad8ad2fef6831808ad724e1970ec51a13f457316))
+
 ## [2.5.4](https://github.com/chodeus/chub/compare/v2.5.3...v2.5.4) (2026-05-23)
 
 
