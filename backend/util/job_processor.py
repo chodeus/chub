@@ -853,51 +853,6 @@ def _queue_upload_job(
         log.error(f"[JOB:{job_id}] Error queueing upload job: {e}")
 
 
-def simple_job_processor(job: Dict[str, Any], logger) -> Dict[str, Any]:
-    """
-    Simplified job processor for basic job types.
-
-    Args:
-        job: Job data from database
-        logger: Logger instance
-
-    Returns:
-        dict: Processing result
-    """
-    job_type = job.get("type")
-    job_id = job.get("id")
-    payload = json.loads(job.get("payload", "{}"))
-
-    if job_type == "sync_gdrive":
-        from backend.modules.sync_gdrive import SyncGDrive
-
-        gdrive_name = payload.get("gdrive_name")
-        if not gdrive_name:
-            return {"success": False, "message": "No gdrive_name provided"}
-
-        syncer = SyncGDrive(logger=logger)
-        success = syncer.sync_folder_adhoc(gdrive_name, job_id=job_id)
-
-        return {"success": success, "message": f"Sync completed for {gdrive_name}"}
-
-    elif job_type == "poster_rename":
-        from backend.modules.poster_renamerr import PosterRenamerr
-
-        media_items = payload.get("media_items", [])
-        if not media_items:
-            return {"success": False, "message": "No media items provided"}
-
-        renamer = PosterRenamerr(logger=logger)
-        return renamer.run_poster_rename_adhoc(media_items)
-
-    elif job_type == "module_run":
-        # Delegate to the main processor
-        return _process_module_run_job(payload, logger, job_id)
-
-    else:
-        return {"success": False, "message": f"Unknown job type: {job_type}"}
-
-
 def _process_labelarr_sync_job(
     payload: Dict[str, Any], logger, job_id: int, db: Any = None
 ) -> Dict[str, Any]:
