@@ -176,10 +176,7 @@ const MediaManagePage = () => {
     );
 
     const duplicates = useMemo(() => dupData?.data?.duplicates || [], [dupData]);
-    const folderCollisions = useMemo(
-        () => dupData?.data?.folder_collisions || [],
-        [dupData]
-    );
+    const folderCollisions = useMemo(() => dupData?.data?.folder_collisions || [], [dupData]);
     const collections = useMemo(
         () => collectionsData?.data?.collections || collectionsData?.data || [],
         [collectionsData]
