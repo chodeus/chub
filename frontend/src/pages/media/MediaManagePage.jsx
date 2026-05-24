@@ -45,8 +45,8 @@ const MediaManagePage = () => {
         options: { showErrorToast: false },
     });
 
-    const { execute: runExport, isLoading: isExporting } = useApiMutation(
-        () => mediaAPI.exportMedia({ format: 'json' })
+    const { execute: runExport, isLoading: isExporting } = useApiMutation(() =>
+        mediaAPI.exportMedia({ format: 'json' })
     );
 
     const { execute: createCollection, isLoading: isCreatingCollection } = useApiMutation(
