@@ -173,64 +173,9 @@ class PosterCache(DatabaseBase):
 
         return self.execute_query(sql, params, fetch_one=True)
 
-    def delete_by_id(self, id_field, id_value, season_number, asset_type=None):
-        """Delete a record by id_field (and season_number, or IS NULL)."""
-        sql = f"DELETE FROM poster_cache WHERE {id_field}=?"
-        params = [id_value]
-
-        if asset_type:
-            sql += " AND asset_type=?"
-            params.append(asset_type)
-
-        if season_number is not None:
-            sql += " AND season_number=?"
-            params.append(season_number)
-        else:
-            sql += " AND season_number IS NULL"
-
-        return self.execute_query(sql, params)
-
-    def delete_by_title(self, normalized_title, year, season_number, asset_type=None):
-        """Delete a record by normalized_title/year/season_number."""
-        sql = "DELETE FROM poster_cache WHERE normalized_title=? AND year IS ? AND season_number IS ?"
-        params = [normalized_title, year, season_number]
-        if asset_type:
-            sql += " AND asset_type=?"
-            params.append(asset_type)
-        return self.execute_query(sql, tuple(params))
-
     def clear(self) -> None:
         """Delete all rows from poster_cache."""
         self.execute_query("DELETE FROM poster_cache")
-
-    def propagate_ids_for_show(self, title, year, asset):
-        """
-        Propagate IDs (tmdb_id, tvdb_id, imdb_id) to all rows with the same normalized_title/year,
-        for all season_numbers (including NULL).
-        """
-        from backend.util.helper import normalize_titles
-
-        normalized_title = normalize_titles(title)
-        sql = """
-            UPDATE poster_cache
-            SET imdb_id = COALESCE(imdb_id, ?),
-                tmdb_id = COALESCE(tmdb_id, ?),
-                tvdb_id = COALESCE(tvdb_id, ?)
-            WHERE normalized_title = ?
-            AND year IS ?
-            AND asset_type = 'show'
-            AND file != ?
-        """
-        params = [
-            asset.get("imdb_id"),
-            asset.get("tmdb_id"),
-            asset.get("tvdb_id"),
-            normalized_title,
-            year,
-            asset.get("file"),
-        ]
-
-        self.execute_query(sql, params)
 
     def get_by_integer_id(self, poster_id: int) -> Optional[dict]:
         """Return a single poster_cache row by its integer primary key."""

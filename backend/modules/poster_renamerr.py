@@ -663,59 +663,15 @@ class PosterRenamerr(ChubModule):
             self.logger.info(f"Processing {total} assets from '{source_dir}'")
 
             for idx, asset in enumerate(assets, 1):
-                for id_field in ["imdb_id", "tmdb_id", "tvdb_id"]:
-                    id_val = asset.get(id_field)
-                    if id_val:
-                        db.poster.delete_by_id(
-                            id_field,
-                            id_val,
-                            asset.get("season_number"),
-                            asset_type=asset.get("asset_type"),
-                        )
-
-                db.poster.delete_by_title(
-                    asset["normalized_title"],
-                    asset.get("year"),
-                    asset.get("season_number"),
-                    asset_type=asset.get("asset_type"),
-                )
-
-                matched = None
-                id_fields = [
-                    ("imdb_id", asset.get("imdb_id")),
-                    ("tmdb_id", asset.get("tmdb_id")),
-                    ("tvdb_id", asset.get("tvdb_id")),
-                ]
-                for id_field, id_val in id_fields:
-                    if id_val:
-                        matched = db.poster.get_by_id(
-                            id_field,
-                            id_val,
-                            asset.get("season_number"),
-                            asset_type=asset.get("asset_type"),
-                        )
-                        if matched:
-                            break
-                if not matched:
-                    matched = db.poster.get_by_normalized_title(
-                        asset["normalized_title"],
-                        asset.get("year"),
-                        asset.get("season_number"),
-                        asset_type=asset.get("asset_type"),
-                    )
-                if matched and not is_match(matched, asset)[0]:
-                    matched = None
-
-                if matched:
-                    for id_field in ["imdb_id", "tmdb_id", "tvdb_id"]:
-                        if matched.get(id_field) and not asset.get(id_field):
-                            asset[id_field] = matched[id_field]
-
-                    if asset.get("asset_type") == "show":
-                        db.poster.propagate_ids_for_show(
-                            asset["title"], asset.get("year"), asset
-                        )
-
+                # The cache mirrors disk 1:1: one row per file in source_dirs.
+                # db.poster.clear() ran before this merge, and the UNIQUE
+                # constraint on (..., file) prevents duplicate-path inserts,
+                # so we just upsert each parsed file as-is. No title-based
+                # dedup (which previously wiped distinct shows sharing a
+                # normalized title, e.g. The Traitors UK vs AU) and no
+                # ID backfill from other rows (a row's fields should reflect
+                # only what its own filename/folder yielded; ID inference
+                # belongs in the match-to-media phase, not here).
                 db.poster.upsert(asset)
 
                 processed_all += 1
