@@ -2,6 +2,13 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.9.0](https://github.com/chodeus/chub/compare/v2.8.0...v2.9.0) (2026-05-24)
+
+
+### Features
+
+* **normalization:** widen poster-title cleanup for ID-less fallback matching ([c0ffbbf](https://github.com/chodeus/chub/commit/c0ffbbf0c5aa7b3a747ef3b51e0860cadce88087))
+
 ## [2.8.0](https://github.com/chodeus/chub/compare/v2.7.0...v2.8.0) (2026-05-24)
 
 
