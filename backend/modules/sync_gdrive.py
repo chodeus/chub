@@ -25,16 +25,26 @@ except ImportError:
     pass
 
 
-# rclone stdout patterns that are repetitive-by-design progress / per-file
-# action noise. Lines matching these go through logger.heartbeat() so the
-# frontend Logs page can hide them with the Hide-Heartbeat toggle.
+# rclone stdout progress/stats lines — pure repetitive noise. Always
+# routed through logger.heartbeat() regardless of verbose so they never
+# flood the default log view.
 _RCLONE_HEARTBEAT_PATTERN = re.compile(
     r"^("
     r"Transferred:"  # progress heartbeat (fires every --stats interval)
     r"|Checks:"  # check-phase heartbeat
     r"|Elapsed time:"  # progress heartbeat
-    r"|.*: (Deleted|Copied|Updated|Renamed|Removed|Skipped)\b"  # per-file action
-    r"|.*: Removing( empty)? directory"  # per-directory cleanup
+    r")"
+)
+
+# rclone per-file action / per-directory cleanup lines. These carry
+# actionable information (which file was deleted/copied/etc) so users
+# can opt into surfacing them by enabling sync_gdrive.verbose — they go
+# to logger.info(). Off by default they route to heartbeat so default
+# log views stay readable on large syncs.
+_RCLONE_FILE_ACTION_PATTERN = re.compile(
+    r"^("
+    r".*: (Deleted|Copied|Updated|Renamed|Removed|Skipped)\b"
+    r"|.*: Removing( empty)? directory"
     r")"
 )
 
@@ -275,6 +285,14 @@ class SyncGDrive(ChubModule):
                         self.logger.error(cleaned_line)
                     elif _RCLONE_HEARTBEAT_PATTERN.match(cleaned_line):
                         self.logger.heartbeat(cleaned_line)
+                    elif _RCLONE_FILE_ACTION_PATTERN.match(cleaned_line):
+                        # Per-file actions: visible at INFO when the user
+                        # opts in via sync_gdrive.verbose, else suppressed
+                        # under Hide-Heartbeat like progress noise.
+                        if getattr(self.config, "verbose", False):
+                            self.logger.info(cleaned_line)
+                        else:
+                            self.logger.heartbeat(cleaned_line)
                     else:
                         self.logger.info(cleaned_line)
                     # Count actual per-file activity for the notification

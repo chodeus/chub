@@ -33,6 +33,7 @@ class SyncGDriveToken(BaseModel):
 class SyncGDriveConfig(BaseModel):
     log_level: str = "info"
     dry_run: bool = False
+    verbose: bool = False
     client_id: str = ""
     client_secret: str = ""
     token: Union[str, SyncGDriveToken, None] = ""
