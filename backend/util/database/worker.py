@@ -219,9 +219,10 @@ class DBWorker(DatabaseBase):
         return self.execute_query(query, tuple(params), fetch_all=True)
 
     def mark_job_complete(self, table_name: str, job_id: int, result):
+        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
         self.execute_query(
-            f"UPDATE {table_name} SET status='success', result=? WHERE id=?",
-            (json.dumps(result) if result else None, job_id),
+            f"UPDATE {table_name} SET status='success', result=?, completed_at=? WHERE id=?",
+            (json.dumps(result) if result else None, now, job_id),
         )
 
     def get_attempts(self, table_name: str, job_id: int):
@@ -246,9 +247,10 @@ class DBWorker(DatabaseBase):
             )
 
     def mark_job_failed(self, table_name: str, job_id: int, error):
+        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
         self.execute_query(
-            f"UPDATE {table_name} SET status='error', error=? WHERE id=?",
-            (str(error), job_id),
+            f"UPDATE {table_name} SET status='error', error=?, completed_at=? WHERE id=?",
+            (str(error), now, job_id),
         )
 
     def reset_job_to_pending(self, table_name: str, job_id: int):
@@ -262,7 +264,7 @@ class DBWorker(DatabaseBase):
         if row["status"] not in ("error", "success"):
             return False
         self.execute_query(
-            f"UPDATE {table_name} SET status='pending', attempts=0, scheduled_at=NULL, error=NULL, result=NULL WHERE id=?",
+            f"UPDATE {table_name} SET status='pending', attempts=0, scheduled_at=NULL, error=NULL, result=NULL, started_at=NULL, completed_at=NULL WHERE id=?",
             (job_id,),
         )
         return True
@@ -294,9 +296,11 @@ class DBWorker(DatabaseBase):
             return None
 
         job_id = row["id"]
+        # Stamp started_at on claim; completed_at is reset so a retried row
+        # doesn't inherit the previous attempt's finish time.
         updated = self.execute_query(
-            f"UPDATE {table_name} SET status='running', attempts=attempts+1 WHERE id=? AND status='pending'",
-            (job_id,),
+            f"UPDATE {table_name} SET status='running', attempts=attempts+1, started_at=?, completed_at=NULL WHERE id=? AND status='pending'",
+            (now, job_id),
         )
         if updated == 1:
             return dict(row)
@@ -333,9 +337,10 @@ class DBWorker(DatabaseBase):
             process_fn = process_job
             log.debug("Using dedicated job processor from backend.util.job_processor")
 
-        # Reset any stuck running jobs
+        # Reset any stuck running jobs — clear timing so the next claim
+        # records a fresh started_at instead of leaving the prior value.
         reset = self.execute_query(
-            f"UPDATE {table_name} SET status='pending' WHERE status='running'"
+            f"UPDATE {table_name} SET status='pending', started_at=NULL, completed_at=NULL WHERE status='running'"
         )
         if reset:
             log.info(f"Reset {reset} 'running' jobs to 'pending' on startup.")

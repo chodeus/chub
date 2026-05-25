@@ -157,9 +157,13 @@ export const JobsPage = () => {
         return `${minutes}m ${secs}s`;
     };
 
-    // Backend reports the real duration in `result.data.duration` (seconds).
-    // For running/pending jobs fall back to "time since received" so the column
-    // stays meaningful, but skip completed rows that lack the result payload.
+    // Duration sources, in priority order:
+    //   1. result.data.duration — present on module_run success rows that opt in
+    //   2. completed_at - started_at — written by the worker on every terminal
+    //      transition (success/error/cancelled), so error rows and any job type
+    //      without a result payload still get a real number
+    //   3. now - started_at — live timer while the job is running/pending
+    //   4. '-' — rows from before the started_at/completed_at columns existed
     const jobDuration = job => {
         try {
             const parsed = job.result ? JSON.parse(job.result) : null;
@@ -167,6 +171,13 @@ export const JobsPage = () => {
             if (typeof d === 'number') return formatSeconds(d);
         } catch {
             /* malformed result; fall through */
+        }
+        if (job.completed_at) {
+            const start = job.started_at || job.received_at;
+            if (start) {
+                const ms = new Date(job.completed_at).getTime() - new Date(start).getTime();
+                return formatSeconds(ms / 1000);
+            }
         }
         if (job.status === 'running' || job.status === 'pending') {
             const start = job.started_at || job.received_at;
