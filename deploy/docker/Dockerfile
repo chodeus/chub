@@ -27,13 +27,34 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip3 install --no-cache-dir -r requirements.txt
 
-# Install additional binaries/tools (rclone, jdupes)
+# Install additional binaries/tools (rclone, jdupes).
+#
+# Codeberg's HTTP/2 git endpoint intermittently cancels in-flight streams
+# (curl error 92), which bites the QEMU-emulated arm64 leg far more than
+# native amd64 because emulated clones run slower and stay in-flight
+# longer. The mitigations below, in order:
+#   * --depth=1            — shallow clone, smaller transfer window.
+#   * http.version=HTTP/1.1 — sidestep the HTTP/2 stream-cancel flake.
+#   * http.postBuffer       — bigger buffer for slow links.
+#   * 3-attempt retry loop  — defends against any other transient failure.
+# See run 26377484926 for the failure mode this guards against.
 RUN set -eux; \
     curl https://rclone.org/install.sh | bash && \
-    git clone https://codeberg.org/jbruchon/libjodycode.git /tmp/libjodycode && \
+    git config --global http.version HTTP/1.1 && \
+    git config --global http.postBuffer 524288000 && \
+    for repo in libjodycode jdupes; do \
+        for attempt in 1 2 3; do \
+            rm -rf /tmp/$repo; \
+            if git clone --depth=1 https://codeberg.org/jbruchon/$repo.git /tmp/$repo; then \
+                break; \
+            fi; \
+            echo "Clone of $repo failed (attempt $attempt), retrying..."; \
+            sleep 5; \
+            if [ "$attempt" = "3" ]; then exit 1; fi; \
+        done; \
+    done && \
     make -C /tmp/libjodycode && make -C /tmp/libjodycode install && \
     ldconfig && \
-    git clone https://codeberg.org/jbruchon/jdupes.git /tmp/jdupes && \
     make -C /tmp/jdupes && make -C /tmp/jdupes install && \
     ln -s /usr/local/bin/jdupes /usr/bin/jdupes && \
     rm -rf /tmp/libjodycode /tmp/jdupes
