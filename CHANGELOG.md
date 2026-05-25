@@ -2,6 +2,26 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.10.0](https://github.com/chodeus/chub/compare/v2.9.0...v2.10.0) (2026-05-25)
+
+
+### Features
+
+* **sync_gdrive:** add verbose flag to surface per-file rclone actions ([e026ac8](https://github.com/chodeus/chub/commit/e026ac80efc3594392b2e31dc78f327fb6f8d7ff))
+
+
+### Bug Fixes
+
+* **dashboard:** point Run a module quick-start to Schedule page ([986407c](https://github.com/chodeus/chub/commit/986407c6dbc6018dc5e8c6e08b9abae21a4cc5d8))
+* **docker:** retry codeberg clones with HTTP/1.1 to dodge stream-cancel flakes ([b07f361](https://github.com/chodeus/chub/commit/b07f361fefd8bf8d1e0799b74a9c2631308ded75))
+* **jobs:** reflect cross-page run state and persist per-job duration ([6d23ead](https://github.com/chodeus/chub/commit/6d23eadca939582cc7560b368e1d3a84b493bb7c))
+
+
+### Refactoring
+
+* **notification:** remove unused get_random_joke footer feature ([a856c0a](https://github.com/chodeus/chub/commit/a856c0a6afc2f68f75727675f5d9da4483951f05))
+* **poster_renamerr:** restore source_dir bottom-wins, scope orphan pass to destination ([746b996](https://github.com/chodeus/chub/commit/746b996ba5a77986dfda86111dfb8a4cf7d7cb3e))
+
 ## [2.9.0](https://github.com/chodeus/chub/compare/v2.8.0...v2.9.0) (2026-05-24)
 
 
