@@ -14,6 +14,25 @@ _cancel_registry: Dict[int, threading.Event] = {}
 _cancel_registry_lock = threading.Lock()
 
 
+# Per-module advisory locks. Enqueue-side dedupe in worker.enqueue_job
+# already collapses duplicate module_run jobs by module_name, but this
+# is a backstop: anything that bypasses enqueue (webhook handlers
+# calling _process_module_run_job directly, future paths we haven't
+# anticipated) still gets serialized per module.
+_MODULE_LOCKS: Dict[str, threading.Lock] = {}
+_MODULE_LOCKS_GUARD = threading.Lock()
+
+
+def _get_module_lock(module_name: str) -> threading.Lock:
+    """Return (creating if needed) the advisory lock for `module_name`."""
+    with _MODULE_LOCKS_GUARD:
+        lock = _MODULE_LOCKS.get(module_name)
+        if lock is None:
+            lock = threading.Lock()
+            _MODULE_LOCKS[module_name] = lock
+        return lock
+
+
 def register_cancel_event(job_id: int) -> threading.Event:
     """Create and register a cancel event for a job. Returns the event."""
     event = threading.Event()
@@ -563,6 +582,24 @@ def _process_module_run_job(
 
     log.info(f"[JOB:{job_id}] Running module {module_name} (origin={origin})")
 
+    module_lock = _get_module_lock(module_name)
+    if not module_lock.acquire(blocking=False):
+        # Backstop for callers that bypass enqueue dedupe (e.g. webhook
+        # handlers invoking us directly). Non-blocking so a worker thread
+        # isn't tied up waiting — we surface the skip as success+deferred
+        # so the queue doesn't retry.
+        log.warning(
+            f"[JOB:{job_id}] {module_name} is already running on another worker; "
+            "deferring this run."
+        )
+        return {
+            "status": 200,
+            "success": True,
+            "deferred": True,
+            "message": f"Skipped — {module_name} already in flight",
+            "data": {"module": module_name, "origin": origin},
+        }
+
     try:
         from backend.modules import MODULES
 
@@ -770,6 +807,8 @@ def _process_module_run_job(
             "message": f"Module run job failed: {str(e)}",
             "error_code": "MODULE_JOB_EXCEPTION",
         }
+    finally:
+        module_lock.release()
 
 
 def _queue_upload_job(

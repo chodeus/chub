@@ -80,11 +80,22 @@ class ModuleOrchestrator:
                 }
 
             job_id = result["data"]["job_id"]
-            self._log(
-                "info",
-                f"Enqueued immediate module run: {module_name} (job {job_id})",
-                origin,
-            )
+            if result.get("deduped"):
+                # enqueue_job collapsed this call onto an in-flight job.
+                # Polling that existing job is the right behaviour for an
+                # "immediate" caller — they get the result of the run
+                # that's already covering their request.
+                self._log(
+                    "info",
+                    f"Module {module_name} already in flight; polling job {job_id}",
+                    origin,
+                )
+            else:
+                self._log(
+                    "info",
+                    f"Enqueued immediate module run: {module_name} (job {job_id})",
+                    origin,
+                )
 
             # Poll for completion (timeout after 5 minutes)
             return self._wait_for_job_completion(job_id, timeout=300)
@@ -139,11 +150,19 @@ class ModuleOrchestrator:
 
             if result["success"]:
                 job_id = result["data"]["job_id"]
-                self._log(
-                    "info",
-                    f"Enqueued async module run: {module_name} (job {job_id})",
-                    origin,
-                )
+                if result.get("deduped"):
+                    self._log(
+                        "info",
+                        f"Skipped duplicate async enqueue for {module_name}; "
+                        f"existing job {job_id} still in flight",
+                        origin,
+                    )
+                else:
+                    self._log(
+                        "info",
+                        f"Enqueued async module run: {module_name} (job {job_id})",
+                        origin,
+                    )
 
             return result
 

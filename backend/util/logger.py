@@ -155,16 +155,24 @@ class Logger:
             log_file_path = self._get_log_file_path(module_name)
 
         key = (module_name, log_file_path)
-        if key in Logger._initialized:
-            self._logger = logging.getLogger(module_name)
+        already_initialized = key in Logger._initialized
+
+        self._logger = logging.getLogger(module_name)
+        # Stamp start_time on every instantiation — log_outro() uses
+        # `datetime.now() - start_time` to print "Run Time:", and the
+        # _initialized cache below short-circuits the handler/rotation
+        # setup so without this hoist the second-and-later runs in a
+        # long-lived process would print elapsed time since first init.
+        self.start_time = datetime.now()
+        self._logger.start_time = self.start_time
+
+        if already_initialized:
             return
         Logger._initialized.add(key)
 
         # Setup log directory and rotation
         self._setup_log_directory_and_rotation(log_file_path, max_logs)
 
-        # Initialize logger
-        self._logger = logging.getLogger(module_name)
         self._logger.setLevel(getattr(logging, log_level, logging.INFO))
 
         # Setup handlers only if not already done
@@ -173,8 +181,6 @@ class Logger:
 
         # Log startup message
         version = get_version()
-        self.start_time = datetime.now()
-        self._logger.start_time = self.start_time
         self._logger.info(
             create_bar(f"{module_name.replace('_', ' ').upper()} Version: {version}")
         )
