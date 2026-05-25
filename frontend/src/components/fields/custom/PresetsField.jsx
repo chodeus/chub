@@ -81,16 +81,29 @@ export const PresetsField = React.memo(
             }
 
             if (presetType === 'gdrive' && presetUrl) {
-                // Fetch remote GDrive presets
+                // Fetch GDrive presets. Internal endpoints (/api/...) return
+                // {success, data: [...]}, while external URLs return the raw
+                // array/object — handle both.
                 setLoading(true);
+                const isInternal = presetUrl.startsWith('/api/');
                 fetch(presetUrl)
                     .then(r => r.json())
-                    .then(data => {
+                    .then(payload => {
+                        const data = isInternal ? payload?.data : payload;
                         let arr = Array.isArray(data)
                             ? data
-                            : Object.entries(data).map(([name, v]) =>
+                            : Object.entries(data || {}).map(([name, v]) =>
                                   typeof v === 'object' ? { name, ...v } : { name, id: v }
                               );
+                        // Prefix the display/identifier name with the style
+                        // (CL2K / MM2K) so the dropdown and the friendly Name
+                        // field auto-fill as "MM2K Mario" instead of "Mario".
+                        arr = arr.map(p => {
+                            if (!p || !p.style || !p.name) return p;
+                            const prefix = `${p.style} `;
+                            if (p.name.startsWith(prefix)) return p;
+                            return { ...p, name: `${prefix}${p.name}` };
+                        });
                         if (mounted) setPresets(arr);
                     })
                     .catch(() => mounted && setPresets([]))

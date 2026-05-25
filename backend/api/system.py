@@ -6,6 +6,7 @@ directory operations, and testing utilities.
 """
 
 import io
+import json
 import os
 import shutil
 import sqlite3
@@ -13,7 +14,7 @@ import time
 import zipfile
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, Request, UploadFile, File
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -28,7 +29,7 @@ from backend.util.config import (
     save_config,
 )
 from backend.util.database import ChubDB
-from backend.util.path_safety import is_path_allowed
+from backend.util.path_safety import get_allowed_roots, is_path_allowed
 from backend.util.version import get_version
 
 router = APIRouter(
@@ -361,6 +362,95 @@ async def create_directory(
         return error(
             f"Error creating folder: {str(e)}",
             code="FOLDER_CREATION_ERROR",
+            status_code=500,
+        )
+
+
+@router.get(
+    "/allowed-roots",
+    summary="List allowed filesystem roots",
+    description="Returns the absolute paths the directory picker is permitted to browse.",
+    responses={
+        200: {
+            "description": "Allowed roots list",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "success": True,
+                        "message": "2 allowed roots",
+                        "data": {"roots": ["/kometa/posters", "/data/media"]},
+                    }
+                }
+            },
+        },
+    },
+)
+async def list_allowed_roots(logger: Any = Depends(get_logger)) -> JSONResponse:
+    """Return the configured allowed roots for the directory picker."""
+    try:
+        try:
+            config = load_config()
+        except ConfigError:
+            return ok("0 allowed roots", {"roots": []})
+
+        roots = sorted({str(p) for p in get_allowed_roots(config)})
+        return ok(f"{len(roots)} allowed roots", {"roots": roots})
+    except Exception as e:
+        logger.error(f"Error listing allowed roots: {e}")
+        return error(
+            f"Error listing allowed roots: {str(e)}",
+            code="ALLOWED_ROOTS_ERROR",
+            status_code=500,
+        )
+
+
+_GDRIVE_PRESETS_PATH = (
+    Path(__file__).resolve().parent.parent / "assets" / "gdrive_presets.json"
+)
+_gdrive_presets_cache: Optional[List[dict]] = None
+
+
+@router.get(
+    "/gdrive-presets",
+    summary="List bundled GDrive presets",
+    description="Returns the curated list of CL2K and MM2K Google Drive presets bundled with CHUB.",
+    responses={
+        200: {
+            "description": "Preset list",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "success": True,
+                        "message": "Loaded 41 presets",
+                        "data": [
+                            {"name": "Chris DC", "id": "1oBz...", "style": "MM2K"}
+                        ],
+                    }
+                }
+            },
+        },
+    },
+)
+async def list_gdrive_presets(logger: Any = Depends(get_logger)) -> JSONResponse:
+    """Return the bundled GDrive presets JSON (cached after first load)."""
+    global _gdrive_presets_cache
+    try:
+        if _gdrive_presets_cache is None:
+            with open(_GDRIVE_PRESETS_PATH, "r", encoding="utf-8") as fh:
+                _gdrive_presets_cache = json.load(fh)
+        return ok(f"Loaded {len(_gdrive_presets_cache)} presets", _gdrive_presets_cache)
+    except FileNotFoundError:
+        logger.error(f"GDrive presets file not found at {_GDRIVE_PRESETS_PATH}")
+        return error(
+            "GDrive presets file not found",
+            code="GDRIVE_PRESETS_MISSING",
+            status_code=500,
+        )
+    except Exception as e:
+        logger.error(f"Error loading gdrive presets: {e}")
+        return error(
+            f"Error loading gdrive presets: {str(e)}",
+            code="GDRIVE_PRESETS_ERROR",
             status_code=500,
         )
 
