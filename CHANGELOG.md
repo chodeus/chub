@@ -2,6 +2,19 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.11.0](https://github.com/chodeus/chub/compare/v2.10.0...v2.11.0) (2026-05-25)
+
+
+### Features
+
+* **sync_gdrive:** bundle CL2K/MM2K presets, prefix names, fix dir picker ([1df83f9](https://github.com/chodeus/chub/commit/1df83f93b3271f8fca12facc05ab61641bc2f308))
+
+
+### Bug Fixes
+
+* **jobs:** dedupe module_run enqueues and reset Logger start_time per run ([29460e3](https://github.com/chodeus/chub/commit/29460e361338e3c55f60bca8cdfd4f687c4e780d))
+* **media:** stop flagging shows with distinct external IDs as folder collisions ([3f5560e](https://github.com/chodeus/chub/commit/3f5560eb3a3920b128d797b0cc9ddef7ce98cc92))
+
 ## [2.10.0](https://github.com/chodeus/chub/compare/v2.9.0...v2.10.0) (2026-05-25)
 
 
