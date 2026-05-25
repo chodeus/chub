@@ -20,6 +20,13 @@ export const SETTINGS_SCHEMA = [
                     'Pass --dry-run to rclone — log every file that would be copied or deleted without touching the local filesystem.',
             },
             {
+                key: 'verbose',
+                label: 'Verbose',
+                type: 'check_box',
+                description:
+                    'Log every file rclone copies, deletes, updates, or renames. Useful for tracing what changed; can be noisy on large syncs.',
+            },
+            {
                 key: 'gdrive_sa_location',
                 label: 'Service Account Location',
                 type: 'text',
