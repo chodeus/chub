@@ -7,6 +7,33 @@ from backend.util.normalization import normalize_titles
 from .db_base import DatabaseBase
 
 
+# ─────────────────────────────────────────────────────────────────────
+# CONTRACT: source_dirs bottom-wins priority
+# ─────────────────────────────────────────────────────────────────────
+# When two source_dirs both contain a poster for the same media item,
+# the entry from the **bottom** of poster_renamerr.source_dirs must win.
+# This matches the user-facing tooltip in
+# frontend/src/utils/constants/settings_schema.js and gives DAPS parity.
+#
+# Mechanism:
+#   1. PosterRenamerr.merge_assets stamps each asset's `priority` to the
+#      0-based index of its source_dir in config.source_dirs (top=0,
+#      bottom=N-1). Higher value = later in list = wins.
+#   2. The match-phase queries below (`get_by_id`,
+#      `get_by_normalized_title`, `get_candidates_by_prefix`) ORDER BY
+#      `priority DESC, id DESC` so the bottom source_dir's row is
+#      returned first. `id DESC` is the within-same-priority tiebreaker
+#      (later-inserted file wins).
+#   3. SyncGDrive._refresh_poster_cache_for_folder looks up the priority
+#      for the folder being refreshed so per-folder syncs preserve it.
+#
+# Guardrail: tests/test_poster_renamerr.py::test_source_dirs_bottom_wins.
+# Removing the ORDER BY clauses, the priority column, or the priority
+# stamping in merge_assets will fail that test loudly. Do not "simplify"
+# this without reading the test first — the ordering is the contract.
+# ─────────────────────────────────────────────────────────────────────
+
+
 class PosterCache(DatabaseBase):
     """
     Handles CRUD operations and logic for the poster_cache table.
@@ -54,18 +81,24 @@ class PosterCache(DatabaseBase):
 
         created_at = record.get("created_at") or datetime.now(timezone.utc).isoformat()
 
+        # priority: see CONTRACT block at top of file. Stamped by callers
+        # from source_dir index; defaults to 0 if absent so direct DB
+        # writes (tests, manual fixtures) don't have to know about it.
+        priority = int(record.get("priority") or 0)
+
         self.execute_query(
             """
             INSERT INTO poster_cache
                 (asset_type, title, normalized_title, year,
-                 tmdb_id, tvdb_id, imdb_id, season_number, folder, file, style, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 tmdb_id, tvdb_id, imdb_id, season_number, folder, file, style, created_at, priority)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(title, year, tmdb_id, tvdb_id, imdb_id, season_number, file)
             DO UPDATE SET
                 asset_type=excluded.asset_type,
                 normalized_title=excluded.normalized_title,
                 folder=excluded.folder,
-                style=excluded.style
+                style=excluded.style,
+                priority=excluded.priority
             """,
             (
                 record.get("asset_type"),
@@ -80,6 +113,7 @@ class PosterCache(DatabaseBase):
                 record["file"],
                 record.get("style"),
                 created_at,
+                priority,
             ),
         )
 
@@ -130,7 +164,11 @@ class PosterCache(DatabaseBase):
         season_number=None,
         asset_type: Optional[str] = None,
     ) -> Optional[dict]:
-        """Get poster cache record by ID field."""
+        """Get poster cache record by ID field.
+
+        Ordering enforces the bottom-wins source_dir contract — see
+        CONTRACT block at top of file.
+        """
         sql = f"SELECT * FROM poster_cache WHERE {id_field}=?"
         params = [id_val]
 
@@ -144,6 +182,7 @@ class PosterCache(DatabaseBase):
         else:
             sql += " AND season_number IS NULL"
 
+        sql += " ORDER BY priority DESC, id DESC LIMIT 1"
         return self.execute_query(sql, params, fetch_one=True)
 
     def get_by_normalized_title(
@@ -153,7 +192,11 @@ class PosterCache(DatabaseBase):
         season_number: Optional[int] = None,
         asset_type: Optional[str] = None,
     ) -> Optional[dict]:
-        """Get poster cache record by normalized title."""
+        """Get poster cache record by normalized title.
+
+        Ordering enforces the bottom-wins source_dir contract — see
+        CONTRACT block at top of file.
+        """
         sql = "SELECT * FROM poster_cache WHERE normalized_title=?"
         params = [normalized_title]
 
@@ -171,6 +214,7 @@ class PosterCache(DatabaseBase):
         else:
             sql += " AND season_number IS NULL"
 
+        sql += " ORDER BY priority DESC, id DESC LIMIT 1"
         return self.execute_query(sql, params, fetch_one=True)
 
     def clear(self) -> None:
@@ -354,7 +398,13 @@ class PosterCache(DatabaseBase):
     def get_candidates_by_prefix(
         self, title: str, length: int = 3, asset_type: Optional[str] = None
     ) -> list:
-        """Get poster candidates by title prefix."""
+        """Get poster candidates by title prefix.
+
+        Ordering enforces the bottom-wins source_dir contract — see
+        CONTRACT block at top of file. The match phase walks this list
+        and takes the first row that passes is_match(), so higher-
+        priority candidates must come first.
+        """
         prefix = get_prefix(title, length)
         if not prefix:
             return []
@@ -365,4 +415,5 @@ class PosterCache(DatabaseBase):
             sql += " AND asset_type=?"
             params.append(asset_type)
 
+        sql += " ORDER BY priority DESC, id DESC"
         return self.execute_query(sql, params, fetch_all=True) or []

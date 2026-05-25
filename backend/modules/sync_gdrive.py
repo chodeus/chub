@@ -53,9 +53,7 @@ _RCLONE_FILE_ACTION_PATTERN = re.compile(
 # since rclone uses both depending on version/operation. "Skipped" is
 # intentionally not counted — it represents files that were already in
 # sync and would inflate the summary without conveying activity.
-_RCLONE_ACTION_PATTERN = re.compile(
-    r": (Copied|Deleted|Updated|Renamed|Removed)\b"
-)
+_RCLONE_ACTION_PATTERN = re.compile(r": (Copied|Deleted|Updated|Renamed|Removed)\b")
 
 
 def _empty_counters() -> dict:
@@ -342,6 +340,11 @@ class SyncGDrive(ChubModule):
         reflects the on-disk state immediately, without waiting for the
         next scheduled poster_renamerr run. Scoped to this folder's path
         prefix — other contributors' rows are untouched.
+
+        Looks up the folder's priority from poster_renamerr.source_dirs so
+        the per-folder refresh preserves the bottom-wins source_dir
+        contract (see poster_cache.py CONTRACT block). Without the lookup,
+        rows would be re-stamped with priority=0 and silently demoted.
         """
         if not self.db:
             return
@@ -351,12 +354,25 @@ class SyncGDrive(ChubModule):
             from backend.modules.poster_renamerr import PosterRenamerr
 
             pr = PosterRenamerr(logger=self.logger)
-            assets = pr._get_assets_files(sync_location)
+
+            # Resolve this folder's priority by matching against
+            # poster_renamerr.source_dirs (normalized for trailing slashes).
+            # If the folder isn't in source_dirs, poster_renamerr won't
+            # pick from it anyway — priority is moot, default to 0.
+            sd_list = list(getattr(pr.config, "source_dirs", []) or [])
+            target = os.path.normpath(sync_location)
+            priority = 0
+            for idx, sd in enumerate(sd_list):
+                if os.path.normpath(sd) == target:
+                    priority = idx
+                    break
+
+            assets = pr._get_assets_files(sync_location, priority=priority)
             self.db.poster.delete_by_path_prefix(sync_location)
             for asset in assets:
                 self.db.poster.upsert(asset)
             self.logger.info(
-                f"Refreshed poster_cache for {sync_location}: {len(assets)} rows"
+                f"Refreshed poster_cache for {sync_location}: {len(assets)} rows (priority={priority})"
             )
         except Exception as e:
             # Cache refresh is a best-effort follow-up to the sync; a

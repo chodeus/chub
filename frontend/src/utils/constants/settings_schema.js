@@ -212,7 +212,7 @@ export const SETTINGS_SCHEMA = [
                 type: 'check_box',
                 section: 'Pipeline',
                 description:
-                    "After renaming, walk the source + destination directories and act on every poster file whose title doesn't match any media in the configured instances — i.e. an asset with no parent media. (Not to be confused with the Unmatched Assets module, which reports media missing a poster — the opposite direction.) The action taken (report / move / remove) follows the Orphan Assets Mode set in the Poster Cleanarr module, so a single setting governs both this post-rename pass and a standalone Cleanarr run.",
+                    "After renaming, walk the destination directory and act on every poster file whose title doesn't match any media in the configured instances — i.e. an asset with no parent media. Source directories are deliberately out of scope: gdrive-synced source dirs would just re-download deleted files on the next sync, and personal source dirs aren't CHUB's to delete from. (Not to be confused with the Unmatched Assets module, which reports media missing a poster — the opposite direction.) The action taken (report / move / remove) follows the Orphan Assets Mode set in the Poster Cleanarr module, so a single setting governs both this post-rename pass and a standalone Cleanarr run.",
             },
             {
                 key: 'report_unmatched_assets',
@@ -936,7 +936,7 @@ export const SETTINGS_SCHEMA = [
                 label: 'Asset Directories',
                 type: 'dirlist_dragdrop',
                 description:
-                    'Directories to scan for orphan assets. Typically the same paths poster_renamerr writes to. Each is walked recursively; the hidden .chub_orphan_restore subdir is skipped.',
+                    "Directories to scan when this standalone orphan pass runs. Typically poster_renamerr's destination_dir, but you can list any path you want explicitly cleaned — including source dirs or personal folders that the post-rename pass deliberately leaves alone. Each is walked recursively; the hidden .chub_orphan_restore subdir is skipped.",
             },
             {
                 key: 'include_collections',
