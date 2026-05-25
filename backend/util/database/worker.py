@@ -503,6 +503,38 @@ class DBWorker(DatabaseBase):
 
         try:
             with self.get_connection() as conn:
+                # Dedupe module_run jobs by module_name. The SELECT runs
+                # inside the same connection/transaction as the INSERT, so
+                # two callers racing to enqueue the same module can't both
+                # win — SQLite serialises writes and the second SELECT
+                # will see the first INSERT. Webhook storms, manual UI
+                # "Run now" overlapping a scheduled fire, and two scheduler
+                # ticks racing past the orchestrator's running-check all
+                # collapse to a single in-flight job per module.
+                if job_type == "module_run":
+                    module_name = (payload or {}).get("module_name")
+                    if module_name:
+                        existing = conn.execute(
+                            f"SELECT id, status FROM {table_name} "
+                            f"WHERE type = 'module_run' "
+                            f"  AND status IN ('pending', 'running') "
+                            f"  AND json_extract(payload, '$.module_name') = ?",
+                            (module_name,),
+                        ).fetchone()
+                        if existing:
+                            existing_id = existing["id"]
+                            existing_status = existing["status"]
+                            return {
+                                "success": True,
+                                "deduped": True,
+                                "message": (
+                                    f"module_run for {module_name} already "
+                                    f"{existing_status} (job {existing_id}); "
+                                    "skipped duplicate enqueue"
+                                ),
+                                "data": {"job_id": existing_id},
+                            }
+
                 cursor = conn.execute(
                     f"INSERT INTO {table_name} ({keys}) VALUES ({qs})",
                     tuple(fields.values()),
