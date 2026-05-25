@@ -279,6 +279,13 @@ class SchemaManager:
                 ColumnDefinition("width", "INTEGER"),
                 ColumnDefinition("height", "INTEGER"),
                 ColumnDefinition("created_at", "TEXT"),
+                # Source-dir bottom-wins priority. Stamped at merge time from
+                # the asset's source_dir index in poster_renamerr.source_dirs
+                # (higher = later in list = wins). The match-phase queries
+                # ORDER BY this DESC so the bottom source_dir's row is
+                # returned first. See poster_cache.py CONTRACT block and
+                # tests/test_poster_renamerr.py::test_source_dirs_bottom_wins.
+                ColumnDefinition("priority", "INTEGER", default=0),
             ],
             constraints=[
                 "UNIQUE(title, year, tmdb_id, tvdb_id, imdb_id, season_number, file)"

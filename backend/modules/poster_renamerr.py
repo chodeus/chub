@@ -569,7 +569,16 @@ class PosterRenamerr(ChubModule):
                     best_len = len(loc)
         return best_style
 
-    def _get_assets_files(self, source_dir: str):
+    def _get_assets_files(self, source_dir: str, priority: int = 0):
+        """Walk source_dir and parse each poster into a cache record.
+
+        `priority` is stamped on every returned record and used by the
+        match-phase queries to enforce bottom-wins source_dir ordering.
+        See CONTRACT block in backend/util/database/poster_cache.py.
+        Defaults to 0 for callers that don't care about priority (e.g.
+        ad-hoc tests, single-folder refresh paths that don't know their
+        position in source_dirs).
+        """
         style_map = self._build_gdrive_style_map()
         asset_records = []
         for root, dirs, files in os.walk(source_dir):
@@ -610,6 +619,7 @@ class PosterRenamerr(ChubModule):
                     "folder": folder,
                     "file": fpath,
                     "style": style,
+                    "priority": priority,
                 }
                 asset_records.append(record)
 
@@ -634,6 +644,13 @@ class PosterRenamerr(ChubModule):
     _MERGE_PROGRESS_CEILING_PCT = 50
 
     def merge_assets(self, source_dirs: List[str], db: ChubDB):
+        # CONTRACT: source_dirs bottom-wins priority.
+        # Each asset's `priority` is its source_dir's 0-based index in
+        # this list. Top of list = 0, bottom = len-1. Higher value wins
+        # in the match-phase queries (see poster_cache.py CONTRACT block).
+        # If the priority stamp is removed or the iteration order is
+        # randomized, tests/test_poster_renamerr.py::test_source_dirs_bottom_wins
+        # will fail. Don't change without reading that test first.
         start_time = datetime.now()
         self.logger.info("Gathering all the posters, please wait...")
         source_dirs = source_dirs or self.config.source_dirs
@@ -644,10 +661,10 @@ class PosterRenamerr(ChubModule):
         # progress smoothly instead of in big steps per source_dir.
         per_dir_assets = []
         total_all = 0
-        for source_dir in source_dirs:
+        for idx, source_dir in enumerate(source_dirs):
             if self.is_cancelled():
                 break
-            assets = self._get_assets_files(source_dir)
+            assets = self._get_assets_files(source_dir, priority=idx)
             per_dir_assets.append((source_dir, assets))
             total_all += len(assets)
 
@@ -697,6 +714,24 @@ class PosterRenamerr(ChubModule):
         minutes, seconds = divmod(remainder, 60)
         formatted_duration = f"{int(hours)}h {int(minutes)}m {int(seconds)}s"
         self.logger.info(f"Merge run time: {formatted_duration}")
+
+    def _orphan_pass_scan_roots(self) -> List[str]:
+        """The directories the post-rename orphan-asset pass walks.
+
+        CONTRACT: destination_dir only. source_dirs are deliberately
+        OUT OF SCOPE — they're either (a) gdrive-synced (any deleted
+        file gets re-downloaded on the next sync, producing pure
+        delete/restore churn) or (b) user-owned personal folders
+        whose contents CHUB has no authority to remove. The only
+        directory CHUB owns the lifecycle of is destination_dir, so
+        that's the only place orphan cleanup acts.
+
+        If a future refactor re-adds source_dirs here, the test
+        tests/test_poster_renamerr.py::test_orphan_pass_scan_roots_excludes_source_dirs
+        will fail. Read that test and the rationale above before
+        "fixing" it — this scoping is the contract, not a bug.
+        """
+        return [self.config.destination_dir] if self.config.destination_dir else []
 
     def run_border_replacerr(self, manifest: dict):
         from backend.modules.border_replacerr import BorderReplacerr
@@ -861,14 +896,7 @@ class PosterRenamerr(ChubModule):
                     )
 
                     cleanarr_logger = Logger(self.config.log_level, "cleanarr")
-                    allowed_roots = [
-                        r
-                        for r in (
-                            [self.config.destination_dir]
-                            + list(self.config.source_dirs or [])
-                        )
-                        if r
-                    ]
+                    allowed_roots = self._orphan_pass_scan_roots()
                     # In dry-run, force report mode regardless of configured
                     # action — never delete during a dry-run. Otherwise defer
                     # to Poster Cleanarr's mode so a single setting governs
