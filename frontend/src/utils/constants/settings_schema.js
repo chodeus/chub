@@ -87,8 +87,7 @@ export const SETTINGS_SCHEMA = [
                         label: 'Gdrive Presets',
                         type: 'presets',
                         presetType: 'gdrive',
-                        presetUrl:
-                            'https://raw.githubusercontent.com/Drazzilb08/daps-gdrive-presets/CL2K/presets.json',
+                        presetUrl: '/api/gdrive-presets',
                         identifierField: 'name',
                         moduleConfigKey: 'gdrive_list',
                         targetFields: ['name', 'id'],

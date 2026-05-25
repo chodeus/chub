@@ -55,6 +55,19 @@ export const systemAPI = {
     },
 
     /**
+     * List filesystem roots the directory picker is permitted to browse.
+     * @param {Object} options - Request options
+     * @returns {Promise<Object>} { roots: string[] }
+     */
+    listAllowedRoots: (options = {}) => {
+        return apiCore.get('/allowed-roots', {
+            useCache: true,
+            cacheTTL: 5 * 60 * 1000,
+            ...options,
+        });
+    },
+
+    /**
      * Test endpoint for API validation
      * @param {Object} testData - Test data to send
      * @param {Object} options - Request options

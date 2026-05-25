@@ -5,17 +5,21 @@
  * server-side directories and systemAPI.createDirectory to create new ones.
  */
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { systemAPI } from '../../../utils/api/system.js';
 import { FieldWrapper, FieldLabel, FieldDescription } from '../primitives';
 
 export const DirPickerField = React.memo(({ field, value, onChange, disabled = false }) => {
-    const [currentPath, setCurrentPath] = useState(value || '/');
+    const [currentPath, setCurrentPath] = useState(value || '');
     const [entries, setEntries] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [newDirName, setNewDirName] = useState('');
     const [creating, setCreating] = useState(false);
+    // Deepest path the user is allowed to ascend to. Locked the first time we
+    // land somewhere valid so "go up" can't escape into a forbidden parent.
+    const rootBoundaryRef = useRef(null);
+    const initializedRef = useRef(false);
 
     const loadDirectory = useCallback(async path => {
         setLoading(true);
@@ -25,6 +29,7 @@ export const DirPickerField = React.memo(({ field, value, onChange, disabled = f
             const dirs = result?.data?.directories || result?.data || [];
             setEntries(Array.isArray(dirs) ? dirs : []);
             setCurrentPath(path);
+            if (!rootBoundaryRef.current) rootBoundaryRef.current = path;
         } catch (err) {
             setError(err.message || 'Failed to load directory');
             setEntries([]);
@@ -34,7 +39,32 @@ export const DirPickerField = React.memo(({ field, value, onChange, disabled = f
     }, []);
 
     useEffect(() => {
-        loadDirectory(value || '/');
+        if (initializedRef.current) return;
+        initializedRef.current = true;
+
+        if (value) {
+            rootBoundaryRef.current = value;
+            loadDirectory(value);
+            return;
+        }
+
+        // No saved value — fetch allowed roots and start at the first one.
+        systemAPI
+            .listAllowedRoots()
+            .then(result => {
+                const roots = result?.data?.roots || [];
+                if (roots.length > 0) {
+                    rootBoundaryRef.current = roots[0];
+                    loadDirectory(roots[0]);
+                } else {
+                    setError(
+                        'No allowed directories configured. Set a source/destination path in another module first.'
+                    );
+                }
+            })
+            .catch(err => {
+                setError(err.message || 'Failed to load allowed directories');
+            });
     }, [loadDirectory, value]);
 
     const handleNavigate = useCallback(
@@ -45,12 +75,15 @@ export const DirPickerField = React.memo(({ field, value, onChange, disabled = f
         [currentPath, loadDirectory]
     );
 
+    const atRoot = !currentPath || currentPath === rootBoundaryRef.current;
+
     const handleGoUp = useCallback(() => {
+        if (atRoot) return;
         const parts = currentPath.split('/').filter(Boolean);
         parts.pop();
         const parentPath = parts.length === 0 ? '/' : `/${parts.join('/')}`;
         loadDirectory(parentPath);
-    }, [currentPath, loadDirectory]);
+    }, [atRoot, currentPath, loadDirectory]);
 
     const handleSelect = useCallback(() => {
         if (onChange) onChange(currentPath);
@@ -97,7 +130,7 @@ export const DirPickerField = React.memo(({ field, value, onChange, disabled = f
 
             {/* Directory listing */}
             <div className="border border-border rounded-lg max-h-48 overflow-y-auto bg-surface">
-                {currentPath !== '/' && (
+                {!atRoot && (
                     <button
                         type="button"
                         onClick={handleGoUp}
