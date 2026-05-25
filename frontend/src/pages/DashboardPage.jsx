@@ -31,7 +31,7 @@ const QUICK_START = [
         description: 'Kick off any configured module on demand.',
         icon: 'play_arrow',
         badge: 1,
-        to: '/settings/modules',
+        to: '/settings/schedule',
     },
     {
         id: 'browse-media',
