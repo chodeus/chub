@@ -1,7 +1,5 @@
 import json
 import logging
-import os
-import random
 import threading
 import traceback
 from dataclasses import dataclass
@@ -161,7 +159,7 @@ class NotificationManager:
                         "color": color,
                         "timestamp": timestamp,
                         "fields": part.get("fields", []),
-                        "footer": {"text": f"Powered by: CHUB | {get_random_joke()}"},
+                        "footer": {"text": "Powered by: CHUB"},
                     }
                 ]
             if "content" in part:
@@ -263,7 +261,6 @@ class NotificationManager:
                 pt_payload["discord"]["text"] = {
                     "title": f"{module_title} Notification{part.get('part', '')}",
                     "fields": fields,
-                    "footer": get_random_joke(),
                 }
             else:
                 content = part.get("content")
@@ -703,12 +700,3 @@ def install_error_notify_handler(config, logger=None) -> Optional[ErrorNotifyHan
     return handler
 
 
-def get_random_joke() -> str:
-    root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    jokes_path = os.path.join(root_dir, "jokes.txt")
-    if os.path.exists(jokes_path):
-        with open(jokes_path, encoding="utf-8") as f:
-            jokes = [line.strip() for line in f if line.strip()]
-            if jokes:
-                return random.choice(jokes)
-    return ""

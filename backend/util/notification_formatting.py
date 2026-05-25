@@ -1,7 +1,6 @@
 import os
 from typing import Any, Dict, List, Tuple
 
-from backend.util.notification import get_random_joke
 
 
 def format_for_discord(
@@ -494,7 +493,7 @@ def format_for_discord(
             else:
                 dir_label = os.path.basename(os.path.normpath(source_dir)).capitalize()
             header = f"_\nSource Directory: '__**{dir_label}**__'\n{field_message}"
-            footer = f"\nPowered by: CHUB | {get_random_joke()}"
+            footer = "\nPowered by: CHUB"
             lines = [f"\t{line}" for line in parsed_files]
             lines.append(f"\tRelink candidates in '{dir_label}': {sub_count}")
             if linked_count:
@@ -850,7 +849,7 @@ def format_for_email(config: Any, output: Any) -> Tuple[str, bool]:
         <body>
             <h2>{title} Notification</h2>
             {body}
-            <div class="footer">Powered by: CHUB | “{get_random_joke()}”</div>
+            <div class="footer">Powered by: CHUB</div>
         </body>
         </html>
         """.strip()

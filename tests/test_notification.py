@@ -10,7 +10,6 @@ from backend.util.notification import (
     ErrorNotifyHandler,
     NotifiarrConfig,
     NotificationManager,
-    get_random_joke,
     install_error_notify_handler,
 )
 
@@ -117,15 +116,6 @@ def test_build_discord_payload_handles_dict_data():
     # Multi-part should label parts
     titles = [p["embeds"][0]["title"] for p in payloads]
     assert any("Part" in t for t in titles)
-
-
-# --- get_random_joke ---
-
-
-def test_get_random_joke_returns_string():
-    # File may or may not exist depending on layout — always returns string
-    result = get_random_joke()
-    assert isinstance(result, str)
 
 
 # --- _get_notification_targets ---

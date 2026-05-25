@@ -49,7 +49,7 @@ def db():
         try:
             os.unlink(path)
         except OSError:
-            pass
+            pass  # best-effort cleanup; temp file may already be gone
 
 
 def _insert(db, *, identity_key, title, normalized_title, year, instance_name,
