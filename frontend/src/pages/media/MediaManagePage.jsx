@@ -419,8 +419,8 @@ const MediaManagePage = () => {
                         Folder collisions ({folderCollisions.length} groups)
                     </h3>
                     <p className="text-xs text-tertiary mb-3">
-                        Same normalized title, different external IDs — usually legitimate
-                        international variants or remakes. Review before resolving.
+                        Same normalized title with missing or ambiguous external IDs — can&apos;t be
+                        told apart from metadata alone. Review before resolving.
                     </p>
                     <div className="grid gap-2">
                         {folderCollisions.slice(0, 10).map((dup, i) => {

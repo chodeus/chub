@@ -2,11 +2,12 @@
 
 These cover the two-tier model:
   * find_duplicates: identity-based (same external ID within an instance)
-  * find_folder_collisions: title-based with conflicting external IDs
-    (e.g. ``Destination X (US)`` vs ``Destination X (UK)``)
+  * find_folder_collisions: title-based, surfaced only when at least
+    one row is missing external IDs so the items can't be told apart
+    from metadata alone. Items with fully distinct external IDs (e.g.
+    ``Destination X (US)`` vs ``(UK)``) are suppressed.
 """
 
-import json
 import os
 import sys
 import tempfile
@@ -108,9 +109,11 @@ def test_different_tvdb_ids_with_same_normalized_title_are_not_duplicates(db):
     assert db.media.find_duplicates() == []
 
 
-def test_different_tvdb_ids_with_same_normalized_title_are_folder_collisions(db):
-    """The same case must surface in folder_collisions, with both
-    identities exposed so the user can tell them apart."""
+def test_different_tvdb_ids_with_same_normalized_title_are_not_folder_collisions(db):
+    """Two shows sharing a normalized title but with distinct tvdb IDs
+    are unambiguously different — the user has already disambiguated
+    them with region tags and IDs in folder names. They must NOT
+    surface as folder collisions."""
     _insert(
         db,
         identity_key="sonarr|show|tvdb:449931",
@@ -132,16 +135,7 @@ def test_different_tvdb_ids_with_same_normalized_title_are_folder_collisions(db)
         instance_name="sonarr",
     )
 
-    collisions = db.media.find_folder_collisions()
-    assert len(collisions) == 1
-    c = collisions[0]
-    assert c["normalized_title"] == "destinationx"
-    assert c["count"] == 2
-    identities = set(c["identities"].split(","))
-    assert identities == {"tvdb:449931", "tvdb:465530"}
-    titles = json.loads(c["titles"])
-    assert "Destination X (US)" in titles
-    assert "Destination X (UK)" in titles
+    assert db.media.find_folder_collisions() == []
 
 
 def test_same_tvdb_id_within_instance_is_a_duplicate(db):
