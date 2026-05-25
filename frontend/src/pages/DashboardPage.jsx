@@ -441,7 +441,10 @@ const DashboardPage = () => {
                     {moduleList.map(mod => {
                         const state = runStates[mod.name];
                         const lastRun = mod.last_run || state?.last_run;
-                        const lastStatus = mod.last_run_status || state?.status;
+                        // Live run-state wins over the persisted last-run status so an
+                        // in-progress job (overlay sets state.status = 'running') isn't
+                        // hidden by a stale 'success' from the previous completed run.
+                        const lastStatus = state?.status || mod.last_run_status;
                         const schedule = mod.schedule;
                         const jobId = state?.job_id;
                         const isRunning = lastStatus === 'running';

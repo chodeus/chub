@@ -344,6 +344,8 @@ class SchemaManager:
                 ColumnDefinition("scheduled_at", "TEXT"),
                 ColumnDefinition("priority", "INTEGER", default=0),
                 ColumnDefinition("progress", "INTEGER", default=0),
+                ColumnDefinition("started_at", "TEXT"),
+                ColumnDefinition("completed_at", "TEXT"),
             ],
             indexes=[
                 "CREATE INDEX IF NOT EXISTS jobs_status_idx ON jobs(status)",

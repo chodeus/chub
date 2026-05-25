@@ -191,14 +191,18 @@ export const useModuleExecution = () => {
         };
     }, [loadRunStates, stopPolling]);
 
-    // Auto start/stop polling based on running modules
+    // Auto start/stop polling based on running modules. Triggers off either
+    // a locally-initiated run (runningModules Set) OR an externally-started
+    // run that shows up in runStates — otherwise the page would idle while
+    // a job triggered from Dashboard/Jobs page is in flight.
+    const externalRunning = Object.values(runStates).some(s => s?.status === 'running');
     useEffect(() => {
-        if (runningModules.size > 0) {
+        if (runningModules.size > 0 || externalRunning) {
             startPolling();
         } else {
             stopPolling();
         }
-    }, [runningModules.size, startPolling, stopPolling]);
+    }, [runningModules.size, externalRunning, startPolling, stopPolling]);
 
     return {
         runningModules,
@@ -206,7 +210,11 @@ export const useModuleExecution = () => {
         polling,
         executeModule,
         refreshData: loadRunStates,
-        isRunning: moduleKey => runningModules.has(moduleKey),
+        // Reflect cross-page truth: a job started elsewhere (Dashboard, Jobs page,
+        // schedule fire) shows up in runStates with status='running' via the
+        // backend overlay, even though this hook's local Set is empty.
+        isRunning: moduleKey =>
+            runningModules.has(moduleKey) || runStates[moduleKey]?.status === 'running',
         getRunState: moduleKey => runStates[moduleKey] || null,
     };
 };

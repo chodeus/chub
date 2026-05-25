@@ -7,6 +7,7 @@ status monitoring, and run state management.
 
 import asyncio
 import json
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -1206,9 +1207,10 @@ async def cancel_module_execution(
         # Signal the cancel event
         if request_cancellation(job_id):
             # Update job status to reflect cancellation is in progress
+            now = datetime.now(timezone.utc).isoformat()
             db.worker.execute_query(
-                "UPDATE jobs SET status='cancelled' WHERE id=? AND status='running'",
-                (job_id,),
+                "UPDATE jobs SET status='cancelled', completed_at=? WHERE id=? AND status='running'",
+                (now, job_id),
             )
             logger.info(f"Cancellation requested for module {name} job {job_id}")
             return ok(
