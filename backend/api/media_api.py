@@ -423,9 +423,12 @@ async def get_duplicates(
     Two-tier detection:
       * ``duplicates`` — rows that share the same external ID
         (tvdb / tmdb / imdb). These are real duplicates worth resolving.
-      * ``folder_collisions`` — rows whose normalized titles match but
-        whose external IDs differ. Usually legitimate international
-        variants or remakes; surfaced for review.
+      * ``folder_collisions`` — rows whose normalized titles match and
+        at least one row is missing external IDs, so they can't be
+        unambiguously told apart from metadata alone. Items with fully
+        distinct external IDs (e.g. international variants like
+        ``Destination X (US)`` vs ``(UK)``) are suppressed — the user
+        has already organized them.
 
     Cross-instance overlap (Radarr + Radarr4K) is intentional quality
     coverage and is not reported.

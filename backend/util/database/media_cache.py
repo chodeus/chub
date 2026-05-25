@@ -930,17 +930,20 @@ class MediaCache(DatabaseBase):
         )
 
     def find_folder_collisions(self, asset_type: Optional[str] = None) -> list:
-        """Find rows whose folders look like the same show but resolve
-        to different external IDs.
+        """Find rows whose folders look like the same item but have
+        ambiguous external IDs.
 
-        Two folders within the same instance count as a collision when
-        their basename normalizes to the same key but their external IDs
-        (tvdb / tmdb / imdb) differ. The classic case is international
-        variants like ``Destination X (US)`` vs ``Destination X (UK)`` —
-        same normalized title, different shows.
+        Two rows within the same instance share a normalized title but
+        differ in external IDs (tvdb / tmdb / imdb / musicbrainz). We
+        only surface a collision when at least one row is missing an
+        external ID — that's when the user genuinely can't tell the
+        rows apart from metadata alone.
 
-        These are informational, NOT genuine duplicates: the user should
-        review them before resolving.
+        When every row has a distinct external ID of its own, the items
+        are unambiguously different (e.g. ``Destination X (US)`` vs
+        ``Destination X (UK)``, or REZZ the EDM producer vs REZZ the
+        pop artist). Those are suppressed; the user has already
+        organized them.
         """
         where = ""
         params: tuple = ()
@@ -979,30 +982,34 @@ class MediaCache(DatabaseBase):
             if len(members) < 2:
                 continue
 
-            # Artists are uniquely identified by MusicBrainz ID. When every
-            # member has a distinct MBID, they're deliberately different
-            # artists that happen to share a name (e.g. REZZ the EDM
-            # producer vs REZZ the pop artist) — not worth surfacing.
-            mbids = [m.get("musicbrainz_id") for m in members]
-            if all(mb for mb in mbids) and len(set(mbids)) == len(mbids):
-                continue
-
-            identities = set()
+            # Best external ID per row, in priority order. None means
+            # the row has no external ID at all.
+            per_row_ids: list = []
             for m in members:
                 mbid = m.get("musicbrainz_id")
                 tvdb = m.get("tvdb_id")
                 tmdb = m.get("tmdb_id")
                 imdb = m.get("imdb_id")
                 if mbid:
-                    identities.add(f"mb:{mbid}")
+                    per_row_ids.append(f"mb:{mbid}")
                 elif tvdb is not None:
-                    identities.add(f"tvdb:{tvdb}")
+                    per_row_ids.append(f"tvdb:{tvdb}")
                 elif tmdb is not None:
-                    identities.add(f"tmdb:{tmdb}")
+                    per_row_ids.append(f"tmdb:{tmdb}")
                 elif imdb is not None:
-                    identities.add(f"imdb:{imdb}")
+                    per_row_ids.append(f"imdb:{imdb}")
                 else:
-                    identities.add(f"row:{m.get('id')}")
+                    per_row_ids.append(None)
+
+            # Every row has a real external ID and they're all distinct
+            # → unambiguously different items the user has already
+            # organized (Destination X US/UK, REZZ EDM/pop, etc.).
+            if all(per_row_ids) and len(set(per_row_ids)) == len(per_row_ids):
+                continue
+
+            identities = set()
+            for i, m in enumerate(members):
+                identities.add(per_row_ids[i] or f"row:{m.get('id')}")
 
             # All members share the same external ID → it's a genuine
             # duplicate, handled by find_duplicates(). Skip here.
