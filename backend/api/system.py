@@ -29,11 +29,7 @@ from backend.util.config import (
     save_config,
 )
 from backend.util.database import ChubDB
-from backend.util.path_safety import (
-    get_allowed_roots,
-    get_browse_roots,
-    is_path_allowed,
-)
+from backend.util.path_safety import get_browse_roots, is_path_allowed
 from backend.util.version import get_version
 
 router = APIRouter(
