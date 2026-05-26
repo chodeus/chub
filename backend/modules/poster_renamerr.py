@@ -76,6 +76,12 @@ class PosterRenamerr(ChubModule):
                 os.link(file, new_file_path)
             elif action_type == "symlink":
                 os.symlink(file, new_file_path)
+            # Per-file action trace — visible when log_level: debug.
+            # Single source of truth so every call site (rename_file,
+            # future orphan cleanup, etc.) logs the same shape.
+            self.logger.debug(
+                f"[{action_type.upper()}] {new_file_path} ← {file}"
+            )
             return True
         except OSError as e:
             self.logger.error(f"Error {action_type}ing file: {e}")
@@ -382,9 +388,6 @@ class PosterRenamerr(ChubModule):
                             f"File operation failed for {file} -> {new_file_path}"
                         )
                         return None
-                    self.logger.debug(
-                        f"[{config.action_type.upper()}] {new_file_path} ← {file}"
-                    )
         else:
             if file_name != new_file_name:
                 messages.append(f"{file_name} -renamed-> {new_file_name}")
@@ -400,9 +403,6 @@ class PosterRenamerr(ChubModule):
                         f"File operation failed for {file} -> {new_file_path}"
                     )
                     return None
-                self.logger.debug(
-                    f"[{config.action_type.upper()}] {new_file_path} ← {file}"
-                )
 
         if messages or discord_message:
             return {

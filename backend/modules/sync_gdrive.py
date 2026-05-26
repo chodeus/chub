@@ -61,6 +61,23 @@ def _empty_counters() -> dict:
     return {"copied": 0, "deleted": 0, "updated": 0, "renamed": 0}
 
 
+def _format_counter_summary(counters: dict) -> str:
+    """
+    One-line user-facing summary of rclone action counters.
+
+    Returns a comma-joined "N action" list with zero-count actions
+    elided, or "already in sync, no changes" when nothing moved.
+
+    Extracted so the post-sync summary log can be tested without
+    spinning up the rclone subprocess.
+    """
+    if not counters or not any(counters.values()):
+        return "already in sync, no changes"
+    return ", ".join(
+        f"{n} {action}" for action, n in sorted(counters.items()) if n
+    )
+
+
 class SyncGDrive(ChubModule):
     def __init__(self, logger: Optional[Logger] = None) -> None:
         super().__init__(logger=logger)
@@ -313,15 +330,7 @@ class SyncGDrive(ChubModule):
                 # Per-folder action summary — visible even when verbose is off,
                 # so users can see "this run did X copies and Y deletes"
                 # without scrolling through the rclone per-file noise.
-                if any(counters.values()):
-                    summary = ", ".join(
-                        f"{n} {action}"
-                        for action, n in sorted(counters.items())
-                        if n
-                    )
-                    self.logger.info(f"   → {summary}")
-                else:
-                    self.logger.info("   → already in sync, no changes")
+                self.logger.info(f"   → {_format_counter_summary(counters)}")
                 guarded_progress_cb(95)
                 return True, counters
             else:
