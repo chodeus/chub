@@ -155,6 +155,59 @@ def test_is_kometa_overlay_false_for_unreadable_file(tmp_path):
     assert PosterCleanarr._is_kometa_overlay(str(p)) is False
 
 
+class _CapturingLogger(StubLogger):
+    """StubLogger variant that records info() calls for assertion."""
+
+    def __init__(self):
+        self.info_lines = []
+
+    def info(self, *a, **k):
+        if a:
+            self.info_lines.append(str(a[0]))
+
+
+def test_execute_mode_remove_logs_per_file_at_info(tmp_path):
+    """Destructive bloat removal must surface each file at INFO so users
+    can audit what was deleted without flipping log_level: debug. Pins
+    the [REMOVE] format and the per-pass summary line."""
+    overlay_a = tmp_path / "alpha.png"
+    overlay_b = tmp_path / "beta.png"
+    _write_image(str(overlay_a), exif_overlay=False)
+    _write_image(str(overlay_b), exif_overlay=False)
+    bloat = [
+        {"path": str(overlay_a), "size": os.path.getsize(overlay_a), "name": "alpha"},
+        {"path": str(overlay_b), "size": os.path.getsize(overlay_b), "name": "beta"},
+    ]
+    module = make_module(overlays_only=False)
+    module.logger = _CapturingLogger()
+    result = module._execute_mode(bloat, mode="remove", metadata_dir=str(tmp_path), restore_dir="")
+
+    info = module.logger.info_lines
+    # Each removed file logged at INFO with the [REMOVE] tag
+    assert any("[REMOVE]" in line and "alpha.png" in line for line in info), info
+    assert any("[REMOVE]" in line and "beta.png" in line for line in info), info
+    # Final summary line
+    assert any("bloat scan" in line and "2 remove" in line for line in info), info
+    # Files actually gone (behaviour preserved)
+    assert result["count"] == 2
+    assert not overlay_a.exists()
+    assert not overlay_b.exists()
+
+
+def test_execute_mode_report_does_not_emit_destructive_log(tmp_path):
+    """Report mode is non-destructive — the per-file action log must NOT
+    fire, even though the summary may still appear."""
+    f = tmp_path / "x.png"
+    _write_image(str(f), exif_overlay=False)
+    bloat = [{"path": str(f), "size": os.path.getsize(f), "name": "x"}]
+    module = make_module(overlays_only=False)
+    module.logger = _CapturingLogger()
+    module._execute_mode(bloat, mode="report", metadata_dir=str(tmp_path), restore_dir="")
+    assert not any("[REMOVE]" in line for line in module.logger.info_lines)
+    # File still exists
+    assert f.exists()
+
+
 def test_execute_mode_overlays_only_keeps_custom_uploads(tmp_path):
     overlay = tmp_path / "kometa_overlay"
     custom = tmp_path / "user_upload"

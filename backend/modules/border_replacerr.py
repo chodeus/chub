@@ -185,6 +185,7 @@ class BorderReplacerr(ChubModule):
                     f"+ {os.path.basename(border_image_path)} → "
                     f"{os.path.basename(renamed_file)}"
                 )
+                self.logger.debug(f"[BORDER_COMPOSITED] {renamed_file}")
                 return True
             os.remove(tmp_path)
             self.logger.debug(
@@ -226,6 +227,7 @@ class BorderReplacerr(ChubModule):
                     self.logger.debug(
                         f"Replaced border: {os.path.basename(original_file)} → {os.path.basename(renamed_file)}"
                     )
+                    self.logger.debug(f"[BORDER_REPLACED] {renamed_file}")
                     return True
                 else:
                     os.remove(tmp_path)
@@ -263,6 +265,7 @@ class BorderReplacerr(ChubModule):
                     self.logger.debug(
                         f"Removed border: {os.path.basename(original_file)} → {os.path.basename(renamed_file)}"
                     )
+                    self.logger.debug(f"[BORDER_REMOVED] {renamed_file}")
                     return True
                 else:
                     os.remove(tmp_path)
@@ -526,6 +529,9 @@ class BorderReplacerr(ChubModule):
                 self.logger.info(
                     f"Border replacerr completed: {processed} processed, {skipped} skipped. No borders changed."
                 )
+            self.logger.info(
+                f"   → {processed} processed, {replaced} replaced, {removed} removed, {skipped} skipped"
+            )
             self.logger.info("")
 
             db.holiday.set_status(active_holiday)

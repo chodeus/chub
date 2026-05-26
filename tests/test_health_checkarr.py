@@ -130,6 +130,58 @@ def test_run_deletes_radarr_items_matching_health(monkeypatch):
     assert sorted(fake.deleted) == [1, 3]
 
 
+def test_run_logs_per_deletion_at_info(monkeypatch):
+    """Destructive deletes must be visible at INFO so users see what was
+    removed without flipping log_level: debug. Pins the [DELETED] format."""
+    fake = FakeARR(
+        health=[{"source": "RemovedMovieCheck", "message": "tmdb 100"}],
+        media=[{"tmdb_id": 100, "title": "Inception", "media_id": 42}],
+    )
+    module = make_module(dry_run=False)
+    _patch_arr(monkeypatch, fake)
+    module.run()
+    info = module.logger.info_lines
+    # The exact title + id must appear in an INFO line tagged [DELETED].
+    assert any(
+        "[DELETED]" in line and "Inception" in line and "id=42" in line
+        for line in info
+    ), info
+    # And the per-instance summary line fires.
+    assert any("→ 1 deleted from" in line for line in info), info
+
+
+def test_run_logs_per_deletion_in_dry_run(monkeypatch):
+    """Dry-run must also emit visible logs so users can audit what
+    WOULD happen — tagged differently so it's never confused with
+    a real delete."""
+    fake = FakeARR(
+        health=[{"source": "RemovedMovieCheck", "message": "tmdb 100"}],
+        media=[{"tmdb_id": 100, "title": "Inception", "media_id": 42}],
+    )
+    module = make_module(dry_run=True)
+    _patch_arr(monkeypatch, fake)
+    module.run()
+    info = module.logger.info_lines
+    assert any("[WOULD DELETE]" in line and "Inception" in line for line in info), info
+    assert any("would be deleted from" in line for line in info), info
+    # And the actual delete didn't fire.
+    assert fake.deleted == []
+
+
+def test_run_summary_says_no_deletions_when_nothing_matches(monkeypatch):
+    fake = FakeARR(
+        health=[{"source": "RemovedMovieCheck", "message": "tmdb 99"}],
+        media=[{"tmdb_id": 100, "title": "Keep", "media_id": 1}],
+    )
+    module = make_module(dry_run=False)
+    _patch_arr(monkeypatch, fake)
+    module.run()
+    # Health item didn't match any media (different tmdb id) so no deletions.
+    # Either: a "no deletions" summary fires, OR the deletion loop never ran.
+    # Both are acceptable — assert no false [DELETED] line slipped through.
+    assert not any("[DELETED]" in line for line in module.logger.info_lines)
+
+
 def test_run_respects_dry_run(monkeypatch):
     fake = FakeARR(
         health=[{"source": "RemovedMovieCheck", "message": "tmdb 100"}],

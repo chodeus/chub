@@ -161,6 +161,8 @@ class HealthCheckarr(ChubModule):
                             f"{action} {len(output)} {instance_type} items from "
                             f"{app.instance_name or instance_name}"
                         )
+                        deleted_count = 0
+                        resolved_instance_name = app.instance_name or instance_name
                         with progress(
                             output,
                             desc=progress_desc,
@@ -178,18 +180,33 @@ class HealthCheckarr(ChubModule):
                                         "missing ARR media id."
                                     )
                                     continue
+                                title = item.get("title", "Untitled")
                                 if self.config.dry_run:
-                                    self.logger.debug(
-                                        f"{item['title']} would have been deleted "
-                                        f"with id: {media_id} and tvdb/tmdb id: "
-                                        f"{item.get('db_id', '')}"
+                                    self.logger.info(
+                                        f"[WOULD DELETE] {instance_type} "
+                                        f"'{title}' (id={media_id}) from "
+                                        f"{resolved_instance_name}"
                                     )
+                                    deleted_count += 1
                                 else:
                                     app.delete_media(media_id)
-                                    self.logger.debug(
-                                        f"{item['title']} deleted with id: {media_id} "
-                                        f"and tvdb/tmdb id: {item.get('db_id', '')}"
+                                    self.logger.info(
+                                        f"[DELETED] {instance_type} "
+                                        f"'{title}' (id={media_id}) from "
+                                        f"{resolved_instance_name}"
                                     )
+                                    deleted_count += 1
+
+                        if deleted_count:
+                            verb = "would be deleted" if self.config.dry_run else "deleted"
+                            self.logger.info(
+                                f"   → {deleted_count} {verb} from "
+                                f"{resolved_instance_name}"
+                            )
+                        else:
+                            self.logger.info(
+                                f"   → no deletions from {resolved_instance_name}"
+                            )
 
                         # Send notification with deleted/flagged items.
                         manager = NotificationManager(

@@ -312,7 +312,9 @@ class Upgradinatorr(ChubModule):
             for season in item["seasons"]:
                 if season["monitored"]:
                     season_number = season["season_number"]
-                    self.logger.debug(f"  [SEASON] {season_number}: Searching...")
+                    self.logger.debug(
+                        f"[SEARCH] {item['title']} S{season_number}"
+                    )
                     before_downloads = self._get_grabbed_downloads(
                         app, item["media_id"], "sonarr", season_number
                     )
@@ -341,7 +343,7 @@ class Upgradinatorr(ChubModule):
                 search_count += 1
                 if all_successful:
                     self.logger.debug(
-                        f"  [TAG] Adding tag {checked_tag_id} to media ID: {item['media_id']}"
+                        f"[TAG] {item['title']} += {checked_tag_id}"
                     )
                     app.add_tags(item["media_id"], checked_tag_id)
                     if progress_db is not None:
@@ -372,7 +374,7 @@ class Upgradinatorr(ChubModule):
         if not remaining:
             # All monitored seasons searched in earlier runs — finalize.
             self.logger.debug(
-                f"  [TAG] All monitored seasons already processed; tagging media ID: {item['media_id']}"
+                f"[TAG] {item['title']} += {checked_tag_id} (all seasons already processed)"
             )
             app.add_tags(item["media_id"], checked_tag_id)
             if progress_db is not None:
@@ -384,6 +386,7 @@ class Upgradinatorr(ChubModule):
             self.logger.info(
                 f"  [SEASON] {item['title']} S{season_number}: Searching..."
             )
+            self.logger.debug(f"[SEARCH] {item['title']} S{season_number}")
             before_downloads = self._get_grabbed_downloads(
                 app, item["media_id"], "sonarr", season_number
             )
@@ -424,7 +427,7 @@ class Upgradinatorr(ChubModule):
 
         # Finished every monitored season this rotation — tag and clear progress.
         self.logger.debug(
-            f"  [TAG] All monitored seasons searched; tagging media ID: {item['media_id']}"
+            f"[TAG] {item['title']} += {checked_tag_id} (all seasons searched)"
         )
         app.add_tags(item["media_id"], checked_tag_id)
         if progress_db is not None:
@@ -457,7 +460,9 @@ class Upgradinatorr(ChubModule):
                         "album_title", f"Album #{album.get('season_number', '?')}"
                     )
                     if album_id:
-                        self.logger.debug(f"  [ALBUM] {album_title}: Searching...")
+                        self.logger.debug(
+                            f"[SEARCH] {item['title']} — {album_title}"
+                        )
                         before_downloads = self._get_grabbed_downloads(
                             app, item["media_id"], "lidarr", album_id=album_id
                         )
@@ -488,7 +493,7 @@ class Upgradinatorr(ChubModule):
                 search_count += 1
                 if all_successful:
                     self.logger.debug(
-                        f"  [TAG] Adding tag {checked_tag_id} to media ID: {item['media_id']}"
+                        f"[TAG] {item['title']} += {checked_tag_id}"
                     )
                     app.add_tags(item["media_id"], checked_tag_id)
                     if progress_db is not None:
@@ -513,7 +518,7 @@ class Upgradinatorr(ChubModule):
             return search_count, False
         if not remaining:
             self.logger.debug(
-                f"  [TAG] All monitored albums already processed; tagging media ID: {item['media_id']}"
+                f"[TAG] {item['title']} += {checked_tag_id} (all albums already processed)"
             )
             app.add_tags(item["media_id"], checked_tag_id)
             if progress_db is not None:
@@ -526,6 +531,7 @@ class Upgradinatorr(ChubModule):
                 "album_title", f"Album #{album.get('season_number', '?')}"
             )
             self.logger.info(f"  [ALBUM] {item['title']} — {album_title}: Searching...")
+            self.logger.debug(f"[SEARCH] {item['title']} — {album_title}")
             before_downloads = self._get_grabbed_downloads(
                 app, item["media_id"], "lidarr", album_id=album_id
             )
@@ -563,7 +569,7 @@ class Upgradinatorr(ChubModule):
             return search_count, False
 
         self.logger.debug(
-            f"  [TAG] All monitored albums searched; tagging media ID: {item['media_id']}"
+            f"[TAG] {item['title']} += {checked_tag_id} (all albums searched)"
         )
         app.add_tags(item["media_id"], checked_tag_id)
         if progress_db is not None:
@@ -936,9 +942,7 @@ class Upgradinatorr(ChubModule):
 
                     if item["seasons"] is None:
                         # Movies (Radarr) or artists without album data
-                        self.logger.debug(
-                            f"Searching media without seasons for media ID: {item['media_id']}"
-                        )
+                        self.logger.debug(f"[SEARCH] {item['title']}")
                         before_downloads = self._get_grabbed_downloads(
                             app, item["media_id"], instance_type
                         )
@@ -958,7 +962,7 @@ class Upgradinatorr(ChubModule):
                                 item["media_id"],
                             )
                             self.logger.debug(
-                                f"  [TAG] Adding tag {checked_tag_id} to media ID: {item['media_id']}"
+                                f"[TAG] {item['title']} += {checked_tag_id}"
                             )
                             app.add_tags(item["media_id"], checked_tag_id)
                         else:
@@ -1055,6 +1059,13 @@ class Upgradinatorr(ChubModule):
                     }
                 )
             output_dict.update(search_stats)
+            tagged_in_run = len(searched_items) - sum(
+                1 for v in failed_searches.values() if v
+            )
+            self.logger.info(
+                f"   → {search_stats['searches_attempted']} searched, "
+                f"{max(tagged_in_run, 0)} tagged"
+            )
         else:
             for item in filtered_media_dict:
                 output_dict["data"].append(
