@@ -2,6 +2,18 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.12.0](https://github.com/chodeus/chub/compare/v2.11.2...v2.12.0) (2026-05-26)
+
+
+### Features
+
+* **logging:** per-action lines for sync_gdrive + poster_renamerr ([9d9775f](https://github.com/chodeus/chub/commit/9d9775fe7e798c912094879b19aacb912b2862de))
+
+
+### Bug Fixes
+
+* **dir-picker:** wire onChange in DirField; skip cache after Create ([1d4b793](https://github.com/chodeus/chub/commit/1d4b7938d55b7ba4c651ff4ae2ef456be4efd41d))
+
 ## [2.11.2](https://github.com/chodeus/chub/compare/v2.11.1...v2.11.2) (2026-05-26)
 
 
