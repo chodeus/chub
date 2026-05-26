@@ -201,20 +201,11 @@ export const PresetsField = React.memo(
         const handleChange = useCallback(
             e => {
                 const selectedValue = e.target.value;
-                console.log('[PresetsField] handleChange called:', {
-                    selectedValue,
-                    presetType,
-                    targetFields,
-                    onPresetSelected: !!onPresetSelected,
-                    presetsLength: presets.length,
-                    field: field.key,
-                });
 
                 onChange(selectedValue);
 
                 if (onPresetSelected && selectedValue) {
                     const selectedPreset = presets.find(p => p[identifierField] === selectedValue);
-                    console.log('[PresetsField] selectedPreset found:', selectedPreset);
 
                     if (selectedPreset && targetFields.length > 0) {
                         // Build preset data mapping based on targetFields configuration
@@ -230,36 +221,11 @@ export const PresetsField = React.memo(
                         // Always include the current field's value
                         presetFieldUpdates[field.key] = selectedValue;
 
-                        console.log(
-                            '[PresetsField] calling onPresetSelected with:',
-                            presetFieldUpdates
-                        );
                         onPresetSelected(presetFieldUpdates);
-                    } else {
-                        console.log('[PresetsField] No targetFields or selectedPreset not found:', {
-                            selectedPreset: !!selectedPreset,
-                            targetFieldsLength: targetFields.length,
-                        });
                     }
-                } else {
-                    console.log(
-                        '[PresetsField] onPresetSelected not available or no selectedValue:',
-                        {
-                            onPresetSelected: !!onPresetSelected,
-                            selectedValue,
-                        }
-                    );
                 }
             },
-            [
-                onChange,
-                onPresetSelected,
-                presets,
-                field.key,
-                identifierField,
-                targetFields,
-                presetType,
-            ]
+            [onChange, onPresetSelected, presets, field.key, identifierField, targetFields]
         );
 
         const inputId = `field-${field.key}`;

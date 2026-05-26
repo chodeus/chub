@@ -8,37 +8,23 @@
  */
 const CONDITION_TYPES = {
     instance_type_equals: (selectedValue, targetValue, apiData) => {
-        console.log('[conditionalFields] Evaluating instance_type_equals:', {
-            selectedValue,
-            targetValue,
-            instanceType: getInstanceType(selectedValue, apiData),
-        });
         const instanceType = getInstanceType(selectedValue, apiData);
         return instanceType === targetValue;
     },
     instance_type_in: (selectedValue, targetValues, apiData) => {
         const instanceType = getInstanceType(selectedValue, apiData);
-        console.log('[conditionalFields] Evaluating instance_type_in:', {
-            selectedValue,
-            targetValues,
-            instanceType,
-        });
         return Array.isArray(targetValues) && targetValues.includes(instanceType);
     },
     equals: (selectedValue, targetValue) => {
-        console.log('[conditionalFields] Evaluating equals:', { selectedValue, targetValue });
         return selectedValue === targetValue;
     },
     not_equals: (selectedValue, targetValue) => {
-        console.log('[conditionalFields] Evaluating not_equals:', { selectedValue, targetValue });
         return selectedValue !== targetValue;
     },
     in: (selectedValue, targetValues) => {
-        console.log('[conditionalFields] Evaluating in:', { selectedValue, targetValues });
         return Array.isArray(targetValues) && targetValues.includes(selectedValue);
     },
     not_in: (selectedValue, targetValues) => {
-        console.log('[conditionalFields] Evaluating not_in:', { selectedValue, targetValues });
         return Array.isArray(targetValues) && !targetValues.includes(selectedValue);
     },
     is_empty: selectedValue =>
@@ -61,35 +47,15 @@ const CONDITION_TYPES = {
  * @returns {boolean} - Whether field should be shown
  */
 export const shouldShowField = (field, formData, apiData = {}) => {
-    console.log('[conditionalFields] Evaluating field visibility:', {
-        fieldKey: field.key,
-        fieldType: field.type,
-        hasConditional: !!field.conditional,
-        hasLegacyCondition: !!field.show_if_instance_type,
-        formData: Object.keys(formData || {}),
-        apiDataKeys: Object.keys(apiData),
-    });
-
     // Handle new conditional format
     if (field.conditional) {
         const { field: dependentField, condition, value, api_lookup } = field.conditional;
         const selectedValue = formData[dependentField];
         const lookupData = api_lookup ? apiData[api_lookup] : null;
 
-        console.log('[conditionalFields] Processing conditional field:', {
-            dependentField,
-            condition,
-            value,
-            selectedValue,
-            api_lookup,
-            hasLookupData: !!lookupData,
-        });
-
         const evaluator = CONDITION_TYPES[condition];
         if (evaluator) {
-            const result = evaluator(selectedValue, value, lookupData);
-            console.log('[conditionalFields] Conditional evaluation result:', result);
-            return result;
+            return evaluator(selectedValue, value, lookupData);
         } else {
             console.warn('[conditionalFields] Unknown condition type:', condition);
             return true;
@@ -102,20 +68,10 @@ export const shouldShowField = (field, formData, apiData = {}) => {
         const selectedInstance = formData[instanceField];
         const instanceType = getInstanceType(selectedInstance, apiData.instances);
 
-        console.log('[conditionalFields] Processing legacy show_if_instance_type:', {
-            instanceField,
-            selectedInstance,
-            instanceType,
-            targetType: field.show_if_instance_type,
-        });
-
-        const result = instanceType === field.show_if_instance_type;
-        console.log('[conditionalFields] Legacy evaluation result:', result);
-        return result;
+        return instanceType === field.show_if_instance_type;
     }
 
     // Show by default if no conditions
-    console.log('[conditionalFields] No conditions found, showing field by default');
     return true;
 };
 
@@ -126,30 +82,18 @@ export const shouldShowField = (field, formData, apiData = {}) => {
  * @returns {string|null} - Instance type (radarr, sonarr, plex) or null
  */
 export const getInstanceType = (instanceName, instancesData) => {
-    console.log('[conditionalFields] Looking up instance type:', {
-        instanceName,
-        hasInstancesData: !!instancesData,
-        instancesDataKeys: instancesData ? Object.keys(instancesData) : [],
-    });
-
     if (!instanceName || !instancesData) {
-        console.log('[conditionalFields] Missing instanceName or instancesData');
         return null;
     }
 
     for (const [serviceType, instances] of Object.entries(instancesData)) {
         if (instances && typeof instances === 'object') {
             if (Object.hasOwn(instances, instanceName)) {
-                console.log('[conditionalFields] Found instance type:', {
-                    instanceName,
-                    serviceType,
-                });
                 return serviceType;
             }
         }
     }
 
-    console.log('[conditionalFields] Instance type not found for:', instanceName);
     return null;
 };
 
@@ -276,13 +220,4 @@ export const enhancedHumanize = text => {
             }
         })
         .join(' ');
-};
-
-/**
- * Debug helper to log conditional field evaluation context
- * @param {string} context - Context description
- * @param {Object} data - Data to log
- */
-export const logConditionalContext = (context, data) => {
-    console.log(`[conditionalFields] ${context}:`, data);
 };
