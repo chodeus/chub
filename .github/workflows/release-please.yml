@@ -21,6 +21,11 @@ jobs:
     permissions:
       contents: read
       packages: write
+    # Shares a concurrency group with codeql-lint.yml's docker-push so the two
+    # jobs serialize on the :latest tag push instead of racing on GHCR auth.
+    concurrency:
+      group: ghcr-push-${{ github.ref }}
+      cancel-in-progress: false
     steps:
       - name: Checkout at new tag
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
