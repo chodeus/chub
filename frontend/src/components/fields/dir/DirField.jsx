@@ -23,7 +23,14 @@ import { FieldRegistry } from '../FieldRegistry';
  * @param {string} props.errorMessage - Error message to display
  */
 export const DirField = React.memo(
-    ({ field, value, disabled = false, highlightInvalid = false, errorMessage = null }) => {
+    ({
+        field,
+        value,
+        onChange,
+        disabled = false,
+        highlightInvalid = false,
+        errorMessage = null,
+    }) => {
         const [modalOpen, setModalOpen] = useState(false);
 
         const handleInputClick = useCallback(() => {
@@ -31,6 +38,17 @@ export const DirField = React.memo(
                 setModalOpen(true);
             }
         }, [disabled]);
+
+        // Called by DirPickerField when the user clicks "Select". Propagate
+        // the chosen path to the parent form and dismiss the modal — without
+        // this wiring the picker's Select button is a no-op.
+        const handlePickerChange = useCallback(
+            newPath => {
+                if (onChange) onChange(newPath);
+                setModalOpen(false);
+            },
+            [onChange]
+        );
 
         const inputId = `field-${field.key}`;
 
@@ -76,7 +94,7 @@ export const DirField = React.memo(
                                         description: 'Browse and select a directory',
                                     }}
                                     value={value}
-                                    onChange={() => {}}
+                                    onChange={handlePickerChange}
                                 />
                             )}
                         </div>

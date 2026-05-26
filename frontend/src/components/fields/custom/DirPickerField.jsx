@@ -38,11 +38,18 @@ export const DirPickerField = React.memo(({ field, value, onChange, disabled = f
     // past this; changing the dropdown jumps to a different root.
     const [activeRoot, setActiveRoot] = useState(null);
 
-    const loadDirectory = useCallback(async path => {
+    const loadDirectory = useCallback(async (path, { skipCache = false } = {}) => {
         setLoading(true);
         setError(null);
         try {
-            const result = await systemAPI.listDirectory(path);
+            // listDirectory caches results for 5 minutes by default. That's
+            // fine for normal browsing but breaks the post-Create refresh —
+            // the new folder won't appear until the cache expires. Callers
+            // mutating the filesystem must pass skipCache: true.
+            const result = await systemAPI.listDirectory(
+                path,
+                skipCache ? { useCache: false } : {}
+            );
             const dirs = result?.data?.directories || result?.data || [];
             setEntries(Array.isArray(dirs) ? dirs : []);
             setCurrentPath(path);
@@ -128,7 +135,10 @@ export const DirPickerField = React.memo(({ field, value, onChange, disabled = f
                     : `${currentPath}/${newDirName.trim()}`;
             await systemAPI.createDirectory(fullPath);
             setNewDirName('');
-            loadDirectory(currentPath);
+            // Skip the listDirectory cache so the just-created folder is
+            // visible on the refresh — otherwise the user sees the old
+            // listing for up to 5 minutes.
+            loadDirectory(currentPath, { skipCache: true });
         } catch {
             setError('Failed to create directory');
         } finally {
