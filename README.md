@@ -72,6 +72,8 @@ docker compose up -d
 
 Open <http://localhost:8000>, create your admin user, connect your Radarr / Sonarr / Plex under **Settings → Instances**, and enable the modules you want under **Settings → Modules**.
 
+> **Rootless alternative.** Prefer not to let the container start as root? Replace the `PUID`/`PGID` env vars with `user: "99:100"` (or whatever uid:gid owns your appdata) and pre-`chown` the host config dir to match. The container then never runs as root — slightly more secure, but you own the host-side permissions. PUID/PGID is the easier default; `--user` is the hardened option.
+
 Already have a `config.yml` from an older YAML-based version of this tool? Drop it into the mounted config dir before first launch — CHUB detects the older shape, preserves the original as a timestamped backup, and migrates the file in place. Details: **[Wiki → Configuration → Auto-migration](https://github.com/chodeus/chub/wiki/Configuration#-auto-migration-from-older-config-formats)**.
 
 Full walk-through: **[Wiki → Installation](https://github.com/chodeus/chub/wiki/Installation)**.
@@ -90,7 +92,20 @@ Single-command Docker, Unraid, and bare-metal options: **[Wiki → Installation]
 2. **If you want remote access, put CHUB behind a reverse proxy with TLS.** Add a second auth layer in front (Authelia, Authentik, Cloudflare Access). CHUB has built-in login and rate limiting, but no WAF or DDoS protection — it isn't meant to face the open internet alone.
 3. **Set a webhook secret if webhooks leave your LAN.** Configure `general.webhook_secret` in **Settings → General**. Any inbound Sonarr/Radarr/Tautulli webhook must then include it. Without it, webhook URLs are unauthenticated — fine inside a LAN, not fine on the public internet. Wiring a webhook into Sonarr/Radarr is documented in the [Webhooks wiki page](https://github.com/chodeus/chub/wiki/Webhooks).
 4. **Pin the image tag for production.** Use a specific digest or date tag instead of `:latest` if you care about reproducible deploys.
-5. **Report vulnerabilities privately.** See [SECURITY.md](SECURITY.md) for the disclosure process.
+5. **Drop capabilities to harden the root window.** CHUB's entrypoint briefly runs as root to apply `PUID`/`PGID` before dropping to an unprivileged user. You can strip every capability except the four it actually uses for that handoff — the container then has no `NET_RAW`, `SYS_ADMIN`, mount, or module-loading powers even during init.
+
+   ```yaml
+   services:
+     chub:
+       # ...
+       cap_drop: [ALL]
+       cap_add: [CHOWN, SETUID, SETGID, FOWNER]
+       security_opt:
+         - no-new-privileges:true
+   ```
+
+   Or, for a fully rootless setup, replace `PUID`/`PGID` with `user: "99:100"` (or whatever uid:gid owns your appdata) and `chown` the host config dir to match — see the Quickstart note. Either approach removes meaningful attack surface; cap-drop is easier, `--user` is stricter.
+6. **Report vulnerabilities privately.** See [SECURITY.md](SECURITY.md) for the disclosure process.
 
 ---
 

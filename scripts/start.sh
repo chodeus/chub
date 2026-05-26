@@ -8,6 +8,14 @@ PGID=${PGID:-99}
 UMASK=${UMASK:-002}
 BRANCH=${BRANCH:-master}
 
+# When started rootless (e.g. `docker run --user 99:100`), PUID/PGID env
+# vars are ignored — we can't usermod without root. Show the real uid/gid
+# in the banner so the operator sees what's actually running.
+if [ "$(id -u)" != "0" ]; then
+  PUID=$(id -u)
+  PGID=$(id -g)
+fi
+
 export RCLONE_CONFIG="${CONFIG_DIR}/rclone/rclone.conf"
 
 VERSION=$(cd "$(dirname "$0")/.." && python3 -c "from backend.util.version import get_version; print(get_version())")
@@ -51,7 +59,10 @@ if [ "$(id -u)" = "0" ]; then
   fi
   chmod -R 777 "${CONFIG_DIR}"
   [ -f "${CONFIG_DIR}/config.yml" ] && chmod 660 "${CONFIG_DIR}/config.yml"
-  exec su -s /bin/bash -c "python3 main.py" dockeruser
+  # runuser instead of su: skips PAM, so the cap set documented in the
+  # README (CHOWN/SETUID/SETGID/FOWNER) is sufficient — no need to grant
+  # AUDIT_WRITE or DAC_OVERRIDE just for the user switch.
+  exec runuser -s /bin/bash -c "python3 main.py" dockeruser
 else
   exec python3 main.py
 fi

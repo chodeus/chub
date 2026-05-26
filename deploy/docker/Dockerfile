@@ -111,10 +111,14 @@ RUN mkdir -p /app/public && \
     if [ -d frontend/dist/img ]; then cp -r frontend/dist/img /app/public/img; fi && \
     if [ -d frontend/dist/posters ]; then cp -r frontend/dist/posters /app/public/posters; fi
 
-# Create user/group for PUID/PGID support via start.sh
+# Create user/group for PUID/PGID support via start.sh.
+# Also make /app world-readable + traversable so the container can be run
+# rootless via `docker run --user uid:gid` with any uid — start.sh's chown
+# only runs when started as root (the PUID/PGID path).
 RUN groupadd -g 99 dockeruser && \
     useradd -u 100 -g 99 dockeruser && \
-    chown -R 100:99 /app
+    chown -R 100:99 /app && \
+    chmod -R a+rX /app
 
 EXPOSE 8000
 
