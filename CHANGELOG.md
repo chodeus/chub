@@ -2,6 +2,15 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.11.1](https://github.com/chodeus/chub/compare/v2.11.0...v2.11.1) (2026-05-26)
+
+
+### Bug Fixes
+
+* **dir-picker:** disable Select during initial load or empty path ([cea5b27](https://github.com/chodeus/chub/commit/cea5b277a824c050319e1e6cf49a12e3012067a9))
+* **sync_gdrive:** expose container bind mounts; fallback to upstream presets ([7a9118e](https://github.com/chodeus/chub/commit/7a9118ec65eea1429537c5da3b45900fcd935be7))
+* **sync_gdrive:** route internal preset fetch through apiCore for auth ([6d14c60](https://github.com/chodeus/chub/commit/6d14c6005eb82008cd9da9d1aab12eddd296f1f0))
+
 ## [2.11.0](https://github.com/chodeus/chub/compare/v2.10.0...v2.11.0) (2026-05-25)
 
 
