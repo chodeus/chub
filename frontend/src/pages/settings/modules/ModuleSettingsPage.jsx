@@ -316,14 +316,6 @@ const ModuleSettingsContent = () => {
                                             const moduleData = formData[module.key] || {};
                                             let fieldValue = moduleData[field.key];
 
-                                            // DEBUG: Detailed logging for sync_gdrive
-                                            if (
-                                                module.key === 'sync_gdrive' &&
-                                                field.key === 'log_level'
-                                            ) {
-                                                // Debug removed
-                                            }
-
                                             // Handle special case for nested values (like token)
                                             if (fieldValue === undefined) {
                                                 fieldValue = field.defaultValue;

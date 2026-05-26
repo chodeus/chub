@@ -48,10 +48,9 @@ const FieldRenderer = React.memo(({ field, formData, apiData, disabled }) => {
     // Preset fields need onPresetSelected for multi-field updates
     if (field.type === 'presets') {
         // This will be passed through to the field component
-        additionalProps.onPresetSelected = presetUpdates => {
+        additionalProps.onPresetSelected = () => {
             // NOTE: This requires FormContext to expose a batch update method
             // For now, fields handle this internally via useFormField
-            console.log('[FormRenderer] Preset selected:', presetUpdates);
         };
     }
 

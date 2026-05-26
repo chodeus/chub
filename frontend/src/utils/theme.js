@@ -87,8 +87,6 @@ class ThemeManager {
 
             // Mark as initialized
             this.initialized = true;
-
-            console.log('ThemeManager initialized successfully');
         } catch (error) {
             console.error('Failed to initialize ThemeManager:', error);
         }
@@ -401,8 +399,6 @@ class ThemeManager {
         // Reset state
         this.initialized = false;
         this.currentTheme = null;
-
-        console.log('ThemeManager destroyed');
     }
 }
 
