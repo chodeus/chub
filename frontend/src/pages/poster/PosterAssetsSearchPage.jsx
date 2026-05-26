@@ -1,5 +1,6 @@
-import React, { useState, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import PropTypes from 'prop-types';
+import { useLocation } from 'react-router-dom';
 import { useApiData, useApiMutation } from '../../hooks/useApiData.js';
 import { useModuleExecution } from '../../hooks/useModuleExecution.js';
 import { useToast } from '../../contexts/ToastContext.jsx';
@@ -91,7 +92,25 @@ const PosterAssetsSearchPage = () => {
     // handler is registered only to satisfy the coordinator (which otherwise
     // warns + sets an error state when no handler exists for an active type).
     const postersNoopSearch = useCallback(async () => ({ data: { items: [] } }), []);
-    const { term: search } = useSearch(SEARCH_TYPES.POSTERS, postersNoopSearch);
+    const { term: search, search: triggerSearch } = useSearch(
+        SEARCH_TYPES.POSTERS,
+        postersNoopSearch
+    );
+
+    // Allow deep-linking from other pages (e.g. the unmatched-movies table on
+    // the poster stats page) with `?q=Title`. Seed the coordinator term once on
+    // mount; the ref guard means clearing the field afterwards won't re-fire
+    // from this effect.
+    const location = useLocation();
+    const seededRef = useRef(false);
+    useEffect(() => {
+        if (seededRef.current) return;
+        const q = new URLSearchParams(location.search).get('q');
+        if (q) {
+            seededRef.current = true;
+            triggerSearch(q);
+        }
+    }, [location.search, triggerSearch]);
 
     // Reset to page 1 whenever the search term changes from the top bar.
     // Done at render time (not in an effect) to avoid a cascading render.

@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { useApiData } from '../../hooks/useApiData.js';
 import { useModuleExecution } from '../../hooks/useModuleExecution.js';
 import { useToast } from '../../contexts/ToastContext.jsx';
@@ -117,7 +118,19 @@ const UnmatchedTable = ({ title, items, type }) => {
                         <tbody className="divide-y divide-border">
                             {items.map((item, idx) => (
                                 <tr key={idx} className="bg-surface hover:bg-surface-alt">
-                                    <td className="px-3 py-2 text-primary">{item.title}</td>
+                                    <td className="px-3 py-2 text-primary">
+                                        {type !== 'collection' ? (
+                                            <Link
+                                                to={`/poster/search/assets?q=${encodeURIComponent(item.title)}`}
+                                                className="hover:text-accent hover:underline"
+                                                title="Search synced posters for this title"
+                                            >
+                                                {item.title}
+                                            </Link>
+                                        ) : (
+                                            item.title
+                                        )}
+                                    </td>
                                     <td className="px-3 py-2 text-secondary">{item.year || '—'}</td>
                                     {type === 'series' && (
                                         <td className="px-3 py-2 text-secondary">
