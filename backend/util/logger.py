@@ -223,7 +223,7 @@ class Logger:
         """Setup logging handlers with improved redaction."""
         formatter = SafeFormatter(
             fmt="%(asctime)s %(levelname)s %(source_tag)s[%(filename)s]: %(message)s",
-            datefmt="%m/%d/%y %I:%M:%S %p",
+            datefmt="%d/%m/%Y %H:%M:%S",
         )
         redaction_filter = SmartRedactionFilter()
 
