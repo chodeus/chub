@@ -2,6 +2,7 @@ import React from 'react';
 import { Card } from '../ui/card/Card';
 import { Button } from '../ui/button/Button';
 import { humanize } from '../../utils/tools';
+import { formatDateTime } from '../../utils/datetime';
 
 /**
  * Instance card component that composes Card primitive for instance display
@@ -153,13 +154,13 @@ export const InstanceCard = ({
                                 {instance.enabled === false ? 'Enable' : 'Disable'}
                             </Button>
                         )}
-                        <Button variant="primary" onClick={onTest} disabled={isTesting}>
+                        <Button variant="secondary" onClick={onTest} disabled={isTesting}>
                             {isTesting ? 'Testing...' : 'Test'}
                         </Button>
                         <Button variant="secondary" onClick={onSync} disabled={isSyncing}>
                             {isSyncing ? 'Syncing...' : 'Sync'}
                         </Button>
-                        <Button variant="warning" onClick={onEdit}>
+                        <Button variant="secondary" onClick={onEdit}>
                             Edit
                         </Button>
                         <Button variant="danger" onClick={onDelete}>
@@ -228,5 +229,5 @@ const formatTimestamp = timestamp => {
     if (seconds < 60) return 'Just now';
     if (minutes < 60) return `${minutes} min${minutes > 1 ? 's' : ''} ago`;
     if (hours < 24) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
-    return new Date(timestamp).toLocaleString();
+    return formatDateTime(timestamp);
 };

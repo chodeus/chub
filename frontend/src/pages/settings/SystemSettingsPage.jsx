@@ -6,6 +6,8 @@ import { Button, Card, IconButton, LoadingButton, PageHeader, StatCard } from '.
 import { Modal } from '../../components/modals/Modal';
 import Spinner from '../../components/ui/Spinner.jsx';
 import { StatGrid } from '../../components/statistics';
+import { formatDateTime as fmtDateTime } from '../../utils/datetime.js';
+import { useUIState } from '../../contexts/UIStateContext.jsx';
 
 const formatBytes = bytes => {
     if (!bytes) return '0 B';
@@ -21,17 +23,11 @@ const formatBytes = bytes => {
 
 const formatNumber = n => (n == null ? '-' : n.toLocaleString());
 
-const formatDateTime = ts => {
-    if (!ts) return '-';
-    try {
-        return new Date(ts.replace(' ', 'T') + 'Z').toLocaleString();
-    } catch {
-        return ts;
-    }
-};
+const formatDateTime = ts => (ts ? fmtDateTime(ts) : '-');
 
 export const SystemSettingsPage = () => {
     const toast = useToast();
+    const { isMobile } = useUIState();
     const [confirmClearPoster, setConfirmClearPoster] = useState(false);
     const [vacuuming, setVacuuming] = useState(false);
     const [clearing, setClearing] = useState(false);
@@ -129,28 +125,49 @@ export const SystemSettingsPage = () => {
             <Card variant="bordered">
                 <Card.Header title="Database Statistics" />
                 <Card.Body>
-                    <div className="overflow-x-auto rounded-lg border border-border">
-                        <table className="w-full text-sm">
-                            <thead>
-                                <tr className="bg-surface-alt text-secondary text-left">
-                                    <th className="px-3 py-2 font-medium">Table</th>
-                                    <th className="px-3 py-2 font-medium text-right">Rows</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-border">
-                                {tables.map(t => (
-                                    <tr key={t.name} className="bg-surface hover:bg-surface-alt">
-                                        <td className="px-3 py-2 text-primary font-mono text-xs">
-                                            {t.name}
-                                        </td>
-                                        <td className="px-3 py-2 text-right text-secondary">
-                                            {formatNumber(t.rows)}
-                                        </td>
+                    {isMobile ? (
+                        <div className="flex flex-col gap-1.5">
+                            {tables.map(t => (
+                                <div
+                                    key={t.name}
+                                    className="flex items-center justify-between gap-3 px-3 py-2 rounded bg-surface border border-border"
+                                >
+                                    <span className="text-primary font-mono text-xs break-all min-w-0">
+                                        {t.name}
+                                    </span>
+                                    <span className="shrink-0 text-secondary text-sm">
+                                        {formatNumber(t.rows)}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="overflow-x-auto rounded-lg border border-border">
+                            <table className="w-full text-sm">
+                                <thead>
+                                    <tr className="bg-surface-alt text-secondary text-left">
+                                        <th className="px-3 py-2 font-medium">Table</th>
+                                        <th className="px-3 py-2 font-medium text-right">Rows</th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
+                                </thead>
+                                <tbody className="divide-y divide-border">
+                                    {tables.map(t => (
+                                        <tr
+                                            key={t.name}
+                                            className="bg-surface hover:bg-surface-alt"
+                                        >
+                                            <td className="px-3 py-2 text-primary font-mono text-xs">
+                                                {t.name}
+                                            </td>
+                                            <td className="px-3 py-2 text-right text-secondary">
+                                                {formatNumber(t.rows)}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
                 </Card.Body>
             </Card>
 
@@ -159,6 +176,22 @@ export const SystemSettingsPage = () => {
                 <Card.Body>
                     {migrations.length === 0 ? (
                         <p className="text-sm text-tertiary">No data migrations applied yet.</p>
+                    ) : isMobile ? (
+                        <div className="flex flex-col gap-2">
+                            {migrations.map(m => (
+                                <div
+                                    key={m.name}
+                                    className="flex flex-col gap-1 px-3 py-2 rounded bg-surface border border-border"
+                                >
+                                    <span className="text-primary font-mono text-xs break-all">
+                                        {m.name}
+                                    </span>
+                                    <span className="text-secondary text-xs">
+                                        Applied {formatDateTime(m.applied_at)}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
                     ) : (
                         <div className="overflow-x-auto rounded-lg border border-border">
                             <table className="w-full text-sm">

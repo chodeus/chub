@@ -140,9 +140,23 @@ export const ArrayObjectField = ({
                 >
                     <div className="flex-1 flex flex-col gap-1 md:flex-row md:items-center md:gap-4 min-w-0">
                         <div className="font-medium text-primary text-sm truncate">{primary}</div>
-                        {secondary && (
-                            <div className="text-xs text-secondary truncate">{secondary}</div>
-                        )}
+                        {secondary &&
+                            (Array.isArray(secondary) ? (
+                                <div className="flex flex-wrap gap-1.5">
+                                    {secondary
+                                        .filter(s => s != null && s !== '')
+                                        .map((seg, i) => (
+                                            <span
+                                                key={i}
+                                                className="inline-flex items-center px-1.5 py-0.5 rounded bg-surface-alt text-xs text-secondary"
+                                            >
+                                                {seg}
+                                            </span>
+                                        ))}
+                                </div>
+                            ) : (
+                                <div className="text-xs text-secondary truncate">{secondary}</div>
+                            ))}
                         {badge && (
                             <div className="inline-flex items-center px-2 py-0.5 bg-accent-bg text-brand-primary-text rounded text-xs font-medium whitespace-nowrap self-start md:ml-auto md:flex-shrink-0">
                                 {/* Show color swatches for items with colors array */}
@@ -339,9 +353,16 @@ const DISPLAY_TEMPLATES = {
         itemName: 'Upgrade Profile',
         display: item => {
             const schedule = item.schedule ? scheduleToHuman(item.schedule) : 'Main schedule only';
+            // Array form lets the row renderer wrap segments as chips on mobile
+            // instead of cramming them into one truncated pipe-separated string.
             return {
                 primary: item.label || item.instance || 'Unknown Instance',
-                secondary: `${item.instance || 'No instance'} | Tag: ${item.tag_name || 'checked'} | Count: ${item.count || 0} | ${schedule}`,
+                secondary: [
+                    item.instance || 'No instance',
+                    `Tag: ${item.tag_name || 'checked'}`,
+                    `Count: ${item.count || 0}`,
+                    schedule,
+                ],
                 badge:
                     item.enabled === false ? 'Disabled' : item.unattended ? 'Auto reset' : 'Manual',
             };

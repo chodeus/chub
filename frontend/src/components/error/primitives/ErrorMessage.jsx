@@ -1,5 +1,6 @@
 import React from 'react';
 import PropTypes from 'prop-types';
+import { formatDateTime } from '../../../utils/datetime.js';
 
 /**
  * ErrorMessage - Formatted error content display
@@ -61,7 +62,7 @@ export const ErrorMessage = ({
                         )}
                         <div className="mb-0 text-sm font-mono break-words">
                             <strong>Time:</strong>{' '}
-                            {errorTimestamp ? new Date(errorTimestamp).toLocaleString() : 'Unknown'}
+                            {errorTimestamp ? formatDateTime(errorTimestamp) : 'Unknown'}
                         </div>
                     </div>
                 </div>

@@ -58,6 +58,7 @@ export const Modal = ({
     closable = true,
     backdrop = true,
     className = '',
+    variant = 'centered',
 }) => {
     // State management: controlled vs uncontrolled
     const [internalOpen, setInternalOpen] = useState(defaultOpen);
@@ -97,8 +98,13 @@ export const Modal = ({
         full: 'max-w-7xl', // 80rem (1280px)
     };
 
+    // Bottom-sheet variant: anchored to bottom on mobile, only top corners
+    // rounded, drag-handle visual at the top edge. Falls through to the regular
+    // centered modal on desktop so the same caller works in both contexts.
+    const useBottomSheet = variant === 'bottom-sheet' && isMobile;
+
     // All styling via utility classes
-    const containerClasses = `
+    const centeredClasses = `
         relative flex flex-col w-full mx-4
         max-h-[90vh] rounded-xl overflow-hidden border
         bg-surface border-border-light
@@ -106,14 +112,25 @@ export const Modal = ({
         z-modal
         ${isMobile ? 'max-w-full' : sizeClasses[size]}
         ${className}
-    `
+    `;
+
+    const sheetClasses = `
+        relative flex flex-col w-full
+        max-h-[90vh] rounded-t-xl overflow-hidden border-t border-x
+        bg-surface border-border-light
+        transition-transform duration-200
+        z-modal
+        ${className}
+    `;
+
+    const containerClasses = (useBottomSheet ? sheetClasses : centeredClasses)
         .trim()
         .replace(/\s+/g, ' ');
 
     // Backdrop styling
     const backdropClasses = `
         fixed inset-0 z-modal-backdrop
-        flex items-center justify-center
+        flex ${useBottomSheet ? 'items-end' : 'items-center'} justify-center
         ${backdrop ? 'bg-overlay-strong backdrop-blur-sm' : ''}
         transition-opacity duration-200
     `
@@ -145,6 +162,11 @@ export const Modal = ({
                     aria-modal="true"
                     aria-labelledby="modal-title"
                 >
+                    {useBottomSheet && (
+                        <div className="flex justify-center pt-2 pb-1" aria-hidden="true">
+                            <div className="w-10 h-1 rounded-full bg-border-light" />
+                        </div>
+                    )}
                     {children}
                 </div>
             </div>

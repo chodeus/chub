@@ -4,6 +4,7 @@ import { useToast } from '../../contexts/ToastContext.jsx';
 import { postersAPI } from '../../utils/api/posters.js';
 import { Button, LoadingButton, PageHeader } from '../../components/ui/index.js';
 import Spinner from '../../components/ui/Spinner.jsx';
+import { formatDate } from '../../utils/datetime.js';
 
 const SORT_OPTIONS = [
     { value: 'name', label: 'Name' },
@@ -40,10 +41,7 @@ const formatSize = bytes => {
     return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
 };
 
-const formatLastSynced = ms => {
-    if (ms == null) return 'Never synced';
-    return new Date(ms).toLocaleDateString();
-};
+const formatLastSynced = ms => (ms == null ? 'Never synced' : formatDate(ms));
 
 const PosterGDriveSearchPage = () => {
     const toast = useToast();
@@ -140,12 +138,12 @@ const PosterGDriveSearchPage = () => {
             {/* Toolbar: quick-sync picker + sort + filter */}
             {sources.length > 0 && (
                 <div className="flex flex-wrap items-center gap-3 p-3 rounded-lg bg-surface border border-border">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
                         <label className="text-sm text-secondary">Sync folder</label>
                         <select
                             value={pickerSelection}
                             onChange={e => setPickerSelection(e.target.value)}
-                            className="px-3 py-1.5 rounded-lg bg-surface border border-border text-primary text-sm min-w-[200px]"
+                            className="flex-1 sm:flex-none min-w-0 sm:min-w-[200px] px-3 py-1.5 rounded-lg bg-surface border border-border text-primary text-sm"
                         >
                             <option value="">Select a folder...</option>
                             {[...sources]

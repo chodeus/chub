@@ -4,6 +4,7 @@ import { labelarrAPI } from '../../utils/api/labelarr.js';
 import { modulesAPI } from '../../utils/api/modules.js';
 import { LoadingButton, PageHeader } from '../../components/ui/index.js';
 import Spinner from '../../components/ui/Spinner.jsx';
+import { formatDateTime } from '../../utils/datetime.js';
 
 const LabelarrPage = () => {
     const {
@@ -86,7 +87,7 @@ const LabelarrPage = () => {
                             <span className="text-xs text-secondary block mb-1">Last Run</span>
                             <span className="font-medium text-primary">
                                 {labelarrState.last_run
-                                    ? new Date(labelarrState.last_run).toLocaleString()
+                                    ? formatDateTime(labelarrState.last_run)
                                     : 'Never'}
                             </span>
                         </div>

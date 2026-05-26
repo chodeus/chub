@@ -8,6 +8,7 @@ import { Modal } from '../../components/modals/Modal';
 import { Button, IconButton, PageHeader, Pagination } from '../../components/ui/index.js';
 import Spinner from '../../components/ui/Spinner.jsx';
 import RecentQueries, { useRecentQueries } from '../../components/RecentQueries.jsx';
+import { formatDate } from '../../utils/datetime.js';
 
 const POSTER_FALLBACK_STYLE = {
     width: 80,
@@ -277,7 +278,7 @@ const MediaSearchPage = () => {
                                         )}
                                         {item.added_at && (
                                             <p className="text-xs text-tertiary mt-1">
-                                                Added {new Date(item.added_at).toLocaleDateString()}
+                                                Added {formatDate(item.added_at)}
                                             </p>
                                         )}
                                     </div>

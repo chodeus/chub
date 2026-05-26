@@ -76,7 +76,7 @@ export const GENERAL_SETTINGS_SCHEMA = [
                 key: 'webhook_secret',
                 label: 'Webhook secret',
                 type: 'password',
-                placeholder: 'Leave blank to accept unauthenticated webhooks',
+                placeholder: 'e.g. shared HMAC secret',
                 description:
                     'Optional shared secret. When set, every inbound webhook must send `X-Webhook-Secret: <value>` (or `?secret=<value>`) or it is rejected with 401. Recommended if your webhook URL is reachable outside your LAN.',
             },

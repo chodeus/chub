@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Modal } from './Modal';
 import { Button } from '../ui/index.js';
 import { mediaAPI } from '../../utils/api/media.js';
+import { formatDateTime } from '../../utils/datetime.js';
 
 /**
  * EditMediaModal - Inline metadata editing for media items
@@ -27,14 +28,7 @@ const buildFormDataFromItem = item => ({
     genre: item?.genre || '',
 });
 
-const formatHistoryTimestamp = ts => {
-    if (!ts) return '';
-    try {
-        return new Date(ts).toLocaleString();
-    } catch {
-        return ts;
-    }
-};
+const formatHistoryTimestamp = ts => (ts ? formatDateTime(ts) : '');
 
 const EditMediaModal = ({ isOpen, onClose, item, onSave, isSaving = false }) => {
     const [formData, setFormData] = useState(() => buildFormDataFromItem(item));

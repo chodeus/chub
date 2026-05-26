@@ -159,6 +159,15 @@
         white-space: nowrap;
     }
 
+    /* Path-aware truncation: keep the filename / leaf segment visible by
+       truncating from the start instead of the end. Pair with .truncate to
+       get an ellipsis at the head of the line for file paths. */
+    .truncate-start {
+        direction: rtl;
+        text-align: left;
+        unicode-bidi: plaintext;
+    }
+
     .text-clip { text-overflow: clip; }
 
     /* Multi-line truncation utilities */

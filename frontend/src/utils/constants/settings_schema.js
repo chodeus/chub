@@ -661,7 +661,8 @@ export const SETTINGS_SCHEMA = [
                 type: 'object_array',
                 displayType: 'labelarr',
 
-                description: 'Mappings of app_type, app_instance, labels, plex_instances.',
+                description:
+                    'Choose which Sonarr/Radarr tag becomes which Plex label, and on which Plex instance.',
                 fields: [
                     {
                         key: 'app_instance',
@@ -1050,30 +1051,35 @@ export const SETTINGS_SCHEMA = [
                 key: 'ignore_folders',
                 label: 'Ignore Folders',
                 type: 'textarea',
+                section: 'Ignore rules',
                 description: 'Folder names to skip when scanning (one per line).',
             },
             {
                 key: 'ignore_profiles',
                 label: 'Ignore Profiles',
                 type: 'textarea',
+                section: 'Ignore rules',
                 description: 'Quality profile names to exclude from scanning (one per line).',
             },
             {
                 key: 'ignore_titles',
                 label: 'Ignore Titles',
                 type: 'textarea',
+                section: 'Ignore rules',
                 description: 'Media titles to skip when scanning (one per line).',
             },
             {
                 key: 'ignore_tags',
                 label: 'Ignore Tags',
                 type: 'textarea',
+                section: 'Ignore rules',
                 description: 'Tags to exclude from scanning (one per line).',
             },
             {
                 key: 'ignore_collections',
                 label: 'Ignore Collections',
                 type: 'textarea',
+                section: 'Ignore rules',
                 description: 'Collection names to exclude from scanning (one per line).',
             },
         ],

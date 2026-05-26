@@ -9,6 +9,7 @@ import EditMediaModal from '../../components/modals/EditMediaModal.jsx';
 import { Button, LoadingButton, IconButton, PageHeader } from '../../components/ui/index.js';
 import Spinner from '../../components/ui/Spinner.jsx';
 import { LibraryMaintenance } from '../../components/maintenance/LibraryMaintenance.jsx';
+import { formatDateTime, formatDate } from '../../utils/datetime.js';
 
 const MediaManagePage = () => {
     const toast = useToast();
@@ -540,7 +541,7 @@ const MediaManagePage = () => {
                     </LoadingButton>
                     {lastScanTime && (
                         <span className="text-xs font-normal text-tertiary sm:ml-auto">
-                            Last scan: {new Date(lastScanTime).toLocaleString()}
+                            Last scan: {formatDateTime(lastScanTime)}
                         </span>
                     )}
                 </h3>
@@ -624,7 +625,10 @@ const MediaManagePage = () => {
                                                         )}
                                                     </div>
                                                     {issue.path && (
-                                                        <div className="text-xs text-tertiary mt-1 font-mono truncate">
+                                                        <div
+                                                            className="text-xs text-tertiary mt-1 font-mono truncate truncate-start"
+                                                            title={issue.path}
+                                                        >
                                                             {issue.path}
                                                         </div>
                                                     )}
@@ -640,12 +644,15 @@ const MediaManagePage = () => {
                                                             </span>
                                                         )}
                                                     </div>
-                                                    <div className="text-xs text-tertiary mt-1 font-mono truncate">
+                                                    <div
+                                                        className="text-xs text-tertiary mt-1 font-mono truncate truncate-start"
+                                                        title={issue.path}
+                                                    >
                                                         {issue.path}
                                                     </div>
                                                     {issue.video_files &&
                                                         issue.video_files.length > 0 && (
-                                                            <div className="text-xs text-error mt-1">
+                                                            <div className="text-xs text-error mt-1 break-words">
                                                                 {issue.video_files.length} video
                                                                 files:{' '}
                                                                 {issue.video_files.join(', ')}
@@ -904,8 +911,7 @@ const MediaManagePage = () => {
                                                         className="text-tertiary"
                                                         title={live.added}
                                                     >
-                                                        added{' '}
-                                                        {new Date(live.added).toLocaleDateString()}
+                                                        added {formatDate(live.added)}
                                                     </span>
                                                 )}
                                             </div>

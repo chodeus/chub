@@ -141,7 +141,7 @@ export const DirListOptionsField = React.memo(
                     minDirectories={minDirectories}
                     addButtonText={field.add_button_text || 'Add Directory'}
                     removeButtonText={field.remove_button_text || 'Remove'}
-                    placeholder={field.placeholder || 'Click to select directory...'}
+                    placeholder={field.placeholder || 'Choose folder…'}
                     emptyMessage={field.empty_message || 'No directories added yet.'}
                     emptySecondaryMessage={
                         field.empty_secondary_message || 'Click "Add Directory" to get started.'

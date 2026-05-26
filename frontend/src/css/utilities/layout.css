@@ -412,7 +412,9 @@
     .top-5 { top: 1.25rem; }
     .top-6 { top: 1.5rem; }
     .top-8 { top: 2rem; }
+    .top-14 { top: 3.5rem; }
     .top-16 { top: 4rem; }
+    .top-20 { top: 5rem; }
     .top-auto { top: auto; }
     .top-1\/2 { top: 50%; }
     .top-1\/3 { top: 33.3333%; }

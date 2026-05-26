@@ -1,5 +1,13 @@
 import { createContext, useContext, useState } from 'react';
 
+// Match UIStateContext's mobile breakpoint so the panel starts collapsed on phones.
+const MOBILE_BREAKPOINT = 768;
+
+const getInitialCollapsed = () => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth < MOBILE_BREAKPOINT;
+};
+
 /**
  * LogControlsContext - Provides shared state for all control components
  *
@@ -34,7 +42,7 @@ export function LogControlsProvider({
     onDownload,
     onUpload,
 }) {
-    const [isCollapsed, setIsCollapsed] = useState(false);
+    const [isCollapsed, setIsCollapsed] = useState(getInitialCollapsed);
 
     const value = {
         // State
