@@ -2,6 +2,19 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.13.0](https://github.com/chodeus/chub/compare/v2.12.0...v2.13.0) (2026-05-26)
+
+
+### Features
+
+* **logging:** standardize per-action + summary logging across modules ([7528512](https://github.com/chodeus/chub/commit/75285120f90cff4e7c3f3e3ecf2fa82c9466c116))
+* **ui:** responsive mobile pass across nav, forms, tables, and pickers ([ebc1207](https://github.com/chodeus/chub/commit/ebc1207be67d5759c9e69f3ea05c37bd302ffc43))
+
+
+### Bug Fixes
+
+* **logger:** switch log timestamps to dd/mm/yyyy 24h ([c8991bc](https://github.com/chodeus/chub/commit/c8991bcf649d99b6869691b75634014d39120fcd))
+
 ## [2.12.0](https://github.com/chodeus/chub/compare/v2.11.2...v2.12.0) (2026-05-26)
 
 
