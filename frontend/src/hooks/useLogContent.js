@@ -52,8 +52,11 @@ export function useLogContent(selectedModule, selectedLogFile) {
         abortRef.current = controller;
         inFlightRef.current = true;
 
+        // Initial load fetches the full file so the viewer shows everything,
+        // including the top of long runs. Polling refresh below stays tailed
+        // to keep recurring fetches cheap.
         logsAPI
-            .fetchLogContent(selectedModule, selectedLogFile, controller.signal)
+            .fetchLogContent(selectedModule, selectedLogFile, controller.signal, 0)
             .then(content => {
                 if (!controller.signal.aborted) setLogText(content);
             })
