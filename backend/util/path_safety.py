@@ -63,6 +63,12 @@ def get_allowed_roots(config: ChubConfig) -> List[Path]:
     )
     roots.append(config_dir)
 
+    # Auto-discover bind-mounted host volumes (Linux containers). On Unraid
+    # / docker, the user's template typically binds paths like /kometa,
+    # /media, /data, /plex into the container. Surface them so the picker
+    # works for fresh setups before any config field has been populated.
+    roots.extend(str(p) for p in _discover_container_mounts())
+
     # Resolve all and deduplicate
     resolved = []
     for r in roots:
@@ -76,6 +82,103 @@ def get_allowed_roots(config: ChubConfig) -> List[Path]:
             continue
 
     return list(set(resolved))
+
+
+# Pseudo / system filesystems we never want to expose via the picker.
+_PSEUDO_FS_TYPES = frozenset(
+    {
+        "proc",
+        "sysfs",
+        "cgroup",
+        "cgroup2",
+        "devpts",
+        "tmpfs",
+        "mqueue",
+        "pstore",
+        "bpf",
+        "tracefs",
+        "securityfs",
+        "debugfs",
+        "fusectl",
+        "configfs",
+        "autofs",
+        "nsfs",
+        "binfmt_misc",
+        "hugetlbfs",
+        "ramfs",
+        "rpc_pipefs",
+        "overlay",
+        "squashfs",
+    }
+)
+
+# Mount points (or prefixes) that are part of the container OS, not user data.
+_SYSTEM_MOUNT_PREFIXES = (
+    "/proc",
+    "/sys",
+    "/dev",
+    "/run",
+    "/etc",
+    "/usr",
+    "/var",
+    "/lib",
+    "/lib64",
+    "/sbin",
+    "/bin",
+    "/boot",
+    "/tmp",
+)
+
+
+def _discover_container_mounts() -> List[Path]:
+    """
+    Read /proc/self/mountinfo and return user-data bind mounts.
+
+    Filters out pseudo-filesystems (proc, sysfs, tmpfs, overlay, etc.)
+    and OS-level mount points (/proc, /sys, /dev, /usr, /var, ...). What
+    remains is the set of paths the user explicitly bound into the
+    container — exactly what the directory picker should expose.
+
+    Returns an empty list on non-Linux hosts or if mountinfo is unreadable.
+    """
+    try:
+        with open("/proc/self/mountinfo", "r", encoding="utf-8") as fh:
+            lines = fh.readlines()
+    except (OSError, IOError):
+        return []
+
+    discovered: List[Path] = []
+    seen: set = set()
+    for line in lines:
+        # mountinfo format:
+        #   <id> <parent> <maj:min> <root> <mount_point> <opts> [<tags>...] - <fs_type> <source> <super_opts>
+        fields = line.rstrip("\n").split(" ")
+        if len(fields) < 5:
+            continue
+        mount_point = fields[4]
+
+        try:
+            dash_idx = fields.index("-")
+        except ValueError:
+            continue
+        if dash_idx + 1 >= len(fields):
+            continue
+        fs_type = fields[dash_idx + 1]
+
+        if fs_type in _PSEUDO_FS_TYPES:
+            continue
+        if mount_point == "/" or mount_point in seen:
+            continue
+        if any(
+            mount_point == p or mount_point.startswith(p + "/")
+            for p in _SYSTEM_MOUNT_PREFIXES
+        ):
+            continue
+
+        seen.add(mount_point)
+        discovered.append(Path(mount_point))
+
+    return discovered
 
 
 def is_path_allowed(path: str, config: ChubConfig) -> bool:
