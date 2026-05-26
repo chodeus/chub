@@ -121,7 +121,7 @@ export const DirPickerField = React.memo(({ field, value, onChange, disabled = f
                 <button
                     type="button"
                     onClick={handleSelect}
-                    disabled={disabled}
+                    disabled={disabled || loading || !currentPath}
                     className="px-3 py-1 text-xs font-medium bg-primary/15 text-primary border border-primary/25 rounded cursor-pointer hover:bg-primary/25 disabled:opacity-50"
                 >
                     Select
