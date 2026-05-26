@@ -252,6 +252,7 @@ class PlexMaintenance(ChubModule):
                 filepath = os.path.join(root, filename)
                 try:
                     total_size += os.path.getsize(filepath)
+                    self.logger.debug(f"[PURGED_CACHE] {filepath}")
                     os.remove(filepath)
                     count += 1
                 except Exception as e:

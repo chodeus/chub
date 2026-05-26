@@ -120,8 +120,10 @@ class Jduparr(ChubModule):
             )
         if self.config.dry_run:
             self.logger.info(f"Total items that would be relinked: {total_candidates}")
+            self.logger.info(f"   → {total_candidates} files would be relinked")
         else:
             self.logger.info(f"Total items relinked: {total_relinked}")
+            self.logger.info(f"   → {total_relinked} files relinked")
 
     def _send_output(self, output: list[dict]) -> None:
         self.print_output(output)
@@ -273,6 +275,9 @@ class Jduparr(ChubModule):
                     linked_count = self._parse_link_count(
                         link_result.stdout, candidate_count
                     )
+                    for group in duplicate_groups:
+                        for relinked_path in group[1:]:
+                            self.logger.debug(f"[RELINKED] {relinked_path}")
 
             if not duplicate_groups:
                 field_message = "✅ No duplicate files discovered..."

@@ -633,7 +633,7 @@ class PosterCleanarr(ChubModule):
             elif mode == "move":
                 try:
                     self._move_file(filepath, metadata_dir, restore_dir)
-                    self.logger.debug(f"  [MOVE] {filepath} ({format_bytes(size)})")
+                    self.logger.info(f"  [MOVE] {os.path.basename(filepath)}")
                     count += 1
                     total_size += size
                 except Exception as e:
@@ -642,7 +642,7 @@ class PosterCleanarr(ChubModule):
             elif mode == "remove":
                 try:
                     os.remove(filepath)
-                    self.logger.debug(f"  [REMOVE] {filepath} ({format_bytes(size)})")
+                    self.logger.info(f"  [REMOVE] {os.path.basename(filepath)}")
                     count += 1
                     total_size += size
                 except Exception as e:
@@ -655,6 +655,7 @@ class PosterCleanarr(ChubModule):
         self.logger.info(
             f"{label.get('ed', 'Processed')} {count} bloat images ({format_bytes(total_size)})"
         )
+        self.logger.info(f"   → bloat scan: {count} {mode}d")
         return {
             "count": count,
             "total_size": total_size,
@@ -953,6 +954,7 @@ class PosterCleanarr(ChubModule):
         for d in touched_dirs:
             self._clean_empty_dirs(d)
 
+        logger.info(f"   → orphan scan: {count} {mode}d")
         return {"count": count, "total_size": total_size, "mode": mode}
 
     # =========================================================================
