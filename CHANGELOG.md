@@ -2,6 +2,14 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.11.2](https://github.com/chodeus/chub/compare/v2.11.1...v2.11.2) (2026-05-26)
+
+
+### Bug Fixes
+
+* **sync_gdrive:** browse-roots collapse + root selector + duplicate guard ([4591628](https://github.com/chodeus/chub/commit/45916281588d9a5520af4a7ba209f53d452943a2))
+* **system:** drop unused get_allowed_roots import ([f4ad558](https://github.com/chodeus/chub/commit/f4ad5587917e4b94667ba9956027809a8051da7a))
+
 ## [2.11.1](https://github.com/chodeus/chub/compare/v2.11.0...v2.11.1) (2026-05-26)
 
 
