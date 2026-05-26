@@ -13,10 +13,11 @@ import { SelectBase } from '../../fields/primitives';
  * @returns {JSX.Element}
  */
 export const LogFileSelect = () => {
-    const { logFiles, onLogFileChange } = useLogControls();
+    const { logFiles, selectedLogFile, onLogFileChange } = useLogControls();
 
     return (
         <SelectBase
+            value={selectedLogFile || ''}
             disabled={!logFiles || logFiles.length === 0}
             onChange={e => onLogFileChange(e.target.value)}
             aria-label="Select log file"
