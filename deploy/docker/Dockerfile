@@ -27,37 +27,8 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip3 install --no-cache-dir -r requirements.txt
 
-# Install additional binaries/tools (rclone, jdupes).
-#
-# Codeberg's HTTP/2 git endpoint intermittently cancels in-flight streams
-# (curl error 92), which bites the QEMU-emulated arm64 leg far more than
-# native amd64 because emulated clones run slower and stay in-flight
-# longer. The mitigations below, in order:
-#   * --depth=1            — shallow clone, smaller transfer window.
-#   * http.version=HTTP/1.1 — sidestep the HTTP/2 stream-cancel flake.
-#   * http.postBuffer       — bigger buffer for slow links.
-#   * 3-attempt retry loop  — defends against any other transient failure.
-# See run 26377484926 for the failure mode this guards against.
-RUN set -eux; \
-    curl https://rclone.org/install.sh | bash && \
-    git config --global http.version HTTP/1.1 && \
-    git config --global http.postBuffer 524288000 && \
-    for repo in libjodycode jdupes; do \
-        for attempt in 1 2 3; do \
-            rm -rf /tmp/$repo; \
-            if git clone --depth=1 https://codeberg.org/jbruchon/$repo.git /tmp/$repo; then \
-                break; \
-            fi; \
-            echo "Clone of $repo failed (attempt $attempt), retrying..."; \
-            sleep 5; \
-            if [ "$attempt" = "3" ]; then exit 1; fi; \
-        done; \
-    done && \
-    make -C /tmp/libjodycode && make -C /tmp/libjodycode install && \
-    ldconfig && \
-    make -C /tmp/jdupes && make -C /tmp/jdupes install && \
-    ln -s /usr/local/bin/jdupes /usr/bin/jdupes && \
-    rm -rf /tmp/libjodycode /tmp/jdupes
+# Install rclone (jdupes is installed via apt in the runtime stage).
+RUN curl https://rclone.org/install.sh | bash
 
 # Copy full app source (including frontend)
 COPY . .
@@ -81,9 +52,11 @@ FROM python:3.13-slim@sha256:b04b5d7233d2ad9c379e22ea8927cd1378cd15c60d4ef876c06
 
 WORKDIR /app
 
-# Install minimal runtime dependencies
+# Install minimal runtime dependencies. jdupes comes from Debian instead
+# of being built from codeberg source — sidesteps recurring codeberg
+# outages, and libjodycode is pulled in automatically as a dep.
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends curl git tzdata && \
+    apt-get install -y --no-install-recommends curl git tzdata jdupes && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy only Python runtime and site-packages from builder
@@ -92,10 +65,6 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 
 # Copy rclone binary (installed to /usr/bin by rclone install script)
 COPY --from=builder /usr/bin/rclone /usr/bin/rclone
-
-# Copy jdupes and libjodycode shared library
-COPY --from=builder /usr/local/lib/libjodycode* /usr/local/lib/
-RUN ldconfig
 
 # Copy built frontend assets
 COPY --from=builder /app/frontend/dist ./frontend/dist
