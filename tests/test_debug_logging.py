@@ -16,8 +16,9 @@ from typing import List, Tuple
 import pytest
 
 from backend.modules.poster_renamerr import PosterRenamerr
-from backend.modules.sync_gdrive import _format_counter_summary
+from backend.modules.sync_gdrive import _format_counter_summary, _rclone_line_level
 from backend.util.config import PosterRenamerrConfig
+from backend.util.logger import Logger
 
 
 class CapturingLogger:
@@ -155,3 +156,91 @@ def test_process_file_uses_action_verb_from_call(renamerr_with_capture, tmp_path
     verbs = [line.split(" ", 1)[0] for line in logger.lines("debug")]
     assert "[COPY]" in verbs
     assert "[HARDLINK]" in verbs
+
+
+# --- sync_gdrive verbose / heartbeat routing ---
+
+
+def test_rclone_error_lines_always_go_to_error():
+    """rclone errors must surface regardless of verbose."""
+    assert _rclone_line_level("oh no", "ERROR", verbose=False) == "error"
+    assert _rclone_line_level("oh no", "ERROR", verbose=True) == "error"
+
+
+def test_rclone_stats_lines_always_heartbeat():
+    """--stats progress lines (Transferred:/Checks:/Elapsed) are
+    repetitive-by-design and must heartbeat even when verbose is on."""
+    for line in (
+        "Transferred:   	    1.136 GiB / 1.136 GiB, 100%, 2.303 MiB/s",
+        "Checks:                 0 / 0, -",
+        "Elapsed time:      9m22.0s",
+    ):
+        assert _rclone_line_level(line, "INFO", verbose=False) == "heartbeat"
+        # Still heartbeat with verbose=True — these aren't per-file actions.
+        assert _rclone_line_level(line, "INFO", verbose=True) == "heartbeat"
+
+
+def test_rclone_per_file_action_lines_routing_honors_verbose():
+    """The contract users care about: file action lines visible at INFO
+    when verbose=True, suppressed under heartbeat otherwise."""
+    for line in (
+        "Hatchet (2006) {tmdb-11908}.jpg: Copied (new)",
+        "Bostafari.jpg: Deleted",
+        "Inception.jpg: Updated",
+        "old.jpg: Renamed to new.jpg",
+        "stale.jpg: Removed",
+    ):
+        assert (
+            _rclone_line_level(line, "INFO", verbose=False) == "heartbeat"
+        ), f"{line!r} should heartbeat when verbose=False"
+        assert (
+            _rclone_line_level(line, "INFO", verbose=True) == "info"
+        ), f"{line!r} should info when verbose=True"
+
+
+def test_rclone_other_lines_go_to_info():
+    """One-off setup / completion lines aren't repetitive; always INFO."""
+    for line in (
+        "Local file system at /kometa/posters/CL2K/Bostafari: Checks finished",
+        "Running all checks before starting transfers",
+        "Some other notice from rclone",
+    ):
+        assert _rclone_line_level(line, "INFO", verbose=False) == "info"
+
+
+# --- Logger level filtering ---
+
+
+def test_logger_log_level_debug_emits_debug_records(tmp_path, monkeypatch):
+    """log_level: debug must surface DEBUG records that log_level: info hides.
+
+    Pins the Python logging contract: setLevel("DEBUG") includes DEBUG;
+    setLevel("INFO") drops them. If a future refactor accidentally
+    hard-codes INFO, this catches it.
+    """
+    monkeypatch.setenv("LOG_DIR", str(tmp_path))
+    debug_logger = Logger(log_level="debug", module_name="logging_audit_debug")
+    info_logger = Logger(log_level="info", module_name="logging_audit_info")
+    # Internal stdlib logger.level is the standard for filtering.
+    import logging as _logging
+
+    assert debug_logger._logger.level == _logging.DEBUG
+    assert info_logger._logger.level == _logging.INFO
+
+
+def test_logger_heartbeat_lines_are_prefixed(tmp_path, monkeypatch):
+    """heartbeat() prepends [hb] so the frontend's Hide-Heartbeat toggle
+    can filter them. The user's earlier confusion ("I thought I should see
+    every Copied line") was that without verbose, per-file rclone lines
+    route through heartbeat and the UI hides the [hb]-tagged output.
+
+    heartbeat() lives on ChubLoggerAdapter (returned by Logger.get_adapter),
+    which is what every module actually uses via base_module.py.
+    """
+    monkeypatch.setenv("LOG_DIR", str(tmp_path))
+    log = Logger(log_level="debug", module_name="logging_audit_hb")
+    adapter = log.get_adapter("AUDIT")
+    seen = []
+    adapter.info = lambda msg, *a, **kw: seen.append(("info", msg))
+    adapter.heartbeat("rclone progress")
+    assert seen == [("info", "[hb] rclone progress")]
