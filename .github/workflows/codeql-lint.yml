@@ -195,6 +195,13 @@ jobs:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     needs: [codeql-python, codeql-javascript, backend-lint, backend-smoke, frontend-lint]
     runs-on: ubuntu-latest
+    # Serialize with the release-please docker-version job so concurrent pushes
+    # to the same :latest tag don't race on GHCR auth. cancel-in-progress is
+    # false because both jobs publish artifacts we want to keep — they just
+    # need to take turns pushing.
+    concurrency:
+      group: ghcr-push-${{ github.ref }}
+      cancel-in-progress: false
 
     steps:
       - name: Checkout code
