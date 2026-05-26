@@ -21,6 +21,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 from backend.api import auth as auth_router  # noqa: E402
 from backend.api import border_replacerr as border_router  # noqa: E402
+from backend.api import system as system_router  # noqa: E402
 from backend.util.config import ChubConfig  # noqa: E402
 
 
@@ -281,3 +282,80 @@ def test_border_thumbnail_rejects_traversal(app_with_router):
         "/api/border-replacerr/borders/%F0%9F%8E%84%20Christmas/bundled/..%2Fetc%2Fpasswd.png"
     )
     assert resp.status_code == 404
+
+
+# --- System: gdrive presets bundle ---
+
+
+def test_gdrive_presets_returns_bundled_catalogue(app_with_router):
+    """The /gdrive-presets endpoint serves the bundled CL2K/MM2K JSON."""
+    app = app_with_router(system_router.router)
+    client = TestClient(app)
+    resp = client.get("/api/gdrive-presets")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["success"] is True
+    presets = body["data"]
+    assert isinstance(presets, list) and len(presets) > 0
+    # Every preset must carry the three fields the frontend uses.
+    for entry in presets:
+        assert {"name", "id", "style"}.issubset(entry.keys())
+        assert entry["style"] in ("CL2K", "MM2K")
+    # Spot-check a couple of canonical entries so we'd notice if the
+    # bundled JSON gets mangled in a future commit.
+    by_id = {e["id"]: e for e in presets}
+    assert "1MiNjT3t_eIdaMTiQ4E89IMNXasco7r6q" in by_id  # CL2K Mario
+    assert by_id["1MiNjT3t_eIdaMTiQ4E89IMNXasco7r6q"]["style"] == "CL2K"
+
+
+def test_gdrive_presets_missing_file_returns_500(monkeypatch, app_with_router):
+    """If the bundled JSON is missing, surface a 500 (not a silent empty list)."""
+    monkeypatch.setattr(
+        system_router, "_GDRIVE_PRESETS_PATH", system_router.Path("/nonexistent.json")
+    )
+    monkeypatch.setattr(system_router, "_gdrive_presets_cache", None)
+    app = app_with_router(system_router.router)
+    client = TestClient(app)
+    resp = client.get("/api/gdrive-presets")
+    assert resp.status_code == 500
+    assert resp.json()["success"] is False
+
+
+# --- System: allowed roots ---
+
+
+def test_allowed_roots_returns_configured_paths(monkeypatch, app_with_router, tmp_path):
+    """The picker discovery endpoint surfaces config-derived roots."""
+    posters = tmp_path / "posters"
+    posters.mkdir()
+    config = ChubConfig()
+    config.poster_renamerr.source_dirs = [str(posters)]
+    monkeypatch.setattr(system_router, "load_config", lambda: config)
+    monkeypatch.setenv("CONFIG_DIR", str(tmp_path / "config"))
+    (tmp_path / "config").mkdir()
+
+    app = app_with_router(system_router.router)
+    client = TestClient(app)
+    resp = client.get("/api/allowed-roots")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["success"] is True
+    roots = body["data"]["roots"]
+    assert isinstance(roots, list)
+    # Configured poster source dir must be present.
+    assert str(posters.resolve()) in roots
+
+
+def test_allowed_roots_returns_empty_when_no_config(monkeypatch, app_with_router):
+    """Pre-onboarding (no config yet) the endpoint returns [] without crashing."""
+    from backend.util.config import ConfigError
+
+    def _raise(*_a, **_kw):
+        raise ConfigError("no config")
+
+    monkeypatch.setattr(system_router, "load_config", _raise)
+    app = app_with_router(system_router.router)
+    client = TestClient(app)
+    resp = client.get("/api/allowed-roots")
+    assert resp.status_code == 200
+    assert resp.json()["data"]["roots"] == []

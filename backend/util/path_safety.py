@@ -130,9 +130,11 @@ _SYSTEM_MOUNT_PREFIXES = (
 )
 
 
-def _discover_container_mounts() -> List[Path]:
+def _discover_container_mounts(
+    mountinfo_path: str = "/proc/self/mountinfo",
+) -> List[Path]:
     """
-    Read /proc/self/mountinfo and return user-data bind mounts.
+    Read mountinfo and return user-data bind mounts.
 
     Filters out pseudo-filesystems (proc, sysfs, tmpfs, overlay, etc.)
     and OS-level mount points (/proc, /sys, /dev, /usr, /var, ...). What
@@ -140,9 +142,10 @@ def _discover_container_mounts() -> List[Path]:
     container — exactly what the directory picker should expose.
 
     Returns an empty list on non-Linux hosts or if mountinfo is unreadable.
+    The path arg is exposed only so tests can inject a fixture file.
     """
     try:
-        with open("/proc/self/mountinfo", "r", encoding="utf-8") as fh:
+        with open(mountinfo_path, "r", encoding="utf-8") as fh:
             lines = fh.readlines()
     except (OSError, IOError):
         return []
