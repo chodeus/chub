@@ -310,6 +310,18 @@ class SyncGDrive(ChubModule):
             process.wait()
             if process.returncode == 0:
                 self.logger.info("✅ RClone sync completed successfully.")
+                # Per-folder action summary — visible even when verbose is off,
+                # so users can see "this run did X copies and Y deletes"
+                # without scrolling through the rclone per-file noise.
+                if any(counters.values()):
+                    summary = ", ".join(
+                        f"{n} {action}"
+                        for action, n in sorted(counters.items())
+                        if n
+                    )
+                    self.logger.info(f"   → {summary}")
+                else:
+                    self.logger.info("   → already in sync, no changes")
                 guarded_progress_cb(95)
                 return True, counters
             else:
