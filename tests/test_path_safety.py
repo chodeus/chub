@@ -211,8 +211,16 @@ def test_browse_roots_keeps_distinct_top_levels(empty_config, tmp_path):
 
 
 def test_browse_roots_empty_when_no_config(empty_config, monkeypatch, tmp_path):
-    """A config that points nowhere returns no browse roots (CONFIG_DIR aside)."""
+    """A config that points nowhere returns no browse roots (CONFIG_DIR aside).
+
+    On Linux CI hosts /proc/self/mountinfo lists real volumes (e.g. /mnt),
+    which the discovery function legitimately picks up. To assert that
+    config-derived emptiness propagates, isolate from host mounts.
+    """
     monkeypatch.setenv("CONFIG_DIR", str(tmp_path / "nope"))  # doesn't exist
+    monkeypatch.setattr(
+        "backend.util.path_safety._discover_container_mounts", lambda: []
+    )
     assert get_browse_roots(empty_config) == []
 
 
