@@ -68,10 +68,116 @@ const SortableDirectoryItem = React.memo(
 
         const isTouch = useTouchDevice();
 
+        const inputBlock = (
+            <div
+                className={`flex ${modeOptions ? 'flex-col gap-2 md:flex-row md:gap-3' : ''} flex-1 min-w-0`}
+            >
+                <InputBase
+                    id={itemId}
+                    type="text"
+                    name={`${baseId}-${index}`}
+                    value={directory || ''}
+                    placeholder={placeholder}
+                    disabled={disabled}
+                    onChange={e => onPathChange(index, e.target.value)}
+                    invalid={invalid}
+                    aria-label={`${label} ${index + 1}`}
+                    className={modeOptions ? 'md:min-w-30' : ''}
+                />
+
+                {/* Mode selection - only show if modeOptions provided */}
+                {modeOptions && (
+                    <SelectBase
+                        id={`${itemId}-mode`}
+                        name={`${baseId}-mode-${index}`}
+                        value={mode || ''}
+                        onChange={e => onModeChange?.(index, e.target.value)}
+                        disabled={disabled}
+                        invalid={invalid}
+                        options={modeOptions}
+                        placeholder="Select mode..."
+                        className="flex-1"
+                        aria-label={`Mode for ${label} ${index + 1}`}
+                    />
+                )}
+            </div>
+        );
+
+        const browseButton = (
+            <FieldButton
+                onClick={() => onBrowseClick(index)}
+                disabled={disabled}
+                ariaLabel={`Browse for ${label} ${index + 1}`}
+                className="flex-shrink-0 self-start"
+            >
+                <span className="material-symbols-outlined text-base">folder_open</span>
+            </FieldButton>
+        );
+
+        const moveUpButton = enableReordering && isTouch && (
+            <FieldButton
+                onClick={() => onMoveUp && onMoveUp(index)}
+                disabled={!canMoveUp}
+                ariaLabel={`Move ${directory || 'directory'} up`}
+                className="flex-shrink-0"
+            >
+                <span className="material-symbols-outlined text-base">keyboard_arrow_up</span>
+            </FieldButton>
+        );
+
+        const moveDownButton = enableReordering && isTouch && (
+            <FieldButton
+                onClick={() => onMoveDown && onMoveDown(index)}
+                disabled={!canMoveDown}
+                ariaLabel={`Move ${directory || 'directory'} down`}
+                className="flex-shrink-0"
+            >
+                <span className="material-symbols-outlined text-base">keyboard_arrow_down</span>
+            </FieldButton>
+        );
+
+        const removeButton = (
+            <RemoveButton
+                onClick={() => onRemove(index)}
+                disabled={!canRemoveDirectory}
+                itemName={`${label} ${index + 1}`}
+                itemType="directory"
+                text={removeButtonText}
+                variant="default"
+                size="medium"
+                title={
+                    isLastItem
+                        ? 'Cannot remove the last directory entry'
+                        : `Remove directory ${index + 1}`
+                }
+                className="flex-shrink-0 self-start"
+            />
+        );
+
+        // Touch devices: stack input + browse on the top row,
+        // reorder/remove controls right-aligned on a second row.
+        // Keeps the path readable on narrow viewports instead of squeezing
+        // it between four square buttons.
+        if (isTouch) {
+            return (
+                <div className="flex flex-col gap-2" ref={setNodeRef} style={style}>
+                    <div className="flex gap-2 items-stretch">
+                        {inputBlock}
+                        {browseButton}
+                    </div>
+                    <div className="flex justify-end gap-2">
+                        {moveUpButton}
+                        {moveDownButton}
+                        {removeButton}
+                    </div>
+                </div>
+            );
+        }
+
         return (
             <div className="flex gap-2 items-start" ref={setNodeRef} style={style}>
                 {/* Non-touch devices: Drag Handle (left side) */}
-                {enableReordering && !isTouch && (
+                {enableReordering && (
                     <div
                         className="flex items-center justify-center w-11 h-11 text-brand-primary cursor-grab hover:text-primary transition-colors touch-target flex-shrink-0"
                         {...attributes}
@@ -81,91 +187,9 @@ const SortableDirectoryItem = React.memo(
                     </div>
                 )}
 
-                {/* Touch devices: Up Button (left side) */}
-                {enableReordering && isTouch && (
-                    <FieldButton
-                        onClick={() => onMoveUp && onMoveUp(index)}
-                        disabled={!canMoveUp}
-                        ariaLabel={`Move ${directory || 'directory'} up`}
-                        className="flex-shrink-0"
-                    >
-                        <span className="material-symbols-outlined text-base">
-                            keyboard_arrow_up
-                        </span>
-                    </FieldButton>
-                )}
-
-                <div
-                    className={`flex ${modeOptions ? 'flex-col gap-2 md:flex-row md:gap-3' : ''} flex-1 min-w-0`}
-                >
-                    <InputBase
-                        id={itemId}
-                        type="text"
-                        name={`${baseId}-${index}`}
-                        value={directory || ''}
-                        placeholder={placeholder}
-                        disabled={disabled}
-                        onChange={e => onPathChange(index, e.target.value)}
-                        invalid={invalid}
-                        aria-label={`${label} ${index + 1}`}
-                        className={modeOptions ? 'md:min-w-30' : ''}
-                    />
-
-                    {/* Mode selection - only show if modeOptions provided */}
-                    {modeOptions && (
-                        <SelectBase
-                            id={`${itemId}-mode`}
-                            name={`${baseId}-mode-${index}`}
-                            value={mode || ''}
-                            onChange={e => onModeChange?.(index, e.target.value)}
-                            disabled={disabled}
-                            invalid={invalid}
-                            options={modeOptions}
-                            placeholder="Select mode..."
-                            className="flex-1"
-                            aria-label={`Mode for ${label} ${index + 1}`}
-                        />
-                    )}
-                </div>
-
-                <FieldButton
-                    onClick={() => onBrowseClick(index)}
-                    disabled={disabled}
-                    ariaLabel={`Browse for ${label} ${index + 1}`}
-                    className="flex-shrink-0 self-start"
-                >
-                    <span className="material-symbols-outlined text-base">folder_open</span>
-                </FieldButton>
-
-                {/* Touch devices: Down Button (right side) */}
-                {enableReordering && isTouch && (
-                    <FieldButton
-                        onClick={() => onMoveDown && onMoveDown(index)}
-                        disabled={!canMoveDown}
-                        ariaLabel={`Move ${directory || 'directory'} down`}
-                        className="flex-shrink-0"
-                    >
-                        <span className="material-symbols-outlined text-base">
-                            keyboard_arrow_down
-                        </span>
-                    </FieldButton>
-                )}
-
-                <RemoveButton
-                    onClick={() => onRemove(index)}
-                    disabled={!canRemoveDirectory}
-                    itemName={`${label} ${index + 1}`}
-                    itemType="directory"
-                    text={removeButtonText}
-                    variant="default"
-                    size="medium"
-                    title={
-                        isLastItem
-                            ? 'Cannot remove the last directory entry'
-                            : `Remove directory ${index + 1}`
-                    }
-                    className="flex-shrink-0 self-start"
-                />
+                {inputBlock}
+                {browseButton}
+                {removeButton}
             </div>
         );
     }
@@ -198,65 +222,89 @@ const DirectoryItem = React.memo(
         modeOptions,
         onModeChange,
     }) => {
+        const isTouch = useTouchDevice();
+
+        const inputBlock = (
+            <div
+                className={`flex ${modeOptions ? 'flex-col gap-2 md:flex-row md:gap-3' : ''} flex-1 min-w-0`}
+            >
+                <InputBase
+                    id={itemId}
+                    type="text"
+                    name={`${baseId}-${index}`}
+                    value={directory || ''}
+                    placeholder={placeholder}
+                    disabled={disabled}
+                    onChange={e => onPathChange(index, e.target.value)}
+                    invalid={invalid}
+                    aria-label={`${label} ${index + 1}`}
+                    className={modeOptions ? 'md:min-w-30' : ''}
+                />
+
+                {/* Mode selection - only show if modeOptions provided */}
+                {modeOptions && (
+                    <SelectBase
+                        id={`${itemId}-mode`}
+                        name={`${baseId}-mode-${index}`}
+                        value={mode || ''}
+                        onChange={e => onModeChange?.(index, e.target.value)}
+                        disabled={disabled}
+                        invalid={invalid}
+                        options={modeOptions}
+                        placeholder="Select mode..."
+                        className="flex-1"
+                        aria-label={`Mode for ${label} ${index + 1}`}
+                    />
+                )}
+            </div>
+        );
+
+        const browseButton = (
+            <FieldButton
+                onClick={() => onBrowseClick(index)}
+                disabled={disabled}
+                ariaLabel={`Browse for ${label} ${index + 1}`}
+                className="flex-shrink-0 self-start"
+            >
+                <span className="material-symbols-outlined text-base">folder_open</span>
+            </FieldButton>
+        );
+
+        const removeButton = (
+            <RemoveButton
+                onClick={() => onRemove(index)}
+                disabled={!canRemoveDirectory}
+                itemName={`${label} ${index + 1}`}
+                itemType="directory"
+                text={removeButtonText}
+                variant="default"
+                size="medium"
+                title={
+                    isLastItem
+                        ? 'Cannot remove the last directory entry'
+                        : `Remove directory ${index + 1}`
+                }
+                className="flex-shrink-0 self-start"
+            />
+        );
+
+        if (isTouch) {
+            return (
+                <div className="flex flex-col gap-2">
+                    <div className="flex gap-2 items-stretch">
+                        {inputBlock}
+                        {browseButton}
+                    </div>
+                    <div className="flex justify-end gap-2">{removeButton}</div>
+                </div>
+            );
+        }
+
         return (
             <div className="flex gap-2 items-start">
-                <div
-                    className={`flex ${modeOptions ? 'flex-col gap-2 md:flex-row md:gap-3' : ''} flex-1 min-w-0`}
-                >
-                    <InputBase
-                        id={itemId}
-                        type="text"
-                        name={`${baseId}-${index}`}
-                        value={directory || ''}
-                        placeholder={placeholder}
-                        disabled={disabled}
-                        onChange={e => onPathChange(index, e.target.value)}
-                        invalid={invalid}
-                        aria-label={`${label} ${index + 1}`}
-                        className={modeOptions ? 'md:min-w-30' : ''}
-                    />
-
-                    {/* Mode selection - only show if modeOptions provided */}
-                    {modeOptions && (
-                        <SelectBase
-                            id={`${itemId}-mode`}
-                            name={`${baseId}-mode-${index}`}
-                            value={mode || ''}
-                            onChange={e => onModeChange?.(index, e.target.value)}
-                            disabled={disabled}
-                            invalid={invalid}
-                            options={modeOptions}
-                            placeholder="Select mode..."
-                            className="flex-1"
-                            aria-label={`Mode for ${label} ${index + 1}`}
-                        />
-                    )}
-                </div>
-
-                <FieldButton
-                    onClick={() => onBrowseClick(index)}
-                    disabled={disabled}
-                    ariaLabel={`Browse for ${label} ${index + 1}`}
-                    className="flex-shrink-0 self-start"
-                >
-                    <span className="material-symbols-outlined text-base">folder_open</span>
-                </FieldButton>
-
-                <RemoveButton
-                    onClick={() => onRemove(index)}
-                    disabled={!canRemoveDirectory}
-                    itemName={`${label} ${index + 1}`}
-                    itemType="directory"
-                    text={removeButtonText}
-                    variant="default"
-                    size="medium"
-                    title={
-                        isLastItem
-                            ? 'Cannot remove the last directory entry'
-                            : `Remove directory ${index + 1}`
-                    }
-                    className="flex-shrink-0 self-start"
-                />
+                {inputBlock}
+                {browseButton}
+                {removeButton}
             </div>
         );
     }
@@ -302,7 +350,7 @@ export const DirectoryArray = React.memo(
         removeButtonText = 'Remove',
         emptyMessage = 'No directories added yet.',
         emptySecondaryMessage = 'Click "Add Directory" to get started.',
-        placeholder = 'Click to select directory...',
+        placeholder = 'Choose folder…',
         className = '',
         enableReordering = false,
         onMoveUp = null,
@@ -476,8 +524,15 @@ export const DirectoryArray = React.memo(
                     )}
                 </div>
 
-                {/* Directory Browser Modal */}
-                <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} size="large">
+                {/* Directory Browser Modal — bottom-sheet variant slides up
+                    from the bottom on mobile so the picker feels like a
+                    native folder picker rather than a centered dialog */}
+                <Modal
+                    isOpen={modalOpen}
+                    onClose={() => setModalOpen(false)}
+                    size="large"
+                    variant="bottom-sheet"
+                >
                     <Modal.Header>Select Directory</Modal.Header>
                     <Modal.Body>
                         <div className="flex flex-col gap-4">

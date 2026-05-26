@@ -82,7 +82,9 @@ const Section = ({ children, alignContent = 'left', collapseButtons = true }) =>
             className={sectionClassName}
             style={{ flexGrow: alignContent === 'right' ? 0 : buttonCount }}
         >
-            <div className="flex items-center gap-1 flex-1 min-w-0 overflow-hidden">
+            <div
+                className={`flex items-center gap-1 min-w-0 overflow-hidden ${alignContent === 'right' ? '' : 'flex-1'}`}
+            >
                 {visibleButtons}
                 {overflowItems.length > 0 && (
                     <>

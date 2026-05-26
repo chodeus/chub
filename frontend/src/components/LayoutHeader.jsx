@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useSearchCoordinator } from '../contexts/SearchCoordinatorContext.jsx';
 import { useTheme } from '../contexts/ThemeContext.jsx';
 import { useUIState } from '../contexts/UIStateContext.jsx';
@@ -7,6 +7,33 @@ import useSearchPageDetection from '../hooks/useSearchPageDetection.js';
 import { useRecentSearches } from '../hooks/useRecentSearches.js';
 import SearchInterface from './Search/SearchInterface.jsx';
 import { HamburgerButton } from './ui/index.js';
+
+// Mirrors the map in useDocumentTitle so the in-app header shows the same
+// page name that the browser tab and breadcrumb already use. Keep them in
+// sync — adding a route here without there means an empty header title.
+const ROUTE_TITLES = {
+    '/login': 'Sign in',
+    '/dashboard': 'Dashboard',
+    '/media/search': 'Library Search',
+    '/media/manage': 'Library',
+    '/media/statistics': 'Statistics',
+    '/media/labelarr': 'Label Sync',
+    '/poster/search/assets': 'Assets',
+    '/poster/search/gdrive': 'GDrive',
+    '/poster/cleanarr': 'Poster Cleanarr',
+    '/poster/border-replacerr': 'Border Replacerr',
+    '/poster/statistics': 'Poster Stats',
+    '/settings': 'Settings',
+    '/settings/general': 'General',
+    '/settings/modules': 'Modules',
+    '/settings/instances': 'Instances',
+    '/settings/schedule': 'Schedule',
+    '/settings/jobs': 'Jobs',
+    '/settings/notifications': 'Notifications',
+    '/settings/webhooks': 'Webhooks',
+    '/settings/system': 'System',
+    '/logs': 'Logs',
+};
 
 /**
  * LayoutHeader component for CHUB application - Phase 4D Context-Aware
@@ -34,7 +61,9 @@ import { HamburgerButton } from './ui/index.js';
  */
 const LayoutHeader = React.memo(() => {
     const { toggleTheme, isDarkTheme, isLightTheme, isSystemTheme, actualTheme } = useTheme();
-    const { mobileMenuOpen, toggleMobileMenu } = useUIState();
+    const { mobileMenuOpen, toggleMobileMenu, isMobile } = useUIState();
+    const { pathname } = useLocation();
+    const pageTitle = ROUTE_TITLES[pathname] || '';
 
     // Context-aware header detection
     const { isSearchPage, searchPageType, searchSubtype } = useSearchPageDetection();
@@ -95,7 +124,7 @@ const LayoutHeader = React.memo(() => {
 
     return (
         <header
-            className={`shrink-0 h-20 bg-header-bg z-sticky min-h-header ${isSearchPage ? 'search-page' : 'non-search-page'}`}
+            className={`shrink-0 ${isMobile ? 'h-14' : 'h-20 min-h-header'} bg-header-bg z-sticky ${isSearchPage ? 'search-page' : 'non-search-page'}`}
             role="banner"
         >
             <div
@@ -118,9 +147,9 @@ const LayoutHeader = React.memo(() => {
                         <img
                             src="/img/chub-logo.png"
                             alt="CHUB"
-                            className="md:hidden h-12 w-12 mt-2"
-                            width="48"
-                            height="48"
+                            className="md:hidden h-9 w-9"
+                            width="36"
+                            height="36"
                         />
                     </Link>
 
@@ -144,8 +173,15 @@ const LayoutHeader = React.memo(() => {
                         />
                     </div>
                 ) : (
-                    /* Non-Search Page - Clean Spacer */
-                    <div className="flex-1">{/* Clean minimal header for non-search pages */}</div>
+                    /* Non-Search Page - show current page title so the wide empty
+                       slot between hamburger and theme toggle has context */
+                    <div className="flex-1 min-w-0 flex items-center justify-center md:justify-start">
+                        {pageTitle && (
+                            <h1 className="text-on-color font-semibold text-base md:text-lg truncate">
+                                {pageTitle}
+                            </h1>
+                        )}
+                    </div>
                 )}
 
                 {/* Actions Section - Always show theme toggle */}

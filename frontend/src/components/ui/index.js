@@ -24,4 +24,5 @@ export { default as Pagination } from './Pagination';
 export { ServiceIcon } from './ServiceIcon';
 export { default as ProgressBar } from './ProgressBar';
 export { default as Spinner } from './Spinner';
+export { Skeleton } from './Skeleton';
 export { StatCard } from './StatCard';

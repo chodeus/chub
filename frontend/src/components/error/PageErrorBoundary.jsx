@@ -4,6 +4,7 @@ import { useErrorContext } from './ErrorContext.jsx';
 import { useToast } from '../../contexts/ToastContext.jsx';
 import { ErrorContainer, ErrorIcon, ErrorActions } from './primitives';
 import { copyText } from '../../utils/clipboard.js';
+import { formatDateTime } from '../../utils/datetime.js';
 
 /**
  * PageErrorBoundary - Page-level error boundary
@@ -217,7 +218,7 @@ class PageErrorBoundaryBase extends Component {
                     )}
                     <div className="mb-0 text-sm font-mono break-words">
                         <strong>Time:</strong>{' '}
-                        {errorTimestamp ? new Date(errorTimestamp).toLocaleString() : 'Unknown'}
+                        {errorTimestamp ? formatDateTime(errorTimestamp) : 'Unknown'}
                     </div>
                 </div>
 

@@ -35,7 +35,7 @@ const Layout = ({ children }) => {
                 {/* Mobile Menu Backdrop */}
                 {isMobile && mobileMenuOpen && (
                     <div
-                        className="fixed inset-0 bg-black bg-opacity-50 z-40"
+                        className="fixed inset-0 bg-black/50 z-40"
                         onClick={closeMobileMenu}
                         aria-hidden="true"
                     />

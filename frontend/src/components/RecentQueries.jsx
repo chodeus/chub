@@ -53,29 +53,41 @@ export function useRecentQueries(storageKey) {
 }
 
 export default function RecentQueries({ entries, onSelect, onClear, label = 'Recent' }) {
+    const handleClearClick = useCallback(() => {
+        if (!onClear) return;
+        // Tiny confirm guard so "Clear" can't be tapped by accident when the
+        // chip row gets crowded.
+        if (typeof window !== 'undefined' && !window.confirm('Clear recent searches?')) return;
+        onClear();
+    }, [onClear]);
+
     if (!entries || entries.length === 0) return null;
     return (
-        <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs uppercase tracking-wider text-tertiary">{label}</span>
-            {entries.map(q => (
-                <button
-                    key={q}
-                    type="button"
-                    onClick={() => onSelect(q)}
-                    className="text-xs px-2.5 py-1 rounded-full bg-surface-alt text-secondary hover:bg-surface hover:text-primary border border-border-light"
-                >
-                    {q}
-                </button>
-            ))}
-            {onClear && (
-                <button
-                    type="button"
-                    onClick={onClear}
-                    className="text-xs text-tertiary hover:text-primary underline-offset-2 hover:underline bg-transparent border-0 p-0 cursor-pointer"
-                >
-                    Clear
-                </button>
-            )}
+        <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between gap-2">
+                <span className="text-xs uppercase tracking-wider text-tertiary">{label}</span>
+                {onClear && (
+                    <button
+                        type="button"
+                        onClick={handleClearClick}
+                        className="text-xs text-tertiary hover:text-primary underline-offset-2 hover:underline bg-transparent border-0 p-0 cursor-pointer"
+                    >
+                        Clear
+                    </button>
+                )}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+                {entries.map(q => (
+                    <button
+                        key={q}
+                        type="button"
+                        onClick={() => onSelect(q)}
+                        className="text-xs px-2.5 py-1 rounded-full bg-surface-alt text-secondary hover:bg-surface hover:text-primary border border-border-light"
+                    >
+                        {q}
+                    </button>
+                ))}
+            </div>
         </div>
     );
 }

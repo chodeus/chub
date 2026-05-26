@@ -7,6 +7,8 @@ import { modulesAPI } from '../../utils/api/modules.js';
 import { StatGrid } from '../../components/statistics';
 import { StatCard, LoadingButton, IconButton, PageHeader } from '../../components/ui';
 import Spinner from '../../components/ui/Spinner.jsx';
+import { formatDateTime } from '../../utils/datetime.js';
+import { useUIState } from '../../contexts/UIStateContext.jsx';
 
 const STATUS_FILTERS = ['all', 'pending', 'running', 'completed', 'error'];
 
@@ -21,6 +23,7 @@ const STATUS_COLORS = {
 
 export const JobsPage = () => {
     const toast = useToast();
+    const { isMobile } = useUIState();
     const [activeFilter, setActiveFilter] = useState('all');
     const [expandedJobId, setExpandedJobId] = useState(null);
     const [jobDetail, setJobDetail] = useState(null);
@@ -188,7 +191,7 @@ export const JobsPage = () => {
 
     const formatTime = ts => {
         if (!ts) return '-';
-        return new Date(ts).toLocaleString();
+        return formatDateTime(ts);
     };
 
     if (statsLoading && jobsLoading) {
@@ -256,6 +259,98 @@ export const JobsPage = () => {
                 <div className="text-center py-12 text-secondary">
                     <span className="material-symbols-outlined text-4xl mb-2 block">inbox</span>
                     No jobs found{activeFilter !== 'all' ? ` with status "${activeFilter}"` : ''}
+                </div>
+            ) : isMobile ? (
+                <div className="flex flex-col gap-2">
+                    {jobs.map(job => {
+                        const isOpen = expandedJobId === job.id;
+                        const typeLabel = job.module_name || job.job_type || job.type || '-';
+                        return (
+                            <div
+                                key={job.id}
+                                className="border border-border rounded-lg bg-surface p-3 flex flex-col gap-2"
+                            >
+                                <div className="flex items-start justify-between gap-2">
+                                    <span className="inline-block px-2 py-0.5 rounded bg-surface-alt text-primary text-xs font-medium break-words min-w-0">
+                                        {typeLabel}
+                                    </span>
+                                    <span
+                                        className={`shrink-0 px-2 py-0.5 rounded-full text-xs font-medium capitalize ${STATUS_COLORS[job.status] || 'bg-surface text-secondary'}`}
+                                    >
+                                        {job.status}
+                                    </span>
+                                </div>
+                                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-secondary">
+                                    <span>
+                                        <span className="text-tertiary">#</span>
+                                        {job.id}
+                                    </span>
+                                    <span>{formatTime(job.received_at || job.created_at)}</span>
+                                    <span>{jobDuration(job)}</span>
+                                </div>
+                                <div className="flex items-center justify-end gap-1">
+                                    <IconButton
+                                        icon={isOpen ? 'expand_less' : 'expand_more'}
+                                        aria-label="Toggle detail"
+                                        variant="ghost"
+                                        onClick={() => handleToggleDetail(job.id, job)}
+                                    />
+                                    {(job.status === 'error' || job.status === 'success') && (
+                                        <LoadingButton
+                                            loading={isRetrying}
+                                            loadingText="..."
+                                            variant="ghost"
+                                            icon="replay"
+                                            onClick={() => handleRetry(job.id)}
+                                        >
+                                            Retry
+                                        </LoadingButton>
+                                    )}
+                                </div>
+                                {isOpen && (
+                                    <div className="border-t border-border pt-2">
+                                        {detailLoading ? (
+                                            <span className="text-xs text-secondary">
+                                                Loading...
+                                            </span>
+                                        ) : jobDetail ? (
+                                            <div className="grid grid-cols-2 gap-2 text-xs">
+                                                {Object.entries(jobDetail)
+                                                    .filter(
+                                                        ([, v]) =>
+                                                            v != null &&
+                                                            v !== '' &&
+                                                            typeof v !== 'object'
+                                                    )
+                                                    .map(([k, v]) => (
+                                                        <div
+                                                            key={k}
+                                                            className="p-1.5 rounded bg-surface-alt"
+                                                        >
+                                                            <span className="text-tertiary capitalize block">
+                                                                {k.replace(/_/g, ' ')}
+                                                            </span>
+                                                            <span className="text-primary break-words">
+                                                                {String(v)}
+                                                            </span>
+                                                        </div>
+                                                    ))}
+                                                {jobDetail.error && (
+                                                    <div className="col-span-full p-2 rounded bg-error/10 text-error text-xs">
+                                                        {jobDetail.error}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <span className="text-xs text-tertiary">
+                                                No detail available
+                                            </span>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
                 </div>
             ) : (
                 <div className="border border-border rounded-lg overflow-hidden">
@@ -418,7 +513,7 @@ export const JobsPage = () => {
                                     <span className="capitalize">{entry.status}</span>
                                     {entry.duration != null && <span>{entry.duration}s</span>}
                                     {entry.completed_at && (
-                                        <span>{new Date(entry.completed_at).toLocaleString()}</span>
+                                        <span>{formatDateTime(entry.completed_at)}</span>
                                     )}
                                 </div>
                             </div>

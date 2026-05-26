@@ -134,7 +134,7 @@ export const DirListDragDropField = React.memo(
         const label = field.label || 'Directories';
         const addButtonText = field.add_button_text || 'Add Directory';
         const removeButtonText = field.remove_button_text || 'Remove';
-        const placeholder = field.placeholder || 'Click to select directory...';
+        const placeholder = field.placeholder || 'Choose folder…';
         const emptyMessage = field.empty_message || 'No directories added yet.';
         const emptySecondaryMessage =
             field.empty_secondary_message || 'Click "Add Directory" to get started.';

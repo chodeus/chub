@@ -36,11 +36,12 @@ export const StatGrid = React.memo(({ children, columns = 3, gap = '4', classNam
         6: 'gap-6',
     };
 
-    // Responsive grid: mobile=min(2,columns), tablet=min(2,columns), desktop=columns
-    const mobileColumns = Math.min(columns, 2);
+    // Mobile uses auto-fit so 3- or 5-card grids don't produce orphan rows;
+    // tablet pins to a 2-up grid for readability; desktop honours the requested
+    // column count.
     const gridClasses = [
         'grid',
-        `grid-cols-${mobileColumns}`,
+        'grid-cols-auto-fit-xs',
         `md:grid-cols-${Math.min(columns, 2)}`,
         `lg:grid-cols-${columns}`,
         gapClasses[gap] || gapClasses['4'],

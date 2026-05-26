@@ -178,16 +178,59 @@ export const DirPickerField = React.memo(({ field, value, onChange, disabled = f
                 </div>
             )}
 
-            {/* Current path display */}
+            {/* Breadcrumb trail so users keep orientation in deep trees */}
+            {currentPath && (
+                <nav
+                    className="mb-2 flex flex-wrap items-center gap-1 text-xs text-tertiary"
+                    aria-label="Path breadcrumb"
+                >
+                    {(() => {
+                        // Derive segments relative to activeRoot so users see
+                        // "GDrive / posters / MM2K / Collection" rather than
+                        // the full absolute path twice.
+                        const rel =
+                            activeRoot && currentPath.startsWith(activeRoot)
+                                ? currentPath.slice(activeRoot.length)
+                                : currentPath;
+                        const parts = rel.split('/').filter(Boolean);
+                        const crumbs = [
+                            { name: activeRoot || '/', path: activeRoot || '/' },
+                            ...parts.map((p, i) => ({
+                                name: p,
+                                path: `${activeRoot || ''}/${parts.slice(0, i + 1).join('/')}`,
+                            })),
+                        ];
+                        return crumbs.map((c, i) => (
+                            <React.Fragment key={c.path}>
+                                {i > 0 && <span aria-hidden="true">/</span>}
+                                <button
+                                    type="button"
+                                    onClick={() => loadDirectory(c.path)}
+                                    disabled={disabled || loading || i === crumbs.length - 1}
+                                    className="px-1.5 py-0.5 rounded hover:bg-surface-alt text-secondary disabled:text-primary disabled:font-medium disabled:cursor-default"
+                                >
+                                    {c.name}
+                                </button>
+                            </React.Fragment>
+                        ));
+                    })()}
+                </nav>
+            )}
+
+            {/* Current path display — truncate-start keeps the leaf visible on
+                narrow viewports so users see what they're about to select */}
             <div className="flex items-center gap-2 mb-2">
-                <span className="text-xs text-secondary font-mono flex-1 truncate bg-surface-alt px-2 py-1 rounded">
+                <span
+                    className="text-xs text-secondary font-mono flex-1 truncate truncate-start bg-surface-alt px-2 py-1 rounded"
+                    title={currentPath}
+                >
                     {currentPath}
                 </span>
                 <button
                     type="button"
                     onClick={handleSelect}
                     disabled={disabled || loading || !currentPath}
-                    className="px-3 py-1 text-xs font-medium bg-primary/15 text-primary border border-primary/25 rounded cursor-pointer hover:bg-primary/25 disabled:opacity-50"
+                    className="shrink-0 px-3 py-1 text-xs font-medium bg-primary/15 text-primary border border-primary/25 rounded cursor-pointer hover:bg-primary/25 disabled:opacity-50"
                 >
                     Select
                 </button>
@@ -248,7 +291,7 @@ export const DirPickerField = React.memo(({ field, value, onChange, disabled = f
                     type="button"
                     onClick={handleCreateDir}
                     disabled={disabled || creating || !newDirName.trim()}
-                    className="px-2 py-1 text-xs font-medium bg-surface-alt text-secondary border border-border rounded cursor-pointer hover:text-primary disabled:opacity-50"
+                    className="px-3 py-1.5 text-xs font-medium bg-primary text-on-color border border-primary rounded cursor-pointer hover:bg-primary-hover disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                     {creating ? '...' : 'Create'}
                 </button>

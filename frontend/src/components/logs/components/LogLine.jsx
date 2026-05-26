@@ -15,8 +15,8 @@ const PATTERNS = {
     htmlEscape: /[&<>]/g,
     quotedString: /(['"])(.*?)\1/g,
     combined:
-        /\b\d{2}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2} (?:AM|PM)\b|\b(CRITICAL|ERROR|WARNING|INFO|DEBUG)\b|https?:\/\/[^\s<>"{}|\\^`\]]+|\[[^\]]+\.(py|js|jsx|ts|tsx|json|yml|yaml|md|txt|log)\]|\b[\w_]+(\.[\w_]+)+\b|\b\d+(\.\d+)?\b|__QUOTED_PLACEHOLDER_\d+__/g,
-    datetime: /^\d{2}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2} (?:AM|PM)$/,
+        /\b\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}:\d{2}\b|\b(CRITICAL|ERROR|WARNING|INFO|DEBUG)\b|https?:\/\/[^\s<>"{}|\\^`\]]+|\[[^\]]+\.(py|js|jsx|ts|tsx|json|yml|yaml|md|txt|log)\]|\b[\w_]+(\.[\w_]+)+\b|\b\d+(\.\d+)?\b|__QUOTED_PLACEHOLDER_\d+__/g,
+    datetime: /^\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}:\d{2}$/,
     level: /^(CRITICAL|ERROR|WARNING|INFO|DEBUG)$/,
     placeholder: /^__QUOTED_PLACEHOLDER_(\d+)__$/,
     url: /^https?:\/\//,

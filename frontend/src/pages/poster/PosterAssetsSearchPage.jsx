@@ -488,6 +488,13 @@ const PosterAssetsSearchPage = () => {
                             const fileBase = item.file
                                 ? item.file.replace(/\\/g, '/').split('/').pop()
                                 : '';
+                            // Strip {tvdb-...}, {tmdb-...}, {imdb-...} ID braces from
+                            // the caption — the full filename remains in the title
+                            // tooltip for users who need it.
+                            const cleanCaption = fileBase
+                                .replace(/\s*\{[^}]*\}\s*/g, ' ')
+                                .replace(/\s{2,}/g, ' ')
+                                .trim();
                             return (
                                 <div
                                     key={item.id}
@@ -564,7 +571,7 @@ const PosterAssetsSearchPage = () => {
                                                     margin: 0,
                                                 }}
                                             >
-                                                {fileBase}
+                                                {cleanCaption || fileBase}
                                             </p>
                                         )}
                                         {driveName && (

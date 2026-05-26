@@ -10,10 +10,11 @@ import { instancesAPI } from '../utils/api/instances';
 import { postersAPI } from '../utils/api/posters';
 import { Button, IconButton } from '../components/ui';
 import { Modal } from '../components/modals/Modal';
-import Spinner from '../components/ui/Spinner';
+import { Skeleton } from '../components/ui';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import { useToast } from '../contexts/ToastContext.jsx';
 import { humanize } from '../utils/tools.js';
+import { formatDateTime } from '../utils/datetime.js';
 import {
     scheduleToNextFire,
     scheduleToHuman,
@@ -387,7 +388,27 @@ const DashboardPage = () => {
     }, [schedules, tick]);
 
     if (isLoading && moduleList.length === 0) {
-        return <Spinner size="large" text="Loading dashboard..." center />;
+        // Skeleton placeholders for the module-card grid + health row so the
+        // page doesn't pop-flicker as the run-states / jobs / modules /
+        // schedule / instances / posters / snapshots calls each resolve.
+        return (
+            <div className="flex flex-col gap-10" aria-busy="true">
+                <section className="flex items-center justify-between gap-4">
+                    <Skeleton width="60%" height="2.5rem" rounded="md" />
+                    <Skeleton width="6rem" height="2rem" rounded="full" />
+                </section>
+                <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {Array.from({ length: 6 }).map((_, i) => (
+                        <Skeleton key={i} height="6.5rem" rounded="lg" />
+                    ))}
+                </section>
+                <section className="grid grid-cols-auto-fit-xs md:grid-cols-2 lg:grid-cols-4 gap-3">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                        <Skeleton key={i} height="5rem" rounded="lg" />
+                    ))}
+                </section>
+            </div>
+        );
     }
 
     const schedulerStateLabel =
@@ -426,14 +447,20 @@ const DashboardPage = () => {
 
             {/* Modules — moved to top; each card deep-links to its log */}
             <section>
-                <div className="flex items-end justify-between mb-4">
+                <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2 mb-4">
                     <div>
                         <h2 className="text-xl font-bold text-primary m-0">Modules</h2>
                         <p className="text-secondary text-sm mt-1 mb-0">
                             Live status of every configured module. Click a card to open its log.
                         </p>
                     </div>
-                    <Link to="/logs" className="text-sm text-accent no-underline hover:underline">
+                    <Link
+                        to="/logs"
+                        className="self-start sm:self-auto inline-flex items-center gap-1 text-sm text-accent no-underline hover:underline whitespace-nowrap"
+                    >
+                        <span className="material-symbols-outlined text-base" aria-hidden="true">
+                            description
+                        </span>
                         All logs
                     </Link>
                 </div>
@@ -494,7 +521,7 @@ const DashboardPage = () => {
                                     {schedule ? (
                                         <span>Schedule: {scheduleToHuman(schedule)}</span>
                                     ) : (
-                                        <span className="inline-flex items-center gap-2">
+                                        <span className="inline-flex items-center gap-3 flex-wrap">
                                             <span className="text-xs px-2 py-0.5 rounded-full bg-surface-alt text-tertiary">
                                                 Manual only
                                             </span>
@@ -505,8 +532,14 @@ const DashboardPage = () => {
                                                         stopNav(e);
                                                         setRunNowTarget(mod.name);
                                                     }}
-                                                    className="text-xs text-accent hover:underline bg-transparent border-0 p-0 cursor-pointer"
+                                                    className="inline-flex items-center gap-1 min-h-11 px-3 py-1.5 text-xs font-medium rounded-lg bg-primary/10 text-primary border border-primary/25 hover:bg-primary/20 transition-colors cursor-pointer"
                                                 >
+                                                    <span
+                                                        className="material-symbols-outlined text-base"
+                                                        aria-hidden="true"
+                                                    >
+                                                        play_arrow
+                                                    </span>
                                                     Run now
                                                 </button>
                                             )}
@@ -707,11 +740,7 @@ const DashboardPage = () => {
                             </div>
                             <div
                                 className={`text-lg font-bold truncate ${lastFailure ? 'text-error' : 'text-primary'}`}
-                                title={
-                                    lastFailure?.ts
-                                        ? new Date(lastFailure.ts).toLocaleString()
-                                        : undefined
-                                }
+                                title={lastFailure?.ts ? formatDateTime(lastFailure.ts) : undefined}
                             >
                                 {lastFailure
                                     ? formatTimeAgo(lastFailure.ts, new Date(tick))
