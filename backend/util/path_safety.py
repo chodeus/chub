@@ -184,6 +184,33 @@ def _discover_container_mounts(
     return discovered
 
 
+def get_browse_roots(config: ChubConfig) -> List[Path]:
+    """
+    Top-level directory roots suitable for the UI directory picker.
+
+    Built on top of ``get_allowed_roots`` but:
+    - drops file paths (e.g. the gdrive service-account .json), since
+      the picker only navigates directories;
+    - collapses each path to its outermost allowed ancestor, so a
+      configured ``/kometa/posters/MM2K/Mario`` doesn't show up as a
+      separate root when ``/kometa`` is already mounted.
+
+    The full unfiltered list is still used by ``is_path_allowed`` for
+    write-permission checks; this is just what gets surfaced to the user.
+    """
+    all_roots = get_allowed_roots(config)
+    dir_roots = [p for p in all_roots if p.is_dir()]
+    # Shortest paths first so we add ancestors before descendants.
+    dir_roots.sort(key=lambda p: len(p.parts))
+    top_level: List[Path] = []
+    for r in dir_roots:
+        # Skip if this path is already covered by a shorter root.
+        if any(top in r.parents for top in top_level):
+            continue
+        top_level.append(r)
+    return top_level
+
+
 def is_path_allowed(path: str, config: ChubConfig) -> bool:
     """
     Check whether *path* falls under one of the allowed roots.

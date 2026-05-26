@@ -201,7 +201,11 @@ export const ArrayObjectField = ({
                             const additionalProps = {};
                             if (subField.type === 'presets') {
                                 additionalProps.onPresetSelected = handlePresetSelected;
-                                additionalProps.moduleConfig = value; // Pass current array as moduleConfig for duplicate detection
+                                // PresetsField looks up moduleConfig[moduleConfigKey]
+                                // (e.g. moduleConfig.gdrive_list) to find entries
+                                // already added. Wrap the array under the parent
+                                // field key so that lookup hits.
+                                additionalProps.moduleConfig = { [field.key]: value };
                             }
 
                             // Enhanced dropdown with API integration

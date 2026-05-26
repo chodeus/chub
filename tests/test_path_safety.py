@@ -4,6 +4,7 @@
 from backend.util.path_safety import (
     _discover_container_mounts,
     get_allowed_roots,
+    get_browse_roots,
     is_path_allowed,
 )
 
@@ -162,6 +163,57 @@ def test_discover_mounts_deduplicates(tmp_path):
     )
     path = _write_mountinfo(tmp_path, content)
     assert _discover_container_mounts(path) == [__import__("pathlib").Path("/data")]
+
+
+# --- get_browse_roots ---
+
+
+def test_browse_roots_drops_file_paths(empty_config, tmp_path):
+    """Files (e.g. service-account .json) must not appear in the picker."""
+    sa_file = tmp_path / "creds.json"
+    sa_file.write_text("{}")
+    empty_config.sync_gdrive.gdrive_sa_location = str(sa_file)
+    browse = get_browse_roots(empty_config)
+    assert sa_file.resolve() not in browse
+    # but is_path_allowed still treats it as in-range for the write check
+    assert is_path_allowed(str(sa_file), empty_config)
+
+
+def test_browse_roots_collapses_nested_paths(empty_config, tmp_path):
+    """A child directory should be collapsed into its allowed ancestor."""
+    from backend.util.config import GDriveListEntry
+
+    outer = tmp_path / "kometa"
+    inner = outer / "posters" / "MM2K" / "Mario"
+    inner.mkdir(parents=True)
+    # poster_renamerr is the outer root; gdrive_list points deep inside it.
+    empty_config.poster_renamerr.source_dirs = [str(outer)]
+    empty_config.sync_gdrive.gdrive_list = [
+        GDriveListEntry(id="x", name="Mario", location=str(inner))
+    ]
+    browse = get_browse_roots(empty_config)
+    paths = {str(p) for p in browse}
+    assert str(outer.resolve()) in paths
+    assert str(inner.resolve()) not in paths
+
+
+def test_browse_roots_keeps_distinct_top_levels(empty_config, tmp_path):
+    """Two independent roots should both appear."""
+    a = tmp_path / "kometa"
+    b = tmp_path / "data"
+    a.mkdir()
+    b.mkdir()
+    empty_config.poster_renamerr.source_dirs = [str(a)]
+    empty_config.nohl.source_dirs = [str(b)]
+    paths = {str(p) for p in get_browse_roots(empty_config)}
+    assert str(a.resolve()) in paths
+    assert str(b.resolve()) in paths
+
+
+def test_browse_roots_empty_when_no_config(empty_config, monkeypatch, tmp_path):
+    """A config that points nowhere returns no browse roots (CONFIG_DIR aside)."""
+    monkeypatch.setenv("CONFIG_DIR", str(tmp_path / "nope"))  # doesn't exist
+    assert get_browse_roots(empty_config) == []
 
 
 def test_get_allowed_roots_includes_gdrive_list(empty_config, tmp_path):

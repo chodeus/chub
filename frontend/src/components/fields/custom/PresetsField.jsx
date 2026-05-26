@@ -166,37 +166,41 @@ export const PresetsField = React.memo(
             }
         }, [presetType, presetUrl, presetData]);
 
-        // Extract already used preset identifiers from moduleConfig
-        const alreadyAddedIds = useMemo(() => {
+        // Extract already used preset identifiers from moduleConfig.
+        // Tracks both name (identifierField) and id, since users sometimes
+        // rename entries after adding them — id-matching keeps the
+        // duplicate guard accurate even when display names diverge.
+        const alreadyAdded = useMemo(() => {
             if (moduleConfigKey && Array.isArray(moduleConfig?.[moduleConfigKey])) {
-                return moduleConfig[moduleConfigKey]
-                    .map(entry => entry?.[identifierField])
-                    .filter(Boolean);
+                const entries = moduleConfig[moduleConfigKey];
+                return {
+                    names: new Set(entries.map(e => e?.[identifierField]).filter(Boolean)),
+                    ids: new Set(entries.map(e => e?.id).filter(Boolean)),
+                };
             }
-            return [];
+            return { names: new Set(), ids: new Set() };
         }, [moduleConfig, moduleConfigKey, identifierField]);
 
-        // IDs excluding current selection so current can remain enabled
-        const usedIdsExceptSelected = useMemo(() => {
-            return alreadyAddedIds.filter(id => id !== value);
-        }, [alreadyAddedIds, value]);
-
-        // Transform presets to SelectBase options format
+        // Transform presets to SelectBase options format. The currently-
+        // selected option stays enabled so the user can see what was picked.
         const options = useMemo(() => {
             const baseOptions = [{ value: '', label: '— Select preset... —' }];
 
             const presetOptions = presets.map(preset => {
                 const identifier = preset[identifierField];
-                const alreadyAdded = usedIdsExceptSelected.includes(identifier);
+                const isCurrentSelection = identifier === value;
+                const dupByName = alreadyAdded.names.has(identifier);
+                const dupById = preset.id && alreadyAdded.ids.has(preset.id);
+                const isDuplicate = !isCurrentSelection && (dupByName || dupById);
                 return {
                     value: identifier,
-                    label: preset.name + (alreadyAdded ? ' (Already Added)' : ''),
-                    disabled: alreadyAdded,
+                    label: preset.name + (isDuplicate ? ' (Already Added)' : ''),
+                    disabled: isDuplicate,
                 };
             });
 
             return [...baseOptions, ...presetOptions];
-        }, [presets, usedIdsExceptSelected, identifierField]);
+        }, [presets, alreadyAdded, identifierField, value]);
 
         const handleChange = useCallback(
             e => {
