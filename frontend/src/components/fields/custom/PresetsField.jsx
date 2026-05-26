@@ -15,8 +15,29 @@ import { borderReplacerrAPI } from '../../../utils/api/border_replacerr.js';
 // deploys.
 let _holidayPresetsCache = null;
 
-// const GDRIVE_PRESETS_URL =
-//     'https://raw.githubusercontent.com/Drazzilb08/daps-gdrive-presets/CL2K/presets.json';
+// Remote fallback used when the bundled /api/gdrive-presets endpoint is
+// unreachable (e.g. an old image is still running after a frontend deploy).
+// Keeps the dropdown populated instead of silently empty.
+const GDRIVE_PRESETS_FALLBACK_URL =
+    'https://raw.githubusercontent.com/Drazzilb08/daps-gdrive-presets/CL2K/presets.json';
+
+const _prefixGdriveNames = arr =>
+    (Array.isArray(arr) ? arr : []).map(p => {
+        if (!p || !p.style || !p.name) return p;
+        const prefix = `${p.style} `;
+        if (p.name.startsWith(prefix)) return p;
+        return { ...p, name: `${prefix}${p.name}` };
+    });
+
+const _normalizeGdrivePayload = (payload, isInternal) => {
+    const data = isInternal ? payload?.data : payload;
+    const arr = Array.isArray(data)
+        ? data
+        : Object.entries(data || {}).map(([name, v]) =>
+              typeof v === 'object' ? { name, ...v } : { name, id: v }
+          );
+    return _prefixGdriveNames(arr);
+};
 
 /**
  * PresetsField component for schema-driven preset selection
@@ -83,31 +104,46 @@ export const PresetsField = React.memo(
             if (presetType === 'gdrive' && presetUrl) {
                 // Fetch GDrive presets. Internal endpoints (/api/...) return
                 // {success, data: [...]}, while external URLs return the raw
-                // array/object — handle both.
+                // array/object — handle both. If the primary URL fails or
+                // returns an empty list (e.g. the backend image is stale and
+                // the new /api/gdrive-presets route 404s), fall back to the
+                // upstream Drazzilb08 JSON so the dropdown stays usable.
                 setLoading(true);
                 const isInternal = presetUrl.startsWith('/api/');
-                fetch(presetUrl)
-                    .then(r => r.json())
-                    .then(payload => {
-                        const data = isInternal ? payload?.data : payload;
-                        let arr = Array.isArray(data)
-                            ? data
-                            : Object.entries(data || {}).map(([name, v]) =>
-                                  typeof v === 'object' ? { name, ...v } : { name, id: v }
-                              );
-                        // Prefix the display/identifier name with the style
-                        // (CL2K / MM2K) so the dropdown and the friendly Name
-                        // field auto-fill as "MM2K Mario" instead of "Mario".
-                        arr = arr.map(p => {
-                            if (!p || !p.style || !p.name) return p;
-                            const prefix = `${p.style} `;
-                            if (p.name.startsWith(prefix)) return p;
-                            return { ...p, name: `${prefix}${p.name}` };
-                        });
-                        if (mounted) setPresets(arr);
-                    })
-                    .catch(() => mounted && setPresets([]))
-                    .finally(() => setLoading(false));
+
+                const tryFetch = async (url, internal) => {
+                    const resp = await fetch(url);
+                    if (!resp.ok) throw new Error(`HTTP ${resp.status} from ${url}`);
+                    const payload = await resp.json();
+                    return _normalizeGdrivePayload(payload, internal);
+                };
+
+                (async () => {
+                    let arr = [];
+                    try {
+                        arr = await tryFetch(presetUrl, isInternal);
+                    } catch (err) {
+                        console.warn(
+                            `[PresetsField] primary preset fetch failed (${presetUrl}):`,
+                            err
+                        );
+                    }
+
+                    if (
+                        (!Array.isArray(arr) || arr.length === 0) &&
+                        presetUrl !== GDRIVE_PRESETS_FALLBACK_URL
+                    ) {
+                        try {
+                            console.warn('[PresetsField] falling back to upstream preset URL');
+                            arr = await tryFetch(GDRIVE_PRESETS_FALLBACK_URL, false);
+                        } catch (err) {
+                            console.error('[PresetsField] upstream fallback also failed:', err);
+                            arr = [];
+                        }
+                    }
+
+                    if (mounted) setPresets(arr);
+                })().finally(() => mounted && setLoading(false));
 
                 return () => {
                     mounted = false;
