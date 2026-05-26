@@ -5,9 +5,24 @@
  * server-side directories and systemAPI.createDirectory to create new ones.
  */
 
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { systemAPI } from '../../../utils/api/system.js';
 import { FieldWrapper, FieldLabel, FieldDescription } from '../primitives';
+
+/**
+ * Pick the allowed root that contains the given path (longest prefix wins).
+ * Returns null if no root matches — the caller falls back to the first root.
+ */
+const matchRoot = (path, roots) => {
+    if (!path || !Array.isArray(roots) || roots.length === 0) return null;
+    let best = null;
+    for (const r of roots) {
+        if (path === r || path.startsWith(r + '/')) {
+            if (!best || r.length > best.length) best = r;
+        }
+    }
+    return best;
+};
 
 export const DirPickerField = React.memo(({ field, value, onChange, disabled = false }) => {
     const [currentPath, setCurrentPath] = useState(value || '');
@@ -16,10 +31,12 @@ export const DirPickerField = React.memo(({ field, value, onChange, disabled = f
     const [error, setError] = useState(null);
     const [newDirName, setNewDirName] = useState('');
     const [creating, setCreating] = useState(false);
-    // Deepest path the user is allowed to ascend to. Locked the first time we
-    // land somewhere valid so "go up" can't escape into a forbidden parent.
-    const rootBoundaryRef = useRef(null);
-    const initializedRef = useRef(false);
+    // All allowed top-level roots fetched from /api/allowed-roots. Drives
+    // the root selector dropdown.
+    const [roots, setRoots] = useState([]);
+    // The root the user is currently browsing under. "Go up" can't ascend
+    // past this; changing the dropdown jumps to a different root.
+    const [activeRoot, setActiveRoot] = useState(null);
 
     const loadDirectory = useCallback(async path => {
         setLoading(true);
@@ -29,7 +46,6 @@ export const DirPickerField = React.memo(({ field, value, onChange, disabled = f
             const dirs = result?.data?.directories || result?.data || [];
             setEntries(Array.isArray(dirs) ? dirs : []);
             setCurrentPath(path);
-            if (!rootBoundaryRef.current) rootBoundaryRef.current = path;
         } catch (err) {
             setError(err.message || 'Failed to load directory');
             setEntries([]);
@@ -38,34 +54,38 @@ export const DirPickerField = React.memo(({ field, value, onChange, disabled = f
         }
     }, []);
 
+    // One-shot initialization: fetch allowed roots, decide which root we're
+    // browsing under, and load the initial directory.
     useEffect(() => {
-        if (initializedRef.current) return;
-        initializedRef.current = true;
-
-        if (value) {
-            rootBoundaryRef.current = value;
-            loadDirectory(value);
-            return;
-        }
-
-        // No saved value — fetch allowed roots and start at the first one.
+        let cancelled = false;
         systemAPI
             .listAllowedRoots()
             .then(result => {
-                const roots = result?.data?.roots || [];
-                if (roots.length > 0) {
-                    rootBoundaryRef.current = roots[0];
-                    loadDirectory(roots[0]);
-                } else {
+                if (cancelled) return;
+                const list = result?.data?.roots || [];
+                if (list.length === 0) {
                     setError(
                         'No allowed directories configured. Set a source/destination path in another module first.'
                     );
+                    return;
                 }
+                setRoots(list);
+                // If the form already has a value, browse under whichever
+                // root contains it; otherwise start at the first root.
+                const startRoot = matchRoot(value, list) || list[0];
+                setActiveRoot(startRoot);
+                loadDirectory(value || startRoot);
             })
             .catch(err => {
-                setError(err.message || 'Failed to load allowed directories');
+                if (!cancelled) setError(err.message || 'Failed to load allowed directories');
             });
-    }, [loadDirectory, value]);
+        return () => {
+            cancelled = true;
+        };
+        // Init runs once; subsequent value changes from the parent are not
+        // expected for the same instance (accordion remount creates a new one).
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     const handleNavigate = useCallback(
         dirName => {
@@ -75,7 +95,7 @@ export const DirPickerField = React.memo(({ field, value, onChange, disabled = f
         [currentPath, loadDirectory]
     );
 
-    const atRoot = !currentPath || currentPath === rootBoundaryRef.current;
+    const atRoot = !currentPath || currentPath === activeRoot;
 
     const handleGoUp = useCallback(() => {
         if (atRoot) return;
@@ -84,6 +104,15 @@ export const DirPickerField = React.memo(({ field, value, onChange, disabled = f
         const parentPath = parts.length === 0 ? '/' : `/${parts.join('/')}`;
         loadDirectory(parentPath);
     }, [atRoot, currentPath, loadDirectory]);
+
+    const handleRootChange = useCallback(
+        e => {
+            const newRoot = e.target.value;
+            setActiveRoot(newRoot);
+            loadDirectory(newRoot);
+        },
+        [loadDirectory]
+    );
 
     const handleSelect = useCallback(() => {
         if (onChange) onChange(currentPath);
@@ -112,6 +141,32 @@ export const DirPickerField = React.memo(({ field, value, onChange, disabled = f
     return (
         <FieldWrapper>
             <FieldLabel label={field.label} required={field.required} />
+
+            {/* Root selector — only shown when there's more than one root to
+                choose from, otherwise the picker behaves like before. */}
+            {roots.length > 1 && (
+                <div className="flex items-center gap-2 mb-2">
+                    <label
+                        htmlFor={`${inputId}-root`}
+                        className="text-xs text-secondary whitespace-nowrap"
+                    >
+                        Root:
+                    </label>
+                    <select
+                        id={`${inputId}-root`}
+                        value={activeRoot || ''}
+                        onChange={handleRootChange}
+                        disabled={disabled || loading}
+                        className="flex-1 px-2 py-1 text-xs bg-input border border-border rounded text-primary focus:border-primary focus:outline-none"
+                    >
+                        {roots.map(r => (
+                            <option key={r} value={r}>
+                                {r}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+            )}
 
             {/* Current path display */}
             <div className="flex items-center gap-2 mb-2">

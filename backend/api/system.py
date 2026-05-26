@@ -29,7 +29,11 @@ from backend.util.config import (
     save_config,
 )
 from backend.util.database import ChubDB
-from backend.util.path_safety import get_allowed_roots, is_path_allowed
+from backend.util.path_safety import (
+    get_allowed_roots,
+    get_browse_roots,
+    is_path_allowed,
+)
 from backend.util.version import get_version
 
 router = APIRouter(
@@ -393,7 +397,11 @@ async def list_allowed_roots(logger: Any = Depends(get_logger)) -> JSONResponse:
         except ConfigError:
             return ok("0 allowed roots", {"roots": []})
 
-        roots = sorted({str(p) for p in get_allowed_roots(config)})
+        # The picker only wants top-level directories — file paths and
+        # nested subdirs of an already-allowed root just create noise.
+        # is_path_allowed() still uses the full get_allowed_roots set,
+        # so write checks aren't affected by this filtering.
+        roots = sorted({str(p) for p in get_browse_roots(config)})
         return ok(f"{len(roots)} allowed roots", {"roots": roots})
     except Exception as e:
         logger.error(f"Error listing allowed roots: {e}")
