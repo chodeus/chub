@@ -9,6 +9,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { FieldWrapper, FieldLabel, FieldError, FieldDescription, SelectBase } from '../primitives';
 import { Card } from '../../ui';
 import { borderReplacerrAPI } from '../../../utils/api/border_replacerr.js';
+import { apiCore } from '../../../utils/api/core.js';
 
 // In-memory cache so opening the holiday picker multiple times in one
 // session doesn't re-hit the backend. The catalogue is static between
@@ -111,11 +112,20 @@ export const PresetsField = React.memo(
                 setLoading(true);
                 const isInternal = presetUrl.startsWith('/api/');
 
+                // Internal endpoints sit behind auth — use apiCore so the
+                // Bearer token is attached. External URLs go through raw
+                // fetch (no credentials needed, no CORS preflight overhead).
                 const tryFetch = async (url, internal) => {
+                    if (internal) {
+                        // apiCore prefixes /api itself, so strip it from the URL.
+                        const path = url.replace(/^\/api/, '');
+                        const payload = await apiCore.get(path, { useCache: false });
+                        return _normalizeGdrivePayload(payload, true);
+                    }
                     const resp = await fetch(url);
                     if (!resp.ok) throw new Error(`HTTP ${resp.status} from ${url}`);
                     const payload = await resp.json();
-                    return _normalizeGdrivePayload(payload, internal);
+                    return _normalizeGdrivePayload(payload, false);
                 };
 
                 (async () => {
