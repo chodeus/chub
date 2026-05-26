@@ -371,6 +371,10 @@ class PosterRenamerr(ChubModule):
                         discord_message.append(f"{new_file_name}")
                 if file_ops_enabled and not config.dry_run:
                     if config.action_type in ["hardlink", "symlink"]:
+                        self.logger.debug(
+                            f"[REPLACED] {new_file_path} (overwriting before "
+                            f"{config.action_type})"
+                        )
                         os.remove(new_file_path)
                     success = self.process_file(file, new_file_path, config.action_type)
                     if not success:
@@ -378,6 +382,9 @@ class PosterRenamerr(ChubModule):
                             f"File operation failed for {file} -> {new_file_path}"
                         )
                         return None
+                    self.logger.debug(
+                        f"[{config.action_type.upper()}] {new_file_path} ← {file}"
+                    )
         else:
             if file_name != new_file_name:
                 messages.append(f"{file_name} -renamed-> {new_file_name}")
@@ -393,6 +400,9 @@ class PosterRenamerr(ChubModule):
                         f"File operation failed for {file} -> {new_file_path}"
                     )
                     return None
+                self.logger.debug(
+                    f"[{config.action_type.upper()}] {new_file_path} ← {file}"
+                )
 
         if messages or discord_message:
             return {
