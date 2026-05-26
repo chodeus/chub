@@ -61,6 +61,32 @@ def _empty_counters() -> dict:
     return {"copied": 0, "deleted": 0, "updated": 0, "renamed": 0}
 
 
+def _rclone_line_level(
+    line: str, rclone_level: str, *, verbose: bool
+) -> str:
+    """
+    Decide which logger method should emit an rclone output line.
+
+    Returns one of: ``"error"``, ``"heartbeat"``, ``"info"``.
+
+    Rules (kept in one place so the verbose / heartbeat contract is testable):
+    - rclone-reported ERROR lines always go to error().
+    - rclone --stats progress lines (Transferred:/Checks:/Elapsed time:)
+      always go to heartbeat(), regardless of verbose.
+    - rclone per-file action lines ("X: Copied (new)", "X: Deleted", etc.)
+      go to info() when ``verbose`` is True, heartbeat() otherwise. This is
+      what the user opts into via ``sync_gdrive.verbose: true``.
+    - Anything else (one-off setup / completion lines) goes to info().
+    """
+    if rclone_level == "ERROR":
+        return "error"
+    if _RCLONE_HEARTBEAT_PATTERN.match(line):
+        return "heartbeat"
+    if _RCLONE_FILE_ACTION_PATTERN.match(line):
+        return "info" if verbose else "heartbeat"
+    return "info"
+
+
 def _format_counter_summary(counters: dict) -> str:
     """
     One-line user-facing summary of rclone action counters.
@@ -289,27 +315,14 @@ class SyncGDrive(ChubModule):
                     line,
                 ).strip()
                 if cleaned_line:
-                    # Respect rclone's own level for ERROR, classify the
-                    # rest. rclone's --stats output (Transferred / Checks /
-                    # Elapsed time) and per-file action lines (": Deleted"
-                    # / ": Copied" / etc) are repetitive-by-design — route
-                    # them through heartbeat() so the frontend hides them
-                    # under the Hide-Heartbeat toggle. One-off setup and
-                    # completion lines stay at INFO so they remain visible.
-                    if rclone_level == "ERROR":
-                        self.logger.error(cleaned_line)
-                    elif _RCLONE_HEARTBEAT_PATTERN.match(cleaned_line):
-                        self.logger.heartbeat(cleaned_line)
-                    elif _RCLONE_FILE_ACTION_PATTERN.match(cleaned_line):
-                        # Per-file actions: visible at INFO when the user
-                        # opts in via sync_gdrive.verbose, else suppressed
-                        # under Hide-Heartbeat like progress noise.
-                        if getattr(self.config, "verbose", False):
-                            self.logger.info(cleaned_line)
-                        else:
-                            self.logger.heartbeat(cleaned_line)
-                    else:
-                        self.logger.info(cleaned_line)
+                    # Routing contract lives in _rclone_line_level() so the
+                    # verbose / heartbeat behaviour is testable in isolation.
+                    level = _rclone_line_level(
+                        cleaned_line,
+                        rclone_level,
+                        verbose=getattr(self.config, "verbose", False),
+                    )
+                    getattr(self.logger, level)(cleaned_line)
                     # Count actual per-file activity for the notification
                     # summary. "Removed" is normalized to "deleted" since
                     # rclone uses both labels depending on operation and
