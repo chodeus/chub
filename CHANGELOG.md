@@ -2,6 +2,13 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.14.2](https://github.com/chodeus/chub/compare/v2.14.1...v2.14.2) (2026-05-27)
+
+
+### Bug Fixes
+
+* **ui:** show Border Replacerr in browser tab title ([6b9b1a2](https://github.com/chodeus/chub/commit/6b9b1a259463c0a0f9027ff0657c00d73a6d47ec))
+
 ## [2.14.1](https://github.com/chodeus/chub/compare/v2.14.0...v2.14.1) (2026-05-27)
 
 
