@@ -1,6 +1,6 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { useSearchCoordinator } from '../contexts/SearchCoordinatorContext.jsx';
+import { useSearchCoordinator, SEARCH_STATUS } from '../contexts/SearchCoordinatorContext.jsx';
 import { useTheme } from '../contexts/ThemeContext.jsx';
 import { useUIState } from '../contexts/UIStateContext.jsx';
 import useSearchPageDetection from '../hooks/useSearchPageDetection.js';
@@ -67,8 +67,36 @@ const LayoutHeader = React.memo(() => {
 
     // Context-aware header detection
     const { isSearchPage, searchPageType, searchSubtype } = useSearchPageDetection();
-    const { search } = useSearchCoordinator();
+    const { getSearchState } = useSearchCoordinator();
     const { recentSearches, addSearch } = useRecentSearches();
+
+    // Watch the coordinator's status for the active search type and record a
+    // recent search whenever a search "commits" — i.e. transitions out of
+    // SEARCHING with a non-empty term. This fires after the coordinator's own
+    // debounce settles, so we don't pollute history with mid-typing
+    // intermediates, and covers both real-handler pages (MediaSearchPage)
+    // and noop-handler pages (PosterAssetsSearchPage). Backspace-to-empty
+    // goes SEARCHING → IDLE with term="" and is excluded by the term guard.
+    //
+    // The ref also tracks `type` so that cross-page navigation (e.g.
+    // /media/search SEARCHING → /poster/search/assets IDLE) doesn't look like
+    // a commit and accidentally record the posters page's leftover term.
+    const activeState = searchPageType
+        ? getSearchState(searchPageType)
+        : { status: SEARCH_STATUS.IDLE, term: '' };
+    const prevRef = useRef({ status: activeState.status, type: searchPageType });
+    useEffect(() => {
+        const prev = prevRef.current;
+        if (
+            prev.type === searchPageType &&
+            prev.status === SEARCH_STATUS.SEARCHING &&
+            activeState.status !== SEARCH_STATUS.SEARCHING &&
+            activeState.term?.trim()
+        ) {
+            addSearch(activeState.term.trim());
+        }
+        prevRef.current = { status: activeState.status, type: searchPageType };
+    }, [activeState.status, activeState.term, searchPageType, addSearch]);
 
     /**
      * Handle theme toggle click
@@ -83,21 +111,6 @@ const LayoutHeader = React.memo(() => {
     const handleHamburgerClick = useCallback(() => {
         toggleMobileMenu();
     }, [toggleMobileMenu]);
-
-    /**
-     * Handle search action from SearchInterface - triggers the registered search handler
-     */
-    const handleSearch = useCallback(
-        searchTerm => {
-            if (searchPageType) {
-                search(searchPageType, searchTerm, { immediate: true });
-                if (searchTerm && searchTerm.trim()) {
-                    addSearch(searchTerm.trim());
-                }
-            }
-        },
-        [searchPageType, search, addSearch]
-    );
 
     /**
      * Get theme display text for button
@@ -168,7 +181,6 @@ const LayoutHeader = React.memo(() => {
                         <SearchInterface
                             searchPageType={searchPageType}
                             searchSubtype={searchSubtype}
-                            onSearch={handleSearch}
                             suggestions={recentSearches}
                         />
                     </div>
