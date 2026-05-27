@@ -334,6 +334,20 @@ class UnmatchedAssetsConfig(BaseModel):
     instances: List[str] = Field(default_factory=list)
 
 
+class TMDBConfig(BaseModel):
+    """TMDB integration. When apikey is set, Chub resolves missing tmdb_id
+    values in media_cache by looking up tvdb_id/imdb_id via TMDB's /find
+    endpoint. Resolved IDs improve poster matching, Plex GUID cross-joins,
+    and the Unmatched Assets request links.
+
+    Note: TMDB enforces ~50 req/s + per-day quotas, so the cache_expiration
+    here is what protects you from re-querying the same IDs and burning rate
+    budget on every sync. Default 60 days matches Kometa."""
+
+    apikey: str = ""
+    cache_expiration: int = Field(default=60, ge=1, le=3650)  # days
+
+
 # Notifications is a dict of module_name to dicts (arbitrary structure, so keep Any)
 class ConfigNotifications(BaseModel):
     poster_renamerr: Optional[Dict[str, Any]] = Field(default_factory=dict)
@@ -381,6 +395,7 @@ class ChubConfig(BaseModel):
     user_interface: UserInterfaceConfig = Field(default_factory=UserInterfaceConfig)
     general: GeneralConfig = Field(default_factory=GeneralConfig)
     auth: AuthConfig = Field(default_factory=AuthConfig)
+    tmdb: TMDBConfig = Field(default_factory=TMDBConfig)
 
 
 # ==== SECRET REDACTION ====
@@ -389,6 +404,7 @@ SENSITIVE_FIELD_NAMES = frozenset(
     {
         "api",
         "api_key",
+        "apikey",
         "access_token",
         "refresh_token",
         "client_secret",

@@ -1,6 +1,29 @@
 // web/static/js/settings/settings_schema.js
 export const SETTINGS_SCHEMA = [
     {
+        key: 'tmdb',
+        label: 'TMDB',
+        fields: [
+            {
+                key: 'apikey',
+                label: 'API Key',
+                type: 'password',
+                required: false,
+                placeholder: 'TMDB v3 API key',
+                description:
+                    'TMDB v3 API key. Get one free at themoviedb.org/settings/api. When set, Chub resolves missing TMDB IDs for unmatched assets and improves poster matching across the app.',
+            },
+            {
+                key: 'cache_expiration',
+                label: 'Cache Expiration (days)',
+                type: 'number',
+                required: false,
+                description:
+                    'How long to cache external→TMDB ID lookups before re-querying. TMDB enforces ~50 req/s and per-day quotas, so this cache keeps repeat syncs from burning API budget. Default 60.',
+            },
+        ],
+    },
+    {
         key: 'sync_gdrive',
         label: 'Sync Gdrive',
         fields: [
@@ -1087,6 +1110,12 @@ export const SETTINGS_SCHEMA = [
 ];
 
 export const SETTINGS_MODULES = [
+    {
+        name: 'TMDB',
+        key: 'tmdb',
+        description:
+            'Look up missing TMDB IDs via the TMDB API. Improves poster matching and request links for unmatched assets.',
+    },
     {
         name: 'Sync Gdrive',
         key: 'sync_gdrive',

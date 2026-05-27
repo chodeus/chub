@@ -339,6 +339,31 @@ class Connector:
 
         sys.stdout.write("\r" + " " * 80 + "\r")
         print(f"ARR database sync complete. ({len(results)} instances)\n")
+
+        # Backfill missing tmdb_id values for rows we just synced. No-op if
+        # the user hasn't configured a TMDB API key. Running here (after all
+        # instances) lets the in-process memo dedup IDs shared between
+        # Radarr/Sonarr instances.
+        try:
+            from backend.util.tmdb import backfill_missing_tmdb_ids
+
+            tmdb_cfg = load_config().tmdb
+            synced_instances = [r.instance_name for r in results if r.success]
+            if synced_instances:
+                resolved = backfill_missing_tmdb_ids(
+                    self.db,
+                    tmdb_cfg,
+                    logger or self.logger,
+                    instance_names=synced_instances,
+                )
+                if resolved and logger:
+                    logger.info(
+                        f"TMDB backfill resolved {resolved} missing IDs across "
+                        f"{len(synced_instances)} synced instances"
+                    )
+        except Exception as exc:
+            (logger or self.logger).warning(f"TMDB backfill skipped: {exc}")
+
         return results
 
     def _sync_single_arr_instance(
