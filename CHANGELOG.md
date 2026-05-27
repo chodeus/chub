@@ -2,6 +2,13 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.15.0](https://github.com/chodeus/chub/compare/v2.14.3...v2.15.0) (2026-05-27)
+
+
+### Features
+
+* **tmdb:** backfill missing media_cache.tmdb_id via TMDB /find ([3ac500b](https://github.com/chodeus/chub/commit/3ac500bdd6739d06919cc7df7f17a6eeb48cdb99))
+
 ## [2.14.3](https://github.com/chodeus/chub/compare/v2.14.2...v2.14.3) (2026-05-27)
 
 
