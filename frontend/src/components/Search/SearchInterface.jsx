@@ -35,23 +35,28 @@ const SearchInterface = React.memo(
         const inputRef = useRef(null);
         const suggestionsRef = useRef(null);
 
-        // Seed the coordinator term from `?q=` on mount (and when the search
-        // page type changes — e.g. navigating from /media/search to
-        // /poster/search/assets). Skip if the coordinator already has a term
-        // for this type so user-cleared state and StrictMode's double-mount
-        // both short-circuit. Reads location.search at effect-fire time so
-        // direct URL navigation between two search pages reseeds correctly.
+        // Sync the coordinator term to the URL `?q=` whenever they differ.
+        // Runs on searchPageType change AND on URL search-string change so
+        // same-route navigation (e.g. clicking an unmatched-title link on the
+        // poster stats page while already on /poster/search/assets) reseeds
+        // the bar instead of leaving the old term sticky. A URL with no `?q=`
+        // is treated as an explicit reset and clears the bar.
+        //
+        // Typing in the bar doesn't push to the URL, so location.search stays
+        // stable during input and this effect doesn't fight the user.
         const location = useLocation();
         useEffect(() => {
-            const q = new URLSearchParams(location.search).get('q');
-            if (q && !getSearchState(searchPageType).term) {
-                search(searchPageType, q);
+            const q = new URLSearchParams(location.search).get('q') || '';
+            const current = getSearchState(searchPageType).term || '';
+            if (q !== current) {
+                if (q) {
+                    search(searchPageType, q);
+                } else {
+                    clearSearch(searchPageType);
+                }
             }
-            // Intentionally narrow deps — re-run only when the search-page
-            // identity changes. We don't want every coordinator state change
-            // to re-fire seeding.
             // eslint-disable-next-line react-hooks/exhaustive-deps
-        }, [searchPageType]);
+        }, [searchPageType, location.search]);
 
         const handleSearchChange = useCallback(
             event => {
