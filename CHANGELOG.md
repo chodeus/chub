@@ -2,6 +2,13 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.14.1](https://github.com/chodeus/chub/compare/v2.14.0...v2.14.1) (2026-05-27)
+
+
+### Bug Fixes
+
+* **search:** drive global bar from SearchCoordinator state ([f0ae4a1](https://github.com/chodeus/chub/commit/f0ae4a17ea18e3f5462c3237c089e1cca9214b74))
+
 ## [2.14.0](https://github.com/chodeus/chub/compare/v2.13.0...v2.14.0) (2026-05-26)
 
 
