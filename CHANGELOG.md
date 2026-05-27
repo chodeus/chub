@@ -2,6 +2,13 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.15.1](https://github.com/chodeus/chub/compare/v2.15.0...v2.15.1) (2026-05-27)
+
+
+### Bug Fixes
+
+* **tmdb:** render TMDB section in settings UI ([19852ba](https://github.com/chodeus/chub/commit/19852ba62aca51f16d260ff7c407b4fde74ff1db))
+
 ## [2.15.0](https://github.com/chodeus/chub/compare/v2.14.3...v2.15.0) (2026-05-27)
 
 
