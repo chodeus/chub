@@ -1,106 +1,93 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import PropTypes from 'prop-types';
-import { useDebounce } from '../../hooks/useDebounce.js';
+import { useLocation } from 'react-router-dom';
+import { useSearchCoordinator } from '../../contexts/SearchCoordinatorContext.jsx';
 
 /**
- * SearchInterface Component for CHUB application
+ * SearchInterface — controlled by SearchCoordinatorContext.
  *
- * Professional search interface providing context-aware search functionality
- * with debounced input, responsive design, and accessibility compliance.
+ * Input value reads from `coordinator.getSearchState(searchPageType).term`.
+ * Typing dispatches to `coordinator.search(type, value)` which updates the
+ * term synchronously and debounces the registered handler (300ms). Any seed
+ * from outside the bar — URL ?q=, programmatic, another component — flows
+ * back into the input because the input is controlled by coordinator state.
  *
- * Features:
- * - Debounced search input (300ms delay) for performance optimization
- * - Context-aware placeholder text based on search page type
- * - Responsive design with mobile-first approach (375px+)
- * - Touch-optimized interaction targets (44px minimum)
- * - Real-time search state feedback and visual indicators
- * - WCAG 2.1 AA compliant with proper ARIA labels
- * - Clear search functionality with keyboard accessibility
- * - Form submission handling for Enter key support
- *
- * @param {Object} props - Component props
- * @param {string} props.searchPageType - Type of search page ('media', 'posters')
- * @param {string} [props.searchSubtype] - Search subtype ('assets') or null for basic search
- * @param {Function} props.onSearch - Callback function for search events, receives search term as parameter
- * @param {string} [props.placeholder] - Custom placeholder text, falls back to contextual placeholder
+ * @param {Object} props
+ * @param {string} props.searchPageType — 'media' | 'posters' etc.
+ * @param {string} [props.searchSubtype] — e.g. 'assets'
+ * @param {string} [props.placeholder]
+ * @param {Array} [props.suggestions] — recent-searches list
+ * @param {Function} [props.onSuggestionSelect] — optional override for chip clicks
  */
 const SearchInterface = React.memo(
     ({
         searchPageType,
         searchSubtype,
-        onSearch,
         placeholder = 'Search media...',
         suggestions = [],
         onSuggestionSelect,
     }) => {
-        const [searchTerm, setSearchTerm] = useState('');
+        const { getSearchState, search, clearSearch } = useSearchCoordinator();
+        const term = getSearchState(searchPageType).term || '';
+
         const [isActive, setIsActive] = useState(false);
         const [showSuggestions, setShowSuggestions] = useState(false);
         const inputRef = useRef(null);
         const suggestionsRef = useRef(null);
 
-        // Debounced search with 300ms delay
-        const debouncedSearchTerm = useDebounce(searchTerm, 300);
+        // Seed the coordinator term from `?q=` on mount (and when the search
+        // page type changes — e.g. navigating from /media/search to
+        // /poster/search/assets). Skip if the coordinator already has a term
+        // for this type so user-cleared state and StrictMode's double-mount
+        // both short-circuit. Reads location.search at effect-fire time so
+        // direct URL navigation between two search pages reseeds correctly.
+        const location = useLocation();
+        useEffect(() => {
+            const q = new URLSearchParams(location.search).get('q');
+            if (q && !getSearchState(searchPageType).term) {
+                search(searchPageType, q);
+            }
+            // Intentionally narrow deps — re-run only when the search-page
+            // identity changes. We don't want every coordinator state change
+            // to re-fire seeding.
+            // eslint-disable-next-line react-hooks/exhaustive-deps
+        }, [searchPageType]);
 
-        /**
-         * Handle search input change
-         */
-        const handleSearchChange = useCallback(event => {
-            const value = event.target.value;
-            setSearchTerm(value);
-        }, []);
+        const handleSearchChange = useCallback(
+            event => {
+                search(searchPageType, event.target.value);
+            },
+            [search, searchPageType]
+        );
 
-        /**
-         * Handle search input focus
-         */
         const handleFocus = useCallback(() => {
             setIsActive(true);
-            if (suggestions.length > 0 && !searchTerm) {
+            if (suggestions.length > 0 && !term) {
                 setShowSuggestions(true);
             }
-        }, [suggestions.length, searchTerm]);
+        }, [suggestions.length, term]);
 
-        /**
-         * Handle search input blur
-         */
         const handleBlur = useCallback(e => {
-            // Delay hiding so click on suggestion can register
             if (suggestionsRef.current?.contains(e.relatedTarget)) return;
             setIsActive(false);
             setTimeout(() => setShowSuggestions(false), 150);
         }, []);
 
-        /**
-         * Handle clear search
-         */
         const handleClear = useCallback(() => {
-            setSearchTerm('');
+            clearSearch(searchPageType);
             inputRef.current?.focus();
-        }, []);
+        }, [clearSearch, searchPageType]);
 
-        /**
-         * Handle form submission
-         */
         const handleSubmit = useCallback(
             event => {
                 event.preventDefault();
-                if (onSearch && searchTerm.trim()) {
-                    onSearch(searchTerm.trim());
+                if (term.trim()) {
+                    search(searchPageType, term.trim(), { immediate: true });
                 }
             },
-            [onSearch, searchTerm]
+            [search, searchPageType, term]
         );
 
-        // Execute search when debounced term changes
-        React.useEffect(() => {
-            if (onSearch && debouncedSearchTerm !== null) {
-                onSearch(debouncedSearchTerm);
-            }
-        }, [debouncedSearchTerm, onSearch]);
-
-        /**
-         * Get appropriate placeholder text based on search context
-         */
         const getContextualPlaceholder = () => {
             if (searchPageType === 'media') {
                 return 'Search media...';
@@ -115,10 +102,9 @@ const SearchInterface = React.memo(
 
         return (
             <div className="w-full relative" role="search">
-                {/* Tier 1: Search Field */}
                 <form className="w-full" onSubmit={handleSubmit}>
                     <div
-                        className={`relative ${isActive ? 'active' : ''} ${searchTerm ? 'has-value' : ''}`}
+                        className={`relative ${isActive ? 'active' : ''} ${term ? 'has-value' : ''}`}
                     >
                         <div className="relative flex items-center bg-surface border rounded-lg h-input focus-within:border-primary">
                             <span
@@ -132,13 +118,13 @@ const SearchInterface = React.memo(
                                 type="text"
                                 className="flex-1 py-input pr-4 pl-10 border-none bg-transparent text-primary outline-none w-full h-full"
                                 placeholder={getContextualPlaceholder()}
-                                value={searchTerm}
+                                value={term}
                                 onChange={handleSearchChange}
                                 onFocus={handleFocus}
                                 onBlur={handleBlur}
                                 aria-label={`Search ${searchPageType === 'media' ? 'media' : 'posters'}`}
                             />
-                            {searchTerm && (
+                            {term && (
                                 <button
                                     type="button"
                                     className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center border-none text-secondary cursor-pointer transition-colors bg-transparent hover:text-primary"
@@ -155,7 +141,6 @@ const SearchInterface = React.memo(
                     </div>
                 </form>
 
-                {/* Search suggestions dropdown */}
                 {showSuggestions && suggestions.length > 0 && (
                     <div
                         ref={suggestionsRef}
@@ -174,11 +159,13 @@ const SearchInterface = React.memo(
                                 className="w-full text-left px-3 py-2 text-sm text-primary hover:bg-hover cursor-pointer border-none bg-transparent flex items-center gap-2"
                                 onMouseDown={e => {
                                     e.preventDefault();
-                                    const term = suggestion.term || suggestion;
-                                    setSearchTerm(term);
+                                    const value = suggestion.term || suggestion;
                                     setShowSuggestions(false);
-                                    if (onSuggestionSelect) onSuggestionSelect(term);
-                                    else if (onSearch) onSearch(term);
+                                    if (onSuggestionSelect) {
+                                        onSuggestionSelect(value);
+                                    } else {
+                                        search(searchPageType, value, { immediate: true });
+                                    }
                                 }}
                             >
                                 <span
@@ -202,7 +189,6 @@ SearchInterface.displayName = 'SearchInterface';
 SearchInterface.propTypes = {
     searchPageType: PropTypes.string.isRequired,
     searchSubtype: PropTypes.string,
-    onSearch: PropTypes.func.isRequired,
     placeholder: PropTypes.string,
     suggestions: PropTypes.array,
     onSuggestionSelect: PropTypes.func,

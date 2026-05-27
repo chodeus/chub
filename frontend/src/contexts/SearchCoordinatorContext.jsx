@@ -154,7 +154,14 @@ export const SearchCoordinatorProvider = ({
     };
 
     /**
-     * Set search state for a specific type
+     * Set search state for a specific type.
+     *
+     * `lastSearchTime` is intentionally NOT bumped here — synchronous term
+     * updates (every keystroke from the bar) would otherwise change the
+     * searchStates object identity on every keystroke and re-render every
+     * consumer of the context. Callers that want to record "a search just
+     * completed" pass `lastSearchTime: Date.now()` in their updates.
+     *
      * @param {string} searchType - Type of search
      * @param {Object} updates - State updates
      */
@@ -165,7 +172,6 @@ export const SearchCoordinatorProvider = ({
                 [searchType]: {
                     ...(prev[searchType] || defaultSearchState),
                     ...updates,
-                    lastSearchTime: Date.now(),
                 },
             }));
         },
@@ -305,6 +311,7 @@ export const SearchCoordinatorProvider = ({
                     setSearchState(searchType, {
                         status: SEARCH_STATUS.ERROR,
                         error: `No search handler for ${searchType}`,
+                        lastSearchTime: Date.now(),
                     });
                     return;
                 }
@@ -333,6 +340,7 @@ export const SearchCoordinatorProvider = ({
                         results,
                         totalCount: data?.total || resultCount,
                         error: null,
+                        lastSearchTime: Date.now(),
                     });
 
                     // Add to history if successful and requested
@@ -347,6 +355,7 @@ export const SearchCoordinatorProvider = ({
                         error: error.message || 'Search failed',
                         results: [],
                         totalCount: 0,
+                        lastSearchTime: Date.now(),
                     });
                 }
             };

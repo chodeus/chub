@@ -1,7 +1,7 @@
-import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useCallback } from 'react';
 import PropTypes from 'prop-types';
-import { useLocation } from 'react-router-dom';
 import { useApiData, useApiMutation } from '../../hooks/useApiData.js';
+import { useDebounce } from '../../hooks/useDebounce.js';
 import { useModuleExecution } from '../../hooks/useModuleExecution.js';
 import { useToast } from '../../contexts/ToastContext.jsx';
 import { useSearch, SEARCH_TYPES } from '../../contexts/SearchCoordinatorContext.jsx';
@@ -91,32 +91,23 @@ const PosterAssetsSearchPage = () => {
     // We use the term as a filter passed to the browse endpoint; the no-op
     // handler is registered only to satisfy the coordinator (which otherwise
     // warns + sets an error state when no handler exists for an active type).
+    // URL ?q= seeding lives in SearchInterface so any search page picks it up.
     const postersNoopSearch = useCallback(async () => ({ data: { items: [] } }), []);
-    const { term: search, search: triggerSearch } = useSearch(
-        SEARCH_TYPES.POSTERS,
-        postersNoopSearch
-    );
+    const { term: search } = useSearch(SEARCH_TYPES.POSTERS, postersNoopSearch);
 
-    // Allow deep-linking from other pages (e.g. the unmatched-movies table on
-    // the poster stats page) with `?q=Title`. Seed the coordinator term once on
-    // mount; the ref guard means clearing the field afterwards won't re-fire
-    // from this effect.
-    const location = useLocation();
-    const seededRef = useRef(false);
-    useEffect(() => {
-        if (seededRef.current) return;
-        const q = new URLSearchParams(location.search).get('q');
-        if (q) {
-            seededRef.current = true;
-            triggerSearch(q);
-        }
-    }, [location.search, triggerSearch]);
+    // Debounce term locally before feeding it into browseParams so the browse
+    // endpoint doesn't refire on every keystroke. The bar dispatches term
+    // updates synchronously to the coordinator; without this debounce the
+    // useApiData dependency array would change per-keystroke and refetch.
+    const debouncedSearch = useDebounce(search, 300);
 
-    // Reset to page 1 whenever the search term changes from the top bar.
-    // Done at render time (not in an effect) to avoid a cascading render.
-    const [prevSearch, setPrevSearch] = useState(search);
-    if (prevSearch !== search) {
-        setPrevSearch(search);
+    // Reset to page 1 whenever the (debounced) search term changes from the
+    // top bar. Done at render time (not in an effect) to avoid a cascading
+    // render. Compares debouncedSearch so pagination resets only after typing
+    // settles, not on every keystroke.
+    const [prevSearch, setPrevSearch] = useState(debouncedSearch);
+    if (prevSearch !== debouncedSearch) {
+        setPrevSearch(debouncedSearch);
         setOffset(0);
     }
 
@@ -124,12 +115,12 @@ const PosterAssetsSearchPage = () => {
         () => ({
             owner: owner || undefined,
             type: type || undefined,
-            query: search || undefined,
+            query: debouncedSearch || undefined,
             style: style || undefined,
             limit: PAGE_SIZE,
             offset,
         }),
-        [owner, type, style, search, offset]
+        [owner, type, style, debouncedSearch, offset]
     );
 
     const {
