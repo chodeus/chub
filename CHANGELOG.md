@@ -2,6 +2,13 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.14.3](https://github.com/chodeus/chub/compare/v2.14.2...v2.14.3) (2026-05-27)
+
+
+### Bug Fixes
+
+* **search:** sync bar to URL ?q= on same-route navigation ([c8633a2](https://github.com/chodeus/chub/commit/c8633a290b1c726db03b9f8d13c001685860c518))
+
 ## [2.14.2](https://github.com/chodeus/chub/compare/v2.14.1...v2.14.2) (2026-05-27)
 
 
