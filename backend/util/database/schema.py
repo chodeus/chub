@@ -458,6 +458,32 @@ class SchemaManager:
         )
         self._add_table(upgradinatorr_progress)
 
+        # TMDB external-ID lookup cache — maps (tvdb_id|imdb_id, media_type)
+        # → tmdb_id resolved via TMDB's /3/find endpoint. Negative-cache rows
+        # (tmdb_id NULL) prevent re-querying known-missing IDs. Expiration is
+        # enforced in the TMDBClient code, not by SQL. Critical for staying
+        # within TMDB's rate limits across repeated syncs.
+        tmdb_id_cache = TableDefinition(
+            name="tmdb_id_cache",
+            columns=[
+                ColumnDefinition("id", "INTEGER", primary_key=True, nullable=False),
+                ColumnDefinition("external_id", "TEXT", nullable=False),
+                ColumnDefinition("source", "TEXT", nullable=False),
+                ColumnDefinition("media_type", "TEXT", nullable=False),
+                ColumnDefinition("tmdb_id", "INTEGER"),
+                ColumnDefinition(
+                    "cached_at", "TEXT", nullable=False, default="CURRENT_TIMESTAMP"
+                ),
+            ],
+            constraints=[
+                "UNIQUE (external_id, source, media_type)",
+            ],
+            indexes=[
+                "CREATE INDEX IF NOT EXISTS tmdb_id_cache_lookup_idx ON tmdb_id_cache (external_id, source, media_type)",
+            ],
+        )
+        self._add_table(tmdb_id_cache)
+
         # Tracks which one-shot data migrations have been applied.
         # See _run_rename_migrations for usage.
         schema_migrations = TableDefinition(

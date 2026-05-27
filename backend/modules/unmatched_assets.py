@@ -354,6 +354,24 @@ class UnmatchedAssets(ChubModule):
                 f"Allowed_instances defaulted to: {self.allowed_instances}"
             )
 
+        # Backfill any missing tmdb_id values before grouping so unmatched
+        # entries surface a real TMDB link. Sync-time backfill (in
+        # Connector.update_arr_database) covers most rows; this catches the
+        # case where stats are viewed without a recent sync.
+        try:
+            from backend.util.tmdb import backfill_missing_tmdb_ids
+
+            backfill_missing_tmdb_ids(
+                db,
+                self.full_config.tmdb,
+                self.logger,
+                instance_names=self.allowed_instances or None,
+            )
+            # Re-fetch so in-memory rows reflect newly resolved IDs.
+            self.fetch_data(db)
+        except Exception as exc:
+            self.logger.warning(f"TMDB backfill skipped in stats: {exc}")
+
         self.filter_by_instance()
         self.filter_by_config()
         unmatched, all_media_grouped, all_collections_grouped = self.group_assets()

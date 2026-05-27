@@ -400,6 +400,7 @@ class MediaCache(DatabaseBase):
         file_hash: Optional[Any] = None,
         poster_url: Optional[Any] = None,
         arr_id: Optional[Any] = None,
+        tmdb_id: Optional[Any] = None,
         # Advanced search fields
         status: Optional[Any] = None,
         rating: Optional[Any] = None,
@@ -437,6 +438,10 @@ class MediaCache(DatabaseBase):
         if arr_id is not None:
             set_clauses.append("arr_id=?")
             params.append(arr_id)
+
+        if tmdb_id is not None:
+            set_clauses.append("tmdb_id=?")
+            params.append(int(tmdb_id))
 
         # Advanced search fields
         if status is not None:

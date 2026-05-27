@@ -23,9 +23,11 @@ const formatId = val => (val ? String(val) : null);
  *
  * For series with exactly one missing season and no missing main poster,
  * the TMDb link points directly at that season's page so the recipient
- * lands on the right poster spread instead of the show's main page. The
- * TVDb fallback is harder (TVDb URLs need a slug, not an id) so it stays
- * show-level. */
+ * lands on the right poster spread instead of the show's main page.
+ *
+ * The backend resolves most missing tmdb_id values via TMDB's /find API
+ * (configurable under Settings → TMDB), so this fallback chain rarely
+ * reaches TVDb in practice. */
 const buildPosterRequestText = (item, type) => {
     const title = item.title || 'Unknown';
     const year = item.year ? ` (${item.year})` : '';

@@ -15,6 +15,7 @@ from .poster_cache import PosterCache
 from .run_state import RunState
 from .schema import SchemaManager
 from .stats import Stats
+from .tmdb_id_cache import TmdbIdCache
 from .upgradinatorr_progress import UpgradinatorrProgress
 from .webhook_cache import WebhookCache
 from .worker import DBWorker
@@ -189,6 +190,11 @@ class ChubDB:
     def upgradinatorr_progress(self) -> UpgradinatorrProgress:
         """Access to Upgradinatorr per-child progress tracking."""
         return self._get_interface("upgradinatorr_progress", UpgradinatorrProgress)
+
+    @property
+    def tmdb_id_cache(self) -> TmdbIdCache:
+        """Access to TMDB external-ID lookup cache."""
+        return self._get_interface("tmdb_id_cache", TmdbIdCache)
 
     @property
     def worker(self) -> DBWorker:
