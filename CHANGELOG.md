@@ -2,6 +2,20 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.14.0](https://github.com/chodeus/chub/compare/v2.13.0...v2.14.0) (2026-05-26)
+
+
+### Features
+
+* **docker:** support rootless --user and document cap-drop hardening ([bd89fc1](https://github.com/chodeus/chub/commit/bd89fc14122c2fb44513d677b5c6aeb42794e886))
+* **posters:** link unmatched titles to assets search ([7dcf9cb](https://github.com/chodeus/chub/commit/7dcf9cb6d55cc7d65b8bccb429364514b8590644))
+
+
+### Bug Fixes
+
+* **docker:** install jdupes from Debian instead of building from codeberg ([506eb68](https://github.com/chodeus/chub/commit/506eb6854947fdaa6014d698afe156e3630c2aec))
+* **logs:** show selected file in dropdown and load full log on open ([28bdf57](https://github.com/chodeus/chub/commit/28bdf573653ce0b726e1d0601795c27a3b83b001))
+
 ## [2.13.0](https://github.com/chodeus/chub/compare/v2.12.0...v2.13.0) (2026-05-26)
 
 
