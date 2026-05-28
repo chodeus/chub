@@ -161,11 +161,15 @@ async def get_poster_stats(
         matched = db.stats.get_matched_posters_stats()
         poster_count = db.stats.count_poster_cache()
         gdrive = db.stats.get_gdrive_stats()
+        applied = db.stats.get_applied_breakdowns()
 
         data = {
             "matched_stats": matched,
             "poster_cache_count": poster_count,
             "gdrive_stats": gdrive,
+            "applied_by_style": applied["by_style"],
+            "applied_by_type": applied["by_type"],
+            "applied_by_source": applied["by_source"],
         }
 
         if groupBy == "type":
@@ -1985,6 +1989,40 @@ async def list_posters_added_since(
         return error(
             f"Error listing posters added_since: {str(e)}",
             code="ADDED_SINCE_ERROR",
+            status_code=500,
+        )
+
+
+@router.get(
+    "/applied",
+    summary="Matched media using a given poster variant",
+    description="List media whose applied poster is of the given style variant "
+    "(e.g. CL2K, MM2K), optionally filtered by asset type. Lets a user drill "
+    "into a variant to request the other one.",
+)
+async def list_applied_media_by_style(
+    style: str,
+    type: Optional[str] = Query(
+        None, description="Filter by asset type: movie, show, season"
+    ),
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    logger: Any = Depends(get_logger),
+    db: ChubDB = Depends(get_database),
+) -> JSONResponse:
+    try:
+        result = db.stats.get_applied_media_by_style(
+            style, asset_type=type, limit=limit, offset=offset
+        )
+        return ok(
+            f"{result['total']} matched media using {style}",
+            {**result, "style": style, "limit": limit, "offset": offset},
+        )
+    except Exception as e:
+        logger.error(f"Error listing applied media by style: {e}")
+        return error(
+            f"Error listing applied media: {str(e)}",
+            code="APPLIED_MEDIA_ERROR",
             status_code=500,
         )
 

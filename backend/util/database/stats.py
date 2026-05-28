@@ -67,6 +67,99 @@ class Stats(DatabaseBase):
         )
         return result["cnt"] if result else 0
 
+    def get_applied_breakdowns(self) -> Dict[str, Dict[str, int]]:
+        """Breakdowns of posters actually applied to the library (matched rows),
+        NOT the full GDrive catalog.
+
+        Applied posters live at ``.../<STYLE>/<source>/<file>``, so style is the
+        grandparent directory and source is the parent directory of
+        original_file. Returns counts ``by_style``, ``by_type``, and
+        ``by_source``.
+        """
+        media = (
+            self.execute_query(
+                "SELECT original_file, asset_type, season_number FROM media_cache "
+                "WHERE matched=1 AND original_file IS NOT NULL AND original_file != ''",
+                fetch_all=True,
+            )
+            or []
+        )
+        collections = (
+            self.execute_query(
+                "SELECT original_file FROM collections_cache "
+                "WHERE matched=1 AND original_file IS NOT NULL AND original_file != ''",
+                fetch_all=True,
+            )
+            or []
+        )
+
+        by_style: Dict[str, int] = defaultdict(int)
+        by_type: Dict[str, int] = defaultdict(int)
+        by_source: Dict[str, int] = defaultdict(int)
+
+        def attribute_path(path: str) -> None:
+            by_style[os.path.basename(os.path.dirname(os.path.dirname(path))) or "other"] += 1
+            by_source[os.path.basename(os.path.dirname(path)) or "other"] += 1
+
+        for row in media:
+            attribute_path(row["original_file"])
+            asset_type = row["asset_type"] or "other"
+            if asset_type == "show" and row["season_number"] is not None:
+                asset_type = "season"
+            by_type[asset_type] += 1
+
+        for row in collections:
+            attribute_path(row["original_file"])
+            by_type["collection"] += 1
+
+        return {
+            "by_style": dict(by_style),
+            "by_type": dict(by_type),
+            "by_source": dict(by_source),
+        }
+
+    def get_applied_media_by_style(
+        self, style, asset_type=None, limit=100, offset=0
+    ) -> Dict[str, Any]:
+        """List matched media whose applied poster is of the given style variant.
+
+        Lets a user drill into a variant (e.g. CL2K) to see which titles use it
+        and request the other variant. ``asset_type`` optionally narrows to
+        movie/show/season. Returns ``{items, total}`` sorted by title.
+        """
+        rows = (
+            self.execute_query(
+                "SELECT id, title, year, asset_type, season_number, tmdb_id, "
+                "tvdb_id, imdb_id, instance_name, original_file FROM media_cache "
+                "WHERE matched=1 AND original_file IS NOT NULL AND original_file != ''",
+                fetch_all=True,
+            )
+            or []
+        )
+
+        def style_of(path: str) -> str:
+            return os.path.basename(os.path.dirname(os.path.dirname(path))) or "other"
+
+        def type_of(row) -> str:
+            atype = row["asset_type"] or "other"
+            if atype == "show" and row["season_number"] is not None:
+                return "season"
+            return atype
+
+        matches = [r for r in rows if style_of(r["original_file"]) == style]
+        if asset_type:
+            matches = [r for r in matches if type_of(r) == asset_type]
+        matches.sort(key=lambda r: (r["title"] or "").lower())
+
+        total = len(matches)
+        page = matches[offset : offset + limit]
+        items = []
+        for r in page:
+            item = dict(r)
+            item["resolved_type"] = type_of(r)
+            items.append(item)
+        return {"items": items, "total": total}
+
     def upsert_gdrive_stat(
         self, location, folder_name, owner, file_count, size_bytes, last_updated
     ):
