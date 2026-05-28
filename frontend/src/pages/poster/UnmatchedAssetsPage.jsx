@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useApiData } from '../../hooks/useApiData.js';
 import { useModuleExecution } from '../../hooks/useModuleExecution.js';
@@ -16,14 +16,163 @@ const SUMMARY_TYPES = [
     { key: 'collections', label: 'Collections' },
 ];
 
-/** Collapsible table of unmatched items with a per-row "copy request" button. */
-const UnmatchedTable = ({ title, items, type }) => {
-    const [expanded, setExpanded] = useState(false);
+const TYPE_LABELS = { movie: 'Movie', series: 'Series', collection: 'Collection' };
+const TYPE_TABS = [
+    { key: 'all', label: 'All' },
+    { key: 'movie', label: 'Movies' },
+    { key: 'series', label: 'Series' },
+    { key: 'collection', label: 'Collections' },
+];
+
+const REEL_FILTERS = [
+    { key: 'all', label: 'All', match: () => true },
+    { key: 'movieshow', label: 'Movie / Show', match: t => t === 'movie' || t === 'show' },
+    { key: 'season', label: 'Season', match: t => t === 'season' },
+    { key: 'collection', label: 'Collection', match: t => t === 'collection' },
+];
+const REEL_PAGE_SIZE = 10;
+
+/** A single poster in the reel: thumbnail with fallback + source-folder caption. */
+const ReelPosterCard = ({ poster }) => {
+    const [failed, setFailed] = useState(false);
+    const caption = poster.folder || poster.style || poster.title || `#${poster.id}`;
+    return (
+        <div className="shrink-0" style={{ width: 112 }}>
+            <div
+                className="rounded-lg overflow-hidden border border-border bg-input shadow-md flex items-center justify-center"
+                style={{ aspectRatio: '2 / 3' }}
+                title={poster.title || poster.file || ''}
+            >
+                {failed ? (
+                    <span className="material-symbols-outlined text-tertiary text-3xl">
+                        broken_image
+                    </span>
+                ) : (
+                    <img
+                        src={postersAPI.getThumbnailUrl(poster.id, 200)}
+                        alt={poster.title || `#${poster.id}`}
+                        loading="lazy"
+                        className="object-cover"
+                        style={{ width: '100%', height: '100%' }}
+                        onError={() => setFailed(true)}
+                    />
+                )}
+            </div>
+            <p className="mt-1 text-xs text-tertiary text-center truncate">{caption}</p>
+        </div>
+    );
+};
+
+/** Horizontal "movie reel" of recently synced posters with type filters + paging. */
+const RecentPosterReel = ({ posters, onRefresh }) => {
+    const [filterKey, setFilterKey] = useState('all');
+    const [page, setPage] = useState(0);
+    const filtered = useMemo(() => {
+        const f = REEL_FILTERS.find(x => x.key === filterKey) || REEL_FILTERS[0];
+        return posters.filter(p => f.match(p.asset_type));
+    }, [posters, filterKey]);
+    const pageCount = Math.max(1, Math.ceil(filtered.length / REEL_PAGE_SIZE));
+    const safePage = Math.min(page, pageCount - 1);
+    const visible = filtered.slice(
+        safePage * REEL_PAGE_SIZE,
+        safePage * REEL_PAGE_SIZE + REEL_PAGE_SIZE
+    );
+    const selectFilter = key => {
+        setFilterKey(key);
+        setPage(0);
+    };
+    return (
+        <section>
+            <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
+                <h3 className="text-lg font-semibold text-primary flex items-center gap-2">
+                    <span className="material-symbols-outlined text-brand-primary">movie</span>
+                    Recently synced
+                </h3>
+                <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex flex-wrap gap-1">
+                        {REEL_FILTERS.map(f => (
+                            <button
+                                key={f.key}
+                                onClick={() => selectFilter(f.key)}
+                                className={`px-3 py-1 text-sm rounded-lg border ${
+                                    filterKey === f.key
+                                        ? 'border-brand-primary/50 bg-surface-alt text-primary'
+                                        : 'border-border text-secondary hover:text-primary'
+                                }`}
+                            >
+                                {f.label}
+                            </button>
+                        ))}
+                    </div>
+                    <span
+                        className="text-xs text-tertiary text-center"
+                        style={{ minWidth: '3rem' }}
+                    >
+                        {safePage + 1} / {pageCount}
+                    </span>
+                    <IconButton
+                        icon="refresh"
+                        variant="ghost"
+                        aria-label="Refresh recently synced"
+                        onClick={onRefresh}
+                    />
+                </div>
+            </div>
+            <div className="flex items-center gap-2">
+                <IconButton
+                    icon="chevron_left"
+                    variant="ghost"
+                    aria-label="Previous page"
+                    disabled={safePage === 0}
+                    onClick={() => setPage(p => Math.max(0, p - 1))}
+                />
+                <div className="flex-1 overflow-x-auto">
+                    <div className="flex gap-3">
+                        {visible.map(p => (
+                            <ReelPosterCard key={p.id} poster={p} />
+                        ))}
+                    </div>
+                </div>
+                <IconButton
+                    icon="chevron_right"
+                    variant="ghost"
+                    aria-label="Next page"
+                    disabled={safePage >= pageCount - 1}
+                    onClick={() => setPage(p => Math.min(pageCount - 1, p + 1))}
+                />
+            </div>
+        </section>
+    );
+};
+
+/** Unified, filterable + searchable table of every unmatched item. */
+const UnmatchedList = ({ items }) => {
     const toast = useToast();
-    if (!items || items.length === 0) return null;
+    const [typeKey, setTypeKey] = useState('all');
+    const [query, setQuery] = useState('');
+
+    const all = useMemo(
+        () => [
+            ...(items.movies || []).map(it => ({ ...it, _type: 'movie' })),
+            ...(items.series || []).map(it => ({ ...it, _type: 'series' })),
+            ...(items.collections || []).map(it => ({ ...it, _type: 'collection' })),
+        ],
+        [items]
+    );
+
+    const presentTabs = TYPE_TABS.filter(t => t.key === 'all' || all.some(i => i._type === t.key));
+
+    const filtered = useMemo(() => {
+        const q = query.trim().toLowerCase();
+        return all.filter(
+            i =>
+                (typeKey === 'all' || i._type === typeKey) &&
+                (!q || (i.title || '').toLowerCase().includes(q))
+        );
+    }, [all, typeKey, query]);
 
     const handleCopy = async item => {
-        const built = buildPosterRequestText(item, type);
+        const built = buildPosterRequestText(item, item._type === 'movie' ? 'movie' : 'series');
         if (!built) {
             toast.error('No TMDb/TVDb id available — cannot build a request link');
             return;
@@ -40,41 +189,68 @@ const UnmatchedTable = ({ title, items, type }) => {
         }
     };
 
+    if (all.length === 0) {
+        return (
+            <p className="text-sm text-secondary">
+                Nothing unmatched — every tracked item has a poster.
+            </p>
+        );
+    }
+
     return (
-        <div className="mt-3">
-            <button
-                className="text-sm text-accent hover:underline flex items-center gap-1"
-                onClick={() => setExpanded(!expanded)}
-            >
-                <span className="material-symbols-outlined text-base">
-                    {expanded ? 'expand_less' : 'expand_more'}
-                </span>
-                {expanded ? 'Hide' : 'Show'} {items.length} unmatched {title.toLowerCase()}
-            </button>
-            {expanded && (
-                <div className="mt-2 overflow-x-auto rounded-lg border border-border">
+        <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex flex-wrap gap-1">
+                    {presentTabs.map(t => (
+                        <button
+                            key={t.key}
+                            onClick={() => setTypeKey(t.key)}
+                            className={`px-3 py-1 text-sm rounded-lg border ${
+                                typeKey === t.key
+                                    ? 'border-brand-primary/50 bg-surface-alt text-primary'
+                                    : 'border-border text-secondary hover:text-primary'
+                            }`}
+                        >
+                            {t.label}
+                        </button>
+                    ))}
+                </div>
+                <input
+                    type="text"
+                    value={query}
+                    onChange={e => setQuery(e.target.value)}
+                    placeholder="Search title…"
+                    aria-label="Search unmatched titles"
+                    className="px-3 py-2 bg-input border border-border rounded-md text-primary text-sm"
+                    style={{ minWidth: '14rem' }}
+                />
+            </div>
+            {filtered.length === 0 ? (
+                <p className="text-sm text-tertiary">No matches.</p>
+            ) : (
+                <div className="overflow-x-auto rounded-lg border border-border">
                     <table className="w-full text-sm">
                         <thead>
                             <tr className="bg-surface-alt text-secondary text-left">
                                 <th className="px-3 py-2 font-medium">Title</th>
+                                <th className="px-3 py-2 font-medium">Type</th>
                                 <th className="px-3 py-2 font-medium">Year</th>
-                                {type === 'series' && (
-                                    <th className="px-3 py-2 font-medium">Missing</th>
-                                )}
+                                <th className="px-3 py-2 font-medium">Missing</th>
                                 <th className="px-3 py-2 font-medium">Instance</th>
                                 <th className="px-3 py-2 font-medium">TMDB</th>
                                 <th className="px-3 py-2 font-medium">IMDB</th>
                                 <th className="px-3 py-2 font-medium">TVDB</th>
-                                {type !== 'collection' && (
-                                    <th className="px-3 py-2 font-medium text-right">Request</th>
-                                )}
+                                <th className="px-3 py-2 font-medium text-right">Request</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-border">
-                            {items.map((item, idx) => (
-                                <tr key={idx} className="bg-surface hover:bg-surface-alt">
+                            {filtered.map((item, idx) => (
+                                <tr
+                                    key={`${item._type}-${item.tmdb_id || item.tvdb_id || item.title || idx}`}
+                                    className="bg-surface hover:bg-surface-alt"
+                                >
                                     <td className="px-3 py-2 text-primary">
-                                        {type !== 'collection' ? (
+                                        {item._type !== 'collection' ? (
                                             <Link
                                                 to={`/poster/search/assets?q=${encodeURIComponent(item.title)}`}
                                                 className="hover:text-accent hover:underline"
@@ -86,19 +262,29 @@ const UnmatchedTable = ({ title, items, type }) => {
                                             item.title
                                         )}
                                     </td>
+                                    <td className="px-3 py-2 text-secondary">
+                                        {TYPE_LABELS[item._type]}
+                                    </td>
                                     <td className="px-3 py-2 text-secondary">{item.year || '—'}</td>
-                                    {type === 'series' && (
-                                        <td className="px-3 py-2 text-secondary">
-                                            {item.missing_main_poster && (
-                                                <span className="text-warning">Main poster</span>
-                                            )}
-                                            {item.missing_main_poster &&
-                                                item.missing_seasons?.length > 0 &&
-                                                ', '}
-                                            {item.missing_seasons?.length > 0 &&
-                                                `S${item.missing_seasons.join(', S')}`}
-                                        </td>
-                                    )}
+                                    <td className="px-3 py-2 text-secondary">
+                                        {item._type === 'series' ? (
+                                            <>
+                                                {item.missing_main_poster && (
+                                                    <span className="text-warning">Main</span>
+                                                )}
+                                                {item.missing_main_poster &&
+                                                    item.missing_seasons?.length > 0 &&
+                                                    ', '}
+                                                {item.missing_seasons?.length > 0 &&
+                                                    `S${item.missing_seasons.join(', S')}`}
+                                                {!item.missing_main_poster &&
+                                                    !(item.missing_seasons?.length > 0) &&
+                                                    '—'}
+                                            </>
+                                        ) : (
+                                            '—'
+                                        )}
+                                    </td>
                                     <td className="px-3 py-2 text-secondary">
                                         {item.instance_name || '—'}
                                     </td>
@@ -111,8 +297,8 @@ const UnmatchedTable = ({ title, items, type }) => {
                                     <td className="px-3 py-2 text-tertiary font-mono text-xs">
                                         {formatId(item.tvdb_id) || '—'}
                                     </td>
-                                    {type !== 'collection' && (
-                                        <td className="px-3 py-2 text-right">
+                                    <td className="px-3 py-2 text-right">
+                                        {item._type !== 'collection' && (
                                             <IconButton
                                                 icon="content_copy"
                                                 size="small"
@@ -121,8 +307,8 @@ const UnmatchedTable = ({ title, items, type }) => {
                                                 title="Copy poster request"
                                                 onClick={() => handleCopy(item)}
                                             />
-                                        </td>
-                                    )}
+                                        )}
+                                    </td>
                                 </tr>
                             ))}
                         </tbody>
@@ -144,6 +330,19 @@ const UnmatchedAssetsPage = () => {
     const summary = useMemo(() => data?.data?.summary || {}, [data]);
     const items = useMemo(() => data?.data?.unmatched || {}, [data]);
     const grandTotal = summary.grand_total || {};
+
+    // The carousel shows the 50 most recently synced posters in sync order
+    // (the backend orders poster_cache.created_at DESC). Epoch cutoff means
+    // "all time" so it's the last 50 regardless of age, not a rolling window.
+    const recentCutoff = useMemo(() => new Date(0).toISOString(), []);
+    const { data: recentPostersData, refresh: refreshRecent } = useApiData({
+        apiFunction: useCallback(
+            () => postersAPI.fetchPostersAddedSince(recentCutoff, 50),
+            [recentCutoff]
+        ),
+        options: { showErrorToast: false },
+    });
+    const recentPosters = useMemo(() => recentPostersData?.data?.items || [], [recentPostersData]);
 
     const handleRun = async () => {
         await executeModule('unmatched_assets');
@@ -193,13 +392,17 @@ const UnmatchedAssetsPage = () => {
                 </div>
             </div>
 
+            {recentPosters.length > 0 && (
+                <RecentPosterReel posters={recentPosters} onRefresh={refreshRecent} />
+            )}
+
             {!hasData ? (
                 <p className="text-sm text-secondary">
                     No unmatched-asset data yet. Run &ldquo;Run Unmatched Assets&rdquo; to scan your
                     library.
                 </p>
             ) : (
-                <section>
+                <>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                         {SUMMARY_TYPES.map(({ key, label }) => {
                             const typeData = summary[key] || {};
@@ -231,14 +434,8 @@ const UnmatchedAssetsPage = () => {
                         })}
                     </div>
 
-                    <UnmatchedTable title="Movies" items={items.movies} type="movie" />
-                    <UnmatchedTable title="Series" items={items.series} type="series" />
-                    <UnmatchedTable
-                        title="Collections"
-                        items={items.collections}
-                        type="collection"
-                    />
-                </section>
+                    <UnmatchedList items={items} />
+                </>
             )}
         </div>
     );
