@@ -25,127 +25,6 @@ const formatSize = bytes => {
 const formatSyncDate = val =>
     val?.length === 8 ? `${val.slice(0, 4)}-${val.slice(4, 6)}-${val.slice(6, 8)}` : val;
 
-const ASSET_FILTERS = [
-    { key: 'all', label: 'All', match: () => true },
-    { key: 'movieshow', label: 'Movie / Show', match: t => t === 'movie' || t === 'show' },
-    { key: 'season', label: 'Season', match: t => t === 'season' },
-    { key: 'collection', label: 'Collection', match: t => t === 'collection' },
-];
-const REEL_PAGE_SIZE = 10;
-
-/** A single poster in the reel: thumbnail with fallback + source-folder caption. */
-const ReelPosterCard = ({ poster }) => {
-    const [failed, setFailed] = useState(false);
-    const caption = poster.folder || poster.style || poster.title || `#${poster.id}`;
-    return (
-        <div className="shrink-0" style={{ width: 112 }}>
-            <div
-                className="rounded-lg overflow-hidden border border-border bg-input shadow-md flex items-center justify-center"
-                style={{ aspectRatio: '2 / 3' }}
-                title={poster.title || poster.file || ''}
-            >
-                {failed ? (
-                    <span className="material-symbols-outlined text-tertiary text-3xl">
-                        broken_image
-                    </span>
-                ) : (
-                    <img
-                        src={postersAPI.getThumbnailUrl(poster.id, 200)}
-                        alt={poster.title || `#${poster.id}`}
-                        loading="lazy"
-                        className="object-cover"
-                        style={{ width: '100%', height: '100%' }}
-                        onError={() => setFailed(true)}
-                    />
-                )}
-            </div>
-            <p className="mt-1 text-xs text-tertiary text-center truncate">{caption}</p>
-        </div>
-    );
-};
-
-/** Horizontal "movie reel" of recently synced posters with type filters + paging. */
-const RecentPosterReel = ({ posters, onRefresh }) => {
-    const [filterKey, setFilterKey] = useState('all');
-    const [page, setPage] = useState(0);
-    const filtered = useMemo(() => {
-        const f = ASSET_FILTERS.find(x => x.key === filterKey) || ASSET_FILTERS[0];
-        return posters.filter(p => f.match(p.asset_type));
-    }, [posters, filterKey]);
-    const pageCount = Math.max(1, Math.ceil(filtered.length / REEL_PAGE_SIZE));
-    const safePage = Math.min(page, pageCount - 1);
-    const visible = filtered.slice(
-        safePage * REEL_PAGE_SIZE,
-        safePage * REEL_PAGE_SIZE + REEL_PAGE_SIZE
-    );
-    const selectFilter = key => {
-        setFilterKey(key);
-        setPage(0);
-    };
-    return (
-        <section>
-            <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
-                <h3 className="text-lg font-semibold text-primary flex items-center gap-2">
-                    <span className="material-symbols-outlined text-brand-primary">movie</span>
-                    Recently synced
-                </h3>
-                <div className="flex items-center gap-2 flex-wrap">
-                    <div className="flex flex-wrap gap-1">
-                        {ASSET_FILTERS.map(f => (
-                            <button
-                                key={f.key}
-                                onClick={() => selectFilter(f.key)}
-                                className={`px-3 py-1 text-sm rounded-lg border ${
-                                    filterKey === f.key
-                                        ? 'border-brand-primary/50 bg-surface-alt text-primary'
-                                        : 'border-border text-secondary hover:text-primary'
-                                }`}
-                            >
-                                {f.label}
-                            </button>
-                        ))}
-                    </div>
-                    <span
-                        className="text-xs text-tertiary text-center"
-                        style={{ minWidth: '3rem' }}
-                    >
-                        {safePage + 1} / {pageCount}
-                    </span>
-                    <IconButton
-                        icon="refresh"
-                        variant="ghost"
-                        aria-label="Refresh recently synced"
-                        onClick={onRefresh}
-                    />
-                </div>
-            </div>
-            <div className="flex items-center gap-2">
-                <IconButton
-                    icon="chevron_left"
-                    variant="ghost"
-                    aria-label="Previous page"
-                    disabled={safePage === 0}
-                    onClick={() => setPage(p => Math.max(0, p - 1))}
-                />
-                <div className="flex-1 overflow-x-auto">
-                    <div className="flex gap-3">
-                        {visible.map(p => (
-                            <ReelPosterCard key={p.id} poster={p} />
-                        ))}
-                    </div>
-                </div>
-                <IconButton
-                    icon="chevron_right"
-                    variant="ghost"
-                    aria-label="Next page"
-                    disabled={safePage >= pageCount - 1}
-                    onClick={() => setPage(p => Math.min(pageCount - 1, p + 1))}
-                />
-            </div>
-        </section>
-    );
-};
-
 /** Turn a {label: count} map into sorted bar data. `topN` collapses the tail
  * into an "Others" row; `labelMap` renames raw keys for display. */
 const buildBars = (counts, { topN, labelMap } = {}) => {
@@ -419,19 +298,6 @@ const PosterStatsPage = () => {
         options: { showErrorToast: false },
     });
 
-    // The carousel shows the 50 most recently synced posters in sync order
-    // (the backend orders poster_cache.created_at DESC). Epoch cutoff means
-    // "all time" so it's the last 50 regardless of age, not a rolling window.
-    const recentCutoff = useMemo(() => new Date(0).toISOString(), []);
-    const { data: recentPostersData, refresh: refreshRecent } = useApiData({
-        apiFunction: useCallback(
-            () => postersAPI.fetchPostersAddedSince(recentCutoff, 50),
-            [recentCutoff]
-        ),
-        options: { showErrorToast: false },
-    });
-    const recentPosters = useMemo(() => recentPostersData?.data?.items || [], [recentPostersData]);
-
     // Low-resolution posters. 1000px is the existing backend default and
     // matches what most poster-source guidance considers the minimum for
     // a 16:9 / 2:3 display without obvious blurring.
@@ -563,11 +429,6 @@ const PosterStatsPage = () => {
                     )}
                 </div>
             </div>
-
-            {/* Recently Synced Posters */}
-            {recentPosters.length > 0 && (
-                <RecentPosterReel posters={recentPosters} onRefresh={refreshRecent} />
-            )}
 
             {/* Poster Breakdown — mix actually applied to the library */}
             {variantBars.length > 0 && (
