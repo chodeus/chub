@@ -24,6 +24,7 @@ const ROUTE_CRUMBS = {
     '/poster/search/assets': [{ label: 'Assets' }, { label: 'Assets Search' }],
     '/poster/search/gdrive': [{ label: 'Assets' }, { label: 'GDrive Sources' }],
     '/poster/cleanarr': [{ label: 'Assets' }, { label: 'Poster Cleanarr' }],
+    '/poster/unmatched': [{ label: 'Assets' }, { label: 'Unmatched Assets' }],
     '/poster/statistics': [{ label: 'Assets' }, { label: 'Statistics' }],
 
     '/settings/general': [{ label: 'Settings' }, { label: 'General' }],

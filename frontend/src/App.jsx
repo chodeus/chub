@@ -59,6 +59,7 @@ const PosterAssetsSearchPage = React.lazy(
 );
 const PosterCleanarrPage = React.lazy(() => import('./pages/poster/PosterCleanarrPage.jsx'));
 const BorderPreviewPage = React.lazy(() => import('./pages/poster/BorderPreviewPage.jsx'));
+const UnmatchedAssetsPage = React.lazy(() => import('./pages/poster/UnmatchedAssetsPage.jsx'));
 const PosterStatsPage = React.lazy(() => import('./pages/poster/PosterStatsPage.jsx'));
 
 // Lazy-loaded dev pages
@@ -302,6 +303,17 @@ const App = () => {
                                                                 to="/poster/cleanarr"
                                                                 replace
                                                             />
+                                                        }
+                                                    />
+                                                    <Route
+                                                        path="poster/unmatched"
+                                                        element={
+                                                            <PageErrorBoundary
+                                                                pageName="Unmatched Assets"
+                                                                pageDescription="Media with no matched poster"
+                                                            >
+                                                                <UnmatchedAssetsPage />
+                                                            </PageErrorBoundary>
                                                         }
                                                     />
                                                     <Route

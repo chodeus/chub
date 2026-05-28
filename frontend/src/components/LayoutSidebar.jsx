@@ -55,6 +55,11 @@ const NAV_SECTIONS = [
                         label: 'Border Replacerr',
                         path: '/poster/border-replacerr',
                     },
+                    {
+                        id: 'unmatched-assets',
+                        label: 'Unmatched Assets',
+                        path: '/poster/unmatched',
+                    },
                     { id: 'poster-statistics', label: 'Statistics', path: '/poster/statistics' },
                 ],
             },
