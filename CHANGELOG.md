@@ -2,6 +2,13 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.17.0](https://github.com/chodeus/chub/compare/v2.16.0...v2.17.0) (2026-05-28)
+
+
+### Features
+
+* **posters:** redesign Unmatched Assets page and relocate recent-synced reel ([998777f](https://github.com/chodeus/chub/commit/998777f1adeb4ddf8bfa4e9ce16bfd475ca480be))
+
 ## [2.16.0](https://github.com/chodeus/chub/compare/v2.15.1...v2.16.0) (2026-05-28)
 
 
