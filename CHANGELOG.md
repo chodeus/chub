@@ -2,6 +2,15 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.16.0](https://github.com/chodeus/chub/compare/v2.15.1...v2.16.0) (2026-05-28)
+
+
+### Features
+
+* **posters:** add applied-poster breakdowns and variant drill-down API ([ae99e2c](https://github.com/chodeus/chub/commit/ae99e2c9705c9795bf2c8dcf13e98e9b00470c39))
+* **posters:** add dedicated Unmatched Assets page ([900fa71](https://github.com/chodeus/chub/commit/900fa716be1678d75d7eb8b7f77fda81aff19aad))
+* **stats:** revamp poster statistics page ([0b80da8](https://github.com/chodeus/chub/commit/0b80da8067511860ef7be9dbb7197ae588ee8afb))
+
 ## [2.15.1](https://github.com/chodeus/chub/compare/v2.15.0...v2.15.1) (2026-05-27)
 
 
