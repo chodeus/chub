@@ -1,10 +1,9 @@
 import React, { useMemo, useState, useCallback } from 'react';
-import { Link } from 'react-router-dom';
 import { useApiData } from '../../hooks/useApiData.js';
-import { useModuleExecution } from '../../hooks/useModuleExecution.js';
 import { useToast } from '../../contexts/ToastContext.jsx';
 import { postersAPI } from '../../utils/api/posters.js';
 import { copyText } from '../../utils/clipboard.js';
+import { buildPosterRequestText, formatId } from '../../utils/posterRequest.js';
 import { IconButton, LoadingButton, PageHeader } from '../../components/ui/index.js';
 import Spinner from '../../components/ui/Spinner.jsx';
 
@@ -15,150 +14,332 @@ const PERIOD_OPTIONS = [
     { value: '90d', label: 'Last 90 Days' },
 ];
 
-/** Formats an external ID for display — returns null if empty/falsy */
-const formatId = val => (val ? String(val) : null);
-
-/** Build a Discord-ready poster-request block for a single unmatched item.
- * Returns {text, hasTmdb} or null when no usable id is available.
- *
- * For series with exactly one missing season and no missing main poster,
- * the TMDb link points directly at that season's page so the recipient
- * lands on the right poster spread instead of the show's main page.
- *
- * The backend resolves most missing tmdb_id values via TMDB's /find API
- * (configurable under Settings → TMDB), so this fallback chain rarely
- * reaches TVDb in practice. */
-const buildPosterRequestText = (item, type) => {
-    const title = item.title || 'Unknown';
-    const year = item.year ? ` (${item.year})` : '';
-    const lines = [`${title}${year}`];
-
-    const missingSeasons = type === 'series' ? item.missing_seasons || [] : [];
-    const onlyOneMissingSeason =
-        type === 'series' && missingSeasons.length === 1 && !item.missing_main_poster;
-
-    let hasTmdb = false;
-    if (type === 'movie' && item.tmdb_id) {
-        lines.push(`https://www.themoviedb.org/movie/${item.tmdb_id}`);
-        hasTmdb = true;
-    } else if (type === 'series' && item.tmdb_id) {
-        if (onlyOneMissingSeason) {
-            lines.push(`https://www.themoviedb.org/tv/${item.tmdb_id}/season/${missingSeasons[0]}`);
-        } else {
-            lines.push(`https://www.themoviedb.org/tv/${item.tmdb_id}`);
-        }
-        hasTmdb = true;
-    } else if (type === 'series' && item.tvdb_id) {
-        lines.push(`https://thetvdb.com/?tab=series&id=${item.tvdb_id}`);
-    } else {
-        return null;
-    }
-
-    if (type === 'series') {
-        if (item.missing_main_poster) lines.push('Missing main poster');
-        if (missingSeasons.length > 0) {
-            lines.push(`Missing seasons: ${missingSeasons.join(', ')}`);
-        }
-    }
-    return { text: lines.join('\n'), hasTmdb };
+/** MB under 1 GB, GB under 1 TB, otherwise TB — keeps large sizes from showing noisy MB. */
+const formatSize = bytes => {
+    const mb = bytes / 1024 / 1024;
+    if (mb >= 1024 * 1024) return `${(mb / 1024 / 1024).toFixed(1)} TB`;
+    return mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${mb.toFixed(0)} MB`;
 };
 
-/** Collapsible table of unmatched items */
-const UnmatchedTable = ({ title, items, type }) => {
-    const [expanded, setExpanded] = useState(false);
+/** Normalize a YYYYMMDD (or already-formatted) sync date to YYYY-MM-DD. */
+const formatSyncDate = val =>
+    val?.length === 8 ? `${val.slice(0, 4)}-${val.slice(4, 6)}-${val.slice(6, 8)}` : val;
+
+const ASSET_FILTERS = [
+    { key: 'all', label: 'All', match: () => true },
+    { key: 'movieshow', label: 'Movie / Show', match: t => t === 'movie' || t === 'show' },
+    { key: 'season', label: 'Season', match: t => t === 'season' },
+    { key: 'collection', label: 'Collection', match: t => t === 'collection' },
+];
+const REEL_PAGE_SIZE = 10;
+
+/** A single poster in the reel: thumbnail with fallback + source-folder caption. */
+const ReelPosterCard = ({ poster }) => {
+    const [failed, setFailed] = useState(false);
+    const caption = poster.folder || poster.style || poster.title || `#${poster.id}`;
+    return (
+        <div className="shrink-0" style={{ width: 112 }}>
+            <div
+                className="rounded-lg overflow-hidden border border-border bg-input shadow-md flex items-center justify-center"
+                style={{ aspectRatio: '2 / 3' }}
+                title={poster.title || poster.file || ''}
+            >
+                {failed ? (
+                    <span className="material-symbols-outlined text-tertiary text-3xl">
+                        broken_image
+                    </span>
+                ) : (
+                    <img
+                        src={postersAPI.getThumbnailUrl(poster.id, 200)}
+                        alt={poster.title || `#${poster.id}`}
+                        loading="lazy"
+                        className="object-cover"
+                        style={{ width: '100%', height: '100%' }}
+                        onError={() => setFailed(true)}
+                    />
+                )}
+            </div>
+            <p className="mt-1 text-xs text-tertiary text-center truncate">{caption}</p>
+        </div>
+    );
+};
+
+/** Horizontal "movie reel" of recently synced posters with type filters + paging. */
+const RecentPosterReel = ({ posters, onRefresh }) => {
+    const [filterKey, setFilterKey] = useState('all');
+    const [page, setPage] = useState(0);
+    const filtered = useMemo(() => {
+        const f = ASSET_FILTERS.find(x => x.key === filterKey) || ASSET_FILTERS[0];
+        return posters.filter(p => f.match(p.asset_type));
+    }, [posters, filterKey]);
+    const pageCount = Math.max(1, Math.ceil(filtered.length / REEL_PAGE_SIZE));
+    const safePage = Math.min(page, pageCount - 1);
+    const visible = filtered.slice(
+        safePage * REEL_PAGE_SIZE,
+        safePage * REEL_PAGE_SIZE + REEL_PAGE_SIZE
+    );
+    const selectFilter = key => {
+        setFilterKey(key);
+        setPage(0);
+    };
+    return (
+        <section>
+            <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
+                <h3 className="text-lg font-semibold text-primary flex items-center gap-2">
+                    <span className="material-symbols-outlined text-brand-primary">movie</span>
+                    Recently synced
+                </h3>
+                <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex flex-wrap gap-1">
+                        {ASSET_FILTERS.map(f => (
+                            <button
+                                key={f.key}
+                                onClick={() => selectFilter(f.key)}
+                                className={`px-3 py-1 text-sm rounded-lg border ${
+                                    filterKey === f.key
+                                        ? 'border-brand-primary/50 bg-surface-alt text-primary'
+                                        : 'border-border text-secondary hover:text-primary'
+                                }`}
+                            >
+                                {f.label}
+                            </button>
+                        ))}
+                    </div>
+                    <span
+                        className="text-xs text-tertiary text-center"
+                        style={{ minWidth: '3rem' }}
+                    >
+                        {safePage + 1} / {pageCount}
+                    </span>
+                    <IconButton
+                        icon="refresh"
+                        variant="ghost"
+                        aria-label="Refresh recently synced"
+                        onClick={onRefresh}
+                    />
+                </div>
+            </div>
+            <div className="flex items-center gap-2">
+                <IconButton
+                    icon="chevron_left"
+                    variant="ghost"
+                    aria-label="Previous page"
+                    disabled={safePage === 0}
+                    onClick={() => setPage(p => Math.max(0, p - 1))}
+                />
+                <div className="flex-1 overflow-x-auto">
+                    <div className="flex gap-3">
+                        {visible.map(p => (
+                            <ReelPosterCard key={p.id} poster={p} />
+                        ))}
+                    </div>
+                </div>
+                <IconButton
+                    icon="chevron_right"
+                    variant="ghost"
+                    aria-label="Next page"
+                    disabled={safePage >= pageCount - 1}
+                    onClick={() => setPage(p => Math.min(pageCount - 1, p + 1))}
+                />
+            </div>
+        </section>
+    );
+};
+
+/** Turn a {label: count} map into sorted bar data. `topN` collapses the tail
+ * into an "Others" row; `labelMap` renames raw keys for display. */
+const buildBars = (counts, { topN, labelMap } = {}) => {
+    let entries = Object.entries(counts || {}).sort((a, b) => b[1] - a[1]);
+    let othersCount = 0;
+    if (topN && entries.length > topN) {
+        othersCount = entries.slice(topN).reduce((sum, [, n]) => sum + n, 0);
+        entries = entries.slice(0, topN);
+    }
+    const total = Object.values(counts || {}).reduce((sum, n) => sum + n, 0) || 1;
+    const max = Math.max(...entries.map(([, n]) => n), othersCount, 1);
+    const toBar = (label, count) => ({
+        label,
+        count,
+        pct: (count / total) * 100,
+        barPct: (count / max) * 100,
+    });
+    const bars = entries.map(([label, count]) => toBar(labelMap?.[label] || label, count));
+    if (othersCount > 0) bars.push(toBar('Others', othersCount));
+    return bars;
+};
+
+/** Horizontal bar list for a single breakdown chart. When `onSelect` is
+ * provided each row becomes a button (used to drill into a variant). */
+const BreakdownBars = ({ bars, onSelect, activeLabel }) => {
+    const interactive = typeof onSelect === 'function';
+    return (
+        <div className="flex flex-col gap-3">
+            {bars.map(({ label, count, pct, barPct }) => {
+                const inner = (
+                    <>
+                        <div className="flex justify-between text-sm mb-1">
+                            <span
+                                className={activeLabel === label ? 'text-accent' : 'text-primary'}
+                            >
+                                {label}
+                                {interactive && <span className="text-tertiary"> ›</span>}
+                            </span>
+                            <span className="text-tertiary">
+                                {count.toLocaleString()} · {pct.toFixed(1)}%
+                            </span>
+                        </div>
+                        <div className="h-2 bg-surface-alt rounded-full overflow-hidden">
+                            <div
+                                className="h-full bg-accent rounded-full"
+                                style={{ width: `${barPct}%` }}
+                            />
+                        </div>
+                    </>
+                );
+                return interactive ? (
+                    <button
+                        key={label}
+                        type="button"
+                        onClick={() => onSelect(label)}
+                        style={{
+                            width: '100%',
+                            textAlign: 'left',
+                            cursor: 'pointer',
+                            background: 'none',
+                            border: 'none',
+                            padding: 0,
+                        }}
+                    >
+                        {inner}
+                    </button>
+                ) : (
+                    <div key={label}>{inner}</div>
+                );
+            })}
+        </div>
+    );
+};
+
+const ASSET_TYPE_LABELS = {
+    movie: 'Movies',
+    show: 'Shows',
+    season: 'Seasons',
+    collection: 'Collections',
+    other: 'Other',
+};
+
+const APPLIED_TYPE_FILTERS = [
+    { key: 'all', label: 'All' },
+    { key: 'movie', label: 'Movies' },
+    { key: 'show', label: 'Shows' },
+    { key: 'season', label: 'Seasons' },
+];
+const APPLIED_PAGE_SIZE = 50;
+
+/** Drill-down table of media using a given poster variant, with a per-row
+ * "copy request" button (same Discord block as Unmatched Assets). */
+const AppliedVariantTable = ({ style }) => {
     const toast = useToast();
-    if (!items || items.length === 0) return null;
+    const [typeKey, setTypeKey] = useState('all');
+    const [offset, setOffset] = useState(0);
+    const { data } = useApiData({
+        apiFunction: useCallback(
+            () =>
+                postersAPI.fetchAppliedByStyle(style, {
+                    type: typeKey === 'all' ? undefined : typeKey,
+                    limit: APPLIED_PAGE_SIZE,
+                    offset,
+                }),
+            [style, typeKey, offset]
+        ),
+        options: { showErrorToast: false },
+        dependencies: [style, typeKey, offset],
+    });
+    const items = data?.data?.items || [];
+    const total = data?.data?.total || 0;
+    const page = Math.floor(offset / APPLIED_PAGE_SIZE) + 1;
+    const pageCount = Math.max(1, Math.ceil(total / APPLIED_PAGE_SIZE));
+
+    const selectType = key => {
+        setTypeKey(key);
+        setOffset(0);
+    };
 
     const handleCopy = async item => {
-        const built = buildPosterRequestText(item, type);
+        const built = buildPosterRequestText(
+            item,
+            item.resolved_type === 'movie' ? 'movie' : 'series'
+        );
         if (!built) {
             toast.error('No TMDb/TVDb id available — cannot build a request link');
             return;
         }
         try {
             await copyText(built.text);
-            toast.success(
-                built.hasTmdb
-                    ? 'Poster request copied to clipboard'
-                    : 'Copied — TVDb link only; add TMDb link manually before posting'
-            );
+            toast.success('Poster request copied to clipboard');
         } catch {
             toast.error('Clipboard write failed');
         }
     };
 
     return (
-        <div className="mt-3">
-            <button
-                className="text-sm text-accent hover:underline flex items-center gap-1"
-                onClick={() => setExpanded(!expanded)}
-            >
-                <span className="material-symbols-outlined text-base">
-                    {expanded ? 'expand_less' : 'expand_more'}
-                </span>
-                {expanded ? 'Hide' : 'Show'} {items.length} unmatched {title.toLowerCase()}
-            </button>
-            {expanded && (
-                <div className="mt-2 overflow-x-auto rounded-lg border border-border">
-                    <table className="w-full text-sm">
-                        <thead>
-                            <tr className="bg-surface-alt text-secondary text-left">
-                                <th className="px-3 py-2 font-medium">Title</th>
-                                <th className="px-3 py-2 font-medium">Year</th>
-                                {type === 'series' && (
-                                    <th className="px-3 py-2 font-medium">Missing</th>
-                                )}
-                                <th className="px-3 py-2 font-medium">Instance</th>
-                                <th className="px-3 py-2 font-medium">TMDB</th>
-                                <th className="px-3 py-2 font-medium">IMDB</th>
-                                <th className="px-3 py-2 font-medium">TVDB</th>
-                                {type !== 'collection' && (
+        <div className="p-5 rounded-xl bg-surface border border-border">
+            <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+                <p className="text-sm text-secondary">
+                    <span className="text-primary font-medium">{style}</span> posters —{' '}
+                    {total.toLocaleString()} items
+                </p>
+                <div className="flex flex-wrap gap-1">
+                    {APPLIED_TYPE_FILTERS.map(f => (
+                        <button
+                            key={f.key}
+                            onClick={() => selectType(f.key)}
+                            className={`px-2 py-1 text-xs rounded-lg border ${
+                                typeKey === f.key
+                                    ? 'border-brand-primary/50 bg-surface-alt text-primary'
+                                    : 'border-border text-secondary hover:text-primary'
+                            }`}
+                        >
+                            {f.label}
+                        </button>
+                    ))}
+                </div>
+            </div>
+            {items.length === 0 ? (
+                <p className="text-sm text-tertiary">No matched media for this variant/type.</p>
+            ) : (
+                <>
+                    <div
+                        className="overflow-x-auto rounded-lg border border-border"
+                        style={{ maxHeight: 340, overflowY: 'auto' }}
+                    >
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="bg-surface-alt text-secondary text-left">
+                                    <th className="px-3 py-2 font-medium">Title</th>
+                                    <th className="px-3 py-2 font-medium">Type</th>
+                                    <th className="px-3 py-2 font-medium">Year</th>
+                                    <th className="px-3 py-2 font-medium">TMDB</th>
                                     <th className="px-3 py-2 font-medium text-right">Request</th>
-                                )}
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-border">
-                            {items.map((item, idx) => (
-                                <tr key={idx} className="bg-surface hover:bg-surface-alt">
-                                    <td className="px-3 py-2 text-primary">
-                                        {type !== 'collection' ? (
-                                            <Link
-                                                to={`/poster/search/assets?q=${encodeURIComponent(item.title)}`}
-                                                className="hover:text-accent hover:underline"
-                                                title="Search synced posters for this title"
-                                            >
-                                                {item.title}
-                                            </Link>
-                                        ) : (
-                                            item.title
-                                        )}
-                                    </td>
-                                    <td className="px-3 py-2 text-secondary">{item.year || '—'}</td>
-                                    {type === 'series' && (
-                                        <td className="px-3 py-2 text-secondary">
-                                            {item.missing_main_poster && (
-                                                <span className="text-warning">Main poster</span>
-                                            )}
-                                            {item.missing_main_poster &&
-                                                item.missing_seasons?.length > 0 &&
-                                                ', '}
-                                            {item.missing_seasons?.length > 0 &&
-                                                `S${item.missing_seasons.join(', S')}`}
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-border">
+                                {items.map(item => (
+                                    <tr key={item.id} className="bg-surface hover:bg-surface-alt">
+                                        <td className="px-3 py-2 text-primary">{item.title}</td>
+                                        <td className="px-3 py-2 text-secondary capitalize">
+                                            {item.resolved_type}
+                                            {item.resolved_type === 'season' &&
+                                            item.season_number != null
+                                                ? ` ${item.season_number}`
+                                                : ''}
                                         </td>
-                                    )}
-                                    <td className="px-3 py-2 text-secondary">
-                                        {item.instance_name || '—'}
-                                    </td>
-                                    <td className="px-3 py-2 text-tertiary font-mono text-xs">
-                                        {formatId(item.tmdb_id) || '—'}
-                                    </td>
-                                    <td className="px-3 py-2 text-tertiary font-mono text-xs">
-                                        {formatId(item.imdb_id) || '—'}
-                                    </td>
-                                    <td className="px-3 py-2 text-tertiary font-mono text-xs">
-                                        {formatId(item.tvdb_id) || '—'}
-                                    </td>
-                                    {type !== 'collection' && (
+                                        <td className="px-3 py-2 text-secondary">
+                                            {item.year || '—'}
+                                        </td>
+                                        <td className="px-3 py-2 text-tertiary font-mono text-xs">
+                                            {formatId(item.tmdb_id) || '—'}
+                                        </td>
                                         <td className="px-3 py-2 text-right">
                                             <IconButton
                                                 icon="content_copy"
@@ -169,12 +350,35 @@ const UnmatchedTable = ({ title, items, type }) => {
                                                 onClick={() => handleCopy(item)}
                                             />
                                         </td>
-                                    )}
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                    {pageCount > 1 && (
+                        <div className="flex items-center justify-end gap-2 mt-3 text-sm text-tertiary">
+                            <IconButton
+                                icon="chevron_left"
+                                size="small"
+                                variant="ghost"
+                                aria-label="Previous page"
+                                disabled={page <= 1}
+                                onClick={() => setOffset(o => Math.max(0, o - APPLIED_PAGE_SIZE))}
+                            />
+                            <span>
+                                {page} / {pageCount}
+                            </span>
+                            <IconButton
+                                icon="chevron_right"
+                                size="small"
+                                variant="ghost"
+                                aria-label="Next page"
+                                disabled={page >= pageCount}
+                                onClick={() => setOffset(o => o + APPLIED_PAGE_SIZE)}
+                            />
+                        </div>
+                    )}
+                </>
             )}
         </div>
     );
@@ -182,8 +386,8 @@ const UnmatchedTable = ({ title, items, type }) => {
 
 const PosterStatsPage = () => {
     const toast = useToast();
-    const { executeModule, isRunning } = useModuleExecution();
     const [period, setPeriod] = useState('');
+    const [variantsOpen, setVariantsOpen] = useState(false);
 
     const fetchStatsWithPeriod = useCallback(
         () => postersAPI.fetchStatistics(period ? { period } : {}),
@@ -215,16 +419,11 @@ const PosterStatsPage = () => {
         options: { showErrorToast: false },
     });
 
-    // "Recent posters" surfaces freshly-added rows by poster_cache.created_at.
-    // 14 days is a reasonable window — long enough to be useful after a quiet
-    // period, short enough that the count doesn't grow unbounded.
-    // `useState` (not `useMemo`) so the cutoff is locked at mount time —
-    // useMemo([]) re-evaluates Date.now() on every render which the
-    // purity check rejects.
-    const [recentCutoff] = useState(() =>
-        new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString()
-    );
-    const { data: recentPostersData } = useApiData({
+    // The carousel shows the 50 most recently synced posters in sync order
+    // (the backend orders poster_cache.created_at DESC). Epoch cutoff means
+    // "all time" so it's the last 50 regardless of age, not a rolling window.
+    const recentCutoff = useMemo(() => new Date(0).toISOString(), []);
+    const { data: recentPostersData, refresh: refreshRecent } = useApiData({
         apiFunction: useCallback(
             () => postersAPI.fetchPostersAddedSince(recentCutoff, 50),
             [recentCutoff]
@@ -273,14 +472,24 @@ const PosterStatsPage = () => {
         () => gdriveDetailData?.data?.gdrive_stats || stats.gdrive_stats || [],
         [gdriveDetailData, stats]
     );
-    const unmatchedSummary = useMemo(
-        () => unmatchedDetailData?.data?.summary || {},
+    const totalSyncedBytes = useMemo(
+        () => gdriveStats.reduce((sum, s) => sum + (s.size_bytes || 0), 0),
+        [gdriveStats]
+    );
+    // Library match completion summary — the full unmatched breakdown lives on
+    // its own page (/poster/unmatched); here we only need the grand total.
+    const grandTotal = useMemo(
+        () => unmatchedDetailData?.data?.summary?.grand_total || {},
         [unmatchedDetailData]
     );
-    const unmatchedItems = useMemo(
-        () => unmatchedDetailData?.data?.unmatched || {},
-        [unmatchedDetailData]
+    // Breakdowns of posters actually applied to the library (not the full
+    // GDrive catalog) — see backend get_applied_breakdowns.
+    const variantBars = useMemo(() => buildBars(stats.applied_by_style), [stats]);
+    const typeBars = useMemo(
+        () => buildBars(stats.applied_by_type, { labelMap: ASSET_TYPE_LABELS }),
+        [stats]
     );
+    const sourceBars = useMemo(() => buildBars(stats.applied_by_source, { topN: 8 }), [stats]);
 
     const handleRefresh = () => {
         refreshStats();
@@ -289,20 +498,7 @@ const PosterStatsPage = () => {
         toast.success('Statistics refreshed');
     };
 
-    const handleRunUnmatched = async () => {
-        await executeModule('unmatched_assets');
-    };
-
     if (isLoading) return <Spinner size="large" text="Loading statistics..." center />;
-
-    const summaryTypes = [
-        { key: 'movies', label: 'Movies' },
-        { key: 'series', label: 'Series' },
-        { key: 'seasons', label: 'Seasons' },
-        { key: 'collections', label: 'Collections' },
-    ];
-
-    const hasUnmatched = summaryTypes.some(t => unmatchedSummary[t.key]?.unmatched > 0);
 
     return (
         <div className="flex flex-col gap-6">
@@ -333,79 +529,100 @@ const PosterStatsPage = () => {
                         variant="ghost"
                         onClick={handleRefresh}
                     />
-                    <LoadingButton
-                        loading={isRunning('unmatched_assets')}
-                        loadingText="Running..."
-                        variant="ghost"
-                        icon="search_check"
-                        onClick={handleRunUnmatched}
-                    >
-                        Run Unmatched Assets
-                    </LoadingButton>
                 </div>
             </div>
 
             {/* Summary Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="p-5 rounded-xl bg-surface border border-border">
                     <p className="text-sm text-secondary mb-1">Cached Posters</p>
                     <p className="text-3xl font-bold text-primary">
-                        {stats.poster_cache_count || 0}
+                        {(stats.poster_cache_count || 0).toLocaleString()}
                     </p>
                 </div>
                 <div className="p-5 rounded-xl bg-surface border border-border">
                     <p className="text-sm text-secondary mb-1">GDrive Sources</p>
                     <p className="text-3xl font-bold text-primary">{gdriveStats.length}</p>
                 </div>
+                <div className="p-5 rounded-xl bg-surface border border-border">
+                    <p className="text-sm text-secondary mb-1">Synced Size</p>
+                    <p className="text-3xl font-bold text-primary">
+                        {formatSize(totalSyncedBytes)}
+                    </p>
+                </div>
+                <div className="p-5 rounded-xl bg-surface border border-border">
+                    <p className="text-sm text-secondary mb-1">Match Completion</p>
+                    <p className="text-3xl font-bold text-primary">
+                        {(grandTotal.percent_complete || 0).toFixed(1)}%
+                    </p>
+                    {grandTotal.total > 0 && (
+                        <p className="text-xs text-tertiary mt-1">
+                            {(grandTotal.total - grandTotal.unmatched).toLocaleString()} /{' '}
+                            {grandTotal.total.toLocaleString()} matched
+                        </p>
+                    )}
+                </div>
             </div>
 
-            {/* Unmatched Assets — Per-type Breakdown */}
-            {hasUnmatched && (
-                <section>
-                    <h3 className="text-lg font-semibold text-primary mb-3 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-warning">warning</span>
-                        Unmatched Assets
-                    </h3>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        {summaryTypes.map(({ key, label }) => {
-                            const data = unmatchedSummary[key] || {};
-                            if (!data.total) return null;
-                            return (
-                                <div
-                                    key={key}
-                                    className="p-4 rounded-lg bg-surface border border-border"
-                                >
-                                    <p className="text-sm text-secondary">{label}</p>
-                                    <p className="text-2xl font-bold text-warning">
-                                        {data.unmatched || 0}
-                                    </p>
-                                    <p className="text-xs text-tertiary mt-1">
-                                        of {data.total} total &mdash;{' '}
-                                        {data.percent_complete?.toFixed(1) || 0}% complete
-                                    </p>
-                                    {data.total > 0 && (
-                                        <div className="mt-2 h-1.5 bg-surface-alt rounded-full overflow-hidden">
-                                            <div
-                                                className="h-full bg-success rounded-full"
-                                                style={{
-                                                    width: `${data.percent_complete || 0}%`,
-                                                }}
-                                            />
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })}
-                    </div>
+            {/* Recently Synced Posters */}
+            {recentPosters.length > 0 && (
+                <RecentPosterReel posters={recentPosters} onRefresh={refreshRecent} />
+            )}
 
-                    {/* Detail tables */}
-                    <UnmatchedTable title="Movies" items={unmatchedItems.movies} type="movie" />
-                    <UnmatchedTable title="Series" items={unmatchedItems.series} type="series" />
-                    <UnmatchedTable
-                        title="Collections"
-                        items={unmatchedItems.collections}
-                        type="collection"
-                    />
+            {/* Poster Breakdown — mix actually applied to the library */}
+            {variantBars.length > 0 && (
+                <section>
+                    <h3 className="text-lg font-semibold text-primary mb-1 flex items-center gap-2">
+                        <span className="material-symbols-outlined text-brand-primary">
+                            donut_small
+                        </span>
+                        Poster Breakdown
+                    </h3>
+                    <p className="text-xs text-tertiary mb-3">
+                        Posters applied to your library — not the full GDrive catalog
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="p-5 rounded-xl bg-surface border border-border">
+                            <p className="text-sm text-secondary mb-3">
+                                By variant{' '}
+                                <span className="text-tertiary">— click to list &amp; request</span>
+                            </p>
+                            <BreakdownBars
+                                bars={variantBars}
+                                onSelect={() => setVariantsOpen(o => !o)}
+                            />
+                        </div>
+                        <div className="p-5 rounded-xl bg-surface border border-border">
+                            <p className="text-sm text-secondary mb-3">By asset type</p>
+                            <BreakdownBars bars={typeBars} />
+                        </div>
+                    </div>
+                    {variantsOpen && (
+                        <div className="mt-4">
+                            <div className="flex items-center justify-between gap-2 mb-2">
+                                <p className="text-sm text-secondary">
+                                    Pick titles to request the other variant
+                                </p>
+                                <IconButton
+                                    icon="close"
+                                    variant="ghost"
+                                    aria-label="Hide variant lists"
+                                    onClick={() => setVariantsOpen(false)}
+                                />
+                            </div>
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                {variantBars.map(b => (
+                                    <AppliedVariantTable key={b.label} style={b.label} />
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                    {sourceBars.length > 0 && (
+                        <div className="p-5 rounded-xl bg-surface border border-border mt-4">
+                            <p className="text-sm text-secondary mb-3">Top sources used</p>
+                            <BreakdownBars bars={sourceBars} />
+                        </div>
+                    )}
                 </section>
             )}
 
@@ -429,7 +646,7 @@ const PosterStatsPage = () => {
                                                 {stat.media_matched || 0}/{stat.media_total || 0}
                                             </span>
                                         </div>
-                                        <div className="mt-1 h-1.5 bg-surface-alt rounded-full overflow-hidden">
+                                        <div className="mt-1 h-2 bg-surface-alt rounded-full overflow-hidden">
                                             <div
                                                 className="h-full bg-success rounded-full"
                                                 style={{ width: `${stat.media_pct || 0}%` }}
@@ -444,9 +661,9 @@ const PosterStatsPage = () => {
                                                 {stat.collections_total || 0}
                                             </span>
                                         </div>
-                                        <div className="mt-1 h-1.5 bg-surface-alt rounded-full overflow-hidden">
+                                        <div className="mt-1 h-2 bg-surface-alt rounded-full overflow-hidden">
                                             <div
-                                                className="h-full bg-brand-primary rounded-full"
+                                                className="h-full bg-accent rounded-full"
                                                 style={{
                                                     width: `${stat.collections_pct || 0}%`,
                                                 }}
@@ -463,41 +680,6 @@ const PosterStatsPage = () => {
                             </div>
                         ))}
                     </div>
-                </section>
-            )}
-
-            {/* Recently Added Posters */}
-            {recentPosters.length > 0 && (
-                <section>
-                    <h3 className="text-lg font-semibold text-primary mb-3 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-brand-primary">
-                            new_releases
-                        </span>
-                        Recently added ({recentPosters.length})
-                        <span className="text-xs font-normal text-tertiary ml-2">past 14 days</span>
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                        {recentPosters.slice(0, 18).map(p => (
-                            <div
-                                key={p.id}
-                                className="flex items-center gap-2 p-2 rounded-lg bg-surface border border-border text-sm"
-                                title={p.file || p.folder}
-                            >
-                                <span className="material-symbols-outlined text-tertiary text-base">
-                                    image
-                                </span>
-                                <span className="flex-1 min-w-0 truncate text-primary">
-                                    {p.title || p.file || `#${p.id}`}
-                                </span>
-                                {p.year && <span className="text-xs text-tertiary">{p.year}</span>}
-                            </div>
-                        ))}
-                    </div>
-                    {recentPosters.length > 18 && (
-                        <p className="text-xs text-tertiary mt-2">
-                            …and {recentPosters.length - 18} more.
-                        </p>
-                    )}
                 </section>
             )}
 
@@ -570,35 +752,24 @@ const PosterStatsPage = () => {
             {gdriveStats.length > 0 && (
                 <section>
                     <h3 className="text-lg font-semibold text-primary mb-3">GDrive Sync Status</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
                         {gdriveStats.map((stat, i) => (
-                            <div key={i} className="p-4 rounded-lg bg-surface border border-border">
-                                <div className="flex items-start gap-3">
-                                    <span className="material-symbols-outlined text-brand-primary mt-0.5">
-                                        cloud_done
-                                    </span>
-                                    <div className="flex-1 min-w-0">
-                                        <p className="font-medium text-primary truncate">
-                                            {stat.folder_name || stat.owner || stat.location}
-                                        </p>
-                                        <div className="flex items-center gap-3 text-sm text-secondary mt-1">
-                                            <span>{stat.file_count || 0} files</span>
-                                            {stat.size_bytes > 0 && (
-                                                <span>
-                                                    {(stat.size_bytes / 1024 / 1024).toFixed(1)} MB
-                                                </span>
-                                            )}
-                                        </div>
-                                        {stat.last_updated && (
-                                            <p className="text-xs text-tertiary mt-1">
-                                                Last synced:{' '}
-                                                {stat.last_updated?.length === 8
-                                                    ? `${stat.last_updated.slice(0, 4)}-${stat.last_updated.slice(4, 6)}-${stat.last_updated.slice(6, 8)}`
-                                                    : stat.last_updated}
-                                            </p>
-                                        )}
-                                    </div>
-                                </div>
+                            <div
+                                key={i}
+                                className="flex items-center gap-2 p-2 rounded-lg bg-surface border border-border text-sm"
+                                title={stat.folder_name || stat.owner || stat.location}
+                            >
+                                <span className="material-symbols-outlined text-brand-primary text-base">
+                                    cloud_done
+                                </span>
+                                <span className="flex-1 min-w-0 truncate text-primary">
+                                    {stat.folder_name || stat.owner || stat.location}
+                                </span>
+                                <span className="shrink-0 text-xs text-tertiary whitespace-nowrap">
+                                    {stat.file_count || 0} files
+                                    {stat.size_bytes > 0 && ` · ${formatSize(stat.size_bytes)}`}
+                                    {stat.last_updated && ` · ${formatSyncDate(stat.last_updated)}`}
+                                </span>
                             </div>
                         ))}
                     </div>

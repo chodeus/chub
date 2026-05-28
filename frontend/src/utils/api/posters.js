@@ -148,6 +148,25 @@ export const postersAPI = {
     },
 
     /**
+     * Matched media whose applied poster is of the given variant (e.g. CL2K).
+     * @param {string} style - Poster variant
+     * @param {{type?: string, limit?: number, offset?: number}} [opts]
+     * @returns {Promise<Object>} { items, total, style, limit, offset }
+     */
+    fetchAppliedByStyle: (style, { type, limit = 50, offset = 0 } = {}) => {
+        const params = new URLSearchParams({
+            style,
+            limit: String(limit),
+            offset: String(offset),
+        });
+        if (type) params.set('type', type);
+        return apiCore.get(`/posters/applied?${params}`, {
+            useCache: true,
+            cacheTTL: 60 * 1000,
+        });
+    },
+
+    /**
      * Posters with recorded width below `min_width`. Run /backfill-dimensions
      * first to populate unset rows or results will be empty/incomplete.
      * @param {number} minWidth - Width threshold in pixels (default 1000)
