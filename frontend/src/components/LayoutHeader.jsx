@@ -22,6 +22,7 @@ const ROUTE_TITLES = {
     '/poster/search/gdrive': 'GDrive',
     '/poster/cleanarr': 'Poster Cleanarr',
     '/poster/border-replacerr': 'Border Replacerr',
+    '/poster/unmatched': 'Unmatched Assets',
     '/poster/statistics': 'Poster Stats',
     '/settings': 'Settings',
     '/settings/general': 'General',

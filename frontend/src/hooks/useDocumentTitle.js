@@ -18,6 +18,7 @@ const ROUTE_TITLES = {
     '/poster/border-replacerr': 'Border Replacerr',
     '/poster/cleanarr': 'Poster Cleanarr',
     '/poster/manage': 'Poster Cleanarr', // legacy redirect target
+    '/poster/unmatched': 'Unmatched Assets',
     '/poster/statistics': 'Poster Statistics',
     '/settings': 'Settings',
     '/settings/general': 'General Settings',
