@@ -2,6 +2,18 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.20.1](https://github.com/chodeus/chub/compare/v2.20.0...v2.20.1) (2026-05-30)
+
+
+### Bug Fixes
+
+* **deps:** update all non-major dependencies ([#193](https://github.com/chodeus/chub/issues/193)) ([64be1d8](https://github.com/chodeus/chub/commit/64be1d8c1742e4617edee65d034e71a84dc42a8e))
+* **deps:** update dependency @tanstack/react-virtual to ^3.13.26 ([#192](https://github.com/chodeus/chub/issues/192)) ([5b21b53](https://github.com/chodeus/chub/commit/5b21b53ef829a55a757ab559ff8143787a88fb19))
+* **posters:** rank picker candidates by relevance; restrict picker to Needs Review ([eec28e8](https://github.com/chodeus/chub/commit/eec28e809ee92cdea492ab3f58ce0157a144acd6))
+* **sync:** refresh collection ids on re-sync ([36be389](https://github.com/chodeus/chub/commit/36be389dfea1e13f56cc8aaac3d8c88b71af0bf7))
+* **sync:** refresh secondary IDs on media re-sync ([a4aeb77](https://github.com/chodeus/chub/commit/a4aeb775f8bb123305355e60ebc18ffa7b2b8b52))
+* **sync:** refresh title and year on media re-sync ([aabfbc4](https://github.com/chodeus/chub/commit/aabfbc46971d23bc911816b44bed083c312f2b73))
+
 ## [2.20.0](https://github.com/chodeus/chub/compare/v2.19.0...v2.20.0) (2026-05-30)
 
 
