@@ -560,35 +560,9 @@ const UnmatchedAssetsPage = () => {
     const items = useMemo(() => data?.data?.unmatched || {}, [data]);
     const reviewRows = useMemo(() => data?.data?.needs_review || [], [data]);
     const ignoredRows = useMemo(() => data?.data?.ignored || [], [data]);
-    const tmdbEnabled = data?.data?.tmdb_enabled ?? false;
     const grandTotal = summary.grand_total || {};
 
     const [viewMode, setViewMode] = useState('unmatched');
-    const [runningQuality, setRunningQuality] = useState(false);
-
-    const handleRunMatchQuality = async () => {
-        setRunningQuality(true);
-        try {
-            const res = await postersAPI.runMatchQuality();
-            const payload = res?.data || {};
-            if (payload.enabled === false) {
-                toast.info(
-                    'Match-quality features are off — enable TMDB verify/AKA or fuzzy matching in config'
-                );
-            } else {
-                const s = payload.summary || {};
-                toast.success(
-                    `Match-quality pass: ${s.id_mismatches || 0} mismatches, ` +
-                        `${s.fuzzy_flagged || 0} fuzzy-flagged, ${s.akas_hydrated || 0} AKA-hydrated`
-                );
-                refresh();
-            }
-        } catch {
-            toast.error('Match-quality pass failed');
-        } finally {
-            setRunningQuality(false);
-        }
-    };
 
     const viewCounts = {
         unmatched: grandTotal.unmatched || 0,
@@ -645,18 +619,6 @@ const UnmatchedAssetsPage = () => {
                         variant="ghost"
                         onClick={handleRefresh}
                     />
-                    {tmdbEnabled && (
-                        <LoadingButton
-                            loading={runningQuality}
-                            loadingText="Checking..."
-                            variant="ghost"
-                            icon="verified"
-                            title="Verify TMDB ids, hydrate alternate titles & flag fuzzy near-misses for review"
-                            onClick={handleRunMatchQuality}
-                        >
-                            Run Match Quality
-                        </LoadingButton>
-                    )}
                     <LoadingButton
                         loading={isRunning('unmatched_assets')}
                         loadingText="Running..."

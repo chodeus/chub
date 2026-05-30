@@ -1290,10 +1290,6 @@ async def get_unmatched_assets_details(
         unmatched = UnmatchedAssets(logger=unmatched_logger)
         stats = unmatched.get_stats_adhoc()
 
-        from backend.util.config import load_config
-
-        tmdb_enabled = bool(load_config().tmdb.apikey)
-
         return ok(
             "Unmatched assets details retrieved",
             {
@@ -1301,7 +1297,6 @@ async def get_unmatched_assets_details(
                 "unmatched": stats.get("unmatched", {}),
                 "needs_review": stats.get("needs_review", []),
                 "ignored": stats.get("ignored", []),
-                "tmdb_enabled": tmdb_enabled,
             },
         )
 
@@ -1376,39 +1371,6 @@ async def approve_match(
         return error(
             f"Error approving match: {str(e)}",
             code="MATCH_APPROVE_ERROR",
-            status_code=500,
-        )
-
-
-@router.post(
-    "/match-quality/run",
-    summary="Run the optional TMDB/fuzzy match-quality pass",
-    description="Enqueue (or run) ID verification, AKA hydration, and fuzzy "
-    "near-miss flagging. No-op unless the tmdb.* toggles are enabled.",
-)
-async def run_match_quality_endpoint(
-    logger: Any = Depends(get_logger),
-    db: ChubDB = Depends(get_database),
-) -> JSONResponse:
-    """Trigger the config-gated match-quality refinement on demand."""
-    try:
-        logger.debug("Serving POST /api/posters/match-quality/run")
-        from backend.util.config import load_config
-        from backend.util.tmdb import run_match_quality
-
-        tmdb_cfg = load_config().tmdb
-        if not tmdb_cfg.apikey:
-            return ok(
-                "Match quality needs a TMDB API key (add it in Settings → TMDB)",
-                {"enabled": False, "summary": {}},
-            )
-        summary = run_match_quality(db, tmdb_cfg, logger.get_adapter("MatchQuality"))
-        return ok("Match-quality pass complete", {"enabled": True, "summary": summary})
-    except Exception as e:
-        logger.error(f"Error running match-quality pass: {e}")
-        return error(
-            f"Error running match-quality pass: {str(e)}",
-            code="MATCH_QUALITY_ERROR",
             status_code=500,
         )
 
