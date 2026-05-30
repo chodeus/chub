@@ -612,3 +612,34 @@ def test_match_item_stamps_matched_at_and_recently_matched(tmp_path):
         assert media_row()["matched_at"] == first_ts
     finally:
         db.__exit__(None, None, None)
+
+
+def test_match_item_no_id_article_prefixed_season_poster(tmp_path):
+    """A season poster with NO id tags whose title starts with an article
+    ('The Lovers - Season 1') must match its Sonarr season row via the title
+    prefix path. Regression: get_prefix() stripped 'The' -> 'lov', which never
+    matched the stored normalized_title 'thelovers', so these silently failed.
+    """
+    m = make_module()
+    db = _open_db(tmp_path, m.logger)
+    try:
+        # No-id show/season poster.
+        db.poster.execute_query(
+            "INSERT INTO poster_cache (asset_type,title,normalized_title,year,season_number,file,priority) "
+            "VALUES ('show','The Lovers','thelovers',2023,1,'/lovers_s1.jpg',0)"
+        )
+        # Sonarr season row: has a tvdb id (the poster does not).
+        db.media.execute_query(
+            "INSERT INTO media_cache (identity_key,asset_type,title,normalized_title,year,tvdb_id,season_number,instance_name) "
+            "VALUES ('mk','show','The Lovers','thelovers','2023',421837,1,'sonarr')"
+        )
+        media = dict(
+            db.media.execute_query(
+                "SELECT * FROM media_cache WHERE identity_key='mk'", fetch_one=True
+            )
+        )
+        result = m.match_item(media, db)
+        assert result["matched"] is True
+        assert result["match"]["file"] == "/lovers_s1.jpg"
+    finally:
+        db.__exit__(None, None, None)
