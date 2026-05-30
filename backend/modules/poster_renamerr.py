@@ -166,9 +166,24 @@ class PosterRenamerr(ChubModule):
                         break
 
         if not candidate:
-            candidates = db.poster.get_candidates_by_prefix(
-                title or "", asset_type=expected_asset_type
-            )
+            # Look up candidates by the prefix of EVERY title the media is known
+            # by — primary plus alternates — not just the primary. Otherwise a
+            # poster named by an AKA (e.g. "Origen" for "Inception") is never in
+            # the candidate set, so the alt-title check below can't fire. This
+            # is what makes TMDB AKA hydration actually pay off.
+            search_titles = [title] if title else []
+            search_titles += [t for t in alt_titles if t]
+            candidates = []
+            seen_files = set()
+            for st in search_titles:
+                for c in db.poster.get_candidates_by_prefix(
+                    st, asset_type=expected_asset_type
+                ):
+                    key = c.get("file")
+                    if key not in seen_files:
+                        seen_files.add(key)
+                        candidates.append(c)
+
             all_titles = set()
             if normalized_title:
                 all_titles.add(normalized_title)
