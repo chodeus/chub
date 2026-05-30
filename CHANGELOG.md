@@ -2,6 +2,18 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.18.0](https://github.com/chodeus/chub/compare/v2.17.0...v2.18.0) (2026-05-30)
+
+
+### Features
+
+* **posters:** match transparency, review/ignore/conflicts, optional TMDB & fuzzy quality ([4408df2](https://github.com/chodeus/chub/commit/4408df2f5fe313a15d3701aa894da5fe7b88f0f5))
+
+
+### Bug Fixes
+
+* **posters:** require a delimiter for season tags so a bare "Season N" in a ([4408df2](https://github.com/chodeus/chub/commit/4408df2f5fe313a15d3701aa894da5fe7b88f0f5))
+
 ## [2.17.0](https://github.com/chodeus/chub/compare/v2.16.0...v2.17.0) (2026-05-28)
 
 
