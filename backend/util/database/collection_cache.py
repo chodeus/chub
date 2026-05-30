@@ -34,7 +34,12 @@ class CollectionCache(DatabaseBase):
                 normalized_title=excluded.normalized_title,
                 alternate_titles=excluded.alternate_titles,
                 normalized_alternate_titles=excluded.normalized_alternate_titles,
-                folder=excluded.folder
+                folder=excluded.folder,
+                -- Refresh ids too (a collection can be re-linked to a different
+                -- TMDb id); otherwise a stale id breaks id-based matching.
+                tmdb_id=excluded.tmdb_id,
+                tvdb_id=excluded.tvdb_id,
+                imdb_id=excluded.imdb_id
             """,
             (
                 record.get("asset_type"),
