@@ -4,6 +4,7 @@ import os
 
 
 from backend.util.helper import (
+    classify_match,
     compare_strings,
     create_bar,
     create_table,
@@ -17,6 +18,33 @@ from backend.util.helper import (
     is_match,
     progress,
 )
+
+
+# --- classify_match ---
+
+
+def test_classify_match_id_is_high_confidence():
+    status, conf = classify_match(True, "ID match: tmdb_id")
+    assert status == "matched"
+    assert conf >= 0.95
+
+
+def test_classify_match_loose_is_needs_review():
+    status, conf = classify_match(True, "Titles match under loose string comparison")
+    assert status == "needs_review"
+    assert conf < 0.7
+
+
+def test_classify_match_normalized_is_matched_medium():
+    status, conf = classify_match(
+        True, "Asset normalized title equals media normalized title"
+    )
+    assert status == "matched"
+    assert 0.7 <= conf < 0.95
+
+
+def test_classify_match_no_match_is_unmatched():
+    assert classify_match(False, "") == ("unmatched", 0.0)
 
 
 # --- extract_year ---

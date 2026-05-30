@@ -254,3 +254,40 @@ def test_calculate_stats_partial_complete():
     )
     # 2 of 4 missing => 50% complete
     assert stats["movies"]["percent_complete"] == 50
+
+
+# --- ignore filtering + review serialization ---
+
+
+def test_should_include_hides_ignored():
+    m = make_module()
+    assert m.should_include({"ignored": 1}) is False
+    assert m.should_include({"ignored": 0}) is True
+    assert m.should_include({}) is True
+
+
+def test_serialize_match_row_parses_conflicts_and_status():
+    row = {
+        "id": 7,
+        "title": "Open Season 2",
+        "year": 2008,
+        "asset_type": "movie",
+        "match_status": "needs_review",
+        "match_confidence": 0.55,
+        "match_reason": "Titles match under loose string comparison",
+        "conflict_ids": '[{"title": "Open Season", "tmdb_id": 9988}]',
+    }
+    out = UnmatchedAssets._serialize_match_row(row, is_collection=False)
+    assert out["id"] == 7
+    assert out["type"] == "movie"
+    assert out["match_status"] == "needs_review"
+    assert out["match_confidence"] == 0.55
+    assert out["conflicts"] == [{"title": "Open Season", "tmdb_id": 9988}]
+
+
+def test_serialize_match_row_collection_and_bad_conflict_json():
+    row = {"id": 3, "title": "Marvel", "conflict_ids": "not-json"}
+    out = UnmatchedAssets._serialize_match_row(row, is_collection=True)
+    assert out["type"] == "collection"
+    assert out["asset_type"] == "collection"
+    assert out["conflicts"] == []

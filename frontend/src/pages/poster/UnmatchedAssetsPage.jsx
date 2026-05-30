@@ -146,10 +146,27 @@ const RecentPosterReel = ({ posters, onRefresh }) => {
 };
 
 /** Unified, filterable + searchable table of every unmatched item. */
-const UnmatchedList = ({ items }) => {
+const UnmatchedList = ({ items, onRefresh }) => {
     const toast = useToast();
     const [typeKey, setTypeKey] = useState('all');
     const [query, setQuery] = useState('');
+    const [busyId, setBusyId] = useState(null);
+
+    const handleIgnore = async item => {
+        setBusyId(item.id);
+        try {
+            await postersAPI.setMatchIgnored(item.id, {
+                kind: item._type === 'collection' ? 'collection' : 'media',
+                ignored: true,
+            });
+            toast.success('Item ignored');
+            onRefresh?.();
+        } catch {
+            toast.error('Failed to ignore item');
+        } finally {
+            setBusyId(null);
+        }
+    };
 
     const all = useMemo(
         () => [
@@ -297,7 +314,7 @@ const UnmatchedList = ({ items }) => {
                                     <td className="px-3 py-2 text-tertiary font-mono text-xs">
                                         {formatId(item.tvdb_id) || '—'}
                                     </td>
-                                    <td className="px-3 py-2 text-right">
+                                    <td className="px-3 py-2 text-right whitespace-nowrap">
                                         {item._type !== 'collection' && (
                                             <IconButton
                                                 icon="content_copy"
@@ -306,6 +323,218 @@ const UnmatchedList = ({ items }) => {
                                                 aria-label="Copy poster request to clipboard"
                                                 title="Copy poster request"
                                                 onClick={() => handleCopy(item)}
+                                            />
+                                        )}
+                                        {item.id != null && (
+                                            <IconButton
+                                                icon="block"
+                                                size="small"
+                                                variant="ghost"
+                                                disabled={busyId === item.id}
+                                                aria-label="Ignore this item"
+                                                title="Ignore — stop showing this item"
+                                                onClick={() => handleIgnore(item)}
+                                            />
+                                        )}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+        </div>
+    );
+};
+
+const STATUS_VIEWS = [
+    { key: 'unmatched', label: 'Unmatched' },
+    { key: 'review', label: 'Needs Review' },
+    { key: 'ignored', label: 'Ignored' },
+];
+
+/** Colour for a 0–1 confidence score. */
+const confidenceTone = c => {
+    if (c == null) return 'text-tertiary';
+    if (c >= 0.9) return 'text-success';
+    if (c >= 0.7) return 'text-warning';
+    return 'text-error';
+};
+
+const kindOf = row => (row.asset_type === 'collection' ? 'collection' : 'media');
+
+/**
+ * Flat table for the Needs-Review and Ignored tabs. Shows the match
+ * confidence + reason the backend now records, plus per-row actions:
+ * review → Approve / Ignore, ignored → Restore.
+ */
+const MatchReviewList = ({ rows, mode, onRefresh }) => {
+    const toast = useToast();
+    const [query, setQuery] = useState('');
+    const [busyId, setBusyId] = useState(null);
+
+    const filtered = useMemo(() => {
+        const q = query.trim().toLowerCase();
+        return rows.filter(r => !q || (r.title || '').toLowerCase().includes(q));
+    }, [rows, query]);
+
+    const act = async (fn, row, successMsg) => {
+        setBusyId(row.id);
+        try {
+            await fn();
+            toast.success(successMsg);
+            onRefresh();
+        } catch {
+            toast.error('Action failed');
+        } finally {
+            setBusyId(null);
+        }
+    };
+
+    if (rows.length === 0) {
+        return (
+            <p className="text-sm text-secondary">
+                {mode === 'review'
+                    ? 'Nothing to review — every match is confident.'
+                    : 'No ignored items. Dismiss a row from Unmatched or Needs Review to park it here.'}
+            </p>
+        );
+    }
+
+    return (
+        <div className="flex flex-col gap-3">
+            <input
+                type="text"
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                placeholder="Search title…"
+                aria-label="Search titles"
+                className="px-3 py-2 bg-input border border-border rounded-md text-primary text-sm self-start"
+                style={{ minWidth: '14rem' }}
+            />
+            {filtered.length === 0 ? (
+                <p className="text-sm text-tertiary">No matches.</p>
+            ) : (
+                <div className="overflow-x-auto rounded-lg border border-border">
+                    <table className="w-full text-sm">
+                        <thead>
+                            <tr className="bg-surface-alt text-secondary text-left">
+                                <th className="px-3 py-2 font-medium">Title</th>
+                                <th className="px-3 py-2 font-medium">Type</th>
+                                <th className="px-3 py-2 font-medium">Year</th>
+                                <th className="px-3 py-2 font-medium">Instance</th>
+                                <th className="px-3 py-2 font-medium">Confidence</th>
+                                <th className="px-3 py-2 font-medium">Why</th>
+                                <th className="px-3 py-2 font-medium text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border">
+                            {filtered.map((item, idx) => (
+                                <tr
+                                    key={`${item.id ?? idx}`}
+                                    className="bg-surface hover:bg-surface-alt align-top"
+                                >
+                                    <td className="px-3 py-2 text-primary">
+                                        <Link
+                                            to={`/poster/search/assets?q=${encodeURIComponent(item.title || '')}`}
+                                            className="hover:text-accent hover:underline"
+                                            title="Search synced posters for this title"
+                                        >
+                                            {item.title}
+                                        </Link>
+                                    </td>
+                                    <td className="px-3 py-2 text-secondary">
+                                        {TYPE_LABELS[item.type] ||
+                                            TYPE_LABELS[item.asset_type] ||
+                                            item.type ||
+                                            '—'}
+                                    </td>
+                                    <td className="px-3 py-2 text-secondary">{item.year || '—'}</td>
+                                    <td className="px-3 py-2 text-secondary">
+                                        {item.instance_name || '—'}
+                                    </td>
+                                    <td className="px-3 py-2">
+                                        {item.match_confidence != null ? (
+                                            <span
+                                                className={`font-semibold ${confidenceTone(item.match_confidence)}`}
+                                            >
+                                                {Math.round(item.match_confidence * 100)}%
+                                            </span>
+                                        ) : (
+                                            <span className="text-tertiary">—</span>
+                                        )}
+                                    </td>
+                                    <td className="px-3 py-2 text-secondary max-w-md">
+                                        <span>{item.match_reason || '—'}</span>
+                                        {item.conflicts?.length > 1 && (
+                                            <span className="block text-xs text-warning mt-1">
+                                                {item.conflicts.length} competing posters
+                                            </span>
+                                        )}
+                                    </td>
+                                    <td className="px-3 py-2 text-right whitespace-nowrap">
+                                        {mode === 'review' ? (
+                                            <>
+                                                <IconButton
+                                                    icon="check_circle"
+                                                    size="small"
+                                                    variant="ghost"
+                                                    disabled={busyId === item.id}
+                                                    aria-label="Approve match"
+                                                    title="Approve — mark as confidently matched"
+                                                    onClick={() =>
+                                                        act(
+                                                            () =>
+                                                                postersAPI.approveMatch(item.id, {
+                                                                    kind: kindOf(item),
+                                                                }),
+                                                            item,
+                                                            'Match approved'
+                                                        )
+                                                    }
+                                                />
+                                                <IconButton
+                                                    icon="block"
+                                                    size="small"
+                                                    variant="ghost"
+                                                    disabled={busyId === item.id}
+                                                    aria-label="Ignore"
+                                                    title="Ignore — hide from these lists"
+                                                    onClick={() =>
+                                                        act(
+                                                            () =>
+                                                                postersAPI.setMatchIgnored(
+                                                                    item.id,
+                                                                    {
+                                                                        kind: kindOf(item),
+                                                                        ignored: true,
+                                                                    }
+                                                                ),
+                                                            item,
+                                                            'Item ignored'
+                                                        )
+                                                    }
+                                                />
+                                            </>
+                                        ) : (
+                                            <IconButton
+                                                icon="undo"
+                                                size="small"
+                                                variant="ghost"
+                                                disabled={busyId === item.id}
+                                                aria-label="Restore"
+                                                title="Restore — return to its normal list"
+                                                onClick={() =>
+                                                    act(
+                                                        () =>
+                                                            postersAPI.setMatchIgnored(item.id, {
+                                                                kind: kindOf(item),
+                                                                ignored: false,
+                                                            }),
+                                                        item,
+                                                        'Item restored'
+                                                    )
+                                                }
                                             />
                                         )}
                                     </td>
@@ -329,7 +558,43 @@ const UnmatchedAssetsPage = () => {
 
     const summary = useMemo(() => data?.data?.summary || {}, [data]);
     const items = useMemo(() => data?.data?.unmatched || {}, [data]);
+    const reviewRows = useMemo(() => data?.data?.needs_review || [], [data]);
+    const ignoredRows = useMemo(() => data?.data?.ignored || [], [data]);
+    const tmdbEnabled = data?.data?.tmdb_enabled ?? false;
     const grandTotal = summary.grand_total || {};
+
+    const [viewMode, setViewMode] = useState('unmatched');
+    const [runningQuality, setRunningQuality] = useState(false);
+
+    const handleRunMatchQuality = async () => {
+        setRunningQuality(true);
+        try {
+            const res = await postersAPI.runMatchQuality();
+            const payload = res?.data || {};
+            if (payload.enabled === false) {
+                toast.info(
+                    'Match-quality features are off — enable TMDB verify/AKA or fuzzy matching in config'
+                );
+            } else {
+                const s = payload.summary || {};
+                toast.success(
+                    `Match-quality pass: ${s.id_mismatches || 0} mismatches, ` +
+                        `${s.fuzzy_flagged || 0} fuzzy-flagged, ${s.akas_hydrated || 0} AKA-hydrated`
+                );
+                refresh();
+            }
+        } catch {
+            toast.error('Match-quality pass failed');
+        } finally {
+            setRunningQuality(false);
+        }
+    };
+
+    const viewCounts = {
+        unmatched: grandTotal.unmatched || 0,
+        review: reviewRows.length,
+        ignored: ignoredRows.length,
+    };
 
     // The carousel shows the 50 most recently synced posters in sync order
     // (the backend orders poster_cache.created_at DESC). Epoch cutoff means
@@ -380,6 +645,18 @@ const UnmatchedAssetsPage = () => {
                         variant="ghost"
                         onClick={handleRefresh}
                     />
+                    {tmdbEnabled && (
+                        <LoadingButton
+                            loading={runningQuality}
+                            loadingText="Checking..."
+                            variant="ghost"
+                            icon="verified"
+                            title="Verify TMDB ids, hydrate alternate titles & flag fuzzy near-misses for review"
+                            onClick={handleRunMatchQuality}
+                        >
+                            Run Match Quality
+                        </LoadingButton>
+                    )}
                     <LoadingButton
                         loading={isRunning('unmatched_assets')}
                         loadingText="Running..."
@@ -396,47 +673,72 @@ const UnmatchedAssetsPage = () => {
                 <RecentPosterReel posters={recentPosters} onRefresh={refreshRecent} />
             )}
 
-            {!hasData ? (
-                <p className="text-sm text-secondary">
-                    No unmatched-asset data yet. Run &ldquo;Run Unmatched Assets&rdquo; to scan your
-                    library.
-                </p>
-            ) : (
-                <>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        {SUMMARY_TYPES.map(({ key, label }) => {
-                            const typeData = summary[key] || {};
-                            return (
-                                <div
-                                    key={key}
-                                    className="p-4 rounded-lg bg-surface border border-border"
-                                >
-                                    <p className="text-sm text-secondary">{label}</p>
-                                    <p className="text-2xl font-bold text-warning">
-                                        {typeData.unmatched || 0}
-                                    </p>
-                                    <p className="text-xs text-tertiary mt-1">
-                                        of {typeData.total || 0} total &mdash;{' '}
-                                        {typeData.percent_complete?.toFixed(1) || 0}% complete
-                                    </p>
-                                    {typeData.total > 0 && (
-                                        <div className="mt-2 h-2 bg-surface-alt rounded-full overflow-hidden">
-                                            <div
-                                                className="h-full bg-success rounded-full"
-                                                style={{
-                                                    width: `${typeData.percent_complete || 0}%`,
-                                                }}
-                                            />
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })}
-                    </div>
+            {/* View switch: Unmatched / Needs Review / Ignored */}
+            <div className="flex flex-wrap gap-1">
+                {STATUS_VIEWS.map(v => (
+                    <button
+                        key={v.key}
+                        onClick={() => setViewMode(v.key)}
+                        className={`px-3 py-1 text-sm rounded-lg border flex items-center gap-2 ${
+                            viewMode === v.key
+                                ? 'border-brand-primary/50 bg-surface-alt text-primary'
+                                : 'border-border text-secondary hover:text-primary'
+                        }`}
+                    >
+                        {v.label}
+                        <span className="text-xs text-tertiary">{viewCounts[v.key]}</span>
+                    </button>
+                ))}
+            </div>
 
-                    <UnmatchedList items={items} />
-                </>
+            {viewMode === 'review' && (
+                <MatchReviewList rows={reviewRows} mode="review" onRefresh={refresh} />
             )}
+            {viewMode === 'ignored' && (
+                <MatchReviewList rows={ignoredRows} mode="ignored" onRefresh={refresh} />
+            )}
+            {viewMode === 'unmatched' &&
+                (!hasData ? (
+                    <p className="text-sm text-secondary">
+                        No unmatched-asset data yet. Run &ldquo;Run Unmatched Assets&rdquo; to scan
+                        your library.
+                    </p>
+                ) : (
+                    <>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            {SUMMARY_TYPES.map(({ key, label }) => {
+                                const typeData = summary[key] || {};
+                                return (
+                                    <div
+                                        key={key}
+                                        className="p-4 rounded-lg bg-surface border border-border"
+                                    >
+                                        <p className="text-sm text-secondary">{label}</p>
+                                        <p className="text-2xl font-bold text-warning">
+                                            {typeData.unmatched || 0}
+                                        </p>
+                                        <p className="text-xs text-tertiary mt-1">
+                                            of {typeData.total || 0} total &mdash;{' '}
+                                            {typeData.percent_complete?.toFixed(1) || 0}% complete
+                                        </p>
+                                        {typeData.total > 0 && (
+                                            <div className="mt-2 h-2 bg-surface-alt rounded-full overflow-hidden">
+                                                <div
+                                                    className="h-full bg-success rounded-full"
+                                                    style={{
+                                                        width: `${typeData.percent_complete || 0}%`,
+                                                    }}
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        <UnmatchedList items={items} onRefresh={refresh} />
+                    </>
+                ))}
         </div>
     );
 };

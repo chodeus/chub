@@ -81,6 +81,9 @@ class UnmatchedAssets(ChubModule):
 
     def should_include(self, asset: Dict[str, Any]) -> bool:
         cfg = self.config
+        # User-dismissed rows never appear in unmatched/review reports.
+        if asset.get("ignored"):
+            return False
         status = asset.get("status")
         if status in self._UNRELEASED_STATUSES:
             return False
@@ -378,12 +381,76 @@ class UnmatchedAssets(ChubModule):
         summary = self.calculate_stats(
             unmatched, all_media_grouped, all_collections_grouped
         )
+        needs_review, ignored = self.get_review_and_ignored(db)
+        summary["needs_review"] = len(needs_review)
+        summary["ignored"] = len(ignored)
         return {
             "unmatched": unmatched,
             "all_media": all_media_grouped,
             "all_collections": all_collections_grouped,
+            "needs_review": needs_review,
+            "ignored": ignored,
             "summary": summary,
         }
+
+    @staticmethod
+    def _serialize_match_row(row: Dict[str, Any], is_collection: bool) -> Dict[str, Any]:
+        """Flatten a media/collection row to the fields the Needs-Review /
+        Ignored tabs render (status, confidence, reason, conflicts)."""
+        import json as _json
+
+        conflicts = []
+        raw = row.get("conflict_ids")
+        if raw:
+            try:
+                parsed = _json.loads(raw)
+                if isinstance(parsed, list):
+                    conflicts = parsed
+            except (ValueError, TypeError):
+                conflicts = []
+        return {
+            "id": row.get("id"),
+            "title": row.get("title"),
+            "year": row.get("year"),
+            "type": "collection" if is_collection else row.get("asset_type"),
+            "asset_type": "collection" if is_collection else row.get("asset_type"),
+            "season_number": row.get("season_number"),
+            "instance_name": row.get("instance_name"),
+            "tmdb_id": row.get("tmdb_id"),
+            "tvdb_id": row.get("tvdb_id"),
+            "imdb_id": row.get("imdb_id"),
+            "match_status": row.get("match_status"),
+            "match_confidence": row.get("match_confidence"),
+            "match_reason": row.get("match_reason"),
+            "conflicts": conflicts,
+        }
+
+    def get_review_and_ignored(self, db: ChubDB) -> tuple:
+        """Return (needs_review, ignored) flat lists for the new tabs.
+
+        needs_review honors the same instance/config gates as unmatched (minus
+        the ignored gate, which the query already applies). ignored is the
+        user's explicit dismissal list, instance-filtered only.
+        """
+        review_rows = [
+            self._serialize_match_row(r, False)
+            for r in db.media.get_needs_review()
+            if self.allowed_media(r) and self.should_include(r)
+        ] + [
+            self._serialize_match_row(r, True)
+            for r in db.collection.get_needs_review()
+            if self.allowed_collection(r) and self.should_include(r)
+        ]
+        ignored_rows = [
+            self._serialize_match_row(r, False)
+            for r in db.media.get_ignored()
+            if self.allowed_media(r)
+        ] + [
+            self._serialize_match_row(r, True)
+            for r in db.collection.get_ignored()
+            if self.allowed_collection(r)
+        ]
+        return review_rows, ignored_rows
 
     def print_stats(self, db: ChubDB) -> None:
         try:

@@ -561,6 +561,42 @@ def is_match(
     return False, ""
 
 
+# Confidence tiers for a successful is_match(), keyed by the kind of evidence.
+# These drive the match_status/match_confidence the UI surfaces — they do NOT
+# change whether a poster is applied (that still follows `matched`). A loose
+# (fuzzy) title match is downgraded to "needs_review" so a human can confirm
+# it, while still being applied as before.
+_MATCH_CONF_ID = 0.99
+_MATCH_CONF_EXACT = 0.92
+_MATCH_CONF_NORMALIZED = 0.85
+_MATCH_CONF_ALTERNATE = 0.80
+_MATCH_CONF_LOOSE = 0.55
+
+
+def classify_match(matched: bool, reason: str) -> Tuple[str, float]:
+    """Map an is_match() result to a (match_status, match_confidence) pair.
+
+    match_status is one of "matched", "needs_review", "unmatched". Loose
+    string-comparison matches are routed to "needs_review" (low confidence)
+    because they're the most likely to be wrong; everything else that matched
+    is "matched" with a tier-appropriate confidence.
+    """
+    if not matched:
+        return "unmatched", 0.0
+
+    text = (reason or "").lower()
+    if text.startswith("id match"):
+        return "matched", _MATCH_CONF_ID
+    if "loose string comparison" in text:
+        return "needs_review", _MATCH_CONF_LOOSE
+    if "alternate" in text:
+        return "matched", _MATCH_CONF_ALTERNATE
+    if "normalized title" in text or "folder normalized" in text:
+        return "matched", _MATCH_CONF_NORMALIZED
+    # exact title / original title / folder equality
+    return "matched", _MATCH_CONF_EXACT
+
+
 def generate_title_variants(title: str) -> Dict[str, List[str]]:
     """Produce alternate title candidates plus their normalized forms.
 

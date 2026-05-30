@@ -16,6 +16,7 @@ from .run_state import RunState
 from .schema import SchemaManager
 from .stats import Stats
 from .tmdb_id_cache import TmdbIdCache
+from .tmdb_details_cache import TmdbDetailsCache
 from .upgradinatorr_progress import UpgradinatorrProgress
 from .webhook_cache import WebhookCache
 from .worker import DBWorker
@@ -195,6 +196,11 @@ class ChubDB:
     def tmdb_id_cache(self) -> TmdbIdCache:
         """Access to TMDB external-ID lookup cache."""
         return self._get_interface("tmdb_id_cache", TmdbIdCache)
+
+    @property
+    def tmdb_details_cache(self) -> TmdbDetailsCache:
+        """Access to TMDB details cache (id verification / AKA hydration)."""
+        return self._get_interface("tmdb_details_cache", TmdbDetailsCache)
 
     @property
     def worker(self) -> DBWorker:

@@ -124,6 +124,34 @@ class CollectionCache(DatabaseBase):
             or []
         )
 
+    def get_needs_review(self) -> list:
+        """Return collections flagged for human review, excluding ignored."""
+        return (
+            self.execute_query(
+                "SELECT * FROM collections_cache "
+                "WHERE match_status='needs_review' "
+                "AND (ignored IS NULL OR ignored=0)",
+                fetch_all=True,
+            )
+            or []
+        )
+
+    def get_ignored(self) -> list:
+        """Return collections the user has dismissed (ignored=1)."""
+        return (
+            self.execute_query(
+                "SELECT * FROM collections_cache WHERE ignored=1", fetch_all=True
+            )
+            or []
+        )
+
+    def set_ignored(self, id: int, ignored: bool) -> None:
+        """Toggle the user-dismissal flag for one collection row."""
+        self.execute_query(
+            "UPDATE collections_cache SET ignored=? WHERE id=?",
+            (int(bool(ignored)), id),
+        )
+
     def clear(self) -> None:
         """Delete all rows from collections_cache."""
         self.execute_query("DELETE FROM collections_cache")
@@ -158,6 +186,11 @@ class CollectionCache(DatabaseBase):
         matched_value: Optional[Any] = None,
         original_file: Optional[Any] = None,
         renamed_file: Optional[Any] = None,
+        match_status: Optional[Any] = None,
+        match_confidence: Optional[Any] = None,
+        match_reason: Optional[Any] = None,
+        ignored: Optional[Any] = None,
+        conflict_ids: Optional[Any] = None,
         id: Optional[Any] = None,
     ) -> None:
         """Update fields for a given collection."""
@@ -175,6 +208,26 @@ class CollectionCache(DatabaseBase):
         if renamed_file is not None:
             set_clauses.append("renamed_file=?")
             params.append(renamed_file)
+
+        if match_status is not None:
+            set_clauses.append("match_status=?")
+            params.append(match_status)
+
+        if match_confidence is not None:
+            set_clauses.append("match_confidence=?")
+            params.append(float(match_confidence))
+
+        if match_reason is not None:
+            set_clauses.append("match_reason=?")
+            params.append(match_reason)
+
+        if ignored is not None:
+            set_clauses.append("ignored=?")
+            params.append(int(bool(ignored)))
+
+        if conflict_ids is not None:
+            set_clauses.append("conflict_ids=?")
+            params.append(conflict_ids)
 
         if not set_clauses:
             return

@@ -1290,11 +1290,18 @@ async def get_unmatched_assets_details(
         unmatched = UnmatchedAssets(logger=unmatched_logger)
         stats = unmatched.get_stats_adhoc()
 
+        from backend.util.config import load_config
+
+        tmdb_enabled = bool(load_config().tmdb.apikey)
+
         return ok(
             "Unmatched assets details retrieved",
             {
                 "summary": stats.get("summary", {}),
                 "unmatched": stats.get("unmatched", {}),
+                "needs_review": stats.get("needs_review", []),
+                "ignored": stats.get("ignored", []),
+                "tmdb_enabled": tmdb_enabled,
             },
         )
 
@@ -1303,6 +1310,105 @@ async def get_unmatched_assets_details(
         return error(
             f"Error retrieving unmatched assets details: {str(e)}",
             code="UNMATCHED_DETAILS_ERROR",
+            status_code=500,
+        )
+
+
+@router.post(
+    "/match/{media_id}/ignore",
+    summary="Dismiss (ignore) a media row from unmatched/review",
+    description="Mark a media or collection row as ignored so it stops "
+    "appearing in the Unmatched/Needs-Review tabs.",
+)
+async def ignore_match(
+    media_id: int,
+    kind: str = Query("media", pattern="^(media|collection)$"),
+    ignored: bool = Query(True),
+    logger: Any = Depends(get_logger),
+    db: ChubDB = Depends(get_database),
+) -> JSONResponse:
+    """Toggle the ignore flag on a media (default) or collection row."""
+    try:
+        logger.debug(
+            f"Serving POST /api/posters/match/{media_id}/ignore "
+            f"(kind={kind}, ignored={ignored})"
+        )
+        if kind == "collection":
+            db.collection.set_ignored(media_id, ignored)
+        else:
+            db.media.set_ignored(media_id, ignored)
+        verb = "ignored" if ignored else "restored"
+        return ok(f"Row {verb}", {"id": media_id, "ignored": bool(ignored)})
+    except Exception as e:
+        logger.error(f"Error updating ignore flag for {media_id}: {e}")
+        return error(
+            f"Error updating ignore flag: {str(e)}",
+            code="MATCH_IGNORE_ERROR",
+            status_code=500,
+        )
+
+
+@router.post(
+    "/match/{media_id}/approve",
+    summary="Approve a needs-review match",
+    description="Confirm a needs-review media/collection row, promoting it to "
+    "the 'matched' state and clearing any conflict flags.",
+)
+async def approve_match(
+    media_id: int,
+    kind: str = Query("media", pattern="^(media|collection)$"),
+    logger: Any = Depends(get_logger),
+    db: ChubDB = Depends(get_database),
+) -> JSONResponse:
+    """Mark a reviewed row as confidently matched."""
+    try:
+        logger.debug(f"Serving POST /api/posters/match/{media_id}/approve (kind={kind})")
+        table = "collections_cache" if kind == "collection" else "media_cache"
+        iface = db.collection if kind == "collection" else db.media
+        iface.execute_query(
+            f"UPDATE {table} SET match_status='matched', match_confidence=1.0, "
+            "conflict_ids='[]' WHERE id=?",
+            (media_id,),
+        )
+        return ok("Match approved", {"id": media_id, "match_status": "matched"})
+    except Exception as e:
+        logger.error(f"Error approving match for {media_id}: {e}")
+        return error(
+            f"Error approving match: {str(e)}",
+            code="MATCH_APPROVE_ERROR",
+            status_code=500,
+        )
+
+
+@router.post(
+    "/match-quality/run",
+    summary="Run the optional TMDB/fuzzy match-quality pass",
+    description="Enqueue (or run) ID verification, AKA hydration, and fuzzy "
+    "near-miss flagging. No-op unless the tmdb.* toggles are enabled.",
+)
+async def run_match_quality_endpoint(
+    logger: Any = Depends(get_logger),
+    db: ChubDB = Depends(get_database),
+) -> JSONResponse:
+    """Trigger the config-gated match-quality refinement on demand."""
+    try:
+        logger.debug("Serving POST /api/posters/match-quality/run")
+        from backend.util.config import load_config
+        from backend.util.tmdb import run_match_quality
+
+        tmdb_cfg = load_config().tmdb
+        if not tmdb_cfg.apikey:
+            return ok(
+                "Match quality needs a TMDB API key (add it in Settings → TMDB)",
+                {"enabled": False, "summary": {}},
+            )
+        summary = run_match_quality(db, tmdb_cfg, logger.get_adapter("MatchQuality"))
+        return ok("Match-quality pass complete", {"enabled": True, "summary": summary})
+    except Exception as e:
+        logger.error(f"Error running match-quality pass: {e}")
+        return error(
+            f"Error running match-quality pass: {str(e)}",
+            code="MATCH_QUALITY_ERROR",
             status_code=500,
         )
 

@@ -216,6 +216,18 @@ def test_get_assets_files_specials_yield_season_zero(tmp_path):
     assert records[0]["season_number"] == 0
 
 
+def test_get_assets_files_folder_based_bare_season_still_detected(tmp_path):
+    """A folder-based layout where the season file is bare 'Season01.jpg' (no
+    ' - ' delimiter) must still yield a season_number — the start-of-name
+    anchor preserves this while a bare 'Season N' inside a movie title does
+    not match."""
+    m = make_module()
+    _make_asset_tree(str(tmp_path), ["Show (2020)/Season01.jpg"])
+    records = m._get_assets_files(str(tmp_path))
+    assert len(records) == 1
+    assert records[0]["season_number"] == 1
+
+
 def test_get_assets_files_singular_special_in_movie_title(tmp_path):
     """Singular 'Special' in a movie title must not be treated as a season marker.
 
@@ -236,6 +248,41 @@ def test_get_assets_files_singular_special_in_movie_title(tmp_path):
     assert record["asset_type"] == "movie"
     assert record["tmdb_id"] == 691677
     assert record["imdb_id"] == "tt1948218"
+
+
+def test_get_assets_files_bare_season_in_movie_title_is_movie(tmp_path):
+    """A bare "Season <n>" inside a movie title (no " - "/"_" delimiter) must
+    NOT be treated as a TV season marker.
+
+    Regression: 'Open Season 2 (2008)' / 'Open Season 3 (2010)' were parsed as
+    season-2/3 shows with title 'Open' — so the file vanished from asset search
+    (normalized_title became 'open') and never matched the Radarr movie row.
+    A real season poster always delimits the tag ('Show (2020) - Season 1'),
+    so only the delimited form should be stripped.
+    """
+    m = make_module()
+    _make_asset_tree(
+        str(tmp_path),
+        [
+            "Open Season 2 (2008) {tmdb-13690} {imdb-tt1107365}.jpg",
+            "Open Season 3 (2010) {tmdb-51170} {imdb-tt1646926}.jpg",
+        ],
+    )
+    records = m._get_assets_files(str(tmp_path))
+    by_title = {r["title"]: r for r in records}
+
+    rec2 = by_title["Open Season 2"]
+    assert rec2["season_number"] is None
+    assert rec2["asset_type"] == "movie"
+    assert rec2["normalized_title"] == "openseason2"
+    assert rec2["tmdb_id"] == 13690
+    assert rec2["imdb_id"] == "tt1107365"
+
+    rec3 = by_title["Open Season 3"]
+    assert rec3["season_number"] is None
+    assert rec3["asset_type"] == "movie"
+    assert rec3["normalized_title"] == "openseason3"
+    assert rec3["tmdb_id"] == 51170
 
 
 # --- source_dirs bottom-wins contract ---
@@ -430,3 +477,98 @@ def test_orphan_pass_scan_roots_empty_when_no_destination():
     """
     m = _module_with_config(destination_dir="", source_dirs=["/some/source"])
     assert m._orphan_pass_scan_roots() == []
+
+
+# --- match transparency: conflicts, status, pure helpers ---
+
+
+def test_candidate_identity_prefers_tmdb_then_title():
+    assert PosterRenamerr._candidate_identity({"tmdb_id": 5}) == ("tmdb", "5")
+    assert PosterRenamerr._candidate_identity({"imdb_id": "TT9"}) == ("imdb", "tt9")
+    assert PosterRenamerr._candidate_identity(
+        {"normalized_title": "foo", "year": 2010}
+    ) == ("title", "foo", 2010)
+
+
+def test_append_rename_history_caps_and_appends():
+    import json as _json
+
+    out = PosterRenamerr._append_rename_history(None, "/src/Old.jpg", "/dst/new.jpg")
+    parsed = _json.loads(out)
+    assert parsed[-1]["old"] == "Old.jpg"
+    assert parsed[-1]["new"] == "new.jpg"
+    assert "at" in parsed[-1]
+    # cap at 20
+    big = _json.dumps([{"old": "a", "new": "b", "at": "t"}] * 25)
+    capped = _json.loads(PosterRenamerr._append_rename_history(big, "x", "y"))
+    assert len(capped) == 20
+
+
+def _open_db(tmp_path, logger):
+    from backend.util.database import ChubDB
+
+    db = ChubDB(logger=logger, db_path=str(tmp_path / "match.db"), quiet=True)
+    db.__enter__()
+    db._ensure_schema_initialized()
+    return db
+
+
+def test_match_item_clean_single_match_is_matched(tmp_path):
+    m = make_module()
+    db = _open_db(tmp_path, m.logger)
+    try:
+        db.poster.execute_query(
+            "INSERT INTO poster_cache (asset_type,title,normalized_title,year,tmdb_id,file,priority) "
+            "VALUES ('movie','Inception','inception',2010,27205,'/a.jpg',0)"
+        )
+        db.media.execute_query(
+            "INSERT INTO media_cache (identity_key,asset_type,title,normalized_title,year,tmdb_id,instance_name) "
+            "VALUES ('mk','movie','Inception','inception','2010',27205,'radarr')"
+        )
+        media = dict(
+            db.media.execute_query(
+                "SELECT * FROM media_cache WHERE identity_key='mk'", fetch_one=True
+            )
+        )
+        result = m.match_item(media, db)
+        assert result["matched"] is True
+        updated = db.media.get_by_id(media["id"])
+        assert updated["match_status"] == "matched"
+        assert updated["match_confidence"] >= 0.95  # ID match
+        assert updated["conflict_ids"] == "[]"
+    finally:
+        db.__exit__(None, None, None)
+
+
+def test_match_item_conflicting_candidates_flagged_review(tmp_path):
+    import json as _json
+
+    m = make_module()
+    db = _open_db(tmp_path, m.logger)
+    try:
+        # Two posters, same title/year, different tmdb ids -> ambiguous. Media
+        # has no id so matching falls to the title path and finds both.
+        db.poster.execute_query(
+            "INSERT INTO poster_cache (asset_type,title,normalized_title,year,tmdb_id,file,priority) "
+            "VALUES ('movie','Ambiguous','ambiguous',2010,111,'/a.jpg',0)"
+        )
+        db.poster.execute_query(
+            "INSERT INTO poster_cache (asset_type,title,normalized_title,year,tmdb_id,file,priority) "
+            "VALUES ('movie','Ambiguous','ambiguous',2010,222,'/b.jpg',1)"
+        )
+        db.media.execute_query(
+            "INSERT INTO media_cache (identity_key,asset_type,title,normalized_title,year,instance_name) "
+            "VALUES ('mk','movie','Ambiguous','ambiguous','2010','radarr')"
+        )
+        media = dict(
+            db.media.execute_query(
+                "SELECT * FROM media_cache WHERE identity_key='mk'", fetch_one=True
+            )
+        )
+        result = m.match_item(media, db)
+        assert result["matched"] is True  # priority-winner still applied
+        updated = db.media.get_by_id(media["id"])
+        assert updated["match_status"] == "needs_review"
+        assert len(_json.loads(updated["conflict_ids"])) == 2
+    finally:
+        db.__exit__(None, None, None)

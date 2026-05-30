@@ -12,6 +12,7 @@ from backend.util.connector import Connector
 from backend.util.constants import season_number_regex
 from backend.util.database import ChubDB
 from backend.util.helper import (
+    classify_match,
     create_table,
     extract_ids,
     extract_year,
@@ -87,6 +88,40 @@ class PosterRenamerr(ChubModule):
             self.logger.error(f"Error {action_type}ing file: {e}")
             return False
 
+    @staticmethod
+    def _append_rename_history(existing: Optional[str], old: str, new: str) -> str:
+        """Append a {old, new, at} entry to a media row's rename_history JSON,
+        keeping the most recent 20. Returns the new JSON string."""
+        try:
+            history = json.loads(existing or "[]")
+            if not isinstance(history, list):
+                history = []
+        except (ValueError, TypeError):
+            history = []
+        history.append(
+            {
+                "old": os.path.basename(old) if old else None,
+                "new": os.path.basename(new) if new else None,
+                "at": datetime.now().isoformat(timespec="seconds"),
+            }
+        )
+        return json.dumps(history[-20:])
+
+    @staticmethod
+    def _candidate_identity(cand: dict) -> tuple:
+        """Identity signature for conflict detection. Prefers an external ID
+        (TMDB, then IMDB), falling back to (normalized_title, year). Two matched
+        posters with different signatures are a genuine ambiguity; duplicates
+        of the same media across drives share a signature and don't conflict.
+        """
+        tmdb = cand.get("tmdb_id")
+        if tmdb not in (None, "", 0, "0"):
+            return ("tmdb", str(tmdb))
+        imdb = cand.get("imdb_id")
+        if imdb:
+            return ("imdb", str(imdb).lower())
+        return ("title", cand.get("normalized_title") or "", cand.get("year"))
+
     def match_item(self, media: dict, db: ChubDB, is_collection=False) -> dict:
         asset_type = media.get("asset_type")
         title = media.get("title")
@@ -107,6 +142,10 @@ class PosterRenamerr(ChubModule):
         matched = False
         candidate = None
         candidates = []
+        win_reason = ""
+        # Every poster that passed is_match() for this media — used to detect
+        # ambiguous (conflicting-identity) matches.
+        matched_candidates = []
 
         for id_field in ["imdb_id", "tmdb_id", "tvdb_id"]:
             id_val = media.get(id_field)
@@ -122,6 +161,8 @@ class PosterRenamerr(ChubModule):
                         )
                         candidate = c
                         candidates = [c]
+                        win_reason = reason
+                        matched_candidates = [c]
                         break
 
         if not candidate:
@@ -152,9 +193,35 @@ class PosterRenamerr(ChubModule):
                         reasons.append(
                             f"Prefix/name candidate: {cand.get('title')} (season {cand.get('season_number')}) [{reason}]"
                         )
+                        matched_candidates.append(cand)
                         if not candidate:
                             candidate = cand
                             matched = True
+                            win_reason = reason
+
+        # --- Match transparency: status + confidence + conflict detection ---
+        # match_status/confidence are additive metadata; `matched` (whether the
+        # poster is applied) is unchanged. A loose match becomes "needs_review"
+        # and, if two posters with different identities both matched, the
+        # priority-winner is still applied but flagged with its rivals.
+        match_status, match_confidence = classify_match(matched, win_reason)
+        conflict_json = "[]"
+        distinct = {self._candidate_identity(c) for c in matched_candidates}
+        if len(distinct) > 1:
+            match_status = "needs_review"
+            conflict_json = json.dumps(
+                [
+                    {
+                        "title": c.get("title"),
+                        "year": c.get("year"),
+                        "file": c.get("file"),
+                        "tmdb_id": c.get("tmdb_id"),
+                        "imdb_id": c.get("imdb_id"),
+                        "tvdb_id": c.get("tvdb_id"),
+                    }
+                    for c in matched_candidates[:5]
+                ]
+            )
 
         if is_collection:
             db.collection.update(
@@ -164,6 +231,10 @@ class PosterRenamerr(ChubModule):
                 instance_name=instance_name,
                 matched_value=matched,
                 original_file=candidate.get("file") if candidate else None,
+                match_status=match_status,
+                match_confidence=match_confidence,
+                match_reason=win_reason or None,
+                conflict_ids=conflict_json,
                 id=media.get("id"),
             )
         else:
@@ -175,6 +246,10 @@ class PosterRenamerr(ChubModule):
                 matched_value=matched,
                 season_number=season_number,
                 original_file=candidate.get("file") if candidate else None,
+                match_status=match_status,
+                match_confidence=match_confidence,
+                match_reason=win_reason or None,
+                conflict_ids=conflict_json,
                 id=media.get("id"),
             )
 
@@ -345,6 +420,13 @@ class PosterRenamerr(ChubModule):
                 id=item.get("id"),
             )
         else:
+            history_json = None
+            if not config.dry_run:
+                history_json = self._append_rename_history(
+                    item.get("rename_history"),
+                    item.get("original_file") or item.get("file"),
+                    new_file_path,
+                )
             db.media.update(
                 asset_type=asset_type,
                 title=item.get("title"),
@@ -354,6 +436,7 @@ class PosterRenamerr(ChubModule):
                 season_number=item.get("season_number"),
                 original_file=None,
                 renamed_file=new_file_path,
+                rename_history=history_json,
                 id=item.get("id"),
             )
 
@@ -441,6 +524,28 @@ class PosterRenamerr(ChubModule):
                                 ):
                                     matched_assets.append(row)
         return matched_assets
+
+    def _run_match_quality_pass(self, db: ChubDB) -> None:
+        """Automatic refinement after matching: fuzzy near-miss flagging
+        (local, always) plus TMDB id verification + AKA hydration (only when a
+        TMDB apikey is configured). Failures never abort the run.
+        """
+        try:
+            from backend.util.config import load_config
+            from backend.util.tmdb import run_match_quality
+
+            tmdb_cfg = load_config().tmdb
+            summary = run_match_quality(db, tmdb_cfg, self.logger)
+            if any(summary.values()):
+                self.logger.info(
+                    "Match-quality pass: "
+                    f"{summary.get('fuzzy_flagged', 0)} fuzzy-flagged, "
+                    f"{summary.get('id_mismatches', 0)} id mismatches, "
+                    f"{summary.get('akas_hydrated', 0)} AKA-hydrated "
+                    f"({summary.get('verified', 0)} ids verified)"
+                )
+        except Exception as exc:
+            self.logger.warning(f"Match-quality pass skipped: {exc}")
 
     # Rename_files reports across _MATCH_PROGRESS_CEILING_PCT..100. Update
     # less frequently than match — this phase is much shorter (only matched
@@ -620,7 +725,15 @@ class PosterRenamerr(ChubModule):
 
                 record = {
                     "title": title,
-                    "normalized_title": normalize_titles(title),
+                    # Derive the search/match key from the raw (ext-stripped)
+                    # filename, not from `title`. normalize_titles() already
+                    # strips the year (and trailing season tag), IDs, and
+                    # special chars, so it yields the same key for normal
+                    # assets — but staying independent of parse_asset_filename
+                    # means a future title-parsing change can never silently
+                    # poison normalized_title (the root cause of the "Open
+                    # Season 2" -> "open" search/match failure).
+                    "normalized_title": normalize_titles(filename),
                     "year": year,
                     "tmdb_id": tmdb_id,
                     "tvdb_id": tvdb_id,
@@ -891,6 +1004,7 @@ class PosterRenamerr(ChubModule):
                 connector.update_collections_database()
 
                 self.match_assets_to_media(db=db)
+                self._run_match_quality_pass(db)
                 output, manifest = self.rename_files(db)
 
                 if self.config.report_unmatched_assets:

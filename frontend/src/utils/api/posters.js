@@ -329,6 +329,35 @@ export const postersAPI = {
     },
 
     /**
+     * Ignore (dismiss) or restore a media/collection row from the
+     * Unmatched / Needs-Review tabs.
+     * @param {number} id - media_cache or collections_cache row id
+     * @param {Object} options - { kind: 'media'|'collection', ignored: boolean }
+     */
+    setMatchIgnored: (id, { kind = 'media', ignored = true } = {}) => {
+        const params = new URLSearchParams({ kind, ignored: String(ignored) });
+        return apiCore.post(`/posters/match/${id}/ignore?${params}`, {});
+    },
+
+    /**
+     * Approve a needs-review match, promoting it to the matched state.
+     * @param {number} id - row id
+     * @param {Object} options - { kind: 'media'|'collection' }
+     */
+    approveMatch: (id, { kind = 'media' } = {}) => {
+        const params = new URLSearchParams({ kind });
+        return apiCore.post(`/posters/match/${id}/approve?${params}`, {});
+    },
+
+    /**
+     * Trigger the optional TMDB/fuzzy match-quality pass on demand.
+     * @returns {Promise<Object>} { enabled, summary }
+     */
+    runMatchQuality: () => {
+        return apiCore.post('/posters/match-quality/run', {});
+    },
+
+    /**
      * Get GDrive synchronization statistics
      * @returns {Promise<Object>} GDrive sync statistics
      */

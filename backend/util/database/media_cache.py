@@ -267,6 +267,35 @@ class MediaCache(DatabaseBase):
             or []
         )
 
+    def get_needs_review(self) -> list:
+        """Return rows flagged for human review (weak/ambiguous/unverified
+        candidate), excluding ones the user has ignored."""
+        return (
+            self.execute_query(
+                "SELECT * FROM media_cache "
+                "WHERE match_status='needs_review' "
+                "AND (ignored IS NULL OR ignored=0)",
+                fetch_all=True,
+            )
+            or []
+        )
+
+    def get_ignored(self) -> list:
+        """Return rows the user has dismissed (ignored=1)."""
+        return (
+            self.execute_query(
+                "SELECT * FROM media_cache WHERE ignored=1", fetch_all=True
+            )
+            or []
+        )
+
+    def set_ignored(self, id: int, ignored: bool) -> None:
+        """Toggle the user-dismissal flag for one media row."""
+        self.execute_query(
+            "UPDATE media_cache SET ignored=? WHERE id=?",
+            (int(bool(ignored)), id),
+        )
+
     def clear(self) -> None:
         """Delete all rows from media_cache."""
         self.execute_query("DELETE FROM media_cache")
@@ -409,6 +438,15 @@ class MediaCache(DatabaseBase):
         runtime: Optional[Any] = None,
         language: Optional[Any] = None,
         monitored: Optional[Any] = None,
+        # Match transparency / lifecycle fields. Each is only written when
+        # explicitly passed (None = leave untouched), so the rename phase can
+        # clear `matched` without wiping match_status/reason.
+        match_status: Optional[Any] = None,
+        match_confidence: Optional[Any] = None,
+        match_reason: Optional[Any] = None,
+        ignored: Optional[Any] = None,
+        conflict_ids: Optional[Any] = None,
+        rename_history: Optional[Any] = None,
         id: Optional[Any] = None,
     ) -> None:
         """Update fields for a given media record."""
@@ -471,6 +509,30 @@ class MediaCache(DatabaseBase):
         if monitored is not None:
             set_clauses.append("monitored=?")
             params.append(int(bool(monitored)))
+
+        if match_status is not None:
+            set_clauses.append("match_status=?")
+            params.append(match_status)
+
+        if match_confidence is not None:
+            set_clauses.append("match_confidence=?")
+            params.append(float(match_confidence))
+
+        if match_reason is not None:
+            set_clauses.append("match_reason=?")
+            params.append(match_reason)
+
+        if ignored is not None:
+            set_clauses.append("ignored=?")
+            params.append(int(bool(ignored)))
+
+        if conflict_ids is not None:
+            set_clauses.append("conflict_ids=?")
+            params.append(conflict_ids)
+
+        if rename_history is not None:
+            set_clauses.append("rename_history=?")
+            params.append(rename_history)
 
         if not set_clauses:
             return
