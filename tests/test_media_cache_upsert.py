@@ -79,3 +79,53 @@ def test_upsert_preserves_match_state_on_resync(db):
     assert row["matched"] == 1
     assert row["original_file"] == "/p.jpg"
     assert row["title"] == "Kill Code"
+
+
+def test_upsert_refreshes_changed_secondary_id(db):
+    """When the row is keyed on imdb and the tvdb id changes on re-sync, the
+    stale secondary id must be refreshed (TVDb re-issues ids)."""
+    item = {
+        "title": "Some Show",
+        "normalized_title": normalize_titles("Some Show"),
+        "year": "2020",
+        "imdb_id": "tt9000000",
+        "tvdb_id": 100,
+        "tmdb_id": None,
+        "alternate_titles": [],
+        "normalized_alternate_titles": [],
+    }
+    db.media.upsert(item, "show", "sonarr", "sonarr_main")
+    item2 = {**item, "tvdb_id": 200}  # same imdb key, new tvdb
+    db.media.upsert(item2, "show", "sonarr", "sonarr_main")
+    row = db.media.execute_query(
+        "SELECT tvdb_id, imdb_id FROM media_cache WHERE imdb_id='tt9000000'",
+        fetch_one=True,
+    )
+    assert row["tvdb_id"] == 200
+
+
+def test_sync_prunes_row_when_identity_id_changes(db):
+    """If the *identity* id changes (here tmdb, with no imdb), sync replaces the
+    old row with a fresh one — no duplicate left behind."""
+    base = {
+        "title": "Identity Mover",
+        "normalized_title": normalize_titles("Identity Mover"),
+        "year": "2026",
+        "imdb_id": None,
+        "tvdb_id": None,
+        "alternate_titles": [],
+        "normalized_alternate_titles": [],
+    }
+    db.media.sync_for_instance(
+        "radarr_main", "radarr", "movie", [{**base, "tmdb_id": 111}]
+    )
+    # Re-sync: same movie, tmdb id re-issued as 222.
+    db.media.sync_for_instance(
+        "radarr_main", "radarr", "movie", [{**base, "tmdb_id": 222}]
+    )
+    rows = db.media.execute_query(
+        "SELECT tmdb_id FROM media_cache WHERE instance_name='radarr_main' AND asset_type='movie'",
+        fetch_all=True,
+    )
+    assert len(rows) == 1  # old tmdb:111 row pruned, not duplicated
+    assert rows[0]["tmdb_id"] == 222

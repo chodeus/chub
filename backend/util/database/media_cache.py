@@ -154,6 +154,14 @@ class MediaCache(DatabaseBase):
             DO UPDATE SET
                 title=excluded.title,
                 year=excluded.year,
+                -- Refresh secondary IDs too: when the row is keyed on one id
+                -- (e.g. imdb) and a *different* id changes on the *arr's side
+                -- (TVDb in particular re-issues ids), the stale value would
+                -- otherwise persist and break id-based matching / request
+                -- links. The key id itself is unchanged here by definition.
+                tmdb_id=excluded.tmdb_id,
+                tvdb_id=excluded.tvdb_id,
+                imdb_id=excluded.imdb_id,
                 normalized_title=excluded.normalized_title,
                 alternate_titles=excluded.alternate_titles,
                 normalized_alternate_titles=excluded.normalized_alternate_titles,
