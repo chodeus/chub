@@ -1,11 +1,11 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useApiData } from '../../hooks/useApiData.js';
 import { useToast } from '../../contexts/ToastContext.jsx';
 import { postersAPI } from '../../utils/api/posters.js';
 import { copyText } from '../../utils/clipboard.js';
 import { buildPosterRequestText, formatId } from '../../utils/posterRequest.js';
-import { IconButton, PageHeader } from '../../components/ui/index.js';
+import { IconButton, Modal, PageHeader } from '../../components/ui/index.js';
 import Spinner from '../../components/ui/Spinner.jsx';
 
 const SUMMARY_TYPES = [
@@ -145,7 +145,7 @@ const RecentPosterReel = ({ posters, onRefresh }) => {
 };
 
 /** Unified, filterable + searchable table of every unmatched item. */
-const UnmatchedList = ({ items, onRefresh }) => {
+const UnmatchedList = ({ items, onRefresh, onPick }) => {
     const toast = useToast();
     const [typeKey, setTypeKey] = useState('all');
     const [query, setQuery] = useState('');
@@ -326,6 +326,16 @@ const UnmatchedList = ({ items, onRefresh }) => {
                                         )}
                                         {item.id != null && (
                                             <IconButton
+                                                icon="wallpaper"
+                                                size="small"
+                                                variant="ghost"
+                                                aria-label="Choose a poster"
+                                                title="Choose a poster to apply"
+                                                onClick={() => onPick?.(item)}
+                                            />
+                                        )}
+                                        {item.id != null && (
+                                            <IconButton
                                                 icon="block"
                                                 size="small"
                                                 variant="ghost"
@@ -367,7 +377,7 @@ const kindOf = row => (row.asset_type === 'collection' ? 'collection' : 'media')
  * confidence + reason the backend now records, plus per-row actions:
  * review → Approve / Ignore, ignored → Restore.
  */
-const MatchReviewList = ({ rows, mode, onRefresh }) => {
+const MatchReviewList = ({ rows, mode, onRefresh, onPick }) => {
     const toast = useToast();
     const [query, setQuery] = useState('');
     const [busyId, setBusyId] = useState(null);
@@ -475,6 +485,14 @@ const MatchReviewList = ({ rows, mode, onRefresh }) => {
                                         {mode === 'review' ? (
                                             <>
                                                 <IconButton
+                                                    icon="wallpaper"
+                                                    size="small"
+                                                    variant="ghost"
+                                                    aria-label="Choose a poster"
+                                                    title="Choose a poster to apply"
+                                                    onClick={() => onPick?.(item)}
+                                                />
+                                                <IconButton
                                                     icon="check_circle"
                                                     size="small"
                                                     variant="ghost"
@@ -547,6 +565,117 @@ const MatchReviewList = ({ rows, mode, onRefresh }) => {
     );
 };
 
+/** One selectable poster thumbnail in the picker. */
+const PickerThumb = ({ cand, busy, onApply }) => {
+    const [failed, setFailed] = useState(false);
+    return (
+        <button
+            type="button"
+            disabled={busy}
+            onClick={() => onApply(cand.poster_id)}
+            title={cand.would_match ? 'Would match' : cand.reason}
+            className={`group relative rounded-lg overflow-hidden border text-left ${
+                cand.would_match ? 'border-success/60' : 'border-border'
+            } hover:border-brand-primary disabled:opacity-50`}
+        >
+            <div
+                className="bg-input flex items-center justify-center"
+                style={{ aspectRatio: '2 / 3' }}
+            >
+                {failed ? (
+                    <span className="material-symbols-outlined text-tertiary text-3xl">
+                        broken_image
+                    </span>
+                ) : (
+                    <img
+                        src={postersAPI.getThumbnailUrl(cand.poster_id, 200)}
+                        alt={cand.title || `#${cand.poster_id}`}
+                        loading="lazy"
+                        className="object-cover w-full h-full"
+                        onError={() => setFailed(true)}
+                    />
+                )}
+            </div>
+            <div className="px-2 py-1">
+                <p className="text-xs text-secondary truncate">{cand.style || cand.owner || '—'}</p>
+                {cand.season_number != null && (
+                    <p className="text-[10px] text-tertiary">Season {cand.season_number}</p>
+                )}
+            </div>
+            <span className="absolute inset-0 flex items-center justify-center bg-brand-primary/80 opacity-0 group-hover:opacity-100 transition-opacity">
+                <span className="material-symbols-outlined text-white">check</span>
+            </span>
+        </button>
+    );
+};
+
+/** Modal that fetches candidate posters for a media row and applies the chosen one. */
+const PosterPickerModal = ({ item, onClose, onApplied }) => {
+    const toast = useToast();
+    const kind = item.asset_type === 'collection' ? 'collection' : 'media';
+    const [candidates, setCandidates] = useState(null);
+    const [busy, setBusy] = useState(null);
+
+    useEffect(() => {
+        let alive = true;
+        postersAPI
+            .fetchMatchCandidates(item.id, { kind })
+            .then(r => alive && setCandidates(r?.data?.candidates || []))
+            .catch(() => alive && setCandidates([]));
+        return () => {
+            alive = false;
+        };
+    }, [item.id, kind]);
+
+    const apply = async posterId => {
+        setBusy(posterId);
+        try {
+            const res = await postersAPI.applyMatch(item.id, posterId, { kind });
+            toast.success(
+                res?.data?.applied
+                    ? 'Poster applied'
+                    : 'Match recorded — applies on the next poster_renamerr run'
+            );
+            onApplied?.();
+            onClose();
+        } catch {
+            toast.error('Failed to apply poster');
+            setBusy(null);
+        }
+    };
+
+    return (
+        <Modal isOpen onClose={onClose} size="large">
+            <Modal.Header>
+                Choose a poster — {item.title}
+                {item.year ? ` (${item.year})` : ''}
+                {item.season_number != null ? ` · Season ${item.season_number}` : ''}
+            </Modal.Header>
+            <Modal.Body>
+                {candidates === null ? (
+                    <p className="text-sm text-secondary">Searching for posters…</p>
+                ) : candidates.length === 0 ? (
+                    <p className="text-sm text-secondary">
+                        No candidate posters found in your cache for this title. The asset may not
+                        exist in any synced source.
+                    </p>
+                ) : (
+                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
+                        {candidates.map(c => (
+                            <PickerThumb
+                                key={c.poster_id}
+                                cand={c}
+                                busy={busy != null}
+                                onApply={apply}
+                            />
+                        ))}
+                    </div>
+                )}
+            </Modal.Body>
+        </Modal>
+    );
+};
+
 const UnmatchedAssetsPage = () => {
     const { data, isLoading, refresh } = useApiData({
         apiFunction: postersAPI.fetchUnmatchedDetails,
@@ -560,6 +689,7 @@ const UnmatchedAssetsPage = () => {
     const grandTotal = summary.grand_total || {};
 
     const [viewMode, setViewMode] = useState('unmatched');
+    const [pickerItem, setPickerItem] = useState(null);
 
     const viewCounts = {
         unmatched: grandTotal.unmatched || 0,
@@ -619,7 +749,12 @@ const UnmatchedAssetsPage = () => {
             </div>
 
             {viewMode === 'review' && (
-                <MatchReviewList rows={reviewRows} mode="review" onRefresh={refresh} />
+                <MatchReviewList
+                    rows={reviewRows}
+                    mode="review"
+                    onRefresh={refresh}
+                    onPick={setPickerItem}
+                />
             )}
             {viewMode === 'ignored' && (
                 <MatchReviewList rows={ignoredRows} mode="ignored" onRefresh={refresh} />
@@ -663,9 +798,17 @@ const UnmatchedAssetsPage = () => {
                             })}
                         </div>
 
-                        <UnmatchedList items={items} onRefresh={refresh} />
+                        <UnmatchedList items={items} onRefresh={refresh} onPick={setPickerItem} />
                     </>
                 ))}
+
+            {pickerItem && (
+                <PosterPickerModal
+                    item={pickerItem}
+                    onClose={() => setPickerItem(null)}
+                    onApplied={refresh}
+                />
+            )}
         </div>
     );
 };

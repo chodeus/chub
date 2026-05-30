@@ -1376,6 +1376,194 @@ async def approve_match(
 
 
 @router.get(
+    "/match/{media_id}/candidates",
+    summary="Candidate posters for a media row (picker + why-no-match)",
+    description="Return the title-similar posters of the right type/season for "
+    "a media/collection row, each annotated with whether it would match and "
+    "why — powering both the manual poster picker and match diagnostics.",
+)
+async def get_match_candidates(
+    media_id: int,
+    kind: str = Query("media", pattern="^(media|collection)$"),
+    limit: int = Query(24, ge=1, le=100),
+    logger: Any = Depends(get_logger),
+    db: ChubDB = Depends(get_database),
+) -> JSONResponse:
+    try:
+        import json as _json
+
+        from backend.util.helper import is_match
+
+        row = (
+            db.collection.get_by_id(media_id)
+            if kind == "collection"
+            else db.media.get_by_id(media_id)
+        )
+        if not row:
+            return error("Media row not found", code="NOT_FOUND", status_code=404)
+
+        asset_type = "collection" if kind == "collection" else row.get("asset_type")
+        season_number = row.get("season_number")
+        try:
+            alts = _json.loads(row.get("alternate_titles") or "[]")
+        except (ValueError, TypeError):
+            alts = []
+        search_titles = [row.get("title")] + [a for a in alts if a]
+
+        seen = set()
+        gathered = []
+        for st in search_titles:
+            for c in db.poster.get_candidates_by_prefix(
+                st or "", asset_type=asset_type
+            ):
+                f = c.get("file")
+                if f and f not in seen:
+                    seen.add(f)
+                    gathered.append(c)
+
+        candidates = []
+        for c in gathered:
+            cs = c.get("season_number")
+            # Keep only posters whose season matches the row's (a season row
+            # wants season posters; a movie/collection/main-show row wants
+            # season-less posters).
+            if season_number is not None and cs != season_number:
+                continue
+            if season_number is None and cs is not None:
+                continue
+            matched, reason = is_match(c, row)
+            candidates.append(
+                {
+                    "poster_id": c.get("id"),
+                    "title": c.get("title"),
+                    "year": c.get("year"),
+                    "season_number": cs,
+                    "style": c.get("style"),
+                    "owner": os.path.basename(os.path.dirname(c.get("file") or "")),
+                    "would_match": bool(matched),
+                    "reason": reason or "title/year/season did not satisfy the matcher",
+                }
+            )
+            if len(candidates) >= limit:
+                break
+
+        return ok(
+            f"{len(candidates)} candidate posters",
+            {
+                "candidates": candidates,
+                "media": {
+                    "title": row.get("title"),
+                    "year": row.get("year"),
+                    "season_number": season_number,
+                    "type": asset_type,
+                },
+            },
+        )
+    except Exception as e:
+        logger.error(f"Error fetching match candidates for {media_id}: {e}")
+        return error(
+            f"Error fetching candidates: {str(e)}",
+            code="MATCH_CANDIDATES_ERROR",
+            status_code=500,
+        )
+
+
+@router.post(
+    "/match/{media_id}/apply",
+    summary="Manually apply a chosen poster to a media row",
+    description="Link a specific poster to a media/collection row and copy it "
+    "to the destination. Used by the manual poster picker.",
+)
+async def apply_match(
+    media_id: int,
+    poster_id: int = Query(...),
+    kind: str = Query("media", pattern="^(media|collection)$"),
+    logger: Any = Depends(get_logger),
+    db: ChubDB = Depends(get_database),
+) -> JSONResponse:
+    try:
+        logger.debug(
+            f"Serving POST /api/posters/match/{media_id}/apply (poster={poster_id})"
+        )
+        row = (
+            db.collection.get_by_id(media_id)
+            if kind == "collection"
+            else db.media.get_by_id(media_id)
+        )
+        if not row:
+            return error("Media row not found", code="NOT_FOUND", status_code=404)
+        poster = db.poster.execute_query(
+            "SELECT * FROM poster_cache WHERE id=?", (poster_id,), fetch_one=True
+        )
+        if not poster:
+            return error("Poster not found", code="NOT_FOUND", status_code=404)
+
+        pfile = poster.get("file")
+        now = datetime.datetime.now().isoformat(timespec="seconds")
+
+        if kind == "collection":
+            db.collection.update(
+                title=row.get("title"),
+                year=row.get("year"),
+                library_name=row.get("library_name"),
+                instance_name=row.get("instance_name"),
+                matched_value=True,
+                original_file=pfile,
+                match_status="matched",
+                match_confidence=1.0,
+                match_reason="Manually applied",
+                conflict_ids="[]",
+                id=media_id,
+            )
+            db.collection.set_ignored(media_id, False)
+            db.collection.set_match_provenance(media_id, now, pfile)
+        else:
+            db.media.update(
+                asset_type=row.get("asset_type"),
+                title=row.get("title"),
+                year=row.get("year"),
+                instance_name=row.get("instance_name"),
+                matched_value=True,
+                season_number=row.get("season_number"),
+                original_file=pfile,
+                match_status="matched",
+                match_confidence=1.0,
+                match_reason="Manually applied",
+                conflict_ids="[]",
+                id=media_id,
+            )
+            db.media.set_ignored(media_id, False)
+            db.media.set_match_provenance(media_id, now, pfile)
+
+        # Best-effort copy to the destination so the poster takes effect now.
+        applied = False
+        try:
+            from backend.modules.poster_renamerr import PosterRenamerr
+
+            pr = PosterRenamerr(logger=logger)
+            item = dict(row)
+            item["original_file"] = pfile
+            item["id"] = media_id
+            applied = pr.rename_file(item, db) is not None
+        except Exception as exc:
+            logger.warning(f"apply: copy to destination failed ({exc}); match recorded")
+
+        return ok(
+            "Poster applied"
+            if applied
+            else "Match recorded — it will be copied on the next poster_renamerr run",
+            {"id": media_id, "poster_id": poster_id, "applied": applied},
+        )
+    except Exception as e:
+        logger.error(f"Error applying poster {poster_id} to {media_id}: {e}")
+        return error(
+            f"Error applying poster: {str(e)}",
+            code="MATCH_APPLY_ERROR",
+            status_code=500,
+        )
+
+
+@router.get(
     "/gdrive/stats",
     summary="Get GDrive synchronization statistics",
     description="Retrieve and refresh GDrive sync statistics and poster data.",
