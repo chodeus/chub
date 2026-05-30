@@ -85,7 +85,7 @@ const RecentPosterReel = ({ posters, onRefresh }) => {
             <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
                 <h3 className="text-lg font-semibold text-primary flex items-center gap-2">
                     <span className="material-symbols-outlined text-brand-primary">movie</span>
-                    Recently synced
+                    Recently matched
                 </h3>
                 <div className="flex items-center gap-2 flex-wrap">
                     <div className="flex flex-wrap gap-1">
@@ -567,15 +567,12 @@ const UnmatchedAssetsPage = () => {
         ignored: ignoredRows.length,
     };
 
-    // The carousel shows the 50 most recently synced posters in sync order
-    // (the backend orders poster_cache.created_at DESC). Epoch cutoff means
-    // "all time" so it's the last 50 regardless of age, not a rolling window.
-    const recentCutoff = useMemo(() => new Date(0).toISOString(), []);
+    // The carousel shows the 50 posters CHUB most recently matched/applied to
+    // media (newest first by matched_at) — genuine match recency, not
+    // poster_cache insertion order (which biased toward whichever owner was
+    // processed last in the scan).
     const { data: recentPostersData, refresh: refreshRecent } = useApiData({
-        apiFunction: useCallback(
-            () => postersAPI.fetchPostersAddedSince(recentCutoff, 50),
-            [recentCutoff]
-        ),
+        apiFunction: useCallback(() => postersAPI.fetchRecentlyMatched(50), []),
         options: { showErrorToast: false },
     });
     const recentPosters = useMemo(() => recentPostersData?.data?.items || [], [recentPostersData]);

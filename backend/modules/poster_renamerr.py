@@ -253,6 +253,24 @@ class PosterRenamerr(ChubModule):
                 id=media.get("id"),
             )
 
+        # Recently-matched provenance: stamp matched_at only when the match is
+        # NEW or CHANGED — never re-stamped for a stable, re-confirmed match —
+        # so the "Recently matched" reel reflects genuinely recent matches
+        # rather than the scan's processing order. Linked by file path so it
+        # survives poster_cache's clear-and-reinsert on every scan.
+        new_file = candidate.get("file") if (matched and candidate) else None
+        prev_file = media.get("matched_poster_file")
+        if new_file and new_file != prev_file:
+            new_matched_at = datetime.now().isoformat(timespec="seconds")
+        elif new_file:
+            new_matched_at = media.get("matched_at")  # unchanged — keep
+        else:
+            new_matched_at = None  # no match — clear
+        if is_collection:
+            db.collection.set_match_provenance(media.get("id"), new_matched_at, new_file)
+        else:
+            db.media.set_match_provenance(media.get("id"), new_matched_at, new_file)
+
         if asset_type == "show":
             if season_number is not None:
                 if matched and candidate:
