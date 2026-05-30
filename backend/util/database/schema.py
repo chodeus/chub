@@ -767,6 +767,28 @@ class SchemaManager:
             requires_table="poster_cache",
         )
 
+        # The first TMDB id-verification pass conflated a transient TMDB error
+        # (rate limit / network / 5xx) with a genuine 404 — both negative-cached
+        # the id and flagged the media row as "not found on TMDB", even for ids
+        # that exist (e.g. Married with Children, tmdb tv/4239). The client now
+        # distinguishes the two, but the bad negatives + bogus flags linger.
+        # Purge the negative details-cache rows so they re-verify cleanly...
+        self._apply_once(
+            conn,
+            "20260530_purge_negative_tmdb_details_cache",
+            "DELETE FROM tmdb_details_cache WHERE verified = 0",
+            requires_table="tmdb_details_cache",
+        )
+        # ...and clear the bogus review flags so those rows drop out of Needs
+        # Review (the next poster_renamerr run re-stamps the real match_status).
+        self._apply_once(
+            conn,
+            "20260530_clear_bogus_tmdb_not_found_flags",
+            "UPDATE media_cache SET match_status = NULL, match_reason = NULL "
+            "WHERE match_reason LIKE '%not found on TMDB%'",
+            requires_table="media_cache",
+        )
+
     def _apply_once(
         self,
         conn: sqlite3.Connection,
