@@ -129,3 +129,25 @@ def test_sync_prunes_row_when_identity_id_changes(db):
     )
     assert len(rows) == 1  # old tmdb:111 row pruned, not duplicated
     assert rows[0]["tmdb_id"] == 222
+
+
+def test_collection_upsert_refreshes_changed_id(db):
+    """A collection re-linked to a different TMDb id (same title/library) must
+    refresh the id on re-sync rather than keep the stale one."""
+    rec = {
+        "title": "Marvel Collection",
+        "normalized_title": normalize_titles("Marvel Collection"),
+        "year": None,
+        "tmdb_id": 100,
+        "tvdb_id": None,
+        "imdb_id": None,
+        "folder": "/c",
+        "library_name": "Movies",
+    }
+    db.collection.upsert(dict(rec), "plex_main")
+    db.collection.upsert({**rec, "tmdb_id": 200}, "plex_main")
+    row = db.collection.execute_query(
+        "SELECT tmdb_id FROM collections_cache WHERE title='Marvel Collection'",
+        fetch_one=True,
+    )
+    assert row["tmdb_id"] == 200
