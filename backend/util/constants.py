@@ -1,15 +1,24 @@
 import re
 from typing import List, Pattern, Set
 
-# Matches "Season 1", "season_01", etc., and "Specials" (returns 0).
-# `Specials` must be the plural form — the canonical Plex/Sonarr season-0
-# folder name. The trailing `\b` prevents bleed into longer words. Singular
-# `Special` is intentionally NOT matched because movie titles legitimately
-# contain it ("X-Men First Class 35mm Special", "Holiday Special", etc.) —
-# matching it ate movie-title suffixes and mis-classified those files as
-# season-0 shows.
+# Matches a season/specials *suffix* tag — "- Season 1", "_Season01", or
+# "- Specials"/"_Specials" (Specials returns season 0 via a None capture).
+# The leading `(?:\s*-\s*|_)` delimiter is REQUIRED: a real season poster in
+# the Kometa/Drazzilb naming scheme always separates the tag from the title
+# with " - " or "_" (e.g. "Show Name (2020) - Season 1.jpg"). Without the
+# delimiter, a bare "Season <n>" embedded in a *movie title* ("Open Season 2",
+# "Open Season 3") was being eaten as a TV season marker — mutilating the
+# title to "Open" and stamping season_number=2, which broke both asset search
+# (normalized_title became "open") and poster matching against the Radarr row.
+# `Specials` stays plural-only with a trailing `\b` so singular "Special" in a
+# movie title ("X-Men First Class 35mm Special") is never matched.
+#
+# The `^` alternative additionally accepts a tag at the very start of the name
+# so folder-based layouts still work — a bare "Season01.jpg" file or a "Season
+# 01" folder (chub searches both the filename and the folder). "Open Season 2"
+# matches neither the delimiter nor the start anchor, so it stays a movie.
 season_number_regex = re.compile(
-    r"(?:[-\s_]+)?Season\s*(\d{1,4})|(?:[-\s_]+)?Specials\b", re.IGNORECASE
+    r"(?:^|\s*-\s*|_)Season\s*(\d{1,4})|(?:^|\s*-\s*|_)Specials\b", re.IGNORECASE
 )
 
 # Matches the literal "Season " followed by 1–4 digits (e.g. "Season 1", "Season 12", up to "Season 9999"), capturing those digits as group 1

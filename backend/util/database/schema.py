@@ -175,9 +175,35 @@ class SchemaManager:
                 ColumnDefinition(
                     "created_at", "TEXT"
                 ),  # ISO timestamp when item was first cached
+                # --- Match transparency / lifecycle ---
+                # match_status is the tri-state the UI surfaces:
+                #   "matched"      — a poster was confidently linked
+                #   "needs_review" — a weak/ambiguous/unverified candidate
+                #                     exists; a human should confirm it
+                #   "unmatched"    — nothing found
+                # It is independent of the transient `matched` flag (which the
+                # rename phase clears), so the review/ignore UI survives a
+                # rename pass.
+                ColumnDefinition("match_status", "TEXT"),
+                # 0.0–1.0 confidence from the match tier (ID=high, exact
+                # title+year=high, normalized title=medium, loose/fuzzy=low).
+                ColumnDefinition("match_confidence", "REAL"),
+                # Human-readable explanation from is_match() (previously
+                # computed then discarded) — e.g. "ID match: tmdb_id".
+                ColumnDefinition("match_reason", "TEXT"),
+                # User dismissal: ignored rows are hidden from unmatched/review
+                # reports and never re-surfaced.
+                ColumnDefinition("ignored", "BOOLEAN", default=0),
+                # JSON array of competing candidate descriptors when two+ posters
+                # match with conflicting IDs — drives the "needs_review" state.
+                ColumnDefinition("conflict_ids", "TEXT"),
+                # JSON array of {old, new, at} entries appended each rename.
+                ColumnDefinition("rename_history", "TEXT"),
             ],
             indexes=[
                 "CREATE INDEX IF NOT EXISTS media_cache_plex_mapping_idx ON media_cache (plex_mapping_id)",
+                "CREATE INDEX IF NOT EXISTS media_cache_match_status_idx ON media_cache (match_status)",
+                "CREATE INDEX IF NOT EXISTS media_cache_ignored_idx ON media_cache (ignored)",
                 "CREATE INDEX IF NOT EXISTS media_cache_instance_idx ON media_cache (instance_name)",
                 # Advanced search filtering indexes
                 "CREATE INDEX IF NOT EXISTS media_cache_status_idx ON media_cache (status)",
@@ -210,6 +236,13 @@ class SchemaManager:
                 ColumnDefinition("matched", "INTEGER", default=0),
                 ColumnDefinition("original_file", "TEXT"),
                 ColumnDefinition("renamed_file", "TEXT"),
+                # Match transparency / lifecycle — mirrors media_cache. See the
+                # media_cache definition above for column semantics.
+                ColumnDefinition("match_status", "TEXT"),
+                ColumnDefinition("match_confidence", "REAL"),
+                ColumnDefinition("match_reason", "TEXT"),
+                ColumnDefinition("ignored", "BOOLEAN", default=0),
+                ColumnDefinition("conflict_ids", "TEXT"),
             ],
             constraints=["UNIQUE (title, library_name, instance_name)"],
         )
@@ -484,6 +517,36 @@ class SchemaManager:
         )
         self._add_table(tmdb_id_cache)
 
+        # TMDB details cache — stores the result of GET /3/{movie|tv}/{id}
+        # (title, original_title, year, alternative_titles) so the optional
+        # ID-verification and AKA-hydration features don't re-hit TMDB for the
+        # same id. `verified` records whether the id actually resolved (a
+        # negative row means "TMDB has no such id" — surfaced as a mismatch).
+        # Expiration is enforced in TMDBClient, not SQL, like tmdb_id_cache.
+        tmdb_details_cache = TableDefinition(
+            name="tmdb_details_cache",
+            columns=[
+                ColumnDefinition("id", "INTEGER", primary_key=True, nullable=False),
+                ColumnDefinition("tmdb_id", "INTEGER", nullable=False),
+                ColumnDefinition("media_type", "TEXT", nullable=False),
+                ColumnDefinition("title", "TEXT"),
+                ColumnDefinition("original_title", "TEXT"),
+                ColumnDefinition("year", "INTEGER"),
+                ColumnDefinition("alternative_titles", "TEXT"),
+                ColumnDefinition("verified", "BOOLEAN"),
+                ColumnDefinition(
+                    "cached_at", "TEXT", nullable=False, default="CURRENT_TIMESTAMP"
+                ),
+            ],
+            constraints=[
+                "UNIQUE (tmdb_id, media_type)",
+            ],
+            indexes=[
+                "CREATE INDEX IF NOT EXISTS tmdb_details_cache_lookup_idx ON tmdb_details_cache (tmdb_id, media_type)",
+            ],
+        )
+        self._add_table(tmdb_details_cache)
+
         # Tracks which one-shot data migrations have been applied.
         # See _run_rename_migrations for usage.
         schema_migrations = TableDefinition(
@@ -663,6 +726,33 @@ class SchemaManager:
               AND file NOT LIKE '%Specials.%'
               AND file NOT LIKE '%- Specials %'
               AND file NOT LIKE '%_ Specials%'
+            """,
+            requires_table="poster_cache",
+        )
+
+        # Same bug class as the Specials purge above, for the "Season <n>"
+        # variant: a bare "Season N" inside a *movie title* ("Open Season 2",
+        # "Open Season 3") was eaten as a TV season marker by the old
+        # delimiter-optional season_number_regex — landing those posters in
+        # poster_cache with a non-null season_number and a truncated title.
+        # The regex now requires a " - "/"_" delimiter, so new scans store them
+        # correctly, but existing mis-stored rows are keyed under the wrong
+        # (asset_type, season_number) tuple and linger. A real season poster
+        # always delimits its tag (" - Season N", "_SeasonNN"), so any
+        # season-tagged row whose filename lacks that delimiter is a movie
+        # casualty — purge it so the next scan re-inserts a clean movie row.
+        self._apply_once(
+            conn,
+            "20260530_purge_orphan_bare_season_show_rows",
+            """
+            DELETE FROM poster_cache
+            WHERE season_number IS NOT NULL
+              AND file NOT LIKE '%- Season%'
+              AND file NOT LIKE '%_Season%'
+              AND file NOT LIKE '%/Season%'
+              AND file NOT LIKE '%- Specials%'
+              AND file NOT LIKE '%_Specials%'
+              AND file NOT LIKE '%/Specials%'
             """,
             requires_table="poster_cache",
         )

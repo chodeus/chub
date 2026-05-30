@@ -347,6 +347,11 @@ class TMDBConfig(BaseModel):
     apikey: str = ""
     cache_expiration: int = Field(default=60, ge=1, le=3650)  # days
 
+    # Match-quality refinement (TMDB id verification, AKA hydration, and fuzzy
+    # near-miss flagging) is automatic whenever `apikey` is set — there's no
+    # separate toggle. Installs without a key skip it entirely and the related
+    # UI is hidden.
+
 
 # Notifications is a dict of module_name to dicts (arbitrary structure, so keep Any)
 class ConfigNotifications(BaseModel):

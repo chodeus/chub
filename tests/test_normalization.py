@@ -99,6 +99,20 @@ def test_parse_asset_filename_strips_nbsp():
     assert out == "Show Title"
 
 
+def test_parse_asset_filename_keeps_bare_season_in_movie_title():
+    """A bare "Season <n>" in a movie title (no " - "/"_" delimiter) is part of
+    the title and must survive parsing. Only a delimited " - Season N" suffix is
+    a real season tag. Regression for 'Open Season 2' being mutilated to 'Open'.
+    """
+    assert (
+        parse_asset_filename("Open Season 2 (2008) {tmdb-13690} {imdb-tt1107365}.jpg")
+        == "Open Season 2"
+    )
+    assert (
+        parse_asset_filename("Open Season 3 (2010) {tmdb-51170}.jpg") == "Open Season 3"
+    )
+
+
 # --- normalize_file_names ---
 
 
