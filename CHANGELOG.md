@@ -2,6 +2,26 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.20.0](https://github.com/chodeus/chub/compare/v2.19.0...v2.20.0) (2026-05-30)
+
+
+### Features
+
+* **posters:** manual poster picker + match diagnostics in Unmatched/Review ([b702b6e](https://github.com/chodeus/chub/commit/b702b6ecd864317281607960f32fc9c95947ae5b))
+
+
+### Bug Fixes
+
+* **posters:** match no-id, article-prefixed titles (e.g. season posters) ([a5227bb](https://github.com/chodeus/chub/commit/a5227bbcb330bbdda07e3ed315b0e81f9e631b0e))
+* **posters:** match posters named by an alternate title; add golden match suite ([dd4e5aa](https://github.com/chodeus/chub/commit/dd4e5aa29c8ae91aa5fdcd18e6a345964a4ec738))
+* **posters:** match yearless season posters ([a524412](https://github.com/chodeus/chub/commit/a52441215bee0bdf1f33e850907f1d2fb81c047d))
+* **posters:** use correct folder-title field in is_match() fallback ([203472c](https://github.com/chodeus/chub/commit/203472c28bd4a4550c7ee62c6a73b4e33af85760))
+
+
+### Refactoring
+
+* **posters:** remove dead get_prefix; strip {tvdbid-}/{tmdbid-} id blocks ([0ed9e7f](https://github.com/chodeus/chub/commit/0ed9e7f0a8207b573d64d2884359c764f2d989ad))
+
 ## [2.19.0](https://github.com/chodeus/chub/compare/v2.18.1...v2.19.0) (2026-05-30)
 
 
