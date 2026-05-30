@@ -152,6 +152,8 @@ class MediaCache(DatabaseBase):
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(identity_key)
             DO UPDATE SET
+                title=excluded.title,
+                year=excluded.year,
                 normalized_title=excluded.normalized_title,
                 alternate_titles=excluded.alternate_titles,
                 normalized_alternate_titles=excluded.normalized_alternate_titles,
