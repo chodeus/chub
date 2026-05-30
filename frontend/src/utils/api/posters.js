@@ -371,6 +371,32 @@ export const postersAPI = {
     },
 
     /**
+     * Candidate posters for a media/collection row (picker + why-no-match).
+     * @param {number} id - row id
+     * @param {Object} options - { kind: 'media'|'collection' }
+     * @returns {Promise<Object>} { candidates: [...], media: {...} }
+     */
+    fetchMatchCandidates: (id, { kind = 'media' } = {}) => {
+        const params = new URLSearchParams({ kind });
+        return apiCore.get(`/posters/match/${id}/candidates?${params}`, {
+            useCache: false,
+        });
+    },
+
+    /**
+     * Manually apply a chosen poster to a media/collection row.
+     * @param {number} id - row id
+     * @param {number} posterId - poster_cache id
+     * @param {Object} options - { kind: 'media'|'collection' }
+     */
+    applyMatch: async (id, posterId, { kind = 'media' } = {}) => {
+        const params = new URLSearchParams({ kind, poster_id: String(posterId) });
+        const res = await apiCore.post(`/posters/match/${id}/apply?${params}`, {});
+        apiCore.clearCache('/posters/unmatched/details');
+        return res;
+    },
+
+    /**
      * Get GDrive synchronization statistics
      * @returns {Promise<Object>} GDrive sync statistics
      */
