@@ -514,7 +514,7 @@ def is_match(
             "Asset normalized title equals media normalized title",
         ),
         (
-            asset.get("normalized_title") == media.get("normalized_folder"),
+            asset.get("normalized_title") == media.get("normalized_folder_title"),
             "Asset normalized title equals media folder normalized",
         ),
         (
