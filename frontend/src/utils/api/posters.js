@@ -334,9 +334,14 @@ export const postersAPI = {
      * @param {number} id - media_cache or collections_cache row id
      * @param {Object} options - { kind: 'media'|'collection', ignored: boolean }
      */
-    setMatchIgnored: (id, { kind = 'media', ignored = true } = {}) => {
+    setMatchIgnored: async (id, { kind = 'media', ignored = true } = {}) => {
         const params = new URLSearchParams({ kind, ignored: String(ignored) });
-        return apiCore.post(`/posters/match/${id}/ignore?${params}`, {});
+        const res = await apiCore.post(`/posters/match/${id}/ignore?${params}`, {});
+        // The Unmatched/Needs-Review/Ignored tabs all derive from this cached
+        // GET — bust it so the follow-up refresh() reflects the change instead
+        // of re-reading stale data.
+        apiCore.clearCache('/posters/unmatched/details');
+        return res;
     },
 
     /**
@@ -344,17 +349,11 @@ export const postersAPI = {
      * @param {number} id - row id
      * @param {Object} options - { kind: 'media'|'collection' }
      */
-    approveMatch: (id, { kind = 'media' } = {}) => {
+    approveMatch: async (id, { kind = 'media' } = {}) => {
         const params = new URLSearchParams({ kind });
-        return apiCore.post(`/posters/match/${id}/approve?${params}`, {});
-    },
-
-    /**
-     * Trigger the optional TMDB/fuzzy match-quality pass on demand.
-     * @returns {Promise<Object>} { enabled, summary }
-     */
-    runMatchQuality: () => {
-        return apiCore.post('/posters/match-quality/run', {});
+        const res = await apiCore.post(`/posters/match/${id}/approve?${params}`, {});
+        apiCore.clearCache('/posters/unmatched/details');
+        return res;
     },
 
     /**
