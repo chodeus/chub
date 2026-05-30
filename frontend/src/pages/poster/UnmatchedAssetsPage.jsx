@@ -1,12 +1,11 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useApiData } from '../../hooks/useApiData.js';
-import { useModuleExecution } from '../../hooks/useModuleExecution.js';
 import { useToast } from '../../contexts/ToastContext.jsx';
 import { postersAPI } from '../../utils/api/posters.js';
 import { copyText } from '../../utils/clipboard.js';
 import { buildPosterRequestText, formatId } from '../../utils/posterRequest.js';
-import { IconButton, LoadingButton, PageHeader } from '../../components/ui/index.js';
+import { IconButton, PageHeader } from '../../components/ui/index.js';
 import Spinner from '../../components/ui/Spinner.jsx';
 
 const SUMMARY_TYPES = [
@@ -549,7 +548,6 @@ const MatchReviewList = ({ rows, mode, onRefresh }) => {
 };
 
 const UnmatchedAssetsPage = () => {
-    const { executeModule, isRunning } = useModuleExecution();
     const { data, isLoading, refresh } = useApiData({
         apiFunction: postersAPI.fetchUnmatchedDetails,
         options: { showErrorToast: false },
@@ -582,10 +580,6 @@ const UnmatchedAssetsPage = () => {
     });
     const recentPosters = useMemo(() => recentPostersData?.data?.items || [], [recentPostersData]);
 
-    const handleRun = async () => {
-        await executeModule('unmatched_assets');
-    };
-
     if (isLoading) return <Spinner size="large" text="Loading unmatched assets..." center />;
 
     const hasData = SUMMARY_TYPES.some(t => summary[t.key]?.total > 0);
@@ -597,28 +591,13 @@ const UnmatchedAssetsPage = () => {
                 description="Media in your library with no matched poster — copy a request to ask for one."
                 icon="warning"
             />
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                {grandTotal.total > 0 && (
-                    <p className="text-sm text-secondary">
-                        <span className="font-medium text-primary">
-                            {grandTotal.unmatched || 0}
-                        </span>{' '}
-                        unmatched of {grandTotal.total.toLocaleString()} —{' '}
-                        {(grandTotal.percent_complete || 0).toFixed(1)}% complete
-                    </p>
-                )}
-                <div className="flex flex-wrap items-center gap-2 sm:gap-3 sm:ml-auto">
-                    <LoadingButton
-                        loading={isRunning('unmatched_assets')}
-                        loadingText="Running..."
-                        variant="ghost"
-                        icon="search_check"
-                        onClick={handleRun}
-                    >
-                        Run Unmatched Assets
-                    </LoadingButton>
-                </div>
-            </div>
+            {grandTotal.total > 0 && (
+                <p className="text-sm text-secondary">
+                    <span className="font-medium text-primary">{grandTotal.unmatched || 0}</span>{' '}
+                    unmatched of {grandTotal.total.toLocaleString()} —{' '}
+                    {(grandTotal.percent_complete || 0).toFixed(1)}% complete
+                </p>
+            )}
 
             {recentPosters.length > 0 && (
                 <RecentPosterReel posters={recentPosters} onRefresh={refreshRecent} />
