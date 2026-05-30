@@ -2,6 +2,15 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.18.1](https://github.com/chodeus/chub/compare/v2.18.0...v2.18.1) (2026-05-30)
+
+
+### Bug Fixes
+
+* **posters:** drop blocking Run Match Quality button; refresh tables after ignore/approve ([33fbb44](https://github.com/chodeus/chub/commit/33fbb443d9316fb08d0bdf82397850ee0cba0b4f))
+* **posters:** remove no-op refresh button from Unmatched Assets ([5cd1aea](https://github.com/chodeus/chub/commit/5cd1aea9cb4739235371aac62d370c4980410d74))
+* **posters:** remove Run Unmatched Assets button from the page ([ae1c06c](https://github.com/chodeus/chub/commit/ae1c06cd327280bd1d8a588d9c8c0f6aaa96ac3f))
+
 ## [2.18.0](https://github.com/chodeus/chub/compare/v2.17.0...v2.18.0) (2026-05-30)
 
 
