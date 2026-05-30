@@ -187,3 +187,12 @@ def test_normalize_titles_id_block_stripped():
 def test_normalize_titles_returns_lowercase():
     out = normalize_titles("CAPS LOCK MOVIE")
     assert out == out.lower()
+
+
+def test_parse_asset_filename_strips_idsuffix_blocks():
+    """{tvdbid-..}/{tmdbid-..} blocks (with the 'id' suffix) must be stripped
+    from the title, consistent with extract_ids — otherwise the id leaks into
+    normalized_title and breaks matching."""
+    assert parse_asset_filename("Show {tvdbid-12345} (2020).jpg") == "Show"
+    assert parse_asset_filename("Movie {tmdbid 678} (2019).jpg") == "Movie"
+    assert "tvdbid" not in normalize_titles("Show {tvdbid-12345} (2020)")

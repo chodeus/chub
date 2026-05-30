@@ -14,7 +14,6 @@ from backend.util.helper import (
     generate_title_variants,
     get_config_dir,
     get_log_dir,
-    get_prefix,
     is_match,
     progress,
 )
@@ -123,24 +122,6 @@ def test_generate_title_variants_alignment():
     assert len(variants["alternate_titles"]) == len(
         variants["normalized_alternate_titles"]
     )
-
-
-# --- get_prefix ---
-
-
-def test_get_prefix_skips_common_words():
-    # "The" is a common word, skipped
-    assert get_prefix("The Matrix") == "mat"
-
-
-def test_get_prefix_default_length_three():
-    assert len(get_prefix("Inception")) == 3
-
-
-def test_get_prefix_fallback_when_all_common():
-    # all words are common -> fall back to full text
-    result = get_prefix("The And Or")
-    assert result  # not empty
 
 
 # --- is_match ---
