@@ -2,6 +2,18 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.19.0](https://github.com/chodeus/chub/compare/v2.18.1...v2.19.0) (2026-05-30)
+
+
+### Features
+
+* **posters:** "Recently matched" reel ordered by genuine match recency ([fa4e907](https://github.com/chodeus/chub/commit/fa4e907ed0e982155f98e83b63311ce953d8ea6c))
+
+
+### Bug Fixes
+
+* **tmdb:** don't flag a real id as "not found" on a transient TMDB error ([bfc2d68](https://github.com/chodeus/chub/commit/bfc2d681c77b835f18f47f6f55b4ae51a7543362))
+
 ## [2.18.1](https://github.com/chodeus/chub/compare/v2.18.0...v2.18.1) (2026-05-30)
 
 
