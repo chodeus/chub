@@ -187,3 +187,44 @@ def test_tmdb_details_cache_roundtrip(tmp_path):
         assert details2["verified"] is False
     finally:
         db.__exit__(None, None, None)
+
+
+def test_verify_skips_on_transient_failure(tmp_path):
+    """A transient TMDB failure (get_details -> None) must NOT flag the row as
+    'not found' — that was the Married-with-Children false positive."""
+    db = _db(tmp_path)
+    try:
+        db.media.execute_query(
+            "INSERT INTO media_cache (identity_key,asset_type,title,normalized_title,tmdb_id,instance_name) "
+            "VALUES ('k','show','Married with Children','marriedwithchildren',4239,'sonarr')"
+        )
+        fake = _FakeClient({4239: None})  # transient
+        counts = tmdb._verify_and_hydrate(db, fake, StubLogger(), None, 100)
+        assert counts["id_mismatches"] == 0
+        row = db.media.execute_query(
+            "SELECT match_status FROM media_cache WHERE tmdb_id=4239", fetch_one=True
+        )
+        assert row["match_status"] != "needs_review"
+    finally:
+        db.__exit__(None, None, None)
+
+
+def test_verify_flags_genuine_not_found(tmp_path):
+    """A genuine 404 (verified=False) SHOULD flag the row."""
+    db = _db(tmp_path)
+    try:
+        db.media.execute_query(
+            "INSERT INTO media_cache (identity_key,asset_type,title,normalized_title,tmdb_id,instance_name) "
+            "VALUES ('k','movie','Ghost Movie','ghostmovie',99999999,'radarr')"
+        )
+        fake = _FakeClient(
+            {99999999: {"title": None, "original_title": None, "year": None, "alternative_titles": [], "verified": False}}
+        )
+        counts = tmdb._verify_and_hydrate(db, fake, StubLogger(), None, 100)
+        assert counts["id_mismatches"] == 1
+        row = db.media.execute_query(
+            "SELECT match_status FROM media_cache WHERE tmdb_id=99999999", fetch_one=True
+        )
+        assert row["match_status"] == "needs_review"
+    finally:
+        db.__exit__(None, None, None)

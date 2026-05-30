@@ -16,13 +16,21 @@ import difflib
 import json
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Dict, Iterable, List, Optional, Set, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 import requests
 
 from backend.util.config import TMDBConfig
 from backend.util.database import ChubDB
 from backend.util.normalization import normalize_titles
+
+
+# Sentinel returned by _fetch_details for a genuine HTTP 404 (TMDB truly has
+# no such id). Distinct from None, which means a *transient* failure (rate
+# limit, network error, 5xx, auth) — those must NOT be negative-cached or
+# reported as "not found", or a real id gets mislabelled when the bulk verify
+# pass hits a blip.
+_TMDB_NOT_FOUND = object()
 
 
 class TMDBAuthError(Exception):
@@ -152,13 +160,17 @@ class TMDBClient:
 
     def get_details(self, tmdb_id: int, media_type: str) -> Optional[dict]:
         """Fetch canonical title/original_title/year/alternative_titles for a
-        TMDB id via GET /3/{movie|tv}/{id}. Results (including negative ones)
-        are cached in tmdb_details_cache. Returns a dict with keys
-        title/original_title/year/alternative_titles/verified, or None when
-        disabled or on a transport error.
+        TMDB id via GET /3/{movie|tv}/{id}, with caching.
 
-        `verified=False` means TMDB has no such id (a 404) — surfaced to the
-        caller as a mismatch rather than a transient failure.
+        Returns one of:
+          - a details dict with verified=True   (id resolved)
+          - a dict with verified=False          (genuine 404 — TMDB has no
+                                                  such id; negative-cached)
+          - None                                (disabled, or a TRANSIENT
+                                                  failure — rate limit, network,
+                                                  5xx, auth; NOT cached, so the
+                                                  caller skips and retries later
+                                                  rather than mislabelling it)
         """
         if not self.enabled or not tmdb_id:
             return None
@@ -174,24 +186,18 @@ class TMDBClient:
             self.logger.warning(f"TMDB details cache read failed for {tmdb_id}: {exc}")
 
         details = self._fetch_details(int(tmdb_id), mt)
-        try:
-            if details is None:
-                # 404 / no-such-id → negative cache so we don't re-hit it.
-                self.db.tmdb_details_cache.put(int(tmdb_id), mt, verified=False)
-            else:
-                self.db.tmdb_details_cache.put(
-                    int(tmdb_id),
-                    mt,
-                    title=details.get("title"),
-                    original_title=details.get("original_title"),
-                    year=details.get("year"),
-                    alternative_titles=details.get("alternative_titles"),
-                    verified=True,
-                )
-        except Exception as exc:
-            self.logger.warning(f"TMDB details cache write failed for {tmdb_id}: {exc}")
 
+        # Transient failure — do NOT cache and do NOT report not-found.
         if details is None:
+            return None
+
+        if details is _TMDB_NOT_FOUND:
+            try:
+                self.db.tmdb_details_cache.put(int(tmdb_id), mt, verified=False)
+            except Exception as exc:
+                self.logger.warning(
+                    f"TMDB details cache write failed for {tmdb_id}: {exc}"
+                )
             return {
                 "title": None,
                 "original_title": None,
@@ -199,10 +205,25 @@ class TMDBClient:
                 "alternative_titles": [],
                 "verified": False,
             }
+
+        try:
+            self.db.tmdb_details_cache.put(
+                int(tmdb_id),
+                mt,
+                title=details.get("title"),
+                original_title=details.get("original_title"),
+                year=details.get("year"),
+                alternative_titles=details.get("alternative_titles"),
+                verified=True,
+            )
+        except Exception as exc:
+            self.logger.warning(f"TMDB details cache write failed for {tmdb_id}: {exc}")
         details["verified"] = True
         return details
 
-    def _fetch_details(self, tmdb_id: int, mt: str) -> Optional[dict]:
+    def _fetch_details(self, tmdb_id: int, mt: str) -> Any:
+        """Returns a details dict, _TMDB_NOT_FOUND (genuine 404), or None
+        (transient failure — caller must not treat as not-found)."""
         url = f"{self.BASE}/{mt}/{tmdb_id}"
         params = {
             "api_key": self.cfg.apikey,
@@ -227,7 +248,7 @@ class TMDBClient:
                 )
                 return None
             if resp.status_code == 404:
-                return None  # no such id — caller treats as a mismatch
+                return _TMDB_NOT_FOUND  # genuine no-such-id
             if resp.status_code == 429:
                 retry_after = min(int(resp.headers.get("Retry-After", "1") or 1), 5)
                 if attempt < self.MAX_RETRIES - 1:
