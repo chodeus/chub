@@ -1,7 +1,6 @@
 import json
 from typing import Optional
 
-from backend.util.helper import get_prefix
 from backend.util.normalization import normalize_titles
 
 from .db_base import DatabaseBase
@@ -404,8 +403,15 @@ class PosterCache(DatabaseBase):
         CONTRACT block at top of file. The match phase walks this list
         and takes the first row that passes is_match(), so higher-
         priority candidates must come first.
+
+        The prefix is derived with normalize_titles() — the SAME function that
+        produced the stored `normalized_title` column — so they stay
+        consistent. (get_prefix() strips leading articles, so "The Lovers"
+        became prefix "lov" which never matched the stored "thelovers" — every
+        no-id, article-prefixed title, e.g. season posters, silently failed to
+        match.)
         """
-        prefix = get_prefix(title, length)
+        prefix = normalize_titles(title)[:length]
         if not prefix:
             return []
 
