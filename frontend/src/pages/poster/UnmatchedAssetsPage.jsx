@@ -549,7 +549,6 @@ const MatchReviewList = ({ rows, mode, onRefresh }) => {
 };
 
 const UnmatchedAssetsPage = () => {
-    const toast = useToast();
     const { executeModule, isRunning } = useModuleExecution();
     const { data, isLoading, refresh } = useApiData({
         apiFunction: postersAPI.fetchUnmatchedDetails,
@@ -586,10 +585,6 @@ const UnmatchedAssetsPage = () => {
     const handleRun = async () => {
         await executeModule('unmatched_assets');
     };
-    const handleRefresh = () => {
-        refresh();
-        toast.success('Unmatched assets refreshed');
-    };
 
     if (isLoading) return <Spinner size="large" text="Loading unmatched assets..." center />;
 
@@ -613,12 +608,6 @@ const UnmatchedAssetsPage = () => {
                     </p>
                 )}
                 <div className="flex flex-wrap items-center gap-2 sm:gap-3 sm:ml-auto">
-                    <IconButton
-                        icon="refresh"
-                        aria-label="Refresh unmatched assets"
-                        variant="ghost"
-                        onClick={handleRefresh}
-                    />
                     <LoadingButton
                         loading={isRunning('unmatched_assets')}
                         loadingText="Running..."
