@@ -51,11 +51,15 @@ tvdb_id_regex = re.compile(r"(?i)\btvdb(?:id[-_\s]*|[-_\s])(\d+)\b")
 # Matches strings like "imdb-tt1234567", "imdb_tt1234567", or "imdb tt1234567", capturing the "tt" plus digits as the IMDb ID
 imdb_id_regex: Pattern = re.compile(r"imdb[-_\s](tt\d+)")
 
-# Remove bracketed blocks containing TMDB, TVDB, or IMDb IDs
+# Remove bracketed blocks containing TMDB, TVDB, or IMDb IDs. The tmdb/tvdb
+# branches accept the optional "id" suffix (e.g. {tvdbid-123}) so block
+# stripping stays consistent with tmdb_id_regex/tvdb_id_regex extraction —
+# otherwise extract_ids pulled the id but the block was left in the title,
+# polluting normalized_title with "tvdbid123".
 id_content_regex = re.compile(
     r"\s*[\{\[]\s*(?:"
-    r"tmdb(?:[-_\s]\d+)|"
-    r"tvdb(?:[-_\s]\d+)|"
+    r"tmdb(?:id[-_\s]*|[-_\s])\d+|"
+    r"tvdb(?:id[-_\s]*|[-_\s])\d+|"
     r"imdb(?:[-_\s](?:tt)?\d+)"
     r")\s*[\}\]]",
     flags=re.IGNORECASE,

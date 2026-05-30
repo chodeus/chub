@@ -15,7 +15,6 @@ import yaml
 from tqdm import tqdm
 
 from backend.util.constants import (
-    common_words,
     folder_year_regex,
     imdb_id_regex,
     prefixes,
@@ -669,20 +668,3 @@ def generate_title_variants(title: str) -> Dict[str, List[str]]:
         "alternate_titles": alternate_titles,
         "normalized_alternate_titles": normalized_alternate_titles,
     }
-
-
-def get_prefix(title: str, length: int = 3) -> str:
-    """Generate short prefix from title for sorting/categorization.
-
-    Filters out common words ("the", "and", etc.) and takes first N characters.
-    Falls back to all words if no meaningful ones remain.
-    """
-
-    words = [w for w in title.split() if w.lower() not in common_words]
-
-    if words:
-        prefix = "".join(words)[:length]
-    else:
-        prefix = "".join(title.split())[:length]
-
-    return prefix.lower()
