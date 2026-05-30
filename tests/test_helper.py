@@ -382,3 +382,22 @@ def test_get_log_dir_uses_env(tmp_path, monkeypatch):
 def test_get_config_dir_returns_path():
     d = get_config_dir()
     assert isinstance(d, str) and d
+
+
+def test_is_match_folder_normalized_title_fallback():
+    """When a media row's title differs from its folder, an asset matching the
+    folder-derived title should still match. Regression: is_match read
+    media['normalized_folder'] but the field is set as
+    'normalized_folder_title', so this fallback was dead."""
+    asset = {"title": "The Lovers", "normalized_title": "thelovers", "year": 2023}
+    media = {
+        "title": "Lovers, The",
+        "normalized_title": "loversthe",
+        "folder": "/tv/The Lovers (2023)",
+        "year": 2023,
+        "alternate_titles": "[]",
+        "normalized_alternate_titles": "[]",
+    }
+    matched, reason = is_match(asset, media)
+    assert matched is True
+    assert "folder" in reason.lower()
