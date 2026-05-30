@@ -1392,7 +1392,10 @@ async def get_match_candidates(
     try:
         import json as _json
 
+        import difflib
+
         from backend.util.helper import is_match
+        from backend.util.normalization import normalize_titles
 
         row = (
             db.collection.get_by_id(media_id)
@@ -1409,6 +1412,7 @@ async def get_match_candidates(
         except (ValueError, TypeError):
             alts = []
         search_titles = [row.get("title")] + [a for a in alts if a]
+        row_norm = row.get("normalized_title") or normalize_titles(row.get("title") or "")
 
         seen = set()
         gathered = []
@@ -1420,27 +1424,45 @@ async def get_match_candidates(
                 if f and f not in seen:
                     seen.add(f)
                     gathered.append(c)
+                if len(gathered) >= 800:  # bound the pool before scoring
+                    break
 
-        candidates = []
+        # Score every candidate by title similarity. The prefix bucket alone is
+        # NOT relevance — without this, the picker showed every poster sharing
+        # the first 3 chars ("str" → Striptease, Strays, …) regardless of the
+        # title. Rank real matches first, then by similarity, and drop posters
+        # that neither match nor resemble the title.
+        scored = []
         for c in gathered:
             cs = c.get("season_number")
-            # Keep only posters whose season matches the row's (a season row
-            # wants season posters; a movie/collection/main-show row wants
-            # season-less posters).
             if season_number is not None and cs != season_number:
                 continue
             if season_number is None and cs is not None:
                 continue
             matched, reason = is_match(c, row)
+            sim = difflib.SequenceMatcher(
+                None, row_norm, c.get("normalized_title") or ""
+            ).ratio()
+            scored.append((bool(matched), sim, c, reason))
+
+        scored.sort(key=lambda x: (x[0], x[1]), reverse=True)
+
+        candidates = []
+        for matched, sim, c, reason in scored:
+            # Real matches always show; non-matching extras only if the title
+            # genuinely resembles (drops same-prefix-but-unrelated noise).
+            if not matched and sim < 0.6:
+                continue
             candidates.append(
                 {
                     "poster_id": c.get("id"),
                     "title": c.get("title"),
                     "year": c.get("year"),
-                    "season_number": cs,
+                    "season_number": c.get("season_number"),
                     "style": c.get("style"),
                     "owner": os.path.basename(os.path.dirname(c.get("file") or "")),
-                    "would_match": bool(matched),
+                    "would_match": matched,
+                    "similarity": round(sim, 2),
                     "reason": reason or "title/year/season did not satisfy the matcher",
                 }
             )
