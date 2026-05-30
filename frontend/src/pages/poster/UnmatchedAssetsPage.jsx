@@ -145,7 +145,7 @@ const RecentPosterReel = ({ posters, onRefresh }) => {
 };
 
 /** Unified, filterable + searchable table of every unmatched item. */
-const UnmatchedList = ({ items, onRefresh, onPick }) => {
+const UnmatchedList = ({ items, onRefresh }) => {
     const toast = useToast();
     const [typeKey, setTypeKey] = useState('all');
     const [query, setQuery] = useState('');
@@ -322,16 +322,6 @@ const UnmatchedList = ({ items, onRefresh, onPick }) => {
                                                 aria-label="Copy poster request to clipboard"
                                                 title="Copy poster request"
                                                 onClick={() => handleCopy(item)}
-                                            />
-                                        )}
-                                        {item.id != null && (
-                                            <IconButton
-                                                icon="wallpaper"
-                                                size="small"
-                                                variant="ghost"
-                                                aria-label="Choose a poster"
-                                                title="Choose a poster to apply"
-                                                onClick={() => onPick?.(item)}
                                             />
                                         )}
                                         {item.id != null && (
@@ -798,7 +788,7 @@ const UnmatchedAssetsPage = () => {
                             })}
                         </div>
 
-                        <UnmatchedList items={items} onRefresh={refresh} onPick={setPickerItem} />
+                        <UnmatchedList items={items} onRefresh={refresh} />
                     </>
                 ))}
 
