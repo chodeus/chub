@@ -461,15 +461,25 @@ def is_match(
             return None
 
     def year_matches() -> bool:
-        """Check if asset year matches any media year."""
+        """Year gate for title-based matches.
+
+        A missing year on EITHER side is treated as "unknown" and does not
+        block — only a year present on BOTH sides that disagrees blocks. This
+        lets a yearless poster (common for season posters named "Show - Season
+        1.jpg" with no "(YYYY)") still match its yeared *arr row on title +
+        season. The id-equality branch short-circuits before this, and conflict
+        detection guards against a yearless poster matching two same-titled
+        items.
+        """
         asset_year = normalized_year(asset.get("year"))
-        media_years = [
+        present_media_years = [
             normalized_year(media.get(key))
             for key in ["year", "secondary_year", "folder_year"]
         ]
-        if asset_year is None and all(year is None for year in media_years):
+        present_media_years = [y for y in present_media_years if y is not None]
+        if asset_year is None or not present_media_years:
             return True
-        return any(asset_year == year for year in media_years if year is not None)
+        return asset_year in present_media_years
 
     def normalized_id(key: str, data: Dict[str, Any]) -> Optional[str]:
         value = data.get(key)

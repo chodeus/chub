@@ -158,6 +158,12 @@ def normalize_titles(title: str) -> str:
         str: Normalized title.
     """
     normalized_title = year_regex.sub("", title)
+    # Strip a delimited season/specials tag so a season poster's key is the
+    # SHOW key (the season is carried separately in season_number). year_regex
+    # above already removes "(YYYY) - Season N" for yeared files; this also
+    # handles yearless ones ("Breaking Bad - Season 1"). The delimiter
+    # requirement means a bare "Season N" in a real title is left intact.
+    normalized_title = season_number_regex.sub("", normalized_title)
     normalized_title = _clean_unicode(html.unescape(normalized_title))
     normalized_title = unidecode(normalized_title).strip()
     normalized_title = normalized_title.replace("&", " and ")

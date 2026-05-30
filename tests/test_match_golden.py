@@ -133,6 +133,12 @@ CASES = [
         media("movie", "Inception", 2010, akas=["Origen"]),
         True,
     ),
+    # --- yearless season poster still matches a yeared *arr row ---
+    (
+        ["Breaking Bad - Season 1.jpg"],
+        media("show", "Breaking Bad", 2008, season=1, tvdb=3),
+        True,
+    ),
     # --- wrong year must NOT match ---
     (
         ["The Lovers (2017).jpg"],
