@@ -199,11 +199,19 @@ class SchemaManager:
                 ColumnDefinition("conflict_ids", "TEXT"),
                 # JSON array of {old, new, at} entries appended each rename.
                 ColumnDefinition("rename_history", "TEXT"),
+                # ISO timestamp of the most recent *new or changed* poster
+                # match (not re-stamped when an existing match is re-confirmed),
+                # plus the source poster file it matched. Powers the
+                # "Recently matched" reel — linking by file (not poster_cache.id)
+                # so it survives the cache's clear-and-reinsert on every scan.
+                ColumnDefinition("matched_at", "TEXT"),
+                ColumnDefinition("matched_poster_file", "TEXT"),
             ],
             indexes=[
                 "CREATE INDEX IF NOT EXISTS media_cache_plex_mapping_idx ON media_cache (plex_mapping_id)",
                 "CREATE INDEX IF NOT EXISTS media_cache_match_status_idx ON media_cache (match_status)",
                 "CREATE INDEX IF NOT EXISTS media_cache_ignored_idx ON media_cache (ignored)",
+                "CREATE INDEX IF NOT EXISTS media_cache_matched_at_idx ON media_cache (matched_at)",
                 "CREATE INDEX IF NOT EXISTS media_cache_instance_idx ON media_cache (instance_name)",
                 # Advanced search filtering indexes
                 "CREATE INDEX IF NOT EXISTS media_cache_status_idx ON media_cache (status)",
@@ -243,6 +251,8 @@ class SchemaManager:
                 ColumnDefinition("match_reason", "TEXT"),
                 ColumnDefinition("ignored", "BOOLEAN", default=0),
                 ColumnDefinition("conflict_ids", "TEXT"),
+                ColumnDefinition("matched_at", "TEXT"),
+                ColumnDefinition("matched_poster_file", "TEXT"),
             ],
             constraints=["UNIQUE (title, library_name, instance_name)"],
         )

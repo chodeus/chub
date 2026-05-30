@@ -152,6 +152,17 @@ class CollectionCache(DatabaseBase):
             (int(bool(ignored)), id),
         )
 
+    def set_match_provenance(
+        self, id: int, matched_at: Optional[str], matched_poster_file: Optional[str]
+    ) -> None:
+        """Record (or clear, with None) when/what poster a collection matched.
+        See media_cache.set_match_provenance for rationale."""
+        self.execute_query(
+            "UPDATE collections_cache SET matched_at=?, matched_poster_file=? "
+            "WHERE id=?",
+            (matched_at, matched_poster_file, id),
+        )
+
     def clear(self) -> None:
         """Delete all rows from collections_cache."""
         self.execute_query("DELETE FROM collections_cache")

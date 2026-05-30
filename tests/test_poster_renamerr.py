@@ -572,3 +572,43 @@ def test_match_item_conflicting_candidates_flagged_review(tmp_path):
         assert len(_json.loads(updated["conflict_ids"])) == 2
     finally:
         db.__exit__(None, None, None)
+
+
+def test_match_item_stamps_matched_at_and_recently_matched(tmp_path):
+    """A new match stamps matched_at + matched_poster_file and surfaces in
+    get_recently_matched; re-confirming the same match keeps the original
+    timestamp (so the reel reflects genuine recency, not scan order)."""
+    m = make_module()
+    db = _open_db(tmp_path, m.logger)
+    try:
+        db.poster.execute_query(
+            "INSERT INTO poster_cache (asset_type,title,normalized_title,year,tmdb_id,file,priority) "
+            "VALUES ('movie','Inception','inception',2010,27205,'/a.jpg',0)"
+        )
+        db.media.execute_query(
+            "INSERT INTO media_cache (identity_key,asset_type,title,normalized_title,year,tmdb_id,instance_name) "
+            "VALUES ('mk','movie','Inception','inception','2010',27205,'radarr')"
+        )
+
+        def media_row():
+            return dict(
+                db.media.execute_query(
+                    "SELECT * FROM media_cache WHERE identity_key='mk'", fetch_one=True
+                )
+            )
+
+        # First match: stamps provenance.
+        m.match_item(media_row(), db)
+        row1 = media_row()
+        assert row1["matched_poster_file"] == "/a.jpg"
+        assert row1["matched_at"] is not None
+        first_ts = row1["matched_at"]
+
+        recent = db.media.get_recently_matched(50)
+        assert [r["title"] for r in recent] == ["Inception"]
+
+        # Re-confirm the same match: timestamp must NOT change.
+        m.match_item(media_row(), db)
+        assert media_row()["matched_at"] == first_ts
+    finally:
+        db.__exit__(None, None, None)

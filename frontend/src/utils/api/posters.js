@@ -148,6 +148,20 @@ export const postersAPI = {
     },
 
     /**
+     * The posters CHUB most recently matched/applied to media, newest first
+     * (genuine match recency, not cache-insertion order).
+     * @param {number} limit - Max rows (default 50)
+     * @returns {Promise<Object>} { items }
+     */
+    fetchRecentlyMatched: (limit = 50) => {
+        const params = new URLSearchParams({ limit: String(limit) });
+        return apiCore.get(`/posters/recently-matched?${params}`, {
+            useCache: true,
+            cacheTTL: 60 * 1000,
+        });
+    },
+
+    /**
      * Matched media whose applied poster is of the given variant (e.g. CL2K).
      * @param {string} style - Poster variant
      * @param {{type?: string, limit?: number, offset?: number}} [opts]

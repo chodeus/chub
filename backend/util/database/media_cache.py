@@ -296,6 +296,51 @@ class MediaCache(DatabaseBase):
             (int(bool(ignored)), id),
         )
 
+    def set_match_provenance(
+        self, id: int, matched_at: Optional[str], matched_poster_file: Optional[str]
+    ) -> None:
+        """Record (or clear, with None) when/what poster a media row matched.
+
+        Done via a dedicated setter rather than update() because both fields
+        must be settable to NULL on a no-match, which update()'s
+        "None = leave untouched" convention can't express.
+        """
+        self.execute_query(
+            "UPDATE media_cache SET matched_at=?, matched_poster_file=? WHERE id=?",
+            (matched_at, matched_poster_file, id),
+        )
+
+    def get_recently_matched(self, limit: int = 50) -> list:
+        """Return the poster_cache rows for the most-recently-matched media and
+        collections, newest first.
+
+        Links by file path (not poster_cache.id) so it survives the cache's
+        clear-and-reinsert on every scan. UNIONs media + collections so the
+        reel covers movies, shows, seasons, and collections.
+        """
+        return (
+            self.execute_query(
+                """
+                SELECT pc.*, m.matched_at AS matched_at
+                FROM poster_cache pc
+                JOIN (
+                    SELECT matched_poster_file, matched_at
+                    FROM media_cache
+                    WHERE matched_poster_file IS NOT NULL AND matched_at IS NOT NULL
+                    UNION ALL
+                    SELECT matched_poster_file, matched_at
+                    FROM collections_cache
+                    WHERE matched_poster_file IS NOT NULL AND matched_at IS NOT NULL
+                ) m ON pc.file = m.matched_poster_file
+                ORDER BY m.matched_at DESC
+                LIMIT ?
+                """,
+                (limit,),
+                fetch_all=True,
+            )
+            or []
+        )
+
     def clear(self) -> None:
         """Delete all rows from media_cache."""
         self.execute_query("DELETE FROM media_cache")

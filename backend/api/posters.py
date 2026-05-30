@@ -2062,6 +2062,30 @@ async def list_posters_added_since(
 
 
 @router.get(
+    "/recently-matched",
+    summary="Posters most recently matched to media",
+    description="Return poster_cache rows for the media/collections most "
+    "recently matched by poster_renamerr, newest first. Reflects what CHUB "
+    "actually applied to your library, not cache insertion order.",
+)
+async def list_recently_matched(
+    limit: int = 50,
+    logger: Any = Depends(get_logger),
+    db: ChubDB = Depends(get_database),
+) -> JSONResponse:
+    try:
+        rows = db.media.get_recently_matched(limit=max(1, min(limit, 500)))
+        return ok(f"{len(rows)} recently matched posters", {"items": rows})
+    except Exception as e:
+        logger.error(f"Error listing recently matched posters: {e}")
+        return error(
+            f"Error listing recently matched posters: {str(e)}",
+            code="RECENTLY_MATCHED_ERROR",
+            status_code=500,
+        )
+
+
+@router.get(
     "/applied",
     summary="Matched media using a given poster variant",
     description="List media whose applied poster is of the given style variant "
