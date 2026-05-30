@@ -382,3 +382,20 @@ def test_is_match_folder_normalized_title_fallback():
     matched, reason = is_match(asset, media)
     assert matched is True
     assert "folder" in reason.lower()
+
+
+def test_is_match_yearless_asset_matches_yeared_media():
+    """A yearless poster should match a yeared media row on title (year absent
+    on one side = unknown, not a mismatch)."""
+    asset = {"title": "Breaking Bad", "normalized_title": "breakingbad"}
+    media = {"title": "Breaking Bad", "normalized_title": "breakingbad", "year": 2008}
+    matched, _ = is_match(asset, media)
+    assert matched is True
+
+
+def test_is_match_both_years_present_and_differ_still_blocks():
+    """When BOTH sides have a year and they differ, it must still block."""
+    asset = {"title": "The Lovers", "year": 2017}
+    media = {"title": "The Lovers", "year": 2023}
+    matched, _ = is_match(asset, media)
+    assert matched is False
