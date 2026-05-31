@@ -450,7 +450,24 @@ class AssetRenamerr(ChubModule):
         — run() / the poster_renamerr chain hook are responsible for that.
         Returns an output dict grouped by image_type for notifications.
         """
-        output: Dict[str, List[dict]] = {t: [] for t in self._active_asset_types()}
+        apply_method = self.config.apply_method
+
+        # Resolve which configured types are actually applicable for this apply
+        # method ONCE (banner is never applicable; squareart needs "direct").
+        # Warn once per skipped type rather than emitting a line per media item.
+        applicable: List[str] = []
+        for image_type in self._active_asset_types():
+            capable, why = apply_capability(image_type, apply_method)
+            if capable:
+                applicable.append(image_type)
+            else:
+                self.logger.warning(f"Skipping '{image_type}': {why}")
+
+        output: Dict[str, List[dict]] = {t: [] for t in applicable}
+        if not applicable:
+            self.logger.warning("No applicable asset types for this apply method.")
+            return output
+
         all_media = self._gather_media(db)
         if not all_media:
             self.logger.warning("No media or collections found for asset matching.")
@@ -466,7 +483,6 @@ class AssetRenamerr(ChubModule):
                 )
                 tmdb_client = None
 
-        apply_method = self.config.apply_method
         for media in all_media:
             if self.is_cancelled():
                 break
@@ -474,22 +490,7 @@ class AssetRenamerr(ChubModule):
             target_kind = "collection" if is_collection else "media"
             target_id = media.get("id")
 
-            for image_type in self._active_asset_types():
-                # Skip (type, apply_method) combinations the platforms can't
-                # apply (banner anywhere; squareart on the kometa path). Report
-                # once so the user sees why, then move on — no source lookup.
-                capable, why = apply_capability(image_type, apply_method)
-                if not capable:
-                    output[image_type].append(
-                        {
-                            "title": media.get("title"),
-                            "year": self._media_year(media),
-                            "applied": False,
-                            "reason": why,
-                        }
-                    )
-                    continue
-
+            for image_type in applicable:
                 resolved = self._resolve_source(
                     media, db, image_type, is_collection, tmdb_client
                 )
@@ -509,8 +510,15 @@ class AssetRenamerr(ChubModule):
                     except OSError:
                         src_mtime = None
                 if target_id is not None and self._already_applied(
-                    db, target_kind, target_id, image_type, apply_method,
-                    source, file, url, src_mtime,
+                    db,
+                    target_kind,
+                    target_id,
+                    image_type,
+                    apply_method,
+                    source,
+                    file,
+                    url,
+                    src_mtime,
                 ):
                     self.logger.debug(
                         f"↳ unchanged, skipping {image_type} for {media.get('title')}"
@@ -556,8 +564,11 @@ class AssetRenamerr(ChubModule):
         return output
 
     def handle_output(self, output: Dict[str, List[dict]]) -> None:
-        for image_type in self._active_asset_types():
-            entries = output.get(image_type, [])
+        # When print_only_renames is set, list only the assets actually applied
+        # (suppress the per-item lines for unchanged/failed) — the header +
+        # "N/M applied" count is always shown so the run is still summarised.
+        only_applied = bool(getattr(self.config, "print_only_renames", False))
+        for image_type, entries in output.items():
             applied = [e for e in entries if e.get("applied")]
             self.logger.info(create_table([[image_type.capitalize()]]))
             if not entries:
@@ -566,7 +577,8 @@ class AssetRenamerr(ChubModule):
             self.logger.info(
                 f"{len(applied)}/{len(entries)} {image_type} assets applied"
             )
-            for e in entries:
+            shown = applied if only_applied else entries
+            for e in shown:
                 title = e.get("title") or ""
                 year = e.get("year")
                 display = f"{title} ({year})" if year else title
