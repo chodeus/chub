@@ -238,19 +238,27 @@ class WebhookProcessor:
 
             from backend.util.ssrf_guard import is_safe_url
 
-            # Try each Plex instance
+            # Validate the configured Plex targets once.
+            targets = []
             for name, details in plex_instances.items():
                 url = details.url
                 token = details.api
                 if not url or not token:
                     continue
-
                 safe, reason = is_safe_url(url)
                 if not safe:
                     log.warning(f"Refused Plex lookup for instance {name}: {reason}")
                     continue
+                targets.append((name, url, token))
 
-                for attempt in range(self.max_retries + 1):
+            # Share ONE retry/sleep budget across all instances: each attempt
+            # tries every instance and returns on the first hit. The retry loop
+            # was previously nested INSIDE the per-instance loop, so M instances
+            # multiplied the wait to M × max_retries × retry_delay — an item that
+            # only ever lands on the last instance blocked the webhook thread for
+            # (M-1) full retry cycles before even checking it.
+            for attempt in range(self.max_retries + 1):
+                for name, url, token in targets:
                     try:
                         plex = PlexServer(url, token, timeout=10)
                         if season_number is not None:
@@ -279,14 +287,16 @@ class WebhookProcessor:
                                         )
                                         return True
                     except Exception as e:
-                        log.debug(f"Plex check attempt {attempt + 1} failed: {e}")
-
-                    if attempt < self.max_retries:
                         log.debug(
-                            f"Not found in Plex yet, retrying in {self.retry_delay}s "
-                            f"(attempt {attempt + 1}/{self.max_retries})"
+                            f"Plex check attempt {attempt + 1} failed for {name}: {e}"
                         )
-                        time.sleep(self.retry_delay)
+
+                if attempt < self.max_retries:
+                    log.debug(
+                        f"Not found in Plex yet, retrying in {self.retry_delay}s "
+                        f"(attempt {attempt + 1}/{self.max_retries})"
+                    )
+                    time.sleep(self.retry_delay)
 
             target = (
                 f"'{media_title}' Season {season_number}"
