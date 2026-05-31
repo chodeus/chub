@@ -715,6 +715,46 @@ class Labelarr(ChubModule):
         log = self.logger.get_adapter("LABELARR_BULK")
         log.info(f"Bulk-syncing tags for {len(media_cache_ids)} media items")
 
+        # Resolve the target Plex instance once.
+        resolved_plex_instance = plex_instance
+        if not resolved_plex_instance or resolved_plex_instance in (
+            "undefined",
+            "null",
+            "",
+        ):
+            available_plex = list(self.full_config.instances.plex.keys())
+            resolved_plex_instance = available_plex[0] if available_plex else None
+
+        # Build the media->Plex mapping ONCE for the whole batch, then resolve
+        # every item's plex_mapping_id up front. Previously each per-item
+        # labelarr_sync_adhoc call (no mapping id) opened a fresh ChubDB +
+        # Connector + PlexClient and reloaded the full plex/media caches to
+        # rebuild the mapping — repeated for every id (the endpoint allows up to
+        # 1000). Passing the resolved id makes each call take the cheap lookup
+        # branch. On any failure we fall back to the old per-item resolution.
+        mapping_ids: Dict[int, Optional[int]] = {}
+        if resolved_plex_instance:
+            try:
+                from backend.util.connector import Connector
+
+                instance_map = {
+                    "arrs": [source_instance],
+                    "plex": {resolved_plex_instance: []},
+                }
+                with ChubDB(logger=self.logger) as db:
+                    with Connector(
+                        db=db, logger=self.logger, instance_map=instance_map
+                    ) as connector:
+                        connector.update_media_plex_mappings()
+                    for mid in media_cache_ids:
+                        row = db.media.get_by_id(mid)
+                        mapping_ids[mid] = row.get("plex_mapping_id") if row else None
+            except Exception as e:
+                log.warning(
+                    f"Bulk mapping prebuild failed; falling back to per-item "
+                    f"resolution: {e}"
+                )
+
         output: List[Dict[str, Any]] = []
         succeeded = 0
         failed = 0
@@ -724,7 +764,8 @@ class Labelarr(ChubModule):
                 source_instance=source_instance,
                 media_cache_id=media_cache_id,
                 tag_actions=tag_actions,
-                plex_instance=plex_instance,
+                plex_instance=resolved_plex_instance,
+                plex_mapping_id=mapping_ids.get(media_cache_id),
                 dry_run=dry_run,
             )
             if result.get("success"):
