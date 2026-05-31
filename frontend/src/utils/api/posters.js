@@ -371,6 +371,18 @@ export const postersAPI = {
     },
 
     /**
+     * Unlock a confirmed match, clearing the lock and re-opening it for review.
+     * @param {number} id - row id
+     * @param {Object} options - { kind: 'media'|'collection' }
+     */
+    unlockMatch: async (id, { kind = 'media' } = {}) => {
+        const params = new URLSearchParams({ kind });
+        const res = await apiCore.post(`/posters/match/${id}/unlock?${params}`, {});
+        apiCore.clearCache('/posters/unmatched/details');
+        return res;
+    },
+
+    /**
      * Candidate posters for a media/collection row (picker + why-no-match).
      * @param {number} id - row id
      * @param {Object} options - { kind: 'media'|'collection' }

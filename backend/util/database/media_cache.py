@@ -306,6 +306,16 @@ class MediaCache(DatabaseBase):
             (int(bool(ignored)), id),
         )
 
+    def get_user_confirmed(self) -> list:
+        """Return rows the user manually locked (user_confirmed=1) — surfaced in
+        the Locked tab so they can be re-opened for review."""
+        return (
+            self.execute_query(
+                "SELECT * FROM media_cache WHERE user_confirmed=1", fetch_all=True
+            )
+            or []
+        )
+
     def set_user_confirmed(self, id: int, confirmed: bool) -> None:
         """Toggle the manual-pick lock for one media row. While set, match_item
         leaves the row's match untouched on re-scans."""
@@ -491,6 +501,7 @@ class MediaCache(DatabaseBase):
         renamed_file: Optional[Any] = None,
         file_hash: Optional[Any] = None,
         file_mtime: Optional[Any] = None,
+        uploaded_libraries: Optional[Any] = None,
         poster_url: Optional[Any] = None,
         arr_id: Optional[Any] = None,
         tmdb_id: Optional[Any] = None,
@@ -536,6 +547,10 @@ class MediaCache(DatabaseBase):
         if file_mtime is not None:
             set_clauses.append("file_mtime=?")
             params.append(float(file_mtime))
+
+        if uploaded_libraries is not None:
+            set_clauses.append("uploaded_libraries=?")
+            params.append(uploaded_libraries)
 
         if poster_url is not None:
             set_clauses.append("poster_url=?")

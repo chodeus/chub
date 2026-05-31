@@ -562,11 +562,11 @@ class PosterUploader:
                 "title": title_override or normalize_titles(asset_title),
             }
 
-            matched_entry, match_type = self.match_asset(
+            matched_entries, match_type = self.match_asset(
                 index, priority_keys, search_values
             )
 
-            if not matched_entry:
+            if not matched_entries:
                 return UploadResult(
                     asset_title=asset_title,
                     asset_type=asset_type,
@@ -574,6 +574,33 @@ class PosterUploader:
                     action="failed",
                     reason="No matching Plex entry found",
                 )
+
+            # The same title can be in more than one enabled library on this
+            # instance (e.g. an HD and a 4K library). Dedupe to one target per
+            # library — upload_poster -> _locate_targets already covers every
+            # unmerged copy *within* a library, so a second call for the same
+            # library would just be redundant.
+            targets: List[Dict] = []
+            seen_libs = set()
+            for entry in matched_entries:
+                lib = entry.get("library_name")
+                if lib in seen_libs:
+                    continue
+                seen_libs.add(lib)
+                targets.append(entry)
+            lib_label = ", ".join(str(t.get("library_name")) for t in targets)
+
+            # Per-library skip: "unchanged" is judged per (file × library), not
+            # per file. recorded_libs is the set of libraries this exact hash has
+            # already reached; missing_libs is what's still owed. A title that
+            # gains a new library copy (e.g. a fresh 4K library) is backfilled on
+            # the next run even though the poster bytes never changed — no forced
+            # run required.
+            target_libs = {str(t.get("library_name")) for t in targets}
+            recorded_libs = self._parse_uploaded_libraries(
+                asset.get("uploaded_libraries")
+            )
+            missing_libs = target_libs - recorded_libs
 
             # mtime fast-path: a single stat() tells us whether the file changed
             # since the last successful upload. When it matches, skip the sha256
@@ -586,72 +613,121 @@ class PosterUploader:
                 current_mtime = None
 
             record_mtime = asset.get("file_mtime")
-            if (
+            record_hash = asset.get("file_hash")
+            mtime_unchanged = (
                 not self.force
                 and record_mtime is not None
                 and current_mtime is not None
                 and float(record_mtime) == float(current_mtime)
-            ):
-                return UploadResult(
-                    asset_title=asset_title,
-                    asset_type=asset_type,
-                    success=True,
-                    action="skipped",
-                    reason="File unchanged (mtime)",
-                    library_name=matched_entry.get("library_name"),
-                    match_type=match_type,
-                )
-
-            # mtime missing/changed — fall back to the sha256 comparison.
-            record_hash = asset.get("file_hash")
-            current_file_hash = self._compute_file_hash(poster_path, dry_run)
-
-            if not current_file_hash:
-                return UploadResult(
-                    asset_title=asset_title,
-                    asset_type=asset_type,
-                    success=False,
-                    action="failed",
-                    reason="Could not read poster file",
-                )
-
-            if current_file_hash == record_hash and not self.force:
-                # Hash unchanged: record the (new) mtime so the next run takes
-                # the fast path, then skip.
-                self._update_asset_database(asset, current_file_hash, current_mtime)
-                return UploadResult(
-                    asset_title=asset_title,
-                    asset_type=asset_type,
-                    success=True,
-                    action="skipped",
-                    reason="File unchanged",
-                    library_name=matched_entry.get("library_name"),
-                    match_type=match_type,
-                )
-
-            # Upload poster
-            upload_success = plex_client.upload_poster(
-                library_name=matched_entry["library_name"],
-                item_title=matched_entry["title"],
-                poster_path=poster_path,
-                year=matched_entry.get("year"),
-                is_collection=is_collection,
-                season_number=season_number,
-                dry_run=dry_run,
             )
 
-            if upload_success:
-                # Remove overlay label if present
-                if self._has_overlay(matched_entry):
-                    plex_client.remove_label(matched_entry, "Overlay", dry_run)
+            # reset_record=True means the poster bytes are new (or forced): push
+            # to EVERY matched library and reset the covered-library record.
+            # reset_record=False means bytes are unchanged: only backfill the
+            # libraries still missing it, growing the existing record.
+            reset_record: bool
+            if mtime_unchanged:
+                if not missing_libs:
+                    # Unchanged file, every library already has it — true skip.
+                    return UploadResult(
+                        asset_title=asset_title,
+                        asset_type=asset_type,
+                        success=True,
+                        action="skipped",
+                        reason="File unchanged (mtime)",
+                        library_name=lib_label,
+                        match_type=match_type,
+                    )
+                # Unchanged bytes but some libraries are missing it — backfill
+                # without re-reading the file.
+                current_file_hash = record_hash
+                upload_targets = [
+                    t for t in targets if str(t.get("library_name")) in missing_libs
+                ]
+                reset_record = False
+            else:
+                # mtime missing/changed — fall back to the sha256 comparison.
+                current_file_hash = self._compute_file_hash(poster_path, dry_run)
 
-                # Update database
-                self._update_asset_database(asset, current_file_hash, current_mtime)
+                if not current_file_hash:
+                    return UploadResult(
+                        asset_title=asset_title,
+                        asset_type=asset_type,
+                        success=False,
+                        action="failed",
+                        reason="Could not read poster file",
+                    )
 
-                # Be gentle on Plex: optional inter-upload delay (only after a
-                # real upload, never after a skip, never in dry-run).
+                if current_file_hash == record_hash and not self.force:
+                    if not missing_libs:
+                        # Same bytes, every library covered: refresh the mtime
+                        # fast-path key (preserving the record) and skip.
+                        self._update_asset_database(
+                            asset,
+                            current_file_hash,
+                            current_mtime,
+                            uploaded_libraries=(
+                                json.dumps(sorted(recorded_libs))
+                                if not dry_run
+                                else None
+                            ),
+                        )
+                        return UploadResult(
+                            asset_title=asset_title,
+                            asset_type=asset_type,
+                            success=True,
+                            action="skipped",
+                            reason="File unchanged",
+                            library_name=lib_label,
+                            match_type=match_type,
+                        )
+                    # Same bytes, some libraries missing — backfill those.
+                    upload_targets = [
+                        t for t in targets if str(t.get("library_name")) in missing_libs
+                    ]
+                    reset_record = False
+                else:
+                    # New bytes (or forced): (re)push to every matched library.
+                    upload_targets = targets
+                    reset_record = True
+
+            # Upload the poster to the resolved target libraries.
+            uploaded_libs: List[str] = []
+            for entry in upload_targets:
+                ok = plex_client.upload_poster(
+                    library_name=entry["library_name"],
+                    item_title=entry["title"],
+                    poster_path=poster_path,
+                    year=entry.get("year"),
+                    is_collection=is_collection,
+                    season_number=season_number,
+                    dry_run=dry_run,
+                )
+                if not ok:
+                    continue
+                uploaded_libs.append(str(entry.get("library_name")))
+                # Remove overlay label if present (per-library item).
+                if self._has_overlay(entry):
+                    plex_client.remove_label(entry, "Overlay", dry_run)
+                # Be gentle on Plex: optional inter-upload delay between each
+                # real upload (never after a skip, never in dry-run).
                 if not dry_run:
                     self._throttle()
+
+            if uploaded_libs:
+                # Grow (backfill) or reset (new bytes) the covered-library set.
+                # Never persisted in dry-run — a pretend upload must not let a
+                # later real run think the library is already done.
+                base = set() if reset_record else recorded_libs
+                covered = base | set(uploaded_libs)
+                self._update_asset_database(
+                    asset,
+                    current_file_hash,
+                    current_mtime,
+                    uploaded_libraries=(
+                        json.dumps(sorted(covered)) if not dry_run else None
+                    ),
+                )
 
                 return UploadResult(
                     asset_title=asset_title,
@@ -659,7 +735,7 @@ class PosterUploader:
                     success=True,
                     action="updated",
                     reason="Successfully uploaded",
-                    library_name=matched_entry.get("library_name"),
+                    library_name=", ".join(uploaded_libs),
                     match_type=match_type,
                 )
             else:
@@ -673,7 +749,7 @@ class PosterUploader:
                         if season_number is not None
                         else "Upload to Plex failed"
                     ),
-                    library_name=matched_entry.get("library_name"),
+                    library_name=lib_label,
                     match_type=match_type,
                 )
 
@@ -694,9 +770,14 @@ class PosterUploader:
             time.sleep(delay_ms / 1000.0)
 
     def _update_asset_database(
-        self, asset: Dict, file_hash: str, file_mtime: Optional[float] = None
+        self,
+        asset: Dict,
+        file_hash: str,
+        file_mtime: Optional[float] = None,
+        uploaded_libraries: Optional[str] = None,
     ):
-        """Persist the uploaded poster's hash (and mtime fast-path key)."""
+        """Persist the uploaded poster's hash (and mtime fast-path key), plus
+        the JSON list of libraries this hash has now reached (per-library skip)."""
         try:
             if asset.get("asset_type") == "collection":
                 self.db.collection.update(
@@ -709,6 +790,7 @@ class PosterUploader:
                     renamed_file=None,
                     file_hash=file_hash,
                     file_mtime=file_mtime,
+                    uploaded_libraries=uploaded_libraries,
                 )
             else:
                 self.db.media.update(
@@ -722,6 +804,7 @@ class PosterUploader:
                     renamed_file=None,
                     file_hash=file_hash,
                     file_mtime=file_mtime,
+                    uploaded_libraries=uploaded_libraries,
                 )
         except Exception as e:
             self.logger.error(
@@ -826,8 +909,23 @@ class PosterUploader:
     # Static/utility methods (keeping existing implementations but with improvements)
     @staticmethod
     def _build_indexes(media_cache: List[Dict]) -> Tuple[Dict, Dict, Dict, Dict]:
-        """Build indexes for fast asset lookups - same as original but with error handling"""
-        movie_index, show_index, season_index, collection_index = {}, {}, {}, {}
+        """Build indexes for fast asset lookups.
+
+        Each key maps to a *list* of cache entries, not a single one. The same
+        title can live in more than one enabled Plex library on a single server
+        (e.g. a "Movies" library and a separate "Movies 4K" library fed by two
+        Radarr instances) — those are distinct plex_media_cache rows sharing a
+        tmdb/imdb guid. Keying to a single entry silently dropped every library
+        but the last one iterated, so the poster only reached one of them.
+        Appending keeps every library so _sync_single_asset can upload to all.
+        """
+        movie_index: Dict[str, List[Dict]] = {}
+        show_index: Dict[str, List[Dict]] = {}
+        season_index: Dict[str, List[Dict]] = {}
+        collection_index: Dict[str, List[Dict]] = {}
+
+        def add(index: Dict[str, List[Dict]], key: str, entry: Dict) -> None:
+            index.setdefault(key, []).append(entry)
 
         for entry in media_cache:
             try:
@@ -844,34 +942,44 @@ class PosterUploader:
 
                 if typ == "movie":
                     if norm_title:
-                        movie_index[f"title:{norm_title}"] = entry
+                        add(movie_index, f"title:{norm_title}", entry)
                     if guids.get("tmdb"):
-                        movie_index[f"tmdb:{guids['tmdb']}"] = entry
+                        add(movie_index, f"tmdb:{guids['tmdb']}", entry)
                     if guids.get("imdb"):
-                        movie_index[f"imdb:{guids['imdb']}"] = entry
+                        add(movie_index, f"imdb:{guids['imdb']}", entry)
 
                 elif typ in ("show", "tvshow"):
                     season_num = entry.get("season_number")
                     if season_num in (None, "null"):
                         # Series main entry
                         if norm_title:
-                            show_index[f"title:{norm_title}"] = entry
+                            add(show_index, f"title:{norm_title}", entry)
                         for guid_type in ["tmdb", "imdb", "tvdb"]:
                             if guids.get(guid_type):
-                                show_index[f"{guid_type}:{guids[guid_type]}"] = entry
+                                add(
+                                    show_index,
+                                    f"{guid_type}:{guids[guid_type]}",
+                                    entry,
+                                )
                     else:
                         # Season entry
                         if norm_title:
-                            season_index[f"title:{norm_title}:S{season_num}"] = entry
+                            add(
+                                season_index,
+                                f"title:{norm_title}:S{season_num}",
+                                entry,
+                            )
                         for guid_type in ["tmdb", "imdb", "tvdb"]:
                             if guids.get(guid_type):
-                                season_index[
-                                    f"{guid_type}:{guids[guid_type]}:S{season_num}"
-                                ] = entry
+                                add(
+                                    season_index,
+                                    f"{guid_type}:{guids[guid_type]}:S{season_num}",
+                                    entry,
+                                )
 
                 elif typ == "collection":
                     if norm_title:
-                        collection_index[f"title:{norm_title}"] = entry
+                        add(collection_index, f"title:{norm_title}", entry)
 
             except Exception:
                 # Log and continue with other entries
@@ -882,13 +990,18 @@ class PosterUploader:
     @staticmethod
     def match_asset(
         index: Dict, priority_keys: List[str], values: Dict
-    ) -> Tuple[Optional[Dict], Optional[str]]:
-        """Match asset using index with priority keys"""
+    ) -> Tuple[List[Dict], Optional[str]]:
+        """Match asset using index with priority keys.
+
+        Returns the *list* of cache entries (one per Plex library that holds
+        the item) for the highest-priority key that hits, plus that key's name.
+        Returns ([], None) when nothing matches.
+        """
         for key in priority_keys:
             value = values.get(key)
             if value and f"{key}:{value}" in index:
                 return index[f"{key}:{value}"], key.upper()
-        return None, None
+        return [], None
 
     @staticmethod
     def _compute_file_hash(poster_path: str, dry_run: bool = False) -> Optional[str]:
@@ -901,6 +1014,23 @@ class PosterUploader:
                 return hashlib.sha256(f.read()).hexdigest()
         except (FileNotFoundError, PermissionError, OSError):
             return None
+
+    @staticmethod
+    def _parse_uploaded_libraries(value: Any) -> set:
+        """Parse the stored JSON list of libraries a poster's hash has reached.
+
+        Tolerates None / empty / malformed values (returns an empty set), so a
+        legacy row with no record is simply treated as "no library covered yet".
+        """
+        if not value:
+            return set()
+        if isinstance(value, (list, set, tuple)):
+            return {str(v) for v in value}
+        try:
+            parsed = json.loads(value)
+            return {str(v) for v in parsed} if isinstance(parsed, list) else set()
+        except (json.JSONDecodeError, TypeError):
+            return set()
 
     @staticmethod
     def _has_overlay(item: Dict) -> bool:

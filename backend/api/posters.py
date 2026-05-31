@@ -1297,6 +1297,7 @@ async def get_unmatched_assets_details(
                 "unmatched": stats.get("unmatched", {}),
                 "needs_review": stats.get("needs_review", []),
                 "ignored": stats.get("ignored", []),
+                "locked": stats.get("locked", []),
             },
         )
 
@@ -1375,6 +1376,43 @@ async def approve_match(
         return error(
             f"Error approving match: {str(e)}",
             code="MATCH_APPROVE_ERROR",
+            status_code=500,
+        )
+
+
+@router.post(
+    "/match/{media_id}/unlock",
+    summary="Unlock a confirmed match and re-open it for review",
+    description="Clear the user_confirmed lock on a media/collection row and put "
+    "it back into the 'needs_review' queue so the matcher can recompute it (or the "
+    "user can re-pick) on the next run.",
+)
+async def unlock_match(
+    media_id: int,
+    kind: str = Query("media", pattern="^(media|collection)$"),
+    logger: Any = Depends(get_logger),
+    db: ChubDB = Depends(get_database),
+) -> JSONResponse:
+    """Release a manual lock and send the row back to Needs Review."""
+    try:
+        logger.debug(f"Serving POST /api/posters/match/{media_id}/unlock (kind={kind})")
+        table = "collections_cache" if kind == "collection" else "media_cache"
+        iface = db.collection if kind == "collection" else db.media
+        iface.execute_query(
+            f"UPDATE {table} SET match_status='needs_review' WHERE id=?",
+            (media_id,),
+        )
+        # Drop the lock so the next scheduled run is free to recompute the match.
+        iface.set_user_confirmed(media_id, False)
+        return ok(
+            "Match unlocked",
+            {"id": media_id, "match_status": "needs_review"},
+        )
+    except Exception as e:
+        logger.error(f"Error unlocking match for {media_id}: {e}")
+        return error(
+            f"Error unlocking match: {str(e)}",
+            code="MATCH_UNLOCK_ERROR",
             status_code=500,
         )
 

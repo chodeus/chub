@@ -349,6 +349,7 @@ const UnmatchedList = ({ items, onRefresh }) => {
 const STATUS_VIEWS = [
     { key: 'unmatched', label: 'Unmatched' },
     { key: 'review', label: 'Needs Review' },
+    { key: 'locked', label: 'Locked' },
     { key: 'ignored', label: 'Ignored' },
 ];
 
@@ -391,13 +392,17 @@ const MatchReviewList = ({ rows, mode, onRefresh, onPick }) => {
     };
 
     if (rows.length === 0) {
-        return (
-            <p className="text-sm text-secondary">
-                {mode === 'review'
-                    ? 'Nothing to review — every match is confident.'
-                    : 'No ignored items. Dismiss a row from Unmatched or Needs Review to park it here.'}
-            </p>
-        );
+        let emptyMsg;
+        if (mode === 'review') {
+            emptyMsg = 'Nothing to review — every match is confident.';
+        } else if (mode === 'locked') {
+            emptyMsg =
+                'No locked items. Approving a match or applying a poster manually locks it here.';
+        } else {
+            emptyMsg =
+                'No ignored items. Dismiss a row from Unmatched or Needs Review to park it here.';
+        }
+        return <p className="text-sm text-secondary">{emptyMsg}</p>;
     }
 
     return (
@@ -523,6 +528,25 @@ const MatchReviewList = ({ rows, mode, onRefresh, onPick }) => {
                                                     }
                                                 />
                                             </>
+                                        ) : mode === 'locked' ? (
+                                            <IconButton
+                                                icon="lock_open"
+                                                size="small"
+                                                variant="ghost"
+                                                disabled={busyId === item.id}
+                                                aria-label="Unlock"
+                                                title="Unlock — re-open for review so the matcher can recompute it"
+                                                onClick={() =>
+                                                    act(
+                                                        () =>
+                                                            postersAPI.unlockMatch(item.id, {
+                                                                kind: kindOf(item),
+                                                            }),
+                                                        item,
+                                                        'Match unlocked'
+                                                    )
+                                                }
+                                            />
                                         ) : (
                                             <IconButton
                                                 icon="undo"
@@ -676,6 +700,7 @@ const UnmatchedAssetsPage = () => {
     const items = useMemo(() => data?.data?.unmatched || {}, [data]);
     const reviewRows = useMemo(() => data?.data?.needs_review || [], [data]);
     const ignoredRows = useMemo(() => data?.data?.ignored || [], [data]);
+    const lockedRows = useMemo(() => data?.data?.locked || [], [data]);
     const grandTotal = summary.grand_total || {};
 
     const [viewMode, setViewMode] = useState('unmatched');
@@ -684,6 +709,7 @@ const UnmatchedAssetsPage = () => {
     const viewCounts = {
         unmatched: grandTotal.unmatched || 0,
         review: reviewRows.length,
+        locked: lockedRows.length,
         ignored: ignoredRows.length,
     };
 
@@ -745,6 +771,9 @@ const UnmatchedAssetsPage = () => {
                     onRefresh={refresh}
                     onPick={setPickerItem}
                 />
+            )}
+            {viewMode === 'locked' && (
+                <MatchReviewList rows={lockedRows} mode="locked" onRefresh={refresh} />
             )}
             {viewMode === 'ignored' && (
                 <MatchReviewList rows={ignoredRows} mode="ignored" onRefresh={refresh} />
