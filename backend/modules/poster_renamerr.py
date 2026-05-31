@@ -4,6 +4,7 @@ import filecmp
 import json
 import os
 import shutil
+import threading
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -29,6 +30,15 @@ from backend.util.normalization import parse_asset_filename
 from backend.util.logger import Logger
 from backend.util.notification import NotificationManager
 from backend.util.upload_posters import PosterUploader
+
+# Process-global lock serializing the destructive poster_cache clear()+rebuild.
+# The scheduled run() and the webhook-driven run_poster_rename_adhoc() run on
+# different worker pools (module-run vs webhook), each opening its own ChubDB
+# with a distinct per-accessor lock — so without this, a webhook firing mid-run
+# could DELETE rows the other path just inserted, leaving the matcher to read a
+# half-empty cache and mark posters as unmatched. Both rebuild sites take this
+# lock so the clear+rebuild is atomic with respect to each other.
+_POSTER_CACHE_REBUILD_LOCK = threading.Lock()
 
 
 def build_asset_record(
@@ -1059,9 +1069,12 @@ class PosterRenamerr(ChubModule):
             with ChubDB(logger=self.logger) as db:
                 self.ensure_destination_dir()
 
-                # Clear and rebuild poster cache for current session
-                db.poster.clear()
-                self.merge_assets(source_dirs=self.config.source_dirs, db=db)
+                # Clear and rebuild poster cache for current session. Serialized
+                # against the scheduled run's rebuild so the two can't interleave
+                # a clear with the other's insert (see _POSTER_CACHE_REBUILD_LOCK).
+                with _POSTER_CACHE_REBUILD_LOCK:
+                    db.poster.clear()
+                    self.merge_assets(source_dirs=self.config.source_dirs, db=db)
 
                 # Process each media item
                 output = {"collection": [], "movie": [], "show": []}
@@ -1155,8 +1168,12 @@ class PosterRenamerr(ChubModule):
 
                 self.sync_posters()
 
-                db.poster.clear()
-                self.merge_assets(source_dirs=self.config.source_dirs, db=db)
+                # Serialized against the webhook adhoc rebuild (see
+                # _POSTER_CACHE_REBUILD_LOCK) so a clear can't wipe rows the
+                # other path just inserted.
+                with _POSTER_CACHE_REBUILD_LOCK:
+                    db.poster.clear()
+                    self.merge_assets(source_dirs=self.config.source_dirs, db=db)
                 from backend.util.connector import build_instance_map
 
                 connector = Connector(

@@ -39,7 +39,17 @@ class DatabaseBase:
         conn = None
         try:
             with self.lock:
-                conn = sqlite3.connect(self.db_path, check_same_thread=False)
+                # timeout + busy_timeout: the per-accessor self.lock only
+                # serializes writers sharing THIS instance; separate ChubDB
+                # instances (per request/worker/thread) hold distinct locks, so
+                # writer-vs-writer contention falls to SQLite. Without a busy
+                # timeout that surfaces immediately as "database is locked".
+                # Wait up to 30s for the write lock instead (WAL keeps readers
+                # non-blocking, so this only affects concurrent writers).
+                conn = sqlite3.connect(
+                    self.db_path, check_same_thread=False, timeout=30
+                )
+                conn.execute("PRAGMA busy_timeout=30000")
                 conn.row_factory = self._dict_factory
                 yield conn
         except Exception as e:
