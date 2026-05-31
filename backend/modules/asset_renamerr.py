@@ -257,6 +257,44 @@ class AssetRenamerr(ChubModule):
 
     # ----- apply ----------------------------------------------------------
 
+    def _already_applied(
+        self,
+        db: ChubDB,
+        target_kind: str,
+        target_id: int,
+        image_type: str,
+        apply_method: str,
+        source: str,
+        file: Optional[str],
+        url: Optional[str],
+        src_mtime: Optional[float],
+    ) -> bool:
+        """True when this asset was already applied with the same source and the
+        source hasn't changed — so we can skip re-applying it. Never skip on a
+        dry run (we still want the would-do report)."""
+        if self.config.dry_run:
+            return False
+        prev = db.media_asset_matches.get_one(target_kind, target_id, image_type)
+        if not prev or prev.get("match_status") != "applied":
+            return False
+        if prev.get("applied_method") != apply_method or prev.get("source") != source:
+            return False
+        # For the kometa path, the destination file must still exist.
+        if apply_method == "kometa":
+            applied_path = prev.get("applied_path")
+            if not applied_path or not os.path.lexists(applied_path):
+                return False
+        if source == "tmdb":
+            return bool(url) and prev.get("matched_url") == url
+        # local: same file + unchanged mtime
+        return (
+            bool(file)
+            and prev.get("matched_file") == file
+            and prev.get("source_mtime") is not None
+            and src_mtime is not None
+            and float(prev.get("source_mtime")) == float(src_mtime)
+        )
+
     def _apply_direct(
         self,
         media: dict,
@@ -278,6 +316,9 @@ class AssetRenamerr(ChubModule):
         else:
             targets = self._enabled_plex_instances()
 
+        # Upload to EVERY matching library, not just the first — an item that
+        # lives in both a 1080p and a 4K library should get the asset in both.
+        applied_to: List[str] = []
         for instance_name, libraries in targets:
             client = self._plex_client_for(instance_name)
             if not client:
@@ -296,7 +337,9 @@ class AssetRenamerr(ChubModule):
                     dry_run=self.config.dry_run,
                 )
                 if ok:
-                    return True, f"{instance_name}/{lib}"
+                    applied_to.append(f"{instance_name}/{lib}")
+        if applied_to:
+            return True, ", ".join(applied_to)
         return False, "not found in any configured Plex library"
 
     def _download_to_temp(self, url: str) -> Optional[str]:
@@ -466,6 +509,26 @@ class AssetRenamerr(ChubModule):
                     continue
                 source, file, url = resolved
 
+                # Idempotency: skip when this exact asset was already applied and
+                # hasn't changed since — so a scheduled run (or the chained
+                # run_asset_renamerr) doesn't re-push every logo/art to Plex and
+                # re-fetch every TMDB URL on every pass. Local files compare by
+                # mtime; TMDB by URL.
+                src_mtime = None
+                if source == "local" and file:
+                    try:
+                        src_mtime = os.stat(file).st_mtime
+                    except OSError:
+                        src_mtime = None
+                if target_id is not None and self._already_applied(
+                    db, target_kind, target_id, image_type, apply_method,
+                    source, file, url, src_mtime,
+                ):
+                    self.logger.debug(
+                        f"↳ unchanged, skipping {image_type} for {media.get('title')}"
+                    )
+                    continue
+
                 if apply_method == "direct":
                     applied, detail = self._apply_direct(
                         media, image_type, file, url, is_collection
@@ -483,6 +546,7 @@ class AssetRenamerr(ChubModule):
                         source=source,
                         matched_file=file,
                         matched_url=url,
+                        source_mtime=src_mtime,
                         applied_method=apply_method,
                         applied_path=detail if applied else None,
                         match_status="applied" if applied else "failed",

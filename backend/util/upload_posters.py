@@ -1,5 +1,6 @@
 import hashlib
 import json
+import os
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any, Dict, Generator, List, Optional, Tuple
@@ -573,7 +574,34 @@ class PosterUploader:
                     reason="No matching Plex entry found",
                 )
 
-            # Check if file hash has changed
+            # mtime fast-path: a single stat() tells us whether the file changed
+            # since the last successful upload. When it matches, skip the sha256
+            # read entirely — reading every poster file on each run was a major
+            # source of page-cache churn on large libraries.
+            current_mtime: Optional[float] = None
+            try:
+                current_mtime = os.stat(poster_path).st_mtime
+            except OSError:
+                current_mtime = None
+
+            record_mtime = asset.get("file_mtime")
+            if (
+                not self.force
+                and record_mtime is not None
+                and current_mtime is not None
+                and float(record_mtime) == float(current_mtime)
+            ):
+                return UploadResult(
+                    asset_title=asset_title,
+                    asset_type=asset_type,
+                    success=True,
+                    action="skipped",
+                    reason="File unchanged (mtime)",
+                    library_name=matched_entry.get("library_name"),
+                    match_type=match_type,
+                )
+
+            # mtime missing/changed — fall back to the sha256 comparison.
             record_hash = asset.get("file_hash")
             current_file_hash = self._compute_file_hash(poster_path, dry_run)
 
@@ -587,6 +615,9 @@ class PosterUploader:
                 )
 
             if current_file_hash == record_hash and not self.force:
+                # Hash unchanged: record the (new) mtime so the next run takes
+                # the fast path, then skip.
+                self._update_asset_database(asset, current_file_hash, current_mtime)
                 return UploadResult(
                     asset_title=asset_title,
                     asset_type=asset_type,
@@ -614,7 +645,7 @@ class PosterUploader:
                     plex_client.remove_label(matched_entry, "Overlay", dry_run)
 
                 # Update database
-                self._update_asset_database(asset, current_file_hash)
+                self._update_asset_database(asset, current_file_hash, current_mtime)
 
                 return UploadResult(
                     asset_title=asset_title,
@@ -646,8 +677,10 @@ class PosterUploader:
                 reason=f"Processing error: {e}",
             )
 
-    def _update_asset_database(self, asset: Dict, file_hash: str):
-        """Update asset in database with new hash"""
+    def _update_asset_database(
+        self, asset: Dict, file_hash: str, file_mtime: Optional[float] = None
+    ):
+        """Persist the uploaded poster's hash (and mtime fast-path key)."""
         try:
             if asset.get("asset_type") == "collection":
                 self.db.collection.update(
@@ -659,6 +692,7 @@ class PosterUploader:
                     original_file=None,
                     renamed_file=None,
                     file_hash=file_hash,
+                    file_mtime=file_mtime,
                 )
             else:
                 self.db.media.update(
@@ -671,6 +705,7 @@ class PosterUploader:
                     original_file=None,
                     renamed_file=None,
                     file_hash=file_hash,
+                    file_mtime=file_mtime,
                 )
         except Exception as e:
             self.logger.error(

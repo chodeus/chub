@@ -490,6 +490,7 @@ class MediaCache(DatabaseBase):
         original_file: Optional[Any] = None,
         renamed_file: Optional[Any] = None,
         file_hash: Optional[Any] = None,
+        file_mtime: Optional[Any] = None,
         poster_url: Optional[Any] = None,
         arr_id: Optional[Any] = None,
         tmdb_id: Optional[Any] = None,
@@ -531,6 +532,10 @@ class MediaCache(DatabaseBase):
         if file_hash is not None:
             set_clauses.append("file_hash=?")
             params.append(file_hash)
+
+        if file_mtime is not None:
+            set_clauses.append("file_mtime=?")
+            params.append(float(file_mtime))
 
         if poster_url is not None:
             set_clauses.append("poster_url=?")

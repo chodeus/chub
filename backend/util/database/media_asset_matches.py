@@ -25,6 +25,7 @@ class MediaAssetMatches(DatabaseBase):
         source: Optional[str] = None,
         matched_file: Optional[str] = None,
         matched_url: Optional[str] = None,
+        source_mtime: Optional[float] = None,
         applied_method: Optional[str] = None,
         applied_path: Optional[str] = None,
         match_status: Optional[str] = None,
@@ -36,13 +37,15 @@ class MediaAssetMatches(DatabaseBase):
             """
             INSERT INTO media_asset_matches
                 (target_kind, target_id, image_type, source, matched_file,
-                 matched_url, applied_method, applied_path, match_status, matched_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 matched_url, source_mtime, applied_method, applied_path,
+                 match_status, matched_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(target_kind, target_id, image_type)
             DO UPDATE SET
                 source=excluded.source,
                 matched_file=excluded.matched_file,
                 matched_url=excluded.matched_url,
+                source_mtime=excluded.source_mtime,
                 applied_method=excluded.applied_method,
                 applied_path=excluded.applied_path,
                 match_status=excluded.match_status,
@@ -55,12 +58,25 @@ class MediaAssetMatches(DatabaseBase):
                 source,
                 matched_file,
                 matched_url,
+                source_mtime,
                 applied_method,
                 applied_path,
                 match_status,
                 matched_at,
             ),
         )
+
+    def get_one(
+        self, target_kind: str, target_id: int, image_type: str
+    ) -> Optional[dict]:
+        """Return the single match row for one (target, image_type), or None."""
+        row = self.execute_query(
+            "SELECT * FROM media_asset_matches "
+            "WHERE target_kind=? AND target_id=? AND image_type=?",
+            (target_kind, int(target_id), image_type),
+            fetch_one=True,
+        )
+        return dict(row) if row else None
 
     def get_for_target(self, target_kind: str, target_id: int) -> List[dict]:
         """Return all asset-match rows for one media/collection target."""

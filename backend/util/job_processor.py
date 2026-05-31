@@ -436,8 +436,25 @@ def _process_upload_posters_job(
         }
 
     force = bool(payload.get("force", False))
+    targeted = bool(payload.get("targeted", False))
     with ChubDB(logger=logger) as db:
-        uploader = PosterUploader(db=db, logger=logger, manifest=manifest, force=force)
+        # Targeted (webhook) uploads reuse the cached Plex snapshot to avoid a
+        # full library rebuild on every webhook — but only when a snapshot
+        # already exists; otherwise fall back to a full refresh so fresh
+        # installs still work.
+        refresh_plex = True
+        if targeted and db.plex.count() > 0:
+            refresh_plex = False
+            logger.get_adapter("UPLOAD_POSTERS").debug(
+                "Targeted upload: reusing cached Plex snapshot (no full refresh)"
+            )
+        uploader = PosterUploader(
+            db=db,
+            logger=logger,
+            manifest=manifest,
+            force=force,
+            refresh_plex=refresh_plex,
+        )
         result = uploader.run()
 
     if result.get("success"):
@@ -495,10 +512,15 @@ def _handle_post_rename_actions(
             renamer.run_border_replacerr(manifest)
             log.info(f"[JOB:{job_id}] Border replacer completed")
 
-        # Queue upload job if Plex instances are enabled
+        # Queue upload job if Plex instances are enabled. This is the adhoc /
+        # webhook path (the full scheduled run uploads inline), so mark it
+        # targeted: reuse the cached Plex snapshot instead of rebuilding the
+        # whole library on every webhook (with an empty-snapshot fallback).
         plex_enabled = _check_plex_upload_enabled(renamer.config)
         if plex_enabled and manifest:
-            _queue_upload_job(manifest, logger, job_id, force=force_upload)
+            _queue_upload_job(
+                manifest, logger, job_id, force=force_upload, targeted=True
+            )
         else:
             log.info(
                 f"[JOB:{job_id}] Plex upload not enabled or no manifest - task complete"
@@ -812,7 +834,11 @@ def _process_module_run_job(
 
 
 def _queue_upload_job(
-    manifest: Dict[str, Any], logger, job_id: int, force: bool = False
+    manifest: Dict[str, Any],
+    logger,
+    job_id: int,
+    force: bool = False,
+    targeted: bool = False,
 ) -> None:
     """
     Queue a poster upload job.
@@ -825,11 +851,20 @@ def _queue_upload_job(
             so unchanged posters still get re-pushed to Plex. Set by webhook
             flows when the originating *arr instance has
             `webhook_force_reupload` enabled.
+        targeted: When True (webhook single-item flow) the upload reuses the
+            existing Plex snapshot instead of rebuilding the entire snapshot for
+            every webhook. The uploader falls back to a full refresh if the
+            snapshot is empty (e.g. a fresh install). See
+            _process_upload_posters_job.
     """
     log = logger.get_adapter("UPLOAD_POSTERS")
 
     try:
-        upload_payload = {"manifest": manifest, "force": bool(force)}
+        upload_payload = {
+            "manifest": manifest,
+            "force": bool(force),
+            "targeted": bool(targeted),
+        }
 
         with ChubDB(logger=logger) as db:
             result = db.worker.enqueue_job(

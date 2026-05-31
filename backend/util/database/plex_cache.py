@@ -86,6 +86,13 @@ class PlexCache(DatabaseBase):
             self.execute_query("SELECT * FROM plex_media_cache", fetch_all=True) or []
         )
 
+    def count(self) -> int:
+        """Number of rows currently in plex_media_cache (cheap existence check)."""
+        row = self.execute_query(
+            "SELECT COUNT(*) AS n FROM plex_media_cache", fetch_one=True
+        )
+        return int(row["n"]) if row else 0
+
     def clear(self) -> None:
         """Delete all rows from the plex_media_cache table."""
         self.execute_query("DELETE FROM plex_media_cache")
