@@ -555,3 +555,54 @@ def test_apply_direct_uploads_to_all_matching_libraries():
     assert applied is True
     # both libraries listed in the detail
     assert "Movies" in detail and "Movies 4K" in detail
+
+
+# --- logging: print_only_renames + capability warn-once ---
+
+
+def _capture_logger():
+    from types import SimpleNamespace
+
+    logs = {"info": [], "debug": [], "warning": [], "error": []}
+    return (
+        SimpleNamespace(
+            info=lambda m, *a, **k: logs["info"].append(m),
+            debug=lambda m, *a, **k: logs["debug"].append(m),
+            warning=lambda m, *a, **k: logs["warning"].append(m),
+            error=lambda m, *a, **k: logs["error"].append(m),
+            get_adapter=lambda *a, **k: None,
+        ),
+        logs,
+    )
+
+
+def test_handle_output_print_only_renames_hides_unapplied():
+    m = make_module(print_only_renames=True, asset_types=["logo"])
+    logger, logs = _capture_logger()
+    m.logger = logger
+    output = {
+        "logo": [
+            {"title": "A", "year": 2020, "applied": True, "reason": "plex/Movies"},
+            {"title": "B", "year": 2021, "applied": False, "reason": "not found"},
+        ]
+    }
+    m.handle_output(output)
+    joined = "\n".join(logs["info"])
+    assert "A (2020)" in joined  # applied shown
+    assert "B (2021)" not in joined  # unapplied hidden when print_only_renames
+    assert "1/2 logo assets applied" in joined  # summary still shown
+
+
+def test_handle_output_default_shows_all():
+    m = make_module(print_only_renames=False, asset_types=["logo"])
+    logger, logs = _capture_logger()
+    m.logger = logger
+    output = {
+        "logo": [
+            {"title": "A", "year": 2020, "applied": True, "reason": "ok"},
+            {"title": "B", "year": 2021, "applied": False, "reason": "not found"},
+        ]
+    }
+    m.handle_output(output)
+    joined = "\n".join(logs["info"])
+    assert "A (2020)" in joined and "B (2021)" in joined
