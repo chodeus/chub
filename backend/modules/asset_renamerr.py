@@ -1,9 +1,10 @@
 # modules/asset_renamerr.py
 
+import json
 import os
 import shutil
 import tempfile
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import requests
 
@@ -117,6 +118,21 @@ class AssetRenamerr(ChubModule):
                 for name, opts in inst.items():
                     out.append((name, list(getattr(opts, "library_names", []) or [])))
         return out
+
+    def _direct_target_lib_keys(self, media: dict, is_collection: bool) -> Set[str]:
+        """The set of "instance/library" keys a direct apply should cover for
+        this item — used both to upload and to decide whether a prior apply is
+        still complete (per-library backfill)."""
+        if is_collection:
+            targets = [(media.get("instance_name"), [media.get("library_name")])]
+        else:
+            targets = self._enabled_plex_instances()
+        keys: Set[str] = set()
+        for instance_name, libraries in targets:
+            for lib in libraries:
+                if lib:
+                    keys.add(f"{instance_name}/{lib}")
+        return keys
 
     def _plex_client_for(self, instance_name: str) -> Optional[PlexClient]:
         """Build (and cache) a connected PlexClient for an instance, or None."""
@@ -260,6 +276,8 @@ class AssetRenamerr(ChubModule):
         file: Optional[str],
         url: Optional[str],
         src_mtime: Optional[float],
+        media: Optional[dict] = None,
+        is_collection: bool = False,
     ) -> bool:
         """True when this asset was already applied with the same source and the
         source hasn't changed — so we can skip re-applying it. Never skip on a
@@ -275,6 +293,18 @@ class AssetRenamerr(ChubModule):
         if apply_method == "kometa":
             applied_path = prev.get("applied_path")
             if not applied_path or not os.path.lexists(applied_path):
+                return False
+        # For the direct path, only skip if EVERY currently-targeted library
+        # already received it; otherwise re-apply so a newly-added or
+        # previously-failed library copy gets backfilled (mirrors the poster
+        # uploaded_libraries logic).
+        if apply_method == "direct" and media is not None:
+            expected = self._direct_target_lib_keys(media, is_collection)
+            try:
+                recorded = set(json.loads(prev.get("applied_libraries") or "[]"))
+            except (ValueError, TypeError):
+                recorded = set()
+            if not expected.issubset(recorded):
                 return False
         if source == "tmdb":
             return bool(url) and prev.get("matched_url") == url
@@ -294,10 +324,10 @@ class AssetRenamerr(ChubModule):
         file: Optional[str],
         url: Optional[str],
         is_collection: bool,
-    ) -> Tuple[bool, str]:
+    ) -> Tuple[bool, str, List[str]]:
         method_name = IMAGE_TYPE_TO_PLEX_METHOD.get(image_type)
         if not method_name:
-            return False, "banner is not uploadable via Plex; use Kometa apply"
+            return False, "banner is not uploadable via Plex; use Kometa apply", []
 
         title = media.get("title")
         year = self._media_year(media)
@@ -331,8 +361,8 @@ class AssetRenamerr(ChubModule):
                 if ok:
                     applied_to.append(f"{instance_name}/{lib}")
         if applied_to:
-            return True, ", ".join(applied_to)
-        return False, "not found in any configured Plex library"
+            return True, ", ".join(applied_to), applied_to
+        return False, "not found in any configured Plex library", []
 
     def _download_to_temp(self, url: str) -> Optional[str]:
         ok, reason = is_safe_url(url, allow_private=False)
@@ -532,14 +562,17 @@ class AssetRenamerr(ChubModule):
                     file,
                     url,
                     src_mtime,
+                    media=media,
+                    is_collection=is_collection,
                 ):
                     self.logger.debug(
                         f"↳ unchanged, skipping {image_type} for {media.get('title')}"
                     )
                     continue
 
+                applied_libs: Optional[List[str]] = None
                 if apply_method == "direct":
-                    applied, detail = self._apply_direct(
+                    applied, detail, applied_libs = self._apply_direct(
                         media, image_type, file, url, is_collection
                     )
                 else:
@@ -558,6 +591,9 @@ class AssetRenamerr(ChubModule):
                         source_mtime=src_mtime,
                         applied_method=apply_method,
                         applied_path=detail if applied else None,
+                        applied_libraries=(
+                            json.dumps(sorted(applied_libs)) if applied_libs else None
+                        ),
                         match_status="applied" if applied else "failed",
                     )
 
