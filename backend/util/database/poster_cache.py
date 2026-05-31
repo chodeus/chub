@@ -39,6 +39,20 @@ class PosterCache(DatabaseBase):
     """
 
     @staticmethod
+    def _image_type_clause(image_type: Optional[str]) -> tuple:
+        """Return an ``(sql_fragment, params)`` pair for filtering by image_type.
+
+        ``image_type=None`` means "all types" (no filter). Every read/match
+        method below defaults the parameter to ``"poster"`` so that adding the
+        non-poster asset types (logo/squareart/background/banner) to this shared
+        table does not leak them into poster matching or the poster UI. Pass an
+        explicit type (or None) from the asset pipeline.
+        """
+        if image_type is None:
+            return "", []
+        return " AND image_type=?", [image_type]
+
+    @staticmethod
     def _canonical_key(item: dict) -> tuple:
         """Returns a tuple key matching the UNIQUE constraint on poster_cache."""
 
@@ -85,19 +99,27 @@ class PosterCache(DatabaseBase):
         # writes (tests, manual fixtures) don't have to know about it.
         priority = int(record.get("priority") or 0)
 
+        # image_type distinguishes posters from the additional asset types
+        # (logo/squareart/background/banner) that now share this table. Defaults
+        # to "poster" so legacy callers and rows that predate the column behave
+        # exactly as before. See asset_renamerr / AssetRenamerrConfig.
+        image_type = record.get("image_type") or "poster"
+
         self.execute_query(
             """
             INSERT INTO poster_cache
                 (asset_type, title, normalized_title, year,
-                 tmdb_id, tvdb_id, imdb_id, season_number, folder, file, style, created_at, priority)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 tmdb_id, tvdb_id, imdb_id, season_number, folder, file, style,
+                 created_at, priority, image_type)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(title, year, tmdb_id, tvdb_id, imdb_id, season_number, file)
             DO UPDATE SET
                 asset_type=excluded.asset_type,
                 normalized_title=excluded.normalized_title,
                 folder=excluded.folder,
                 style=excluded.style,
-                priority=excluded.priority
+                priority=excluded.priority,
+                image_type=excluded.image_type
             """,
             (
                 record.get("asset_type"),
@@ -113,6 +135,7 @@ class PosterCache(DatabaseBase):
                 record.get("style"),
                 created_at,
                 priority,
+                image_type,
             ),
         )
 
@@ -123,29 +146,39 @@ class PosterCache(DatabaseBase):
             (int(width), int(height), int(poster_id)),
         )
 
-    def find_low_resolution(self, min_width: int = 1000, limit: int = 200) -> list:
+    def find_low_resolution(
+        self,
+        min_width: int = 1000,
+        limit: int = 200,
+        image_type: Optional[str] = "poster",
+    ) -> list:
         """
         Return posters whose stored width falls below `min_width`. Rows
         with no recorded width are excluded — use record_dimensions first.
         """
+        it_sql, it_params = self._image_type_clause(image_type)
         rows = (
             self.execute_query(
-                "SELECT * FROM poster_cache WHERE width IS NOT NULL AND width < ? "
-                "ORDER BY width ASC LIMIT ?",
-                (int(min_width), int(limit)),
+                "SELECT * FROM poster_cache WHERE width IS NOT NULL AND width < ?"
+                + it_sql
+                + " ORDER BY width ASC LIMIT ?",
+                (int(min_width), *it_params, int(limit)),
                 fetch_all=True,
             )
             or []
         )
         return [dict(r) for r in rows]
 
-    def added_since(self, iso_cutoff: str, limit: int = 500) -> list:
+    def added_since(
+        self, iso_cutoff: str, limit: int = 500, image_type: Optional[str] = "poster"
+    ) -> list:
         """Return poster_cache rows added at or after the ISO-8601 cutoff."""
+        it_sql, it_params = self._image_type_clause(image_type)
         rows = (
             self.execute_query(
-                "SELECT * FROM poster_cache WHERE created_at >= ? "
+                "SELECT * FROM poster_cache WHERE created_at >= ?" + it_sql + " "
                 "ORDER BY created_at DESC LIMIT ?",
-                (iso_cutoff, int(limit)),
+                (iso_cutoff, *it_params, int(limit)),
                 fetch_all=True,
             )
             or []
@@ -162,11 +195,13 @@ class PosterCache(DatabaseBase):
         id_val,
         season_number=None,
         asset_type: Optional[str] = None,
+        image_type: Optional[str] = "poster",
     ) -> Optional[dict]:
         """Get poster cache record by ID field.
 
         Ordering enforces the bottom-wins source_dir contract — see
-        CONTRACT block at top of file.
+        CONTRACT block at top of file. ``image_type`` defaults to "poster";
+        pass a specific asset type (or None for all) from the asset pipeline.
         """
         sql = f"SELECT * FROM poster_cache WHERE {id_field}=?"
         params = [id_val]
@@ -174,6 +209,10 @@ class PosterCache(DatabaseBase):
         if asset_type:
             sql += " AND asset_type=?"
             params.append(asset_type)
+
+        it_sql, it_params = self._image_type_clause(image_type)
+        sql += it_sql
+        params.extend(it_params)
 
         if season_number is not None:
             sql += " AND season_number=?"
@@ -190,11 +229,12 @@ class PosterCache(DatabaseBase):
         year: Optional[int] = None,
         season_number: Optional[int] = None,
         asset_type: Optional[str] = None,
+        image_type: Optional[str] = "poster",
     ) -> Optional[dict]:
         """Get poster cache record by normalized title.
 
         Ordering enforces the bottom-wins source_dir contract — see
-        CONTRACT block at top of file.
+        CONTRACT block at top of file. ``image_type`` defaults to "poster".
         """
         sql = "SELECT * FROM poster_cache WHERE normalized_title=?"
         params = [normalized_title]
@@ -202,6 +242,10 @@ class PosterCache(DatabaseBase):
         if asset_type:
             sql += " AND asset_type=?"
             params.append(asset_type)
+
+        it_sql, it_params = self._image_type_clause(image_type)
+        sql += it_sql
+        params.extend(it_params)
 
         if year is not None:
             sql += " AND year=?"
@@ -233,6 +277,19 @@ class PosterCache(DatabaseBase):
             "DELETE FROM poster_cache WHERE file LIKE ?", (prefix + "%",)
         )
 
+    def delete_asset_rows_by_path_prefix(self, path_prefix: str) -> int:
+        """Delete non-poster rows (image_type != 'poster') under `path_prefix`.
+
+        Used by asset_renamerr's standalone scan to refresh its asset rows for a
+        source_dir WITHOUT touching the poster rows poster_renamerr owns in the
+        shared poster_cache.
+        """
+        prefix = path_prefix.rstrip("/") + "/"
+        return self.execute_query(
+            "DELETE FROM poster_cache WHERE file LIKE ? AND image_type != 'poster'",
+            (prefix + "%",),
+        )
+
     def get_by_integer_id(self, poster_id: int) -> Optional[dict]:
         """Return a single poster_cache row by its integer primary key."""
         return self.execute_query(
@@ -247,11 +304,19 @@ class PosterCache(DatabaseBase):
         return record
 
     def search(
-        self, query: Optional[str] = None, limit: int = 50, offset: int = 0
+        self,
+        query: Optional[str] = None,
+        limit: int = 50,
+        offset: int = 0,
+        image_type: Optional[str] = "poster",
     ) -> dict:
         """Search poster_cache by normalized title with pagination."""
         conditions = []
         params: list = []
+
+        if image_type is not None:
+            conditions.append("image_type=?")
+            params.append(image_type)
 
         if query:
             # Match the same normalization that built the `normalized_title`
@@ -282,11 +347,13 @@ class PosterCache(DatabaseBase):
 
         return {"items": items, "total": total, "limit": limit, "offset": offset}
 
-    def get_all_grouped(self) -> dict:
+    def get_all_grouped(self, image_type: Optional[str] = "poster") -> dict:
         """Return all poster_cache records grouped by type."""
         all_records = self.get_all()
         grouped = {"movies": [], "shows": [], "seasons": [], "collections": []}
         for record in all_records:
+            if image_type is not None and (record.get("image_type") or "poster") != image_type:
+                continue
             asset_type = record.get("asset_type")
             season = record.get("season_number")
             if asset_type == "collection":
@@ -303,11 +370,14 @@ class PosterCache(DatabaseBase):
                 grouped["shows"].append(record)
         return grouped
 
-    def get_distinct_owners(self) -> list:
+    def get_distinct_owners(self, image_type: Optional[str] = "poster") -> list:
         """Return distinct owner names derived from the folder path."""
+        it_sql, it_params = self._image_type_clause(image_type)
         rows = (
             self.execute_query(
-                "SELECT DISTINCT folder FROM poster_cache WHERE folder IS NOT NULL AND folder != ''",
+                "SELECT DISTINCT folder FROM poster_cache "
+                "WHERE folder IS NOT NULL AND folder != ''" + it_sql,
+                tuple(it_params),
                 fetch_all=True,
             )
             or []
@@ -319,11 +389,14 @@ class PosterCache(DatabaseBase):
                 owners.add(parts[-1])
         return sorted(owners)
 
-    def get_distinct_styles(self) -> list:
+    def get_distinct_styles(self, image_type: Optional[str] = "poster") -> list:
         """Return distinct non-empty style values stored on poster_cache rows."""
+        it_sql, it_params = self._image_type_clause(image_type)
         rows = (
             self.execute_query(
-                "SELECT DISTINCT style FROM poster_cache WHERE style IS NOT NULL AND style != ''",
+                "SELECT DISTINCT style FROM poster_cache "
+                "WHERE style IS NOT NULL AND style != ''" + it_sql,
+                tuple(it_params),
                 fetch_all=True,
             )
             or []
@@ -338,10 +411,15 @@ class PosterCache(DatabaseBase):
         style: Optional[str] = None,
         limit: int = 60,
         offset: int = 0,
+        image_type: Optional[str] = "poster",
     ) -> dict:
         """Browse poster_cache with optional owner, type, style, and search filters."""
         conditions = []
         params: list = []
+
+        if image_type is not None:
+            conditions.append("image_type=?")
+            params.append(image_type)
 
         if query:
             # Match the same normalization that built the `normalized_title`
@@ -395,7 +473,11 @@ class PosterCache(DatabaseBase):
         return {"items": items, "total": total, "limit": limit, "offset": offset}
 
     def get_candidates_by_prefix(
-        self, title: str, length: int = 3, asset_type: Optional[str] = None
+        self,
+        title: str,
+        length: int = 3,
+        asset_type: Optional[str] = None,
+        image_type: Optional[str] = "poster",
     ) -> list:
         """Get poster candidates by title prefix.
 
@@ -420,6 +502,10 @@ class PosterCache(DatabaseBase):
         if asset_type:
             sql += " AND asset_type=?"
             params.append(asset_type)
+
+        it_sql, it_params = self._image_type_clause(image_type)
+        sql += it_sql
+        params.extend(it_params)
 
         sql += " ORDER BY priority DESC, id DESC"
         return self.execute_query(sql, params, fetch_all=True) or []

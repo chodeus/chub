@@ -30,12 +30,39 @@ class TestSchemaManager:
             expected_tables = {
                 "media_cache",
                 "poster_cache",
+                "media_asset_matches",
+                "tmdb_images_cache",
                 "jobs",
             }
 
             for table in expected_tables:
                 assert table in tables, f"Expected table '{table}' not found. Tables: {tables}"
 
+            # poster_cache must carry the image_type column (defaults to poster)
+            cursor.execute("PRAGMA table_info(poster_cache)")
+            cols = {row[1] for row in cursor.fetchall()}
+            assert "image_type" in cols
+
+            conn.close()
+        finally:
+            os.unlink(db_path)
+
+    def test_poster_cache_image_type_defaults_to_poster(self):
+        """A row inserted without image_type back-fills to 'poster' (so legacy
+        rows behave as posters)."""
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+            db_path = f.name
+        try:
+            conn = sqlite3.connect(db_path)
+            SchemaManager.init_database(conn)
+            conn.execute(
+                "INSERT INTO poster_cache (title, file) VALUES ('X', '/x/X.png')"
+            )
+            conn.commit()
+            row = conn.execute(
+                "SELECT image_type FROM poster_cache WHERE file='/x/X.png'"
+            ).fetchone()
+            assert row[0] == "poster"
             conn.close()
         finally:
             os.unlink(db_path)

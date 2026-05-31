@@ -229,6 +229,14 @@ export const SETTINGS_SCHEMA = [
                     'After files are renamed, hand the manifest to Border Replacerr so it can recolor or strip the white TPDB border on just those posters. Configure colors in the Border Replacerr module.',
             },
             {
+                key: 'run_asset_renamerr',
+                label: 'Run Asset Renamerr after rename',
+                type: 'check_box',
+                section: 'Pipeline',
+                description:
+                    "After posters are processed, run Asset Renamerr in the same pass to apply clear logos, square art, backgrounds, and banners — reusing this run's Google Drive sync, source scan, and media/Plex data so nothing is fetched twice. Configure the asset types, sources, and apply method in the Asset Renamerr module.",
+            },
+            {
                 key: 'clean_orphan_assets',
                 label: 'Clean orphan assets after rename',
                 type: 'check_box',
@@ -255,6 +263,133 @@ export const SETTINGS_SCHEMA = [
                 instance_types: ['plex', 'radarr', 'sonarr', 'lidarr'],
                 description:
                     'Radarr/Sonarr/Lidarr instances supply the media list to match against. Plex instances additionally receive uploaded posters when "Upload posters to this Plex instance" is enabled per-instance.',
+            },
+        ],
+    },
+
+    {
+        key: 'asset_renamerr',
+        label: 'Asset Renamerr',
+        fields: [
+            {
+                key: 'log_level',
+                label: 'Log Level',
+                type: 'dropdown',
+                options: ['debug', 'info'],
+                required: true,
+                description:
+                    'Set the logging verbosity. "debug" prints per-item source resolution and apply decisions.',
+            },
+            {
+                key: 'dry_run',
+                label: 'Dry Run',
+                type: 'check_box',
+                description:
+                    'Walk the full pipeline and log every action that would be taken — but write nothing to disk and upload nothing to Plex.',
+            },
+            {
+                key: 'print_only_renames',
+                label: 'Log only applied assets',
+                type: 'check_box',
+                description:
+                    'Quiet the log by suppressing entries for assets that were already up to date.',
+            },
+            // ─── Asset types ───────────────────────────────────────────
+            {
+                key: 'asset_types',
+                label: 'Asset Types',
+                type: 'array',
+                section: 'Assets',
+                suggestions: ['logo', 'background', 'squareart'],
+                allowCustom: false,
+                placeholder: 'Add asset type…',
+                description:
+                    'Which additional asset types to manage. Support varies by Apply Method: logo and background work on BOTH "direct" and "kometa"; squareart works on "direct" ONLY (Kometa asset directories do not read square art, so squareart is skipped with a warning under "kometa"). Defaults to logo + background.',
+            },
+            // ─── Source ────────────────────────────────────────────────
+            {
+                key: 'sources',
+                label: 'Sources (priority order)',
+                type: 'array',
+                section: 'Source',
+                suggestions: ['local', 'tmdb'],
+                allowCustom: false,
+                placeholder: 'Add source…',
+                description:
+                    'Where asset images come from, in priority order — the first source that has an image for a given item wins. "local" = files scanned from Source Directories (g-drive synced); "tmdb" = fetched from TMDB (requires a TMDB API key; supplies logo + background only). e.g. ["local","tmdb"] prefers your g-drive files and falls back to TMDB.',
+            },
+            {
+                key: 'source_dirs',
+                label: 'Source Directories',
+                type: 'dirlist_dragdrop',
+                section: 'Source',
+                description:
+                    'Folders scanned for asset files named like "Title (Year) {tmdb-123} - Logo.png". Drag to set priority — later directories win when multiple sources have the same asset (bottom takes precedence). Used by the "local" source.',
+            },
+            {
+                key: 'sync_assets',
+                label: 'Sync from Google Drive first',
+                type: 'check_box',
+                section: 'Source',
+                description:
+                    'Run Sync Gdrive before each standalone Asset Renamerr run so the source directories are up to date. Not needed when running via Poster Renamerr\'s "Run Asset Renamerr after rename" (that pass reuses the poster sync).',
+            },
+            {
+                key: 'tmdb_language',
+                label: 'TMDB Language',
+                type: 'text',
+                section: 'Source',
+                placeholder: 'en',
+                description:
+                    'Preferred 2-letter language for TMDB image selection. Logos prefer this language then language-neutral art; backgrounds prefer textless art then this language.',
+            },
+            // ─── Apply ─────────────────────────────────────────────────
+            {
+                key: 'apply_method',
+                label: 'Apply Method',
+                type: 'dropdown',
+                section: 'Apply',
+                options: ['kometa', 'direct'],
+                required: true,
+                description:
+                    '"direct" uploads images straight to Plex via plexapi — logo, background, and squareart. "kometa" renames/copies files into the Destination Directory using Kometa asset names (logo.ext, background.ext, and Season##_logo.ext for seasons) for Kometa to apply — Kometa reads only logo and background.',
+            },
+            {
+                key: 'destination_dir',
+                label: 'Destination Directory',
+                type: 'dir',
+                section: 'Apply',
+                description:
+                    'Kometa assets directory where renamed assets are written. Required when Apply Method is "kometa".',
+            },
+            {
+                key: 'action_type',
+                label: 'File Action',
+                type: 'dropdown',
+                section: 'Apply',
+                options: ['copy', 'move', 'hardlink', 'symlink'],
+                required: true,
+                description:
+                    'How matched assets reach the destination on the "kometa" path. "hardlink" is fastest and saves disk when source and destination share a filesystem; "copy" is safest.',
+            },
+            {
+                key: 'asset_folders',
+                label: 'Asset folders (per-title)',
+                type: 'check_box',
+                section: 'Apply',
+                description:
+                    'Kometa-style folder layout: destination/<Title (Year)>/logo.png. When off, files are flat: destination/<Title (Year)>_logo.png. Match this to your Kometa configuration.',
+            },
+            // ─── Targets ───────────────────────────────────────────────
+            {
+                key: 'instances',
+                label: 'Instances',
+                type: 'instances',
+                section: 'Targets',
+                required: true,
+                instance_types: ['plex', 'radarr', 'sonarr'],
+                description:
+                    'Radarr/Sonarr instances supply the media list to match against. Plex instances are searched/targeted for the "direct" upload path and supply collections.',
             },
         ],
     },

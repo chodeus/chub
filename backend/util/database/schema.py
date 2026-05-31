@@ -329,6 +329,13 @@ class SchemaManager:
                 # returned first. See poster_cache.py CONTRACT block and
                 # tests/test_poster_renamerr.py::test_source_dirs_bottom_wins.
                 ColumnDefinition("priority", "INTEGER", default=0),
+                # Distinguishes plain posters from the additional asset types
+                # (logo/squareart/background/banner) that share this table.
+                # Defaults to "poster"; legacy rows back-fill to "poster" via
+                # this DEFAULT. The poster matcher + poster UI queries filter on
+                # image_type="poster" so assets never leak into poster flows.
+                # See backend/modules/asset_renamerr.py.
+                ColumnDefinition("image_type", "TEXT", default="poster"),
             ],
             constraints=[
                 "UNIQUE(title, year, tmdb_id, tvdb_id, imdb_id, season_number, file)"
@@ -342,9 +349,45 @@ class SchemaManager:
                 "CREATE INDEX IF NOT EXISTS poster_cache_style_idx ON poster_cache (style)",
                 "CREATE INDEX IF NOT EXISTS poster_cache_created_at_idx ON poster_cache (created_at)",
                 "CREATE INDEX IF NOT EXISTS poster_cache_resolution_idx ON poster_cache (width, height)",
+                "CREATE INDEX IF NOT EXISTS poster_cache_image_type_idx ON poster_cache (image_type)",
             ],
         )
         self._add_table(poster_cache)
+
+        # Per-(media, image_type) asset match/apply provenance. Kept separate
+        # from media_cache.matched_poster_file (which is the poster's single-file
+        # state) so a media item can carry a logo + squareart + background +
+        # banner independently without disturbing poster matching.
+        media_asset_matches = TableDefinition(
+            name="media_asset_matches",
+            columns=[
+                ColumnDefinition("id", "INTEGER", primary_key=True, nullable=False),
+                # target_kind + target_id identify the matched row:
+                #   "media"      -> media_cache.id
+                #   "collection" -> collections_cache.id
+                # A (kind, id) pair instead of two nullable FK columns so the
+                # UNIQUE below actually enforces (SQLite treats NULLs in a
+                # UNIQUE as distinct, which would defeat ON CONFLICT upserts).
+                ColumnDefinition("target_kind", "TEXT", nullable=False),
+                ColumnDefinition("target_id", "INTEGER", nullable=False),
+                # logo | squareart | background | banner
+                ColumnDefinition("image_type", "TEXT", nullable=False),
+                # local | tmdb — which source won the priority resolution.
+                ColumnDefinition("source", "TEXT"),
+                ColumnDefinition("matched_file", "TEXT"),  # local source file path
+                ColumnDefinition("matched_url", "TEXT"),  # tmdb image URL
+                ColumnDefinition("applied_method", "TEXT"),  # direct | kometa
+                ColumnDefinition("applied_path", "TEXT"),  # kometa destination written
+                ColumnDefinition("match_status", "TEXT"),
+                ColumnDefinition("matched_at", "TEXT"),
+            ],
+            constraints=["UNIQUE(target_kind, target_id, image_type)"],
+            indexes=[
+                "CREATE INDEX IF NOT EXISTS maa_target_idx ON media_asset_matches (target_kind, target_id)",
+                "CREATE INDEX IF NOT EXISTS maa_type_idx ON media_asset_matches (image_type)",
+            ],
+        )
+        self._add_table(media_asset_matches)
 
         # Holiday Status
         holiday_status = TableDefinition(
@@ -556,6 +599,31 @@ class SchemaManager:
             ],
         )
         self._add_table(tmdb_details_cache)
+
+        # Caches the selected image URLs from TMDB GET /3/{movie|tv}/{id}/images
+        # (logo / background). Mandatory: asset_renamerr may run on a schedule,
+        # and re-querying images for every media item each run would burn TMDB's
+        # rate budget. Expiration enforced in TMDBClient, like the other caches.
+        tmdb_images_cache = TableDefinition(
+            name="tmdb_images_cache",
+            columns=[
+                ColumnDefinition("id", "INTEGER", primary_key=True, nullable=False),
+                ColumnDefinition("tmdb_id", "INTEGER", nullable=False),
+                ColumnDefinition("media_type", "TEXT", nullable=False),
+                # JSON {"logo": url|null, "background": url|null}
+                ColumnDefinition("images", "TEXT"),
+                ColumnDefinition(
+                    "cached_at", "TEXT", nullable=False, default="CURRENT_TIMESTAMP"
+                ),
+            ],
+            constraints=[
+                "UNIQUE (tmdb_id, media_type)",
+            ],
+            indexes=[
+                "CREATE INDEX IF NOT EXISTS tmdb_images_cache_lookup_idx ON tmdb_images_cache (tmdb_id, media_type)",
+            ],
+        )
+        self._add_table(tmdb_images_cache)
 
         # Tracks which one-shot data migrations have been applied.
         # See _run_rename_migrations for usage.

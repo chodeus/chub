@@ -295,6 +295,143 @@ class TMDBClient:
 
         return None
 
+    # TMDB serves images from a CDN; "original" is the full-resolution size.
+    IMAGE_BASE = "https://image.tmdb.org/t/p/original"
+
+    @staticmethod
+    def _pick_image(items: list, preferred_langs: list) -> Optional[str]:
+        """Return the best file_path from a TMDB image list.
+
+        `preferred_langs` is an ordered list of acceptable ``iso_639_1`` values
+        (use ``None`` for language-neutral / textless art). Items whose language
+        is in the list rank first by that list's order; everything else falls to
+        the end. Within a tier, higher vote_average then vote_count wins.
+        """
+        if not items:
+            return None
+
+        def tier(it):
+            lang = it.get("iso_639_1")
+            try:
+                return preferred_langs.index(lang)
+            except ValueError:
+                return len(preferred_langs)
+
+        best = sorted(
+            items,
+            key=lambda it: (
+                tier(it),
+                -(it.get("vote_average") or 0),
+                -(it.get("vote_count") or 0),
+            ),
+        )[0]
+        return best.get("file_path")
+
+    def get_images(
+        self, tmdb_id: int, media_type: str, language: str = "en"
+    ) -> Optional[Dict[str, Optional[str]]]:
+        """Fetch the best logo + background image URLs for a TMDB id.
+
+        Returns ``{"logo": url|None, "background": url|None}`` (absolute CDN
+        URLs), or None when disabled / on a transient failure. Results are
+        cached in tmdb_images_cache to respect TMDB rate limits across runs.
+
+        Note: TMDB has no "square art" image class, so squareart is never
+        returned here — the asset pipeline falls back to local files for that
+        type.
+        """
+        if not self.enabled or not tmdb_id:
+            return None
+
+        mt = "movie" if media_type == "movie" else "tv"
+        key = ("images", str(tmdb_id), mt)
+        if key in self._memo:
+            return self._memo[key]
+
+        try:
+            hit, cached = self.db.tmdb_images_cache.get(
+                int(tmdb_id), mt, self.cfg.cache_expiration
+            )
+            if hit:
+                self._memo[key] = cached
+                return cached
+        except Exception as exc:
+            self.logger.warning(f"TMDB images cache read failed for {tmdb_id}: {exc}")
+
+        raw = self._fetch_images(int(tmdb_id), mt, language)
+        if raw is None:
+            return None  # transient — don't cache, let caller retry later
+
+        logo_path = self._pick_image(raw.get("logos") or [], [language, None])
+        # Backdrops: prefer textless (language-neutral) art, then the requested
+        # language.
+        backdrop_path = self._pick_image(raw.get("backdrops") or [], [None, language])
+        images = {
+            "logo": f"{self.IMAGE_BASE}{logo_path}" if logo_path else None,
+            "background": f"{self.IMAGE_BASE}{backdrop_path}" if backdrop_path else None,
+        }
+        try:
+            self.db.tmdb_images_cache.put(int(tmdb_id), mt, images)
+        except Exception as exc:
+            self.logger.warning(f"TMDB images cache write failed for {tmdb_id}: {exc}")
+        self._memo[key] = images
+        return images
+
+    def _fetch_images(self, tmdb_id: int, mt: str, language: str) -> Any:
+        """GET /3/{movie|tv}/{id}/images. Returns the raw dict, or None on a
+        transient failure / 404 (callers treat None as 'no images available')."""
+        url = f"{self.BASE}/{mt}/{tmdb_id}/images"
+        # include_image_language pulls the requested language plus textless
+        # (null-language) art in one call so _pick_image has both tiers.
+        params = {
+            "api_key": self.cfg.apikey,
+            "include_image_language": f"{language},null",
+        }
+
+        for attempt in range(self.MAX_RETRIES):
+            try:
+                resp = self.session.get(url, params=params, timeout=self.HTTP_TIMEOUT)
+            except requests.RequestException as exc:
+                if attempt == self.MAX_RETRIES - 1:
+                    self.logger.warning(
+                        f"TMDB images request failed for {tmdb_id}: {exc}"
+                    )
+                    return None
+                time.sleep(self.BACKOFF_SECONDS[attempt])
+                continue
+
+            if resp.status_code == 401:
+                self._auth_failed = True
+                self.logger.error(
+                    "TMDB API rejected the configured key (401). "
+                    "Disabling TMDB lookups for the remainder of this run."
+                )
+                return None
+            if resp.status_code == 404:
+                return {"logos": [], "backdrops": []}  # no such id → no images
+            if resp.status_code == 429:
+                retry_after = min(int(resp.headers.get("Retry-After", "1") or 1), 5)
+                if attempt < self.MAX_RETRIES - 1:
+                    time.sleep(retry_after)
+                    continue
+                self.logger.warning("TMDB rate-limited; giving up after retries")
+                return None
+            if resp.status_code >= 500 and attempt < self.MAX_RETRIES - 1:
+                time.sleep(self.BACKOFF_SECONDS[attempt])
+                continue
+            if not resp.ok:
+                self.logger.warning(
+                    f"TMDB returned {resp.status_code} for {mt}/{tmdb_id}/images"
+                )
+                return None
+
+            try:
+                return resp.json()
+            except ValueError:
+                return None
+
+        return None
+
 
 def backfill_missing_tmdb_ids(
     db: ChubDB,

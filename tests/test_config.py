@@ -35,6 +35,36 @@ def test_default_config_creates_valid_model():
     assert isinstance(config.instances, InstancesConfig)
 
 
+def test_asset_renamerr_defaults():
+    """AssetRenamerrConfig defaults are sane and the poster_renamerr chain flag
+    exists."""
+    config = ChubConfig()
+    ar = config.asset_renamerr
+    assert ar.sources == ["local", "tmdb"]
+    # defaults to the two types that work on BOTH apply methods
+    assert ar.asset_types == ["logo", "background"]
+    assert ar.apply_method == "kometa"
+    assert config.poster_renamerr.run_asset_renamerr is False
+    # notifications section accepts asset_renamerr
+    assert config.notifications.asset_renamerr == {}
+
+
+def test_asset_renamerr_banner_direct_combo_loads():
+    """banner + direct apply must NOT be a hard validation error — the config
+    has to stay loadable while a user toggles apply_method (the incompatibility
+    is handled at runtime with a skip + warning)."""
+    config = ChubConfig.model_validate(
+        {
+            "asset_renamerr": {
+                "apply_method": "direct",
+                "asset_types": ["banner", "logo"],
+            }
+        }
+    )
+    assert config.asset_renamerr.apply_method == "direct"
+    assert "banner" in config.asset_renamerr.asset_types
+
+
 def test_instances_round_trip():
     """Instances written into config should survive model_dump and re-parse."""
     config = ChubConfig(

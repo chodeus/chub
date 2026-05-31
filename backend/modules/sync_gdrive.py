@@ -401,7 +401,11 @@ class SyncGDrive(ChubModule):
                     priority = idx
                     break
 
-            assets = pr._get_assets_files(sync_location, priority=priority)
+            assets = pr._get_assets_files(
+                sync_location,
+                priority=priority,
+                include_assets=getattr(pr.config, "run_asset_renamerr", False),
+            )
             self.db.poster.delete_by_path_prefix(sync_location)
             for asset in assets:
                 self.db.poster.upsert(asset)

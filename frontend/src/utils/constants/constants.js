@@ -3,6 +3,7 @@ export const moduleOrder = [
     'main',
     'sync_gdrive',
     'poster_renamerr',
+    'asset_renamerr',
     'poster_cleanarr',
     'plex_maintenance',
     'border_replacerr',

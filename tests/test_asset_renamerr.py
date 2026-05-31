@@ -1,0 +1,454 @@
+"""Tests for backend/modules/asset_renamerr.py and the shared asset plumbing.
+
+Covers:
+* build_asset_record() image_type detection + suffix stripping (incl. the real
+  g-drive filename convention and negative cases).
+* image_type filtering keeps poster matching isolated from asset rows.
+* source-priority resolution (local vs tmdb, first match wins).
+* the apply dispatcher (banner skipped on the direct path; correct PlexClient
+  method called otherwise) and the Kometa rename path.
+"""
+
+import os
+from types import SimpleNamespace
+
+import pytest
+
+from backend.modules.asset_renamerr import (
+    AssetRenamerr,
+    apply_capability,
+)
+from backend.modules.poster_renamerr import PosterRenamerr, build_asset_record
+from backend.util.constants import asset_type_regex
+from backend.util.database import ChubDB
+
+
+# --------------------------------------------------------------------------
+# helpers
+# --------------------------------------------------------------------------
+
+
+def _logger():
+    return SimpleNamespace(
+        debug=lambda *a, **k: None,
+        info=lambda *a, **k: None,
+        warning=lambda *a, **k: None,
+        error=lambda *a, **k: None,
+        get_adapter=lambda *a, **k: _logger(),
+    )
+
+
+def make_module(**config_overrides):
+    """Build an AssetRenamerr without triggering ChubModule.__init__/config load."""
+    m = object.__new__(AssetRenamerr)
+    m.logger = _logger()
+    m._cancel_event = None
+    m._plex_clients = {}
+    cfg = {
+        "log_level": "info",
+        "dry_run": False,
+        "sources": ["local", "tmdb"],
+        "asset_types": ["logo", "squareart", "background", "banner"],
+        "apply_method": "kometa",
+        "action_type": "copy",
+        "asset_folders": False,
+        "destination_dir": "",
+        "source_dirs": [],
+        "print_only_renames": False,
+        "sync_assets": False,
+        "tmdb_language": "en",
+        "instances": [],
+    }
+    cfg.update(config_overrides)
+    m.config = SimpleNamespace(**cfg)
+    m.full_config = SimpleNamespace(
+        tmdb=SimpleNamespace(apikey="", cache_expiration=60),
+        instances=SimpleNamespace(plex={}),
+    )
+    return m
+
+
+@pytest.fixture
+def db(tmp_path):
+    logger = _logger()
+    path = str(tmp_path / "chub.db")
+    with ChubDB(logger, db_path=path) as database:
+        yield database
+
+
+# --------------------------------------------------------------------------
+# build_asset_record — image_type detection + suffix stripping
+# --------------------------------------------------------------------------
+
+
+def test_real_gdrive_movie_logo():
+    rec = build_asset_record(
+        "8 A.M. Metro (2023) {tmdb-1121330} {imdb-tt27511275} - Logo.png", "/x"
+    )
+    assert rec["image_type"] == "logo"
+    assert rec["title"] == "8 A.M. Metro"
+    assert rec["year"] == 2023
+    assert rec["tmdb_id"] == 1121330
+    assert rec["imdb_id"] == "tt27511275"
+    assert rec["normalized_title"] == "8ammetro"
+
+
+def test_real_gdrive_collection_logo():
+    rec = build_asset_record(
+        "De De Pyaar De Collection {tmdb-1511685} - Logo.png", "/x"
+    )
+    assert rec["image_type"] == "logo"
+    assert rec["tmdb_id"] == 1511685
+    assert rec["year"] is None
+    # year-less + Collection suffix classifies as a collection
+    assert AssetRenamerr._classify(rec) == "collection"
+
+
+@pytest.mark.parametrize(
+    "fname,expected",
+    [
+        ("Movie (1999) - Logo.png", "logo"),
+        ("Movie (1999)_Logo.png", "logo"),
+        ("Movie (1999) - SquareArt.png", "squareart"),
+        ("Movie (1999) - Background.png", "background"),
+        ("Movie (1999) - Banner.png", "banner"),
+        ("Movie (1999).png", "poster"),  # no suffix -> poster
+    ],
+)
+def test_suffix_variants(fname, expected):
+    rec = build_asset_record(fname, "/x")
+    assert rec["image_type"] == expected
+
+
+def test_negative_title_not_eaten():
+    """A movie literally containing the word in its title is NOT an asset tag."""
+    rec = build_asset_record("Open Season 2 (2008) - Logo.png", "/x")
+    # the " - Logo" tag is stripped; "Open Season 2" survives as the title
+    assert rec["image_type"] == "logo"
+    assert "Open Season 2" in rec["title"]
+    # and a bare title without a delimited tag isn't mistaken for an asset
+    bare = build_asset_record("Background Noise (2010).png", "/x")
+    assert bare["image_type"] == "poster"
+
+
+def test_asset_and_poster_share_match_key():
+    """The logo and the poster for the same film must normalize to one key."""
+    poster = build_asset_record("8 A.M. Metro (2023) {tmdb-1121330}.png", "/x")
+    logo = build_asset_record("8 A.M. Metro (2023) {tmdb-1121330} - Logo.png", "/x")
+    assert poster["normalized_title"] == logo["normalized_title"]
+    assert poster["image_type"] == "poster" and logo["image_type"] == "logo"
+
+
+def test_asset_type_regex_requires_delimiter():
+    assert asset_type_regex.search("Logo (2017)") is None
+    assert asset_type_regex.search("Show - Logo").group(1).lower() == "logo"
+
+
+# --------------------------------------------------------------------------
+# image_type isolation: poster matching ignores asset rows
+# --------------------------------------------------------------------------
+
+
+def _media(**over):
+    base = {
+        "id": 1,
+        "asset_type": "movie",
+        "title": "8 A.M. Metro",
+        "normalized_title": "8ammetro",
+        "year": 2023,
+        "tmdb_id": 1121330,
+        "tvdb_id": None,
+        "imdb_id": "tt27511275",
+        "season_number": None,
+        "alternate_titles": "[]",
+        "instance_name": "radarr1",
+        "library_name": None,
+        "folder": "8 A.M. Metro (2023)",
+    }
+    base.update(over)
+    return base
+
+
+def _seed(db, image_type, fname):
+    db.poster.upsert(
+        {
+            "asset_type": "movie",
+            "title": "8 A.M. Metro",
+            "normalized_title": "8ammetro",
+            "year": 2023,
+            "tmdb_id": 1121330,
+            "tvdb_id": None,
+            "imdb_id": "tt27511275",
+            "season_number": None,
+            "folder": "x",
+            "file": f"/x/{fname}",
+            "style": None,
+            "priority": 0,
+            "image_type": image_type,
+        }
+    )
+
+
+def test_poster_match_ignores_logo_rows(db):
+    _seed(db, "poster", "8 A.M. Metro (2023).png")
+    _seed(db, "logo", "8 A.M. Metro (2023) - Logo.png")
+    poster = PosterRenamerr.find_asset_candidate(_media(), db, image_type="poster")
+    logo = PosterRenamerr.find_asset_candidate(_media(), db, image_type="logo")
+    assert poster["matched"] and poster["candidate"]["image_type"] == "poster"
+    assert logo["matched"] and logo["candidate"]["image_type"] == "logo"
+
+
+# --------------------------------------------------------------------------
+# source priority resolution
+# --------------------------------------------------------------------------
+
+
+def _fake_tmdb(url="https://image.tmdb.org/t/p/original/l.png"):
+    return SimpleNamespace(get_images=lambda *a, **k: {"logo": url, "background": None})
+
+
+def test_source_priority_local_first(db):
+    _seed(db, "logo", "8 A.M. Metro (2023) - Logo.png")
+    m = make_module(sources=["local", "tmdb"])
+    src, file, url = m._resolve_source(_media(), db, "logo", False, _fake_tmdb())
+    assert src == "local" and file and url is None
+
+
+def test_source_priority_tmdb_first(db):
+    _seed(db, "logo", "8 A.M. Metro (2023) - Logo.png")
+    m = make_module(sources=["tmdb", "local"])
+    src, file, url = m._resolve_source(_media(), db, "logo", False, _fake_tmdb())
+    assert src == "tmdb" and url and file is None
+
+
+def test_source_fallback_to_tmdb_when_no_local(db):
+    # no local row seeded
+    m = make_module(sources=["local", "tmdb"])
+    resolved = m._resolve_source(_media(), db, "logo", False, _fake_tmdb())
+    assert resolved is not None
+    src, file, url = resolved
+    assert src == "tmdb" and url
+
+
+def test_source_none_when_nothing_available(db):
+    m = make_module(sources=["local", "tmdb"])
+    # tmdb returns no logo, no local row
+    empty_tmdb = SimpleNamespace(get_images=lambda *a, **k: {"logo": None})
+    assert m._resolve_source(_media(), db, "logo", False, empty_tmdb) is None
+
+
+# --------------------------------------------------------------------------
+# apply dispatcher
+# --------------------------------------------------------------------------
+
+
+def test_direct_banner_skipped():
+    m = make_module(apply_method="direct")
+    applied, reason = m._apply_direct(_media(), "banner", "/x/l.png", None, False)
+    assert applied is False
+    assert "banner" in reason.lower()
+
+
+def test_direct_logo_calls_upload_logo(monkeypatch):
+    m = make_module(
+        apply_method="direct",
+        instances=[{"plex1": SimpleNamespace(library_names=["Movies"])}],
+    )
+    calls = []
+
+    class FakeClient:
+        def upload_logo(self, library_name, item_title, **kw):
+            calls.append((library_name, item_title, kw.get("url"), kw.get("filepath")))
+            return True
+
+    m._plex_clients = {"plex1": FakeClient()}
+    applied, detail = m._apply_direct(
+        _media(), "logo", None, "http://x/l.png", is_collection=False
+    )
+    assert applied is True
+    assert calls and calls[0][0] == "Movies" and calls[0][2] == "http://x/l.png"
+
+
+def test_direct_squareart_and_background_methods(monkeypatch):
+    m = make_module(
+        apply_method="direct",
+        instances=[{"plex1": SimpleNamespace(library_names=["Movies"])}],
+    )
+    used = []
+
+    class FakeClient:
+        def upload_square_art(self, *a, **k):
+            used.append("squareart")
+            return True
+
+        def upload_art(self, *a, **k):
+            used.append("background")
+            return True
+
+    m._plex_clients = {"plex1": FakeClient()}
+    m._apply_direct(_media(), "squareart", "/x/s.png", None, False)
+    m._apply_direct(_media(), "background", "/x/b.png", None, False)
+    assert used == ["squareart", "background"]
+
+
+# --------------------------------------------------------------------------
+# Kometa rename path
+# --------------------------------------------------------------------------
+
+
+def _make_src(tmp_path, name="src.png"):
+    p = tmp_path / name
+    p.write_bytes(b"img")
+    return str(p)
+
+
+def test_kometa_flat_naming(tmp_path):
+    dest = tmp_path / "assets"
+    dest.mkdir()
+    src = _make_src(tmp_path)
+    m = make_module(
+        apply_method="kometa",
+        action_type="copy",
+        asset_folders=False,
+        destination_dir=str(dest),
+    )
+    applied, path = m._apply_kometa(_media(), "logo", "local", src, None)
+    assert applied
+    assert os.path.basename(path) == "8 A.M. Metro (2023)_logo.png"
+    assert os.path.exists(path)
+
+
+def test_kometa_asset_folders_naming(tmp_path):
+    dest = tmp_path / "assets"
+    dest.mkdir()
+    src = _make_src(tmp_path)
+    m = make_module(
+        apply_method="kometa",
+        action_type="copy",
+        asset_folders=True,
+        destination_dir=str(dest),
+    )
+    applied, path = m._apply_kometa(_media(), "background", "local", src, None)
+    assert applied
+    assert path.endswith(os.path.join("8 A.M. Metro (2023)", "background.png"))
+    assert os.path.exists(path)
+
+
+def test_kometa_dry_run_writes_nothing(tmp_path):
+    dest = tmp_path / "assets"
+    dest.mkdir()
+    src = _make_src(tmp_path)
+    m = make_module(
+        apply_method="kometa",
+        asset_folders=False,
+        destination_dir=str(dest),
+        dry_run=True,
+    )
+    applied, path = m._apply_kometa(_media(), "logo", "local", src, None)
+    assert applied
+    assert not os.path.exists(path)  # dry-run wrote nothing
+
+
+@pytest.mark.parametrize("action", ["copy", "move", "hardlink", "symlink"])
+def test_kometa_action_types(tmp_path, action):
+    dest = tmp_path / "assets"
+    dest.mkdir()
+    src = _make_src(tmp_path, name=f"{action}.png")
+    m = make_module(
+        apply_method="kometa",
+        action_type=action,
+        asset_folders=True,
+        destination_dir=str(dest),
+    )
+    applied, path = m._apply_kometa(_media(), "logo", "local", src, None)
+    assert applied and os.path.exists(path)
+
+
+def test_kometa_requires_destination():
+    m = make_module(apply_method="kometa", destination_dir="")
+    applied, reason = m._apply_kometa(_media(), "logo", "local", "/x/l.png", None)
+    assert applied is False and "destination" in reason.lower()
+
+
+def test_kometa_season_logo_naming(tmp_path):
+    """A show season logo must use Kometa's Season##_logo form (PR #2681)."""
+    dest = tmp_path / "assets"
+    dest.mkdir()
+    src = _make_src(tmp_path)
+    m = make_module(
+        apply_method="kometa", asset_folders=True, destination_dir=str(dest)
+    )
+    media = _media(asset_type="show", season_number=2, folder="The Show (2020)")
+    applied, path = m._apply_kometa(media, "logo", "local", src, None)
+    assert applied
+    assert path.endswith(os.path.join("The Show (2020)", "Season02_logo.png"))
+
+
+def test_kometa_season_logo_flat_naming(tmp_path):
+    dest = tmp_path / "assets"
+    dest.mkdir()
+    src = _make_src(tmp_path)
+    m = make_module(
+        apply_method="kometa", asset_folders=False, destination_dir=str(dest)
+    )
+    media = _media(asset_type="show", season_number=1, folder="The Show (2020)")
+    applied, path = m._apply_kometa(media, "background", "local", src, None)
+    assert applied
+    assert os.path.basename(path) == "The Show (2020)_Season01_background.png"
+
+
+# --------------------------------------------------------------------------
+# apply capability matrix (Plex API + Kometa PR #2681)
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "image_type,method,ok",
+    [
+        ("logo", "direct", True),
+        ("logo", "kometa", True),
+        ("background", "direct", True),
+        ("background", "kometa", True),
+        ("squareart", "direct", True),
+        ("squareart", "kometa", False),  # Kometa asset dirs ignore square art
+        ("banner", "direct", False),  # no plexapi banner
+        ("banner", "kometa", False),  # not read by Kometa
+    ],
+)
+def test_apply_capability(image_type, method, ok):
+    capable, reason = apply_capability(image_type, method)
+    assert capable is ok
+    if not ok:
+        assert reason  # must explain why
+
+
+# --------------------------------------------------------------------------
+# no-bloat gating: assets are only scanned when the feature is enabled
+# --------------------------------------------------------------------------
+
+
+def _poster_module(run_asset_renamerr):
+    m = object.__new__(PosterRenamerr)
+    m.logger = _logger()
+    m._cancel_event = None
+    m.config = SimpleNamespace(run_asset_renamerr=run_asset_renamerr)
+    m.full_config = SimpleNamespace(sync_gdrive=SimpleNamespace(gdrive_list=[]))
+    return m
+
+
+def test_scan_excludes_assets_when_feature_off(tmp_path):
+    (tmp_path / "Movie (2020).png").write_bytes(b"p")
+    (tmp_path / "Movie (2020) - Logo.png").write_bytes(b"l")
+    m = _poster_module(run_asset_renamerr=False)
+    recs = m._get_assets_files(str(tmp_path), include_assets=False)
+    types = {r["image_type"] for r in recs}
+    assert types == {"poster"}  # logo skipped entirely — no bloat for non-users
+
+
+def test_scan_includes_assets_when_feature_on(tmp_path):
+    (tmp_path / "Movie (2020).png").write_bytes(b"p")
+    (tmp_path / "Movie (2020) - Logo.png").write_bytes(b"l")
+    m = _poster_module(run_asset_renamerr=True)
+    recs = m._get_assets_files(str(tmp_path), include_assets=True)
+    types = {r["image_type"] for r in recs}
+    assert types == {"poster", "logo"}

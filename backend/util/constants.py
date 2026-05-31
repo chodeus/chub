@@ -21,6 +21,26 @@ season_number_regex = re.compile(
     r"(?:^|\s*-\s*|_)Season\s*(\d{1,4})|(?:^|\s*-\s*|_)Specials\b", re.IGNORECASE
 )
 
+# Matches an additional-asset type tag suffix — " - Logo"/"_Logo", "- SquareArt",
+# "- Background", "- Banner" (case-insensitive), capturing the type as group 1.
+# The leading `(?:\s*-\s*|_)` delimiter is REQUIRED (same rationale as
+# season_number_regex): a real asset file in the Kometa/Drazzilb scheme always
+# separates the type tag from the title with " - " or "_" (e.g.
+# "Show Name (2020) - Logo.png", "Movie (1999) {tmdb-1} - SquareArt.png"). The
+# delimiter requirement plus a trailing `\b` keeps a bare "Logo"/"Background"
+# inside a real title (a movie literally named "Logo", "Open Background") from
+# being mistaken for an asset-type tag. Used by asset_renamerr to (a) detect the
+# image_type and (b) strip the tag before normalising the title so the asset's
+# match key equals the same media's poster key.
+#
+# Banner is matched on purpose even though it is NOT a processable asset type
+# (no Plex upload API, not read by Kometa — see asset_renamerr.ALL_ASSET_TYPES):
+# recognising "Movie (2020) - Banner.png" as a banner means it's classified and
+# ignored rather than mis-parsed as a poster titled "Movie - Banner".
+asset_type_regex = re.compile(
+    r"(?:\s*-\s*|_)(Logo|SquareArt|Background|Banner)\b", re.IGNORECASE
+)
+
 # Matches the literal "Season " followed by 1–4 digits (e.g. "Season 1", "Season 12", up to "Season 9999"), capturing those digits as group 1
 season_regex: str = r"Season (\d{1,4})"
 

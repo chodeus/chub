@@ -1,7 +1,7 @@
 import html
 import itertools
 import sys
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import plexapi
 from plexapi import utils as plexutils
@@ -330,6 +330,140 @@ class PlexClient:
         print()  # Move to next line after done
         return all_entries
 
+    def _locate_targets(
+        self,
+        library_name: str,
+        item_title: str,
+        year: Any = None,
+        is_collection: bool = False,
+        season_number: Any = None,
+        edition: Any = None,
+    ) -> list:
+        """Return the plexapi objects artwork should be uploaded to.
+
+        Shared by every upload_* method so they apply the SAME item-location
+        rules: collections by title; movies/shows by title+year (all unmerged
+        copies, or edition-narrowed); a specific Season across the target shows
+        when season_number is given. Returns [] (and logs) when nothing matches.
+        """
+        section = self.plex.library.section(library_name)
+
+        if is_collection:
+            items = section.search(title=item_title, libtype="collection")
+            if not items:
+                self.logger.error(
+                    f"Collection '{item_title}' not found in '{library_name}'"
+                )
+                return []
+            return [items[0]]
+
+        # TV Shows / Movies
+        items = section.search(title=item_title, year=year)
+        if not items:
+            self.logger.error(
+                f"Item '{item_title}' not found in '{library_name}' (year={year})"
+            )
+            return []
+
+        # Edition-aware matching: if edition is specified, find the matching
+        # edition and narrow targets to that one item.
+        # Otherwise, if multiple items share the same title+year (e.g. a
+        # 1080p and a 4K copy that Plex never merged), upload to ALL of
+        # them so both copies get the same artwork. Picking items[0]
+        # silently skipped the sibling.
+        if edition and len(items) > 1:
+            edition_match = next(
+                (
+                    c
+                    for c in items
+                    if getattr(c, "editionTitle", None)
+                    and c.editionTitle.lower() == str(edition).lower()
+                ),
+                None,
+            )
+            targets = [edition_match] if edition_match else [items[0]]
+        elif edition:
+            candidate_edition = getattr(items[0], "editionTitle", None)
+            if candidate_edition and candidate_edition.lower() != str(edition).lower():
+                self.logger.debug(
+                    f"Edition mismatch for '{item_title}': wanted '{edition}', "
+                    f"found '{candidate_edition}'"
+                )
+            targets = [items[0]]
+        else:
+            targets = items
+            if len(items) > 1:
+                self.logger.debug(
+                    f"'{item_title}' ({year}) has {len(items)} Plex items; "
+                    f"uploading artwork to all copies."
+                )
+
+        if season_number is not None:
+            # Narrow to the matching season on every target show.
+            seasons_out = []
+            for tgt in targets:
+                try:
+                    seasons_out.extend(
+                        s
+                        for s in tgt.seasons()
+                        if int(s.index) == int(season_number)
+                    )
+                except Exception:
+                    continue
+            if not seasons_out:
+                self.logger.error(
+                    f"Season {season_number} not found for '{item_title}' in '{library_name}'"
+                )
+            return seasons_out
+
+        return targets
+
+    def _upload_artwork(
+        self,
+        method_name: str,
+        art_label: str,
+        library_name: str,
+        item_title: str,
+        *,
+        filepath: Optional[str] = None,
+        url: Optional[str] = None,
+        year: Any = None,
+        is_collection: bool = False,
+        season_number: Any = None,
+        edition: Any = None,
+        dry_run: bool = False,
+    ) -> bool:
+        """Locate the target(s) and invoke a plexapi upload method on each.
+
+        ``method_name`` is the plexapi method to call (uploadPoster / uploadArt
+        / uploadLogo / uploadSquareArt); ``art_label`` is used only for logging.
+        Provide exactly one of ``filepath`` (local file) or ``url`` (remote).
+        """
+        try:
+            targets = self._locate_targets(
+                library_name,
+                item_title,
+                year=year,
+                is_collection=is_collection,
+                season_number=season_number,
+                edition=edition,
+            )
+            if not targets:
+                return False
+            if not dry_run:
+                for tgt in targets:
+                    method = getattr(tgt, method_name)
+                    if url:
+                        method(url=url)
+                    else:
+                        method(filepath=filepath)
+            return True
+        except Exception as e:
+            self.logger.error(
+                f"Failed to upload {art_label} for '{item_title}' in '{library_name}': {e}"
+            )
+            return False
+
     def upload_poster(
         self,
         library_name: str,
@@ -346,100 +480,103 @@ class PlexClient:
         Supports uploading to a series season if season_number is given,
         and targeting a specific movie edition via editionTitle.
         """
-        try:
-            section = self.plex.library.section(library_name)
+        return self._upload_artwork(
+            "uploadPoster",
+            "poster",
+            library_name,
+            item_title,
+            filepath=poster_path,
+            year=year,
+            is_collection=is_collection,
+            season_number=season_number,
+            edition=edition,
+            dry_run=dry_run,
+        )
 
-            if is_collection:
-                items = section.search(title=item_title, libtype="collection")
-                if not items:
-                    self.logger.error(
-                        f"Collection '{item_title}' not found in '{library_name}'"
-                    )
-                    return False
-                item = items[0]
-                if not dry_run:
-                    item.uploadPoster(filepath=poster_path)
-                return True
+    def upload_logo(
+        self,
+        library_name: str,
+        item_title: str,
+        *,
+        filepath: Optional[str] = None,
+        url: Optional[str] = None,
+        year: Any = None,
+        is_collection: bool = False,
+        season_number: Any = None,
+        edition: Any = None,
+        dry_run: bool = False,
+    ) -> bool:
+        """Upload a clear logo (plexapi uploadLogo). Accepts a local filepath or
+        a remote url (e.g. a TMDB image URL)."""
+        return self._upload_artwork(
+            "uploadLogo",
+            "logo",
+            library_name,
+            item_title,
+            filepath=filepath,
+            url=url,
+            year=year,
+            is_collection=is_collection,
+            season_number=season_number,
+            edition=edition,
+            dry_run=dry_run,
+        )
 
-            # TV Shows / Movies
-            items = section.search(title=item_title, year=year)
-            if not items:
-                self.logger.error(
-                    f"Item '{item_title}' not found in '{library_name}' (year={year})"
-                )
-                return False
+    def upload_art(
+        self,
+        library_name: str,
+        item_title: str,
+        *,
+        filepath: Optional[str] = None,
+        url: Optional[str] = None,
+        year: Any = None,
+        is_collection: bool = False,
+        season_number: Any = None,
+        edition: Any = None,
+        dry_run: bool = False,
+    ) -> bool:
+        """Upload background/fanart (plexapi uploadArt). Local filepath or url."""
+        return self._upload_artwork(
+            "uploadArt",
+            "background",
+            library_name,
+            item_title,
+            filepath=filepath,
+            url=url,
+            year=year,
+            is_collection=is_collection,
+            season_number=season_number,
+            edition=edition,
+            dry_run=dry_run,
+        )
 
-            # Edition-aware matching: if edition is specified, find the matching
-            # edition and narrow targets to that one item.
-            # Otherwise, if multiple items share the same title+year (e.g. a
-            # 1080p and a 4K copy that Plex never merged), upload to ALL of
-            # them so both copies get the same poster. Picking items[0]
-            # silently skipped the sibling.
-            if edition and len(items) > 1:
-                edition_match = next(
-                    (
-                        c
-                        for c in items
-                        if getattr(c, "editionTitle", None)
-                        and c.editionTitle.lower() == str(edition).lower()
-                    ),
-                    None,
-                )
-                targets = [edition_match] if edition_match else [items[0]]
-            elif edition:
-                candidate_edition = getattr(items[0], "editionTitle", None)
-                if (
-                    candidate_edition
-                    and candidate_edition.lower() != str(edition).lower()
-                ):
-                    self.logger.debug(
-                        f"Edition mismatch for '{item_title}': wanted '{edition}', "
-                        f"found '{candidate_edition}'"
-                    )
-                targets = [items[0]]
-            else:
-                targets = items
-                if len(items) > 1:
-                    self.logger.debug(
-                        f"'{item_title}' ({year}) has {len(items)} Plex items; "
-                        f"uploading poster to all copies."
-                    )
-
-            if season_number is not None:
-                # Upload to the matching season on every target show.
-                uploaded = 0
-                for tgt in targets:
-                    try:
-                        seasons = [
-                            s
-                            for s in tgt.seasons()
-                            if int(s.index) == int(season_number)
-                        ]
-                    except Exception:
-                        seasons = []
-                    if not seasons:
-                        continue
-                    if not dry_run:
-                        seasons[0].uploadPoster(filepath=poster_path)
-                    uploaded += 1
-                if uploaded == 0:
-                    self.logger.error(
-                        f"Season {season_number} not found for '{item_title}' in '{library_name}'"
-                    )
-                    return False
-                return True
-
-            # Otherwise, upload to the main show/movie poster on every target.
-            if not dry_run:
-                for tgt in targets:
-                    tgt.uploadPoster(filepath=poster_path)
-            return True
-
-        except Exception as e:
-            self.logger.error(
-                f"Failed to upload poster for '{item_title}' in '{library_name}': {e}"
-            )
-            return False
+    def upload_square_art(
+        self,
+        library_name: str,
+        item_title: str,
+        *,
+        filepath: Optional[str] = None,
+        url: Optional[str] = None,
+        year: Any = None,
+        is_collection: bool = False,
+        season_number: Any = None,
+        edition: Any = None,
+        dry_run: bool = False,
+    ) -> bool:
+        """Upload square art (plexapi uploadSquareArt). Local filepath or url."""
+        return self._upload_artwork(
+            "uploadSquareArt",
+            "squareart",
+            library_name,
+            item_title,
+            filepath=filepath,
+            url=url,
+            year=year,
+            is_collection=is_collection,
+            season_number=season_number,
+            edition=edition,
+            dry_run=dry_run,
+        )
 
     def remove_label(
         self,
