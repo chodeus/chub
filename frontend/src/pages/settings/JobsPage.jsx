@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useApiData, useApiMutation } from '../../hooks/useApiData.js';
 import { useModuleEvents } from '../../hooks/useModuleEvents.js';
 import { useToast } from '../../contexts/ToastContext.jsx';
@@ -28,13 +28,20 @@ export const JobsPage = () => {
     const [expandedJobId, setExpandedJobId] = useState(null);
     const [jobDetail, setJobDetail] = useState(null);
     const [detailLoading, setDetailLoading] = useState(false);
+    // Tracks the row whose detail is currently being loaded. Rapid toggling
+    // can resolve out of order, so each async result checks this before
+    // committing — otherwise a slow earlier fetch could render under a row the
+    // user has since expanded to a different job.
+    const detailReqRef = useRef(null);
 
     const handleToggleDetail = async (jobId, job) => {
         if (expandedJobId === jobId) {
+            detailReqRef.current = null;
             setExpandedJobId(null);
             setJobDetail(null);
             return;
         }
+        detailReqRef.current = jobId;
         setExpandedJobId(jobId);
         setDetailLoading(true);
         try {
@@ -57,11 +64,18 @@ export const JobsPage = () => {
                 }
             }
 
-            setJobDetail(detail);
+            // Only commit if this is still the row the user is expanding.
+            if (detailReqRef.current === jobId) {
+                setJobDetail(detail);
+            }
         } catch {
-            setJobDetail(null);
+            if (detailReqRef.current === jobId) {
+                setJobDetail(null);
+            }
         } finally {
-            setDetailLoading(false);
+            if (detailReqRef.current === jobId) {
+                setDetailLoading(false);
+            }
         }
     };
 
