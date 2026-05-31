@@ -122,7 +122,10 @@ def test_match_asset_skips_missing_values():
 
 
 def test_compute_file_hash_dry_run_returns_placeholder():
-    assert PosterUploader._compute_file_hash("/nonexistent", dry_run=True) == "dry_run_hash"
+    assert (
+        PosterUploader._compute_file_hash("/nonexistent", dry_run=True)
+        == "dry_run_hash"
+    )
 
 
 def test_compute_file_hash_real_file(tmp_path):
@@ -154,3 +157,74 @@ def test_has_overlay_invalid_json_treated_as_empty():
 
 def test_has_overlay_missing_labels():
     assert PosterUploader._has_overlay({}) is False
+
+
+# --- inter-upload throttle (#d4d1896) ---
+
+
+def test_throttle_sleeps_when_configured(monkeypatch):
+    from types import SimpleNamespace
+    import backend.util.upload_posters as up_mod
+
+    up = object.__new__(PosterUploader)
+    up.config = SimpleNamespace(upload_delay_ms=50)
+    calls = []
+    monkeypatch.setattr(up_mod.time, "sleep", lambda s: calls.append(s))
+    up._throttle()
+    assert calls == [0.05]
+
+
+def test_throttle_noop_when_zero(monkeypatch):
+    from types import SimpleNamespace
+    import backend.util.upload_posters as up_mod
+
+    up = object.__new__(PosterUploader)
+    up.config = SimpleNamespace(upload_delay_ms=0)
+    calls = []
+    monkeypatch.setattr(up_mod.time, "sleep", lambda s: calls.append(s))
+    up._throttle()
+    assert calls == []
+
+
+# --- season-missing signal for webhook retry (#f1e6393) ---
+
+
+def _stub_logger():
+    from types import SimpleNamespace
+
+    return SimpleNamespace(info=lambda *a, **k: None, debug=lambda *a, **k: None)
+
+
+def test_compile_result_counts_seasons_missing():
+    from backend.util.upload_posters import InstanceResult, UploadResult
+
+    up = object.__new__(PosterUploader)
+    up.manifest = {}
+    up.logger = _stub_logger()
+    ir = InstanceResult(
+        instance_name="p1",
+        enabled=True,
+        connected=True,
+        uploads=[
+            UploadResult(
+                "Show S2",
+                "season",
+                False,
+                "failed",
+                "Season not found in Plex yet",
+                seasons_missing=True,
+            ),
+            UploadResult("Movie", "movie", True, "updated", "ok"),
+        ],
+    )
+    result = up._compile_final_result([ir])
+    assert result["payload"]["seasons_missing"] == 1
+    # matched = updated + failed
+    assert result["payload"]["matched"] == 2
+
+
+def test_upload_result_defaults_seasons_missing_false():
+    from backend.util.upload_posters import UploadResult
+
+    r = UploadResult("x", "movie", True, "updated", "ok")
+    assert r.seasons_missing is False

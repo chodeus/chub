@@ -625,9 +625,27 @@ def _lidarr_item():
         "status": "continuing",
         "tags": [],
         "seasons": [
-            {"season_number": 0, "album_id": 101, "album_title": "A", "monitored": True, "episode_data": []},
-            {"season_number": 1, "album_id": 102, "album_title": "B", "monitored": True, "episode_data": []},
-            {"season_number": 2, "album_id": 103, "album_title": "C", "monitored": True, "episode_data": []},
+            {
+                "season_number": 0,
+                "album_id": 101,
+                "album_title": "A",
+                "monitored": True,
+                "episode_data": [],
+            },
+            {
+                "season_number": 1,
+                "album_id": 102,
+                "album_title": "B",
+                "monitored": True,
+                "episode_data": [],
+            },
+            {
+                "season_number": 2,
+                "album_id": 103,
+                "album_title": "C",
+                "monitored": True,
+                "episode_data": [],
+            },
         ],
     }
 
@@ -640,8 +658,13 @@ def test_upgradinatorr_granular_sonarr_resumes_across_runs():
 
     # Run 1: budget = 2 → search seasons 1, 2, no tag, progress records both.
     new_count, hit = module._process_sonarr_item(
-        item, app, checked_tag_id=99, count=2, granular=True,
-        progress_db=progress, search_count=0,
+        item,
+        app,
+        checked_tag_id=99,
+        count=2,
+        granular=True,
+        progress_db=progress,
+        search_count=0,
     )
     assert hit is True
     assert new_count == 2
@@ -651,8 +674,13 @@ def test_upgradinatorr_granular_sonarr_resumes_across_runs():
 
     # Run 2: only season 3 remains → 1 search, tag added, progress cleared.
     new_count, hit = module._process_sonarr_item(
-        item, app, checked_tag_id=99, count=2, granular=True,
-        progress_db=progress, search_count=0,
+        item,
+        app,
+        checked_tag_id=99,
+        count=2,
+        granular=True,
+        progress_db=progress,
+        search_count=0,
     )
     assert hit is False
     assert new_count == 1
@@ -670,8 +698,13 @@ def test_upgradinatorr_granular_sonarr_skips_already_done_parent():
     progress.record_processed_child("sonarr_main", 11, "3")
 
     new_count, hit = module._process_sonarr_item(
-        _sonarr_item(), app, checked_tag_id=99, count=5, granular=True,
-        progress_db=progress, search_count=0,
+        _sonarr_item(),
+        app,
+        checked_tag_id=99,
+        count=5,
+        granular=True,
+        progress_db=progress,
+        search_count=0,
     )
     # No budget consumed but parent finalized.
     assert hit is False
@@ -688,8 +721,13 @@ def test_upgradinatorr_legacy_sonarr_tags_once_and_clears_stale_progress():
     progress.record_processed_child("sonarr_main", 11, "1")
 
     new_count, hit = module._process_sonarr_item(
-        _sonarr_item(), app, checked_tag_id=99, count=5, granular=False,
-        progress_db=progress, search_count=0,
+        _sonarr_item(),
+        app,
+        checked_tag_id=99,
+        count=5,
+        granular=False,
+        progress_db=progress,
+        search_count=0,
     )
     # All monitored seasons searched, parent tagged once, stale row wiped.
     assert hit is False
@@ -767,8 +805,13 @@ def test_upgradinatorr_granular_lidarr_resumes_across_runs():
     item = _lidarr_item()
 
     new_count, hit = module._process_lidarr_item(
-        item, app, checked_tag_id=99, count=2, granular=True,
-        progress_db=progress, search_count=0,
+        item,
+        app,
+        checked_tag_id=99,
+        count=2,
+        granular=True,
+        progress_db=progress,
+        search_count=0,
     )
     assert hit is True
     assert new_count == 2
@@ -777,8 +820,13 @@ def test_upgradinatorr_granular_lidarr_resumes_across_runs():
     assert progress.get_processed_children("lidarr_main", 21) == {"101", "102"}
 
     new_count, hit = module._process_lidarr_item(
-        item, app, checked_tag_id=99, count=2, granular=True,
-        progress_db=progress, search_count=0,
+        item,
+        app,
+        checked_tag_id=99,
+        count=2,
+        granular=True,
+        progress_db=progress,
+        search_count=0,
     )
     assert hit is False
     assert new_count == 1
@@ -892,7 +940,9 @@ def test_upgradinatorr_unattended_dry_run_does_not_remove_tags():
 
 def test_upgradinatorr_unattended_resets_checked_tag_then_processes_next_cycle():
     module = make_upgradinatorr(dry_run=False)
-    app = FakeARR([[upgradinatorr_media_item(["checked"])], [upgradinatorr_media_item([])]])
+    app = FakeARR(
+        [[upgradinatorr_media_item(["checked"])], [upgradinatorr_media_item([])]]
+    )
 
     result = module.process_instance(
         "radarr",
@@ -984,9 +1034,7 @@ def test_upgradinatorr_run_skips_disabled_profiles(monkeypatch):
     )
     module.full_config = ChubConfig(
         instances=InstancesConfig(
-            radarr={
-                "radarr_main": InstanceDetail(url="http://radarr:7878", api="key")
-            }
+            radarr={"radarr_main": InstanceDetail(url="http://radarr:7878", api="key")}
         ),
         upgradinatorr=module.config,
     )
@@ -1040,7 +1088,9 @@ def test_scheduler_enqueues_due_upgradinatorr_profile(monkeypatch):
         ),
     )
     orchestrator = FakeOrchestrator()
-    chub_scheduler = ChubScheduler(config, logger=None, module_orchestrator=orchestrator)
+    chub_scheduler = ChubScheduler(
+        config, logger=None, module_orchestrator=orchestrator
+    )
 
     chub_scheduler._tick(config.schedule)
 
@@ -1065,3 +1115,17 @@ def test_scheduler_enqueues_due_upgradinatorr_profile(monkeypatch):
             },
         )
     ]
+
+
+def test_poster_renamerr_upload_tuning_defaults():
+    """New upload-tuning fields: throttle off by default; webhook season retry on."""
+    pr = ChubConfig().poster_renamerr
+    assert pr.upload_delay_ms == 0
+    assert pr.webhook_season_retry_attempts == 2
+    assert pr.webhook_season_retry_delay_seconds == 15
+    # bounds are enforced
+    cfg = ChubConfig.model_validate(
+        {"poster_renamerr": {"upload_delay_ms": 50, "webhook_season_retry_attempts": 0}}
+    )
+    assert cfg.poster_renamerr.upload_delay_ms == 50
+    assert cfg.poster_renamerr.webhook_season_retry_attempts == 0
