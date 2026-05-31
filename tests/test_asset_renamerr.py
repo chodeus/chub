@@ -244,9 +244,12 @@ def test_source_none_when_nothing_available(db):
 
 def test_direct_banner_skipped():
     m = make_module(apply_method="direct")
-    applied, reason = m._apply_direct(_media(), "banner", "/x/l.png", None, False)
+    applied, reason, applied_libs = m._apply_direct(
+        _media(), "banner", "/x/l.png", None, False
+    )
     assert applied is False
     assert "banner" in reason.lower()
+    assert applied_libs == []
 
 
 def test_direct_logo_calls_upload_logo(monkeypatch):
@@ -262,11 +265,12 @@ def test_direct_logo_calls_upload_logo(monkeypatch):
             return True
 
     m._plex_clients = {"plex1": FakeClient()}
-    applied, detail = m._apply_direct(
+    applied, detail, applied_libs = m._apply_direct(
         _media(), "logo", None, "http://x/l.png", is_collection=False
     )
     assert applied is True
     assert calls and calls[0][0] == "Movies" and calls[0][2] == "http://x/l.png"
+    assert applied_libs == ["plex1/Movies"]
 
 
 def test_direct_squareart_and_background_methods(monkeypatch):
@@ -520,6 +524,71 @@ def test_already_applied_local_mtime(db, tmp_path):
     )
 
 
+def test_already_applied_direct_backfills_new_library(db):
+    """A direct asset applied to only one library is re-applied when the config
+    now targets a second library (per-library backfill), then skipped once both
+    are covered."""
+    m = make_module(
+        sources=["tmdb"],
+        apply_method="direct",
+        instances=[{"plex1": SimpleNamespace(library_names=["Movies", "Movies 4K"])}],
+    )
+    db.media_asset_matches.upsert(
+        target_kind="media",
+        target_id=3,
+        image_type="logo",
+        source="tmdb",
+        matched_url="http://x/l.png",
+        applied_method="direct",
+        applied_libraries='["plex1/Movies"]',
+        match_status="applied",
+    )
+    # "Movies 4K" not yet covered -> don't skip, so it gets backfilled.
+    assert (
+        m._already_applied(
+            db,
+            "media",
+            3,
+            "logo",
+            "direct",
+            "tmdb",
+            None,
+            "http://x/l.png",
+            None,
+            media={"title": "X"},
+            is_collection=False,
+        )
+        is False
+    )
+    # Both libraries now covered -> skip.
+    db.media_asset_matches.upsert(
+        target_kind="media",
+        target_id=3,
+        image_type="logo",
+        source="tmdb",
+        matched_url="http://x/l.png",
+        applied_method="direct",
+        applied_libraries='["plex1/Movies", "plex1/Movies 4K"]',
+        match_status="applied",
+    )
+    assert (
+        m._already_applied(
+            db,
+            "media",
+            3,
+            "logo",
+            "direct",
+            "tmdb",
+            None,
+            "http://x/l.png",
+            None,
+            media={"title": "X"},
+            is_collection=False,
+        )
+        is True
+    )
+
+
 def test_already_applied_never_skips_in_dry_run(db):
     m = make_module(dry_run=True, sources=["tmdb"], apply_method="direct")
     db.media_asset_matches.upsert(
@@ -550,10 +619,13 @@ def test_apply_direct_uploads_to_all_matching_libraries():
             return True
 
     m._plex_clients = {"plex1": FakeClient()}
-    applied, detail = m._apply_direct(_media(), "logo", "/x/l.png", None, False)
+    applied, detail, applied_libs = m._apply_direct(
+        _media(), "logo", "/x/l.png", None, False
+    )
     assert applied is True
-    # both libraries listed in the detail
+    # both libraries listed in the detail + returned for per-library tracking
     assert "Movies" in detail and "Movies 4K" in detail
+    assert set(applied_libs) == {"plex1/Movies", "plex1/Movies 4K"}
 
 
 # --- logging: print_only_renames + capability warn-once ---

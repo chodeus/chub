@@ -28,6 +28,7 @@ class MediaAssetMatches(DatabaseBase):
         source_mtime: Optional[float] = None,
         applied_method: Optional[str] = None,
         applied_path: Optional[str] = None,
+        applied_libraries: Optional[str] = None,
         match_status: Optional[str] = None,
         matched_at: Optional[str] = None,
     ) -> None:
@@ -38,8 +39,8 @@ class MediaAssetMatches(DatabaseBase):
             INSERT INTO media_asset_matches
                 (target_kind, target_id, image_type, source, matched_file,
                  matched_url, source_mtime, applied_method, applied_path,
-                 match_status, matched_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 applied_libraries, match_status, matched_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(target_kind, target_id, image_type)
             DO UPDATE SET
                 source=excluded.source,
@@ -48,6 +49,7 @@ class MediaAssetMatches(DatabaseBase):
                 source_mtime=excluded.source_mtime,
                 applied_method=excluded.applied_method,
                 applied_path=excluded.applied_path,
+                applied_libraries=excluded.applied_libraries,
                 match_status=excluded.match_status,
                 matched_at=excluded.matched_at
             """,
@@ -61,6 +63,7 @@ class MediaAssetMatches(DatabaseBase):
                 source_mtime,
                 applied_method,
                 applied_path,
+                applied_libraries,
                 match_status,
                 matched_at,
             ),

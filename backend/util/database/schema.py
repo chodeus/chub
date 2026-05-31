@@ -434,6 +434,13 @@ class SchemaManager:
                 ColumnDefinition("source_mtime", "REAL"),
                 ColumnDefinition("applied_method", "TEXT"),  # direct | kometa
                 ColumnDefinition("applied_path", "TEXT"),  # kometa destination written
+                # JSON list of "instance/library" keys this asset was uploaded
+                # to on the direct path — so a re-run backfills a newly-added or
+                # previously-failed library copy instead of skipping the item
+                # because the source is unchanged (mirrors the poster
+                # uploaded_libraries column). NULL for the library-agnostic
+                # kometa path.
+                ColumnDefinition("applied_libraries", "TEXT"),
                 ColumnDefinition("match_status", "TEXT"),
                 ColumnDefinition("matched_at", "TEXT"),
             ],
