@@ -502,24 +502,9 @@ class PosterRenamerr(ChubModule):
 
     def match_assets_to_media(self, db: ChubDB):
         self.logger.info("Matching assets to media and collections, please wait...")
-        all_media = []
+        from backend.util.connector import gather_media_and_collections
 
-        for inst in self.config.instances:
-            if isinstance(inst, str):
-                instance_name = inst
-                media = db.media.get_by_instance(instance_name)
-                if media:
-                    all_media.extend(media)
-            elif isinstance(inst, dict):
-                for instance_name, params in inst.items():
-                    library_names = params.library_names
-                    if library_names:
-                        for library_name in library_names:
-                            collections = db.collection.get_by_instance_and_library(
-                                instance_name, library_name
-                            )
-                            if collections:
-                                all_media.extend(collections)
+        all_media = gather_media_and_collections(self.config, db)
         total_items = len(all_media)
         if not all_media:
             self.logger.warning(
@@ -1172,17 +1157,12 @@ class PosterRenamerr(ChubModule):
 
                 db.poster.clear()
                 self.merge_assets(source_dirs=self.config.source_dirs, db=db)
-                instance_map = {
-                    "arrs": [i for i in self.config.instances if isinstance(i, str)],
-                    "plex": {
-                        name: (opts.library_names or [])
-                        for i in self.config.instances
-                        if isinstance(i, dict)
-                        for name, opts in i.items()
-                    },
-                }
+                from backend.util.connector import build_instance_map
+
                 connector = Connector(
-                    db=db, logger=self.logger, instance_map=instance_map
+                    db=db,
+                    logger=self.logger,
+                    instance_map=build_instance_map(self.config),
                 )
                 connector.update_arr_database()
                 connector.update_collections_database()

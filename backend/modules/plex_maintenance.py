@@ -126,9 +126,11 @@ class PlexMaintenance(ChubModule):
     # ------------------------------------------------------------------
 
     def _get_plex_server(self):
-        """Get a PlexServer connection using CHUB instance config with retry logic."""
-        from plexapi.server import PlexServer
+        """Select the configured Plex instance and connect (with retry).
 
+        Selection is module-specific (uses the first selected instance); the
+        connect+retry loop is the shared plex.connect_plex_with_retry.
+        """
         instances = self.config.instances
         plex_instances = self.full_config.instances.plex
 
@@ -151,7 +153,6 @@ class PlexMaintenance(ChubModule):
         instance_detail = plex_instances[instance_name]
         url = instance_detail.url
         token = instance_detail.api
-        timeout = self.config.timeout
 
         if not url or not token:
             self.logger.error(
@@ -159,39 +160,15 @@ class PlexMaintenance(ChubModule):
             )
             return None
 
-        max_retries = 5
-        backoff = 60
+        from backend.util.plex import connect_plex_with_retry
 
-        for attempt in range(1, max_retries + 1):
-            try:
-                self.logger.info(
-                    f"Connecting to Plex '{instance_name}' at {url} "
-                    f"(attempt {attempt}/{max_retries})..."
-                )
-                server = PlexServer(url, token, timeout=timeout)
-                _ = server.version
-                self.logger.info(f"Connected to Plex server v{server.version}")
-                return server
-            except Exception as e:
-                err_msg = str(e).lower()
-                if "unauthorized" in err_msg or "401" in err_msg:
-                    self.logger.error(
-                        f"Plex authentication failed for '{instance_name}': check api token."
-                    )
-                    return None
-                if attempt < max_retries:
-                    self.logger.warning(
-                        f"Plex connection attempt {attempt} failed: {e}. "
-                        f"Retrying in {backoff}s..."
-                    )
-                    time.sleep(backoff)
-                else:
-                    self.logger.error(
-                        f"Plex connection failed after {max_retries} attempts: {e}"
-                    )
-                    return None
-
-        return None
+        return connect_plex_with_retry(
+            url,
+            token,
+            self.logger,
+            instance_name=instance_name,
+            timeout=self.config.timeout,
+        )
 
     # ------------------------------------------------------------------
     # Server-level maintenance tasks

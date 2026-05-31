@@ -1042,3 +1042,43 @@ class Connector:
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit - clean up connections"""
         self.connection_manager.close_all_connections()
+
+
+def gather_media_and_collections(config: Any, db: ChubDB) -> List[dict]:
+    """Collect the media + collection rows a poster/asset run matches against.
+
+    Walks ``config.instances``: a bare string is an ARR instance (movies/shows
+    from media_cache); a dict is a Plex instance whose collections are pulled
+    per configured library. Shared by poster_renamerr and asset_renamerr so the
+    instance-iteration rule lives in exactly one place.
+    """
+    all_media: List[dict] = []
+    for inst in config.instances:
+        if isinstance(inst, str):
+            media = db.media.get_by_instance(inst)
+            if media:
+                all_media.extend(media)
+        elif isinstance(inst, dict):
+            for instance_name, params in inst.items():
+                for library_name in getattr(params, "library_names", None) or []:
+                    collections = db.collection.get_by_instance_and_library(
+                        instance_name, library_name
+                    )
+                    if collections:
+                        all_media.extend(collections)
+    return all_media
+
+
+def build_instance_map(config: Any) -> Dict[str, Any]:
+    """Build the ``{"arrs": [...], "plex": {name: [libraries]}}`` map a Connector
+    is constructed with, from ``config.instances``. Shared by the modules' run()
+    methods (previously duplicated verbatim)."""
+    return {
+        "arrs": [i for i in config.instances if isinstance(i, str)],
+        "plex": {
+            name: (opts.library_names or [])
+            for i in config.instances
+            if isinstance(i, dict)
+            for name, opts in i.items()
+        },
+    }

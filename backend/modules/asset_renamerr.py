@@ -134,21 +134,9 @@ class AssetRenamerr(ChubModule):
     # ----- media gathering (mirrors poster_renamerr.match_assets_to_media) -
 
     def _gather_media(self, db: ChubDB) -> List[dict]:
-        all_media: List[dict] = []
-        for inst in self.config.instances:
-            if isinstance(inst, str):
-                media = db.media.get_by_instance(inst)
-                if media:
-                    all_media.extend(media)
-            elif isinstance(inst, dict):
-                for instance_name, params in inst.items():
-                    for library_name in params.library_names or []:
-                        collections = db.collection.get_by_instance_and_library(
-                            instance_name, library_name
-                        )
-                        if collections:
-                            all_media.extend(collections)
-        return all_media
+        from backend.util.connector import gather_media_and_collections
+
+        return gather_media_and_collections(self.config, db)
 
     @staticmethod
     def _media_year(media: dict) -> Any:
@@ -610,17 +598,12 @@ class AssetRenamerr(ChubModule):
                 if "local" in self._sources():
                     self._scan_local_sources(db)
 
-                instance_map = {
-                    "arrs": [i for i in self.config.instances if isinstance(i, str)],
-                    "plex": {
-                        name: (opts.library_names or [])
-                        for i in self.config.instances
-                        if isinstance(i, dict)
-                        for name, opts in i.items()
-                    },
-                }
+                from backend.util.connector import build_instance_map
+
                 connector = Connector(
-                    db=db, logger=self.logger, instance_map=instance_map
+                    db=db,
+                    logger=self.logger,
+                    instance_map=build_instance_map(self.config),
                 )
                 connector.update_arr_database()
                 connector.update_collections_database()
