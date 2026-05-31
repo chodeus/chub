@@ -2,6 +2,13 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.24.0](https://github.com/chodeus/chub/compare/v2.23.0...v2.24.0) (2026-05-31)
+
+
+### Features
+
+* align poster/asset apply pipeline on a strict Plex|Kometa apply_method ([3f283e2](https://github.com/chodeus/chub/commit/3f283e29f6cb2c7a816e9ddf3c49b51969c0f7ed))
+
 ## [2.23.0](https://github.com/chodeus/chub/compare/v2.22.0...v2.23.0) (2026-05-31)
 
 
