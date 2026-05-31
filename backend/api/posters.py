@@ -965,8 +965,6 @@ async def optimize_posters(
     Returns:
         Optimization results with space savings details
     """
-    from PIL import Image
-
     try:
         body = await request.json()
     except Exception:
@@ -982,6 +980,34 @@ async def optimize_posters(
     pil_format = format_map.get(target_format, "JPEG")
     ext_map = {"JPEG": ".jpg", "WEBP": ".webp", "PNG": ".png"}
     target_ext = ext_map.get(pil_format, ".jpg")
+
+    # The full-cache read + per-poster PIL resize/convert loop is heavy and
+    # CPU-bound; run it off the event loop so it doesn't freeze the server.
+    return await run_in_threadpool(
+        _optimize_posters_sync,
+        db,
+        logger,
+        max_width,
+        max_height,
+        pil_format,
+        target_ext,
+        quality,
+        mode,
+    )
+
+
+def _optimize_posters_sync(
+    db,
+    logger,
+    max_width,
+    max_height,
+    pil_format,
+    target_ext,
+    quality,
+    mode,
+) -> JSONResponse:
+    """Blocking body of optimize_posters — runs in a worker thread."""
+    from PIL import Image
 
     try:
         # Get all posters from cache
@@ -1539,7 +1565,7 @@ async def get_match_candidates(
     description="Link a specific poster to a media/collection row and copy it "
     "to the destination. Used by the manual poster picker.",
 )
-async def apply_match(
+def apply_match(
     media_id: int,
     poster_id: int = Query(...),
     kind: str = Query("media", pattern="^(media|collection)$"),
@@ -2126,7 +2152,7 @@ async def preview_poster_file(
         }
     },
 )
-async def upload_media_posters(
+def upload_media_posters(
     media_id: int, logger: Any = Depends(get_logger), db: ChubDB = Depends(get_database)
 ) -> JSONResponse:
     """
@@ -2193,7 +2219,7 @@ async def upload_media_posters(
         }
     },
 )
-async def upload_collection_posters(
+def upload_collection_posters(
     collection_id: int,
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
