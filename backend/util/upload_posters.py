@@ -50,10 +50,6 @@ class UploadResult:
     reason: str
     library_name: Optional[str] = None
     match_type: Optional[str] = None
-    # True when a season asset matched its show in Plex but the season folder
-    # wasn't found — typically a webhook firing before Plex scanned the new
-    # season. Drives the targeted-upload retry. See _process_upload_posters_job.
-    seasons_missing: bool = False
 
 
 @dataclass
@@ -667,11 +663,6 @@ class PosterUploader:
                     match_type=match_type,
                 )
             else:
-                # A season asset that matched its show (we passed the
-                # no-matching-entry check above) but failed to upload is almost
-                # always "season folder not scanned yet" — flag it so a webhook
-                # retry can wait for Plex to catch up.
-                season_missing = season_number is not None
                 return UploadResult(
                     asset_title=asset_title,
                     asset_type=asset_type,
@@ -679,12 +670,11 @@ class PosterUploader:
                     action="failed",
                     reason=(
                         "Season not found in Plex yet"
-                        if season_missing
+                        if season_number is not None
                         else "Upload to Plex failed"
                     ),
                     library_name=matched_entry.get("library_name"),
                     match_type=match_type,
-                    seasons_missing=season_missing,
                 )
 
         except Exception as e:
@@ -788,16 +778,6 @@ class PosterUploader:
                     + "\n".join(f"  • {detail}" for detail in failed_details)
                 )
 
-        # Count season assets that matched their show but whose season folder
-        # wasn't in Plex yet — surfaced so a targeted (webhook) upload can retry
-        # after Plex scans the new season.
-        total_seasons_missing = sum(
-            1
-            for instance_result in instance_results
-            for upload in instance_result.uploads
-            if getattr(upload, "seasons_missing", False)
-        )
-
         # Determine overall success
         overall_success = total_failed == 0 and successful_instances > 0
 
@@ -809,8 +789,6 @@ class PosterUploader:
                 "updated": total_updated,
                 "skipped": total_skipped,
                 "failed": total_failed,
-                "seasons_missing": total_seasons_missing,
-                "matched": total_updated + total_failed,
                 "instances_processed": successful_instances,
                 "instance_results": [
                     {

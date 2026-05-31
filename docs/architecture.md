@@ -65,6 +65,7 @@ backend/
 │   └── server.py       # FastAPI app factory + router registration
 ├── modules/            # Scheduled/on-demand work units
 │   ├── poster_renamerr.py
+│   ├── asset_renamerr.py   # clear logo / square art / background
 │   ├── poster_cleanarr.py
 │   ├── border_replacerr.py
 │   ├── labelarr.py
