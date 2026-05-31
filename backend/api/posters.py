@@ -1328,10 +1328,12 @@ async def ignore_match(
             f"Serving POST /api/posters/match/{media_id}/ignore "
             f"(kind={kind}, ignored={ignored})"
         )
-        if kind == "collection":
-            db.collection.set_ignored(media_id, ignored)
-        else:
-            db.media.set_ignored(media_id, ignored)
+        iface = db.collection if kind == "collection" else db.media
+        iface.set_ignored(media_id, ignored)
+        # Ignoring releases any manual-pick lock so the matcher is free to
+        # re-evaluate the row (it's hidden from review while ignored anyway).
+        if ignored:
+            iface.set_user_confirmed(media_id, False)
         verb = "ignored" if ignored else "restored"
         return ok(f"Row {verb}", {"id": media_id, "ignored": bool(ignored)})
     except Exception as e:
@@ -1365,6 +1367,8 @@ async def approve_match(
             "conflict_ids='[]' WHERE id=?",
             (media_id,),
         )
+        # Lock the confirmed match so a future re-scan can't revert it (Fix B).
+        iface.set_user_confirmed(media_id, True)
         return ok("Match approved", {"id": media_id, "match_status": "matched"})
     except Exception as e:
         logger.error(f"Error approving match for {media_id}: {e}")
@@ -1539,6 +1543,7 @@ async def apply_match(
             )
             db.collection.set_ignored(media_id, False)
             db.collection.set_match_provenance(media_id, now, pfile)
+            db.collection.set_user_confirmed(media_id, True)
         else:
             db.media.update(
                 asset_type=row.get("asset_type"),
@@ -1556,25 +1561,67 @@ async def apply_match(
             )
             db.media.set_ignored(media_id, False)
             db.media.set_match_provenance(media_id, now, pfile)
+            db.media.set_user_confirmed(media_id, True)
 
-        # Best-effort copy to the destination so the poster takes effect now.
-        applied = False
+        # Apply this one poster immediately, the same way a full run would: copy
+        # it to the Kometa destination (rename_file → renamed_file) AND push it
+        # to Plex for just this row (single-item manifest, force=True). Reuse the
+        # cached Plex snapshot (refresh_plex=False) so the click stays fast. The
+        # match is already saved + locked above, so if neither leg succeeds the
+        # poster still applies (without reverting) on the next poster_renamerr run.
+        copied = False
+        plex_ok = False
+        item = dict(row)
+        item["original_file"] = pfile
+        item["id"] = media_id
         try:
             from backend.modules.poster_renamerr import PosterRenamerr
 
-            pr = PosterRenamerr(logger=logger)
-            item = dict(row)
-            item["original_file"] = pfile
-            item["id"] = media_id
-            applied = pr.rename_file(item, db) is not None
+            PosterRenamerr(logger=logger).rename_file(item, db)
+            renamed = item.get("renamed_file")
+            copied = bool(renamed and os.path.lexists(renamed))
         except Exception as exc:
-            logger.warning(f"apply: copy to destination failed ({exc}); match recorded")
+            logger.warning(f"apply: copy to destination failed ({exc})")
+
+        try:
+            from backend.util.upload_posters import PosterUploader
+
+            manifest = (
+                {"collections_cache": [media_id]}
+                if kind == "collection"
+                else {"media_cache": [media_id]}
+            )
+            up = PosterUploader(
+                db=db,
+                logger=logger,
+                manifest=manifest,
+                force=True,
+                refresh_plex=False,
+            ).run()
+            plex_ok = bool(up.get("success"))
+        except Exception as exc:
+            logger.warning(f"apply: Plex upload failed ({exc})")
+
+        applied = plex_ok or copied
+        if plex_ok:
+            message = "Poster applied to Plex"
+        elif copied:
+            message = "Poster copied to assets directory (Kometa will apply)"
+        else:
+            message = (
+                "Match saved and locked — it will be applied on the next "
+                "poster_renamerr run"
+            )
 
         return ok(
-            "Poster applied"
-            if applied
-            else "Match recorded — it will be copied on the next poster_renamerr run",
-            {"id": media_id, "poster_id": poster_id, "applied": applied},
+            message,
+            {
+                "id": media_id,
+                "poster_id": poster_id,
+                "applied": applied,
+                "plex": plex_ok,
+                "copied": copied,
+            },
         )
     except Exception as e:
         logger.error(f"Error applying poster {poster_id} to {media_id}: {e}")

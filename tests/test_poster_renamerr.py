@@ -643,3 +643,93 @@ def test_match_item_no_id_article_prefixed_season_poster(tmp_path):
         assert result["match"]["file"] == "/lovers_s1.jpg"
     finally:
         db.__exit__(None, None, None)
+
+
+# --- Fix A: conflict detection defers to priority -----------------------------
+
+
+def test_no_conflict_same_title_id_presence():
+    """A collection with one id-bearing poster and one id-less poster of the
+    SAME title is not a conflict — priority picks one silently (no review)."""
+    cands = [
+        {"normalized_title": "phineasandferbcollection", "tmdb_id": None},
+        {"normalized_title": "phineasandferbcollection", "tmdb_id": 12345},
+    ]
+    assert PosterRenamerr._has_identity_conflict(cands) is False
+
+
+def test_conflict_when_titles_differ():
+    cands = [
+        {"normalized_title": "goodburgercollection"},
+        {"normalized_title": "goonburgercollection"},
+    ]
+    assert PosterRenamerr._has_identity_conflict(cands) is True
+
+
+def test_conflict_when_same_title_different_tmdb_ids():
+    cands = [
+        {"normalized_title": "x", "tmdb_id": 1},
+        {"normalized_title": "x", "tmdb_id": 2},
+    ]
+    assert PosterRenamerr._has_identity_conflict(cands) is True
+
+
+def test_single_candidate_never_conflicts():
+    assert PosterRenamerr._has_identity_conflict([{"normalized_title": "x"}]) is False
+
+
+# --- Fix B: user_confirmed lock survives re-scans -----------------------------
+
+
+def test_user_confirmed_match_is_preserved():
+    """A locked (manually applied) row must skip re-matching entirely so a
+    scheduled re-scan can never revert it."""
+    m = make_module()
+    media = {
+        "user_confirmed": 1,
+        "matched": 1,
+        "title": "Phineas and Ferb Collection",
+        "year": None,
+        "asset_type": "collection",
+    }
+    # db is never touched on the locked path, so None is fine.
+    result = m.match_item(media, db=None, is_collection=True)
+    assert result["matched"] is True
+    assert "user_confirmed" in result["reasons"][0]
+
+
+# --- Fix C: collection rename names by title when folder is empty -------------
+
+
+def test_rename_file_collection_names_by_title(tmp_path):
+    """Plex collections have no on-disk folder; rename_file must name the asset
+    by the collection title instead of emitting a nameless '.jpg'."""
+    src = tmp_path / "src.jpg"
+    src.write_bytes(b"img")
+    m = make_module()
+    m.config = SimpleNamespace(
+        destination_dir=str(tmp_path),
+        asset_folders=False,
+        dry_run=False,
+        action_type="copy",
+        run_border_replacerr=False,
+        print_only_renames=False,
+    )
+
+    class _Iface:
+        def update(self, **kwargs):
+            pass
+
+    db = SimpleNamespace(collection=_Iface(), media=_Iface())
+    item = {
+        "asset_type": "collection",
+        "title": "Phineas and Ferb Collection",
+        "folder": "",
+        "original_file": str(src),
+        "id": 1,
+        "year": None,
+    }
+    m.rename_file(item, db)
+    expected = tmp_path / "Phineas and Ferb Collection.jpg"
+    assert expected.exists()
+    assert item["renamed_file"].endswith("Phineas and Ferb Collection.jpg")
