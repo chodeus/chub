@@ -191,33 +191,46 @@ export const SETTINGS_SCHEMA = [
                 description:
                     'Run Sync Gdrive before each Poster Renamerr run so the source directories are up to date. Requires Sync Gdrive to be configured.',
             },
-            // ─── Output ────────────────────────────────────────────────
+            // ─── Apply ─────────────────────────────────────────────────
+            {
+                key: 'apply_method',
+                label: 'Apply Method',
+                type: 'dropdown',
+                section: 'Apply',
+                options: [
+                    { value: 'plex', label: 'Plex' },
+                    { value: 'kometa', label: 'Kometa' },
+                ],
+                required: true,
+                description:
+                    'Where matched posters go (either/or). "Plex" uploads posters straight to Plex for the instances whose "Upload to this Plex instance" box is ticked below — nothing is written to disk. "Kometa" renames/copies posters into the Destination Directory for Kometa to apply — no Plex upload. The Destination Directory / File Action / Asset folders settings apply to the "Kometa" method.',
+            },
             {
                 key: 'destination_dir',
                 label: 'Destination Directory',
                 type: 'dir',
-                section: 'Output',
+                section: 'Apply',
                 required: true,
                 description:
-                    'Where renamed posters are written. Plex/Kometa-compatible asset folder structure when "Asset folders" is enabled below.',
+                    'Kometa method: where renamed posters are written. Plex/Kometa-compatible asset folder structure when "Asset folders" is enabled below.',
             },
             {
                 key: 'action_type',
                 label: 'File Action',
                 type: 'dropdown',
-                section: 'Output',
+                section: 'Apply',
                 options: ['copy', 'move', 'hardlink', 'symlink'],
                 required: true,
                 description:
-                    'How matched posters reach the destination. "hardlink" is fastest and saves disk space when source and destination are on the same filesystem; "copy" is safest if you are unsure.',
+                    'Kometa method: how matched posters reach the destination. "hardlink" is fastest and saves disk space when source and destination are on the same filesystem; "copy" is safest if you are unsure.',
             },
             {
                 key: 'asset_folders',
                 label: 'Asset folders (per-show)',
                 type: 'check_box',
-                section: 'Output',
+                section: 'Apply',
                 description:
-                    'Enable Plex-style folder layout: destination/<Show Name>/poster.jpg + Season01.jpg. When off, files are flat: destination/<Show Name>_Season01.jpg.',
+                    'Kometa method: enable Plex-style folder layout: destination/<Show Name>/poster.jpg + Season01.jpg. When off, files are flat: destination/<Show Name>_Season01.jpg.',
             },
             // ─── Pipeline ──────────────────────────────────────────────
             {
@@ -317,14 +330,16 @@ export const SETTINGS_SCHEMA = [
             // ─── Source ────────────────────────────────────────────────
             {
                 key: 'sources',
-                label: 'Sources (priority order)',
-                type: 'array',
+                label: 'Primary Source',
+                type: 'primary_source',
                 section: 'Source',
-                suggestions: ['local', 'tmdb'],
-                allowCustom: false,
-                placeholder: 'Add source…',
+                options: [
+                    { value: 'local', label: 'Prefer local files (TMDB fallback)' },
+                    { value: 'tmdb', label: 'Prefer TMDB (local fallback)' },
+                ],
+                required: true,
                 description:
-                    'Where asset images come from, in priority order — the first source that has an image for a given item wins. "local" = files scanned from Source Directories (g-drive synced); "tmdb" = fetched from TMDB (requires a TMDB API key; supplies logo + background only). e.g. ["local","tmdb"] prefers your g-drive files and falls back to TMDB.',
+                    'Which image source to prefer; the other is automatically used as a fallback when the preferred source has no image for an item. "local" = files scanned from Source Directories (g-drive synced); "tmdb" = fetched from TMDB (requires a TMDB API key; supplies logo + background only).',
             },
             {
                 key: 'source_dirs',
@@ -344,12 +359,39 @@ export const SETTINGS_SCHEMA = [
             },
             {
                 key: 'tmdb_language',
-                label: 'TMDB Language',
-                type: 'text',
+                label: 'TMDB Languages (priority order)',
+                type: 'multiselect',
                 section: 'Source',
-                placeholder: 'en',
+                placeholder: 'Add language…',
+                options: [
+                    { value: 'en', label: 'English (en)' },
+                    { value: 'es', label: 'Spanish (es)' },
+                    { value: 'fr', label: 'French (fr)' },
+                    { value: 'de', label: 'German (de)' },
+                    { value: 'it', label: 'Italian (it)' },
+                    { value: 'pt', label: 'Portuguese (pt)' },
+                    { value: 'nl', label: 'Dutch (nl)' },
+                    { value: 'ja', label: 'Japanese (ja)' },
+                    { value: 'ko', label: 'Korean (ko)' },
+                    { value: 'zh', label: 'Chinese (zh)' },
+                    { value: 'ru', label: 'Russian (ru)' },
+                    { value: 'hi', label: 'Hindi (hi)' },
+                    { value: 'ar', label: 'Arabic (ar)' },
+                    { value: 'tr', label: 'Turkish (tr)' },
+                    { value: 'pl', label: 'Polish (pl)' },
+                    { value: 'sv', label: 'Swedish (sv)' },
+                    { value: 'da', label: 'Danish (da)' },
+                    { value: 'no', label: 'Norwegian (no)' },
+                    { value: 'fi', label: 'Finnish (fi)' },
+                    { value: 'cs', label: 'Czech (cs)' },
+                    { value: 'el', label: 'Greek (el)' },
+                    { value: 'he', label: 'Hebrew (he)' },
+                    { value: 'th', label: 'Thai (th)' },
+                    { value: 'id', label: 'Indonesian (id)' },
+                    { value: 'uk', label: 'Ukrainian (uk)' },
+                ],
                 description:
-                    'Preferred 2-letter language for TMDB image selection. Logos prefer this language then language-neutral art; backgrounds prefer textless art then this language.',
+                    'Preferred languages for TMDB image selection, in priority order (the order you add them) — the first available language wins, with language-neutral / textless art always allowed as a fallback. Logos prefer your languages then textless; backgrounds prefer textless then your languages.',
             },
             // ─── Apply ─────────────────────────────────────────────────
             {
@@ -357,10 +399,13 @@ export const SETTINGS_SCHEMA = [
                 label: 'Apply Method',
                 type: 'dropdown',
                 section: 'Apply',
-                options: ['kometa', 'direct'],
+                options: [
+                    { value: 'plex', label: 'Plex' },
+                    { value: 'kometa', label: 'Kometa' },
+                ],
                 required: true,
                 description:
-                    '"direct" uploads images straight to Plex via plexapi — logo, background, and squareart. "kometa" renames/copies files into the Destination Directory using Kometa asset names (logo.ext, background.ext, and Season##_logo.ext for seasons) for Kometa to apply — Kometa reads only logo and background.',
+                    '"Plex" uploads images straight to Plex via plexapi — logo, background, and squareart — for the instances whose "Upload to this Plex instance" box is ticked below. "Kometa" renames/copies files into the Destination Directory using Kometa asset names (logo.ext, background.ext, and Season##_logo.ext for seasons) for Kometa to apply — Kometa reads only logo and background.',
             },
             {
                 key: 'destination_dir',
@@ -395,9 +440,10 @@ export const SETTINGS_SCHEMA = [
                 type: 'instances',
                 section: 'Targets',
                 required: true,
+                add_posters_option: true,
                 instance_types: ['plex', 'radarr', 'sonarr'],
                 description:
-                    'Radarr/Sonarr instances supply the media list to match against. Plex instances are searched/targeted for the "direct" upload path and supply collections.',
+                    'Radarr/Sonarr instances supply the media list to match against. On the "Plex" apply method, assets are uploaded only to Plex instances whose "Upload to this Plex instance" box is ticked; Plex instances also supply collections.',
             },
         ],
     },
@@ -1268,6 +1314,12 @@ export const SETTINGS_MODULES = [
         name: 'Poster Renamerr',
         key: 'poster_renamerr',
         description: 'Automate and configure your poster renaming workflow.',
+    },
+    {
+        name: 'Asset Renamerr',
+        key: 'asset_renamerr',
+        description:
+            'Apply additional artwork — logos, square art, and backgrounds — to Plex or into a Kometa assets directory.',
     },
     {
         name: 'Border Replacerr',

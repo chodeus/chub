@@ -29,6 +29,8 @@ const FIELD_RESOLVERS = {
     check_box: () => SelectFields.CheckboxField,
     toggle: () => SelectFields.CheckboxField,
     dropdown: () => SelectFields.DropdownField,
+    primary_source: () => SelectFields.PrimarySourceField,
+    multiselect: () => SelectFields.MultiSelectField,
     json: () => CustomFields.JsonField,
 
     color: () => ColorFields.ColorField,
@@ -110,6 +112,8 @@ const IMPLEMENTED_FIELD_TYPES = new Set([
     'check_box',
     'toggle',
     'dropdown',
+    'primary_source',
+    'multiselect',
     'json',
     'color',
     'color_list',

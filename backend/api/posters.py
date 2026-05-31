@@ -1639,33 +1639,46 @@ def apply_match(
         item = dict(row)
         item["original_file"] = pfile
         item["id"] = media_id
-        try:
-            from backend.modules.poster_renamerr import PosterRenamerr
+        from backend.modules.poster_renamerr import PosterRenamerr
 
-            PosterRenamerr(logger=logger).rename_file(item, db)
-            renamed = item.get("renamed_file")
-            copied = bool(renamed and os.path.lexists(renamed))
-        except Exception as exc:
-            logger.warning(f"apply: copy to destination failed ({exc})")
+        renamer = PosterRenamerr(logger=logger)
+        # Honour the module's apply_method (strict either/or): "kometa" copies
+        # the poster into the destination dir; "plex" stages it (apply_staging)
+        # and uploads straight to Plex for opted-in instances, keeping nothing
+        # on disk. The match is already saved + locked above, so if the chosen
+        # leg fails the poster still applies on the next poster_renamerr run.
+        apply_method = getattr(renamer.config, "apply_method", "kometa")
+        manifest = (
+            {"collections_cache": [media_id]}
+            if kind == "collection"
+            else {"media_cache": [media_id]}
+        )
+        with renamer.apply_staging():
+            try:
+                renamer.rename_file(item, db)
+                renamed = item.get("renamed_file")
+                staged = bool(renamed and os.path.lexists(renamed))
+            except Exception as exc:
+                staged = False
+                logger.warning(f"apply: rename/stage failed ({exc})")
 
-        try:
-            from backend.util.upload_posters import PosterUploader
+            if apply_method == "plex":
+                try:
+                    from backend.util.upload_posters import PosterUploader
 
-            manifest = (
-                {"collections_cache": [media_id]}
-                if kind == "collection"
-                else {"media_cache": [media_id]}
-            )
-            up = PosterUploader(
-                db=db,
-                logger=logger,
-                manifest=manifest,
-                force=True,
-                refresh_plex=False,
-            ).run()
-            plex_ok = bool(up.get("success"))
-        except Exception as exc:
-            logger.warning(f"apply: Plex upload failed ({exc})")
+                    up = PosterUploader(
+                        db=db,
+                        logger=logger,
+                        manifest=manifest,
+                        force=True,
+                        refresh_plex=False,
+                    ).run()
+                    plex_ok = bool(up.get("success"))
+                except Exception as exc:
+                    logger.warning(f"apply: Plex upload failed ({exc})")
+            else:
+                # kometa: the staged copy IS the destination file (no upload).
+                copied = staged
 
         applied = plex_ok or copied
         if plex_ok:

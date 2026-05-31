@@ -16,7 +16,7 @@ import difflib
 import json
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Union
 
 import requests
 
@@ -324,10 +324,32 @@ class TMDBClient:
         )[0]
         return best.get("file_path")
 
+    @staticmethod
+    def _normalize_langs(language: Union[str, List[str], None]) -> List[str]:
+        """Coerce a single code, comma-string, or list into an ordered list of
+        lowercased non-empty language codes. Falls back to ['en']."""
+        if isinstance(language, str):
+            parts = [p.strip().lower() for p in language.split(",")]
+        elif isinstance(language, (list, tuple)):
+            parts = [str(p).strip().lower() for p in language]
+        else:
+            parts = []
+        # Preserve order, drop blanks and duplicates.
+        seen: Set[str] = set()
+        langs = [p for p in parts if p and not (p in seen or seen.add(p))]
+        return langs or ["en"]
+
     def get_images(
-        self, tmdb_id: int, media_type: str, language: str = "en"
+        self,
+        tmdb_id: int,
+        media_type: str,
+        language: Union[str, List[str]] = "en",
     ) -> Optional[Dict[str, Optional[str]]]:
         """Fetch the best logo + background image URLs for a TMDB id.
+
+        ``language`` is a preferred-language priority list (a single string is
+        accepted and treated as a one-element list); the first matching language
+        wins, with language-neutral / textless art always allowed as a fallback.
 
         Returns ``{"logo": url|None, "background": url|None}`` (absolute CDN
         URLs), or None when disabled / on a transient failure. Results are
@@ -339,6 +361,8 @@ class TMDBClient:
         """
         if not self.enabled or not tmdb_id:
             return None
+
+        langs = self._normalize_langs(language)
 
         mt = "movie" if media_type == "movie" else "tv"
         key = ("images", str(tmdb_id), mt)
@@ -355,14 +379,15 @@ class TMDBClient:
         except Exception as exc:
             self.logger.warning(f"TMDB images cache read failed for {tmdb_id}: {exc}")
 
-        raw = self._fetch_images(int(tmdb_id), mt, language)
+        raw = self._fetch_images(int(tmdb_id), mt, langs)
         if raw is None:
             return None  # transient — don't cache, let caller retry later
 
-        logo_path = self._pick_image(raw.get("logos") or [], [language, None])
+        # Logos: prefer the requested languages in order, then textless art.
+        logo_path = self._pick_image(raw.get("logos") or [], [*langs, None])
         # Backdrops: prefer textless (language-neutral) art, then the requested
-        # language.
-        backdrop_path = self._pick_image(raw.get("backdrops") or [], [None, language])
+        # languages in order.
+        backdrop_path = self._pick_image(raw.get("backdrops") or [], [None, *langs])
         images = {
             "logo": f"{self.IMAGE_BASE}{logo_path}" if logo_path else None,
             "background": f"{self.IMAGE_BASE}{backdrop_path}" if backdrop_path else None,
@@ -374,15 +399,18 @@ class TMDBClient:
         self._memo[key] = images
         return images
 
-    def _fetch_images(self, tmdb_id: int, mt: str, language: str) -> Any:
+    def _fetch_images(
+        self, tmdb_id: int, mt: str, languages: Union[str, List[str]]
+    ) -> Any:
         """GET /3/{movie|tv}/{id}/images. Returns the raw dict, or None on a
         transient failure / 404 (callers treat None as 'no images available')."""
         url = f"{self.BASE}/{mt}/{tmdb_id}/images"
-        # include_image_language pulls the requested language plus textless
-        # (null-language) art in one call so _pick_image has both tiers.
+        langs = self._normalize_langs(languages)
+        # include_image_language pulls the requested languages plus textless
+        # (null-language) art in one call so _pick_image has every tier.
         params = {
             "api_key": self.cfg.apikey,
-            "include_image_language": f"{language},null",
+            "include_image_language": ",".join([*langs, "null"]),
         }
 
         resp = self._request_with_retry(url, params, what=f"{mt}/{tmdb_id}/images")

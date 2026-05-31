@@ -70,6 +70,13 @@ class PosterRenamerrConfig(BaseModel):
     log_level: str = "info"
     dry_run: bool = False
     sync_posters: bool = False
+    # Where matched posters go (strict either/or):
+    #   "kometa" — rename/copy into destination_dir for Kometa to apply (the
+    #     destination_dir / action_type / asset_folders fields apply here).
+    #   "plex"   — upload posters straight to Plex via plexapi for instances
+    #     whose per-instance add_posters opt-in is set; no destination_dir write.
+    # Default "kometa" preserves the historical file-output behaviour on upgrade.
+    apply_method: str = "kometa"
     action_type: str = "copy"
     asset_folders: bool = False
     print_only_renames: bool = False
@@ -108,9 +115,30 @@ class PosterRenamerrConfig(BaseModel):
             )
         return v
 
+    @field_validator("apply_method", mode="before")
+    @classmethod
+    def _validate_apply_method(cls, value: Any) -> Any:
+        # Strict either/or: "plex" (direct upload) or "kometa" (destination_dir).
+        # Accept legacy "direct" as an alias for "plex" so older asset-style
+        # values don't break a poster config.
+        if not isinstance(value, str):
+            return value
+        v = value.strip().lower()
+        if v == "direct":
+            v = "plex"
+        allowed = {"plex", "kometa"}
+        if v not in allowed:
+            raise ValueError(
+                f"apply_method must be one of {sorted(allowed)}, got {value!r}"
+            )
+        return v
+
 
 class AssetRenamerrPlexInstance(BaseModel):
     library_names: List[str] = Field(default_factory=list)
+    # Per-instance opt-in for the "plex" apply path: only Plex instances with
+    # add_posters=True receive direct uploads (mirrors PosterRenamerrPlexInstance).
+    add_posters: Optional[bool] = False
 
 
 class AssetRenamerrConfig(BaseModel):
@@ -128,19 +156,20 @@ class AssetRenamerrConfig(BaseModel):
           the top-level tmdb.apikey).
 
     Supported types per apply method (see backend/modules/asset_renamerr.py):
-      apply_method:
-        - "direct": upload straight to Plex via plexapi. Supports
-          logo (uploadLogo), background (uploadArt), squareart (uploadSquareArt).
-          plexapi has NO banner endpoint.
+      apply_method ("plex" | "kometa"; legacy "direct" is an alias for "plex"):
+        - "plex": upload straight to Plex via plexapi, for instances whose
+          per-instance add_posters opt-in is set. Supports logo (uploadLogo),
+          background (uploadArt), squareart (uploadSquareArt). plexapi has NO
+          banner endpoint.
         - "kometa": rename/copy the file into destination_dir using Kometa's
           asset names for Kometa to apply. Per Kometa, asset directories read
           only logo (logo.ext) and background (background.ext) — NOT squareart
           or banner.
 
     Net capability matrix:
-        logo       → direct ✓ / kometa ✓
-        background → direct ✓ / kometa ✓
-        squareart  → direct ✓ / kometa ✗ (Kometa ignores square art)
+        logo       → plex ✓ / kometa ✓
+        background → plex ✓ / kometa ✓
+        squareart  → plex ✓ / kometa ✗ (Kometa ignores square art)
 
     (Banner is intentionally unsupported: Plex has no banner upload API and
     Kometa does not read banners from asset directories — there is no path.)
@@ -160,14 +189,17 @@ class AssetRenamerrConfig(BaseModel):
     # work on BOTH apply methods. squareart (direct only) can be added
     # explicitly. Valid values: "logo", "background", "squareart".
     asset_types: List[str] = Field(default_factory=lambda: ["logo", "background"])
-    apply_method: str = "kometa"  # "direct" | "kometa"
+    apply_method: str = "kometa"  # "plex" | "kometa" (legacy "direct" → "plex")
     action_type: str = "copy"  # copy | move | hardlink | symlink (kometa path)
     asset_folders: bool = False  # per-title folders (kometa path)
     destination_dir: str = ""  # kometa path
     source_dirs: List[str] = Field(default_factory=list)  # local source
     print_only_renames: bool = False
     sync_assets: bool = False  # run sync_gdrive first (standalone path)
-    tmdb_language: str = "en"  # preferred language for TMDB image selection
+    # Preferred languages for TMDB image selection, in priority order; the first
+    # matching language wins (language-neutral / textless art is always allowed
+    # as a fallback). A legacy single string (e.g. "en") is coerced to ["en"].
+    tmdb_language: List[str] = Field(default_factory=lambda: ["en"])
     instances: List[Union[str, Dict[str, AssetRenamerrPlexInstance]]] = Field(
         default_factory=list
     )
@@ -175,12 +207,15 @@ class AssetRenamerrConfig(BaseModel):
     @field_validator("apply_method", mode="before")
     @classmethod
     def _validate_apply_method(cls, value: Any) -> Any:
-        # Only "direct" is special-cased at the apply gate; any other value
-        # silently fell through to the kometa file-copy path. Reject unknowns.
+        # "plex" uploads via plexapi; "kometa" writes files to destination_dir.
+        # Legacy configs used "direct" for the Plex path — accept it as an alias
+        # so they keep loading after the rename. Reject anything else loudly.
         if not isinstance(value, str):
             return value
         v = value.strip().lower()
-        allowed = {"direct", "kometa"}
+        if v == "direct":
+            v = "plex"
+        allowed = {"plex", "kometa"}
         if v not in allowed:
             raise ValueError(
                 f"apply_method must be one of {sorted(allowed)}, got {value!r}"
@@ -199,6 +234,23 @@ class AssetRenamerrConfig(BaseModel):
                 f"action_type must be one of {sorted(allowed)}, got {value!r}"
             )
         return v
+
+    @field_validator("tmdb_language", mode="before")
+    @classmethod
+    def _coerce_tmdb_language(cls, value: Any) -> Any:
+        # Accept a legacy single string ("en") or a comma-separated string and
+        # normalise to an ordered list of lowercased 2-letter codes. Empty/blank
+        # input falls back to ["en"] so image selection always has a preference.
+        if value is None:
+            return ["en"]
+        if isinstance(value, str):
+            parts = [p.strip().lower() for p in value.split(",")]
+            value = [p for p in parts if p]
+        elif isinstance(value, list):
+            value = [str(p).strip().lower() for p in value if str(p).strip()]
+        else:
+            return value
+        return value or ["en"]
 
 
 class BorderHoliday(BaseModel):
