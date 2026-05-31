@@ -11,6 +11,7 @@ const CONFIG_MODULE_KEYS = [
     'tmdb',
     'sync_gdrive',
     'poster_renamerr',
+    'asset_renamerr',
     'border_replacerr',
     'upgradinatorr',
     'renameinatorr',
