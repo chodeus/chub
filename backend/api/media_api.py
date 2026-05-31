@@ -1713,7 +1713,12 @@ def get_media_poster(
 
     headers: dict = {}
     if poster_url.startswith("http://") or poster_url.startswith("https://"):
+        # User-settable absolute URL (set via the metadata-edit endpoint).
+        # Treat it as untrusted: block private/loopback/metadata targets and
+        # do not follow redirects (a public URL could otherwise 302 onto an
+        # internal address — SSRF).
         fetch_url = poster_url
+        is_external = True
     else:
         instance_name = item.get("instance_name")
         config = load_config()
@@ -1734,14 +1739,18 @@ def get_media_poster(
             path = path[len("/config") :]
         fetch_url = f"{base}{path}"
         headers["X-Api-Key"] = instance_detail.api
+        # Trusted ARR instance on the LAN — private addresses are expected.
+        is_external = False
 
-    safe, reason = is_safe_url(fetch_url)
+    safe, reason = is_safe_url(fetch_url, allow_private=not is_external)
     if not safe:
         logger.warning(f"Refused poster fetch for id={media_id}: {reason}")
         return Response(status_code=403)
 
     try:
-        resp = requests.get(fetch_url, headers=headers, timeout=10)
+        resp = requests.get(
+            fetch_url, headers=headers, timeout=10, allow_redirects=not is_external
+        )
         resp.raise_for_status()
     except requests.RequestException as e:
         logger.debug(f"Poster fetch failed for id={media_id}: {e}")

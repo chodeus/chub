@@ -44,6 +44,15 @@ def is_safe_url(url: str, allow_private: bool = True) -> Tuple[bool, str]:
     Return (ok, reason). `allow_private=True` permits RFC1918 / loopback ranges,
     since homelab ARR/Plex instances are typically on the local network.
     Cloud-metadata endpoints are always blocked.
+
+    Note: this validates the hostname's resolved IP *once*; the subsequent
+    requests.get re-resolves DNS, so a rebinding host could in theory pass the
+    check and then connect elsewhere (TOCTOU). It is not pinned to the resolved
+    IP. This is acceptable today because every caller's URL is either built from
+    a hardcoded base (e.g. image.tmdb.org) or validated with allow_private=False
+    and allow_redirects disabled, so there is no reachable rebinding sink. If a
+    future caller fetches a fully attacker-controlled host, pin the connection
+    to the validated IP instead of re-resolving.
     """
     if not url or not isinstance(url, str):
         return False, "empty URL"

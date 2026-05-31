@@ -81,18 +81,6 @@ export default function Logs() {
         }
     };
 
-    // Upload handler (delegated to ActionButtons via useUploadState)
-    const handleUpload = async () => {
-        if (!selectedModule || !selectedLogFile) {
-            throw new Error('Select a module and log file first');
-        }
-        if (!logText || !logText.trim()) {
-            throw new Error('No log content to upload');
-        }
-
-        return await logsAPI.uploadLogToPaste(logText);
-    };
-
     // Keyboard shortcuts (Ctrl/Cmd+F)
     useEffect(() => {
         function handleKeyDown(e) {
@@ -145,7 +133,6 @@ export default function Logs() {
                     onLogFileChange={setSelectedLogFile}
                     onSearchChange={setSearchTerm}
                     onDownload={handleDownload}
-                    onUpload={handleUpload}
                 />
 
                 {/* Filter pill bar */}
