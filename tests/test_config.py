@@ -1117,15 +1117,8 @@ def test_scheduler_enqueues_due_upgradinatorr_profile(monkeypatch):
     ]
 
 
-def test_poster_renamerr_upload_tuning_defaults():
-    """New upload-tuning fields: throttle off by default; webhook season retry on."""
-    pr = ChubConfig().poster_renamerr
-    assert pr.upload_delay_ms == 0
-    assert pr.webhook_season_retry_attempts == 2
-    assert pr.webhook_season_retry_delay_seconds == 15
-    # bounds are enforced
-    cfg = ChubConfig.model_validate(
-        {"poster_renamerr": {"upload_delay_ms": 50, "webhook_season_retry_attempts": 0}}
-    )
+def test_poster_renamerr_upload_delay_default_and_bounds():
+    """upload_delay_ms throttle: off by default, accepts a configured value."""
+    assert ChubConfig().poster_renamerr.upload_delay_ms == 0
+    cfg = ChubConfig.model_validate({"poster_renamerr": {"upload_delay_ms": 50}})
     assert cfg.poster_renamerr.upload_delay_ms == 50
-    assert cfg.poster_renamerr.webhook_season_retry_attempts == 0

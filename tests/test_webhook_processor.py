@@ -34,9 +34,7 @@ def wp(monkeypatch):
             sonarr={"main": InstanceDetail(url="http://192.168.1.11:8989", api="y")},
         ),
     )
-    monkeypatch.setattr(
-        "backend.util.webhook_processor.load_config", lambda: cfg
-    )
+    monkeypatch.setattr("backend.util.webhook_processor.load_config", lambda: cfg)
     return WebhookProcessor(logger=StubLogger())
 
 
@@ -77,9 +75,10 @@ def test_extract_media_block_unknown_returns_none(wp):
 
 
 def test_extract_season_number_from_episodes():
-    assert WebhookProcessor._extract_season_number(
-        {"episodes": [{"seasonNumber": 3}]}
-    ) == 3
+    assert (
+        WebhookProcessor._extract_season_number({"episodes": [{"seasonNumber": 3}]})
+        == 3
+    )
 
 
 def test_extract_season_number_no_episodes():
@@ -117,9 +116,7 @@ def test_find_arr_instance_matches_radarr(wp):
 
 
 def test_find_arr_instance_matches_sonarr(wp):
-    result = wp._find_arr_instance(
-        {"client_host": "192.168.1.11", "client_port": 8989}
-    )
+    result = wp._find_arr_instance({"client_host": "192.168.1.11", "client_port": 8989})
     assert result["found"] is True
     assert result["type"] == "sonarr"
 
@@ -132,15 +129,11 @@ def test_find_arr_instance_normalizes_localhost(monkeypatch):
             }
         ),
     )
-    monkeypatch.setattr(
-        "backend.util.webhook_processor.load_config", lambda: cfg
-    )
+    monkeypatch.setattr("backend.util.webhook_processor.load_config", lambda: cfg)
     wp = WebhookProcessor(logger=StubLogger())
 
     # 127.0.0.1 normalizes to localhost -> matches
-    result = wp._find_arr_instance(
-        {"client_host": "127.0.0.1", "client_port": 7878}
-    )
+    result = wp._find_arr_instance({"client_host": "127.0.0.1", "client_port": 7878})
     assert result["found"] is True
 
 
@@ -150,9 +143,7 @@ def test_find_arr_instance_no_client_info_returns_not_found(wp):
 
 
 def test_find_arr_instance_port_mismatch(wp):
-    result = wp._find_arr_instance(
-        {"client_host": "192.168.1.10", "client_port": 9999}
-    )
+    result = wp._find_arr_instance({"client_host": "192.168.1.10", "client_port": 9999})
     assert result["found"] is False
 
 
@@ -167,7 +158,9 @@ def test_validate_webhook_no_media_block(wp):
 
 def test_validate_webhook_no_instance(wp):
     payload = {"series": {"id": 1, "title": "Show"}}
-    result = wp._validate_webhook(payload, client_info={"client_host": "10.0.0.50", "client_port": 1234})
+    result = wp._validate_webhook(
+        payload, client_info={"client_host": "10.0.0.50", "client_port": 1234}
+    )
     assert result["success"] is False
     assert result["error_code"] == "NO_INSTANCE"
 
@@ -184,3 +177,34 @@ def test_validate_webhook_success(wp):
     assert result["media_id"] == 1
     assert result["season_number"] == 2
     assert result["instance_info"]["type"] == "sonarr"
+
+
+# --- season-aware wait_for_plex_availability (consolidated season retry) ---
+
+
+def _plex_with(season_index, episodes, show_title="The Show", show_year=2020):
+    season = SimpleNamespace(index=season_index, episodes=lambda: episodes)
+    show = SimpleNamespace(title=show_title, year=show_year, seasons=lambda: [season])
+    section = SimpleNamespace(type="show", search=lambda **k: [show])
+    return SimpleNamespace(library=SimpleNamespace(sections=lambda: [section]))
+
+
+def test_season_present_true_when_scanned():
+    plex = _plex_with(2, [object()])
+    assert WebhookProcessor._season_present(plex, "The Show", 2020, 2) is True
+
+
+def test_season_present_false_when_other_season_only():
+    plex = _plex_with(1, [object()])  # season 1 present, asked for 2
+    assert WebhookProcessor._season_present(plex, "The Show", 2020, 2) is False
+
+
+def test_season_present_false_when_season_has_no_episodes():
+    plex = _plex_with(2, [])  # folder seen but not scanned yet
+    assert WebhookProcessor._season_present(plex, "The Show", 2020, 2) is False
+
+
+def test_season_present_false_when_show_absent():
+    section = SimpleNamespace(type="show", search=lambda **k: [])
+    plex = SimpleNamespace(library=SimpleNamespace(sections=lambda: [section]))
+    assert WebhookProcessor._season_present(plex, "Missing Show", None, 1) is False

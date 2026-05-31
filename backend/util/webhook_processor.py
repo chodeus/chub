@@ -172,17 +172,53 @@ class WebhookProcessor:
 
         return {"found": False, "error": "No matching instance"}
 
-    def wait_for_plex_availability(self, media_title: str, year=None) -> bool:
+    @staticmethod
+    def _season_present(plex, media_title: str, year, season_number: int) -> bool:
+        """True when `media_title` exists as a show in Plex AND its season
+        `season_number` is present with at least one episode (i.e. Plex has
+        actually scanned the newly-grabbed season folder, not just the show)."""
+        for section in plex.library.sections():
+            if getattr(section, "type", None) != "show":
+                continue
+            try:
+                results = section.search(title=media_title)
+            except Exception:
+                results = []
+            for show in results:
+                if show.title.lower() != media_title.lower():
+                    continue
+                if year is not None and getattr(show, "year", None) not in (None, year):
+                    continue
+                try:
+                    seasons = [
+                        s
+                        for s in show.seasons()
+                        if int(getattr(s, "index", -1)) == int(season_number)
+                    ]
+                    if seasons and seasons[0].episodes():
+                        return True
+                except Exception:
+                    continue
+        return False
+
+    def wait_for_plex_availability(
+        self, media_title: str, year=None, season_number=None
+    ) -> bool:
         """
-        Wait for a media item to appear in Plex's recently added items.
+        Wait for a media item to appear in Plex before processing its posters.
         Uses configurable initial delay and retry logic.
 
         Args:
             media_title: Title of the media to look for
             year: Optional year for matching
+            season_number: When set (Sonarr Download / EpisodeFileImported), wait
+                until that specific season folder is scanned — a webhook often
+                fires before Plex has indexed a freshly-grabbed season, leaving
+                the season poster nowhere to land. When None, falls back to the
+                item-level "recently added" check.
 
         Returns:
-            bool: True if item was found in Plex
+            bool: True if the item (or season) was found in Plex
         """
         log = self.logger.get_adapter("WEBHOOK")
 
@@ -217,29 +253,47 @@ class WebhookProcessor:
                 for attempt in range(self.max_retries + 1):
                     try:
                         plex = PlexServer(url, token, timeout=10)
-                        for section in plex.library.sections():
-                            recent = section.recentlyAdded(maxresults=50)
-                            for item in recent:
-                                if item.title.lower() == media_title.lower() and (
-                                    year is None or getattr(item, "year", None) == year
-                                ):
-                                    log.info(
-                                        f"Found '{media_title}' in Plex recently added"
-                                    )
-                                    return True
+                        if season_number is not None:
+                            # Season-aware: the show usually already exists, so a
+                            # recently-added title check won't fire — verify the
+                            # specific season folder has been scanned instead.
+                            if self._season_present(
+                                plex, media_title, year, season_number
+                            ):
+                                log.info(
+                                    f"Found '{media_title}' Season {season_number} "
+                                    "in Plex"
+                                )
+                                return True
+                        else:
+                            for section in plex.library.sections():
+                                recent = section.recentlyAdded(maxresults=50)
+                                for item in recent:
+                                    if item.title.lower() == media_title.lower() and (
+                                        year is None
+                                        or getattr(item, "year", None) == year
+                                    ):
+                                        log.info(
+                                            f"Found '{media_title}' in Plex "
+                                            "recently added"
+                                        )
+                                        return True
                     except Exception as e:
                         log.debug(f"Plex check attempt {attempt + 1} failed: {e}")
 
                     if attempt < self.max_retries:
                         log.debug(
-                            f"Item not found in Plex, retrying in {self.retry_delay}s "
+                            f"Not found in Plex yet, retrying in {self.retry_delay}s "
                             f"(attempt {attempt + 1}/{self.max_retries})"
                         )
                         time.sleep(self.retry_delay)
 
-            log.debug(
-                f"'{media_title}' not found in Plex after {self.max_retries} retries"
+            target = (
+                f"'{media_title}' Season {season_number}"
+                if season_number is not None
+                else f"'{media_title}'"
             )
+            log.debug(f"{target} not found in Plex after {self.max_retries} retries")
             return False
 
         except ImportError:

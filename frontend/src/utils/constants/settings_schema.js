@@ -245,22 +245,6 @@ export const SETTINGS_SCHEMA = [
                     'Optional pause after each poster uploaded to Plex, to be gentle on the server during large runs. 0 = no delay (default). Only applied after an actual upload, never after a skip. Try 50 if your Plex struggles under bursts.',
             },
             {
-                key: 'webhook_season_retry_attempts',
-                label: 'Webhook season retry attempts',
-                type: 'number',
-                section: 'Pipeline',
-                description:
-                    'Webhook only: when a new season is grabbed, Plex may not have scanned the season folder yet so the season poster has nowhere to land. Retry the upload this many times (re-checking Plex each time) before leaving it for the next scheduled run. 0 = disabled.',
-            },
-            {
-                key: 'webhook_season_retry_delay_seconds',
-                label: 'Webhook season retry delay (s)',
-                type: 'number',
-                section: 'Pipeline',
-                description:
-                    'Seconds to wait between webhook season-retry attempts while Plex scans the new season folder. Default 15.',
-            },
-            {
                 key: 'clean_orphan_assets',
                 label: 'Clean orphan assets after rename',
                 type: 'check_box',
