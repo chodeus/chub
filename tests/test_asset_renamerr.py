@@ -452,3 +452,106 @@ def test_scan_includes_assets_when_feature_on(tmp_path):
     recs = m._get_assets_files(str(tmp_path), include_assets=True)
     types = {r["image_type"] for r in recs}
     assert types == {"poster", "logo"}
+
+
+# --- #1 asset idempotency: skip unchanged re-applies -------------------------
+
+
+def test_already_applied_skips_unchanged_tmdb(db):
+    m = make_module(sources=["tmdb"], apply_method="direct")
+    db.media_asset_matches.upsert(
+        target_kind="media",
+        target_id=1,
+        image_type="logo",
+        source="tmdb",
+        matched_url="http://x/l.png",
+        applied_method="direct",
+        match_status="applied",
+    )
+    # same url + applied + same method -> skip
+    assert (
+        m._already_applied(
+            db, "media", 1, "logo", "direct", "tmdb", None, "http://x/l.png", None
+        )
+        is True
+    )
+    # different url -> don't skip
+    assert (
+        m._already_applied(
+            db, "media", 1, "logo", "direct", "tmdb", None, "http://x/OTHER.png", None
+        )
+        is False
+    )
+
+
+def test_already_applied_local_mtime(db, tmp_path):
+    f = str(tmp_path / "Movie - Logo.png")
+    open(f, "wb").write(b"x") if False else None
+    with open(f, "wb") as fh:
+        fh.write(b"x")
+    mtime = os.stat(f).st_mtime
+    m = make_module(
+        sources=["local"], apply_method="kometa", destination_dir=str(tmp_path)
+    )
+    dest = str(tmp_path / "out.png")
+    with open(dest, "wb") as fh:
+        fh.write(b"x")
+    db.media_asset_matches.upsert(
+        target_kind="media",
+        target_id=2,
+        image_type="logo",
+        source="local",
+        matched_file=f,
+        source_mtime=mtime,
+        applied_method="kometa",
+        applied_path=dest,
+        match_status="applied",
+    )
+    # unchanged mtime + applied_path exists -> skip
+    assert (
+        m._already_applied(db, "media", 2, "logo", "kometa", "local", f, None, mtime)
+        is True
+    )
+    # changed mtime -> don't skip
+    assert (
+        m._already_applied(
+            db, "media", 2, "logo", "kometa", "local", f, None, mtime + 5
+        )
+        is False
+    )
+
+
+def test_already_applied_never_skips_in_dry_run(db):
+    m = make_module(dry_run=True, sources=["tmdb"], apply_method="direct")
+    db.media_asset_matches.upsert(
+        target_kind="media",
+        target_id=3,
+        image_type="logo",
+        source="tmdb",
+        matched_url="http://x/l.png",
+        applied_method="direct",
+        match_status="applied",
+    )
+    assert (
+        m._already_applied(
+            db, "media", 3, "logo", "direct", "tmdb", None, "http://x/l.png", None
+        )
+        is False
+    )
+
+
+def test_apply_direct_uploads_to_all_matching_libraries():
+    m = make_module(
+        apply_method="direct",
+        instances=[{"plex1": SimpleNamespace(library_names=["Movies", "Movies 4K"])}],
+    )
+
+    class FakeClient:
+        def upload_logo(self, library_name, item_title, **kw):
+            return True
+
+    m._plex_clients = {"plex1": FakeClient()}
+    applied, detail = m._apply_direct(_media(), "logo", "/x/l.png", None, False)
+    assert applied is True
+    # both libraries listed in the detail
+    assert "Movies" in detail and "Movies 4K" in detail

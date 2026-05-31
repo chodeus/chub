@@ -210,6 +210,8 @@ class CollectionCache(DatabaseBase):
         matched_value: Optional[Any] = None,
         original_file: Optional[Any] = None,
         renamed_file: Optional[Any] = None,
+        file_hash: Optional[Any] = None,
+        file_mtime: Optional[Any] = None,
         match_status: Optional[Any] = None,
         match_confidence: Optional[Any] = None,
         match_reason: Optional[Any] = None,
@@ -232,6 +234,14 @@ class CollectionCache(DatabaseBase):
         if renamed_file is not None:
             set_clauses.append("renamed_file=?")
             params.append(renamed_file)
+
+        if file_hash is not None:
+            set_clauses.append("file_hash=?")
+            params.append(file_hash)
+
+        if file_mtime is not None:
+            set_clauses.append("file_mtime=?")
+            params.append(float(file_mtime))
 
         if match_status is not None:
             set_clauses.append("match_status=?")

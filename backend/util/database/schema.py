@@ -211,6 +211,11 @@ class SchemaManager:
                 # so a scheduled poster_renamerr run can never revert the manual
                 # pick. Cleared if the user re-opens it for review. Defaults 0.
                 ColumnDefinition("user_confirmed", "BOOLEAN", default=0),
+                # mtime of the matched poster file at last successful upload. A
+                # single os.stat() against this skips the sha256 read when the
+                # file is unchanged (page-cache-friendly fast path). Paired with
+                # file_hash, which remains the authority when mtime differs.
+                ColumnDefinition("file_mtime", "REAL"),
             ],
             indexes=[
                 "CREATE INDEX IF NOT EXISTS media_cache_plex_mapping_idx ON media_cache (plex_mapping_id)",
@@ -261,6 +266,9 @@ class SchemaManager:
                 # See media_cache.user_confirmed — manual-pick lock that match
                 # re-scans must respect.
                 ColumnDefinition("user_confirmed", "BOOLEAN", default=0),
+                # See media_cache.file_mtime — sha256 fast-path.
+                ColumnDefinition("file_hash", "TEXT"),
+                ColumnDefinition("file_mtime", "REAL"),
             ],
             constraints=["UNIQUE (title, library_name, instance_name)"],
         )
@@ -384,6 +392,9 @@ class SchemaManager:
                 ColumnDefinition("source", "TEXT"),
                 ColumnDefinition("matched_file", "TEXT"),  # local source file path
                 ColumnDefinition("matched_url", "TEXT"),  # tmdb image URL
+                # mtime of matched_file at last apply — lets a re-run skip an
+                # unchanged local asset without re-uploading/re-copying it.
+                ColumnDefinition("source_mtime", "REAL"),
                 ColumnDefinition("applied_method", "TEXT"),  # direct | kometa
                 ColumnDefinition("applied_path", "TEXT"),  # kometa destination written
                 ColumnDefinition("match_status", "TEXT"),
