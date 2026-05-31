@@ -92,6 +92,22 @@ class PosterRenamerrConfig(BaseModel):
         default_factory=list
     )
 
+    @field_validator("action_type", mode="before")
+    @classmethod
+    def _validate_action_type(cls, value: Any) -> Any:
+        # Reject unknown actions loudly instead of silently doing nothing:
+        # process_file() is an if/elif chain with no else, so an unrecognized
+        # value (or wrong case) performed no file op yet reported success.
+        if not isinstance(value, str):
+            return value
+        v = value.strip().lower()
+        allowed = {"copy", "move", "hardlink", "symlink"}
+        if v not in allowed:
+            raise ValueError(
+                f"action_type must be one of {sorted(allowed)}, got {value!r}"
+            )
+        return v
+
 
 class AssetRenamerrPlexInstance(BaseModel):
     library_names: List[str] = Field(default_factory=list)
@@ -156,6 +172,34 @@ class AssetRenamerrConfig(BaseModel):
         default_factory=list
     )
 
+    @field_validator("apply_method", mode="before")
+    @classmethod
+    def _validate_apply_method(cls, value: Any) -> Any:
+        # Only "direct" is special-cased at the apply gate; any other value
+        # silently fell through to the kometa file-copy path. Reject unknowns.
+        if not isinstance(value, str):
+            return value
+        v = value.strip().lower()
+        allowed = {"direct", "kometa"}
+        if v not in allowed:
+            raise ValueError(
+                f"apply_method must be one of {sorted(allowed)}, got {value!r}"
+            )
+        return v
+
+    @field_validator("action_type", mode="before")
+    @classmethod
+    def _validate_action_type(cls, value: Any) -> Any:
+        if not isinstance(value, str):
+            return value
+        v = value.strip().lower()
+        allowed = {"copy", "move", "hardlink", "symlink"}
+        if v not in allowed:
+            raise ValueError(
+                f"action_type must be one of {sorted(allowed)}, got {value!r}"
+            )
+        return v
+
 
 class BorderHoliday(BaseModel):
     name: str
@@ -208,6 +252,28 @@ class RenameinatorrConfig(BaseModel):
     ignore_tags: str = ""
     enable_batching: bool = False
     instances: List[str] = Field(default_factory=list)
+
+    @field_validator("count", mode="before")
+    @classmethod
+    def _coerce_count(cls, value: Any) -> Any:
+        # The str arm of count exists to allow an empty string meaning "all".
+        # A numeric string ("50") would otherwise survive validation and then
+        # crash the run at range(0, n, "50"). Coerce numeric strings to int,
+        # keep "" as the "all" sentinel, and reject anything else.
+        if value is None:
+            return 100
+        if isinstance(value, str):
+            s = value.strip()
+            if s == "":
+                return ""
+            try:
+                return int(s)
+            except ValueError:
+                raise ValueError(
+                    f"count must be an integer or an empty string (= all), "
+                    f"got {value!r}"
+                )
+        return value
 
 
 class NohlSourceDir(BaseModel):
