@@ -437,25 +437,53 @@ def _process_upload_posters_job(
 
     force = bool(payload.get("force", False))
     targeted = bool(payload.get("targeted", False))
+
+    from backend.util.config import load_config
+
+    pr_cfg = load_config().poster_renamerr
+    retry_attempts = (
+        int(getattr(pr_cfg, "webhook_season_retry_attempts", 0) or 0) if targeted else 0
+    )
+    retry_delay = int(getattr(pr_cfg, "webhook_season_retry_delay_seconds", 15) or 15)
+    log = logger.get_adapter("UPLOAD_POSTERS")
+
+    result = None
     with ChubDB(logger=logger) as db:
-        # Targeted (webhook) uploads reuse the cached Plex snapshot to avoid a
-        # full library rebuild on every webhook — but only when a snapshot
-        # already exists; otherwise fall back to a full refresh so fresh
-        # installs still work.
-        refresh_plex = True
-        if targeted and db.plex.count() > 0:
-            refresh_plex = False
-            logger.get_adapter("UPLOAD_POSTERS").debug(
-                "Targeted upload: reusing cached Plex snapshot (no full refresh)"
+        # attempt 0 is the initial pass; up to `retry_attempts` retries follow
+        # when a webhook fired before Plex scanned a new season.
+        for attempt in range(retry_attempts + 1):
+            # First targeted pass reuses the cached Plex snapshot (fast); any
+            # retry forces a full refresh so a season Plex has since scanned is
+            # actually seen. A full (non-targeted) run always refreshes. Falls
+            # back to a refresh when the snapshot is empty (fresh install).
+            refresh_plex = True
+            if targeted and attempt == 0 and db.plex.count() > 0:
+                refresh_plex = False
+                log.debug(
+                    "Targeted upload: reusing cached Plex snapshot (no full refresh)"
+                )
+
+            uploader = PosterUploader(
+                db=db,
+                logger=logger,
+                manifest=manifest,
+                force=force,
+                refresh_plex=refresh_plex,
             )
-        uploader = PosterUploader(
-            db=db,
-            logger=logger,
-            manifest=manifest,
-            force=force,
-            refresh_plex=refresh_plex,
-        )
-        result = uploader.run()
+            result = uploader.run()
+
+            seasons_missing = int(
+                (result.get("payload") or {}).get("seasons_missing", 0)
+            )
+            if attempt < retry_attempts and seasons_missing > 0:
+                log.info(
+                    f"Webhook: {seasons_missing} season(s) matched a show but aren't "
+                    f"scanned in Plex yet; retrying in {retry_delay}s "
+                    f"(attempt {attempt + 1}/{retry_attempts})"
+                )
+                time.sleep(retry_delay)
+                continue
+            break
 
     if result.get("success"):
         return {

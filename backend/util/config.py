@@ -82,6 +82,16 @@ class PosterRenamerrConfig(BaseModel):
     run_asset_renamerr: bool = False
     clean_orphan_assets: bool = False
     report_unmatched_assets: bool = False
+    # Optional delay (milliseconds) inserted after each poster uploaded to Plex,
+    # to be gentle on the server on large runs. 0 = no delay (default; unchanged
+    # behaviour). Only sleeps after an actual upload, never after a skip.
+    upload_delay_ms: int = Field(default=0, ge=0, le=5000)
+    # Webhook-only: when a webhook fires for a brand-new season Plex may not have
+    # scanned the season folder yet, so the season poster has nowhere to land.
+    # Retry the targeted upload up to N times (re-fetching the Plex snapshot each
+    # retry so a freshly-scanned season is seen). 0 attempts = disabled.
+    webhook_season_retry_attempts: int = Field(default=2, ge=0, le=10)
+    webhook_season_retry_delay_seconds: int = Field(default=15, ge=1, le=600)
     source_dirs: List[str] = Field(default_factory=list)
     destination_dir: str = ""
     instances: List[Union[str, Dict[str, PosterRenamerrPlexInstance]]] = Field(
