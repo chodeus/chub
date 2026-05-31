@@ -2,6 +2,25 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.21.0](https://github.com/chodeus/chub/compare/v2.20.1...v2.21.0) (2026-05-31)
+
+
+### Features
+
+* **asset:** add asset_renamerr for clear logo, square art, background ([bdc6d4a](https://github.com/chodeus/chub/commit/bdc6d4a2abe06d9f14d21d6a97d8a7707fa2e363))
+* **upload:** webhook season-scan retry + optional inter-upload throttle ([b30c4a7](https://github.com/chodeus/chub/commit/b30c4a7a42c449d80ba186aadffb891d31e9ec28))
+
+
+### Bug Fixes
+
+* **match:** auto-match id-less collections, lock manual picks, apply now ([b90e2c3](https://github.com/chodeus/chub/commit/b90e2c3373d83e4e85a417da0f13273a713c166e))
+* **ui:** show Asset Renamerr in module settings (CONFIG_MODULE_KEYS) ([a21fa41](https://github.com/chodeus/chub/commit/a21fa4148636331f5c365d9925c95381511d1f65))
+
+
+### Performance
+
+* **upload:** asset idempotency, mtime fast-path, multi-library, targeted webhooks ([4924080](https://github.com/chodeus/chub/commit/492408046d6a7e568600e1e514cc59d39617c114))
+
 ## [2.20.1](https://github.com/chodeus/chub/compare/v2.20.0...v2.20.1) (2026-05-30)
 
 
