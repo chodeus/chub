@@ -8,7 +8,7 @@ import pytest
 from backend.modules.health_checkarr import HealthCheckarr
 from backend.util.config import ChubConfig, InstanceDetail, InstancesConfig
 from backend.util.constants import tmdb_id_regex, tvdb_id_regex
-from backend.util.notification_formatting import format_for_discord, format_for_email
+from backend.util.notification_formatting import format_for_discord
 
 
 class StubLogger:
@@ -361,14 +361,9 @@ def test_health_checkarr_formatters_handle_module_output():
     discord_fields, ok = format_for_discord(
         SimpleNamespace(module_name="health_checkarr"), output
     )
-    email_body, email_ok = format_for_email(
-        SimpleNamespace(module_name="health_checkarr"), output
-    )
 
     assert ok is True
-    assert email_ok is True
     assert discord_fields[1][0]["name"] == "Summary"
-    assert "main" in email_body
 
 
 def test_health_checkarr_formatters_fallback_when_instance_metadata_missing():
@@ -377,11 +372,6 @@ def test_health_checkarr_formatters_fallback_when_instance_metadata_missing():
     discord_fields, ok = format_for_discord(
         SimpleNamespace(module_name="health_checkarr"), output
     )
-    email_body, email_ok = format_for_email(
-        SimpleNamespace(module_name="health_checkarr"), output
-    )
 
     assert ok is True
-    assert email_ok is True
     assert discord_fields[1][1]["name"] == "Unknown Instance"
-    assert "Unknown Instance" in email_body

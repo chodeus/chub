@@ -88,47 +88,4 @@ export const NOTIFICATIONS_SCHEMA = [
             },
         ],
     },
-    {
-        type: 'email',
-        label: 'Email',
-        fields: [
-            {
-                key: 'smtp_server',
-                label: 'SMTP Server',
-                type: 'text',
-                required: true,
-                placeholder: 'smtp.gmail.com',
-            },
-            { key: 'smtp_port', label: 'Port', type: 'number', required: true, placeholder: '587' },
-            { key: 'use_tls', label: 'Use TLS', type: 'check_box', required: true },
-            {
-                key: 'username',
-                label: 'Username',
-                type: 'text',
-                required: true,
-                placeholder: 'user@email.com',
-            },
-            {
-                key: 'password',
-                label: 'Password',
-                type: 'password',
-                required: true,
-                placeholder: '••••••••',
-            },
-            {
-                key: 'from',
-                label: 'From',
-                type: 'text',
-                required: true,
-                placeholder: 'My App <bot@email.com>',
-            },
-            {
-                key: 'to',
-                label: 'Recipients',
-                type: 'text',
-                required: true,
-                placeholder: 'someone@email.com, another@email.com',
-            },
-        ],
-    },
 ];

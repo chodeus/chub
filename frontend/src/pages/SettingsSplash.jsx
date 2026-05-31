@@ -48,7 +48,7 @@ const SETTINGS_CARDS = [
         to: '/settings/notifications',
         icon: 'notifications',
         title: 'Notifications',
-        description: 'Discord, Notifiarr, and email alerts.',
+        description: 'Discord and Notifiarr alerts.',
         badge: 3,
     },
     {

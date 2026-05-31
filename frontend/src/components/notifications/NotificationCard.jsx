@@ -25,7 +25,6 @@ export const NotificationCard = ({
     const labels = {
         discord: 'Discord',
         notifiarr: 'Notifiarr',
-        email: 'Email',
     };
 
     return (
@@ -36,13 +35,7 @@ export const NotificationCard = ({
                     className="flex items-center justify-center"
                     style={{ width: '48px', height: '48px' }}
                 >
-                    {serviceType === 'email' ? (
-                        <span className="material-symbols-rounded" style={{ fontSize: '48px' }}>
-                            mail
-                        </span>
-                    ) : (
-                        <ServiceIcon service={serviceType} size="xlarge" />
-                    )}
+                    <ServiceIcon service={serviceType} size="xlarge" />
                 </div>
                 <div className="flex-1">
                     <h3 className="text-lg font-semibold text-primary">{labels[serviceType]}</h3>
@@ -56,9 +49,6 @@ export const NotificationCard = ({
                 )}
                 {serviceType === 'notifiarr' && (
                     <div className="text-tertiary">Channel: {config.channel_id || 'Not set'}</div>
-                )}
-                {serviceType === 'email' && (
-                    <div className="text-tertiary">Server: {config.smtp_server || 'Not set'}</div>
                 )}
             </div>
 

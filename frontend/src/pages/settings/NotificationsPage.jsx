@@ -16,7 +16,7 @@ import { humanize } from '../../utils/tools';
  * Notifications Management page
  *
  * Manages notification service configurations for all CHUB modules:
- * - Discord, Notifiarr, and Email notification services
+ * - Discord and Notifiarr notification services
  * - Per-module notification settings
  * - Service testing and validation
  *
@@ -257,7 +257,6 @@ export const NotificationsPage = () => {
                 { label: 'Total Services', value: 0, valueColor: '' },
                 { label: 'Discord', value: 0, valueColor: '' },
                 { label: 'Notifiarr', value: 0, valueColor: '' },
-                { label: 'Email', value: 0, valueColor: '' },
             ];
         }
 
@@ -267,7 +266,6 @@ export const NotificationsPage = () => {
         let totalServices = 0;
         let discordCount = 0;
         let notifiarrCount = 0;
-        let emailCount = 0;
 
         // Count services across all modules
         moduleKeys.forEach(moduleKey => {
@@ -279,10 +277,6 @@ export const NotificationsPage = () => {
             }
             if (moduleNotifications.notifiarr) {
                 notifiarrCount++;
-                totalServices++;
-            }
-            if (moduleNotifications.email) {
-                emailCount++;
                 totalServices++;
             }
         });
@@ -308,11 +302,6 @@ export const NotificationsPage = () => {
                 value: notifiarrCount,
                 valueColor: '',
             },
-            {
-                label: 'Email',
-                value: emailCount,
-                valueColor: '',
-            },
         ];
     }, [notifications]);
 
@@ -322,7 +311,7 @@ export const NotificationsPage = () => {
             <div className="p-6 max-w-screen-xl mx-auto">
                 <PageHeader
                     title="Notifications"
-                    description="Discord, Notifiarr, and email alerts."
+                    description="Discord and Notifiarr alerts."
                     badge={3}
                     icon="notifications"
                 />
@@ -339,7 +328,7 @@ export const NotificationsPage = () => {
             <div className="p-6 max-w-screen-xl mx-auto">
                 <PageHeader
                     title="Notifications"
-                    description="Discord, Notifiarr, and email alerts."
+                    description="Discord and Notifiarr alerts."
                     badge={3}
                     icon="notifications"
                 />
@@ -358,7 +347,7 @@ export const NotificationsPage = () => {
             {/* Page Header */}
             <PageHeader
                 title="Notifications"
-                description="Discord, Notifiarr, and email alerts."
+                description="Discord and Notifiarr alerts."
                 badge={3}
                 icon="notifications"
             />
@@ -454,16 +443,7 @@ export const NotificationsPage = () => {
                                         <div className="flex items-center gap-3 w-full">
                                             {/* Icon */}
                                             <div className="flex items-center justify-center min-w-6">
-                                                {service.type === 'email' ? (
-                                                    <span className="material-symbols-rounded text-2xl">
-                                                        mail
-                                                    </span>
-                                                ) : (
-                                                    <ServiceIcon
-                                                        service={service.type}
-                                                        size="medium"
-                                                    />
-                                                )}
+                                                <ServiceIcon service={service.type} size="medium" />
                                             </div>
 
                                             {/* Label */}
