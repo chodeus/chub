@@ -8,6 +8,9 @@ from types import SimpleNamespace
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+import pytest
+from pydantic import ValidationError
+
 import backend.util.scheduler as scheduler
 from backend.modules.upgradinatorr import Upgradinatorr
 from backend.util.arr import LidarrClient
@@ -1122,3 +1125,48 @@ def test_poster_renamerr_upload_delay_default_and_bounds():
     assert ChubConfig().poster_renamerr.upload_delay_ms == 0
     cfg = ChubConfig.model_validate({"poster_renamerr": {"upload_delay_ms": 50}})
     assert cfg.poster_renamerr.upload_delay_ms == 50
+
+
+def test_poster_renamerr_action_type_validation():
+    """Invalid action_type is rejected (was a silent no-op reported as success);
+    valid values are case-normalized."""
+    assert (
+        ChubConfig.model_validate(
+            {"poster_renamerr": {"action_type": "Hardlink"}}
+        ).poster_renamerr.action_type
+        == "hardlink"
+    )
+    with pytest.raises(ValidationError):
+        ChubConfig.model_validate({"poster_renamerr": {"action_type": "mvoe"}})
+
+
+def test_asset_renamerr_apply_method_and_action_type_validation():
+    """Invalid apply_method no longer silently routes to the kometa copy path."""
+    assert (
+        ChubConfig.model_validate(
+            {"asset_renamerr": {"apply_method": "DIRECT"}}
+        ).asset_renamerr.apply_method
+        == "direct"
+    )
+    with pytest.raises(ValidationError):
+        ChubConfig.model_validate({"asset_renamerr": {"apply_method": "plex"}})
+    with pytest.raises(ValidationError):
+        ChubConfig.model_validate({"asset_renamerr": {"action_type": "teleport"}})
+
+
+def test_renameinatorr_count_coercion():
+    """Numeric-string count coerces to int (no longer crashes range());
+    empty string is the 'all' sentinel; garbage is rejected."""
+    assert (
+        ChubConfig.model_validate(
+            {"renameinatorr": {"count": "50"}}
+        ).renameinatorr.count
+        == 50
+    )
+    assert (
+        ChubConfig.model_validate({"renameinatorr": {"count": ""}}).renameinatorr.count
+        == ""
+    )
+    assert ChubConfig().renameinatorr.count == 100
+    with pytest.raises(ValidationError):
+        ChubConfig.model_validate({"renameinatorr": {"count": "abc"}})
