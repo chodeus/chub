@@ -91,6 +91,9 @@ class AssetRenamerr(ChubModule):
         and populated media_cache — so no second sync/scan/fetch is incurred.
     """
 
+    # Report Jobs-page progress every N media items during match_and_apply.
+    _PROGRESS_EVERY = 25
+
     def __init__(self, logger: Optional[Logger] = None) -> None:
         super().__init__(logger=logger)
         self._plex_clients: Dict[str, Optional[PlexClient]] = {}
@@ -483,9 +486,16 @@ class AssetRenamerr(ChubModule):
                 )
                 tmdb_client = None
 
-        for media in all_media:
+        total = len(all_media)
+        for idx, media in enumerate(all_media, 1):
             if self.is_cancelled():
                 break
+            # Report Jobs-page progress over the media loop (the dominant phase:
+            # it hits Plex/TMDB per item). No-op when chained from poster_renamerr
+            # (that instance has no job context); active on a standalone run.
+            if idx % self._PROGRESS_EVERY == 0 or idx == total:
+                self._report_progress(int(idx / total * 100))
+
             is_collection = media.get("asset_type") == "collection"
             target_kind = "collection" if is_collection else "media"
             target_id = media.get("id")
@@ -589,6 +599,7 @@ class AssetRenamerr(ChubModule):
     def run(self) -> None:
         try:
             with ChubDB(logger=self.logger) as db:
+                self._report_progress(0)
                 if self.config.log_level == "debug":
                     print_settings(self.logger, self.config)
 
@@ -627,6 +638,7 @@ class AssetRenamerr(ChubModule):
                     self.full_config, self.logger, module_name="asset_renamerr"
                 )
                 manager.send_notification(output)
+                self._report_progress(100)
         except KeyboardInterrupt:
             self.logger.info("Asset Renamerr interrupted. Exiting...")
         except Exception:

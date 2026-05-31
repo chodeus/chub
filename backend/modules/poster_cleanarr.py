@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from PIL import Image, UnidentifiedImageError
 
 from backend.util.base_module import ChubModule
+from backend.util.constants import asset_type_regex
 from backend.util.database import ChubDB
 from backend.util.helper import create_table
 from backend.util.logger import Logger
@@ -815,8 +816,18 @@ class PosterCleanarr(ChubModule):
     def _scan_orphan_assets(
         self, asset_dirs: List[str], library_titles: Set[str]
     ) -> List[Dict[str, Any]]:
-        """Walk each asset_dir, parse every image's filename to a normalized
-        title, and collect entries whose title is not in `library_titles`."""
+        """Walk each asset_dir and collect images whose media can't be found in
+        `library_titles`.
+
+        A file is matched by EITHER its filename-derived title OR its parent
+        folder's title, and the asset-type tag is stripped first. This keeps
+        Kometa asset-directory layouts safe: ``<Title (Year)>/logo.png`` resolves
+        via the folder, and a flat ``<Title (Year)>_logo.png`` via the suffix-
+        stripped filename — so the additional artwork written by asset_renamerr
+        (logo/background/squareart) and Kometa's own ``poster.jpg``/``logo.png``
+        are no longer mis-flagged as orphans. Matching on either key can only
+        spare files, never flag new ones.
+        """
         orphans: List[Dict[str, Any]] = []
         for asset_dir in asset_dirs:
             restore_real = os.path.realpath(
@@ -830,12 +841,21 @@ class PosterCleanarr(ChubModule):
                 ):
                     dirs[:] = []
                     continue
+                # Parent-folder title — in Kometa asset_folders layouts the media
+                # title lives on the folder, not the bare asset filename.
+                folder_key = normalize_titles(os.path.basename(root.rstrip(os.sep)))
                 for fname in files:
                     if not fname.lower().endswith(ASSET_IMAGE_EXTS):
                         continue
-                    parsed = parse_asset_filename(fname)
+                    # Strip an asset-type tag (" - Logo"/"_Background"/…) so a
+                    # flat "Title (Year)_logo.png" keys on the media title, not
+                    # "titlelogo".
+                    parsed = asset_type_regex.sub("", parse_asset_filename(fname))
+                    parsed = parsed.strip(" -_")
                     key = normalize_titles(parsed)
-                    if not key or key in library_titles:
+                    if not key and not folder_key:
+                        continue
+                    if key in library_titles or folder_key in library_titles:
                         continue
                     fpath = os.path.join(root, fname)
                     try:
@@ -916,7 +936,9 @@ class PosterCleanarr(ChubModule):
                     if not os.listdir(dir_path):
                         os.rmdir(dir_path)
                         count += 1
-                except OSError:  # noqa: S110 -- skip dirs that vanished or are non-empty
+                except (
+                    OSError
+                ):  # noqa: S110 -- skip dirs that vanished or are non-empty
                     pass
         return count
 
