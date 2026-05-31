@@ -2,6 +2,26 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.22.0](https://github.com/chodeus/chub/compare/v2.21.0...v2.22.0) (2026-05-31)
+
+
+### Features
+
+* **posters:** per-library uploads + skip tracking, unlock manual matches ([816edfe](https://github.com/chodeus/chub/commit/816edfeb91d462194ffc37dd641f9728f4ef31a1))
+
+
+### Bug Fixes
+
+* orphan pass spares Kometa asset files; asset_renamerr reports progress ([009f68a](https://github.com/chodeus/chub/commit/009f68a314591326cfb1c814c950c9b3d45f2a25))
+
+
+### Refactoring
+
+* **asset_renamerr:** warn-once on unsupported types + honor print_only_renames ([f7a1fc2](https://github.com/chodeus/chub/commit/f7a1fc25192a80fe2c206bab7eb504884214787b))
+* consolidate duplicated logic (fixes clear-logo bloat-deletion bug) ([ce6dfe0](https://github.com/chodeus/chub/commit/ce6dfe06313edac382b5c97931bcd2eeebccdb28))
+* remove email notifications (keep Discord + Notifiarr) ([941a62b](https://github.com/chodeus/chub/commit/941a62bf619aeaf5a8be97ac73b2b50aa56adadc))
+* **webhook:** consolidate season-scan wait into wait_for_plex_availability ([b51756f](https://github.com/chodeus/chub/commit/b51756fb59fea1543e39ae69127b7347ff726fd6))
+
 ## [2.21.0](https://github.com/chodeus/chub/compare/v2.20.1...v2.21.0) (2026-05-31)
 
 
