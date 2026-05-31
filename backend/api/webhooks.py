@@ -124,12 +124,17 @@ async def process_poster_webhook(
     try:
         logger.debug("Serving POST /api/webhooks/poster/add")
 
-        # Extract client information for logging and debugging
+        # Extract client information for logging and debugging. Only the
+        # fields actually used downstream (ARR-instance resolution) are kept —
+        # the full header map is deliberately NOT stored: it carries the
+        # X-Webhook-Secret (and any Authorization/Cookie), which would then be
+        # persisted in cleartext in the jobs table, dumped into backups, and
+        # echoed back by GET /api/jobs/{id}.
         client_info = {
             "client_host": request.client.host if request.client else None,
             "client_port": request.headers.get("X-Service-Port"),
-            "headers": dict(request.headers),
             "scheme": getattr(request.url, "scheme", "http"),
+            "user_agent": request.headers.get("User-Agent", ""),
         }
 
         # Parse webhook payload
@@ -306,7 +311,7 @@ async def get_webhook_wiring(
         except ConfigError:
             secret = ""
 
-        return ok(
+        resp = ok(
             "Webhook wiring retrieved",
             {
                 "poster_add_path": "/api/webhooks/poster/add",
@@ -314,6 +319,11 @@ async def get_webhook_wiring(
                 "secret": secret,
             },
         )
+        # This response body carries the raw webhook secret (by design — the UI
+        # builds paste-ready ARR URLs from it, and it now sits behind JWT auth).
+        # Forbid caching so it never lands in browser/proxy caches.
+        resp.headers["Cache-Control"] = "no-store"
+        return resp
     except Exception as e:
         logger.error(f"Error retrieving webhook wiring: {e}")
         return error(

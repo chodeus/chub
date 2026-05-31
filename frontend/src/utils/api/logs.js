@@ -1,12 +1,11 @@
 /**
  * CHUB Logs API Module
  *
- * Handles log file access, content retrieval, and external log sharing:
+ * Handles log file access and content retrieval:
  * - Log module listing
  * - Log file retrieval for specific modules
  * - Log content fetching
  * - Log download URLs
- * - External log upload (dpaste)
  */
 
 import { apiCore } from './core.js';
@@ -138,40 +137,5 @@ export const logsAPI = {
         } finally {
             URL.revokeObjectURL(objectUrl);
         }
-    },
-
-    /**
-     * Upload log content to external dpaste service
-     * @param {string} logContent - Log content to upload
-     * @returns {Promise<Object>} Upload result with URL
-     * @throws {Error} If upload fails
-     */
-    uploadLogToPaste: async logContent => {
-        if (!logContent) {
-            throw new Error('No log content provided');
-        }
-
-        const response = await fetch('https://dpaste.com/api/v2/', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({
-                content: logContent,
-                syntax: 'text',
-                expiry_days: '1',
-            }),
-        });
-
-        if (!response.ok) {
-            throw new Error(`Upload failed with status ${response.status}`);
-        }
-
-        const responseText = await response.text();
-
-        // dpaste returns the URL as plain text
-        return {
-            success: true,
-            url: responseText.trim(),
-            message: 'Log uploaded successfully',
-        };
     },
 };

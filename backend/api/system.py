@@ -254,7 +254,11 @@ async def list_directory(
         except ConfigError:
             config = None
 
-        if config and not is_path_allowed(path, config):
+        # Fail closed: if the config can't be loaded (corrupt/invalid existing
+        # file), deny rather than allowing arbitrary directory enumeration or
+        # creation. A fresh no-file install returns a default config (not None),
+        # so the setup flow is unaffected.
+        if config is None or not is_path_allowed(path, config):
             return error(
                 "Access denied — path outside allowed directories",
                 code="PATH_NOT_ALLOWED",
@@ -338,7 +342,11 @@ async def create_directory(
         except ConfigError:
             config = None
 
-        if config and not is_path_allowed(path, config):
+        # Fail closed: if the config can't be loaded (corrupt/invalid existing
+        # file), deny rather than allowing arbitrary directory enumeration or
+        # creation. A fresh no-file install returns a default config (not None),
+        # so the setup flow is unaffected.
+        if config is None or not is_path_allowed(path, config):
             return error(
                 "Access denied — path outside allowed directories",
                 code="PATH_NOT_ALLOWED",

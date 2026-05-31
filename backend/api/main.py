@@ -47,6 +47,14 @@ AUTH_EXEMPT_PATHS = (
     "/api/auth/login",
     "/api/auth/setup",
     "/api/auth/status",
+    # Inbound webhooks from Sonarr/Radarr/Tautulli authenticate with the
+    # shared X-Webhook-Secret (verify_webhook_secret), never a JWT. Without
+    # this exemption AuthMiddleware would 401 every inbound webhook the moment
+    # a login is configured, silently breaking automated processing. Only the
+    # secret-gated INGEST endpoints are exempt — the /wiring and
+    # /unmatched/status UI endpoints stay behind JWT auth.
+    "/api/webhooks/poster/add",
+    "/api/webhooks/unmatched/process",
 )
 AUTH_EXEMPT_PREFIXES = (
     "/api/health",
