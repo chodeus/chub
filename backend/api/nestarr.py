@@ -204,7 +204,7 @@ def _validate_target_path(raw_media: dict, body: FixRequest):
 
 
 @router.post("/preview")
-async def preview_fix(request: Request, body: FixRequest):
+def preview_fix(request: Request, body: FixRequest):
     """
     Preview what a fix would do — shows the current path, the target path,
     and any pending file/folder renames from the ARR naming format.
@@ -274,7 +274,7 @@ async def preview_fix(request: Request, body: FixRequest):
 
 
 @router.post("/fix")
-async def fix_nested_media(
+def fix_nested_media(
     request: Request, body: FixRequest, db: ChubDB = Depends(get_database)
 ):
     """

@@ -12,6 +12,7 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse, StreamingResponse
+from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
 from backend.api.utils import error, get_database, get_logger, ok
@@ -434,11 +435,14 @@ async def module_events(request: Request):
                 if await request.is_disconnected():
                     break
 
-                # Poll current states from database
-                try:
+                # Poll current states from the DB. This opens a ChubDB and runs
+                # several queries every 2s PER connected client, so run it off
+                # the event loop — otherwise each tick blocks the loop (and all
+                # other requests/streams) for the duration of the queries.
+                def _poll_states():
+                    states_by_name = {}
                     with ChubDB(request.app.state.logger, quiet=True) as db:
                         run_states = db.run_state.get_all()
-                        states_by_name = {}
                         for state in run_states:
                             name = state.get("module_name")
                             if name:
@@ -465,6 +469,10 @@ async def module_events(request: Request):
                                         "job_id": job_id,
                                         "progress": progress,
                                     }
+                    return states_by_name
+
+                try:
+                    states_by_name = await run_in_threadpool(_poll_states)
 
                     # Detect changes and emit events
                     for name, state in states_by_name.items():
@@ -1265,7 +1273,7 @@ async def cancel_module_execution(
         404: {"description": "Module not found"},
     },
 )
-async def test_module(
+def test_module(
     name: str,
     logger: Any = Depends(get_logger),
 ) -> JSONResponse:

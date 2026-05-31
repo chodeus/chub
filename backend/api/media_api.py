@@ -13,6 +13,7 @@ from typing import Any, List, Optional
 import requests
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse, Response
+from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
 from backend.api.utils import error, get_database, get_logger, ok
@@ -619,29 +620,40 @@ async def export_media(
         fields = payload.get("fields")
         logger.debug(f"Serving POST /api/media/export format={export_format}")
 
-        all_media = db.media.get_all()
+        # Full-table read + field projection + CSV serialization are blocking
+        # (and the DB layer holds a lock) — run off the event loop.
+        def _build_export() -> JSONResponse:
+            all_media = db.media.get_all()
 
-        if fields:
-            all_media = [
-                {k: item.get(k) for k in fields if k in item} for item in all_media
-            ]
+            if fields:
+                projected = [
+                    {k: item.get(k) for k in fields if k in item} for item in all_media
+                ]
+            else:
+                projected = all_media
 
-        if export_format == "csv":
-            if not all_media:
-                return ok("No media to export", {"data": "", "format": "csv"})
-            output = io.StringIO()
-            writer = csv.DictWriter(output, fieldnames=all_media[0].keys())
-            writer.writeheader()
-            writer.writerows(all_media)
+            if export_format == "csv":
+                if not projected:
+                    return ok("No media to export", {"data": "", "format": "csv"})
+                output = io.StringIO()
+                writer = csv.DictWriter(output, fieldnames=projected[0].keys())
+                writer.writeheader()
+                writer.writerows(projected)
+                return ok(
+                    "Media exported",
+                    {
+                        "data": output.getvalue(),
+                        "format": "csv",
+                        "count": len(projected),
+                    },
+                )
+
             return ok(
                 "Media exported",
-                {"data": output.getvalue(), "format": "csv", "count": len(all_media)},
+                {"data": projected, "format": "json", "count": len(projected)},
             )
 
-        return ok(
-            "Media exported",
-            {"data": all_media, "format": "json", "count": len(all_media)},
-        )
+        return await run_in_threadpool(_build_export)
 
     except Exception as e:
         logger.error(f"Error exporting media: {e}")
@@ -1823,8 +1835,13 @@ async def delete_media_item(
         except Exception:
             pass
 
-        # If deleteFiles requested, remove from ARR instance first
-        if delete_files and item.get("arr_id") and item.get("instance_name"):
+        # If deleteFiles requested, remove from ARR first. The connect probe +
+        # delete request are blocking, so run them off the event loop.
+        def _delete_from_arr() -> None:
+            if not (
+                delete_files and item.get("arr_id") and item.get("instance_name")
+            ):
+                return
             try:
                 config = load_config()
                 instance_name = item["instance_name"]
@@ -1861,6 +1878,8 @@ async def delete_media_item(
             except Exception as arr_err:
                 logger.error(f"ARR delete failed for {media_id}: {arr_err}")
                 # Continue with cache deletion even if ARR delete fails
+
+        await run_in_threadpool(_delete_from_arr)
 
         db.media.delete_by_id(media_id)
 

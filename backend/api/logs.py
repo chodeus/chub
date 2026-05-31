@@ -127,7 +127,7 @@ async def list_logs_for_module(
 
 
 @router.get("/logs/{module}/{filename}", response_class=PlainTextResponse)
-async def read_log(
+def read_log(
     module: str,
     filename: str,
     tail: int = Query(

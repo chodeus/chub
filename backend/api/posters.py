@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, File, Query, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
+from starlette.concurrency import run_in_threadpool
 
 from backend.api.utils import error, get_database, get_logger, get_module_logger, ok
 from backend.modules.sync_gdrive import SyncGDrive
@@ -2751,12 +2752,24 @@ async def set_plex_metadata_active(
             )
 
         from plexapi.server import PlexServer
+        from plexapi.exceptions import NotFound
 
-        server = PlexServer(instance_cfg.url, instance_cfg.api)
-        item = server.fetchItem(int(rating_key))
-        if item is None:
+        # The Plex connect + fetch + upload is blocking — run it off the event
+        # loop. fetchItem raises NotFound (never returns None) on a bad rating
+        # key, so catch that and return a 404 instead of falling through to the
+        # broad handler's 500 (the old `is None` check was dead).
+        def _apply_active():
+            server = PlexServer(instance_cfg.url, instance_cfg.api)
+            try:
+                item = server.fetchItem(int(rating_key))
+            except NotFound:
+                return False
+            item.uploadPoster(filepath=safe_path)
+            return True
+
+        applied = await run_in_threadpool(_apply_active)
+        if not applied:
             return error("Plex item not found", code="ITEM_NOT_FOUND", status_code=404)
-        item.uploadPoster(filepath=safe_path)
         invalidate_cache()
         logger.info(f"UI set-active: rating_key={rating_key} path={safe_path}")
         return ok(
