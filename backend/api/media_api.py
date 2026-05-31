@@ -977,6 +977,24 @@ async def resolve_duplicates(
             status_code=404,
         )
 
+    # The loop does N blocking ARR connect+delete round trips (with file
+    # deletion) plus cache deletes — run it off the event loop.
+    return await run_in_threadpool(
+        _resolve_duplicates_sync,
+        db,
+        logger,
+        keep_id,
+        kept_item,
+        remove_ids,
+        delete_files,
+        add_exclusion,
+    )
+
+
+def _resolve_duplicates_sync(
+    db, logger, keep_id, kept_item, remove_ids, delete_files, add_exclusion
+) -> JSONResponse:
+    """Blocking body of resolve_duplicates — runs in a worker thread."""
     removed = []
     failed = []
 
@@ -1445,13 +1463,16 @@ def _fetch_duplicate_member(cache_row: dict, config, logger) -> dict:
 @router.post(
     "/duplicates/members", summary="Fetch live per-member info for a duplicate group"
 )
-async def get_duplicate_members(
+def get_duplicate_members(
     body: DuplicateMembersRequest,
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
     """Given a list of media_cache ids, return per-id live info from the origin
-    ARR instance so the Resolve modal can show size, quality, file path, etc."""
+    ARR instance so the Resolve modal can show size, quality, file path, etc.
+
+    Plain `def` (not async) so Starlette runs the per-id blocking ARR HTTP
+    lookups in its threadpool instead of on the event loop."""
     try:
         if not body.ids:
             return error("No ids provided", code="NO_IDS", status_code=400)
