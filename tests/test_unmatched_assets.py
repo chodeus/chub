@@ -291,3 +291,33 @@ def test_serialize_match_row_collection_and_bad_conflict_json():
     assert out["type"] == "collection"
     assert out["asset_type"] == "collection"
     assert out["conflicts"] == []
+
+
+def test_get_review_and_ignored_returns_locked():
+    """The third list surfaces user-confirmed (manually locked) rows so the
+    UI can offer an Unlock / re-open action."""
+    m = make_module()
+    m.allowed_instances = {"radarr"}
+
+    media = SimpleNamespace(
+        get_needs_review=lambda: [
+            {"id": 1, "title": "Review Me", "instance_name": "radarr"}
+        ],
+        get_ignored=lambda: [
+            {"id": 2, "title": "Ignored Me", "instance_name": "radarr"}
+        ],
+        get_user_confirmed=lambda: [
+            {"id": 3, "title": "Locked Me", "instance_name": "radarr"}
+        ],
+    )
+    collection = SimpleNamespace(
+        get_needs_review=lambda: [],
+        get_ignored=lambda: [],
+        get_user_confirmed=lambda: [],
+    )
+    db = SimpleNamespace(media=media, collection=collection)
+
+    review, ignored, locked = m.get_review_and_ignored(db)
+    assert [r["id"] for r in review] == [1]
+    assert [r["id"] for r in ignored] == [2]
+    assert [r["id"] for r in locked] == [3]

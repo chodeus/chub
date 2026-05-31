@@ -157,6 +157,15 @@ class CollectionCache(DatabaseBase):
             (int(bool(ignored)), id),
         )
 
+    def get_user_confirmed(self) -> list:
+        """Return collections the user manually locked (user_confirmed=1)."""
+        return (
+            self.execute_query(
+                "SELECT * FROM collections_cache WHERE user_confirmed=1", fetch_all=True
+            )
+            or []
+        )
+
     def set_user_confirmed(self, id: int, confirmed: bool) -> None:
         """Toggle the manual-pick lock for one collection row. While set,
         match_item leaves the row's match untouched on re-scans."""
@@ -212,6 +221,7 @@ class CollectionCache(DatabaseBase):
         renamed_file: Optional[Any] = None,
         file_hash: Optional[Any] = None,
         file_mtime: Optional[Any] = None,
+        uploaded_libraries: Optional[Any] = None,
         match_status: Optional[Any] = None,
         match_confidence: Optional[Any] = None,
         match_reason: Optional[Any] = None,
@@ -242,6 +252,10 @@ class CollectionCache(DatabaseBase):
         if file_mtime is not None:
             set_clauses.append("file_mtime=?")
             params.append(float(file_mtime))
+
+        if uploaded_libraries is not None:
+            set_clauses.append("uploaded_libraries=?")
+            params.append(uploaded_libraries)
 
         if match_status is not None:
             set_clauses.append("match_status=?")

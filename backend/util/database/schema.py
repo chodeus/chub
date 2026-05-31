@@ -216,6 +216,12 @@ class SchemaManager:
                 # file is unchanged (page-cache-friendly fast path). Paired with
                 # file_hash, which remains the authority when mtime differs.
                 ColumnDefinition("file_mtime", "REAL"),
+                # JSON list of Plex library names this poster's current hash has
+                # been uploaded to. A title can live in several enabled libraries
+                # on one server (e.g. an HD and a 4K library); the "skip if
+                # unchanged" check is per-library, not per-file, so a newly-added
+                # library copy is backfilled on the next run without forcing.
+                ColumnDefinition("uploaded_libraries", "TEXT"),
             ],
             indexes=[
                 "CREATE INDEX IF NOT EXISTS media_cache_plex_mapping_idx ON media_cache (plex_mapping_id)",
@@ -269,6 +275,8 @@ class SchemaManager:
                 # See media_cache.file_mtime — sha256 fast-path.
                 ColumnDefinition("file_hash", "TEXT"),
                 ColumnDefinition("file_mtime", "REAL"),
+                # See media_cache.uploaded_libraries — per-library upload record.
+                ColumnDefinition("uploaded_libraries", "TEXT"),
             ],
             constraints=["UNIQUE (title, library_name, instance_name)"],
         )

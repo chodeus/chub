@@ -381,15 +381,17 @@ class UnmatchedAssets(ChubModule):
         summary = self.calculate_stats(
             unmatched, all_media_grouped, all_collections_grouped
         )
-        needs_review, ignored = self.get_review_and_ignored(db)
+        needs_review, ignored, locked = self.get_review_and_ignored(db)
         summary["needs_review"] = len(needs_review)
         summary["ignored"] = len(ignored)
+        summary["locked"] = len(locked)
         return {
             "unmatched": unmatched,
             "all_media": all_media_grouped,
             "all_collections": all_collections_grouped,
             "needs_review": needs_review,
             "ignored": ignored,
+            "locked": locked,
             "summary": summary,
         }
 
@@ -426,11 +428,12 @@ class UnmatchedAssets(ChubModule):
         }
 
     def get_review_and_ignored(self, db: ChubDB) -> tuple:
-        """Return (needs_review, ignored) flat lists for the new tabs.
+        """Return (needs_review, ignored, locked) flat lists for the tabs.
 
         needs_review honors the same instance/config gates as unmatched (minus
         the ignored gate, which the query already applies). ignored is the
-        user's explicit dismissal list, instance-filtered only.
+        user's explicit dismissal list; locked is the rows the user manually
+        applied/approved (user_confirmed) — both instance-filtered only.
         """
         review_rows = [
             self._serialize_match_row(r, False)
@@ -450,7 +453,16 @@ class UnmatchedAssets(ChubModule):
             for r in db.collection.get_ignored()
             if self.allowed_collection(r)
         ]
-        return review_rows, ignored_rows
+        locked_rows = [
+            self._serialize_match_row(r, False)
+            for r in db.media.get_user_confirmed()
+            if self.allowed_media(r)
+        ] + [
+            self._serialize_match_row(r, True)
+            for r in db.collection.get_user_confirmed()
+            if self.allowed_collection(r)
+        ]
+        return review_rows, ignored_rows, locked_rows
 
     def print_stats(self, db: ChubDB) -> None:
         try:
