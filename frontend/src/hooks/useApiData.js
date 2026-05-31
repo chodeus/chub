@@ -29,6 +29,11 @@ export const useApiData = ({ apiFunction, options = {}, dependencies = [] }) => 
     const retryTimeoutRef = useRef(null);
     const isMountedRef = useRef(true);
     const executeRequestRef = useRef(null);
+    // Monotonic request id. The AbortController isn't threaded into the network
+    // layer, so a superseded request isn't truly cancelled — guard every state
+    // commit on this so a slow earlier response can't overwrite a newer one
+    // (stale-data render on rapid dependency changes).
+    const requestSeqRef = useRef(0);
 
     const cleanup = useCallback(() => {
         if (abortControllerRef.current) {
@@ -70,6 +75,9 @@ export const useApiData = ({ apiFunction, options = {}, dependencies = [] }) => 
         (retryAttempt = 0, executeOptions = {}) => {
             cleanup();
             abortControllerRef.current = new AbortController();
+            // A retry continues the same logical request, so only bump the
+            // sequence for a fresh (non-retry) call.
+            const seq = retryAttempt > 0 ? requestSeqRef.current : (requestSeqRef.current += 1);
 
             return Promise.resolve()
                 .then(() => {
@@ -84,7 +92,8 @@ export const useApiData = ({ apiFunction, options = {}, dependencies = [] }) => 
                     return apiFunction(executeOptions);
                 })
                 .then(result => {
-                    if (!isMountedRef.current) return;
+                    // Ignore a superseded (out-of-order) response.
+                    if (!isMountedRef.current || seq !== requestSeqRef.current) return;
                     const finalData = transform ? transform(result) : result;
                     setData(finalData);
                     setRetryCount(0);
@@ -93,7 +102,7 @@ export const useApiData = ({ apiFunction, options = {}, dependencies = [] }) => 
                     }
                 })
                 .catch(err => {
-                    if (!isMountedRef.current) return;
+                    if (!isMountedRef.current || seq !== requestSeqRef.current) return;
                     if (err.name === 'AbortError') return;
 
                     setError(err);
@@ -120,7 +129,7 @@ export const useApiData = ({ apiFunction, options = {}, dependencies = [] }) => 
                     }
                 })
                 .finally(() => {
-                    if (isMountedRef.current) {
+                    if (isMountedRef.current && seq === requestSeqRef.current) {
                         setIsLoading(false);
                     }
                 });
