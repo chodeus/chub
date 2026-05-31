@@ -1,9 +1,11 @@
 # modules/poster_renamerr.py
 
+import contextlib
 import filecmp
 import json
 import os
 import shutil
+import tempfile
 import threading
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -109,6 +111,44 @@ def build_asset_record(
 class PosterRenamerr(ChubModule):
     def __init__(self, logger: Optional[Logger] = None) -> None:
         super().__init__(logger=logger)
+
+    @contextlib.contextmanager
+    def apply_staging(self):
+        """Redirect file output for the "plex" apply path.
+
+        On apply_method == "plex" posters are uploaded straight to Plex and
+        never kept on disk, but the rename → border pipeline still needs files
+        to operate on. This stages them in a temp dir (flat layout, COPY only —
+        never move/hardlink/symlink the user's source), yields the staging path,
+        then restores the overridden config and removes the dir on exit. A
+        no-op (yields None) on the "kometa" path, which writes to the
+        configured destination_dir as usual.
+
+        Used by both the scheduled run() and the webhook/adhoc orchestration so
+        the staging lifecycle is identical and always cleaned up.
+        """
+        if getattr(self.config, "apply_method", "kometa") != "plex":
+            yield None
+            return
+        orig = (
+            self.config.destination_dir,
+            self.config.action_type,
+            self.config.asset_folders,
+        )
+        staging_dir = tempfile.mkdtemp(prefix="chub_poster_plex_")
+        self.config.destination_dir = staging_dir
+        self.config.action_type = "copy"
+        self.config.asset_folders = False
+        try:
+            yield staging_dir
+        finally:
+            (
+                self.config.destination_dir,
+                self.config.action_type,
+                self.config.asset_folders,
+            ) = orig
+            if os.path.isdir(staging_dir):
+                shutil.rmtree(staging_dir, ignore_errors=True)
 
     def ensure_destination_dir(self):
         if not os.path.exists(self.config.destination_dir):
@@ -1152,10 +1192,21 @@ class PosterRenamerr(ChubModule):
 
     def run(self):
         """
-        Full scheduled run - existing functionality unchanged.
+        Full scheduled run.
+
+        Strict either/or apply pipeline (see PosterRenamerrConfig.apply_method):
+          - "kometa": rename/copy posters into destination_dir for Kometa; no
+            Plex upload.
+          - "plex": stage posters in a temp dir (so the existing rename → border
+            pipeline still works), upload them straight to Plex for instances
+            whose per-instance add_posters opt-in is set, then discard the temp
+            dir. destination_dir is not written.
         """
+        apply_method = getattr(self.config, "apply_method", "kometa")
         try:
-            with ChubDB(logger=self.logger) as db:
+            # On the plex path this redirects output to a temp staging dir and
+            # cleans it up on exit; on the kometa path it's a no-op.
+            with self.apply_staging(), ChubDB(logger=self.logger) as db:
                 if self.config.log_level == "debug":
                     print_settings(self.logger, self.config)
 
@@ -1195,7 +1246,9 @@ class PosterRenamerr(ChubModule):
                     with ChubDB(logger=self.logger) as unmatched_db:
                         unmatched_reporter.print_stats(unmatched_db)
 
-                if self.config.clean_orphan_assets:
+                # Orphan cleanup walks the on-disk destination_dir, so it only
+                # applies to the kometa path (the plex path keeps no files).
+                if apply_method == "kometa" and self.config.clean_orphan_assets:
                     from backend.modules.poster_cleanarr import (
                         run_orphan_assets_pass,
                     )
@@ -1236,7 +1289,13 @@ class PosterRenamerr(ChubModule):
                 if self.config.run_border_replacerr:
                     self.run_border_replacerr(manifest)
 
-                PosterUploader(db=db, logger=self.logger, manifest=manifest).run()
+                # Strict either/or: upload to Plex only on the "plex" path. The
+                # uploader still gates per-instance on add_posters, so only
+                # opted-in Plex servers receive the staged posters.
+                if apply_method == "plex":
+                    PosterUploader(
+                        db=db, logger=self.logger, manifest=manifest
+                    ).run()
 
                 # Additional asset types (clear logo / squareart / background /
                 # banner) ride this run when enabled: the gdrive sync, the single

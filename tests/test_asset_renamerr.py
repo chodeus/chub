@@ -243,7 +243,7 @@ def test_source_none_when_nothing_available(db):
 
 
 def test_direct_banner_skipped():
-    m = make_module(apply_method="direct")
+    m = make_module(apply_method="plex")
     applied, reason, applied_libs = m._apply_direct(
         _media(), "banner", "/x/l.png", None, False
     )
@@ -254,8 +254,8 @@ def test_direct_banner_skipped():
 
 def test_direct_logo_calls_upload_logo(monkeypatch):
     m = make_module(
-        apply_method="direct",
-        instances=[{"plex1": SimpleNamespace(library_names=["Movies"])}],
+        apply_method="plex",
+        instances=[{"plex1": SimpleNamespace(library_names=["Movies"], add_posters=True)}],
     )
     calls = []
 
@@ -275,8 +275,8 @@ def test_direct_logo_calls_upload_logo(monkeypatch):
 
 def test_direct_squareart_and_background_methods(monkeypatch):
     m = make_module(
-        apply_method="direct",
-        instances=[{"plex1": SimpleNamespace(library_names=["Movies"])}],
+        apply_method="plex",
+        instances=[{"plex1": SimpleNamespace(library_names=["Movies"], add_posters=True)}],
     )
     used = []
 
@@ -409,13 +409,13 @@ def test_kometa_season_logo_flat_naming(tmp_path):
 @pytest.mark.parametrize(
     "image_type,method,ok",
     [
-        ("logo", "direct", True),
+        ("logo", "plex", True),
         ("logo", "kometa", True),
-        ("background", "direct", True),
+        ("background", "plex", True),
         ("background", "kometa", True),
-        ("squareart", "direct", True),
+        ("squareart", "plex", True),
         ("squareart", "kometa", False),  # Kometa asset dirs ignore square art
-        ("banner", "direct", False),  # no plexapi banner
+        ("banner", "plex", False),  # no plexapi banner
         ("banner", "kometa", False),  # not read by Kometa
     ],
 )
@@ -462,27 +462,27 @@ def test_scan_includes_assets_when_feature_on(tmp_path):
 
 
 def test_already_applied_skips_unchanged_tmdb(db):
-    m = make_module(sources=["tmdb"], apply_method="direct")
+    m = make_module(sources=["tmdb"], apply_method="plex")
     db.media_asset_matches.upsert(
         target_kind="media",
         target_id=1,
         image_type="logo",
         source="tmdb",
         matched_url="http://x/l.png",
-        applied_method="direct",
+        applied_method="plex",
         match_status="applied",
     )
     # same url + applied + same method -> skip
     assert (
         m._already_applied(
-            db, "media", 1, "logo", "direct", "tmdb", None, "http://x/l.png", None
+            db, "media", 1, "logo", "plex", "tmdb", None, "http://x/l.png", None
         )
         is True
     )
     # different url -> don't skip
     assert (
         m._already_applied(
-            db, "media", 1, "logo", "direct", "tmdb", None, "http://x/OTHER.png", None
+            db, "media", 1, "logo", "plex", "tmdb", None, "http://x/OTHER.png", None
         )
         is False
     )
@@ -530,8 +530,8 @@ def test_already_applied_direct_backfills_new_library(db):
     are covered."""
     m = make_module(
         sources=["tmdb"],
-        apply_method="direct",
-        instances=[{"plex1": SimpleNamespace(library_names=["Movies", "Movies 4K"])}],
+        apply_method="plex",
+        instances=[{"plex1": SimpleNamespace(library_names=["Movies", "Movies 4K"], add_posters=True)}],
     )
     db.media_asset_matches.upsert(
         target_kind="media",
@@ -539,7 +539,7 @@ def test_already_applied_direct_backfills_new_library(db):
         image_type="logo",
         source="tmdb",
         matched_url="http://x/l.png",
-        applied_method="direct",
+        applied_method="plex",
         applied_libraries='["plex1/Movies"]',
         match_status="applied",
     )
@@ -550,7 +550,7 @@ def test_already_applied_direct_backfills_new_library(db):
             "media",
             3,
             "logo",
-            "direct",
+            "plex",
             "tmdb",
             None,
             "http://x/l.png",
@@ -567,7 +567,7 @@ def test_already_applied_direct_backfills_new_library(db):
         image_type="logo",
         source="tmdb",
         matched_url="http://x/l.png",
-        applied_method="direct",
+        applied_method="plex",
         applied_libraries='["plex1/Movies", "plex1/Movies 4K"]',
         match_status="applied",
     )
@@ -577,7 +577,7 @@ def test_already_applied_direct_backfills_new_library(db):
             "media",
             3,
             "logo",
-            "direct",
+            "plex",
             "tmdb",
             None,
             "http://x/l.png",
@@ -590,19 +590,19 @@ def test_already_applied_direct_backfills_new_library(db):
 
 
 def test_already_applied_never_skips_in_dry_run(db):
-    m = make_module(dry_run=True, sources=["tmdb"], apply_method="direct")
+    m = make_module(dry_run=True, sources=["tmdb"], apply_method="plex")
     db.media_asset_matches.upsert(
         target_kind="media",
         target_id=3,
         image_type="logo",
         source="tmdb",
         matched_url="http://x/l.png",
-        applied_method="direct",
+        applied_method="plex",
         match_status="applied",
     )
     assert (
         m._already_applied(
-            db, "media", 3, "logo", "direct", "tmdb", None, "http://x/l.png", None
+            db, "media", 3, "logo", "plex", "tmdb", None, "http://x/l.png", None
         )
         is False
     )
@@ -610,8 +610,8 @@ def test_already_applied_never_skips_in_dry_run(db):
 
 def test_apply_direct_uploads_to_all_matching_libraries():
     m = make_module(
-        apply_method="direct",
-        instances=[{"plex1": SimpleNamespace(library_names=["Movies", "Movies 4K"])}],
+        apply_method="plex",
+        instances=[{"plex1": SimpleNamespace(library_names=["Movies", "Movies 4K"], add_posters=True)}],
     )
 
     class FakeClient:

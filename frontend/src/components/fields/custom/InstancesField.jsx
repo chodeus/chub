@@ -849,9 +849,13 @@ const PlexInstanceSelector = React.memo(
                                                 <div className="flex flex-col">
                                                     <FieldLabel
                                                         htmlFor={uploadId}
-                                                        label="Upload posters to this Plex instance"
+                                                        label="Upload to this Plex instance"
                                                         className="text-sm font-medium leading-normal text-primary cursor-pointer select-none"
                                                     />
+                                                    <span className="text-xs text-tertiary">
+                                                        Only used when this module&apos;s Apply
+                                                        Method is set to Plex.
+                                                    </span>
                                                 </div>
                                             </div>
                                         </div>

@@ -36,7 +36,7 @@ IMAGE_TYPE_TO_PLEX_METHOD = {
 # image_type -> Kometa asset-name stem. Per Kometa (PR #2681), asset directories
 # read only logo and background (+ Season##_logo / Season##_background for
 # seasons). squareart is NOT read from asset directories, so it has no entry and
-# is skipped on the kometa path (use apply_method "direct" for square art).
+# is skipped on the kometa path (use apply_method "plex" for square art).
 IMAGE_TYPE_TO_KOMETA_NAME = {
     "logo": "logo",
     "background": "background",
@@ -47,13 +47,13 @@ def apply_capability(image_type: str, apply_method: str) -> Tuple[bool, str]:
     """Whether (image_type, apply_method) is actually applicable.
 
     Capability matrix (Plex API + Kometa PR #2681):
-        logo/background → direct ✓ / kometa ✓
-        squareart       → direct ✓ / kometa ✗ (Kometa ignores square art)
+        logo/background → plex ✓ / kometa ✓
+        squareart       → plex ✓ / kometa ✗ (Kometa ignores square art)
 
     (Banner is not a processable type — see ALL_ASSET_TYPES — but the generic
     branches below still return False for it defensively.)
     """
-    if apply_method == "direct":
+    if apply_method == "plex":
         if image_type in IMAGE_TYPE_TO_PLEX_METHOD:
             return True, ""
         return False, f"{image_type} is not uploadable to Plex directly"
@@ -62,7 +62,7 @@ def apply_capability(image_type: str, apply_method: str) -> Tuple[bool, str]:
         return True, ""
     return False, (
         f"{image_type} is not read from Kometa asset directories "
-        "(use apply method 'direct')"
+        "(use apply method 'plex')"
     )
 
 
@@ -111,12 +111,21 @@ class AssetRenamerr(ChubModule):
         return [s for s in (self.config.sources or ["local"]) if s in ("local", "tmdb")]
 
     def _enabled_plex_instances(self) -> List[Tuple[str, List[str]]]:
-        """(instance_name, library_names) for each Plex entry in instances."""
+        """(instance_name, library_names) for each Plex entry that opted in.
+
+        Mirrors poster_renamerr: only Plex instances whose per-instance
+        ``add_posters`` flag is set receive direct uploads on the "plex" apply
+        path. (Existing configs that predate this flag must tick it to keep
+        uploading — surfaced in the module's settings UI.)
+        """
         out: List[Tuple[str, List[str]]] = []
         for inst in self.config.instances:
             if isinstance(inst, dict):
                 for name, opts in inst.items():
-                    out.append((name, list(getattr(opts, "library_names", []) or [])))
+                    if getattr(opts, "add_posters", False):
+                        out.append(
+                            (name, list(getattr(opts, "library_names", []) or []))
+                        )
         return out
 
     def _direct_target_lib_keys(self, media: dict, is_collection: bool) -> Set[str]:
@@ -294,11 +303,11 @@ class AssetRenamerr(ChubModule):
             applied_path = prev.get("applied_path")
             if not applied_path or not os.path.lexists(applied_path):
                 return False
-        # For the direct path, only skip if EVERY currently-targeted library
+        # For the plex path, only skip if EVERY currently-targeted library
         # already received it; otherwise re-apply so a newly-added or
         # previously-failed library copy gets backfilled (mirrors the poster
         # uploaded_libraries logic).
-        if apply_method == "direct" and media is not None:
+        if apply_method == "plex" and media is not None:
             expected = self._direct_target_lib_keys(media, is_collection)
             try:
                 recorded = set(json.loads(prev.get("applied_libraries") or "[]"))
@@ -489,7 +498,7 @@ class AssetRenamerr(ChubModule):
         apply_method = self.config.apply_method
 
         # Resolve which configured types are actually applicable for this apply
-        # method ONCE (banner is never applicable; squareart needs "direct").
+        # method ONCE (banner is never applicable; squareart needs "plex").
         # Warn once per skipped type rather than emitting a line per media item.
         applicable: List[str] = []
         for image_type in self._active_asset_types():
@@ -571,7 +580,7 @@ class AssetRenamerr(ChubModule):
                     continue
 
                 applied_libs: Optional[List[str]] = None
-                if apply_method == "direct":
+                if apply_method == "plex":
                     applied, detail, applied_libs = self._apply_direct(
                         media, image_type, file, url, is_collection
                     )

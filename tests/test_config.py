@@ -53,9 +53,10 @@ def test_asset_renamerr_defaults():
 
 
 def test_asset_renamerr_banner_direct_combo_loads():
-    """banner + direct apply must NOT be a hard validation error — the config
+    """banner + plex apply must NOT be a hard validation error — the config
     has to stay loadable while a user toggles apply_method (the incompatibility
-    is handled at runtime with a skip + warning)."""
+    is handled at runtime with a skip + warning). Also confirms the legacy
+    "direct" value is coerced to the renamed "plex" value."""
     config = ChubConfig.model_validate(
         {
             "asset_renamerr": {
@@ -64,7 +65,7 @@ def test_asset_renamerr_banner_direct_combo_loads():
             }
         }
     )
-    assert config.asset_renamerr.apply_method == "direct"
+    assert config.asset_renamerr.apply_method == "plex"
     assert "banner" in config.asset_renamerr.asset_types
 
 
@@ -1141,15 +1142,29 @@ def test_poster_renamerr_action_type_validation():
 
 
 def test_asset_renamerr_apply_method_and_action_type_validation():
-    """Invalid apply_method no longer silently routes to the kometa copy path."""
+    """apply_method accepts plex/kometa (legacy 'direct' aliases to 'plex',
+    case-insensitively); invalid values no longer silently route to kometa."""
+    # Legacy "direct" (any case) coerces to the renamed "plex" value.
     assert (
         ChubConfig.model_validate(
             {"asset_renamerr": {"apply_method": "DIRECT"}}
         ).asset_renamerr.apply_method
-        == "direct"
+        == "plex"
+    )
+    assert (
+        ChubConfig.model_validate(
+            {"asset_renamerr": {"apply_method": "plex"}}
+        ).asset_renamerr.apply_method
+        == "plex"
+    )
+    assert (
+        ChubConfig.model_validate(
+            {"asset_renamerr": {"apply_method": "kometa"}}
+        ).asset_renamerr.apply_method
+        == "kometa"
     )
     with pytest.raises(ValidationError):
-        ChubConfig.model_validate({"asset_renamerr": {"apply_method": "plex"}})
+        ChubConfig.model_validate({"asset_renamerr": {"apply_method": "ftp"}})
     with pytest.raises(ValidationError):
         ChubConfig.model_validate({"asset_renamerr": {"action_type": "teleport"}})
 

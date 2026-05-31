@@ -645,10 +645,14 @@ const PosterPickerModal = ({ item, onClose, onApplied }) => {
         setBusy(posterId);
         try {
             const res = await postersAPI.applyMatch(item.id, posterId, { kind });
+            // Prefer the backend's precise outcome ("Poster applied to Plex" /
+            // "Poster copied to assets directory (Kometa will apply)") so the
+            // user sees which Apply Method path ran; fall back to a generic msg.
             toast.success(
-                res?.data?.applied
-                    ? 'Poster applied'
-                    : 'Match recorded — applies on the next poster_renamerr run'
+                res?.message ||
+                    (res?.data?.applied
+                        ? 'Poster applied'
+                        : 'Match recorded — applies on the next poster_renamerr run')
             );
             onApplied?.();
             onClose();
@@ -666,6 +670,13 @@ const PosterPickerModal = ({ item, onClose, onApplied }) => {
                 {item.season_number != null ? ` · Season ${item.season_number}` : ''}
             </Modal.Header>
             <Modal.Body>
+                <p className="text-xs text-tertiary mb-3">
+                    Applying follows Poster Renamerr&apos;s <strong>Apply Method</strong>: with{' '}
+                    <strong>Plex</strong> the poster is uploaded straight to Plex (for instances
+                    you&apos;ve opted in); with <strong>Kometa</strong> it&apos;s copied into your
+                    assets directory for Kometa to apply. The match is saved &amp; locked either
+                    way.
+                </p>
                 {candidates === null ? (
                     <p className="text-sm text-secondary">Searching for posters…</p>
                 ) : candidates.length === 0 ? (

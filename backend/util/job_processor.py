@@ -266,25 +266,17 @@ def _process_webhook_job(
                 media_items = focused
 
         renamer = PosterRenamerr(logger=logger)
-        rename_result = renamer.run_poster_rename_adhoc(media_items)
+        # Honour `webhook_force_reupload` on the originating *arr instance — when
+        # set, the upload bypasses the uploader's hash-equal short-circuit so an
+        # unchanged poster still gets re-pushed to Plex. The staging lifecycle
+        # for the plex apply path lives inside the helper.
+        force_upload = _instance_force_reupload(instance_info)
+        rename_result = _adhoc_rename_and_post(
+            renamer, media_items, logger, job_id, force_upload=force_upload
+        )
 
         if rename_result["success"]:
             log.info(f"[JOB:{job_id}] Webhook processing successful")
-
-            if rename_result.get("output"):
-                # Honour `webhook_force_reupload` on the originating *arr
-                # instance — when set, the queued upload job bypasses the
-                # uploader's hash-equal short-circuit so an unchanged
-                # poster still gets re-pushed to Plex.
-                force_upload = _instance_force_reupload(instance_info)
-                _handle_post_rename_actions(
-                    rename_result,
-                    renamer,
-                    logger,
-                    job_id,
-                    force_upload=force_upload,
-                )
-
             return {
                 "success": True,
                 "message": f"Webhook processed successfully: {media['title']}",
@@ -408,12 +400,9 @@ def _process_poster_rename_job(
         }
 
     renamer = PosterRenamerr(logger=logger)
-    result = renamer.run_poster_rename_adhoc(media_items)
-
-    if result["success"] and result.get("output"):
-        _handle_post_rename_actions(result, renamer, logger, job_id)
-
-    return result
+    # apply_staging() + post-rename actions (border + plex/kometa upload policy)
+    # are handled inside the helper.
+    return _adhoc_rename_and_post(renamer, media_items, logger, job_id)
 
 
 def _process_upload_posters_job(
@@ -479,6 +468,23 @@ def _process_upload_posters_job(
         }
 
 
+def _adhoc_rename_and_post(
+    renamer, media_items, logger, job_id: int, force_upload: bool = False
+) -> Dict[str, Any]:
+    """Run the webhook/adhoc rename + post-rename actions under the apply_staging
+    context so the plex path's temp staging dir lives across rename → border →
+    (synchronous) upload and is cleaned up afterwards. On the kometa path
+    apply_staging() is a no-op and files are written to destination_dir.
+    """
+    with renamer.apply_staging():
+        result = renamer.run_poster_rename_adhoc(media_items)
+        if result.get("success") and result.get("output"):
+            _handle_post_rename_actions(
+                result, renamer, logger, job_id, force_upload=force_upload
+            )
+    return result
+
+
 def _handle_post_rename_actions(
     rename_result: Dict[str, Any],
     renamer,
@@ -519,15 +525,29 @@ def _handle_post_rename_actions(
             renamer.run_border_replacerr(manifest)
             log.info(f"[JOB:{job_id}] Border replacer completed")
 
-        # Queue upload job if Plex instances are enabled. This is the adhoc /
-        # webhook path (the full scheduled run uploads inline), so mark it
-        # targeted: reuse the cached Plex snapshot instead of rebuilding the
-        # whole library on every webhook (with an empty-snapshot fallback).
-        plex_enabled = _check_plex_upload_enabled(renamer.config)
-        if plex_enabled and manifest:
-            _queue_upload_job(
-                manifest, logger, job_id, force=force_upload, targeted=True
-            )
+        # Strict either/or (PosterRenamerrConfig.apply_method):
+        #   - "kometa": files were written to destination_dir; do NOT upload.
+        #   - "plex": posters were staged in a temp dir by apply_staging(); they
+        #     must be uploaded SYNCHRONOUSLY here (a queued async upload job
+        #     would run after the staging dir is cleaned up). The uploader still
+        #     gates per-instance on add_posters. Targeted: reuse the cached Plex
+        #     snapshot when one exists to avoid a full rebuild per webhook.
+        apply_method = getattr(renamer.config, "apply_method", "kometa")
+        if apply_method != "plex":
+            log.info(f"[JOB:{job_id}] apply_method=kometa - no Plex upload")
+        elif _check_plex_upload_enabled(renamer.config) and manifest:
+            from backend.util.upload_posters import PosterUploader
+
+            with ChubDB(logger=logger) as updb:
+                refresh_plex = updb.plex.count() == 0
+                PosterUploader(
+                    db=updb,
+                    logger=logger,
+                    manifest=manifest,
+                    force=force_upload,
+                    refresh_plex=refresh_plex,
+                ).run()
+            log.info(f"[JOB:{job_id}] Plex upload completed")
         else:
             log.info(
                 f"[JOB:{job_id}] Plex upload not enabled or no manifest - task complete"
@@ -838,54 +858,6 @@ def _process_module_run_job(
         }
     finally:
         module_lock.release()
-
-
-def _queue_upload_job(
-    manifest: Dict[str, Any],
-    logger,
-    job_id: int,
-    force: bool = False,
-    targeted: bool = False,
-) -> None:
-    """
-    Queue a poster upload job.
-
-    Args:
-        manifest: Upload manifest data
-        logger: Logger instance
-        job_id: Current job ID for tracking
-        force: When True, the uploader bypasses its hash-equal short-circuit
-            so unchanged posters still get re-pushed to Plex. Set by webhook
-            flows when the originating *arr instance has
-            `webhook_force_reupload` enabled.
-        targeted: When True (webhook single-item flow) the upload reuses the
-            existing Plex snapshot instead of rebuilding the entire snapshot for
-            every webhook. The uploader falls back to a full refresh if the
-            snapshot is empty (e.g. a fresh install). See
-            _process_upload_posters_job.
-    """
-    log = logger.get_adapter("UPLOAD_POSTERS")
-
-    try:
-        upload_payload = {
-            "manifest": manifest,
-            "force": bool(force),
-            "targeted": bool(targeted),
-        }
-
-        with ChubDB(logger=logger) as db:
-            result = db.worker.enqueue_job(
-                table_name="jobs", payload=upload_payload, job_type="upload_posters"
-            )
-
-        if result["success"]:
-            upload_job_id = result["data"]["job_id"]
-            log.info(f"[JOB:{job_id}] Upload job queued: {upload_job_id}")
-        else:
-            log.error(f"[JOB:{job_id}] Failed to queue upload job: {result['message']}")
-
-    except Exception as e:
-        log.error(f"[JOB:{job_id}] Error queueing upload job: {e}")
 
 
 def _process_labelarr_bulk_sync_job(
