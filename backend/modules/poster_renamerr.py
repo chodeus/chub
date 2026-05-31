@@ -9,7 +9,11 @@ from typing import Any, Dict, List, Optional
 
 from backend.util.base_module import ChubModule
 from backend.util.connector import Connector
-from backend.util.constants import asset_type_regex, season_number_regex
+from backend.util.constants import (
+    asset_type_regex,
+    illegal_chars_regex,
+    season_number_regex,
+)
 from backend.util.database import ChubDB
 from backend.util.helper import (
     classify_match,
@@ -188,6 +192,40 @@ class PosterRenamerr(ChubModule):
         return ("title", cand.get("normalized_title") or "", cand.get("year"))
 
     @staticmethod
+    def _has_identity_conflict(matched_candidates: list) -> bool:
+        """True only when matched posters GENUINELY disagree on identity.
+
+        A real conflict means two posters that point at *different* media:
+        different normalized titles, or different non-null IDs of the same
+        source. It is NOT a conflict when same-title posters merely differ in
+        ID *presence* — e.g. a collection with "Phineas and Ferb Collection.jpg"
+        (no id) and "...Collection {tmdb-1}.jpg" — those are the same entity, so
+        the bottom-wins source priority picks one silently (no needs_review).
+        This is what lets id-less Plex collections auto-match instead of piling
+        up in the review queue.
+        """
+        if len(matched_candidates) < 2:
+            return False
+
+        norm_titles = {c.get("normalized_title") or "" for c in matched_candidates}
+        if len(norm_titles) > 1:
+            return True
+
+        def distinct_ids(field: str) -> set:
+            vals = set()
+            for c in matched_candidates:
+                v = c.get(field)
+                if v not in (None, "", 0, "0"):
+                    vals.add(str(v).lower())
+            return vals
+
+        return (
+            len(distinct_ids("tmdb_id")) > 1
+            or len(distinct_ids("imdb_id")) > 1
+            or len(distinct_ids("tvdb_id")) > 1
+        )
+
+    @staticmethod
     def find_asset_candidate(
         media: dict,
         db: ChubDB,
@@ -318,6 +356,22 @@ class PosterRenamerr(ChubModule):
         instance_name = media.get("instance_name")
         season_number = media.get("season_number")
 
+        # A user-confirmed (manually applied/approved) row is locked: never let a
+        # re-scan recompute and overwrite its match. This is what makes a manual
+        # poster pick survive scheduled poster_renamerr runs. The lock is cleared
+        # by applying a different poster (re-sets it) or by ignoring the item
+        # (the ignore endpoint clears user_confirmed).
+        if media.get("user_confirmed"):
+            self.logger.debug(
+                f"↳ user-confirmed, preserving manual match: {title} ({year})"
+            )
+            return {
+                "matched": bool(media.get("matched")),
+                "match": None,
+                "candidates": [],
+                "reasons": ["user_confirmed: manual match preserved"],
+            }
+
         found = self.find_asset_candidate(
             media, db, image_type="poster", is_collection=is_collection
         )
@@ -335,8 +389,7 @@ class PosterRenamerr(ChubModule):
         # priority-winner is still applied but flagged with its rivals.
         match_status, match_confidence = classify_match(matched, win_reason)
         conflict_json = "[]"
-        distinct = {self._candidate_identity(c) for c in matched_candidates}
-        if len(distinct) > 1:
+        if self._has_identity_conflict(matched_candidates):
             match_status = "needs_review"
             conflict_json = json.dumps(
                 [
@@ -511,6 +564,12 @@ class PosterRenamerr(ChubModule):
         asset_type = item.get("asset_type")
         file = item.get("original_file") or item.get("file")
         folder = item.get("folder", item.get("media_folder", "")) or ""
+        # Plex collections have no on-disk folder, so collections_cache.folder is
+        # empty — which previously produced a nameless ".jpg" (flat) or a generic
+        # "poster.jpg" at the destination root. Kometa names a collection's asset
+        # by its title, so fall back to the (path-sanitised) collection title.
+        if asset_type == "collection" and not folder:
+            folder = illegal_chars_regex.sub("", item.get("title") or "").strip()
         file_name = os.path.basename(file)
         file_extension = os.path.splitext(file)[1]
         season_number = item.get("season_number")

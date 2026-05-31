@@ -206,6 +206,11 @@ class SchemaManager:
                 # so it survives the cache's clear-and-reinsert on every scan.
                 ColumnDefinition("matched_at", "TEXT"),
                 ColumnDefinition("matched_poster_file", "TEXT"),
+                # Set when a user manually applies/approves a poster. While set,
+                # match_item leaves the row's match state untouched on re-scans
+                # so a scheduled poster_renamerr run can never revert the manual
+                # pick. Cleared if the user re-opens it for review. Defaults 0.
+                ColumnDefinition("user_confirmed", "BOOLEAN", default=0),
             ],
             indexes=[
                 "CREATE INDEX IF NOT EXISTS media_cache_plex_mapping_idx ON media_cache (plex_mapping_id)",
@@ -253,6 +258,9 @@ class SchemaManager:
                 ColumnDefinition("conflict_ids", "TEXT"),
                 ColumnDefinition("matched_at", "TEXT"),
                 ColumnDefinition("matched_poster_file", "TEXT"),
+                # See media_cache.user_confirmed — manual-pick lock that match
+                # re-scans must respect.
+                ColumnDefinition("user_confirmed", "BOOLEAN", default=0),
             ],
             constraints=["UNIQUE (title, library_name, instance_name)"],
         )

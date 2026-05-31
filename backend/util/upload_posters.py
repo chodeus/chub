@@ -70,6 +70,7 @@ class PosterUploader:
         logger: Optional[Logger] = None,
         manifest: Optional[Dict] = None,
         force: bool = False,
+        refresh_plex: bool = True,
     ):
         self.full_config = load_config()
         self.config = self.full_config.poster_renamerr
@@ -78,6 +79,13 @@ class PosterUploader:
         self.logger = self.logger.get_adapter("poster_uploader")
         self.manifest = manifest or {}
         self.force = force
+        # When False, reuse the existing plex_media_cache snapshot instead of
+        # re-fetching the whole Plex library. Used by the interactive manual
+        # "apply this one poster now" path so a click doesn't trigger a full
+        # library sync; the cached snapshot from the last run is good enough,
+        # and if it can't locate the item the match is still saved + locked and
+        # applies on the next run.
+        self.refresh_plex = refresh_plex
 
         # Cache for connections and indexes
         self._plex_clients = {}
@@ -102,8 +110,10 @@ class PosterUploader:
                     error_code="NO_ENABLED_INSTANCES",
                 )
 
-            # Update Plex database once for all instances
-            self._update_plex_database(enabled_instances)
+            # Update Plex database once for all instances (skippable for the
+            # interactive single-item apply, which reuses the cached snapshot).
+            if self.refresh_plex:
+                self._update_plex_database(enabled_instances)
 
             # Process each enabled instance
             instance_results = []

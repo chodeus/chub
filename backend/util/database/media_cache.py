@@ -306,6 +306,14 @@ class MediaCache(DatabaseBase):
             (int(bool(ignored)), id),
         )
 
+    def set_user_confirmed(self, id: int, confirmed: bool) -> None:
+        """Toggle the manual-pick lock for one media row. While set, match_item
+        leaves the row's match untouched on re-scans."""
+        self.execute_query(
+            "UPDATE media_cache SET user_confirmed=? WHERE id=?",
+            (int(bool(confirmed)), id),
+        )
+
     def set_match_provenance(
         self, id: int, matched_at: Optional[str], matched_poster_file: Optional[str]
     ) -> None:
