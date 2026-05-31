@@ -1,5 +1,6 @@
 # modules/__init__.py
 
+from .asset_renamerr import AssetRenamerr
 from .border_replacerr import BorderReplacerr
 from .health_checkarr import HealthCheckarr
 from .jduparr import Jduparr
@@ -17,6 +18,7 @@ from .upgradinatorr import Upgradinatorr
 MODULES = {
     "sync_gdrive": SyncGDrive,
     "poster_renamerr": PosterRenamerr,
+    "asset_renamerr": AssetRenamerr,
     "border_replacerr": BorderReplacerr,
     "upgradinatorr": Upgradinatorr,
     "renameinatorr": Renameinatorr,

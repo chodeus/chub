@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 
 from backend.util.base_module import ChubModule
 from backend.util.connector import Connector
-from backend.util.constants import season_number_regex
+from backend.util.constants import asset_type_regex, season_number_regex
 from backend.util.database import ChubDB
 from backend.util.helper import (
     classify_match,
@@ -25,6 +25,71 @@ from backend.util.normalization import parse_asset_filename
 from backend.util.logger import Logger
 from backend.util.notification import NotificationManager
 from backend.util.upload_posters import PosterUploader
+
+
+def build_asset_record(
+    fname: str, root: str, style: Optional[str] = None, priority: int = 0
+) -> dict:
+    """Parse one image file into a poster_cache record.
+
+    Shared by poster_renamerr's scan and asset_renamerr's scan. Detects an
+    additional-asset-type suffix (logo/squareart/background/banner) via
+    ``asset_type_regex`` and stamps ``image_type`` accordingly; suffix-less
+    files are plain posters. For asset files the suffix is stripped BEFORE the
+    title/normalized_title are computed so the asset's match key equals the same
+    media's poster key (e.g. "Movie (2023) - Logo.png" keys on "movie", exactly
+    like "Movie (2023).png"). The poster path (no suffix) is byte-identical to
+    the original inline logic — do not let it drift. ``asset_type``
+    (movie/show/collection) is NOT set here; it is classified across the full
+    record set by the caller (it needs cross-record show_keys).
+    """
+    folder = os.path.basename(root)
+    filename, ext = os.path.splitext(fname)
+
+    m = asset_type_regex.search(filename)
+    if m:
+        image_type = m.group(1).lower()
+        # Strip the type tag, then re-attach the real extension so
+        # parse_asset_filename's own splitext targets the extension (not a dot
+        # inside a title like "8 A.M. Metro").
+        base = asset_type_regex.sub("", filename).strip(" -_")
+        title = parse_asset_filename(base + ext)
+        normalized_title = normalize_titles(base)
+    else:
+        image_type = "poster"
+        title = parse_asset_filename(fname)
+        # Derive the search/match key from the raw (ext-stripped) filename, not
+        # from `title`. normalize_titles() already strips the year (and trailing
+        # season tag), IDs, and special chars, so it yields the same key for
+        # normal assets — but staying independent of parse_asset_filename means
+        # a future title-parsing change can never silently poison
+        # normalized_title (the root cause of the "Open Season 2" -> "open"
+        # search/match failure).
+        normalized_title = normalize_titles(filename)
+
+    year = extract_year(fname) or extract_year(title) or extract_year(folder)
+    tmdb_id, tvdb_id, imdb_id = extract_ids(fname)
+    if not (tmdb_id or tvdb_id or imdb_id):
+        tmdb_id, tvdb_id, imdb_id = extract_ids(folder)
+    match = season_number_regex.search(fname) or season_number_regex.search(folder)
+    season_number = (
+        int(match.group(1)) if match and match.group(1) else (0 if match else None)
+    )
+
+    return {
+        "title": title,
+        "normalized_title": normalized_title,
+        "year": year,
+        "tmdb_id": tmdb_id,
+        "tvdb_id": tvdb_id,
+        "imdb_id": imdb_id,
+        "season_number": season_number,
+        "folder": folder,
+        "file": os.path.join(root, fname),
+        "style": style,
+        "priority": priority,
+        "image_type": image_type,
+    }
 
 
 class PosterRenamerr(ChubModule):
@@ -122,12 +187,30 @@ class PosterRenamerr(ChubModule):
             return ("imdb", str(imdb).lower())
         return ("title", cand.get("normalized_title") or "", cand.get("year"))
 
-    def match_item(self, media: dict, db: ChubDB, is_collection=False) -> dict:
+    @staticmethod
+    def find_asset_candidate(
+        media: dict,
+        db: ChubDB,
+        image_type: str = "poster",
+        is_collection: bool = False,
+    ) -> dict:
+        """Find the best poster_cache candidate for ``media``, scoped to
+        ``image_type``.
+
+        This is the shared candidate-finding core (ID lookup, then prefix/AKA
+        name lookup with season + identity checks) used both by poster matching
+        (``image_type="poster"``) and by the asset pipeline (logo / squareart /
+        background / banner). It performs NO writeback — callers decide where to
+        record the result (media_cache for posters, media_asset_matches for
+        assets).
+
+        Returns a dict with: ``candidate`` (best row or None), ``matched``
+        (bool), ``win_reason`` (str), ``matched_candidates`` (every row that
+        passed is_match — used for conflict detection), ``candidates`` (the
+        considered set), and ``reasons`` (human-readable trace).
+        """
         asset_type = media.get("asset_type")
         title = media.get("title")
-        year = media.get("year")
-        library_name = media.get("library_name")
-        instance_name = media.get("instance_name")
         normalized_title = media.get("normalized_title")
         season_number = media.get("season_number")
         expected_asset_type = "collection" if is_collection else asset_type
@@ -151,7 +234,11 @@ class PosterRenamerr(ChubModule):
             id_val = media.get(id_field)
             if id_val:
                 c = db.poster.get_by_id(
-                    id_field, id_val, season_number, asset_type=expected_asset_type
+                    id_field,
+                    id_val,
+                    season_number,
+                    asset_type=expected_asset_type,
+                    image_type=image_type,
                 )
                 if c:
                     matched, reason = is_match(c, media)
@@ -177,7 +264,7 @@ class PosterRenamerr(ChubModule):
             seen_files = set()
             for st in search_titles:
                 for c in db.poster.get_candidates_by_prefix(
-                    st, asset_type=expected_asset_type
+                    st, asset_type=expected_asset_type, image_type=image_type
                 ):
                     key = c.get("file")
                     if key not in seen_files:
@@ -213,6 +300,33 @@ class PosterRenamerr(ChubModule):
                             candidate = cand
                             matched = True
                             win_reason = reason
+
+        return {
+            "candidate": candidate,
+            "matched": bool(matched),
+            "win_reason": win_reason,
+            "matched_candidates": matched_candidates,
+            "candidates": candidates,
+            "reasons": reasons,
+        }
+
+    def match_item(self, media: dict, db: ChubDB, is_collection=False) -> dict:
+        asset_type = media.get("asset_type")
+        title = media.get("title")
+        year = media.get("year")
+        library_name = media.get("library_name")
+        instance_name = media.get("instance_name")
+        season_number = media.get("season_number")
+
+        found = self.find_asset_candidate(
+            media, db, image_type="poster", is_collection=is_collection
+        )
+        candidate = found["candidate"]
+        matched = found["matched"]
+        win_reason = found["win_reason"]
+        matched_candidates = found["matched_candidates"]
+        candidates = found["candidates"]
+        reasons = found["reasons"]
 
         # --- Match transparency: status + confidence + conflict detection ---
         # match_status/confidence are additive metadata; `matched` (whether the
@@ -717,8 +831,10 @@ class PosterRenamerr(ChubModule):
                     best_len = len(loc)
         return best_style
 
-    def _get_assets_files(self, source_dir: str, priority: int = 0):
-        """Walk source_dir and parse each poster into a cache record.
+    def _get_assets_files(
+        self, source_dir: str, priority: int = 0, include_assets: bool = False
+    ):
+        """Walk source_dir and parse each image into a cache record.
 
         `priority` is stamped on every returned record and used by the
         match-phase queries to enforce bottom-wins source_dir ordering.
@@ -726,6 +842,15 @@ class PosterRenamerr(ChubModule):
         Defaults to 0 for callers that don't care about priority (e.g.
         ad-hoc tests, single-folder refresh paths that don't know their
         position in source_dirs).
+
+        Each record carries an `image_type` ("poster" for a plain poster, or
+        logo/squareart/background/banner for a suffixed asset file). When
+        `include_assets` is False (the default), suffixed asset files are
+        skipped entirely so a poster_renamerr run by a user who hasn't enabled
+        Asset Renamerr stores ZERO asset rows — no poster_cache bloat and no
+        chance of an asset file being mis-handled as a poster. When True (the
+        feature is on) the one walk feeds both poster matching and the asset
+        pipeline. See build_asset_record().
         """
         style_map = self._build_gdrive_style_map()
         asset_records = []
@@ -735,48 +860,11 @@ class PosterRenamerr(ChubModule):
             for fname in sorted(files, key=str.lower):
                 if not fname.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
                     continue
-                fpath = os.path.join(root, fname)
-                folder = os.path.basename(root)
-                filename, _ = os.path.splitext(fname)
-
-                title = parse_asset_filename(fname)
-
-                year = (
-                    extract_year(fname) or extract_year(title) or extract_year(folder)
+                record = build_asset_record(
+                    fname, root, style=style, priority=priority
                 )
-                tmdb_id, tvdb_id, imdb_id = extract_ids(fname)
-                if not (tmdb_id or tvdb_id or imdb_id):
-                    tmdb_id, tvdb_id, imdb_id = extract_ids(folder)
-                match = season_number_regex.search(fname) or season_number_regex.search(
-                    folder
-                )
-                season_number = (
-                    int(match.group(1))
-                    if match and match.group(1)
-                    else (0 if match else None)
-                )
-
-                record = {
-                    "title": title,
-                    # Derive the search/match key from the raw (ext-stripped)
-                    # filename, not from `title`. normalize_titles() already
-                    # strips the year (and trailing season tag), IDs, and
-                    # special chars, so it yields the same key for normal
-                    # assets — but staying independent of parse_asset_filename
-                    # means a future title-parsing change can never silently
-                    # poison normalized_title (the root cause of the "Open
-                    # Season 2" -> "open" search/match failure).
-                    "normalized_title": normalize_titles(filename),
-                    "year": year,
-                    "tmdb_id": tmdb_id,
-                    "tvdb_id": tvdb_id,
-                    "imdb_id": imdb_id,
-                    "season_number": season_number,
-                    "folder": folder,
-                    "file": fpath,
-                    "style": style,
-                    "priority": priority,
-                }
+                if not include_assets and record.get("image_type") != "poster":
+                    continue
                 asset_records.append(record)
 
         show_keys = {
@@ -820,7 +908,11 @@ class PosterRenamerr(ChubModule):
         for idx, source_dir in enumerate(source_dirs):
             if self.is_cancelled():
                 break
-            assets = self._get_assets_files(source_dir, priority=idx)
+            assets = self._get_assets_files(
+                source_dir,
+                priority=idx,
+                include_assets=getattr(self.config, "run_asset_renamerr", False),
+            )
             per_dir_assets.append((source_dir, assets))
             total_all += len(assets)
 
@@ -1089,6 +1181,25 @@ class PosterRenamerr(ChubModule):
                     self.run_border_replacerr(manifest)
 
                 PosterUploader(db=db, logger=self.logger, manifest=manifest).run()
+
+                # Additional asset types (clear logo / squareart / background /
+                # banner) ride this run when enabled: the gdrive sync, the single
+                # image_type-aware merge_assets scan (poster_cache already holds
+                # the asset rows), and the loaded media/Plex snapshot are all
+                # reused, so no second sync/scan/fetch happens. See AssetRenamerr.
+                if self.config.run_asset_renamerr:
+                    from backend.modules.asset_renamerr import AssetRenamerr
+
+                    self.logger.info("Running asset_renamerr")
+                    asset_output = AssetRenamerr(
+                        logger=self.logger
+                    ).match_and_apply_assets(db)
+                    self.logger.info("Finished running asset_renamerr")
+                    # Notify under asset_renamerr so its own notification config
+                    # governs (mirrors how each chained module owns its policy).
+                    NotificationManager(
+                        self.full_config, self.logger, module_name="asset_renamerr"
+                    ).send_notification(asset_output)
                 # Always notify on a successful run, even when nothing
                 # was renamed — gives the user a heartbeat that the
                 # module fired. The formatter handles the empty-output

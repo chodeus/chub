@@ -74,11 +74,81 @@ class PosterRenamerrConfig(BaseModel):
     asset_folders: bool = False
     print_only_renames: bool = False
     run_border_replacerr: bool = False
+    # When True, the asset phase (clear logo / squareart / background / banner)
+    # runs inline at the end of a poster_renamerr run, reusing the same gdrive
+    # sync, the single image_type-aware source-dir scan, and the loaded
+    # media/Plex snapshot — so no second sync/scan/fetch is incurred. See
+    # AssetRenamerrConfig and backend/modules/asset_renamerr.py.
+    run_asset_renamerr: bool = False
     clean_orphan_assets: bool = False
     report_unmatched_assets: bool = False
     source_dirs: List[str] = Field(default_factory=list)
     destination_dir: str = ""
     instances: List[Union[str, Dict[str, PosterRenamerrPlexInstance]]] = Field(
+        default_factory=list
+    )
+
+
+class AssetRenamerrPlexInstance(BaseModel):
+    library_names: List[str] = Field(default_factory=list)
+
+
+class AssetRenamerrConfig(BaseModel):
+    """Additional-asset support: clear logo, square art, background, banner.
+
+    Mirrors poster_renamerr's scan/match flow but for non-poster image types.
+    Images can come from two SOURCES and be applied two WAYS:
+
+      sources (ORDERED — first match wins, encodes priority):
+        - "local": files scanned from source_dirs, named like
+          "Title (Year) {tmdb-N} - Logo.png" (the same convention as posters
+          plus a " - Logo"/" - SquareArt"/" - Background"/" - Banner" suffix).
+          source_dirs keep poster_renamerr's bottom-wins ordering within local.
+        - "tmdb": images fetched from TMDB for the media's tmdb_id (requires
+          the top-level tmdb.apikey).
+
+    Supported types per apply method (see backend/modules/asset_renamerr.py):
+      apply_method:
+        - "direct": upload straight to Plex via plexapi. Supports
+          logo (uploadLogo), background (uploadArt), squareart (uploadSquareArt).
+          plexapi has NO banner endpoint.
+        - "kometa": rename/copy the file into destination_dir using Kometa's
+          asset names for Kometa to apply. Per Kometa, asset directories read
+          only logo (logo.ext) and background (background.ext) — NOT squareart
+          or banner.
+
+    Net capability matrix:
+        logo       → direct ✓ / kometa ✓
+        background → direct ✓ / kometa ✓
+        squareart  → direct ✓ / kometa ✗ (Kometa ignores square art)
+
+    (Banner is intentionally unsupported: Plex has no banner upload API and
+    Kometa does not read banners from asset directories — there is no path.)
+
+    An unsupported (type, apply_method) combination — squareart on the kometa
+    path — is NOT a validation error (config must stay loadable while the user
+    toggles apply_method); it is skipped with a warning during the run. Defaults
+    to the two universally supported types so users who don't tune this never
+    hit a no-op.
+    """
+
+    log_level: str = "info"
+    dry_run: bool = False
+    # Ordered source preference; first source yielding an image wins.
+    sources: List[str] = Field(default_factory=lambda: ["local", "tmdb"])
+    # Which non-poster asset types to process. Defaults to the two types that
+    # work on BOTH apply methods. squareart (direct only) can be added
+    # explicitly. Valid values: "logo", "background", "squareart".
+    asset_types: List[str] = Field(default_factory=lambda: ["logo", "background"])
+    apply_method: str = "kometa"  # "direct" | "kometa"
+    action_type: str = "copy"  # copy | move | hardlink | symlink (kometa path)
+    asset_folders: bool = False  # per-title folders (kometa path)
+    destination_dir: str = ""  # kometa path
+    source_dirs: List[str] = Field(default_factory=list)  # local source
+    print_only_renames: bool = False
+    sync_assets: bool = False  # run sync_gdrive first (standalone path)
+    tmdb_language: str = "en"  # preferred language for TMDB image selection
+    instances: List[Union[str, Dict[str, AssetRenamerrPlexInstance]]] = Field(
         default_factory=list
     )
 
@@ -356,6 +426,7 @@ class TMDBConfig(BaseModel):
 # Notifications is a dict of module_name to dicts (arbitrary structure, so keep Any)
 class ConfigNotifications(BaseModel):
     poster_renamerr: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    asset_renamerr: Optional[Dict[str, Any]] = Field(default_factory=dict)
     unmatched_assets: Optional[Dict[str, Any]] = Field(default_factory=dict)
     health_checkarr: Optional[Dict[str, Any]] = Field(default_factory=dict)
     labelarr: Optional[Dict[str, Any]] = Field(default_factory=dict)
@@ -383,6 +454,7 @@ class ChubConfig(BaseModel):
         default_factory=UnmatchedAssetsConfig
     )
     poster_renamerr: PosterRenamerrConfig = Field(default_factory=PosterRenamerrConfig)
+    asset_renamerr: AssetRenamerrConfig = Field(default_factory=AssetRenamerrConfig)
     border_replacerr: BorderReplacerrConfig = Field(
         default_factory=BorderReplacerrConfig
     )

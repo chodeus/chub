@@ -747,8 +747,41 @@ def format_for_discord(
             )
         return fields
 
+    def fmt_asset_renamerr(o: Any) -> List[Dict[str, Any]]:
+        """Format asset_renamerr output for Discord embeds.
+
+        Input is ``{image_type: [{title, year, source, applied, reason}, ...]}``.
+        One field per image_type (logo/background/squareart) summarising applied
+        vs skipped (e.g. squareart skipped on the kometa path).
+        """
+        fields: List[Dict[str, Any]] = []
+        had_any = False
+        for image_type, entries in (o or {}).items():
+            if not entries:
+                continue
+            applied = [e for e in entries if e.get("applied")]
+            lines = [f"{len(applied)}/{len(entries)} applied"]
+            for e in entries:
+                title = e.get("title") or ""
+                year = e.get("year")
+                disp = f"{title} ({year})" if year else title
+                mark = "✓" if e.get("applied") else "✗"
+                src = e.get("source")
+                suffix = f" [{src}]" if src else ""
+                lines.append(f"{mark} {disp}{suffix} — {e.get('reason', '')}")
+            had_any = True
+            text = "\n".join(lines)
+            fields.append(
+                {"name": image_type.capitalize(), "value": f"```{text}```"}
+            )
+
+        if not had_any:
+            fields = [{"name": "No assets were applied.", "value": ""}]
+        return fields
+
     registry: Dict[str, Dict[str, Any]] = {
         "poster_renamerr": {"formatter": fmt_poster_renamerr, "type": "embedded"},
+        "asset_renamerr": {"formatter": fmt_asset_renamerr, "type": "embedded"},
         "renameinatorr": {"formatter": fmt_renameinatorr, "type": "embedded"},
         "health_checkarr": {"formatter": fmt_health_checkarr, "type": "embedded"},
         "nohl": {"formatter": fmt_nohl, "type": "embedded"},

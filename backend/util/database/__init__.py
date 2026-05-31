@@ -9,6 +9,7 @@ from backend.util.logger import Logger
 from .collection_cache import CollectionCache
 from .db_base import DatabaseBase
 from .holiday import HolidayStatus
+from .media_asset_matches import MediaAssetMatches
 from .media_cache import MediaCache
 from .plex_cache import PlexCache
 from .poster_cache import PosterCache
@@ -17,6 +18,7 @@ from .schema import SchemaManager
 from .stats import Stats
 from .tmdb_id_cache import TmdbIdCache
 from .tmdb_details_cache import TmdbDetailsCache
+from .tmdb_images_cache import TmdbImagesCache
 from .upgradinatorr_progress import UpgradinatorrProgress
 from .webhook_cache import WebhookCache
 from .worker import DBWorker
@@ -168,6 +170,11 @@ class ChubDB:
         return self._get_interface("poster", PosterCache)
 
     @property
+    def media_asset_matches(self) -> MediaAssetMatches:
+        """Access to per-(media, image_type) asset match provenance."""
+        return self._get_interface("media_asset_matches", MediaAssetMatches)
+
+    @property
     def run_state(self) -> RunState:
         """Access to run state operations."""
         return self._get_interface("run_state", RunState)
@@ -201,6 +208,11 @@ class ChubDB:
     def tmdb_details_cache(self) -> TmdbDetailsCache:
         """Access to TMDB details cache (id verification / AKA hydration)."""
         return self._get_interface("tmdb_details_cache", TmdbDetailsCache)
+
+    @property
+    def tmdb_images_cache(self) -> TmdbImagesCache:
+        """Access to TMDB images cache (logo / background URLs)."""
+        return self._get_interface("tmdb_images_cache", TmdbImagesCache)
 
     @property
     def worker(self) -> DBWorker:
@@ -306,6 +318,7 @@ __all__ = [
     "DBWorker",
     "HolidayStatus",
     "MediaCache",
+    "MediaAssetMatches",
     "WebhookCache",
     "with_database",
 ]
