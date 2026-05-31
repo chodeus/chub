@@ -144,14 +144,19 @@ def _load_metadata_item_index(db_path: str) -> Dict[str, Dict[str, Any]]:
         conn = sqlite3.connect(db_path)
         try:
             cur = conn.cursor()
-            try:
-                cur.execute(
-                    "SELECT id, title, year, metadata_type, library_section_id, "
-                    "user_thumb_url, user_art_url, user_banner_url FROM metadata_items"
-                )
-                for row in cur.fetchall():
-                    item_id, title, year, mtype, section_id, thumb, art, banner = row
-                    for url in (thumb, art, banner):
+            # Anchor on EVERY in-use image column (the canonical
+            # IN_USE_IMAGE_COLUMNS, same as get_in_use_hashes), not just
+            # thumb/art/banner — otherwise an item whose only on-disk anchor is
+            # a clear logo or square art is never matched and surfaces in the
+            # cleanarr UI with empty title/year. Query each column separately so
+            # an older Plex schema missing one skips it instead of dropping all.
+            for col in IN_USE_IMAGE_COLUMNS:
+                try:
+                    cur.execute(
+                        "SELECT id, title, year, metadata_type, "
+                        f"library_section_id, {col} FROM metadata_items"
+                    )
+                    for item_id, title, year, mtype, section_id, url in cur.fetchall():
                         if not url:
                             continue
                         parsed = urlparse(url)
@@ -165,10 +170,9 @@ def _load_metadata_item_index(db_path: str) -> Dict[str, Dict[str, Any]]:
                             "metadata_type": mtype,
                             "library_section_id": section_id,
                         }
-            except sqlite3.OperationalError:
-                # metadata_items may be missing some columns on older Plex
-                # schemas — swallow and return whatever we have so far.
-                pass
+                except sqlite3.OperationalError:
+                    # Older Plex schema lacks this column — skip it.
+                    continue
         finally:
             conn.close()
     except Exception:
