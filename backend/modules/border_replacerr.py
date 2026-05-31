@@ -216,7 +216,9 @@ class BorderReplacerr(ChubModule):
                 f"Error compositing image border on "
                 f"{os.path.basename(original_file)}: {e}"
             )
-            return False
+            # None = failure (distinct from False = no change needed) so run()
+            # can tally it instead of silently counting it as processed.
+            return None
 
     def replace_borders(self, original_file, renamed_file, border_color, border_width):
         try:
@@ -258,7 +260,7 @@ class BorderReplacerr(ChubModule):
             self.logger.error(
                 f"Error replacing border on {os.path.basename(original_file)}: {e}"
             )
-            return False
+            return None  # None = failure (vs False = no change needed)
 
     def remove_borders(self, original_file, renamed_file, border_width):
         try:
@@ -296,7 +298,7 @@ class BorderReplacerr(ChubModule):
             self.logger.error(
                 f"Error removing border on {os.path.basename(original_file)}: {e}"
             )
-            return False
+            return None  # None = failure (vs False = no change needed)
 
     def run(self, manifest: dict):
         with ChubDB(logger=self.logger) as db:
@@ -326,6 +328,7 @@ class BorderReplacerr(ChubModule):
             replaced = 0
             removed = 0
             skipped = 0
+            failed = 0
             if reset_all:
                 self.logger.debug(
                     "Holiday state changed (or startup). Doing full reprocessing of all matched assets."
@@ -454,6 +457,8 @@ class BorderReplacerr(ChubModule):
                                         "detail": os.path.basename(border_path),
                                     }
                                 )
+                        elif result is None:
+                            failed += 1
                         processed += 1
                     elif border_colors:
                         color = border_colors[color_index]
@@ -480,6 +485,8 @@ class BorderReplacerr(ChubModule):
                                         "detail": color,
                                     }
                                 )
+                        elif result is None:
+                            failed += 1
                         processed += 1
                     else:
                         if not dry_run:
@@ -503,6 +510,8 @@ class BorderReplacerr(ChubModule):
                                         "detail": "",
                                     }
                                 )
+                        elif result is None:
+                            failed += 1
                         processed += 1
 
             if changes:
@@ -526,6 +535,8 @@ class BorderReplacerr(ChubModule):
                 ["Processed", processed],
                 ["Skipped", skipped],
             ]
+            if failed:
+                summary_table.append(["Failed", failed])
             if replaced:
                 summary_table.append(["Borders replaced", replaced])
             elif removed:
@@ -549,8 +560,14 @@ class BorderReplacerr(ChubModule):
                     f"Border replacerr completed: {processed} processed, {skipped} skipped. No borders changed."
                 )
             self.logger.info(
-                f"   → {processed} processed, {replaced} replaced, {removed} removed, {skipped} skipped"
+                f"   → {processed} processed, {replaced} replaced, {removed} removed, "
+                f"{skipped} skipped, {failed} failed"
             )
+            if failed:
+                self.logger.warning(
+                    f"{failed} poster(s) failed to composite/replace/remove — "
+                    "see the ERROR lines above for details."
+                )
             self.logger.info("")
 
             db.holiday.set_status(active_holiday)
@@ -568,6 +585,7 @@ class BorderReplacerr(ChubModule):
                             "skipped": skipped,
                             "replaced": replaced,
                             "removed": removed,
+                            "failed": failed,
                             "active_holiday": active_holiday,
                         }
                     )
