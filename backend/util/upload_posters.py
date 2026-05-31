@@ -550,6 +550,16 @@ class PosterUploader:
                 "title": title_override or normalize_titles(asset_title),
             }
 
+            # Season entries are indexed with a ":S{n}" suffix on EVERY key
+            # (tmdb:123:S2, title:show:S2). title_override already carries it,
+            # but the guid values were left bare, so the guid priority keys
+            # never matched and season posters silently fell back to title-only
+            # matching (wrong-show collisions). Suffix the guid values too.
+            if season_number is not None:
+                for _k in ("tmdb", "imdb", "tvdb"):
+                    if search_values.get(_k):
+                        search_values[_k] = f"{search_values[_k]}:S{season_number}"
+
             matched_entries, match_type = self.match_asset(
                 index, priority_keys, search_values
             )
