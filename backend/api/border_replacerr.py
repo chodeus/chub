@@ -345,7 +345,7 @@ async def preview_options(
         "tokens; fetch each composite via /api/border-replacerr/preview/file/{token}.jpg."
     ),
 )
-async def generate_preview(
+def generate_preview(
     count: int = Query(6, ge=1, le=24),
     holiday: str = Query("current"),
     db: ChubDB = Depends(get_database),
@@ -601,7 +601,7 @@ def _resolve_variant_source_dir(source: str, folder: str) -> Optional[Path]:
         404: {"description": "Variant not found"},
     },
 )
-async def border_thumbnail(
+def border_thumbnail(
     holiday: str,
     source: str,
     variant: str,

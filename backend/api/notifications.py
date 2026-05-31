@@ -91,7 +91,7 @@ def get_config() -> ChubConfig:
         502: {"description": "Notification service connection failed"},
     },
 )
-async def test_notification(
+def test_notification(
     payload: NotificationPayload, logger: Any = Depends(get_logger)
 ) -> JSONResponse:
     """
