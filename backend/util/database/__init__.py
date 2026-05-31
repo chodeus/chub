@@ -1,6 +1,7 @@
 # util/database/__init__.py
 
 import os
+import threading
 from typing import List, Optional
 
 from backend.util.helper import get_config_dir
@@ -62,8 +63,13 @@ class ChubDB:
             config_dir = get_config_dir()
             self.db_path = os.path.join(config_dir, "chub.db")
 
-        # Database interfaces (lazy-loaded)
+        # Database interfaces (lazy-loaded). The lock guards the check-then-set
+        # in _get_interface: a single ChubDB is shared between async API
+        # handlers and worker threads, and constructing an interface re-runs
+        # init_schema (blocking I/O that releases the GIL), so two threads could
+        # otherwise both miss the cache and double-construct.
         self._interfaces = {}
+        self._interfaces_lock = threading.Lock()
 
         # Track created workers for cleanup
         self.created_workers: List[DBWorker] = []
@@ -125,9 +131,12 @@ class ChubDB:
         self._ensure_schema_initialized()
 
         if interface_name not in self._interfaces:
-            self._interfaces[interface_name] = interface_class(
-                logger=self.logger, db_path=self.db_path
-            )
+            with self._interfaces_lock:
+                # Re-check inside the lock (another thread may have built it).
+                if interface_name not in self._interfaces:
+                    self._interfaces[interface_name] = interface_class(
+                        logger=self.logger, db_path=self.db_path
+                    )
 
         return self._interfaces[interface_name]
 

@@ -52,6 +52,32 @@ class ColumnDefinition:
 
         return sql
 
+    def to_add_column_sql(self) -> str:
+        """Column clause valid for ``ALTER TABLE ... ADD COLUMN``.
+
+        SQLite rejects UNIQUE, PRIMARY KEY, and non-constant DEFAULT (e.g.
+        CURRENT_TIMESTAMP) on ADD COLUMN, and only allows NOT NULL when a
+        constant default is supplied. Emit only what ADD COLUMN accepts;
+        uniqueness is recreated via a separate CREATE UNIQUE INDEX in
+        add_missing_columns so the constraint isn't silently lost.
+        """
+        sql = f"{self.name} {self.type}"
+        has_constant_default = self.default is not None and not (
+            isinstance(self.default, str) and self.default == "CURRENT_TIMESTAMP"
+        )
+        if not self.nullable and has_constant_default:
+            sql += " NOT NULL"
+        if has_constant_default:
+            if isinstance(self.default, str):
+                sql += f" DEFAULT '{self.default}'"
+            else:
+                sql += f" DEFAULT {self.default}"
+        if self.check_constraint:
+            sql += f" CHECK ({self.check_constraint})"
+        if self.foreign_key:
+            sql += f" REFERENCES {self.foreign_key}"
+        return sql
+
 
 @dataclass
 class TableDefinition:
@@ -229,6 +255,9 @@ class SchemaManager:
                 "CREATE INDEX IF NOT EXISTS media_cache_ignored_idx ON media_cache (ignored)",
                 "CREATE INDEX IF NOT EXISTS media_cache_matched_at_idx ON media_cache (matched_at)",
                 "CREATE INDEX IF NOT EXISTS media_cache_instance_idx ON media_cache (instance_name)",
+                # Composite for sync_for_instance / clear_by_instance_and_type,
+                # which filter on (instance_name, asset_type) together.
+                "CREATE INDEX IF NOT EXISTS media_cache_instance_type_idx ON media_cache (instance_name, asset_type)",
                 # Advanced search filtering indexes
                 "CREATE INDEX IF NOT EXISTS media_cache_status_idx ON media_cache (status)",
                 "CREATE INDEX IF NOT EXISTS media_cache_rating_idx ON media_cache (rating)",
@@ -750,12 +779,21 @@ class SchemaManager:
 
             for column_def in table_def.columns:
                 if column_def.name not in current_columns:
-                    # Add missing column
+                    # Add missing column. Use the ADD COLUMN-safe clause (no
+                    # UNIQUE / PRIMARY KEY / non-constant DEFAULT, which SQLite
+                    # rejects on ALTER) and recreate uniqueness as an index.
                     alter_sql = (
-                        f"ALTER TABLE {table_name} ADD COLUMN {column_def.to_sql()}"
+                        f"ALTER TABLE {table_name} "
+                        f"ADD COLUMN {column_def.to_add_column_sql()}"
                     )
                     try:
                         cursor.execute(alter_sql)
+                        if column_def.unique:
+                            cursor.execute(
+                                f"CREATE UNIQUE INDEX IF NOT EXISTS "
+                                f"{table_name}_{column_def.name}_uq "
+                                f"ON {table_name} ({column_def.name})"
+                            )
                         changes.append(
                             f"Added column {column_def.name} to {table_name}"
                         )
@@ -763,8 +801,10 @@ class SchemaManager:
                             f"Added column {column_def.name} to table {table_name}"
                         )
                     except sqlite3.Error as e:
-                        logger.error(
-                            f"Failed to add column {column_def.name} to {table_name}: {e}"
+                        logger.warning(
+                            f"[schema] Could not add column {column_def.name} to "
+                            f"{table_name} via ALTER ({e}); a one-time table "
+                            f"rebuild may be required for this column."
                         )
 
         return changes
@@ -1030,12 +1070,17 @@ class SchemaManager:
             # Add missing tables
             changes["tables_added"] = self.add_missing_tables(conn)
 
-            # One-shot rename migrations (legacy table -> new table)
-            self._run_rename_migrations(conn)
-
-            # Add missing columns (if enabled)
+            # Add missing columns (if enabled) BEFORE the one-shot migrations:
+            # a column-targeted migration UPDATE (e.g. the has_content backfill)
+            # would otherwise raise "no such column" on an upgrade that predates
+            # the column, fail to record success, and re-attempt every startup.
             if add_missing_columns:
                 changes["columns_added"] = self.add_missing_columns(conn)
+
+            # One-shot rename / data migrations (legacy table -> new table, and
+            # column-targeted backfills) — now run against the fully-formed
+            # schema.
+            self._run_rename_migrations(conn)
 
             # Add missing indexes
             changes["indexes_added"] = self.add_missing_indexes(conn)
