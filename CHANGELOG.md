@@ -2,6 +2,34 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.23.0](https://github.com/chodeus/chub/compare/v2.22.0...v2.23.0) (2026-05-31)
+
+
+### Features
+
+* **border_replacerr:** surface per-poster failures in the summary (N21) ([196b117](https://github.com/chodeus/chub/commit/196b1178767fb976ab99b10a445da0ab54a23960))
+
+
+### Bug Fixes
+
+* **asset_renamerr:** per-library backfill for direct asset apply (P7, WS-4) ([b3929c2](https://github.com/chodeus/chub/commit/b3929c278268ca8696e2ae7b54faaf51df4f1942))
+* **border_replacerr:** crash-proof holiday parsing + bounds + anchors (WS-3) ([7ff9ce3](https://github.com/chodeus/chub/commit/7ff9ce3f041685a50dd10a2deeced3450881a253))
+* **config:** reject invalid action_type/apply_method/count (WS-8) ([1fc661d](https://github.com/chodeus/chub/commit/1fc661da36bd3ec5d58dc57992003338b6105e0b))
+* **db:** DB robustness — busy_timeout, rebuild lock, safe ALTER (WS-5) ([e91212b](https://github.com/chodeus/chub/commit/e91212b842fc9d153c79b6fe80d0762adbd44ba1))
+* **frontend:** guard stale-data races in useApiData + JobsPage (P31, N28) ([884a6bf](https://github.com/chodeus/chub/commit/884a6bfaf2a67334eb105eb2e5e382f4fd55fd2f))
+* **match:** season-poster GUID matching + collection attrs (WS-4 part 1) ([52cc59d](https://github.com/chodeus/chub/commit/52cc59d7ba5b98115ba7ba86593a895f9136ec30))
+* **resilience:** ARR/worker/TMDB/Plex-wait robustness (WS-6) ([22a7e12](https://github.com/chodeus/chub/commit/22a7e12af0964261c17c30f468565ccc313f8929))
+* **security:** close auth-boundary and secret-exposure gaps (WS-2) ([83bc211](https://github.com/chodeus/chub/commit/83bc211aa194332c15a762a8efe59870957f4075))
+
+
+### Performance
+
+* **api:** offload blocking handlers off the event loop, part 1 (WS-1) ([cc4abcc](https://github.com/chodeus/chub/commit/cc4abcc063657a43a69365408ee573f72b3f6421))
+* **api:** offload duplicate-resolve + duplicate-members handlers (N8, N9) ([2da9ab6](https://github.com/chodeus/chub/commit/2da9ab6c0810f9cdfd479d9616438c106bd77998))
+* **api:** offload poster apply/upload/optimize handlers (P2, WS-1) ([7b77aed](https://github.com/chodeus/chub/commit/7b77aed384761f5ec5e46bab7d9bcfa3cf808ec1))
+* **api:** offload remaining blocking handlers, part 2 (WS-1) ([e56ba55](https://github.com/chodeus/chub/commit/e56ba5545078218de19726b006f27c27ce8d11cb))
+* **labelarr:** build plex mapping once per bulk sync (P3, WS-4) ([1f68506](https://github.com/chodeus/chub/commit/1f685064433de3031ad1b912e4967dcf0ec8484e))
+
 ## [2.22.0](https://github.com/chodeus/chub/compare/v2.21.0...v2.22.0) (2026-05-31)
 
 
