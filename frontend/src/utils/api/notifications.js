@@ -2,7 +2,7 @@
  * CHUB Notifications API Module
  *
  * Handles notification configuration management for CHUB modules:
- * - Notification service configuration (Discord, Notifiarr, Email)
+ * - Notification service configuration (Discord, Notifiarr)
  * - Notification testing and validation
  * - Per-module notification settings
  * - Service-specific configuration management
@@ -24,8 +24,7 @@ export const notificationsAPI = {
      * {
      *   module_name: {
      *     discord: { bot_name, color, webhook },
-     *     notifiarr: { color, webhook, channel_id },
-     *     email: { smtp_server, smtp_port, use_tls, username, password, from, to }
+     *     notifiarr: { color, webhook, channel_id }
      *   }
      * }
      */
@@ -41,7 +40,7 @@ export const notificationsAPI = {
      * Create or update notification configuration for a module
      * @param {Object} data - Notification configuration data
      * @param {string} data.module - Module name
-     * @param {string} data.service_type - Service type ("discord" | "notifiarr" | "email")
+     * @param {string} data.service_type - Service type ("discord" | "notifiarr")
      * @param {Object} data.config - Service-specific configuration
      * @returns {Promise<Object>} Updated notification configuration
      *
@@ -70,7 +69,7 @@ export const notificationsAPI = {
     /**
      * Delete notification service configuration for a module
      * @param {string} moduleId - Module identifier
-     * @param {string} serviceType - Service type to delete ("discord" | "notifiarr" | "email")
+     * @param {string} serviceType - Service type to delete ("discord" | "notifiarr")
      * @returns {Promise<Object>} Deletion confirmation
      *
      * Response format:

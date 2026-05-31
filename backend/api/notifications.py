@@ -39,7 +39,7 @@ class NotificationUpdateRequest(BaseModel):
     """Request schema for creating/updating notification configuration."""
 
     module: str
-    service_type: str  # "discord" | "notifiarr" | "email"
+    service_type: str  # "discord" | "notifiarr"
     config: dict  # Service-specific configuration
 
 
@@ -98,8 +98,8 @@ async def test_notification(
     Test notification configuration for a module.
 
     Sends a test notification using the provided configuration to verify
-    that notification settings are working correctly. Supports various
-    notification services like Discord, Slack, email, etc.
+    that notification settings are working correctly. Supports the configured
+    notification services (Discord, Notifiarr).
 
     Args:
         payload: Module name and notification configuration to test
@@ -347,7 +347,7 @@ async def update_module_notification(
             )
 
         # Validate service type
-        allowed_service_types = ["discord", "notifiarr", "email"]
+        allowed_service_types = ["discord", "notifiarr"]
         if service_type not in allowed_service_types:
             return error(
                 f"Invalid service type: '{service_type}'. "
@@ -423,7 +423,7 @@ async def delete_module_notification(
 
     Args:
         module_id: Module name to remove notification for
-        service_type: Service type to remove (discord, notifiarr, email)
+        service_type: Service type to remove (discord, notifiarr)
 
     Returns:
         Success confirmation with deleted module name and service type

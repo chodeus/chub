@@ -5,10 +5,8 @@ import traceback
 from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Any, Dict, List, Optional, Tuple, Union
-from urllib.parse import quote
 
 import requests
-from apprise import Apprise
 from ratelimit import limits, sleep_and_retry
 
 
@@ -38,7 +36,6 @@ class NotificationManager:
         self.SEND_HANDLERS = {
             "notifiarr": self.send_notifiarr_notification,
             "discord": self.send_discord_notification,
-            "email": self.send_email_notification,
         }
 
     @staticmethod
@@ -321,58 +318,6 @@ class NotificationManager:
             messages.append(msg)
         return success, "; ".join(messages)
 
-    def send_apprise_notification(
-        self,
-        label: str,
-        apprise: Apprise,
-        title: str,
-        body: str,
-        body_format: str = "text",
-    ) -> Tuple[bool, str]:
-        try:
-            sent = apprise.notify(title=title, body=body, body_format=body_format)
-            if sent:
-                self.logger.info(f"[Notification] ✅ {label} sent via Apprise.")
-                return True, "Notification sent via Apprise."
-            else:
-                err_msg = self.format_notification_error(apprise, label)
-                self.logger.error(
-                    f"[Notification] ❌ {label} failed via Apprise: {err_msg}"
-                )
-                return False, err_msg
-        except Exception as e:
-            tb_str = traceback.format_exc()
-            self.logger.error(
-                f"[Notification] ❌ {label} exception via Apprise: {e}\n{tb_str}",
-                exc_info=True,
-            )
-            return False, f"{e}\n{tb_str}"
-
-    def send_email_notification(
-        self,
-        apprise: Apprise,
-        module_title: str,
-        output: Any,
-    ) -> Tuple[bool, str]:
-        from backend.util.notification_formatting import format_for_email
-
-        try:
-            body, success = format_for_email(self.format_config, output)
-            if not success:
-                self.logger.warning("[Notification] Email skipped: no formatter found.")
-                return False, "No email formatter found."
-            subject = f"{module_title} Notification"
-            return self.send_apprise_notification(
-                f"{module_title} Email", apprise, subject, body, "html"
-            )
-        except Exception as e:
-            tb_str = traceback.format_exc()
-            self.logger.error(
-                f"[Notification] Unhandled exception during email notification: {e}\n{tb_str}",
-                exc_info=True,
-            )
-            return False, f"{e}\n{tb_str}"
-
     def collect_valid_targets(
         self, test: bool = False
     ) -> Dict[str, Union[str, Dict[str, Any]]]:
@@ -423,36 +368,6 @@ class NotificationManager:
                     else:
                         logger.warning("Invalid Notifiarr configuration")
                         target_data["notifiarr"] = "Invalid Notifiarr configuration"
-                elif ttype == "email":
-                    smtp_server = target.get("smtp_server")
-                    smtp_port = target.get("smtp_port", 587)
-                    username = target.get("username", "")
-                    password = target.get("password", "")
-                    from_addr = target.get("from", "")
-                    to_addrs = target.get("to", [])
-                    use_tls = target.get("use_tls", False)
-                    if smtp_server and from_addr and to_addrs:
-                        proto = "mailtos" if use_tls else "mailto"
-                        if username and password:
-                            user = quote(username, safe="")
-                            pwd = quote(password, safe="")
-                            auth = f"{user}:{pwd}@"
-                        else:
-                            auth = ""
-                        host_part = f"{smtp_server}:{smtp_port}"
-                        params = []
-                        to_addrs_list = (
-                            [to_addrs] if isinstance(to_addrs, str) else to_addrs
-                        )
-                        params.append("to=" + quote(",".join(to_addrs_list)))
-                        params.append("from=" + quote(from_addr))
-                        query = "&".join(params)
-                        mail_url = f"{proto}://{auth}{host_part}?{query}"
-                        target_data[ttype] = mail_url
-                    else:
-                        msg = "Invalid email configuration"
-                        logger.warning(msg)
-                        target_data[ttype] = msg
                 else:
                     target_data[ttype] = f"Invalid - Unknown notification type: {ttype}"
         except Exception as e:
@@ -481,10 +396,6 @@ class NotificationManager:
                     elif target == "discord":
                         cfg = DiscordConfig(**data)
                         ok, msg = handler(cfg, module_title, output)
-                    elif target == "email":
-                        apprise = Apprise()
-                        apprise.add(data)
-                        ok, msg = handler(apprise, module_title, output)
                     else:
                         ok, msg = False, f"Unknown handler for {target}"
                     entry["ok"] = ok
@@ -541,13 +452,7 @@ class NotificationManager:
                         cfg, module_title, None, test=True
                     )
                 else:
-                    apprise = Apprise()
-                    apprise.add(data)
-                    subject = f"{target} Notification Test"
-                    body = "This is a test notification."
-                    ok, msg = self.send_apprise_notification(
-                        f"{target} Notification Test", apprise, subject, body, "text"
-                    )
+                    ok, msg = False, f"Unknown notification target: {target}"
                 entry["ok"] = ok
                 entry["message"] = msg
                 if not ok:
@@ -564,57 +469,16 @@ class NotificationManager:
             out["error"] = "; ".join(errors)
         return out
 
-    @staticmethod
-    def extract_apprise_errors(apprise: Apprise) -> str:
-        errors = []
-        for service in apprise:
-            err = getattr(service, "notify_error", None)
-            if callable(err):
-                notify_err = err()
-                if notify_err:
-                    errors.append(str(notify_err))
-            last_resp = getattr(service, "last_response", None)
-            if last_resp and str(last_resp) not in errors:
-                errors.append(str(last_resp))
-            resp = getattr(service, "response", None)
-            if resp and str(resp) not in errors:
-                errors.append(str(resp))
-            if hasattr(service, "details") and callable(service.details):
-                try:
-                    details = service.details()
-                    if details and isinstance(details, dict):
-                        for k, v in details.items():
-                            if isinstance(v, str) and (
-                                "error" in v.lower() or "fail" in v.lower()
-                            ):
-                                errors.append(f"{k}: {v}")
-                    elif details and isinstance(details, str) and details not in errors:
-                        errors.append(details)
-                except Exception:
-                    pass
-        errors = [e for e in errors if not e.startswith("Service:")] or errors
-        if not errors:
-            return "Unknown notification error. (No error message was provided by Apprise or the notification service.) Please double-check your config values and try sending a test with debug logs enabled."
-        return "; ".join(dict.fromkeys(errors))
-
     def format_notification_error(
         self, source: Any, label: str = "", config: Any = None
     ) -> str:
         if isinstance(source, requests.Response):
             return self.extract_error(source)
-        try:
-            if isinstance(source, Apprise):
-                msg = self.extract_apprise_errors(source)
-                if "Unknown notification error" in msg and config is not None:
-                    return f"{msg}\n\nConfig used:\n{json.dumps(config, indent=2)}"
-                return msg
-        except Exception:
-            pass
         return f"{label} unknown error"
 
 
 class ErrorNotifyHandler(logging.Handler):
-    """Custom logging handler to send errors to Discord/Notifiarr/Email via notifications.
+    """Custom logging handler to send errors to Discord/Notifiarr via notifications.
 
     Reads the notification config from the `main` section but renders using the
     `error_notify` formatter. Uses a thread-local re-entry guard so log calls made
@@ -692,7 +556,7 @@ def install_error_notify_handler(config, logger=None) -> Optional[ErrorNotifyHan
             if isinstance(section, dict):
                 main_targets = section
 
-    if not any(k in main_targets for k in ("discord", "notifiarr", "email")):
+    if not any(k in main_targets for k in ("discord", "notifiarr")):
         return None
 
     handler = ErrorNotifyHandler(config, module_name="main", logger=logger)

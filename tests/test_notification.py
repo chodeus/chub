@@ -222,31 +222,6 @@ def test_collect_targets_notifiarr_preserves_color_and_channel():
     assert "bot_name" not in targets["notifiarr"]
 
 
-def test_collect_targets_email_maps_from_and_to_correctly():
-    """Regression: UI label/key swap used to invert sender/recipients."""
-    cfg = SimpleNamespace(
-        notifications={
-            "poster_renamerr": {
-                "email": {
-                    "smtp_server": "smtp.example.com",
-                    "smtp_port": 587,
-                    "use_tls": True,
-                    "username": "user",
-                    "password": "pw",
-                    "from": "sender@example.com",
-                    "to": "recipient@example.com",
-                }
-            }
-        }
-    )
-    m = make_manager(cfg)
-    url = m.collect_valid_targets()["email"]
-    # Apprise mailto URL must have to=recipient, from=sender
-    assert "to=recipient%40example.com" in url
-    assert "from=sender%40example.com" in url
-    assert url.startswith("mailtos://")  # use_tls=True
-
-
 # --- build_discord_payload: bot_name reaches the Discord username field ---
 
 
