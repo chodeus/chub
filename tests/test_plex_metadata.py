@@ -106,7 +106,11 @@ def _make_plex_db(path):
         [
             ("upload://posters/abc123", None, None),
             (None, "metadata://art/zzz999", None),
-            ("http://external.example/x.jpg", None, None),  # not upload:// or metadata://
+            (
+                "http://external.example/x.jpg",
+                None,
+                None,
+            ),  # not upload:// or metadata://
             (None, None, "upload://banners/banner1"),
         ],
     )
@@ -136,3 +140,30 @@ def test_invalidate_cache_does_not_raise():
     # No-op assertion; just verify it doesn't crash on empty cache
     invalidate_cache()
     invalidate_cache()
+
+
+def test_get_in_use_hashes_includes_clear_logo_and_square_art(tmp_path):
+    """Regression: the in-use scan must protect clear logos + square art (the
+    'new experience' columns) so the bloat cleaner can't delete custom ones."""
+    from backend.util.plex_metadata import IN_USE_IMAGE_COLUMNS
+
+    assert "user_clear_logo_url" in IN_USE_IMAGE_COLUMNS
+    assert "user_square_art_url" in IN_USE_IMAGE_COLUMNS
+
+    db = tmp_path / "lib5.db"
+    conn = sqlite3.connect(str(db))
+    conn.execute(
+        "CREATE TABLE metadata_items (id INTEGER PRIMARY KEY, "
+        "user_thumb_url TEXT, user_art_url TEXT, user_banner_url TEXT, "
+        "user_clear_logo_url TEXT, user_square_art_url TEXT)"
+    )
+    conn.execute(
+        "INSERT INTO metadata_items (user_clear_logo_url, user_square_art_url) "
+        "VALUES ('upload://logos/logo1', 'upload://squareart/sq1')"
+    )
+    conn.commit()
+    conn.close()
+
+    hashes = get_in_use_hashes(str(db))
+    assert "logo1" in hashes
+    assert "sq1" in hashes

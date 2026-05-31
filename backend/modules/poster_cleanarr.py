@@ -4,11 +4,9 @@ import glob
 import json
 import os
 import shutil
-import sqlite3
 import time
 import zipfile
 from typing import Any, Dict, List, Optional, Set, Tuple
-from urllib.parse import urlparse
 
 from PIL import Image, UnidentifiedImageError
 
@@ -264,9 +262,12 @@ class PosterCleanarr(ChubModule):
     # =========================================================================
 
     def _get_plex_server(self):
-        """Get a PlexServer connection using CHUB instance config with retry logic."""
-        from plexapi.server import PlexServer
+        """Select the configured Plex instance and connect (with retry).
 
+        Selection is module-specific (tolerates Radarr/Sonarr entries mixed into
+        the same `instances` list for the orphan-asset comparison set); the
+        connect+retry loop is the shared plex.connect_plex_with_retry.
+        """
         instances = self.config.instances
         plex_instances = self.full_config.instances.plex
 
@@ -281,9 +282,7 @@ class PosterCleanarr(ChubModule):
             )
             return None
 
-        # Pick the first configured instance that is a Plex one. Lets users add
-        # Radarr/Sonarr entries to the same `instances` list for the orphan-
-        # asset comparison set without breaking bloat-image flow.
+        # Pick the first configured instance that is a Plex one.
         instance_name = next((n for n in instances if n in plex_instances), None)
         if instance_name is None:
             self.logger.error(
@@ -295,7 +294,6 @@ class PosterCleanarr(ChubModule):
         instance_detail = plex_instances[instance_name]
         url = instance_detail.url
         token = instance_detail.api
-        timeout = self.config.timeout
 
         if not url or not token:
             self.logger.error(
@@ -303,38 +301,16 @@ class PosterCleanarr(ChubModule):
             )
             return None
 
-        max_retries = 5
-        backoff = 60
+        from backend.util.plex import connect_plex_with_retry
 
-        for attempt in range(1, max_retries + 1):
-            try:
-                self.logger.info(
-                    f"Connecting to Plex '{instance_name}' at {url} (attempt {attempt}/{max_retries})..."
-                )
-                server = PlexServer(url, token, timeout=timeout)
-                _ = server.version
-                self.logger.info(f"Connected to Plex server v{server.version}")
-                return server
-            except Exception as e:
-                err_msg = str(e).lower()
-                if "unauthorized" in err_msg or "401" in err_msg:
-                    self.logger.error(
-                        f"Authentication failed for Plex '{instance_name}'. Check your API token."
-                    )
-                    return None
-                if attempt < max_retries:
-                    wait = backoff * attempt
-                    self.logger.warning(
-                        f"Plex connection failed: {e}. Retrying in {wait}s..."
-                    )
-                    time.sleep(wait)
-                else:
-                    self.logger.error(
-                        f"Failed to connect to Plex after {max_retries} attempts: {e}"
-                    )
-                    return None
-
-        return None
+        return connect_plex_with_retry(
+            url,
+            token,
+            self.logger,
+            instance_name=instance_name,
+            timeout=self.config.timeout,
+            linear_backoff=True,  # preserve poster_cleanarr's escalating wait
+        )
 
     # =========================================================================
     # Plex database retrieval
@@ -491,46 +467,15 @@ class PosterCleanarr(ChubModule):
     # =========================================================================
 
     def _query_in_use_images(self, db_path: str) -> Set[str]:
-        """Query Plex database for in-use image filenames."""
-        in_use: Set[str] = set()
+        """Query Plex for in-use image filenames.
 
-        try:
-            conn = sqlite3.connect(db_path)
-            try:
-                cursor = conn.cursor()
+        Delegates to the single canonical scan in plex_metadata so the set of
+        protected columns (IN_USE_IMAGE_COLUMNS — thumb/art/banner/clear-logo/
+        square-art) stays identical to the API-side bloat report and can't drift.
+        """
+        from backend.util.plex_metadata import get_in_use_hashes
 
-                # Plex's "new experience" UI added user_clear_logo_url and
-                # user_square_art_url; without them any custom-uploaded clear
-                # logo or square art is wrongly flagged as bloat.
-                for column in (
-                    "user_thumb_url",
-                    "user_art_url",
-                    "user_banner_url",
-                    "user_clear_logo_url",
-                    "user_square_art_url",
-                ):
-                    query = (
-                        f"SELECT {column} FROM metadata_items "
-                        f"WHERE {column} LIKE 'upload://%' OR {column} LIKE 'metadata://%'"
-                    )
-                    try:
-                        cursor.execute(query)
-                        for (url_value,) in cursor.fetchall():
-                            if url_value:
-                                parsed = urlparse(url_value)
-                                filename = (
-                                    parsed.path.split("/")[-1] if parsed.path else ""
-                                )
-                                if filename:
-                                    in_use.add(filename)
-                    except sqlite3.OperationalError as e:
-                        self.logger.warning(f"Failed to query {column}: {e}")
-            finally:
-                conn.close()
-        except Exception as e:
-            self.logger.error(f"Failed to query Plex database: {e}")
-
-        return in_use
+        return get_in_use_hashes(db_path, logger=self.logger)
 
     def _scan_bloat_images(
         self, metadata_dir: str, in_use: Set[str]

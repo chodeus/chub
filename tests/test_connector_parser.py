@@ -1,9 +1,16 @@
 """Tests for backend/util/connector.py — InstanceParser parsing logic."""
 
+from types import SimpleNamespace
+
 import pytest
 
 from backend.util.config import ChubConfig, InstanceDetail, InstancesConfig
-from backend.util.connector import InstanceConfigError, InstanceParser
+from backend.util.connector import (
+    InstanceConfigError,
+    InstanceParser,
+    build_instance_map,
+    gather_media_and_collections,
+)
 
 
 def make_config():
@@ -123,3 +130,40 @@ def test_parse_instance_map_empty():
     cfg = make_config()
     out = InstanceParser.parse_instance_map({}, cfg)
     assert out == {"arr": [], "plex": []}
+
+
+# --- shared media-gathering / instance-map helpers ---
+
+
+def test_build_instance_map_splits_arrs_and_plex():
+    cfg = SimpleNamespace(
+        instances=[
+            "radarr_main",
+            "sonarr_main",
+            {"plex_main": SimpleNamespace(library_names=["Movies", "TV"])},
+        ]
+    )
+    m = build_instance_map(cfg)
+    assert m["arrs"] == ["radarr_main", "sonarr_main"]
+    assert m["plex"] == {"plex_main": ["Movies", "TV"]}
+
+
+def test_gather_media_and_collections_merges_media_and_collections():
+    cfg = SimpleNamespace(
+        instances=[
+            "radarr_main",
+            {"plex_main": SimpleNamespace(library_names=["Movies"])},
+        ]
+    )
+
+    class FakeMedia:
+        def get_by_instance(self, name):
+            return [{"id": 1}] if name == "radarr_main" else []
+
+    class FakeColl:
+        def get_by_instance_and_library(self, inst, lib):
+            return [{"id": 2}]
+
+    db = SimpleNamespace(media=FakeMedia(), collection=FakeColl())
+    rows = gather_media_and_collections(cfg, db)
+    assert sorted(r["id"] for r in rows) == [1, 2]

@@ -40,6 +40,20 @@ from typing import Any, Dict, List, Optional, Set
 from urllib.parse import urlparse
 
 PLEX_DB_NAME = "com.plexapp.plugins.library.db"
+
+# metadata_items columns that reference an *in-use* (currently-applied) image.
+# Canonical list shared by every "what artwork is Plex actively using" scan so
+# the bloat cleaner can't flag an applied image as deletable. The "new
+# experience" UI added user_clear_logo_url + user_square_art_url; omitting them
+# made the bloat scanner treat custom clear logos / square art as orphans.
+IN_USE_IMAGE_COLUMNS = (
+    "user_thumb_url",
+    "user_art_url",
+    "user_banner_url",
+    "user_clear_logo_url",
+    "user_square_art_url",
+)
+
 _CACHE_TTL_SEC = 300  # 5 minutes
 _cache_lock = threading.Lock()
 _cache: Dict[str, Dict[str, Any]] = {}
@@ -75,17 +89,23 @@ def copy_plex_db(plex_path: str, dest: str) -> Optional[str]:
         return None
 
 
-def get_in_use_hashes(db_path: str) -> Set[str]:
+def get_in_use_hashes(db_path: str, logger: Any = None) -> Set[str]:
     """
-    Extract filenames currently referenced by any metadata_items.{user_thumb_url,
-    user_art_url, user_banner_url}. These are the files Plex is actively using.
+    Extract the filenames currently referenced by any of IN_USE_IMAGE_COLUMNS on
+    metadata_items — the images Plex is actively using. This is the single
+    canonical "in-use" scan; both the API bloat report and poster_cleanarr use
+    it, so the set of protected columns can't drift between them.
+
+    `logger` is optional: when provided, per-column / DB errors are logged
+    (poster_cleanarr wants this); otherwise failures are swallowed (the API
+    scanner is best-effort and returns an empty set rather than 500ing).
     """
     in_use: Set[str] = set()
     try:
         conn = sqlite3.connect(db_path)
         try:
             cur = conn.cursor()
-            for col in ("user_thumb_url", "user_art_url", "user_banner_url"):
+            for col in IN_USE_IMAGE_COLUMNS:
                 try:
                     cur.execute(
                         f"SELECT {col} FROM metadata_items "
@@ -98,15 +118,20 @@ def get_in_use_hashes(db_path: str) -> Set[str]:
                         fname = parsed.path.rsplit("/", 1)[-1] if parsed.path else ""
                         if fname:
                             in_use.add(fname)
-                except sqlite3.OperationalError:
+                except sqlite3.OperationalError as e:
+                    # Older Plex schemas may lack a column (e.g. the newer
+                    # clear-logo/square-art ones) — skip it, don't abort.
+                    if logger:
+                        logger.warning(f"Failed to query {col}: {e}")
                     continue
         finally:
             conn.close()
-    except Exception:
+    except Exception as e:
         # Scanner is best-effort: a corrupt/missing DB returns an empty
         # in-use set rather than crashing the API. Caller decides what to
         # do with zero results.
-        pass
+        if logger:
+            logger.error(f"Failed to query Plex database: {e}")
     return in_use
 
 

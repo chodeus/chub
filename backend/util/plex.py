@@ -1,6 +1,7 @@
 import html
 import itertools
 import sys
+import time
 from typing import Any, Dict, List, Optional
 
 import plexapi
@@ -13,6 +14,57 @@ from unidecode import unidecode
 from backend.util.helper import generate_title_variants, progress
 from backend.util.normalization import normalize_titles
 from backend.util.ssrf_guard import is_safe_url
+
+
+def connect_plex_with_retry(
+    url: str,
+    token: str,
+    logger: Any,
+    *,
+    instance_name: str = "",
+    timeout: int = 30,
+    max_retries: int = 5,
+    backoff: int = 60,
+    linear_backoff: bool = False,
+) -> Optional[PlexServer]:
+    """Connect to a Plex server with bounded retry; return the server or None.
+
+    Single home for the server-level connect loop shared by the modules that
+    need a raw ``PlexServer`` (poster_cleanarr, plex_maintenance) rather than the
+    poster-upload-focused ``PlexClient``. An auth failure (401/unauthorized)
+    returns None immediately — retrying won't help. ``linear_backoff=True`` waits
+    ``backoff * attempt`` between tries (escalating); otherwise a flat ``backoff``.
+    Instance *selection* stays with each caller (it differs by module); this only
+    owns the connect+retry.
+    """
+    label = instance_name or url
+    for attempt in range(1, max_retries + 1):
+        try:
+            logger.info(
+                f"Connecting to Plex '{label}' at {url} "
+                f"(attempt {attempt}/{max_retries})..."
+            )
+            server = PlexServer(url, token, timeout=timeout)
+            _ = server.version
+            logger.info(f"Connected to Plex server v{server.version}")
+            return server
+        except Exception as e:
+            err_msg = str(e).lower()
+            if "unauthorized" in err_msg or "401" in err_msg:
+                logger.error(
+                    f"Authentication failed for Plex '{label}'. Check your API token."
+                )
+                return None
+            if attempt < max_retries:
+                wait = backoff * attempt if linear_backoff else backoff
+                logger.warning(f"Plex connection failed: {e}. Retrying in {wait}s...")
+                time.sleep(wait)
+            else:
+                logger.error(
+                    f"Failed to connect to Plex after {max_retries} attempts: {e}"
+                )
+                return None
+    return None
 
 
 class PlexClient:

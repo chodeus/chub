@@ -99,23 +99,23 @@ class TMDBClient:
         self._memo[key] = tmdb_id
         return tmdb_id
 
-    def _fetch(
-        self, external_id: str, source: str, media_type: str
-    ) -> Optional[int]:
-        url = f"{self.BASE}/find/{external_id}"
-        params = {
-            "api_key": self.cfg.apikey,
-            "external_source": source,
-        }
+    def _request_with_retry(self, url: str, params: dict, *, what: str):
+        """Single GET-with-retry used by every TMDB call.
 
+        Returns a `requests.Response` for any *terminal* status (2xx, 404, other
+        non-retryable codes) for the caller to interpret, or None on an auth
+        failure / exhausted transient retries. Handles the shared ladder once:
+        network errors and 5xx → backoff+retry; 429 → honor Retry-After once;
+        401 → disable TMDB for the run and bail. The caller owns status-specific
+        logic (404 semantics, JSON parsing) and the not-ok warning. `what` is a
+        short label for log messages (e.g. "tvdb_id=123", "movie/55/images").
+        """
         for attempt in range(self.MAX_RETRIES):
             try:
                 resp = self.session.get(url, params=params, timeout=self.HTTP_TIMEOUT)
             except requests.RequestException as exc:
                 if attempt == self.MAX_RETRIES - 1:
-                    self.logger.warning(
-                        f"TMDB request failed for {source}={external_id}: {exc}"
-                    )
+                    self.logger.warning(f"TMDB request failed for {what}: {exc}")
                     return None
                 time.sleep(self.BACKOFF_SECONDS[attempt])
                 continue
@@ -139,23 +139,38 @@ class TMDBClient:
             if resp.status_code >= 500 and attempt < self.MAX_RETRIES - 1:
                 time.sleep(self.BACKOFF_SECONDS[attempt])
                 continue
-            if not resp.ok:
-                self.logger.warning(
-                    f"TMDB returned {resp.status_code} for {source}={external_id}"
-                )
-                return None
+            # Terminal status (2xx / 404 / other 4xx) — hand back to the caller.
+            return resp
 
-            try:
-                data = resp.json()
-            except ValueError:
-                return None
+        return None
 
-            bucket = "movie_results" if media_type == "movie" else "tv_results"
-            results = data.get(bucket) or []
-            if results and isinstance(results[0].get("id"), int):
-                return results[0]["id"]
+    def _fetch(
+        self, external_id: str, source: str, media_type: str
+    ) -> Optional[int]:
+        url = f"{self.BASE}/find/{external_id}"
+        params = {
+            "api_key": self.cfg.apikey,
+            "external_source": source,
+        }
+
+        resp = self._request_with_retry(url, params, what=f"{source}={external_id}")
+        if resp is None:
+            return None
+        if not resp.ok:
+            self.logger.warning(
+                f"TMDB returned {resp.status_code} for {source}={external_id}"
+            )
             return None
 
+        try:
+            data = resp.json()
+        except ValueError:
+            return None
+
+        bucket = "movie_results" if media_type == "movie" else "tv_results"
+        results = data.get(bucket) or []
+        if results and isinstance(results[0].get("id"), int):
+            return results[0]["id"]
         return None
 
     def get_details(self, tmdb_id: int, media_type: str) -> Optional[dict]:
@@ -230,68 +245,44 @@ class TMDBClient:
             "append_to_response": "alternative_titles",
         }
 
-        for attempt in range(self.MAX_RETRIES):
-            try:
-                resp = self.session.get(url, params=params, timeout=self.HTTP_TIMEOUT)
-            except requests.RequestException as exc:
-                if attempt == self.MAX_RETRIES - 1:
-                    self.logger.warning(f"TMDB details request failed for {tmdb_id}: {exc}")
-                    return None
-                time.sleep(self.BACKOFF_SECONDS[attempt])
-                continue
+        resp = self._request_with_retry(url, params, what=f"{mt}/{tmdb_id}")
+        if resp is None:
+            return None
+        if resp.status_code == 404:
+            return _TMDB_NOT_FOUND  # genuine no-such-id
+        if not resp.ok:
+            self.logger.warning(f"TMDB returned {resp.status_code} for {mt}/{tmdb_id}")
+            return None
 
-            if resp.status_code == 401:
-                self._auth_failed = True
-                self.logger.error(
-                    "TMDB API rejected the configured key (401). "
-                    "Disabling TMDB lookups for the remainder of this run."
-                )
-                return None
-            if resp.status_code == 404:
-                return _TMDB_NOT_FOUND  # genuine no-such-id
-            if resp.status_code == 429:
-                retry_after = min(int(resp.headers.get("Retry-After", "1") or 1), 5)
-                if attempt < self.MAX_RETRIES - 1:
-                    time.sleep(retry_after)
-                    continue
-                self.logger.warning("TMDB rate-limited; giving up after retries")
-                return None
-            if resp.status_code >= 500 and attempt < self.MAX_RETRIES - 1:
-                time.sleep(self.BACKOFF_SECONDS[attempt])
-                continue
-            if not resp.ok:
-                self.logger.warning(
-                    f"TMDB returned {resp.status_code} for {mt}/{tmdb_id}"
-                )
-                return None
+        try:
+            data = resp.json()
+        except ValueError:
+            return None
 
-            try:
-                data = resp.json()
-            except ValueError:
-                return None
+        if mt == "movie":
+            title = data.get("title")
+            original_title = data.get("original_title")
+            date = data.get("release_date") or ""
+            alt_block = (data.get("alternative_titles") or {}).get("titles") or []
+        else:
+            title = data.get("name")
+            original_title = data.get("original_name")
+            date = data.get("first_air_date") or ""
+            alt_block = (data.get("alternative_titles") or {}).get("results") or []
 
-            if mt == "movie":
-                title = data.get("title")
-                original_title = data.get("original_title")
-                date = data.get("release_date") or ""
-                alt_block = (data.get("alternative_titles") or {}).get("titles") or []
-            else:
-                title = data.get("name")
-                original_title = data.get("original_name")
-                date = data.get("first_air_date") or ""
-                alt_block = (data.get("alternative_titles") or {}).get("results") or []
+        year = None
+        if isinstance(date, str) and len(date) >= 4 and date[:4].isdigit():
+            year = int(date[:4])
+        akas = [
+            t.get("title") for t in alt_block if isinstance(t, dict) and t.get("title")
+        ]
 
-            year = None
-            if isinstance(date, str) and len(date) >= 4 and date[:4].isdigit():
-                year = int(date[:4])
-            akas = [t.get("title") for t in alt_block if isinstance(t, dict) and t.get("title")]
-
-            return {
-                "title": title,
-                "original_title": original_title,
-                "year": year,
-                "alternative_titles": akas,
-            }
+        return {
+            "title": title,
+            "original_title": original_title,
+            "year": year,
+            "alternative_titles": akas,
+        }
 
         return None
 
@@ -388,47 +379,21 @@ class TMDBClient:
             "include_image_language": f"{language},null",
         }
 
-        for attempt in range(self.MAX_RETRIES):
-            try:
-                resp = self.session.get(url, params=params, timeout=self.HTTP_TIMEOUT)
-            except requests.RequestException as exc:
-                if attempt == self.MAX_RETRIES - 1:
-                    self.logger.warning(
-                        f"TMDB images request failed for {tmdb_id}: {exc}"
-                    )
-                    return None
-                time.sleep(self.BACKOFF_SECONDS[attempt])
-                continue
+        resp = self._request_with_retry(url, params, what=f"{mt}/{tmdb_id}/images")
+        if resp is None:
+            return None
+        if resp.status_code == 404:
+            return {"logos": [], "backdrops": []}  # no such id → no images
+        if not resp.ok:
+            self.logger.warning(
+                f"TMDB returned {resp.status_code} for {mt}/{tmdb_id}/images"
+            )
+            return None
 
-            if resp.status_code == 401:
-                self._auth_failed = True
-                self.logger.error(
-                    "TMDB API rejected the configured key (401). "
-                    "Disabling TMDB lookups for the remainder of this run."
-                )
-                return None
-            if resp.status_code == 404:
-                return {"logos": [], "backdrops": []}  # no such id → no images
-            if resp.status_code == 429:
-                retry_after = min(int(resp.headers.get("Retry-After", "1") or 1), 5)
-                if attempt < self.MAX_RETRIES - 1:
-                    time.sleep(retry_after)
-                    continue
-                self.logger.warning("TMDB rate-limited; giving up after retries")
-                return None
-            if resp.status_code >= 500 and attempt < self.MAX_RETRIES - 1:
-                time.sleep(self.BACKOFF_SECONDS[attempt])
-                continue
-            if not resp.ok:
-                self.logger.warning(
-                    f"TMDB returned {resp.status_code} for {mt}/{tmdb_id}/images"
-                )
-                return None
-
-            try:
-                return resp.json()
-            except ValueError:
-                return None
+        try:
+            return resp.json()
+        except ValueError:
+            return None
 
         return None
 
