@@ -64,13 +64,6 @@ def get_plex_metadata_dir(plex_path: str) -> str:
     return os.path.join(plex_path, "Metadata")
 
 
-def _plex_is_running(plex_path: str) -> bool:
-    db_dir = os.path.join(plex_path, "Plug-in Support", "Databases")
-    return os.path.exists(
-        os.path.join(db_dir, f"{PLEX_DB_NAME}-shm")
-    ) or os.path.exists(os.path.join(db_dir, f"{PLEX_DB_NAME}-wal"))
-
-
 def copy_plex_db(plex_path: str, dest: str) -> Optional[str]:
     """
     Copy Plex's live SQLite DB to `dest` for read-only querying.

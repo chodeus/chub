@@ -75,8 +75,9 @@ TMDB_IMAGE_KEY = {
 
 
 class AssetRenamerr(ChubModule):
-    """Apply additional Plex asset types — clear logo, square art, background,
-    banner — to matched media.
+    """Apply additional Plex asset types — clear logo, square art, background —
+    to matched media. (Banner is intentionally unsupported: Plex has no banner
+    upload API and Kometa does not read banners from asset directories.)
 
     Reuses poster_renamerr's scan/match machinery (assets live in poster_cache
     tagged with image_type) and PlexClient/TMDBClient. Images come from an
@@ -442,6 +443,8 @@ class AssetRenamerr(ChubModule):
             try:
                 os.remove(path)
             except OSError:
+                # Best-effort cleanup of an internally-generated temp file;
+                # a missing or unremovable temp file is non-fatal.
                 pass
 
     # ----- orchestration --------------------------------------------------
