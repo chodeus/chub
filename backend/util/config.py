@@ -213,7 +213,11 @@ class BorderReplacerrConfig(BaseModel):
     dry_run: bool = False
     source_dirs: List[str] = Field(default_factory=list)
     destination_dir: str = ""
-    border_width: int = 26
+    # Bounded so a misconfigured huge value can't invert the crop box
+    # (border >= half the poster dimension), which silently turned every
+    # poster into a no-op reported as success. 200px is far above any real
+    # border and stays valid on normalized poster dimensions.
+    border_width: int = Field(default=26, ge=0, le=200)
     skip: bool = False
     exclusion_list: Optional[List[str]] = None
     ignore_folders: List[str] = Field(default_factory=list)

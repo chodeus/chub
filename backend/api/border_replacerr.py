@@ -354,7 +354,16 @@ async def generate_preview(
     config = load_config()
     cfg = config.border_replacerr
 
-    palette, border_paths, active_holiday = _resolve_palette(config, holiday, db)
+    try:
+        palette, border_paths, active_holiday = _resolve_palette(config, holiday, db)
+    except (ValueError, KeyError, AttributeError) as e:
+        # A malformed holiday/border config must yield a clean 4xx, not an
+        # unhandled 500 on the preview endpoint.
+        return error(
+            f"Invalid border/holiday configuration: {e}",
+            code="BORDER_CONFIG_INVALID",
+            status_code=400,
+        )
     border_width = int(cfg.border_width or 26)
 
     # Wipe previous previews so /tmp doesn't grow unboundedly across refreshes.

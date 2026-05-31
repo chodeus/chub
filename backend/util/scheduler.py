@@ -49,6 +49,17 @@ _WEEKDAY_ALIASES = {
 }
 
 
+def _safe_md_date(year: int, month: int, day: int) -> datetime:
+    """datetime for a month/day range boundary, clamping Feb 29 to Feb 28 on
+    non-leap years so a leap-day range doesn't silently never fire."""
+    try:
+        return datetime(year, month, day)
+    except ValueError:
+        if month == 2 and day == 29:
+            return datetime(year, 2, 28)
+        raise
+
+
 def _normalize_weekday(day: str) -> str:
     return _WEEKDAY_ALIASES.get(day.strip().lower(), day.strip().lower())
 
@@ -119,8 +130,8 @@ def check_schedule(script_name: str, schedule: str, logger: Optional[Logger]) ->
                 start, end = start_end.split("-")
                 start_month, start_day = map(int, start.split("/"))
                 end_month, end_day = map(int, end.split("/"))
-                start_date = datetime(now.year, start_month, start_day)
-                end_date = datetime(now.year, end_month, end_day)
+                start_date = _safe_md_date(now.year, start_month, start_day)
+                end_date = _safe_md_date(now.year, end_month, end_day)
                 if start_date <= now <= end_date:
                     return True
 
