@@ -129,8 +129,16 @@ class TMDBClient:
                 return None
             if resp.status_code == 429:
                 # Honor Retry-After once, then give up — interactive callers
-                # can't wait minutes for a stats page.
-                retry_after = min(int(resp.headers.get("Retry-After", "1") or 1), 5)
+                # can't wait minutes for a stats page. Retry-After is usually
+                # delta-seconds, but RFC 7231 also permits an HTTP-date; int()
+                # on a date string would raise and abort the whole retry loop,
+                # so fall back to a small fixed delay.
+                try:
+                    retry_after = min(
+                        int(resp.headers.get("Retry-After", "1") or 1), 5
+                    )
+                except (ValueError, TypeError):
+                    retry_after = 1
                 if attempt < self.MAX_RETRIES - 1:
                     time.sleep(retry_after)
                     continue

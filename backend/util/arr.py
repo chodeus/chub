@@ -236,6 +236,14 @@ class BaseARRClient:
         self.logger.debug(f"Create tag payload: {payload}")
         endpoint = f"{self.api_base}/tag"
         response = self.make_post_request(endpoint, json=payload)
+        # _request_with_retries returns None on a failed/unreachable request.
+        # Raise a clear, catchable error instead of letting response["id"] blow
+        # up with a confusing 'NoneType' is not subscriptable.
+        if not isinstance(response, dict) or "id" not in response:
+            raise RuntimeError(
+                f"Failed to create tag '{tag}' on {self.api_base}: "
+                f"no valid response from the ARR instance (unreachable?)."
+            )
         return response["id"]
 
     def get_instance_name(self) -> Optional[str]:
@@ -650,7 +658,16 @@ class RadarrClient(BaseARRClient):
         payload = {"movieIds": media_id, "tags": [tag_id], "applyTags": "add"}
         self.logger.debug(f"Add tag payload: {payload}")
         endpoint = f"{self.api_base}/movie/editor"
-        return self.make_put_request(endpoint, json=payload)
+        resp = self.make_put_request(endpoint, json=payload)
+        if not resp:
+            # _request_with_retries returns None on failure. Surface it: a
+            # silently-failed tag means the item gets re-processed (re-searched)
+            # next run, which can re-grab releases.
+            self.logger.warning(
+                f"add_tags: no response tagging media {media_id} on "
+                f"{self.api_base} (instance unreachable?)."
+            )
+        return resp
 
     def add_tags_by_name(
         self, media_id: Union[int, List[int]], tag_names: Union[str, List[str]]
@@ -977,7 +994,13 @@ class SonarrClient(BaseARRClient):
         payload = {"seriesIds": media_id, "tags": [tag_id], "applyTags": "add"}
         self.logger.debug(f"Add tag payload: {payload}")
         endpoint = f"{self.api_base}/series/editor"
-        return self.make_put_request(endpoint, json=payload)
+        resp = self.make_put_request(endpoint, json=payload)
+        if not resp:
+            self.logger.warning(
+                f"add_tags: no response tagging media {media_id} on "
+                f"{self.api_base} (instance unreachable?)."
+            )
+        return resp
 
     def add_tags_by_name(
         self, media_id: Union[int, List[int]], tag_names: Union[str, List[str]]
