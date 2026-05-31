@@ -151,10 +151,15 @@ class PlexClient:
                     sanitize_filename(title_unescaped, platform="universal")
                     or title_unescaped
                 )
-                year = getattr(collection, "year", None)
-                tmdb_id = getattr(collection, "tmdb_id", None)
-                imdb_id = getattr(collection, "imdb_id", None)
-                tvdb_id = getattr(collection, "tvdb_id", None)
+                # plexapi's Collection exposes neither a flat `year` nor
+                # tmdb/imdb/tvdb attributes (only minYear/maxYear + .guids), so
+                # those getattrs always returned None — collections are matched
+                # by title. Take the earliest-item year from minYear when Plex
+                # provides it; leave the external ids null.
+                year = getattr(collection, "minYear", None)
+                tmdb_id = None
+                imdb_id = None
+                tvdb_id = None
                 media_item = {
                     "title": title_unescaped,
                     "normalized_title": normalized_title,
