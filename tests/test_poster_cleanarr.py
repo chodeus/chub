@@ -180,7 +180,9 @@ def test_execute_mode_remove_logs_per_file_at_info(tmp_path):
     ]
     module = make_module(overlays_only=False)
     module.logger = _CapturingLogger()
-    result = module._execute_mode(bloat, mode="remove", metadata_dir=str(tmp_path), restore_dir="")
+    result = module._execute_mode(
+        bloat, mode="remove", metadata_dir=str(tmp_path), restore_dir=""
+    )
 
     info = module.logger.info_lines
     # Each removed file logged at INFO with the [REMOVE] tag
@@ -202,7 +204,9 @@ def test_execute_mode_report_does_not_emit_destructive_log(tmp_path):
     bloat = [{"path": str(f), "size": os.path.getsize(f), "name": "x"}]
     module = make_module(overlays_only=False)
     module.logger = _CapturingLogger()
-    module._execute_mode(bloat, mode="report", metadata_dir=str(tmp_path), restore_dir="")
+    module._execute_mode(
+        bloat, mode="report", metadata_dir=str(tmp_path), restore_dir=""
+    )
     assert not any("[REMOVE]" in line for line in module.logger.info_lines)
     # File still exists
     assert f.exists()
@@ -215,12 +219,18 @@ def test_execute_mode_overlays_only_keeps_custom_uploads(tmp_path):
     _write_image(str(custom), exif_overlay=False)
 
     bloat = [
-        {"path": str(overlay), "size": os.path.getsize(overlay), "name": "kometa_overlay"},
+        {
+            "path": str(overlay),
+            "size": os.path.getsize(overlay),
+            "name": "kometa_overlay",
+        },
         {"path": str(custom), "size": os.path.getsize(custom), "name": "user_upload"},
     ]
 
     module = make_module(overlays_only=True)
-    result = module._execute_mode(bloat, mode="remove", metadata_dir=str(tmp_path), restore_dir="")
+    result = module._execute_mode(
+        bloat, mode="remove", metadata_dir=str(tmp_path), restore_dir=""
+    )
 
     # The custom upload survives; only the Kometa overlay was removed.
     assert os.path.exists(custom)
@@ -238,12 +248,18 @@ def test_execute_mode_overlays_off_removes_everything(tmp_path):
     _write_image(str(custom), exif_overlay=False)
 
     bloat = [
-        {"path": str(overlay), "size": os.path.getsize(overlay), "name": "kometa_overlay"},
+        {
+            "path": str(overlay),
+            "size": os.path.getsize(overlay),
+            "name": "kometa_overlay",
+        },
         {"path": str(custom), "size": os.path.getsize(custom), "name": "user_upload"},
     ]
 
     module = make_module(overlays_only=False)
-    result = module._execute_mode(bloat, mode="remove", metadata_dir=str(tmp_path), restore_dir="")
+    result = module._execute_mode(
+        bloat, mode="remove", metadata_dir=str(tmp_path), restore_dir=""
+    )
 
     assert not os.path.exists(overlay)
     assert not os.path.exists(custom)
@@ -260,12 +276,18 @@ def test_execute_mode_overlays_only_report_mode_counts_only_overlays(tmp_path):
     _write_image(str(custom), exif_overlay=False)
 
     bloat = [
-        {"path": str(overlay), "size": os.path.getsize(overlay), "name": "kometa_overlay"},
+        {
+            "path": str(overlay),
+            "size": os.path.getsize(overlay),
+            "name": "kometa_overlay",
+        },
         {"path": str(custom), "size": os.path.getsize(custom), "name": "user_upload"},
     ]
 
     module = make_module(overlays_only=True)
-    result = module._execute_mode(bloat, mode="report", metadata_dir=str(tmp_path), restore_dir="")
+    result = module._execute_mode(
+        bloat, mode="report", metadata_dir=str(tmp_path), restore_dir=""
+    )
 
     # Nothing actually moved/removed in report mode, but the count reflects
     # what *would* be actioned.
@@ -273,3 +295,35 @@ def test_execute_mode_overlays_only_report_mode_counts_only_overlays(tmp_path):
     assert os.path.exists(custom)
     assert result["count"] == 1
     assert result["ignored_non_overlay"] == 1
+
+
+def test_orphan_scan_spares_kometa_asset_files(tmp_path):
+    """asset_renamerr (kometa) writes logo.png / background.png; Kometa writes
+    poster.jpg too. The orphan pass must NOT flag these as orphans when the media
+    is in the library — matched via the parent folder or the suffix-stripped
+    flat name."""
+    m = make_module()
+    assets = tmp_path / "assets"
+
+    # asset_folders layout: <Title (Year)>/<asset>.ext
+    folder = assets / "The Show (2020)"
+    folder.mkdir(parents=True)
+    for name in ("poster.jpg", "logo.png", "background.png"):
+        (folder / name).write_bytes(b"x")
+
+    # flat layout: <Title (Year)>_<asset>.ext
+    (assets / "The Show (2020)_logo.png").write_bytes(b"x")
+
+    # a genuine orphan: unrelated title, no folder context
+    (assets / "Totally Unknown Thing (1999).jpg").write_bytes(b"x")
+
+    titles = {"theshow"}  # normalized library title
+    orphans = m._scan_orphan_assets([str(assets)], titles)
+    orphan_names = {os.path.basename(o["path"]) for o in orphans}
+
+    assert "poster.jpg" not in orphan_names
+    assert "logo.png" not in orphan_names
+    assert "background.png" not in orphan_names
+    assert "The Show (2020)_logo.png" not in orphan_names
+    # the genuinely-unmatched file is still flagged
+    assert "Totally Unknown Thing (1999).jpg" in orphan_names
