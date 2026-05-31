@@ -486,7 +486,6 @@ def test_already_applied_skips_unchanged_tmdb(db):
 
 def test_already_applied_local_mtime(db, tmp_path):
     f = str(tmp_path / "Movie - Logo.png")
-    open(f, "wb").write(b"x") if False else None
     with open(f, "wb") as fh:
         fh.write(b"x")
     mtime = os.stat(f).st_mtime

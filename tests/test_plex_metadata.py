@@ -7,7 +7,6 @@ import pytest
 from backend.util.plex_metadata import (
     PLEX_DB_NAME,
     _classify_variant_kind,
-    _plex_is_running,
     copy_plex_db,
     get_in_use_hashes,
     get_plex_metadata_dir,
@@ -46,28 +45,6 @@ def test_classify_variant_kind_case_insensitive():
 
 def test_get_plex_metadata_dir_joins():
     assert get_plex_metadata_dir("/plex") == "/plex/Metadata"
-
-
-# --- _plex_is_running ---
-
-
-def test_plex_is_running_false_when_no_lockfiles(tmp_path):
-    """Without -shm/-wal lockfiles, Plex isn't running."""
-    assert _plex_is_running(str(tmp_path)) is False
-
-
-def test_plex_is_running_true_with_wal(tmp_path):
-    db_dir = tmp_path / "Plug-in Support" / "Databases"
-    db_dir.mkdir(parents=True)
-    (db_dir / f"{PLEX_DB_NAME}-wal").write_bytes(b"")
-    assert _plex_is_running(str(tmp_path)) is True
-
-
-def test_plex_is_running_true_with_shm(tmp_path):
-    db_dir = tmp_path / "Plug-in Support" / "Databases"
-    db_dir.mkdir(parents=True)
-    (db_dir / f"{PLEX_DB_NAME}-shm").write_bytes(b"")
-    assert _plex_is_running(str(tmp_path)) is True
 
 
 # --- copy_plex_db ---

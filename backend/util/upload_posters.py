@@ -27,18 +27,6 @@ class PlexConnectionError(PosterUploadError):
     pass
 
 
-class AssetProcessingError(PosterUploadError):
-    """Raised when asset processing fails"""
-
-    pass
-
-
-class FileOperationError(PosterUploadError):
-    """Raised when file operations fail"""
-
-    pass
-
-
 @dataclass
 class UploadResult:
     """Result of a single upload operation"""

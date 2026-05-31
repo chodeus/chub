@@ -284,8 +284,6 @@ class TMDBClient:
             "alternative_titles": akas,
         }
 
-        return None
-
     # TMDB serves images from a CDN; "original" is the full-resolution size.
     IMAGE_BASE = "https://image.tmdb.org/t/p/original"
 
@@ -394,8 +392,6 @@ class TMDBClient:
             return resp.json()
         except ValueError:
             return None
-
-        return None
 
 
 def backfill_missing_tmdb_ids(

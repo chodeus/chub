@@ -29,11 +29,6 @@ def get_config_dep() -> ChubConfig:
     return load_config()
 
 
-def save_config_model(cfg: ChubConfig) -> None:
-    """Save configuration model to disk."""
-    save_config(cfg)
-
-
 router = APIRouter(
     prefix="/api",
     tags=["Configuration"],

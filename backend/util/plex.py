@@ -109,32 +109,6 @@ class PlexClient:
             self.logger.error(f"Failed to fetch libraries: {e}")
             return []
 
-    def get_media_by_libraries(
-        self,
-        library_names: list = None,
-        logger=None,
-        instance_name=None,
-    ):
-        """
-        Fetch all media for specified libraries (all if None).
-        Returns dict {library_name: [media]}.
-        """
-        result = {}
-        libraries = library_names or self.get_libraries()
-        for library_name in libraries:
-            try:
-                media = self.get_all_plex_media(
-                    library_name=library_name,
-                    logger=logger or self.logger,
-                    instance_name=instance_name,
-                )
-                result[library_name] = media
-            except Exception as e:
-                (logger or self.logger).error(
-                    f"Error fetching media for '{library_name}': {e}"
-                )
-        return result
-
     def get_collections(
         self,
         library_name: str,
@@ -673,51 +647,6 @@ class PlexClient:
         except Exception as e:
             self.logger.error(
                 f"Failed to remove label '{label_name}' from '{matched_entry.get('title', '')}': {e}"
-            )
-
-    def add_label(
-        self,
-        matched_entry: Dict[str, Any],
-        label_name: str = "Overlay",
-        dry_run: bool = False,
-    ) -> None:
-        """
-        Add a label to a Plex item (movie, show, collection) using matched_entry from the index/db.
-        Does NOT attempt to add labels to seasons or episodes.
-        """
-        try:
-            section = self.plex.library.section(matched_entry["library_name"])
-            asset_type = matched_entry.get("asset_type")
-            title = matched_entry.get("title")
-            year = matched_entry.get("year")
-
-            if asset_type == "collection":
-                items = section.search(title=title, libtype="collection")
-                if not items:
-                    self.logger.error(
-                        f"Collection '{title}' not found in '{section.title}'"
-                    )
-                    return
-                item = items[0]
-            else:
-                items = section.search(title=title, year=year)
-                if not items:
-                    self.logger.error(f"Item '{title}' not found in '{section.title}'")
-                    return
-                item = items[0]
-
-            if dry_run:
-                self.logger.info(
-                    f"[DRY RUN] Would add label '{label_name}' to '{title}' in '{section.title}'"
-                )
-            else:
-                item.addLabel(label_name)
-                self.logger.debug(
-                    f"Added label '{label_name}' to '{title}' in '{section.title}'"
-                )
-        except Exception as e:
-            self.logger.error(
-                f"Failed to add label '{label_name}' to '{matched_entry.get('title', '')}': {e}"
             )
 
     def batch_update_labels(
