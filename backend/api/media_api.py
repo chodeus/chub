@@ -1240,7 +1240,7 @@ def _live_arr_ids_by_instance(config, logger) -> dict:
 
 
 @router.get("/orphaned", summary="List cache rows whose ARR entry no longer exists")
-async def get_orphaned_cache(
+def get_orphaned_cache(
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
@@ -2022,7 +2022,7 @@ async def get_media_history(
     description="Query the media's ARR instance for its import-exclusion "
     "list and return whether this item's TMDB/TVDB ID is present.",
 )
-async def get_import_exclusion(
+def get_import_exclusion(
     media_id: int,
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),

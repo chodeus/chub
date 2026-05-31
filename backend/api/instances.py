@@ -336,7 +336,7 @@ async def get_instance_type_schema(
         }
     },
 )
-async def check_all_health(
+def check_all_health(
     config: ChubConfig = Depends(get_config),
     logger: Any = Depends(get_logger),
 ) -> JSONResponse:
@@ -514,7 +514,7 @@ async def get_instances(
         502: {"description": "Failed to connect to Plex server"},
     },
 )
-async def get_plex_libraries(
+def get_plex_libraries(
     instance: str,
     config: ChubConfig = Depends(get_config),
     logger: Any = Depends(get_logger),
@@ -624,7 +624,7 @@ async def get_plex_libraries(
         502: {"description": "Connection failed - unable to reach server"},
     },
 )
-async def test_instance(
+def test_instance(
     data: TestInstanceRequest, logger: Any = Depends(get_logger)
 ) -> JSONResponse:
     """
@@ -1126,7 +1126,7 @@ async def get_single_instance(
         502: {"description": "Connection failed"},
     },
 )
-async def test_existing_instance(
+def test_existing_instance(
     instance_id: str,
     config: ChubConfig = Depends(get_config),
     logger: Any = Depends(get_logger),
@@ -1529,7 +1529,7 @@ async def toggle_instance(
         }
     },
 )
-async def get_instance_logs(
+def get_instance_logs(
     instance_id: str,
     limit: int = Query(default=100, ge=1, le=5000),
     level: Optional[str] = Query(default=None),
@@ -1632,7 +1632,7 @@ async def get_instance_logs(
         404: {"description": "Instance not found"},
     },
 )
-async def check_instance_health(
+def check_instance_health(
     instance_id: str,
     config: ChubConfig = Depends(get_config),
     logger: Any = Depends(get_logger),

@@ -19,6 +19,7 @@ from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, Request, UploadFile, File
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
+from starlette.concurrency import run_in_threadpool
 
 from backend.api.utils import error, get_database, get_logger, ok
 from backend.util.config import (
@@ -547,7 +548,7 @@ def _get_backup_dir() -> Path:
         500: {"description": "Backup creation failed"},
     },
 )
-async def create_backup(
+def create_backup(
     request: Request, logger: Any = Depends(get_logger)
 ) -> StreamingResponse:
     """
@@ -656,65 +657,73 @@ async def restore_backup(
     """
     try:
         content = await file.read()
-        buf = io.BytesIO(content)
 
-        if not zipfile.is_zipfile(buf):
-            return error(
-                "Uploaded file is not a valid zip",
-                code="INVALID_BACKUP",
-                status_code=400,
+        # The zip parse + yaml validation + file writes are blocking; run them
+        # off the event loop so a large upload doesn't stall the whole server.
+        def _do_restore() -> JSONResponse:
+            buf = io.BytesIO(content)
+
+            if not zipfile.is_zipfile(buf):
+                return error(
+                    "Uploaded file is not a valid zip",
+                    code="INVALID_BACKUP",
+                    status_code=400,
+                )
+
+            buf.seek(0)
+            with zipfile.ZipFile(buf, "r") as zf:
+                names = zf.namelist()
+
+                if "config.yml" not in names:
+                    return error(
+                        "Backup zip must contain config.yml",
+                        code="INVALID_BACKUP_CONTENTS",
+                        status_code=400,
+                    )
+
+                # Validate the config.yml inside the zip
+                raw_config = zf.read("config.yml")
+                import yaml
+
+                try:
+                    parsed = yaml.safe_load(raw_config)
+                    ChubConfig.model_validate(parsed)
+                except Exception as e:
+                    return error(
+                        f"config.yml in backup is invalid: {e}",
+                        code="INVALID_BACKUP_CONFIG",
+                        status_code=400,
+                    )
+
+                # Safety: backup current state first
+                config_path = get_config_path()
+                if os.path.exists(config_path):
+                    safety_path = config_path + ".pre-restore"
+                    with open(config_path, "rb") as src:
+                        with open(safety_path, "wb") as dst:
+                            dst.write(src.read())
+
+                # Restore config.yml (atomic write)
+                restored_config = ChubConfig.model_validate(parsed)
+                save_config(restored_config)
+                restored_items = ["config.yml"]
+
+                # If DB dump is included, save it for reference
+                if "chub.db.sql" in names:
+                    backup_dir = _get_backup_dir()
+                    sql_path = backup_dir / "restored-db.sql"
+                    sql_path.write_bytes(zf.read("chub.db.sql"))
+                    restored_items.append(
+                        "chub.db.sql (saved to backups/restored-db.sql)"
+                    )
+
+            logger.info(f"Restore completed: {restored_items}")
+            return ok(
+                "Restore completed",
+                {"restored": restored_items},
             )
 
-        buf.seek(0)
-        with zipfile.ZipFile(buf, "r") as zf:
-            names = zf.namelist()
-
-            if "config.yml" not in names:
-                return error(
-                    "Backup zip must contain config.yml",
-                    code="INVALID_BACKUP_CONTENTS",
-                    status_code=400,
-                )
-
-            # Validate the config.yml inside the zip
-            raw_config = zf.read("config.yml")
-            import yaml
-
-            try:
-                parsed = yaml.safe_load(raw_config)
-                ChubConfig.model_validate(parsed)
-            except Exception as e:
-                return error(
-                    f"config.yml in backup is invalid: {e}",
-                    code="INVALID_BACKUP_CONFIG",
-                    status_code=400,
-                )
-
-            # Safety: backup current state first
-            config_path = get_config_path()
-            if os.path.exists(config_path):
-                safety_path = config_path + ".pre-restore"
-                with open(config_path, "rb") as src:
-                    with open(safety_path, "wb") as dst:
-                        dst.write(src.read())
-
-            # Restore config.yml (atomic write)
-            restored_config = ChubConfig.model_validate(parsed)
-            save_config(restored_config)
-            restored_items = ["config.yml"]
-
-            # If DB dump is included, save it for reference
-            if "chub.db.sql" in names:
-                backup_dir = _get_backup_dir()
-                sql_path = backup_dir / "restored-db.sql"
-                sql_path.write_bytes(zf.read("chub.db.sql"))
-                restored_items.append("chub.db.sql (saved to backups/restored-db.sql)")
-
-        logger.info(f"Restore completed: {restored_items}")
-        return ok(
-            "Restore completed",
-            {"restored": restored_items},
-        )
+        return await run_in_threadpool(_do_restore)
 
     except Exception as e:
         logger.error(f"Restore failed: {e}")
@@ -1006,7 +1015,7 @@ async def get_db_stats(
     "any time but holds a write lock for the duration — short on a small "
     "DB (~1s for 50MB), longer if your DB has grown.",
 )
-async def vacuum_database(
+def vacuum_database(
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
