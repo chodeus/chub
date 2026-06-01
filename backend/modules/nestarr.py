@@ -3,6 +3,7 @@
 import hashlib
 import json
 import os
+import unicodedata
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -773,6 +774,17 @@ class _NestScanner:
     def _is_video_file(self, filename: str) -> bool:
         return os.path.splitext(filename)[1].lower() in self.VIDEO_EXTS
 
+    @staticmethod
+    def _normalize_fs_name(name: str) -> str:
+        """Normalize a folder/file basename for cross-source comparison.
+
+        ARR-API paths are typically NFC while os.listdir() can return NFD on
+        some filesystems, so a byte-for-byte `==` flags accented or
+        special-character folders as stray even when ARR tracks them. NFC +
+        whitespace trim makes the two comparable.
+        """
+        return unicodedata.normalize("NFC", name).strip()
+
     def _detect_stray_files(
         self, media_by_type: Dict[str, List[Dict[str, Any]]]
     ) -> List[Dict[str, Any]]:
@@ -823,7 +835,7 @@ class _NestScanner:
                 expected_folders = set()
                 path_to_item: Dict[str, Dict[str, Any]] = {}
                 for item in items_in_root:
-                    basename = os.path.basename(item["path"])
+                    basename = self._normalize_fs_name(os.path.basename(item["path"]))
                     expected_folders.add(basename)
                     local_path = self._translate_path(item["path"])
                     path_to_item[local_path] = item
@@ -849,7 +861,7 @@ class _NestScanner:
                     child_path = os.path.join(local_root, child)
 
                     if os.path.isdir(child_path):
-                        if child not in expected_folders:
+                        if self._normalize_fs_name(child) not in expected_folders:
                             stray_count += 1
                             # Map back to ARR path for display
                             arr_child_path = os.path.join(arr_root, child)

@@ -799,6 +799,7 @@ class Connector:
         """
         import json
 
+        from backend.util.helper import YEAR_MATCH_TOLERANCE
         from backend.util.normalization import normalize_titles
 
         # Extract media item data
@@ -808,7 +809,7 @@ class Connector:
         media_mbid = self._get_clean_id(media_item.get("musicbrainz_id"))
         media_season = media_item.get("season_number")
         media_title = normalize_titles(media_item.get("title"))
-        media_year = str(media_item.get("year") or "")
+        media_year = self._clean_year(media_item.get("year"))
         media_folder = media_item.get("folder") or ""
         media_root = media_item.get("root_folder") or ""
 
@@ -823,10 +824,19 @@ class Connector:
             plex_mbid = self._get_clean_id(guids.get("mbid"))
             plex_season = plex_item.get("season_number")
             plex_title = normalize_titles(plex_item.get("title"))
-            plex_year = str(plex_item.get("year") or "")
+            plex_year = self._clean_year(plex_item.get("year"))
 
             title_match = media_title == plex_title
-            year_match = media_year == plex_year
+            # ±1 tolerance, and a missing year on either side does not block —
+            # exact string equality wrongly dropped TV titles where ARR's
+            # release year and Plex's first-air year differ, and yearless ARR
+            # rows (e.g. "House of Anubis") never matched their yeared Plex
+            # counterpart. Mirrors helper.is_match's year gate.
+            year_match = (
+                media_year is None
+                or plex_year is None
+                or abs(media_year - plex_year) <= YEAR_MATCH_TOLERANCE
+            )
 
             if media_season == 0:
                 season_match = plex_season is None or plex_season == 0
@@ -946,7 +956,7 @@ class Connector:
 
             # New format: already a dict with clean keys → use directly
             if isinstance(parsed, dict):
-                for key in ("tmdb", "tvdb", "imdb"):
+                for key in ("tmdb", "tvdb", "imdb", "mbid"):
                     val = parsed.get(key)
                     if val is not None:
                         guids[key] = str(val).split("?")[0]
@@ -980,6 +990,9 @@ class Connector:
                     guids["tmdb"] = clean.split("tmdb://")[1].split("?")[0]
                 elif "tvdb://" in clean:
                     guids["tvdb"] = clean.split("tvdb://")[1].split("?")[0]
+                # MusicBrainz (Lidarr/Plex music agent): mbid://<uuid>
+                elif "mbid://" in clean:
+                    guids["mbid"] = clean.split("mbid://")[1].split("?")[0]
 
         except Exception:
             pass  # Return empty dict on parse error
@@ -989,6 +1002,20 @@ class Connector:
     def _get_clean_id(self, val):
         """Normalize IDs into comparable strings or None (from labelarr.py logic)"""
         return str(val).strip() if val not in (None, "null", "", "None") else None
+
+    @staticmethod
+    def _clean_year(val):
+        """Parse a year into an int, or None when absent/unparseable.
+
+        None means "unknown" to the matcher and never blocks a title match,
+        rather than collapsing to "" and failing exact equality.
+        """
+        if val in (None, "", "None", 0, "0"):
+            return None
+        try:
+            return int(val)
+        except (TypeError, ValueError):
+            return None
 
     def sync_all_databases(self) -> Dict[str, List[SyncResult]]:
         """Sync all databases and return results"""
