@@ -1337,6 +1337,78 @@ async def get_unmatched_assets_details(
         )
 
 
+@router.get(
+    "/unmatched/artwork",
+    summary="Get additional-artwork coverage (logo/background/squareart)",
+    description="Per-image-type coverage + per-item lists for the Unmatched "
+    "page's 'Additional artwork' view, derived from media_asset_matches.",
+)
+async def get_unmatched_artwork(
+    logger: Any = Depends(get_logger),
+) -> JSONResponse:
+    """Return per-type artwork stats (applied/missing/needs_review/ignored) and
+    the per-type item lists, mirroring the poster unmatched details shape."""
+    try:
+        logger.debug("Serving GET /api/posters/unmatched/artwork")
+        unmatched = UnmatchedAssets(logger=logger.get_adapter("UnmatchedArtwork"))
+        stats = unmatched.get_artwork_stats_adhoc()
+        return ok(
+            "Unmatched artwork coverage retrieved",
+            {"types": stats.get("types", {}), "summary": stats.get("summary", {})},
+        )
+    except Exception as e:
+        logger.error(f"Error retrieving unmatched artwork: {e}")
+        return error(
+            f"Error retrieving unmatched artwork: {str(e)}",
+            code="UNMATCHED_ARTWORK_ERROR",
+            status_code=500,
+        )
+
+
+@router.post(
+    "/match/{media_id}/artwork/{image_type}/ignore",
+    summary="Ignore a specific artwork type for a media row",
+    description="Mark one (media, image_type) pair as not-needed so it stops "
+    "appearing in the Additional-artwork view — independent of other types.",
+)
+async def ignore_artwork(
+    media_id: int,
+    image_type: str,
+    kind: str = Query("media", pattern="^(media|collection)$"),
+    ignored: bool = Query(True),
+    logger: Any = Depends(get_logger),
+    db: ChubDB = Depends(get_database),
+) -> JSONResponse:
+    """Toggle the per-(media, image_type) ignore flag in media_asset_matches."""
+    allowed = {"logo", "background", "squareart"}
+    if image_type not in allowed:
+        return error(
+            f"image_type must be one of {sorted(allowed)}, got '{image_type}'",
+            code="INVALID_IMAGE_TYPE",
+            status_code=400,
+        )
+    try:
+        logger.debug(
+            f"Serving POST /api/posters/match/{media_id}/artwork/{image_type}/ignore "
+            f"(kind={kind}, ignored={ignored})"
+        )
+        db.media_asset_matches.set_ignored(kind, media_id, image_type, ignored)
+        verb = "ignored" if ignored else "restored"
+        return ok(
+            f"Artwork {verb}",
+            {"id": media_id, "image_type": image_type, "ignored": bool(ignored)},
+        )
+    except Exception as e:
+        logger.error(
+            f"Error updating artwork ignore for {media_id}/{image_type}: {e}"
+        )
+        return error(
+            f"Error updating artwork ignore flag: {str(e)}",
+            code="ARTWORK_IGNORE_ERROR",
+            status_code=500,
+        )
+
+
 @router.post(
     "/match/{media_id}/ignore",
     summary="Dismiss (ignore) a media row from unmatched/review",

@@ -9,10 +9,18 @@ import { IconButton, Modal, PageHeader } from '../../components/ui/index.js';
 import Spinner from '../../components/ui/Spinner.jsx';
 
 const SUMMARY_TYPES = [
-    { key: 'movies', label: 'Movies' },
-    { key: 'series', label: 'Series' },
-    { key: 'seasons', label: 'Seasons' },
-    { key: 'collections', label: 'Collections' },
+    { key: 'movies', label: 'Movies', icon: '🎬' },
+    { key: 'series', label: 'Series', icon: '📺' },
+    { key: 'seasons', label: 'Seasons', icon: '🗓️' },
+    { key: 'collections', label: 'Collections', icon: '🗂️' },
+];
+
+// Additional (non-poster) artwork shown behind the "Additional artwork" toggle.
+// Banner is intentionally absent (no Plex/Kometa apply path). Order = display.
+const ARTWORK_TYPES = [
+    { key: 'logo', label: 'Logos', icon: '🅰️' },
+    { key: 'background', label: 'Backgrounds', icon: '🌄' },
+    { key: 'squareart', label: 'Square art', icon: '🔳' },
 ];
 
 const TYPE_LABELS = { movie: 'Movie', series: 'Series', collection: 'Collection' };
@@ -579,6 +587,212 @@ const MatchReviewList = ({ rows, mode, onRefresh, onPick }) => {
     );
 };
 
+/**
+ * "Additional artwork" view: per-type coverage cards (logo/background/square
+ * art) styled like the poster summary cards, plus a per-item table of media
+ * still missing the selected artwork type. Per-item actions: copy a request,
+ * ignore (per-type, "not needed"), and a link to the Asset Renamerr module.
+ */
+const ArtworkView = ({ data, status, isLoading, onRefresh }) => {
+    const toast = useToast();
+    const [activeType, setActiveType] = useState('logo');
+    const [query, setQuery] = useState('');
+    const [busyKey, setBusyKey] = useState(null);
+
+    const types = useMemo(() => data?.data?.types || {}, [data]);
+
+    // The status tab decides which per-type list we show (missing / review /
+    // ignored). Locked has no artwork analogue, so it falls back to missing.
+    const listKey =
+        status === 'ignored'
+            ? 'ignored_items'
+            : status === 'review'
+              ? 'needs_review_items'
+              : 'missing_items';
+    const rows = useMemo(() => {
+        const list = types[activeType]?.[listKey] || [];
+        const q = query.trim().toLowerCase();
+        return q ? list.filter(r => (r.title || '').toLowerCase().includes(q)) : list;
+    }, [types, activeType, listKey, query]);
+
+    const copyRequest = async item => {
+        const type = item.asset_type === 'movie' ? 'movie' : 'series';
+        const built = buildPosterRequestText(item, type);
+        if (!built) {
+            toast.error('No external ID to build a request');
+            return;
+        }
+        const ok = await copyText(built.text);
+        toast[ok ? 'success' : 'error'](ok ? 'Request copied' : 'Copy failed');
+    };
+
+    const setIgnored = async (item, ignored) => {
+        const key = `${item.id}:${activeType}`;
+        setBusyKey(key);
+        try {
+            await postersAPI.ignoreArtwork(item.id, activeType, {
+                kind: item.asset_type === 'collection' ? 'collection' : 'media',
+                ignored,
+            });
+            toast.success(ignored ? 'Marked not needed' : 'Restored');
+            onRefresh();
+        } catch {
+            toast.error('Action failed');
+        } finally {
+            setBusyKey(null);
+        }
+    };
+
+    if (isLoading) return <Spinner size="large" text="Loading artwork coverage..." center />;
+
+    return (
+        <div className="flex flex-col gap-4">
+            {/* Per-type coverage cards — same style as the poster summary cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {ARTWORK_TYPES.map(({ key, label, icon }) => {
+                    const t = types[key] || {};
+                    const isActive = activeType === key;
+                    return (
+                        <button
+                            key={key}
+                            type="button"
+                            onClick={() => setActiveType(key)}
+                            className={`text-left p-4 rounded-lg border transition-colors ${
+                                isActive
+                                    ? 'bg-surface border-brand-primary/60'
+                                    : 'bg-surface border-border hover:border-brand-primary/40'
+                            }`}
+                        >
+                            <p className="text-sm text-secondary">
+                                <span className="mr-1.5">{icon}</span>
+                                {label}
+                            </p>
+                            <p className="text-2xl font-bold text-warning">{t.missing ?? 0}</p>
+                            <p className="text-xs text-tertiary mt-1">
+                                of {t.total || 0} total &mdash;{' '}
+                                {t.percent_complete?.toFixed(1) || 0}% complete
+                            </p>
+                            {t.total > 0 && (
+                                <div className="mt-2 h-2 bg-surface-alt rounded-full overflow-hidden">
+                                    <div
+                                        className="h-full bg-success rounded-full"
+                                        style={{ width: `${t.percent_complete || 0}%` }}
+                                    />
+                                </div>
+                            )}
+                        </button>
+                    );
+                })}
+            </div>
+
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+                <input
+                    type="text"
+                    value={query}
+                    onChange={e => setQuery(e.target.value)}
+                    placeholder="Search title…"
+                    aria-label="Search titles"
+                    className="px-3 py-2 bg-input border border-border rounded-md text-primary text-sm"
+                    style={{ minWidth: '14rem' }}
+                />
+                <Link
+                    to="/settings/modules#asset_renamerr"
+                    className="text-sm text-accent hover:underline whitespace-nowrap"
+                    title="Configure / run the module that applies this artwork"
+                >
+                    ⚙️ Asset Renamerr settings
+                </Link>
+            </div>
+
+            {rows.length === 0 ? (
+                <p className="text-sm text-secondary">
+                    {status === 'ignored'
+                        ? 'Nothing marked “not needed” for this artwork type.'
+                        : status === 'review'
+                          ? 'Nothing to review for this artwork type.'
+                          : `No media missing ${ARTWORK_TYPES.find(a => a.key === activeType)?.label.toLowerCase()}.`}
+                </p>
+            ) : (
+                <div className="overflow-x-auto rounded-lg border border-border">
+                    <table className="w-full text-sm">
+                        <thead>
+                            <tr className="bg-surface-alt text-secondary text-left">
+                                <th className="px-3 py-2 font-medium">Title</th>
+                                <th className="px-3 py-2 font-medium">Type</th>
+                                <th className="px-3 py-2 font-medium">Year</th>
+                                <th className="px-3 py-2 font-medium">Instance</th>
+                                <th className="px-3 py-2 font-medium text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border">
+                            {rows.map((item, idx) => {
+                                const key = `${item.id}:${activeType}`;
+                                const isIgnored = status === 'ignored';
+                                return (
+                                    <tr
+                                        key={`${item.id ?? idx}`}
+                                        className="bg-surface hover:bg-surface-alt align-top"
+                                    >
+                                        <td className="px-3 py-2 text-primary">
+                                            <Link
+                                                to={`/poster/search/assets?q=${encodeURIComponent(item.title || '')}`}
+                                                className="hover:text-accent hover:underline"
+                                                title="Search synced assets for this title"
+                                            >
+                                                {item.title}
+                                            </Link>
+                                        </td>
+                                        <td className="px-3 py-2 text-secondary">
+                                            {TYPE_LABELS[item.asset_type] || item.asset_type || '—'}
+                                        </td>
+                                        <td className="px-3 py-2 text-secondary">
+                                            {item.year || '—'}
+                                        </td>
+                                        <td className="px-3 py-2 text-secondary">
+                                            {item.instance_name || '—'}
+                                        </td>
+                                        <td className="px-3 py-2 text-right whitespace-nowrap">
+                                            <IconButton
+                                                icon="content_copy"
+                                                size="small"
+                                                variant="ghost"
+                                                aria-label="Copy request"
+                                                title="Copy a request for this artwork"
+                                                onClick={() => copyRequest(item)}
+                                            />
+                                            {isIgnored ? (
+                                                <IconButton
+                                                    icon="undo"
+                                                    size="small"
+                                                    variant="ghost"
+                                                    disabled={busyKey === key}
+                                                    aria-label="Restore"
+                                                    title="Restore — track this artwork again"
+                                                    onClick={() => setIgnored(item, false)}
+                                                />
+                                            ) : (
+                                                <IconButton
+                                                    icon="block"
+                                                    size="small"
+                                                    variant="ghost"
+                                                    disabled={busyKey === key}
+                                                    aria-label="Not needed"
+                                                    title="Not needed — stop tracking this artwork for this item"
+                                                    onClick={() => setIgnored(item, true)}
+                                                />
+                                            )}
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+        </div>
+    );
+};
+
 /** One selectable poster thumbnail in the picker. */
 const PickerThumb = ({ cand, busy, onApply }) => {
     const [failed, setFailed] = useState(false);
@@ -716,13 +930,39 @@ const UnmatchedAssetsPage = () => {
 
     const [viewMode, setViewMode] = useState('unmatched');
     const [pickerItem, setPickerItem] = useState(null);
+    // Primary segregation: posters (default) vs additional artwork.
+    const [assetClass, setAssetClass] = useState('poster');
 
-    const viewCounts = {
+    // Artwork coverage is fetched lazily — only when the user opens that view —
+    // so the default poster experience carries zero extra cost.
+    const {
+        data: artworkData,
+        isLoading: artworkLoading,
+        refresh: refreshArtwork,
+    } = useApiData({
+        apiFunction: postersAPI.fetchUnmatchedArtwork,
+        options: { showErrorToast: false, immediate: false },
+    });
+    const artworkLoaded = !!artworkData;
+    useEffect(() => {
+        if (assetClass === 'art' && !artworkLoaded) refreshArtwork();
+    }, [assetClass, artworkLoaded, refreshArtwork]);
+
+    const artworkSummary = artworkData?.data?.summary || {};
+    const artworkCounts = {
+        unmatched: artworkSummary.missing || 0,
+        review: artworkSummary.needs_review || 0,
+        locked: 0,
+        ignored: artworkSummary.ignored || 0,
+    };
+
+    const posterViewCounts = {
         unmatched: grandTotal.unmatched || 0,
         review: reviewRows.length,
         locked: lockedRows.length,
         ignored: ignoredRows.length,
     };
+    const viewCounts = assetClass === 'art' ? artworkCounts : posterViewCounts;
 
     // The carousel shows the 50 posters CHUB most recently matched/applied to
     // media (newest first by matched_at) — genuine match recency, not
@@ -757,6 +997,50 @@ const UnmatchedAssetsPage = () => {
                 <RecentPosterReel posters={recentPosters} onRefresh={refreshRecent} />
             )}
 
+            {/* Primary segregation: Posters (default) vs Additional artwork.
+                Posters is what most users care about; artwork is one click away. */}
+            <div className="flex items-center gap-3 flex-wrap">
+                <div className="inline-flex p-1 gap-1 bg-surface-alt border border-border rounded-xl">
+                    {[
+                        { key: 'poster', label: '🖼️ Posters', count: null },
+                        {
+                            key: 'art',
+                            label: '🎨 Additional artwork',
+                            count: artworkLoaded ? artworkCounts.unmatched : null,
+                        },
+                    ].map(c => (
+                        <button
+                            key={c.key}
+                            type="button"
+                            onClick={() => {
+                                // Reset to the default status tab when switching
+                                // class so a stale "review/locked" view doesn't
+                                // carry over between posters and artwork.
+                                setViewMode('unmatched');
+                                setAssetClass(c.key);
+                            }}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                                assetClass === c.key
+                                    ? 'bg-brand-primary text-white'
+                                    : 'text-secondary hover:text-primary'
+                            }`}
+                        >
+                            {c.label}
+                            {c.count != null && (
+                                <span className="text-xs px-1.5 py-0.5 rounded-full bg-surface text-secondary">
+                                    {c.count}
+                                </span>
+                            )}
+                        </button>
+                    ))}
+                </div>
+                <span className="text-xs text-tertiary">
+                    {assetClass === 'art'
+                        ? 'Optional extras (Asset Renamerr) — kept separate so posters stay primary.'
+                        : 'The main artwork shown in Plex.'}
+                </span>
+            </div>
+
             {/* View switch: Unmatched / Needs Review / Ignored */}
             <div className="flex flex-wrap gap-1">
                 {STATUS_VIEWS.map(v => (
@@ -775,7 +1059,16 @@ const UnmatchedAssetsPage = () => {
                 ))}
             </div>
 
-            {viewMode === 'review' && (
+            {assetClass === 'art' && (
+                <ArtworkView
+                    data={artworkData}
+                    status={viewMode}
+                    isLoading={artworkLoading && !artworkLoaded}
+                    onRefresh={refreshArtwork}
+                />
+            )}
+
+            {assetClass === 'poster' && viewMode === 'review' && (
                 <MatchReviewList
                     rows={reviewRows}
                     mode="review"
@@ -783,13 +1076,14 @@ const UnmatchedAssetsPage = () => {
                     onPick={setPickerItem}
                 />
             )}
-            {viewMode === 'locked' && (
+            {assetClass === 'poster' && viewMode === 'locked' && (
                 <MatchReviewList rows={lockedRows} mode="locked" onRefresh={refresh} />
             )}
-            {viewMode === 'ignored' && (
+            {assetClass === 'poster' && viewMode === 'ignored' && (
                 <MatchReviewList rows={ignoredRows} mode="ignored" onRefresh={refresh} />
             )}
-            {viewMode === 'unmatched' &&
+            {assetClass === 'poster' &&
+                viewMode === 'unmatched' &&
                 (!hasData ? (
                     <p className="text-sm text-secondary">
                         No unmatched-asset data yet. Run &ldquo;Run Unmatched Assets&rdquo; to scan
@@ -798,14 +1092,17 @@ const UnmatchedAssetsPage = () => {
                 ) : (
                     <>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                            {SUMMARY_TYPES.map(({ key, label }) => {
+                            {SUMMARY_TYPES.map(({ key, label, icon }) => {
                                 const typeData = summary[key] || {};
                                 return (
                                     <div
                                         key={key}
                                         className="p-4 rounded-lg bg-surface border border-border"
                                     >
-                                        <p className="text-sm text-secondary">{label}</p>
+                                        <p className="text-sm text-secondary">
+                                            <span className="mr-1.5">{icon}</span>
+                                            {label}
+                                        </p>
                                         <p className="text-2xl font-bold text-warning">
                                             {typeData.unmatched || 0}
                                         </p>

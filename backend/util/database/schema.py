@@ -449,6 +449,12 @@ class SchemaManager:
                 ColumnDefinition("applied_libraries", "TEXT"),
                 ColumnDefinition("match_status", "TEXT"),
                 ColumnDefinition("matched_at", "TEXT"),
+                # Per-(media, image_type) "not needed" flag set from the
+                # Unmatched → Additional artwork view, so a user can dismiss a
+                # missing logo while still tracking a missing background. The
+                # asset run skips ignored (media, type) pairs. Additive default
+                # 0 so it auto-migrates on existing databases.
+                ColumnDefinition("ignored", "INTEGER", default=0),
             ],
             constraints=["UNIQUE(target_kind, target_id, image_type)"],
             indexes=[
