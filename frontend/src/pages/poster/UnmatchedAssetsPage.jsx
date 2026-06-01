@@ -749,11 +749,8 @@ const ArtworkView = ({ data, status, isLoading, onRefresh }) => {
     if (isLoading) return <Spinner size="large" text="Loading artwork coverage..." center />;
 
     const isIgnoredTab = status === 'ignored';
-    const missingColLabel = isIgnoredTab
-        ? 'Not needed'
-        : status === 'review'
-          ? 'Failed'
-          : 'Missing';
+    const isReviewTab = status === 'review';
+    const missingColLabel = isIgnoredTab ? 'Not needed' : isReviewTab ? 'Failed' : 'Missing';
 
     return (
         <div className="flex flex-col gap-4">
@@ -872,6 +869,7 @@ const ArtworkView = ({ data, status, isLoading, onRefresh }) => {
                                     <th className="px-3 py-2 font-medium">Type</th>
                                     <th className="px-3 py-2 font-medium">Year</th>
                                     <th className="px-3 py-2 font-medium">{missingColLabel}</th>
+                                    {isReviewTab && <th className="px-3 py-2 font-medium">Why</th>}
                                     <th className="px-3 py-2 font-medium">Instance</th>
                                     <th className="px-3 py-2 font-medium">TMDB</th>
                                     <th className="px-3 py-2 font-medium">IMDB</th>
@@ -919,6 +917,29 @@ const ArtworkView = ({ data, status, isLoading, onRefresh }) => {
                                                 reasons={item.reasons}
                                             />
                                         </td>
+                                        {isReviewTab && (
+                                            <td className="px-3 py-2 text-secondary max-w-xs">
+                                                {(() => {
+                                                    const reasons = item.reasons || {};
+                                                    const uniq = [
+                                                        ...new Set(
+                                                            (item.failed || [])
+                                                                .map(t => reasons[t])
+                                                                .filter(Boolean)
+                                                        ),
+                                                    ];
+                                                    return uniq.length ? (
+                                                        <span title={uniq.join(' • ')}>
+                                                            {uniq.join('; ')}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-tertiary">
+                                                            No detail recorded
+                                                        </span>
+                                                    );
+                                                })()}
+                                            </td>
+                                        )}
                                         <td className="px-3 py-2 text-secondary">
                                             {item.instance_name || '—'}
                                         </td>
