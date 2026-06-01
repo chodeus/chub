@@ -9,6 +9,7 @@ import { SETTINGS_SCHEMA } from '../utils/constants/settings_schema.js';
  */
 const CONFIG_MODULE_KEYS = [
     'tmdb',
+    'fanart',
     'sync_gdrive',
     'poster_renamerr',
     'asset_renamerr',
