@@ -395,6 +395,128 @@ class UnmatchedAssets(ChubModule):
             "summary": summary,
         }
 
+    # Additional (non-poster) artwork types surfaced on the Unmatched →
+    # "Additional artwork" view. Banner is intentionally absent (no Plex/Kometa
+    # apply path — see asset_renamerr.ALL_ASSET_TYPES). squareart applies to
+    # movies + shows only.
+    ARTWORK_TYPES = ["logo", "background", "squareart"]
+
+    def get_artwork_stats_adhoc(self) -> Dict[str, Any]:
+        try:
+            with ChubDB(logger=self.logger) as db:
+                return self.get_artwork_stats(db)
+        except Exception as exc:
+            self.logger.error(f"\n\nAn error occurred: {exc}\n", exc_info=True)
+            return {}
+
+    def get_artwork_stats(self, db: ChubDB) -> Dict[str, Any]:
+        """Per-image-type coverage for the additional artwork (logo / background
+        / squareart), derived from media_asset_matches.
+
+        Reuses the same instance + config filtering as the poster view to get
+        the eligible media universe, then for each (media, image_type) classifies
+        it from its media_asset_matches row:
+          - applied      → match_status == "applied" and not ignored
+          - needs_review → row exists, status != applied, not ignored
+          - ignored      → ignored flag set (user dismissed)
+          - missing      → no row (or status failed) and not ignored
+        Returns per-type {total, applied, missing, needs_review, ignored,
+        percent_complete} plus flat per-type lists for the table, mirroring the
+        shape the poster view returns so the frontend can reuse its rendering.
+        """
+        self.fetch_data(db)
+        self.compute_instance_filters()
+        if not self.allowed_instances:
+            self.allowed_instances = {
+                a.get("instance_name") for a in self.all_media + self.all_collections
+            }
+        self.filter_by_instance()
+        self.filter_by_config()
+
+        # Eligible media universe: only released/has-content movies+shows that
+        # pass the ignore gates (same predicate the poster unmatched list uses).
+        # squareart is movie/show-capable too; banner is excluded entirely.
+        eligible = [
+            a
+            for a in self.all_media
+            if a.get("asset_type") in ("movie", "show") and self.should_include(a)
+        ]
+
+        # Presence index: (target_id, image_type) -> match row (media only).
+        index: Dict[tuple, Dict[str, Any]] = {}
+        for image_type in self.ARTWORK_TYPES:
+            for row in db.media_asset_matches.get_by_type(image_type):
+                if row.get("target_kind") == "media":
+                    index[(row.get("target_id"), image_type)] = row
+
+        per_type: Dict[str, Dict[str, Any]] = {}
+        for image_type in self.ARTWORK_TYPES:
+            applied = missing = needs_review = ignored = 0
+            missing_items: List[Dict[str, Any]] = []
+            review_items: List[Dict[str, Any]] = []
+            ignored_items: List[Dict[str, Any]] = []
+            for media in eligible:
+                row = index.get((media.get("id"), image_type))
+                item = self._serialize_artwork_item(media, image_type, row)
+                if row and row.get("ignored"):
+                    ignored += 1
+                    ignored_items.append(item)
+                elif row and row.get("match_status") == "applied":
+                    applied += 1
+                elif row and row.get("match_status"):
+                    needs_review += 1
+                    review_items.append(item)
+                else:
+                    missing += 1
+                    missing_items.append(item)
+            total = len(eligible)
+            per_type[image_type] = {
+                "total": total,
+                "applied": applied,
+                "missing": missing,
+                "needs_review": needs_review,
+                "ignored": ignored,
+                "percent_complete": (applied / total * 100) if total else 0,
+                "missing_items": missing_items,
+                "needs_review_items": review_items,
+                "ignored_items": ignored_items,
+            }
+
+        grand_missing = sum(t["missing"] for t in per_type.values())
+        grand_review = sum(t["needs_review"] for t in per_type.values())
+        grand_ignored = sum(t["ignored"] for t in per_type.values())
+        return {
+            "types": per_type,
+            "summary": {
+                "missing": grand_missing,
+                "needs_review": grand_review,
+                "ignored": grand_ignored,
+            },
+        }
+
+    @staticmethod
+    def _serialize_artwork_item(
+        media: Dict[str, Any], image_type: str, row: Optional[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """Flatten a (media, image_type) pair to the fields the artwork table
+        renders. ``row`` is the media_asset_matches row if one exists."""
+        return {
+            "id": media.get("id"),
+            "title": media.get("title"),
+            "year": media.get("year"),
+            "type": media.get("asset_type"),
+            "asset_type": media.get("asset_type"),
+            "season_number": media.get("season_number"),
+            "instance_name": media.get("instance_name"),
+            "tmdb_id": media.get("tmdb_id"),
+            "tvdb_id": media.get("tvdb_id"),
+            "imdb_id": media.get("imdb_id"),
+            "image_type": image_type,
+            "match_status": (row or {}).get("match_status"),
+            "source": (row or {}).get("source"),
+            "ignored": bool((row or {}).get("ignored")),
+        }
+
     @staticmethod
     def _serialize_match_row(row: Dict[str, Any], is_collection: bool) -> Dict[str, Any]:
         """Flatten a media/collection row to the fields the Needs-Review /

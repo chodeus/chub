@@ -343,6 +343,33 @@ export const postersAPI = {
     },
 
     /**
+     * Additional-artwork coverage (logo/background/squareart) for the
+     * Unmatched page's "Additional artwork" view.
+     * @returns {Promise<Object>} { types: {logo,background,squareart}, summary }
+     */
+    fetchUnmatchedArtwork: () => {
+        return apiCore.get('/posters/unmatched/artwork', {
+            cacheTTL: 5 * 60 * 1000,
+        });
+    },
+
+    /**
+     * Toggle the per-(media, image_type) "not needed" ignore flag.
+     * @param {number} id - media_cache id
+     * @param {string} imageType - 'logo' | 'background' | 'squareart'
+     * @param {Object} options - { kind: 'media'|'collection', ignored: bool }
+     */
+    ignoreArtwork: async (id, imageType, { kind = 'media', ignored = true } = {}) => {
+        const params = new URLSearchParams({ kind, ignored: String(ignored) });
+        const res = await apiCore.post(
+            `/posters/match/${id}/artwork/${imageType}/ignore?${params}`,
+            {}
+        );
+        apiCore.clearCache('/posters/unmatched/artwork');
+        return res;
+    },
+
+    /**
      * Ignore (dismiss) or restore a media/collection row from the
      * Unmatched / Needs-Review tabs.
      * @param {number} id - media_cache or collections_cache row id

@@ -69,6 +69,32 @@ class MediaAssetMatches(DatabaseBase):
             ),
         )
 
+    def set_ignored(
+        self, target_kind: str, target_id: int, image_type: str, ignored: bool
+    ) -> None:
+        """Set the per-(target, image_type) "not needed" flag.
+
+        Works even when no match row exists yet — a *missing* asset has no row,
+        so ignoring it inserts a status-less row carrying just the flag. An
+        existing row keeps its match provenance and only flips ``ignored``.
+        """
+        self.execute_query(
+            """
+            INSERT INTO media_asset_matches
+                (target_kind, target_id, image_type, matched_at, ignored)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(target_kind, target_id, image_type)
+            DO UPDATE SET ignored=excluded.ignored
+            """,
+            (
+                target_kind,
+                int(target_id),
+                image_type,
+                datetime.now(timezone.utc).isoformat(),
+                1 if ignored else 0,
+            ),
+        )
+
     def get_one(
         self, target_kind: str, target_id: int, image_type: str
     ) -> Optional[dict]:
