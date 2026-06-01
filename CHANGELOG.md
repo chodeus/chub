@@ -2,6 +2,13 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.24.1](https://github.com/chodeus/chub/compare/v2.24.0...v2.24.1) (2026-06-01)
+
+
+### Performance
+
+* **asset_renamerr:** resolve Plex artwork targets via a shared guid-first index ([bd2b095](https://github.com/chodeus/chub/commit/bd2b095382520db40992e257fc2c4b9c8ec5543f))
+
 ## [2.24.0](https://github.com/chodeus/chub/compare/v2.23.0...v2.24.0) (2026-05-31)
 
 
