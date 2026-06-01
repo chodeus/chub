@@ -2,6 +2,13 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.26.1](https://github.com/chodeus/chub/compare/v2.26.0...v2.26.1) (2026-06-01)
+
+
+### Bug Fixes
+
+* **unmatched:** label show season rows in the artwork table ([14c6ad3](https://github.com/chodeus/chub/commit/14c6ad387e168ebc614b9e2ac578fcc962d41d7a))
+
 ## [2.26.0](https://github.com/chodeus/chub/compare/v2.25.1...v2.26.0) (2026-06-01)
 
 
