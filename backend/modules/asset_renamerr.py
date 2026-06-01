@@ -146,16 +146,20 @@ class AssetRenamerr(ChubModule):
             cache[instance_name] = PlexMediaIndex(rows) if rows else None
         return cache[instance_name]
 
-    def _index_resolved_libraries(
+    def _index_resolved_targets(
         self, db: ChubDB, instance_name: str, media: dict
-    ) -> Optional[List[str]]:
-        """Use the guid-first PlexMediaIndex to return the libraries on this
-        instance that ACTUALLY hold ``media`` (so we upload only where the item
-        exists — no wrong-library attempts, guid match beats title+year).
+    ) -> Optional[List[dict]]:
+        """Use the guid-first PlexMediaIndex to return the Plex cache ENTRIES on
+        this instance that ACTUALLY hold ``media`` (guid match beats title+year,
+        so we upload only where the item exists). Each entry carries the Plex
+        ``plex_id`` (ratingKey) plus the Plex-side title/year — so the upload can
+        target the exact item by ratingKey instead of re-searching by the *arr
+        title, which often differs from Plex's (e.g. Radarr 'Aliens vs Predator:
+        Requiem' vs Plex 'AVPR: Aliens vs Predator - Requiem').
 
-        Returns a list of library names (possibly empty = "indexed, not here"),
-        or None when the index is unavailable (no snapshot) so the caller can
-        fall back to a live type-filtered search.
+        Returns a list of entries (one per library, possibly empty = "indexed,
+        not here"), or None when the index is unavailable (no snapshot) so the
+        caller can fall back to a live type-filtered search.
         """
         index = self._get_plex_index(db, instance_name)
         if index is None:
@@ -171,50 +175,93 @@ class AssetRenamerr(ChubModule):
         entries, _key = index.resolve(
             media, media_type=media_type, season_number=season_number
         )
-        # Dedupe to one library name per hit (the index lists every copy).
-        libs: List[str] = []
+        # One entry per library (the index lists every copy).
+        seen: Set[str] = set()
+        out: List[dict] = []
         for e in entries:
             lib = e.get("library_name")
-            if lib and lib not in libs:
-                libs.append(lib)
-        return libs
+            if lib and lib not in seen:
+                seen.add(lib)
+                out.append(e)
+        return out
 
     def _resolve_apply_targets(
         self, db: ChubDB, media: dict, is_collection: bool
-    ) -> List[Tuple[str, List[str]]]:
-        """(instance, libraries) the direct apply should upload to.
+    ) -> List[Tuple[str, List[dict]]]:
+        """(instance, [targets]) the direct apply should upload to, where each
+        target is a dict ``{library_name, title, year, plex_id}`` describing how
+        to locate the item in that library.
 
         Collections keep their stored instance/library. For movies/shows, prefer
-        the PlexMediaIndex (guid-first, only libraries that actually hold the
-        item); fall back per-instance to a live type-filtered search when the
-        index has no snapshot for that instance (lazy fallback for fresh/edge
-        items). This is the single source of truth for both the upload loop and
-        the per-library idempotency key-set, so they can't drift.
+        the PlexMediaIndex (guid-first) and carry the matched item's Plex
+        ``plex_id`` (ratingKey) + Plex title/year — so the upload targets the
+        EXACT item by ratingKey rather than re-searching by the *arr title,
+        which frequently differs from Plex's (e.g. Radarr 'Aliens vs Predator:
+        Requiem' vs Plex 'AVPR: Aliens vs Predator - Requiem'). Fall back
+        per-instance to a live type-filtered search (by *arr title, no plex_id)
+        when the index has no snapshot. Single source of truth for both the
+        upload loop and the per-library idempotency key-set, so they can't drift.
         """
+        media_title = media.get("title")
+        media_year = self._media_year(media)
         if is_collection:
-            return [(media.get("instance_name"), [media.get("library_name")])]
+            return [
+                (
+                    media.get("instance_name"),
+                    [
+                        {
+                            "library_name": media.get("library_name"),
+                            "title": media_title,
+                            "year": media_year,
+                            "plex_id": None,
+                        }
+                    ],
+                )
+            ]
 
         expected = self._PLEX_SECTION_TYPE.get(media.get("asset_type"))
-        out: List[Tuple[str, List[str]]] = []
+        out: List[Tuple[str, List[dict]]] = []
         for instance_name, opted_libs in self._enabled_plex_instances():
-            resolved = self._index_resolved_libraries(db, instance_name, media)
+            resolved = self._index_resolved_targets(db, instance_name, media)
             if resolved is None:
-                # No index snapshot → live type-filtered fallback for this item.
+                # No index snapshot → live type-filtered fallback (by *arr title).
                 client = self._plex_client_for(instance_name)
                 getter = getattr(client, "section_type", None) if client else None
-                libs = []
+                targets: List[dict] = []
                 for lib in opted_libs:
                     if not lib:
                         continue
                     st = getter(lib) if (getter and expected) else None
                     if st is None or st == expected:
-                        libs.append(lib)
+                        targets.append(
+                            {
+                                "library_name": lib,
+                                "title": media_title,
+                                "year": media_year,
+                                "plex_id": None,
+                            }
+                        )
             else:
-                # Index hit: intersect "libraries that hold it" with opted-in.
+                # Index hit: keep entries whose library is opted-in, carrying the
+                # Plex ratingKey + Plex title/year (falling back to *arr values
+                # only when the cache row omits them).
                 opted = {lib for lib in opted_libs if lib}
-                libs = [lib for lib in resolved if lib in opted] if opted else resolved
-            if libs:
-                out.append((instance_name, libs))
+                targets = [
+                    {
+                        "library_name": e.get("library_name"),
+                        "title": e.get("title") or media_title,
+                        "year": (
+                            e.get("year")
+                            if e.get("year") not in (None, "", "None")
+                            else media_year
+                        ),
+                        "plex_id": e.get("plex_id"),
+                    }
+                    for e in resolved
+                    if not opted or e.get("library_name") in opted
+                ]
+            if targets:
+                out.append((instance_name, targets))
         return out
 
     def _type_matched_targets(self, media: dict) -> List[Tuple[str, List[str]]]:
@@ -250,10 +297,11 @@ class AssetRenamerr(ChubModule):
         path as the upload loop so the expected set matches what _apply_direct
         will actually attempt."""
         keys: Set[str] = set()
-        for instance_name, libraries in self._resolve_apply_targets(
+        for instance_name, targets in self._resolve_apply_targets(
             db, media, is_collection
         ):
-            for lib in libraries:
+            for tgt in targets:
+                lib = tgt.get("library_name")
                 if lib:
                     keys.add(f"{instance_name}/{lib}")
         return keys
@@ -464,23 +512,28 @@ class AssetRenamerr(ChubModule):
 
         # Upload to EVERY matching library, not just the first — an item that
         # lives in both a 1080p and a 4K library should get the asset in both.
+        # Each target carries the Plex ratingKey (plex_id) + Plex title/year, so
+        # the upload hits the exact item; fall back to the media's own
+        # title/year when a target omits them (lazy/no-index path).
         applied_to: List[str] = []
-        for instance_name, libraries in targets:
+        for instance_name, lib_targets in targets:
             client = self._plex_client_for(instance_name)
             if not client:
                 continue
-            for lib in libraries:
+            for tgt in lib_targets:
+                lib = tgt.get("library_name")
                 if not lib:
                     continue
                 ok = getattr(client, method_name)(
                     lib,
-                    title,
+                    tgt.get("title") or title,
                     filepath=file,
                     url=url,
-                    year=year,
+                    year=(tgt.get("year") if tgt.get("year") is not None else year),
                     is_collection=is_collection,
                     season_number=season_number,
                     dry_run=self.config.dry_run,
+                    plex_id=tgt.get("plex_id"),
                 )
                 if ok:
                     applied_to.append(f"{instance_name}/{lib}")

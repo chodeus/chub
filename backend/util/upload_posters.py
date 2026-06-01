@@ -701,6 +701,7 @@ class PosterUploader:
                     is_collection=is_collection,
                     season_number=season_number,
                     dry_run=dry_run,
+                    plex_id=entry.get("plex_id"),
                 )
                 if not ok:
                     continue
