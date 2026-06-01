@@ -619,6 +619,52 @@ def test_already_applied_never_skips_in_dry_run(db):
     )
 
 
+def test_dry_run_does_not_persist_match_state(db, monkeypatch):
+    """A dry-run plex apply must NOT write media_asset_matches — otherwise the
+    next REAL run's _already_applied check would skip an item that was never
+    actually uploaded (the bug). The upload itself is also skipped."""
+    m = make_module(
+        dry_run=True,
+        sources=["tmdb"],
+        apply_method="plex",
+        asset_types=["logo"],
+        instances=[
+            {"plex1": SimpleNamespace(library_names=["Movies"], add_posters=True)}
+        ],
+    )
+
+    uploaded = []
+
+    class FakeClient:
+        def section_type(self, library_name):
+            return "movie"
+
+        def upload_logo(self, library_name, item_title, **kw):
+            # Real PlexClient skips the actual call on dry_run; if this fires
+            # during a dry run that's a separate bug. Record to assert it doesn't.
+            if not kw.get("dry_run"):
+                uploaded.append(library_name)
+            return True  # mirrors _upload_artwork returning True even on dry-run
+
+    m._plex_clients = {"plex1": FakeClient()}
+    monkeypatch.setattr(m, "_gather_media", lambda _db: [_media(id=3)])
+    monkeypatch.setattr(
+        m,
+        "_resolve_source",
+        lambda *a, **k: ("tmdb", None, "http://x/logo.png"),
+    )
+
+    out = m.match_and_apply_assets(db)
+
+    # Reported as a (would-be) apply in the output...
+    assert out["logo"] and out["logo"][0]["applied"] is True
+    assert out["logo"][0]["dry_run"] is True
+    # ...but NOTHING persisted, so a later real run still uploads.
+    assert db.media_asset_matches.get_one("media", 3, "logo") is None
+    # ...and no real upload happened.
+    assert uploaded == []
+
+
 def test_apply_direct_uploads_to_all_matching_libraries():
     m = make_module(
         apply_method="plex",
