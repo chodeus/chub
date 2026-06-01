@@ -728,7 +728,12 @@ class AssetRenamerr(ChubModule):
                         media, image_type, source, file, url
                     )
 
-                if target_id is not None:
+                # On a dry run, NEVER persist match state: media_asset_matches
+                # drives idempotency (_already_applied), so recording a dry-run
+                # as "applied" would make the next REAL run skip an item that
+                # was never actually uploaded. We still report it in the output
+                # (marked "would apply") so the dry-run preview is complete.
+                if target_id is not None and not self.config.dry_run:
                     db.media_asset_matches.upsert(
                         target_kind=target_kind,
                         target_id=target_id,
@@ -751,12 +756,15 @@ class AssetRenamerr(ChubModule):
                         "year": self._media_year(media),
                         "source": source,
                         "applied": applied,
+                        "dry_run": self.config.dry_run,
                         "reason": detail,
                     }
                 )
                 if applied:
+                    prefix = "[DRY RUN] would apply" if self.config.dry_run else "✓"
                     self.logger.debug(
-                        f"✓ {image_type} [{source}] {media.get('title')} -> {detail}"
+                        f"{prefix} {image_type} [{source}] "
+                        f"{media.get('title')} -> {detail}"
                     )
         return output
 
@@ -765,21 +773,29 @@ class AssetRenamerr(ChubModule):
         # (suppress the per-item lines for unchanged/failed) — the header +
         # "N/M applied" count is always shown so the run is still summarised.
         only_applied = bool(getattr(self.config, "print_only_renames", False))
+        dry = bool(getattr(self.config, "dry_run", False))
         for image_type, entries in output.items():
             applied = [e for e in entries if e.get("applied")]
             self.logger.info(create_table([[image_type.capitalize()]]))
             if not entries:
                 self.logger.info(f"No {image_type} assets matched\n")
                 continue
+            verb = "would be applied" if dry else "applied"
             self.logger.info(
-                f"{len(applied)}/{len(entries)} {image_type} assets applied"
+                f"{len(applied)}/{len(entries)} {image_type} assets {verb}"
             )
             shown = applied if only_applied else entries
             for e in shown:
                 title = e.get("title") or ""
                 year = e.get("year")
                 display = f"{title} ({year})" if year else title
-                mark = "✓" if e.get("applied") else "✗"
+                # On a dry run an "applied" item is only a projection — show
+                # "⊘ would apply" so the preview can't be mistaken for a real
+                # upload (a genuine miss stays "✗").
+                if e.get("applied"):
+                    mark = "⊘ would apply" if dry else "✓"
+                else:
+                    mark = "✗"
                 self.logger.info(f"\t{mark} {display} — {e.get('reason')}")
             self.logger.info("")
 
