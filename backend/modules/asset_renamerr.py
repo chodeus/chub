@@ -748,6 +748,9 @@ class AssetRenamerr(ChubModule):
                             json.dumps(sorted(applied_libs)) if applied_libs else None
                         ),
                         match_status="applied" if applied else "failed",
+                        # Persist the outcome detail on BOTH paths so a failed
+                        # apply can explain itself in the Needs-Review view.
+                        detail=detail,
                     )
 
                 output[image_type].append(

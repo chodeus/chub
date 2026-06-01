@@ -1099,3 +1099,40 @@ async def clear_poster_cache(
             code="DB_CLEAR_POSTER_CACHE_ERROR",
             status_code=500,
         )
+
+
+@router.post(
+    "/system/db/artwork-matches/clear",
+    summary="Reset additional-artwork match state",
+    description="Deletes every row in media_asset_matches (logo/background/"
+    "square-art apply provenance + per-type ignore flags). The Additional-"
+    "artwork coverage view resets to all-missing; the next asset_renamerr run "
+    "repopulates it from real apply results. Use to purge stale state — e.g. "
+    "rows a pre-fix dry-run wrongly recorded as 'applied'. Does not touch "
+    "posters or media_cache.",
+)
+async def clear_artwork_matches(
+    logger: Any = Depends(get_logger),
+    db: ChubDB = Depends(get_database),
+) -> JSONResponse:
+    try:
+        logger.debug("Serving POST /api/system/db/artwork-matches/clear")
+        count_row = db.worker.execute_query(
+            "SELECT COUNT(*) AS total FROM media_asset_matches", fetch_one=True
+        )
+        before = int(count_row["total"]) if count_row else 0
+
+        db.media_asset_matches.clear()
+
+        logger.info(
+            f"Wiped media_asset_matches via /api/system/db/artwork-matches/clear "
+            f"({before} rows)"
+        )
+        return ok("Artwork match state cleared", {"deleted": before})
+    except Exception as e:
+        logger.error(f"Error clearing media_asset_matches: {e}")
+        return error(
+            f"Error clearing media_asset_matches: {str(e)}",
+            code="DB_CLEAR_ARTWORK_MATCHES_ERROR",
+            status_code=500,
+        )

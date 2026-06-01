@@ -113,6 +113,25 @@ def test_artwork_stats_ignored_excluded_from_missing(db):
     assert logo["missing"] == 0  # an ignored item is not also counted missing
 
 
+def test_artwork_needs_review_carries_failure_reason(db):
+    """A failed apply must surface WHY in the needs_review item so the UI can
+    explain itself instead of just saying 'failed'."""
+    a = _seed_movie(db, "Alpha", 301)
+    db.media_asset_matches.upsert(
+        target_kind="media",
+        target_id=a,
+        image_type="logo",
+        source="tmdb",
+        match_status="failed",
+        detail="not found in any configured Plex library",
+    )
+    m = _module()
+    review = m.get_artwork_stats(db)["types"]["logo"]["needs_review_items"]
+    assert len(review) == 1
+    assert review[0]["reason"] == "not found in any configured Plex library"
+    assert review[0]["match_status"] == "failed"
+
+
 def test_artwork_stats_empty_universe(db):
     m = _module()
     stats = m.get_artwork_stats(db)

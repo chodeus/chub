@@ -30,6 +30,7 @@ class MediaAssetMatches(DatabaseBase):
         applied_path: Optional[str] = None,
         applied_libraries: Optional[str] = None,
         match_status: Optional[str] = None,
+        detail: Optional[str] = None,
         matched_at: Optional[str] = None,
     ) -> None:
         """Insert or refresh the match row for one (target, image_type)."""
@@ -39,8 +40,8 @@ class MediaAssetMatches(DatabaseBase):
             INSERT INTO media_asset_matches
                 (target_kind, target_id, image_type, source, matched_file,
                  matched_url, source_mtime, applied_method, applied_path,
-                 applied_libraries, match_status, matched_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 applied_libraries, match_status, detail, matched_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(target_kind, target_id, image_type)
             DO UPDATE SET
                 source=excluded.source,
@@ -51,6 +52,7 @@ class MediaAssetMatches(DatabaseBase):
                 applied_path=excluded.applied_path,
                 applied_libraries=excluded.applied_libraries,
                 match_status=excluded.match_status,
+                detail=excluded.detail,
                 matched_at=excluded.matched_at
             """,
             (
@@ -65,6 +67,7 @@ class MediaAssetMatches(DatabaseBase):
                 applied_path,
                 applied_libraries,
                 match_status,
+                detail,
                 matched_at,
             ),
         )
