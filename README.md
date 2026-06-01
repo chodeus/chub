@@ -128,4 +128,6 @@ I write large portions of CHUB's source, tests, and documentation with the help 
 
 CHUB is a fork of [DAPS](https://github.com/Drazzilb08/daps) by **Drazzilb08** — thank you for the scripts and inspiration that made this possible.
 
+Logo and background artwork is sourced from [fanart.tv](https://fanart.tv) — images and metadata are provided by fanart.tv and its contributors.
+
 Licensed under the [MIT License](LICENSE).

@@ -16,7 +16,7 @@ from backend.util.logger import Logger
 from backend.util.notification import NotificationManager
 from backend.util.plex import PlexClient
 from backend.util.ssrf_guard import is_safe_url
-from backend.util.tmdb import TMDBClient
+from backend.util.fanart import FanartClient
 
 # The additional (non-poster) asset types this module manages. Banner is
 # deliberately absent: Plex has no banner upload API and Kometa does not read
@@ -66,24 +66,24 @@ def apply_capability(image_type: str, apply_method: str) -> Tuple[bool, str]:
     )
 
 
-# image_type -> the TMDB image class get_images() can supply. squareart and
-# banner are absent from TMDB, so those types only ever resolve from local
-# files even when "tmdb" is a configured source.
-TMDB_IMAGE_KEY = {
+# image_type -> the key returned by FanartClient.get_images(). squareart and
+# banner are absent from fanart.tv, so those types only ever resolve from local
+# files even when "fanart" is a configured source.
+FANART_IMAGE_KEY = {
     "logo": "logo",
     "background": "background",
 }
 
 
 class AssetRenamerr(ChubModule):
-    """Apply additional Plex asset types — clear logo, square art, background —
+    """Apply additional Plex asset types — logo, square art, background —
     to matched media. (Banner is intentionally unsupported: Plex has no banner
     upload API and Kometa does not read banners from asset directories.)
 
     Reuses poster_renamerr's scan/match machinery (assets live in poster_cache
-    tagged with image_type) and PlexClient/TMDBClient. Images come from an
-    ordered ``sources`` preference (local g-drive files and/or TMDB; first hit
-    wins) and are applied either directly to Plex (uploadLogo/uploadSquareArt/
+    tagged with image_type) and PlexClient/FanartClient. Images come from an
+    ordered ``sources`` preference (local g-drive files and/or fanart.tv; first
+    hit wins) and are applied either directly to Plex (uploadLogo/uploadSquareArt/
     uploadArt) or renamed into a Kometa assets directory.
 
     The core, ``match_and_apply_assets``, is callable two ways:
@@ -108,7 +108,9 @@ class AssetRenamerr(ChubModule):
 
     def _sources(self) -> List[str]:
         """Ordered source preference (first match wins). Defaults to local."""
-        return [s for s in (self.config.sources or ["local"]) if s in ("local", "tmdb")]
+        return [
+            s for s in (self.config.sources or ["local"]) if s in ("local", "fanart")
+        ]
 
     def _enabled_plex_instances(self) -> List[Tuple[str, List[str]]]:
         """(instance_name, library_names) for each Plex entry that opted in.
@@ -405,7 +407,7 @@ class AssetRenamerr(ChubModule):
         db: ChubDB,
         image_type: str,
         is_collection: bool,
-        tmdb_client: Optional[TMDBClient],
+        fanart_client: Optional[FanartClient],
     ) -> Optional[Tuple[str, Optional[str], Optional[str]]]:
         """Resolve one (media, image_type) to an image, honouring the ordered
         ``sources`` preference. Returns ``(source, file, url)`` for the first
@@ -421,18 +423,17 @@ class AssetRenamerr(ChubModule):
                 cand = found.get("candidate")
                 if found.get("matched") and cand and cand.get("file"):
                     return ("local", cand["file"], None)
-            elif source == "tmdb":
-                tmdb_key = TMDB_IMAGE_KEY.get(image_type)
-                tmdb_id = media.get("tmdb_id")
-                if not tmdb_key or not tmdb_id or not tmdb_client:
+            elif source == "fanart":
+                fanart_key = FANART_IMAGE_KEY.get(image_type)
+                # fanart has no squareart/banner; collections aren't supported.
+                if not fanart_key or is_collection or not fanart_client:
                     continue
-                media_type = "movie" if media.get("asset_type") == "movie" else "tv"
-                images = tmdb_client.get_images(
-                    int(tmdb_id), media_type, language=self.config.tmdb_language
+                images = fanart_client.get_images(
+                    media, language=self.config.tmdb_language
                 )
-                url = (images or {}).get(tmdb_key)
+                url = (images or {}).get(fanart_key)
                 if url:
-                    return ("tmdb", None, url)
+                    return ("fanart", None, url)
         return None
 
     # ----- apply ----------------------------------------------------------
@@ -478,7 +479,7 @@ class AssetRenamerr(ChubModule):
                 recorded = set()
             if not expected.issubset(recorded):
                 return False
-        if source == "tmdb":
+        if source == "fanart":
             return bool(url) and prev.get("matched_url") == url
         # local: same file + unchanged mtime
         return (
@@ -573,12 +574,12 @@ class AssetRenamerr(ChubModule):
         if not dest_root:
             return False, "no destination_dir configured for Kometa apply"
 
-        # Obtain a local source file (download TMDB urls first).
+        # Obtain a local source file (download remote fanart.tv urls first).
         temp_file = None
         src = file
-        if source == "tmdb":
+        if source == "fanart":
             if self.config.dry_run:
-                src = "<tmdb>"  # placeholder; nothing is written in dry-run
+                src = "<fanart>"  # placeholder; nothing is written in dry-run
             else:
                 temp_file = self._download_to_temp(url) if url else None
                 src = temp_file
@@ -710,15 +711,16 @@ class AssetRenamerr(ChubModule):
                     f"Plex cache refresh skipped ({exc}); using existing snapshot."
                 )
 
-        tmdb_client = None
-        if "tmdb" in self._sources():
-            tmdb_client = TMDBClient(self.full_config.tmdb, db, self.logger)
-            if not tmdb_client.enabled:
+        fanart_client = None
+        if "fanart" in self._sources():
+            fanart_client = FanartClient(self.full_config.fanart, db, self.logger)
+            if not fanart_client.enabled:
                 self.logger.info(
-                    "TMDB source requested but no API key is configured; "
-                    "falling back to local sources only."
+                    "fanart.tv source requested but no personal API key is "
+                    "configured; add your fanart.tv key in settings. Falling "
+                    "back to local sources only."
                 )
-                tmdb_client = None
+                fanart_client = None
 
         total = len(all_media)
         for idx, media in enumerate(all_media, 1):
@@ -736,7 +738,7 @@ class AssetRenamerr(ChubModule):
 
             for image_type in applicable:
                 resolved = self._resolve_source(
-                    media, db, image_type, is_collection, tmdb_client
+                    media, db, image_type, is_collection, fanart_client
                 )
                 if not resolved:
                     continue

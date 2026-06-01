@@ -1297,7 +1297,7 @@ class PosterRenamerr(ChubModule):
                         db=db, logger=self.logger, manifest=manifest
                     ).run()
 
-                # Additional asset types (clear logo / squareart / background /
+                # Additional asset types (logo / squareart / background /
                 # banner) ride this run when enabled: the gdrive sync, the single
                 # image_type-aware merge_assets scan (poster_cache already holds
                 # the asset rows), and the loaded media/Plex snapshot are all

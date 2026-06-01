@@ -81,7 +81,7 @@ class PosterRenamerrConfig(BaseModel):
     asset_folders: bool = False
     print_only_renames: bool = False
     run_border_replacerr: bool = False
-    # When True, the asset phase (clear logo / squareart / background / banner)
+    # When True, the asset phase (logo / squareart / background / banner)
     # runs inline at the end of a poster_renamerr run, reusing the same gdrive
     # sync, the single image_type-aware source-dir scan, and the loaded
     # media/Plex snapshot — so no second sync/scan/fetch is incurred. See
@@ -142,7 +142,7 @@ class AssetRenamerrPlexInstance(BaseModel):
 
 
 class AssetRenamerrConfig(BaseModel):
-    """Additional-asset support: clear logo, square art, background, banner.
+    """Additional-asset support: logo, square art, background, banner.
 
     Mirrors poster_renamerr's scan/match flow but for non-poster image types.
     Images can come from two SOURCES and be applied two WAYS:
@@ -152,8 +152,10 @@ class AssetRenamerrConfig(BaseModel):
           "Title (Year) {tmdb-N} - Logo.png" (the same convention as posters
           plus a " - Logo"/" - SquareArt"/" - Background"/" - Banner" suffix).
           source_dirs keep poster_renamerr's bottom-wins ordering within local.
-        - "tmdb": images fetched from TMDB for the media's tmdb_id (requires
-          the top-level tmdb.apikey).
+        - "fanart": images fetched from fanart.tv (curated logos +
+          backgrounds, ranked by community likes). Requires the user's
+          personal fanart.tv key (fanart.client_key); the project key is
+          embedded. Supplies logo + background only (no square art).
 
     Supported types per apply method (see backend/modules/asset_renamerr.py):
       apply_method ("plex" | "kometa"; legacy "direct" is an alias for "plex"):
@@ -184,7 +186,7 @@ class AssetRenamerrConfig(BaseModel):
     log_level: str = "info"
     dry_run: bool = False
     # Ordered source preference; first source yielding an image wins.
-    sources: List[str] = Field(default_factory=lambda: ["local", "tmdb"])
+    sources: List[str] = Field(default_factory=lambda: ["local", "fanart"])
     # Which non-poster asset types to process. Defaults to the two types that
     # work on BOTH apply methods. squareart (direct only) can be added
     # explicitly. Valid values: "logo", "background", "squareart".
@@ -251,6 +253,24 @@ class AssetRenamerrConfig(BaseModel):
         else:
             return value
         return value or ["en"]
+
+    @field_validator("sources", mode="before")
+    @classmethod
+    def _migrate_sources(cls, value: Any) -> Any:
+        # Logos/backgrounds now come from fanart.tv (curated + likes-ranked),
+        # not TMDB. Migrate any legacy "tmdb" source to "fanart" so existing
+        # configs keep working, drop unknown values, de-dupe (preserving order),
+        # and fall back to the default when nothing valid remains.
+        if not isinstance(value, list):
+            return value
+        out: List[str] = []
+        for item in value:
+            s = str(item).strip().lower()
+            if s == "tmdb":
+                s = "fanart"
+            if s in ("local", "fanart") and s not in out:
+                out.append(s)
+        return out or ["local", "fanart"]
 
 
 class BorderHoliday(BaseModel):
@@ -554,6 +574,25 @@ class TMDBConfig(BaseModel):
     # UI is hidden.
 
 
+class FanartConfig(BaseModel):
+    """fanart.tv integration — the source for logos + backgrounds in
+    asset_renamerr (curated art, ranked by community likes).
+
+    A fanart.tv PERSONAL key (client_key) authenticates on its own, so it is all
+    Chub needs — and Chub requires it for the "fanart" source (without it the
+    asset run falls back to local files). It also gives the faster tier, cutting
+    the delay for newly-added artwork from 7 days to 2 (immediate for VIP).
+    Get one free at https://fanart.tv/get-an-api-key/ (Personal API Keys).
+    Chub does not use a fanart.tv project key.
+
+    cache_expiration mirrors TMDB: fanart.tv's terms forbid more requests than
+    necessary, so resolved URLs are cached this many days across runs.
+    """
+
+    client_key: str = ""
+    cache_expiration: int = Field(default=60, ge=1, le=3650)  # days
+
+
 # Notifications is a dict of module_name to dicts (arbitrary structure, so keep Any)
 class ConfigNotifications(BaseModel):
     poster_renamerr: Optional[Dict[str, Any]] = Field(default_factory=dict)
@@ -604,6 +643,7 @@ class ChubConfig(BaseModel):
     general: GeneralConfig = Field(default_factory=GeneralConfig)
     auth: AuthConfig = Field(default_factory=AuthConfig)
     tmdb: TMDBConfig = Field(default_factory=TMDBConfig)
+    fanart: FanartConfig = Field(default_factory=FanartConfig)
 
 
 # ==== SECRET REDACTION ====
@@ -613,6 +653,7 @@ SENSITIVE_FIELD_NAMES = frozenset(
         "api",
         "api_key",
         "apikey",
+        "client_key",
         "access_token",
         "refresh_token",
         "client_secret",
