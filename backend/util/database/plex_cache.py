@@ -46,8 +46,8 @@ class PlexCache(DatabaseBase):
         self.execute_query(
             """
             INSERT INTO plex_media_cache
-                (plex_id, instance_name, asset_type, library_name, title, normalized_title, season_number, year, guids, labels, file_paths)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (plex_id, instance_name, asset_type, library_name, title, normalized_title, season_number, year, guids, labels, file_paths, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
             ON CONFLICT(plex_id, instance_name) DO UPDATE SET
                 asset_type = excluded.asset_type,
                 library_name = excluded.library_name,
@@ -57,7 +57,8 @@ class PlexCache(DatabaseBase):
                 year = excluded.year,
                 guids = excluded.guids,
                 labels = excluded.labels,
-                file_paths = excluded.file_paths
+                file_paths = excluded.file_paths,
+                updated_at = CURRENT_TIMESTAMP
             """,
             (
                 item["plex_id"],
@@ -92,6 +93,35 @@ class PlexCache(DatabaseBase):
             "SELECT COUNT(*) AS n FROM plex_media_cache", fetch_one=True
         )
         return int(row["n"]) if row else 0
+
+    def last_synced_age_seconds(
+        self, instance_name: Optional[str] = None
+    ) -> Optional[float]:
+        """Seconds since the most recent upsert into plex_media_cache (optionally
+        scoped to one instance), or None if the cache is empty / has no
+        timestamp. Used by the TTL guard to skip a redundant Plex re-walk when
+        the snapshot is already fresh. Uses SQLite's clock so it can't drift
+        from the CURRENT_TIMESTAMP values written on upsert.
+        """
+        if instance_name is not None:
+            row = self.execute_query(
+                "SELECT CAST(strftime('%s','now') - strftime('%s', MAX(updated_at)) AS REAL) AS age "
+                "FROM plex_media_cache WHERE instance_name=?",
+                (instance_name,),
+                fetch_one=True,
+            )
+        else:
+            row = self.execute_query(
+                "SELECT CAST(strftime('%s','now') - strftime('%s', MAX(updated_at)) AS REAL) AS age "
+                "FROM plex_media_cache",
+                fetch_one=True,
+            )
+        if not row or row.get("age") is None:
+            return None
+        try:
+            return max(0.0, float(row["age"]))
+        except (TypeError, ValueError):
+            return None
 
     def clear(self) -> None:
         """Delete all rows from the plex_media_cache table."""

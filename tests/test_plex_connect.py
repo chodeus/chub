@@ -68,3 +68,54 @@ def test_connect_gives_up_after_max_retries(monkeypatch):
     monkeypatch.setattr(plex_mod, "PlexServer", FakeServer)
     monkeypatch.setattr(plex_mod.time, "sleep", lambda s: None)
     assert connect_plex_with_retry("http://x", "tok", _Log(), max_retries=2) is None
+
+
+class _DebugLog(_Log):
+    def debug(self, *a, **k):
+        pass
+
+
+def _client_with_fake_search(search_results, counter):
+    """A minimal PlexClient whose library.section().search() is counted."""
+    from backend.util.plex import PlexClient
+
+    class FakeSection:
+        type = "show"
+
+        def search(self, **kw):
+            counter["n"] += 1
+            return list(search_results)
+
+    class FakeLibrary:
+        def section(self, name):
+            return FakeSection()
+
+    client = object.__new__(PlexClient)
+    client.plex = type("P", (), {"library": FakeLibrary()})()
+    client.logger = _DebugLog()
+    return client
+
+
+def test_locate_targets_memoized_per_client():
+    """Resolving the same item repeatedly (logo, background, … all share the
+    same locate params) must hit Plex once, not once per call."""
+    counter = {"n": 0}
+
+    class FakeItem:
+        title = "Show"
+        editionTitle = None
+
+        def seasons(self):
+            return []
+
+    client = _client_with_fake_search([FakeItem()], counter)
+
+    r1 = client._locate_targets("TV", "Show", year=2021)
+    r2 = client._locate_targets("TV", "Show", year=2021)  # logo vs background
+    assert counter["n"] == 1  # second call served from the per-client cache
+    assert r1 == r2 and len(r1) == 1
+
+    # A different season is a distinct key → one more search, then cached.
+    client._locate_targets("TV", "Show", year=2021, season_number=1)
+    client._locate_targets("TV", "Show", year=2021, season_number=1)
+    assert counter["n"] == 2

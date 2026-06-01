@@ -38,6 +38,15 @@ def _logger():
     )
 
 
+def _empty_index_db(rows=None):
+    """A stand-in db whose plex_media_cache has no rows for any instance, so
+    PlexMediaIndex is unavailable and _resolve_apply_targets uses the live
+    type-filtered fallback (the path these direct-apply tests exercise)."""
+    return SimpleNamespace(
+        plex=SimpleNamespace(get_by_instance=lambda name: rows or [])
+    )
+
+
 def make_module(**config_overrides):
     """Build an AssetRenamerr without triggering ChubModule.__init__/config load."""
     m = object.__new__(AssetRenamerr)
@@ -245,7 +254,7 @@ def test_source_none_when_nothing_available(db):
 def test_direct_banner_skipped():
     m = make_module(apply_method="plex")
     applied, reason, applied_libs = m._apply_direct(
-        _media(), "banner", "/x/l.png", None, False
+        _empty_index_db(), _media(), "banner", "/x/l.png", None, False
     )
     assert applied is False
     assert "banner" in reason.lower()
@@ -266,7 +275,7 @@ def test_direct_logo_calls_upload_logo(monkeypatch):
 
     m._plex_clients = {"plex1": FakeClient()}
     applied, detail, applied_libs = m._apply_direct(
-        _media(), "logo", None, "http://x/l.png", is_collection=False
+        _empty_index_db(), _media(), "logo", None, "http://x/l.png", is_collection=False
     )
     assert applied is True
     assert calls and calls[0][0] == "Movies" and calls[0][2] == "http://x/l.png"
@@ -290,8 +299,10 @@ def test_direct_squareart_and_background_methods(monkeypatch):
             return True
 
     m._plex_clients = {"plex1": FakeClient()}
-    m._apply_direct(_media(), "squareart", "/x/s.png", None, False)
-    m._apply_direct(_media(), "background", "/x/b.png", None, False)
+    m._apply_direct(
+        _empty_index_db(), _media(), "squareart", "/x/s.png", None, False)
+    m._apply_direct(
+        _empty_index_db(), _media(), "background", "/x/b.png", None, False)
     assert used == ["squareart", "background"]
 
 
@@ -620,12 +631,101 @@ def test_apply_direct_uploads_to_all_matching_libraries():
 
     m._plex_clients = {"plex1": FakeClient()}
     applied, detail, applied_libs = m._apply_direct(
-        _media(), "logo", "/x/l.png", None, False
+        _empty_index_db(), _media(), "logo", "/x/l.png", None, False
     )
     assert applied is True
     # both libraries listed in the detail + returned for per-library tracking
     assert "Movies" in detail and "Movies 4K" in detail
     assert set(applied_libs) == {"plex1/Movies", "plex1/Movies 4K"}
+
+
+def test_apply_direct_skips_type_mismatched_libraries():
+    """A movie must not be searched/uploaded against a 'show' library — those
+    are guaranteed misses (the old source of noisy 'not found' errors)."""
+    m = make_module(
+        apply_method="plex",
+        instances=[
+            {
+                "plex1": SimpleNamespace(
+                    library_names=["Films", "TV Programmes"], add_posters=True
+                )
+            }
+        ],
+    )
+
+    uploaded_to = []
+
+    class FakeClient:
+        def section_type(self, library_name):
+            return {"Films": "movie", "TV Programmes": "show"}.get(library_name)
+
+        def upload_logo(self, library_name, item_title, **kw):
+            uploaded_to.append(library_name)
+            return True
+
+    m._plex_clients = {"plex1": FakeClient()}
+    applied, detail, applied_libs = m._apply_direct(
+        _empty_index_db(), _media(), "logo", "/x/l.png", None, False
+    )
+    assert applied is True
+    # only the movie-type library was touched; the show library was skipped
+    assert uploaded_to == ["Films"]
+    assert set(applied_libs) == {"plex1/Films"}
+    # the type-filtered key set (used for idempotency) matches what was applied
+    assert m._direct_target_lib_keys(_empty_index_db(), _media(), False) == {"plex1/Films"}
+
+
+def test_apply_direct_uses_index_resolved_libraries():
+    """When a PlexMediaIndex snapshot exists, the upload targets come from it
+    (guid-matched, only libraries that actually hold the item) — not a live
+    search, and intersected with the opted-in libraries."""
+    m = make_module(
+        apply_method="plex",
+        instances=[
+            {
+                "plex1": SimpleNamespace(
+                    library_names=["Films", "Films 4K"], add_posters=True
+                )
+            }
+        ],
+    )
+
+    uploaded_to = []
+
+    class FakeClient:
+        def section_type(self, library_name):
+            return "movie"  # would pass the live fallback too — but unused here
+
+        def upload_logo(self, library_name, item_title, **kw):
+            uploaded_to.append(library_name)
+            return True
+
+    m._plex_clients = {"plex1": FakeClient()}
+
+    # Index snapshot: this movie (tmdb 1121330 — matches _media()) lives only in
+    # "Films", even though "Films 4K" is also opted in.
+    cache_rows = [
+        {
+            "plex_id": "100",
+            "instance_name": "plex1",
+            "asset_type": "movie",
+            "library_name": "Films",
+            "title": "8 A.M. Metro",
+            "normalized_title": "8ammetro",
+            "season_number": None,
+            "guids": {"tmdb": "1121330"},
+        }
+    ]
+    db = _empty_index_db(rows=cache_rows)
+
+    applied, detail, applied_libs = m._apply_direct(
+        db, _media(), "logo", "/x/l.png", None, False
+    )
+    assert applied is True
+    # Resolved to the one library the index says holds it (guid match), not 4K.
+    assert uploaded_to == ["Films"]
+    assert set(applied_libs) == {"plex1/Films"}
+    assert m._direct_target_lib_keys(db, _media(), False) == {"plex1/Films"}
 
 
 # --- logging: print_only_renames + capability warn-once ---
