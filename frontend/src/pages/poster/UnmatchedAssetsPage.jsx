@@ -152,11 +152,18 @@ const RecentPosterReel = ({ posters, onRefresh }) => {
     );
 };
 
+const UNMATCHED_PAGE_SIZE = 50;
+
 /** Unified, filterable + searchable table of every unmatched item. */
-const UnmatchedList = ({ items, onRefresh }) => {
+const UnmatchedList = ({ items, onRefresh, typeKey: typeKeyProp, onTypeChange }) => {
     const toast = useToast();
-    const [typeKey, setTypeKey] = useState('all');
+    // typeKey can be driven externally (the clickable summary cards) or locally
+    // (the All/Movies/Series tabs). Controlled when onTypeChange is provided.
+    const [typeKeyLocal, setTypeKeyLocal] = useState('all');
+    const typeKey = typeKeyProp ?? typeKeyLocal;
+    const setTypeKey = onTypeChange ?? setTypeKeyLocal;
     const [query, setQuery] = useState('');
+    const [page, setPage] = useState(0);
     const [busyId, setBusyId] = useState(null);
 
     const handleIgnore = async item => {
@@ -195,6 +202,13 @@ const UnmatchedList = ({ items, onRefresh }) => {
         );
     }, [all, typeKey, query]);
 
+    const pageCount = Math.max(1, Math.ceil(filtered.length / UNMATCHED_PAGE_SIZE));
+    const safePage = Math.min(page, pageCount - 1);
+    const visible = filtered.slice(
+        safePage * UNMATCHED_PAGE_SIZE,
+        safePage * UNMATCHED_PAGE_SIZE + UNMATCHED_PAGE_SIZE
+    );
+
     const handleCopy = async item => {
         const built = buildPosterRequestText(item, item._type === 'movie' ? 'movie' : 'series');
         if (!built) {
@@ -228,10 +242,13 @@ const UnmatchedList = ({ items, onRefresh }) => {
                     {presentTabs.map(t => (
                         <button
                             key={t.key}
-                            onClick={() => setTypeKey(t.key)}
+                            onClick={() => {
+                                setTypeKey(t.key);
+                                setPage(0);
+                            }}
                             className={`px-3 py-1 text-sm rounded-lg border ${
                                 typeKey === t.key
-                                    ? 'border-brand-primary/50 bg-surface-alt text-primary'
+                                    ? 'border-primary bg-surface-alt text-primary'
                                     : 'border-border text-secondary hover:text-primary'
                             }`}
                         >
@@ -242,7 +259,10 @@ const UnmatchedList = ({ items, onRefresh }) => {
                 <input
                     type="text"
                     value={query}
-                    onChange={e => setQuery(e.target.value)}
+                    onChange={e => {
+                        setQuery(e.target.value);
+                        setPage(0);
+                    }}
                     placeholder="Search title…"
                     aria-label="Search unmatched titles"
                     className="px-3 py-2 bg-input border border-border rounded-md text-primary text-sm"
@@ -268,7 +288,7 @@ const UnmatchedList = ({ items, onRefresh }) => {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-border">
-                            {filtered.map((item, idx) => (
+                            {visible.map((item, idx) => (
                                 <tr
                                     key={`${item._type}-${item.tmdb_id || item.tvdb_id || item.title || idx}`}
                                     className="bg-surface hover:bg-surface-alt"
@@ -348,6 +368,27 @@ const UnmatchedList = ({ items, onRefresh }) => {
                             ))}
                         </tbody>
                     </table>
+                </div>
+            )}
+            {filtered.length > 0 && pageCount > 1 && (
+                <div className="flex items-center justify-center gap-3 text-sm text-secondary">
+                    <IconButton
+                        icon="chevron_left"
+                        variant="ghost"
+                        aria-label="Previous page"
+                        disabled={safePage === 0}
+                        onClick={() => setPage(p => Math.max(0, p - 1))}
+                    />
+                    <span>
+                        Page {safePage + 1} / {pageCount} ({filtered.length} items)
+                    </span>
+                    <IconButton
+                        icon="chevron_right"
+                        variant="ghost"
+                        aria-label="Next page"
+                        disabled={safePage >= pageCount - 1}
+                        onClick={() => setPage(p => Math.min(pageCount - 1, p + 1))}
+                    />
                 </div>
             )}
         </div>
@@ -593,28 +634,82 @@ const MatchReviewList = ({ rows, mode, onRefresh, onPick }) => {
  * still missing the selected artwork type. Per-item actions: copy a request,
  * ignore (per-type, "not needed"), and a link to the Asset Renamerr module.
  */
+const ARTWORK_PAGE_SIZE = 50;
+// Which per-media list each status tab reads, and which type-array on a row
+// carries the artwork types relevant to that tab.
+const ARTWORK_STATUS = {
+    unmatched: { listKey: 'unmatched', typesKey: 'missing' },
+    review: { listKey: 'needs_review', typesKey: 'failed' },
+    ignored: { listKey: 'ignored', typesKey: 'ignored_types' },
+};
+
+/** Chip listing the artwork type(s) a media row is missing/failed/ignored. */
+const MissingChips = ({ typeKeys, reasons }) => {
+    if (!typeKeys?.length) return <span className="text-tertiary">—</span>;
+    return (
+        <span className="flex flex-wrap gap-1">
+            {typeKeys.map(tk => {
+                const meta = ARTWORK_TYPES.find(a => a.key === tk);
+                const reason = reasons?.[tk];
+                return (
+                    <span
+                        key={tk}
+                        title={reason || undefined}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-surface-alt text-secondary text-xs whitespace-nowrap"
+                    >
+                        <span className="leading-none">{meta?.icon}</span>
+                        {meta?.label || tk}
+                    </span>
+                );
+            })}
+        </span>
+    );
+};
+
 const ArtworkView = ({ data, status, isLoading, onRefresh }) => {
     const toast = useToast();
-    const [activeType, setActiveType] = useState('logo');
+    // Artwork-type card filter: null = all types; otherwise restrict rows to
+    // ones whose relevant type-array includes this artwork type.
+    const [typeFilter, setTypeFilter] = useState(null);
+    // Media-type tab (All / Movies / Series), mirroring the poster list.
+    const [mediaTypeKey, setMediaTypeKey] = useState('all');
     const [query, setQuery] = useState('');
+    const [page, setPage] = useState(0);
     const [busyKey, setBusyKey] = useState(null);
 
     const types = useMemo(() => data?.data?.types || {}, [data]);
-    const activeMeta = ARTWORK_TYPES.find(a => a.key === activeType);
+    const media = useMemo(() => data?.data?.media || {}, [data]);
 
-    // The status tab decides which per-type list we show (missing / review /
-    // ignored). Locked has no artwork analogue, so it falls back to missing.
-    const listKey =
-        status === 'ignored'
-            ? 'ignored_items'
-            : status === 'review'
-              ? 'needs_review_items'
-              : 'missing_items';
-    const rows = useMemo(() => {
-        const list = types[activeType]?.[listKey] || [];
+    const cfg = ARTWORK_STATUS[status] || ARTWORK_STATUS.unmatched;
+    const baseRows = useMemo(() => media[cfg.listKey] || [], [media, cfg.listKey]);
+
+    // Only show media-type tabs that are actually present in the current list.
+    const mediaTabs = useMemo(() => {
+        const tabs = [{ key: 'all', label: 'All' }];
+        if (baseRows.some(r => r.asset_type === 'movie'))
+            tabs.push({ key: 'movie', label: 'Movies' });
+        if (baseRows.some(r => r.asset_type === 'show'))
+            tabs.push({ key: 'show', label: 'Series' });
+        return tabs;
+    }, [baseRows]);
+
+    const filtered = useMemo(() => {
         const q = query.trim().toLowerCase();
-        return q ? list.filter(r => (r.title || '').toLowerCase().includes(q)) : list;
-    }, [types, activeType, listKey, query]);
+        return baseRows.filter(
+            r =>
+                (mediaTypeKey === 'all' || r.asset_type === mediaTypeKey) &&
+                (!typeFilter || (r[cfg.typesKey] || []).includes(typeFilter)) &&
+                (!q || (r.title || '').toLowerCase().includes(q))
+        );
+    }, [baseRows, mediaTypeKey, typeFilter, cfg.typesKey, query]);
+
+    // Reset to page 0 whenever the result set changes underneath us.
+    const pageCount = Math.max(1, Math.ceil(filtered.length / ARTWORK_PAGE_SIZE));
+    const safePage = Math.min(page, pageCount - 1);
+    const visible = filtered.slice(
+        safePage * ARTWORK_PAGE_SIZE,
+        safePage * ARTWORK_PAGE_SIZE + ARTWORK_PAGE_SIZE
+    );
 
     const copyRequest = async item => {
         const type = item.asset_type === 'movie' ? 'movie' : 'series';
@@ -627,14 +722,21 @@ const ArtworkView = ({ data, status, isLoading, onRefresh }) => {
         toast[ok ? 'success' : 'error'](ok ? 'Request copied' : 'Copy failed');
     };
 
+    // Ignore / restore every artwork type currently shown for this row (the
+    // ones in its relevant type-array), so the per-media row acts as a unit.
     const setIgnored = async (item, ignored) => {
-        const key = `${item.id}:${activeType}`;
-        setBusyKey(key);
+        const targetTypes = item[cfg.typesKey] || [];
+        if (!targetTypes.length) return;
+        setBusyKey(item.id);
         try {
-            await postersAPI.ignoreArtwork(item.id, activeType, {
-                kind: item.asset_type === 'collection' ? 'collection' : 'media',
-                ignored,
-            });
+            await Promise.all(
+                targetTypes.map(tk =>
+                    postersAPI.ignoreArtwork(item.id, tk, {
+                        kind: item.asset_type === 'collection' ? 'collection' : 'media',
+                        ignored,
+                    })
+                )
+            );
             toast.success(ignored ? 'Marked not needed' : 'Restored');
             onRefresh();
         } catch {
@@ -646,18 +748,33 @@ const ArtworkView = ({ data, status, isLoading, onRefresh }) => {
 
     if (isLoading) return <Spinner size="large" text="Loading artwork coverage..." center />;
 
+    const isIgnoredTab = status === 'ignored';
+    const missingColLabel = isIgnoredTab
+        ? 'Not needed'
+        : status === 'review'
+          ? 'Failed'
+          : 'Missing';
+
     return (
         <div className="flex flex-col gap-4">
-            {/* Per-type coverage cards — same style as the poster summary cards */}
+            {/* Per-type coverage cards — also act as a filter on the per-media list */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {ARTWORK_TYPES.map(({ key, label, icon }) => {
                     const t = types[key] || {};
-                    const isActive = activeType === key;
+                    const isActive = typeFilter === key;
                     return (
                         <button
                             key={key}
                             type="button"
-                            onClick={() => setActiveType(key)}
+                            onClick={() => {
+                                setTypeFilter(isActive ? null : key);
+                                setPage(0);
+                            }}
+                            title={
+                                isActive
+                                    ? 'Showing only items missing this — click to clear'
+                                    : 'Filter the list to items missing this'
+                            }
                             className={`text-left p-4 rounded-lg border transition-colors ${
                                 isActive
                                     ? 'bg-surface border-primary ring-1 ring-primary/40'
@@ -687,15 +804,47 @@ const ArtworkView = ({ data, status, isLoading, onRefresh }) => {
             </div>
 
             <div className="flex items-center justify-between gap-3 flex-wrap">
-                <input
-                    type="text"
-                    value={query}
-                    onChange={e => setQuery(e.target.value)}
-                    placeholder="Search title…"
-                    aria-label="Search titles"
-                    className="px-3 py-2 bg-input border border-border rounded-md text-primary text-sm"
-                    style={{ minWidth: '14rem' }}
-                />
+                <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex flex-wrap gap-1">
+                        {mediaTabs.map(t => (
+                            <button
+                                key={t.key}
+                                onClick={() => {
+                                    setMediaTypeKey(t.key);
+                                    setPage(0);
+                                }}
+                                className={`px-3 py-1 text-sm rounded-lg border ${
+                                    mediaTypeKey === t.key
+                                        ? 'border-primary bg-surface-alt text-primary'
+                                        : 'border-border text-secondary hover:text-primary'
+                                }`}
+                            >
+                                {t.label}
+                            </button>
+                        ))}
+                    </div>
+                    <input
+                        type="text"
+                        value={query}
+                        onChange={e => {
+                            setQuery(e.target.value);
+                            setPage(0);
+                        }}
+                        placeholder="Search title…"
+                        aria-label="Search titles"
+                        className="px-3 py-2 bg-input border border-border rounded-md text-primary text-sm"
+                        style={{ minWidth: '14rem' }}
+                    />
+                    {typeFilter && (
+                        <button
+                            type="button"
+                            onClick={() => setTypeFilter(null)}
+                            className="text-xs text-secondary hover:text-primary underline"
+                        >
+                            Clear {ARTWORK_TYPES.find(a => a.key === typeFilter)?.label} filter
+                        </button>
+                    )}
+                </div>
                 <Link
                     to="/settings/modules#asset_renamerr"
                     className="text-sm text-accent hover:underline whitespace-nowrap"
@@ -705,37 +854,33 @@ const ArtworkView = ({ data, status, isLoading, onRefresh }) => {
                 </Link>
             </div>
 
-            {rows.length === 0 ? (
+            {filtered.length === 0 ? (
                 <p className="text-sm text-secondary">
-                    {status === 'ignored'
-                        ? 'Nothing marked “not needed” for this artwork type.'
+                    {isIgnoredTab
+                        ? 'Nothing marked “not needed”.'
                         : status === 'review'
-                          ? 'Nothing to review for this artwork type.'
-                          : `No media missing ${ARTWORK_TYPES.find(a => a.key === activeType)?.label.toLowerCase()}.`}
+                          ? 'Nothing to review — no failed artwork applies.'
+                          : 'No media missing additional artwork.'}
                 </p>
             ) : (
-                <div className="overflow-x-auto rounded-lg border border-border">
-                    <table className="w-full text-sm">
-                        <thead>
-                            <tr className="bg-surface-alt text-secondary text-left">
-                                <th className="px-3 py-2 font-medium">Title</th>
-                                <th className="px-3 py-2 font-medium">Type</th>
-                                <th className="px-3 py-2 font-medium">Year</th>
-                                <th className="px-3 py-2 font-medium">Instance</th>
-                                <th className="px-3 py-2 font-medium">
-                                    {status === 'ignored' ? 'Not needed' : 'Missing'}
-                                </th>
-                                {status === 'review' && (
-                                    <th className="px-3 py-2 font-medium">Why</th>
-                                )}
-                                <th className="px-3 py-2 font-medium text-right">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-border">
-                            {rows.map((item, idx) => {
-                                const key = `${item.id}:${activeType}`;
-                                const isIgnored = status === 'ignored';
-                                return (
+                <>
+                    <div className="overflow-x-auto rounded-lg border border-border">
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="bg-surface-alt text-secondary text-left">
+                                    <th className="px-3 py-2 font-medium">Title</th>
+                                    <th className="px-3 py-2 font-medium">Type</th>
+                                    <th className="px-3 py-2 font-medium">Year</th>
+                                    <th className="px-3 py-2 font-medium">{missingColLabel}</th>
+                                    <th className="px-3 py-2 font-medium">Instance</th>
+                                    <th className="px-3 py-2 font-medium">TMDB</th>
+                                    <th className="px-3 py-2 font-medium">IMDB</th>
+                                    <th className="px-3 py-2 font-medium">TVDB</th>
+                                    <th className="px-3 py-2 font-medium text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-border">
+                                {visible.map((item, idx) => (
                                     <tr
                                         key={`${item.id ?? idx}`}
                                         className="bg-surface hover:bg-surface-alt align-top"
@@ -755,26 +900,24 @@ const ArtworkView = ({ data, status, isLoading, onRefresh }) => {
                                         <td className="px-3 py-2 text-secondary">
                                             {item.year || '—'}
                                         </td>
+                                        <td className="px-3 py-2">
+                                            <MissingChips
+                                                typeKeys={item[cfg.typesKey]}
+                                                reasons={item.reasons}
+                                            />
+                                        </td>
                                         <td className="px-3 py-2 text-secondary">
                                             {item.instance_name || '—'}
                                         </td>
-                                        <td className="px-3 py-2">
-                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-surface-alt text-secondary text-xs whitespace-nowrap">
-                                                <span className="leading-none">
-                                                    {activeMeta?.icon}
-                                                </span>
-                                                {activeMeta?.label}
-                                            </span>
+                                        <td className="px-3 py-2 text-tertiary font-mono text-xs">
+                                            {formatId(item.tmdb_id) || '—'}
                                         </td>
-                                        {status === 'review' && (
-                                            <td className="px-3 py-2 text-secondary max-w-md">
-                                                {item.reason || (
-                                                    <span className="text-tertiary">
-                                                        Apply failed — no detail recorded
-                                                    </span>
-                                                )}
-                                            </td>
-                                        )}
+                                        <td className="px-3 py-2 text-tertiary font-mono text-xs">
+                                            {formatId(item.imdb_id) || '—'}
+                                        </td>
+                                        <td className="px-3 py-2 text-tertiary font-mono text-xs">
+                                            {formatId(item.tvdb_id) || '—'}
+                                        </td>
                                         <td className="px-3 py-2 text-right whitespace-nowrap">
                                             <IconButton
                                                 icon="content_copy"
@@ -784,12 +927,12 @@ const ArtworkView = ({ data, status, isLoading, onRefresh }) => {
                                                 title="Copy a request for this artwork"
                                                 onClick={() => copyRequest(item)}
                                             />
-                                            {isIgnored ? (
+                                            {isIgnoredTab ? (
                                                 <IconButton
                                                     icon="undo"
                                                     size="small"
                                                     variant="ghost"
-                                                    disabled={busyKey === key}
+                                                    disabled={busyKey === item.id}
                                                     aria-label="Restore"
                                                     title="Restore — track this artwork again"
                                                     onClick={() => setIgnored(item, false)}
@@ -799,19 +942,41 @@ const ArtworkView = ({ data, status, isLoading, onRefresh }) => {
                                                     icon="block"
                                                     size="small"
                                                     variant="ghost"
-                                                    disabled={busyKey === key}
+                                                    disabled={busyKey === item.id}
                                                     aria-label="Not needed"
-                                                    title="Not needed — stop tracking this artwork for this item"
+                                                    title="Not needed — stop tracking the missing artwork for this item"
                                                     onClick={() => setIgnored(item, true)}
                                                 />
                                             )}
                                         </td>
                                     </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                </div>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {pageCount > 1 && (
+                        <div className="flex items-center justify-center gap-3 text-sm text-secondary">
+                            <IconButton
+                                icon="chevron_left"
+                                variant="ghost"
+                                aria-label="Previous page"
+                                disabled={safePage === 0}
+                                onClick={() => setPage(p => Math.max(0, p - 1))}
+                            />
+                            <span>
+                                Page {safePage + 1} / {pageCount} ({filtered.length} items)
+                            </span>
+                            <IconButton
+                                icon="chevron_right"
+                                variant="ghost"
+                                aria-label="Next page"
+                                disabled={safePage >= pageCount - 1}
+                                onClick={() => setPage(p => Math.min(pageCount - 1, p + 1))}
+                            />
+                        </div>
+                    )}
+                </>
             )}
         </div>
     );
@@ -988,6 +1153,9 @@ const UnmatchedAssetsPage = () => {
     };
     const viewCounts = assetClass === 'art' ? artworkCounts : posterViewCounts;
 
+    // Type filter shared between the clickable summary cards and the list tabs.
+    const [posterTypeFilter, setPosterTypeFilter] = useState('all');
+
     // The carousel shows the 50 posters CHUB most recently matched/applied to
     // media (newest first by matched_at) — genuine match recency, not
     // poster_cache insertion order (which biased toward whichever owner was
@@ -1128,10 +1296,32 @@ const UnmatchedAssetsPage = () => {
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                             {SUMMARY_TYPES.map(({ key, label, icon }) => {
                                 const typeData = summary[key] || {};
+                                // Each summary card maps to a list filter; seasons
+                                // live under the series list, so both point at it.
+                                const filterFor = {
+                                    movies: 'movie',
+                                    series: 'series',
+                                    seasons: 'series',
+                                    collections: 'collection',
+                                }[key];
+                                const isActive = posterTypeFilter === filterFor;
                                 return (
-                                    <div
+                                    <button
                                         key={key}
-                                        className="p-4 rounded-lg bg-surface border border-border"
+                                        type="button"
+                                        onClick={() =>
+                                            setPosterTypeFilter(isActive ? 'all' : filterFor)
+                                        }
+                                        title={
+                                            isActive
+                                                ? 'Filtering the list by this — click to clear'
+                                                : `Filter the list to ${label.toLowerCase()}`
+                                        }
+                                        className={`text-left p-4 rounded-lg border transition-colors ${
+                                            isActive
+                                                ? 'bg-surface border-primary ring-1 ring-primary/40'
+                                                : 'bg-surface border-border hover:border-primary/50'
+                                        }`}
                                     >
                                         <p className="text-sm text-secondary flex items-center gap-1.5">
                                             <span className="text-base leading-none">{icon}</span>
@@ -1154,12 +1344,17 @@ const UnmatchedAssetsPage = () => {
                                                 />
                                             </div>
                                         )}
-                                    </div>
+                                    </button>
                                 );
                             })}
                         </div>
 
-                        <UnmatchedList items={items} onRefresh={refresh} />
+                        <UnmatchedList
+                            items={items}
+                            onRefresh={refresh}
+                            typeKey={posterTypeFilter}
+                            onTypeChange={setPosterTypeFilter}
+                        />
                     </>
                 ))}
 

@@ -485,12 +485,67 @@ class UnmatchedAssets(ChubModule):
         grand_missing = sum(t["missing"] for t in per_type.values())
         grand_review = sum(t["needs_review"] for t in per_type.values())
         grand_ignored = sum(t["ignored"] for t in per_type.values())
+
+        # Per-MEDIA rows: one entry per item, with the artwork types it's missing
+        # / failed / ignored as arrays. This is what the per-media table renders
+        # (one line per movie/show, chips showing which artwork it lacks) —
+        # aligned with the poster Unmatched list. An item appears in:
+        #   unmatched      → missing[] non-empty
+        #   needs_review   → failed[] non-empty
+        #   ignored        → ignored_types[] non-empty
+        media_rows: Dict[Any, Dict[str, Any]] = {}
+        for media in eligible:
+            mid = media.get("id")
+            entry = {
+                "id": mid,
+                "title": media.get("title"),
+                "year": media.get("year"),
+                "type": media.get("asset_type"),
+                "asset_type": media.get("asset_type"),
+                "season_number": media.get("season_number"),
+                "instance_name": media.get("instance_name"),
+                "tmdb_id": media.get("tmdb_id"),
+                "tvdb_id": media.get("tvdb_id"),
+                "imdb_id": media.get("imdb_id"),
+                "missing": [],
+                "failed": [],
+                "ignored_types": [],
+                "reasons": {},
+            }
+            for image_type in self.ARTWORK_TYPES:
+                row = index.get((mid, image_type))
+                if row and row.get("ignored"):
+                    entry["ignored_types"].append(image_type)
+                elif row and row.get("match_status") == "applied":
+                    pass  # covered — nothing to show
+                elif row and row.get("match_status"):
+                    entry["failed"].append(image_type)
+                    if row.get("detail"):
+                        entry["reasons"][image_type] = row.get("detail")
+                else:
+                    entry["missing"].append(image_type)
+            media_rows[mid] = entry
+
+        rows = list(media_rows.values())
+        unmatched_media = [r for r in rows if r["missing"]]
+        review_media = [r for r in rows if r["failed"]]
+        ignored_media = [r for r in rows if r["ignored_types"]]
+
         return {
             "types": per_type,
+            "media": {
+                "unmatched": unmatched_media,
+                "needs_review": review_media,
+                "ignored": ignored_media,
+            },
             "summary": {
-                "missing": grand_missing,
-                "needs_review": grand_review,
-                "ignored": grand_ignored,
+                "missing": len(unmatched_media),
+                "needs_review": len(review_media),
+                "ignored": len(ignored_media),
+                # keep the per-type grand totals too (cards still show them)
+                "missing_types": grand_missing,
+                "needs_review_types": grand_review,
+                "ignored_types": grand_ignored,
             },
         }
 

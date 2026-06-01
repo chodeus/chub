@@ -1354,7 +1354,11 @@ async def get_unmatched_artwork(
         stats = unmatched.get_artwork_stats_adhoc()
         return ok(
             "Unmatched artwork coverage retrieved",
-            {"types": stats.get("types", {}), "summary": stats.get("summary", {})},
+            {
+                "types": stats.get("types", {}),
+                "media": stats.get("media", {}),
+                "summary": stats.get("summary", {}),
+            },
         )
     except Exception as e:
         logger.error(f"Error retrieving unmatched artwork: {e}")
