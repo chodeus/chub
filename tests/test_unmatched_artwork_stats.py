@@ -132,6 +132,38 @@ def test_artwork_needs_review_carries_failure_reason(db):
     assert review[0]["match_status"] == "failed"
 
 
+def test_artwork_stats_per_media_grouping(db):
+    """One row per media item, with the artwork types it lacks grouped into
+    missing/failed/ignored arrays (the per-media table model)."""
+    a = _seed_movie(db, "Alpha", 401)  # logo applied, bg missing, square missing
+    b = _seed_movie(db, "Bravo", 402)  # logo failed, square ignored, bg missing
+    db.media_asset_matches.upsert(
+        target_kind="media", target_id=a, image_type="logo", match_status="applied"
+    )
+    db.media_asset_matches.upsert(
+        target_kind="media", target_id=b, image_type="logo",
+        match_status="failed", detail="not found in Plex",
+    )
+    db.media_asset_matches.set_ignored("media", b, "squareart", True)
+
+    m = _module()
+    media = m.get_artwork_stats(db)["media"]
+
+    alpha = next(r for r in media["unmatched"] if r["id"] == a)
+    assert set(alpha["missing"]) == {"background", "squareart"}  # logo applied -> not missing
+    assert alpha["failed"] == [] and alpha["ignored_types"] == []
+
+    bravo = next(r for r in media["unmatched"] if r["id"] == b)
+    assert bravo["missing"] == ["background"]
+    assert bravo["failed"] == ["logo"]
+    assert bravo["reasons"]["logo"] == "not found in Plex"
+    assert bravo["ignored_types"] == ["squareart"]
+
+    # Bravo appears in needs_review (failed logo) and ignored (squareart) too
+    assert any(r["id"] == b for r in media["needs_review"])
+    assert any(r["id"] == b for r in media["ignored"])
+
+
 def test_artwork_stats_empty_universe(db):
     m = _module()
     stats = m.get_artwork_stats(db)
