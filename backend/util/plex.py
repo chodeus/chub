@@ -383,6 +383,31 @@ class PlexClient:
         print()  # Move to next line after done
         return all_entries
 
+    def _fetch_by_rating_key(self, plex_id: Any, season_number: Any = None):
+        """Fetch the exact Plex item by ratingKey (the stable per-item id).
+
+        Returns ``[item]``, or — when a *show* ratingKey arrives together with a
+        season_number — the matching ``[season]``. Returns ``None`` when the key
+        can't be fetched (e.g. a stale ratingKey after the item was re-added),
+        so the caller falls back to a live title+year search. Our index stores a
+        season's own ratingKey, so seasons normally fetch directly.
+        """
+        try:
+            item = self.plex.fetchItem(int(plex_id))
+        except Exception:
+            return None
+        if item is None:
+            return None
+        if season_number is not None and getattr(item, "TYPE", None) == "show":
+            try:
+                seasons = [
+                    s for s in item.seasons() if int(s.index) == int(season_number)
+                ]
+            except Exception:
+                seasons = []
+            return seasons or None
+        return [item]
+
     def _locate_targets(
         self,
         library_name: str,
@@ -391,6 +416,7 @@ class PlexClient:
         is_collection: bool = False,
         season_number: Any = None,
         edition: Any = None,
+        plex_id: Any = None,
     ) -> list:
         """Cached front for :meth:`_locate_targets_uncached`.
 
@@ -400,12 +426,20 @@ class PlexClient:
         method runs afterwards. Re-searching each time is wasted work and was
         the source of the duplicated "not found" log spam. Memoize per client
         (asset/poster runs build a fresh client each time, so the cache is
-        naturally per-run) so every (library, title, year, season, edition) is
-        searched — and logged — at most once.
+        naturally per-run) so every (library, title, year, season, edition,
+        plex_id) is searched — and logged — at most once.
         """
         if not hasattr(self, "_locate_cache"):
             self._locate_cache: Dict[tuple, list] = {}
-        key = (library_name, item_title, year, bool(is_collection), season_number, edition)
+        key = (
+            library_name,
+            item_title,
+            year,
+            bool(is_collection),
+            season_number,
+            edition,
+            plex_id,
+        )
         if key not in self._locate_cache:
             self._locate_cache[key] = self._locate_targets_uncached(
                 library_name,
@@ -414,6 +448,7 @@ class PlexClient:
                 is_collection=is_collection,
                 season_number=season_number,
                 edition=edition,
+                plex_id=plex_id,
             )
         return self._locate_cache[key]
 
@@ -425,14 +460,33 @@ class PlexClient:
         is_collection: bool = False,
         season_number: Any = None,
         edition: Any = None,
+        plex_id: Any = None,
     ) -> list:
         """Return the plexapi objects artwork should be uploaded to.
 
-        Shared by every upload_* method so they apply the SAME item-location
-        rules: collections by title; movies/shows by title+year (all unmerged
-        copies, or edition-narrowed); a specific Season across the target shows
-        when season_number is given. Returns [] (and logs) when nothing matches.
+        Resolution is ratingKey-first: when ``plex_id`` is given (the cached
+        Plex ratingKey from a guid-matched index hit), fetch that exact item —
+        no title search, no same-title ambiguity, and it works even when the
+        *arr title differs from Plex's. If the ratingKey is stale (item deleted
+        + re-added since the cache snapshot, so fetchItem fails), we fall
+        through to the live title+year search below, which self-heals the miss.
+
+        Without a ``plex_id`` (lazy/fresh items, collections) the shared
+        title-based rules apply: collections by title; movies/shows by
+        title+year (all unmerged copies, or edition-narrowed); a specific Season
+        across the target shows when season_number is given. Returns [] (and
+        logs) when nothing matches.
         """
+        if plex_id is not None:
+            located = self._fetch_by_rating_key(plex_id, season_number)
+            if located is not None:
+                return located
+            # Stale ratingKey → fall through to the live title+year search.
+            self.logger.debug(
+                f"ratingKey {plex_id} for '{item_title}' not fetchable in "
+                f"'{library_name}'; falling back to title+year search"
+            )
+
         section = self.plex.library.section(library_name)
 
         if is_collection:
@@ -553,12 +607,15 @@ class PlexClient:
         season_number: Any = None,
         edition: Any = None,
         dry_run: bool = False,
+        plex_id: Any = None,
     ) -> bool:
         """Locate the target(s) and invoke a plexapi upload method on each.
 
         ``method_name`` is the plexapi method to call (uploadPoster / uploadArt
         / uploadLogo / uploadSquareArt); ``art_label`` is used only for logging.
         Provide exactly one of ``filepath`` (local file) or ``url`` (remote).
+        ``plex_id`` (optional) is the cached ratingKey for a guid-matched item;
+        when present the target is fetched by ratingKey instead of searched.
         """
         try:
             targets = self._locate_targets(
@@ -568,6 +625,7 @@ class PlexClient:
                 is_collection=is_collection,
                 season_number=season_number,
                 edition=edition,
+                plex_id=plex_id,
             )
             if not targets:
                 return False
@@ -595,11 +653,13 @@ class PlexClient:
         season_number: Any = None,
         edition: Any = None,
         dry_run: bool = False,
+        plex_id: Any = None,
     ) -> bool:
         """
         Upload a poster to Plex using plexapi's built-in methods.
         Supports uploading to a series season if season_number is given,
         and targeting a specific movie edition via editionTitle.
+        ``plex_id`` (the cached ratingKey) targets the exact item directly.
         """
         return self._upload_artwork(
             "uploadPoster",
@@ -612,6 +672,7 @@ class PlexClient:
             season_number=season_number,
             edition=edition,
             dry_run=dry_run,
+            plex_id=plex_id,
         )
 
     def upload_logo(
@@ -626,6 +687,7 @@ class PlexClient:
         season_number: Any = None,
         edition: Any = None,
         dry_run: bool = False,
+        plex_id: Any = None,
     ) -> bool:
         """Upload a clear logo (plexapi uploadLogo). Accepts a local filepath or
         a remote url (e.g. a TMDB image URL)."""
@@ -641,6 +703,7 @@ class PlexClient:
             season_number=season_number,
             edition=edition,
             dry_run=dry_run,
+            plex_id=plex_id,
         )
 
     def upload_art(
@@ -655,6 +718,7 @@ class PlexClient:
         season_number: Any = None,
         edition: Any = None,
         dry_run: bool = False,
+        plex_id: Any = None,
     ) -> bool:
         """Upload background/fanart (plexapi uploadArt). Local filepath or url."""
         return self._upload_artwork(
@@ -669,6 +733,7 @@ class PlexClient:
             season_number=season_number,
             edition=edition,
             dry_run=dry_run,
+            plex_id=plex_id,
         )
 
     def upload_square_art(
@@ -683,6 +748,7 @@ class PlexClient:
         season_number: Any = None,
         edition: Any = None,
         dry_run: bool = False,
+        plex_id: Any = None,
     ) -> bool:
         """Upload square art (plexapi uploadSquareArt). Local filepath or url."""
         return self._upload_artwork(
@@ -697,6 +763,7 @@ class PlexClient:
             season_number=season_number,
             edition=edition,
             dry_run=dry_run,
+            plex_id=plex_id,
         )
 
     def remove_label(

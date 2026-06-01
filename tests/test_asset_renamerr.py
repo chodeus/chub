@@ -774,6 +774,51 @@ def test_apply_direct_uses_index_resolved_libraries():
     assert m._direct_target_lib_keys(db, _media(), False) == {"plex1/Films"}
 
 
+def test_apply_direct_uses_plex_title_and_rating_key():
+    """Index hit: the upload targets the cached Plex ratingKey and the PLEX
+    title/year — NOT the *arr title — so an item whose Plex title differs still
+    resolves (e.g. Radarr 'Aliens vs Predator: Requiem' vs Plex
+    'AVPR: Aliens vs Predator - Requiem')."""
+    m = make_module(
+        apply_method="plex",
+        instances=[{"plex1": SimpleNamespace(library_names=["Films"], add_posters=True)}],
+    )
+    calls = []
+
+    class FakeClient:
+        def upload_logo(self, library_name, item_title, **kw):
+            calls.append(
+                (library_name, item_title, kw.get("year"), kw.get("plex_id"))
+            )
+            return True
+
+    m._plex_clients = {"plex1": FakeClient()}
+    # Plex cache row: SAME tmdb guid as _media(), but a different Plex title/year.
+    cache_rows = [
+        {
+            "plex_id": "218095",
+            "instance_name": "plex1",
+            "asset_type": "movie",
+            "library_name": "Films",
+            "title": "AVPR: Aliens vs Predator - Requiem",
+            "normalized_title": "avpraliensvspredatorrequiem",
+            "year": 2007,
+            "season_number": None,
+            "guids": {"tmdb": "1121330"},
+        }
+    ]
+    db = _empty_index_db(rows=cache_rows)
+    applied, detail, applied_libs = m._apply_direct(
+        db, _media(), "logo", None, "http://x/l.png", is_collection=False
+    )
+    assert applied is True
+    # Plex title + Plex year + cached ratingKey — not the *arr "8 A.M. Metro"/2023.
+    assert calls == [
+        ("Films", "AVPR: Aliens vs Predator - Requiem", 2007, "218095")
+    ]
+    assert set(applied_libs) == {"plex1/Films"}
+
+
 # --- logging: print_only_renames + capability warn-once ---
 
 

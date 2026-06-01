@@ -174,3 +174,60 @@ def test_locate_targets_year_tolerant_fallback_rejects_off_by_two():
     )
     targets = client._locate_targets("Films", "Thanks for Sharing", year=2013)
     assert targets == []
+
+
+def _client_with_fetchitem(item_or_exc, search_counter):
+    """PlexClient whose plex.fetchItem returns an item (or raises) and whose
+    section.search is counted, to prove ratingKey resolution skips searching."""
+    from backend.util.plex import PlexClient
+
+    class FakeSection:
+        def search(self, **kw):
+            search_counter["n"] += 1
+            return list(search_counter.get("results", []))
+
+    class FakeLibrary:
+        def section(self, name):
+            return FakeSection()
+
+    class FakePlex:
+        library = FakeLibrary()
+
+        def fetchItem(self, rk):
+            if isinstance(item_or_exc, Exception):
+                raise item_or_exc
+            return item_or_exc
+
+    client = object.__new__(PlexClient)
+    client.plex = FakePlex()
+    client.logger = _DebugLog()
+    client._locate_cache = {}
+    return client
+
+
+def test_locate_targets_fetches_by_rating_key():
+    """plex_id present → fetch the exact item by ratingKey; never title-search."""
+
+    class FakeItem:
+        TYPE = "movie"
+
+    item = FakeItem()
+    counter = {"n": 0}
+    client = _client_with_fetchitem(item, counter)
+    targets = client._locate_targets(
+        "Films", "Wrong *arr Title", year=1999, plex_id="218095"
+    )
+    assert targets == [item]
+    assert counter["n"] == 0  # ratingKey hit — no fallback search
+
+
+def test_locate_targets_stale_rating_key_falls_back_to_search():
+    """A stale ratingKey (fetchItem raises) self-heals via the title+year search."""
+    found = _FakeMovie(2007)
+    counter = {"n": 0, "results": [found]}
+    client = _client_with_fetchitem(RuntimeError("404 not found"), counter)
+    targets = client._locate_targets(
+        "Films", "AVPR", year=2007, plex_id="999999"
+    )
+    assert targets == [found]  # fell back to the live search
+    assert counter["n"] >= 1
