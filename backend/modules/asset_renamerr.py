@@ -713,7 +713,7 @@ class AssetRenamerr(ChubModule):
 
         fanart_client = None
         if "fanart" in self._sources():
-            fanart_client = FanartClient(self.full_config.fanart, db, self.logger)
+            fanart_client = FanartClient(self.full_config.fanart, self.logger)
             if not fanart_client.enabled:
                 self.logger.info(
                     "fanart.tv source requested but no personal API key is "
