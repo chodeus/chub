@@ -20,7 +20,6 @@ from .stats import Stats
 from .tmdb_id_cache import TmdbIdCache
 from .tmdb_details_cache import TmdbDetailsCache
 from .tmdb_images_cache import TmdbImagesCache
-from .fanart_images_cache import FanartImagesCache
 from .upgradinatorr_progress import UpgradinatorrProgress
 from .webhook_cache import WebhookCache
 from .worker import DBWorker
@@ -223,11 +222,6 @@ class ChubDB:
     def tmdb_images_cache(self) -> TmdbImagesCache:
         """Access to TMDB images cache (logo / background URLs)."""
         return self._get_interface("tmdb_images_cache", TmdbImagesCache)
-
-    @property
-    def fanart_images_cache(self) -> FanartImagesCache:
-        """Access to fanart.tv images cache (logo / background URLs)."""
-        return self._get_interface("fanart_images_cache", FanartImagesCache)
 
     @property
     def worker(self) -> DBWorker:

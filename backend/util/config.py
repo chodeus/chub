@@ -585,12 +585,12 @@ class FanartConfig(BaseModel):
     Get one free at https://fanart.tv/get-an-api-key/ (Personal API Keys).
     Chub does not use a fanart.tv project key.
 
-    cache_expiration mirrors TMDB: fanart.tv's terms forbid more requests than
-    necessary, so resolved URLs are cached this many days across runs.
+    No persistent cache: fanart.tv rarely rate-limits (it just asks clients to
+    back off on HTTP 429), so each run fetches fresh art and always reflects the
+    latest uploads.
     """
 
     client_key: str = ""
-    cache_expiration: int = Field(default=60, ge=1, le=3650)  # days
 
 
 # Notifications is a dict of module_name to dicts (arbitrary structure, so keep Any)

@@ -12,8 +12,9 @@ supplies their own free personal key, and Chub REQUIRES it (the client is only
 faster tier (2-day vs 7-day delay for newly-added art). Chub does not use a
 project key.
 
-Resolved URLs are cached in ``fanart_images_cache`` so repeated runs don't
-re-hit fanart — required by their "no more requests than necessary" terms.
+There is no persistent cache: fanart.tv rarely rate-limits and just asks
+clients to back off on HTTP 429 (handled in :meth:`_request_with_retry`), so
+each run fetches fresh art and always reflects the latest uploads.
 """
 
 from __future__ import annotations
@@ -24,7 +25,6 @@ from typing import Any, Dict, List, Optional, Union
 import requests
 
 from backend.util.config import FanartConfig
-from backend.util.database import ChubDB
 
 # fanart image-type fields, in preference order (HD/clear variants first).
 _MOVIE_LOGO_KEYS = ("hdmovielogo", "movielogo")
@@ -39,9 +39,11 @@ _NEUTRAL_LANGS = ("00", "")
 class FanartClient:
     """Thin, synchronous fanart.tv v3 client for logo + background lookup.
 
-    Caches in two layers: a per-instance memo dict (collapses duplicate work in
-    one run) and the persistent ``fanart_images_cache`` table (survives restarts;
-    respects the configured expiration window).
+    No persistent cache — fanart.tv rarely rate-limits and asks only that
+    clients back off on HTTP 429 (handled in :meth:`_request_with_retry`), so
+    each run fetches fresh art (always picking up newly-added/better images). A
+    per-instance ``_memo`` dict still collapses duplicate work within a single
+    run (e.g. an item's logo and background resolve from one fetch).
     """
 
     BASE = "https://webservice.fanart.tv/v3"
@@ -49,9 +51,8 @@ class FanartClient:
     MAX_RETRIES = 3
     BACKOFF_SECONDS = (1, 2)  # waits between attempts 1→2 and 2→3
 
-    def __init__(self, cfg: FanartConfig, db: ChubDB, logger) -> None:
+    def __init__(self, cfg: FanartConfig, logger) -> None:
         self.cfg = cfg
-        self.db = db
         self.logger = logger
         self.session = requests.Session()
         self._memo: dict = {}
@@ -104,30 +105,14 @@ class FanartClient:
         if memo_key in self._memo:
             return self._memo[memo_key]
 
-        try:
-            hit, cached = self.db.fanart_images_cache.get(
-                lookup_id, kind, self.cfg.cache_expiration, season=season_key
-            )
-            if hit:
-                self._memo[memo_key] = cached
-                return cached
-        except Exception as exc:
-            self.logger.warning(f"fanart images cache read failed for {lookup_id}: {exc}")
-
         raw = self._fetch(kind, str(lookup_id))
         if raw is None:
-            return None  # transient — don't cache, let a later run retry
+            return None  # transient — don't memo, let a later run retry
 
         images = {
             "logo": self._pick_logo(raw, kind, langs),
             "background": self._pick_background(raw, kind, langs, season_key),
         }
-        try:
-            self.db.fanart_images_cache.put(lookup_id, kind, images, season=season_key)
-        except Exception as exc:
-            self.logger.warning(
-                f"fanart images cache write failed for {lookup_id}: {exc}"
-            )
         self._memo[memo_key] = images
         return images
 
