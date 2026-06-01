@@ -2,6 +2,13 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.25.1](https://github.com/chodeus/chub/compare/v2.25.0...v2.25.1) (2026-06-01)
+
+
+### Bug Fixes
+
+* **unmatched:** artwork view polish + failure reasons + state-reset endpoint ([38f1887](https://github.com/chodeus/chub/commit/38f1887e0ce3f0e6829031f9e8ede3a96b509eeb))
+
 ## [2.25.0](https://github.com/chodeus/chub/compare/v2.24.1...v2.25.0) (2026-06-01)
 
 
