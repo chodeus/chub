@@ -2,6 +2,13 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.26.0](https://github.com/chodeus/chub/compare/v2.25.1...v2.26.0) (2026-06-01)
+
+
+### Features
+
+* **unmatched:** per-media artwork table + pagination + clickable type cards ([99ebdb7](https://github.com/chodeus/chub/commit/99ebdb7bb39bf682ff3c93a7435c8fff53df7b35))
+
 ## [2.25.1](https://github.com/chodeus/chub/compare/v2.25.0...v2.25.1) (2026-06-01)
 
 
