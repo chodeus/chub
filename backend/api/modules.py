@@ -21,7 +21,7 @@ from backend.util.database import ChubDB
 
 MODULE_DESCRIPTIONS = {
     "poster_renamerr": "Match and rename poster artwork for media libraries",
-    "asset_renamerr": "Match and apply clear logo, square art, background, and banner artwork",
+    "asset_renamerr": "Match and apply logo, square art, background, and banner artwork",
     "border_replacerr": "Add or replace borders on poster images",
     "sync_gdrive": "Sync poster files from Google Drive",
     "unmatched_assets": "Report media without matching poster artwork",

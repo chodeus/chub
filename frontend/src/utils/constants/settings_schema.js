@@ -24,6 +24,29 @@ export const SETTINGS_SCHEMA = [
         ],
     },
     {
+        key: 'fanart',
+        label: 'fanart.tv',
+        fields: [
+            {
+                key: 'client_key',
+                label: 'Personal API Key',
+                type: 'password',
+                required: false,
+                placeholder: 'fanart.tv personal API key',
+                description:
+                    'Your personal fanart.tv API key. Required to use fanart.tv as an Asset Renamerr source for logos + backgrounds — a personal key authenticates on its own, so it is all CHUB needs. It also cuts the delay for newly-added artwork from 7 days to 2 (immediate for VIP accounts). Get one free at fanart.tv/get-an-api-key (Personal API Keys).',
+            },
+            {
+                key: 'cache_expiration',
+                label: 'Cache Expiration (days)',
+                type: 'number',
+                required: false,
+                description:
+                    'How long to cache resolved fanart.tv logo/background URLs before re-querying. fanart.tv asks that apps make no more requests than necessary, so this cache keeps repeat runs from re-hitting their servers. Default 60.',
+            },
+        ],
+    },
+    {
         key: 'sync_gdrive',
         label: 'Sync Gdrive',
         fields: [
@@ -247,7 +270,7 @@ export const SETTINGS_SCHEMA = [
                 type: 'check_box',
                 section: 'Pipeline',
                 description:
-                    "After posters are processed, run Asset Renamerr in the same pass to apply clear logos, square art, backgrounds, and banners — reusing this run's Google Drive sync, source scan, and media/Plex data so nothing is fetched twice. Configure the asset types, sources, and apply method in the Asset Renamerr module.",
+                    "After posters are processed, run Asset Renamerr in the same pass to apply logos, square art, backgrounds, and banners — reusing this run's Google Drive sync, source scan, and media/Plex data so nothing is fetched twice. Configure the asset types, sources, and apply method in the Asset Renamerr module.",
             },
             {
                 key: 'upload_delay_ms',
@@ -334,12 +357,12 @@ export const SETTINGS_SCHEMA = [
                 type: 'primary_source',
                 section: 'Source',
                 options: [
-                    { value: 'local', label: 'Prefer local files (TMDB fallback)' },
-                    { value: 'tmdb', label: 'Prefer TMDB (local fallback)' },
+                    { value: 'local', label: 'Prefer local files (fanart.tv fallback)' },
+                    { value: 'fanart', label: 'Prefer fanart.tv (local fallback)' },
                 ],
                 required: true,
                 description:
-                    'Which image source to prefer; the other is automatically used as a fallback when the preferred source has no image for an item. "local" = files scanned from Source Directories (g-drive synced); "tmdb" = fetched from TMDB (requires a TMDB API key; supplies logo + background only).',
+                    'Which image source to prefer; the other is automatically used as a fallback when the preferred source has no image for an item. "local" = files scanned from Source Directories (g-drive synced). "fanart" = logos + backgrounds from fanart.tv, ranked by community likes (requires your fanart.tv personal API key below; supplies logo + background only — square art always comes from local files).',
             },
             {
                 key: 'source_dirs',
@@ -359,7 +382,7 @@ export const SETTINGS_SCHEMA = [
             },
             {
                 key: 'tmdb_language',
-                label: 'TMDB Languages (priority order)',
+                label: 'Image Languages (priority order)',
                 type: 'multiselect',
                 section: 'Source',
                 placeholder: 'Add language…',
@@ -391,7 +414,7 @@ export const SETTINGS_SCHEMA = [
                     { value: 'uk', label: 'Ukrainian (uk)' },
                 ],
                 description:
-                    'Preferred languages for TMDB image selection, in priority order (the order you add them) — the first available language wins, with language-neutral / textless art always allowed as a fallback. Logos prefer your languages then textless; backgrounds prefer textless then your languages.',
+                    'Preferred languages for fanart.tv image selection, in priority order (the order you add them) — the first available language wins, with language-neutral / textless art always allowed as a fallback. Logos prefer your languages then textless; backgrounds prefer textless then your languages. Within a tier, the most-liked image on fanart.tv wins.',
             },
             // ─── Apply ─────────────────────────────────────────────────
             {

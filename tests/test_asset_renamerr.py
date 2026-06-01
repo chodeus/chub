@@ -4,7 +4,7 @@ Covers:
 * build_asset_record() image_type detection + suffix stripping (incl. the real
   g-drive filename convention and negative cases).
 * image_type filtering keeps poster matching isolated from asset rows.
-* source-priority resolution (local vs tmdb, first match wins).
+* source-priority resolution (local vs fanart, first match wins).
 * the apply dispatcher (banner skipped on the direct path; correct PlexClient
   method called otherwise) and the Kometa rename path.
 """
@@ -56,7 +56,7 @@ def make_module(**config_overrides):
     cfg = {
         "log_level": "info",
         "dry_run": False,
-        "sources": ["local", "tmdb"],
+        "sources": ["local", "fanart"],
         "asset_types": ["logo", "squareart", "background", "banner"],
         "apply_method": "kometa",
         "action_type": "copy",
@@ -72,6 +72,7 @@ def make_module(**config_overrides):
     m.config = SimpleNamespace(**cfg)
     m.full_config = SimpleNamespace(
         tmdb=SimpleNamespace(apikey="", cache_expiration=60),
+        fanart=SimpleNamespace(client_key="", cache_expiration=60),
         instances=SimpleNamespace(plex={}),
     )
     return m
@@ -212,38 +213,45 @@ def test_poster_match_ignores_logo_rows(db):
 # --------------------------------------------------------------------------
 
 
-def _fake_tmdb(url="https://image.tmdb.org/t/p/original/l.png"):
+def _fake_fanart(url="https://assets.fanart.tv/fanart/movies/123/hdmovielogo/l.png"):
     return SimpleNamespace(get_images=lambda *a, **k: {"logo": url, "background": None})
 
 
 def test_source_priority_local_first(db):
     _seed(db, "logo", "8 A.M. Metro (2023) - Logo.png")
-    m = make_module(sources=["local", "tmdb"])
-    src, file, url = m._resolve_source(_media(), db, "logo", False, _fake_tmdb())
+    m = make_module(sources=["local", "fanart"])
+    src, file, url = m._resolve_source(_media(), db, "logo", False, _fake_fanart())
     assert src == "local" and file and url is None
 
 
-def test_source_priority_tmdb_first(db):
+def test_source_priority_fanart_first(db):
     _seed(db, "logo", "8 A.M. Metro (2023) - Logo.png")
-    m = make_module(sources=["tmdb", "local"])
-    src, file, url = m._resolve_source(_media(), db, "logo", False, _fake_tmdb())
-    assert src == "tmdb" and url and file is None
+    m = make_module(sources=["fanart", "local"])
+    src, file, url = m._resolve_source(_media(), db, "logo", False, _fake_fanart())
+    assert src == "fanart" and url and file is None
 
 
-def test_source_fallback_to_tmdb_when_no_local(db):
+def test_source_fallback_to_fanart_when_no_local(db):
     # no local row seeded
-    m = make_module(sources=["local", "tmdb"])
-    resolved = m._resolve_source(_media(), db, "logo", False, _fake_tmdb())
+    m = make_module(sources=["local", "fanart"])
+    resolved = m._resolve_source(_media(), db, "logo", False, _fake_fanart())
     assert resolved is not None
     src, file, url = resolved
-    assert src == "tmdb" and url
+    assert src == "fanart" and url
 
 
 def test_source_none_when_nothing_available(db):
-    m = make_module(sources=["local", "tmdb"])
-    # tmdb returns no logo, no local row
-    empty_tmdb = SimpleNamespace(get_images=lambda *a, **k: {"logo": None})
-    assert m._resolve_source(_media(), db, "logo", False, empty_tmdb) is None
+    m = make_module(sources=["local", "fanart"])
+    # fanart returns no logo, no local row
+    empty_fanart = SimpleNamespace(get_images=lambda *a, **k: {"logo": None})
+    assert m._resolve_source(_media(), db, "logo", False, empty_fanart) is None
+
+
+def test_squareart_never_from_fanart(db):
+    # fanart has no square-art type → squareart must not resolve via fanart even
+    # when fanart would return a logo/background for the item.
+    m = make_module(sources=["fanart", "local"])
+    assert m._resolve_source(_media(), db, "squareart", False, _fake_fanart()) is None
 
 
 # --------------------------------------------------------------------------
@@ -472,13 +480,13 @@ def test_scan_includes_assets_when_feature_on(tmp_path):
 # --- #1 asset idempotency: skip unchanged re-applies -------------------------
 
 
-def test_already_applied_skips_unchanged_tmdb(db):
-    m = make_module(sources=["tmdb"], apply_method="plex")
+def test_already_applied_skips_unchanged_fanart(db):
+    m = make_module(sources=["fanart"], apply_method="plex")
     db.media_asset_matches.upsert(
         target_kind="media",
         target_id=1,
         image_type="logo",
-        source="tmdb",
+        source="fanart",
         matched_url="http://x/l.png",
         applied_method="plex",
         match_status="applied",
@@ -486,14 +494,14 @@ def test_already_applied_skips_unchanged_tmdb(db):
     # same url + applied + same method -> skip
     assert (
         m._already_applied(
-            db, "media", 1, "logo", "plex", "tmdb", None, "http://x/l.png", None
+            db, "media", 1, "logo", "plex", "fanart", None, "http://x/l.png", None
         )
         is True
     )
     # different url -> don't skip
     assert (
         m._already_applied(
-            db, "media", 1, "logo", "plex", "tmdb", None, "http://x/OTHER.png", None
+            db, "media", 1, "logo", "plex", "fanart", None, "http://x/OTHER.png", None
         )
         is False
     )
@@ -540,7 +548,7 @@ def test_already_applied_direct_backfills_new_library(db):
     now targets a second library (per-library backfill), then skipped once both
     are covered."""
     m = make_module(
-        sources=["tmdb"],
+        sources=["fanart"],
         apply_method="plex",
         instances=[{"plex1": SimpleNamespace(library_names=["Movies", "Movies 4K"], add_posters=True)}],
     )
@@ -548,7 +556,7 @@ def test_already_applied_direct_backfills_new_library(db):
         target_kind="media",
         target_id=3,
         image_type="logo",
-        source="tmdb",
+        source="fanart",
         matched_url="http://x/l.png",
         applied_method="plex",
         applied_libraries='["plex1/Movies"]',
@@ -562,7 +570,7 @@ def test_already_applied_direct_backfills_new_library(db):
             3,
             "logo",
             "plex",
-            "tmdb",
+            "fanart",
             None,
             "http://x/l.png",
             None,
@@ -576,7 +584,7 @@ def test_already_applied_direct_backfills_new_library(db):
         target_kind="media",
         target_id=3,
         image_type="logo",
-        source="tmdb",
+        source="fanart",
         matched_url="http://x/l.png",
         applied_method="plex",
         applied_libraries='["plex1/Movies", "plex1/Movies 4K"]',
@@ -589,7 +597,7 @@ def test_already_applied_direct_backfills_new_library(db):
             3,
             "logo",
             "plex",
-            "tmdb",
+            "fanart",
             None,
             "http://x/l.png",
             None,
@@ -601,19 +609,19 @@ def test_already_applied_direct_backfills_new_library(db):
 
 
 def test_already_applied_never_skips_in_dry_run(db):
-    m = make_module(dry_run=True, sources=["tmdb"], apply_method="plex")
+    m = make_module(dry_run=True, sources=["fanart"], apply_method="plex")
     db.media_asset_matches.upsert(
         target_kind="media",
         target_id=3,
         image_type="logo",
-        source="tmdb",
+        source="fanart",
         matched_url="http://x/l.png",
         applied_method="plex",
         match_status="applied",
     )
     assert (
         m._already_applied(
-            db, "media", 3, "logo", "plex", "tmdb", None, "http://x/l.png", None
+            db, "media", 3, "logo", "plex", "fanart", None, "http://x/l.png", None
         )
         is False
     )
@@ -625,7 +633,7 @@ def test_dry_run_does_not_persist_match_state(db, monkeypatch):
     actually uploaded (the bug). The upload itself is also skipped."""
     m = make_module(
         dry_run=True,
-        sources=["tmdb"],
+        sources=["fanart"],
         apply_method="plex",
         asset_types=["logo"],
         instances=[
@@ -651,7 +659,7 @@ def test_dry_run_does_not_persist_match_state(db, monkeypatch):
     monkeypatch.setattr(
         m,
         "_resolve_source",
-        lambda *a, **k: ("tmdb", None, "http://x/logo.png"),
+        lambda *a, **k: ("fanart", None, "http://x/logo.png"),
     )
 
     out = m.match_and_apply_assets(db)

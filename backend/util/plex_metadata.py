@@ -45,7 +45,7 @@ PLEX_DB_NAME = "com.plexapp.plugins.library.db"
 # Canonical list shared by every "what artwork is Plex actively using" scan so
 # the bloat cleaner can't flag an applied image as deletable. The "new
 # experience" UI added user_clear_logo_url + user_square_art_url; omitting them
-# made the bloat scanner treat custom clear logos / square art as orphans.
+# made the bloat scanner treat custom logos / square art as orphans.
 IN_USE_IMAGE_COLUMNS = (
     "user_thumb_url",
     "user_art_url",
@@ -147,7 +147,7 @@ def _load_metadata_item_index(db_path: str) -> Dict[str, Dict[str, Any]]:
             # Anchor on EVERY in-use image column (the canonical
             # IN_USE_IMAGE_COLUMNS, same as get_in_use_hashes), not just
             # thumb/art/banner — otherwise an item whose only on-disk anchor is
-            # a clear logo or square art is never matched and surfaces in the
+            # a logo or square art is never matched and surfaces in the
             # cleanarr UI with empty title/year. Query each column separately so
             # an older Plex schema missing one skips it instead of dropping all.
             for col in IN_USE_IMAGE_COLUMNS:

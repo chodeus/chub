@@ -689,7 +689,7 @@ class PlexClient:
         dry_run: bool = False,
         plex_id: Any = None,
     ) -> bool:
-        """Upload a clear logo (plexapi uploadLogo). Accepts a local filepath or
+        """Upload a logo (plexapi uploadLogo). Accepts a local filepath or
         a remote url (e.g. a TMDB image URL)."""
         return self._upload_artwork(
             "uploadLogo",

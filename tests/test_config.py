@@ -43,7 +43,7 @@ def test_asset_renamerr_defaults():
     exists."""
     config = ChubConfig()
     ar = config.asset_renamerr
-    assert ar.sources == ["local", "tmdb"]
+    assert ar.sources == ["local", "fanart"]
     # defaults to the two types that work on BOTH apply methods
     assert ar.asset_types == ["logo", "background"]
     assert ar.apply_method == "kometa"
