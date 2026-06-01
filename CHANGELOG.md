@@ -2,6 +2,13 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.26.2](https://github.com/chodeus/chub/compare/v2.26.1...v2.26.2) (2026-06-01)
+
+
+### Bug Fixes
+
+* **plex:** resolve upload targets by ratingKey, not *arr title ([6aa878a](https://github.com/chodeus/chub/commit/6aa878a7cd0804acae13ca217fad76bacaaf6024))
+
 ## [2.26.1](https://github.com/chodeus/chub/compare/v2.26.0...v2.26.1) (2026-06-01)
 
 
