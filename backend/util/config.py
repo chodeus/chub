@@ -471,6 +471,11 @@ class GeneralConfig(BaseModel):
     webhook_max_retries: int = Field(default=10, ge=0, le=100)
     webhook_secret: str = ""
     duplicate_exclude_groups: List[Any] = Field(default_factory=list)
+    # TTL (seconds) for reusing the plex_media_cache snapshot before a re-walk.
+    # The "plex" apply path resolves artwork targets from this cache; when it
+    # was refreshed within this window, chained/back-to-back runs skip a
+    # redundant full Plex walk. 0 = always refresh. Default 5 minutes.
+    plex_cache_ttl_seconds: int = Field(default=300, ge=0, le=86400)
 
     @field_validator("log_level", mode="before")
     @classmethod

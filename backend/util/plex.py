@@ -109,6 +109,24 @@ class PlexClient:
             self.logger.error(f"Failed to fetch libraries: {e}")
             return []
 
+    def section_type(self, library_name: str) -> Optional[str]:
+        """Return a library's Plex content type ('movie', 'show', 'artist', …),
+        or None if it can't be resolved. Cached per client so callers can cheaply
+        skip type-incompatible libraries (e.g. a movie against a 'show' library)
+        instead of issuing a doomed search. None = "unknown, don't filter".
+        """
+        if not hasattr(self, "_section_type_cache"):
+            self._section_type_cache: Dict[str, Optional[str]] = {}
+        if library_name in self._section_type_cache:
+            return self._section_type_cache[library_name]
+        typ = None
+        try:
+            typ = self.plex.library.section(library_name).type
+        except Exception as e:
+            self.logger.debug(f"Could not resolve type for library '{library_name}': {e}")
+        self._section_type_cache[library_name] = typ
+        return typ
+
     def get_collections(
         self,
         library_name: str,
@@ -370,6 +388,40 @@ class PlexClient:
         season_number: Any = None,
         edition: Any = None,
     ) -> list:
+        """Cached front for :meth:`_locate_targets_uncached`.
+
+        Plex library contents don't change mid-run, yet a single item is
+        resolved over and over — logo, background, square art, and each season
+        all pass the SAME locate parameters, differing only in which upload
+        method runs afterwards. Re-searching each time is wasted work and was
+        the source of the duplicated "not found" log spam. Memoize per client
+        (asset/poster runs build a fresh client each time, so the cache is
+        naturally per-run) so every (library, title, year, season, edition) is
+        searched — and logged — at most once.
+        """
+        if not hasattr(self, "_locate_cache"):
+            self._locate_cache: Dict[tuple, list] = {}
+        key = (library_name, item_title, year, bool(is_collection), season_number, edition)
+        if key not in self._locate_cache:
+            self._locate_cache[key] = self._locate_targets_uncached(
+                library_name,
+                item_title,
+                year=year,
+                is_collection=is_collection,
+                season_number=season_number,
+                edition=edition,
+            )
+        return self._locate_cache[key]
+
+    def _locate_targets_uncached(
+        self,
+        library_name: str,
+        item_title: str,
+        year: Any = None,
+        is_collection: bool = False,
+        season_number: Any = None,
+        edition: Any = None,
+    ) -> list:
         """Return the plexapi objects artwork should be uploaded to.
 
         Shared by every upload_* method so they apply the SAME item-location
@@ -382,7 +434,10 @@ class PlexClient:
         if is_collection:
             items = section.search(title=item_title, libtype="collection")
             if not items:
-                self.logger.error(
+                # Not an error: _locate_targets is called per-library across every
+                # library on the instance, so a miss just means the item lives in
+                # a different library. The caller handles "no targets anywhere".
+                self.logger.debug(
                     f"Collection '{item_title}' not found in '{library_name}'"
                 )
                 return []
@@ -391,7 +446,9 @@ class PlexClient:
         # TV Shows / Movies
         items = section.search(title=item_title, year=year)
         if not items:
-            self.logger.error(
+            # Debug, not error — expected when the item is in another library on
+            # this instance (e.g. a Film searched against TV Programmes / Anime).
+            self.logger.debug(
                 f"Item '{item_title}' not found in '{library_name}' (year={year})"
             )
             return []
@@ -442,7 +499,10 @@ class PlexClient:
                 except Exception:
                     continue
             if not seasons_out:
-                self.logger.error(
+                # Debug, not error: the show may simply not have this season in
+                # this library (e.g. a missing Season 0 / specials), or it lives
+                # in another library. Caller aggregates across libraries.
+                self.logger.debug(
                     f"Season {season_number} not found for '{item_title}' in '{library_name}'"
                 )
             return seasons_out

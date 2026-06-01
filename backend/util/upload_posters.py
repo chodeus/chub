@@ -12,6 +12,7 @@ from backend.util.database import ChubDB
 from backend.util.helper import progress
 from backend.util.logger import Logger
 from backend.util.normalization import normalize_titles
+from backend.util.plex_index import PlexMediaIndex
 from backend.util.plex import PlexClient
 
 
@@ -907,83 +908,17 @@ class PosterUploader:
     # Static/utility methods (keeping existing implementations but with improvements)
     @staticmethod
     def _build_indexes(media_cache: List[Dict]) -> Tuple[Dict, Dict, Dict, Dict]:
-        """Build indexes for fast asset lookups.
+        """Build the type-separated lookup indexes for fast asset matching.
 
-        Each key maps to a *list* of cache entries, not a single one. The same
-        title can live in more than one enabled Plex library on a single server
-        (e.g. a "Movies" library and a separate "Movies 4K" library fed by two
-        Radarr instances) — those are distinct plex_media_cache rows sharing a
-        tmdb/imdb guid. Keying to a single entry silently dropped every library
-        but the last one iterated, so the poster only reached one of them.
-        Appending keeps every library so _sync_single_asset can upload to all.
+        Thin wrapper over the shared :class:`PlexMediaIndex` (single source of
+        truth for the guid-first keying, shared with asset_renamerr's plex
+        apply path). Returns the four raw dicts so the existing _sync_* call
+        sites stay unchanged; each key maps to a *list* of entries (the same
+        title can live in more than one enabled library on a server, e.g. a
+        "Movies" and a "Movies 4K" library — every copy must get the poster).
         """
-        movie_index: Dict[str, List[Dict]] = {}
-        show_index: Dict[str, List[Dict]] = {}
-        season_index: Dict[str, List[Dict]] = {}
-        collection_index: Dict[str, List[Dict]] = {}
-
-        def add(index: Dict[str, List[Dict]], key: str, entry: Dict) -> None:
-            index.setdefault(key, []).append(entry)
-
-        for entry in media_cache:
-            try:
-                typ = entry.get("asset_type")
-                norm_title = entry.get("normalized_title")
-                guids = entry.get("guids", {})
-
-                # Handle JSON-encoded guids
-                if isinstance(guids, str):
-                    try:
-                        guids = json.loads(guids)
-                    except (json.JSONDecodeError, TypeError):
-                        guids = {}
-
-                if typ == "movie":
-                    if norm_title:
-                        add(movie_index, f"title:{norm_title}", entry)
-                    if guids.get("tmdb"):
-                        add(movie_index, f"tmdb:{guids['tmdb']}", entry)
-                    if guids.get("imdb"):
-                        add(movie_index, f"imdb:{guids['imdb']}", entry)
-
-                elif typ in ("show", "tvshow"):
-                    season_num = entry.get("season_number")
-                    if season_num in (None, "null"):
-                        # Series main entry
-                        if norm_title:
-                            add(show_index, f"title:{norm_title}", entry)
-                        for guid_type in ["tmdb", "imdb", "tvdb"]:
-                            if guids.get(guid_type):
-                                add(
-                                    show_index,
-                                    f"{guid_type}:{guids[guid_type]}",
-                                    entry,
-                                )
-                    else:
-                        # Season entry
-                        if norm_title:
-                            add(
-                                season_index,
-                                f"title:{norm_title}:S{season_num}",
-                                entry,
-                            )
-                        for guid_type in ["tmdb", "imdb", "tvdb"]:
-                            if guids.get(guid_type):
-                                add(
-                                    season_index,
-                                    f"{guid_type}:{guids[guid_type]}:S{season_num}",
-                                    entry,
-                                )
-
-                elif typ == "collection":
-                    if norm_title:
-                        add(collection_index, f"title:{norm_title}", entry)
-
-            except Exception:
-                # Log and continue with other entries
-                continue
-
-        return movie_index, show_index, season_index, collection_index
+        idx = PlexMediaIndex(media_cache)
+        return idx.movies, idx.shows, idx.seasons, idx.collections
 
     @staticmethod
     def match_asset(
@@ -993,13 +928,10 @@ class PosterUploader:
 
         Returns the *list* of cache entries (one per Plex library that holds
         the item) for the highest-priority key that hits, plus that key's name.
-        Returns ([], None) when nothing matches.
+        Returns ([], None) when nothing matches. Delegates to the shared
+        PlexMediaIndex matcher so poster and asset paths key identically.
         """
-        for key in priority_keys:
-            value = values.get(key)
-            if value and f"{key}:{value}" in index:
-                return index[f"{key}:{value}"], key.upper()
-        return [], None
+        return PlexMediaIndex._match(index, priority_keys, values)
 
     @staticmethod
     def _compute_file_hash(poster_path: str, dry_run: bool = False) -> Optional[str]:

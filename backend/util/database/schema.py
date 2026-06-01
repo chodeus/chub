@@ -135,6 +135,12 @@ class SchemaManager:
                 ColumnDefinition("guids", "TEXT"),
                 ColumnDefinition("labels", "TEXT"),
                 ColumnDefinition("file_paths", "TEXT"),
+                # Stamped on every upsert; lets callers judge cache freshness
+                # (TTL guard) before deciding to re-walk Plex. Additive default
+                # so it auto-migrates on existing databases.
+                ColumnDefinition(
+                    "updated_at", "TEXT", default="CURRENT_TIMESTAMP"
+                ),
             ],
             constraints=["UNIQUE (plex_id, instance_name)"],
         )

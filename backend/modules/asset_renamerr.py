@@ -128,16 +128,131 @@ class AssetRenamerr(ChubModule):
                         )
         return out
 
-    def _direct_target_lib_keys(self, media: dict, is_collection: bool) -> Set[str]:
+    # media asset_type -> the Plex library type that can actually hold it.
+    _PLEX_SECTION_TYPE = {"movie": "movie", "show": "show"}
+
+    def _get_plex_index(self, db: ChubDB, instance_name: str):
+        """Build (once per run, cached) a PlexMediaIndex over this instance's
+        plex_media_cache snapshot. Returns None if the cache has no rows for the
+        instance (callers then fall back to a live search)."""
+        cache = getattr(self, "_plex_index_cache", None)
+        if cache is None:
+            cache = {}
+            self._plex_index_cache = cache
+        if instance_name not in cache:
+            from backend.util.plex_index import PlexMediaIndex
+
+            rows = db.plex.get_by_instance(instance_name) or []
+            cache[instance_name] = PlexMediaIndex(rows) if rows else None
+        return cache[instance_name]
+
+    def _index_resolved_libraries(
+        self, db: ChubDB, instance_name: str, media: dict
+    ) -> Optional[List[str]]:
+        """Use the guid-first PlexMediaIndex to return the libraries on this
+        instance that ACTUALLY hold ``media`` (so we upload only where the item
+        exists — no wrong-library attempts, guid match beats title+year).
+
+        Returns a list of library names (possibly empty = "indexed, not here"),
+        or None when the index is unavailable (no snapshot) so the caller can
+        fall back to a live type-filtered search.
+        """
+        index = self._get_plex_index(db, instance_name)
+        if index is None:
+            return None
+        asset_type = media.get("asset_type")
+        season_number = media.get("season_number")
+        if asset_type == "movie":
+            media_type = "movie"
+        elif asset_type == "show":
+            media_type = "season" if season_number is not None else "show"
+        else:
+            return None  # collections resolve via their own instance/library
+        entries, _key = index.resolve(
+            media, media_type=media_type, season_number=season_number
+        )
+        # Dedupe to one library name per hit (the index lists every copy).
+        libs: List[str] = []
+        for e in entries:
+            lib = e.get("library_name")
+            if lib and lib not in libs:
+                libs.append(lib)
+        return libs
+
+    def _resolve_apply_targets(
+        self, db: ChubDB, media: dict, is_collection: bool
+    ) -> List[Tuple[str, List[str]]]:
+        """(instance, libraries) the direct apply should upload to.
+
+        Collections keep their stored instance/library. For movies/shows, prefer
+        the PlexMediaIndex (guid-first, only libraries that actually hold the
+        item); fall back per-instance to a live type-filtered search when the
+        index has no snapshot for that instance (lazy fallback for fresh/edge
+        items). This is the single source of truth for both the upload loop and
+        the per-library idempotency key-set, so they can't drift.
+        """
+        if is_collection:
+            return [(media.get("instance_name"), [media.get("library_name")])]
+
+        expected = self._PLEX_SECTION_TYPE.get(media.get("asset_type"))
+        out: List[Tuple[str, List[str]]] = []
+        for instance_name, opted_libs in self._enabled_plex_instances():
+            resolved = self._index_resolved_libraries(db, instance_name, media)
+            if resolved is None:
+                # No index snapshot → live type-filtered fallback for this item.
+                client = self._plex_client_for(instance_name)
+                getter = getattr(client, "section_type", None) if client else None
+                libs = []
+                for lib in opted_libs:
+                    if not lib:
+                        continue
+                    st = getter(lib) if (getter and expected) else None
+                    if st is None or st == expected:
+                        libs.append(lib)
+            else:
+                # Index hit: intersect "libraries that hold it" with opted-in.
+                opted = {lib for lib in opted_libs if lib}
+                libs = [lib for lib in resolved if lib in opted] if opted else resolved
+            if libs:
+                out.append((instance_name, libs))
+        return out
+
+    def _type_matched_targets(self, media: dict) -> List[Tuple[str, List[str]]]:
+        """Opted-in (instance, libraries) targets, dropping libraries whose Plex
+        type can't hold this item — e.g. a movie is never in a 'show' library, so
+        searching one is a guaranteed miss (and was the source of noisy "not
+        found" logs). A library is only excluded when its type is KNOWN and
+        mismatches; if the type can't be resolved (no client / offline), the
+        library is kept so behaviour degrades to the old "search everything".
+        """
+        expected = self._PLEX_SECTION_TYPE.get(media.get("asset_type"))
+        out: List[Tuple[str, List[str]]] = []
+        for instance_name, libraries in self._enabled_plex_instances():
+            client = self._plex_client_for(instance_name)
+            getter = getattr(client, "section_type", None) if client else None
+            libs: List[str] = []
+            for lib in libraries:
+                if not lib:
+                    continue
+                st = getter(lib) if (getter and expected) else None
+                if st is None or st == expected:
+                    libs.append(lib)
+            if libs:
+                out.append((instance_name, libs))
+        return out
+
+    def _direct_target_lib_keys(
+        self, db: ChubDB, media: dict, is_collection: bool
+    ) -> Set[str]:
         """The set of "instance/library" keys a direct apply should cover for
         this item — used both to upload and to decide whether a prior apply is
-        still complete (per-library backfill)."""
-        if is_collection:
-            targets = [(media.get("instance_name"), [media.get("library_name")])]
-        else:
-            targets = self._enabled_plex_instances()
+        still complete (per-library backfill). Resolved via the same index-first
+        path as the upload loop so the expected set matches what _apply_direct
+        will actually attempt."""
         keys: Set[str] = set()
-        for instance_name, libraries in targets:
+        for instance_name, libraries in self._resolve_apply_targets(
+            db, media, is_collection
+        ):
             for lib in libraries:
                 if lib:
                     keys.add(f"{instance_name}/{lib}")
@@ -308,7 +423,7 @@ class AssetRenamerr(ChubModule):
         # previously-failed library copy gets backfilled (mirrors the poster
         # uploaded_libraries logic).
         if apply_method == "plex" and media is not None:
-            expected = self._direct_target_lib_keys(media, is_collection)
+            expected = self._direct_target_lib_keys(db, media, is_collection)
             try:
                 recorded = set(json.loads(prev.get("applied_libraries") or "[]"))
             except (ValueError, TypeError):
@@ -328,6 +443,7 @@ class AssetRenamerr(ChubModule):
 
     def _apply_direct(
         self,
+        db: ChubDB,
         media: dict,
         image_type: str,
         file: Optional[str],
@@ -342,10 +458,9 @@ class AssetRenamerr(ChubModule):
         year = self._media_year(media)
         season_number = media.get("season_number")
 
-        if is_collection:
-            targets = [(media.get("instance_name"), [media.get("library_name")])]
-        else:
-            targets = self._enabled_plex_instances()
+        # Index-first (guid-matched, only libraries that actually hold the item);
+        # lazy live type-filtered fallback when no cache snapshot exists.
+        targets = self._resolve_apply_targets(db, media, is_collection)
 
         # Upload to EVERY matching library, not just the first — an item that
         # lives in both a 1080p and a 4K library should get the asset in both.
@@ -518,6 +633,30 @@ class AssetRenamerr(ChubModule):
             self.logger.warning("No media or collections found for asset matching.")
             return output
 
+        # On the plex path, resolve upload targets from the plex_media_cache via
+        # PlexMediaIndex (guid-first). Refresh that snapshot once up front (TTL-
+        # guarded, so a chained poster_renamerr run that just walked Plex isn't
+        # re-walked), then reset any stale per-run index so it rebuilds from the
+        # fresh rows. A lazy live search still covers items added post-refresh.
+        if apply_method == "plex" and not self.config.dry_run:
+            self._plex_index_cache = {}
+            try:
+                from backend.util.plex_refresh import refresh_plex_cache_if_stale
+
+                enabled = {
+                    name: libs for name, libs in self._enabled_plex_instances()
+                }
+                refresh_plex_cache_if_stale(
+                    db, self.full_config, self.logger, enabled
+                )
+            except Exception as exc:
+                # Never fail the run on a refresh hiccup — the index falls back
+                # to whatever snapshot exists, and per-item lazy search covers
+                # misses.
+                self.logger.warning(
+                    f"Plex cache refresh skipped ({exc}); using existing snapshot."
+                )
+
         tmdb_client = None
         if "tmdb" in self._sources():
             tmdb_client = TMDBClient(self.full_config.tmdb, db, self.logger)
@@ -582,7 +721,7 @@ class AssetRenamerr(ChubModule):
                 applied_libs: Optional[List[str]] = None
                 if apply_method == "plex":
                     applied, detail, applied_libs = self._apply_direct(
-                        media, image_type, file, url, is_collection
+                        db, media, image_type, file, url, is_collection
                     )
                 else:
                     applied, detail = self._apply_kometa(
