@@ -1321,6 +1321,12 @@ export const SETTINGS_MODULES = [
             'Look up missing TMDB IDs via the TMDB API. Improves poster matching and request links for unmatched assets.',
     },
     {
+        name: 'fanart.tv',
+        key: 'fanart',
+        description:
+            'Source logos and backgrounds for Asset Renamerr from fanart.tv, ranked by community likes. Requires your personal fanart.tv API key.',
+    },
+    {
         name: 'Sync Gdrive',
         key: 'sync_gdrive',
         description: 'Synchronize your Google Drive with CHUB.',
