@@ -893,9 +893,22 @@ const ArtworkView = ({ data, status, isLoading, onRefresh }) => {
                                             >
                                                 {item.title}
                                             </Link>
+                                            {item.season_number != null && (
+                                                <span className="ml-2 text-xs text-tertiary">
+                                                    {item.season_number === 0
+                                                        ? 'Specials'
+                                                        : `S${String(item.season_number).padStart(2, '0')}`}
+                                                </span>
+                                            )}
                                         </td>
                                         <td className="px-3 py-2 text-secondary">
-                                            {TYPE_LABELS[item.asset_type] || item.asset_type || '—'}
+                                            {item.asset_type === 'show'
+                                                ? item.season_number != null
+                                                    ? 'Season'
+                                                    : 'Series'
+                                                : TYPE_LABELS[item.asset_type] ||
+                                                  item.asset_type ||
+                                                  '—'}
                                         </td>
                                         <td className="px-3 py-2 text-secondary">
                                             {item.year || '—'}
