@@ -377,6 +377,12 @@ def compare_strings(string1: str, string2: str) -> bool:
     return normalized1 == normalized2
 
 
+# Allowed absolute difference (in years) when matching by title+year. Plex,
+# TMDB, and the *arrs frequently disagree by one year (production vs. release
+# year), so a strict equality check produced false "no match" results.
+YEAR_MATCH_TOLERANCE = 1
+
+
 def is_match(
     asset: Dict[str, Any],
     media: Dict[str, Any],
@@ -479,7 +485,12 @@ def is_match(
         present_media_years = [y for y in present_media_years if y is not None]
         if asset_year is None or not present_media_years:
             return True
-        return asset_year in present_media_years
+        # ±1 tolerance: Plex/TMDB/*arr routinely disagree by a year (production
+        # vs. release year), e.g. a film TMDB dates 2013 that Plex stores as
+        # 2012. An exact-equality gate dropped those as "no match".
+        return any(
+            abs(asset_year - y) <= YEAR_MATCH_TOLERANCE for y in present_media_years
+        )
 
     def normalized_id(key: str, data: Dict[str, Any]) -> Optional[str]:
         value = data.get(key)

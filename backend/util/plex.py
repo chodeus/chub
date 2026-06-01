@@ -11,7 +11,11 @@ from pathvalidate import sanitize_filename
 from plexapi.server import PlexServer
 from unidecode import unidecode
 
-from backend.util.helper import generate_title_variants, progress
+from backend.util.helper import (
+    YEAR_MATCH_TOLERANCE,
+    generate_title_variants,
+    progress,
+)
 from backend.util.normalization import normalize_titles
 from backend.util.ssrf_guard import is_safe_url
 
@@ -445,6 +449,32 @@ class PlexClient:
 
         # TV Shows / Movies
         items = section.search(title=item_title, year=year)
+        if not items and year is not None:
+            # Year drift: Plex's year can differ from *arr/TMDB by a year
+            # (production vs. release year), so a strict year= search misses an
+            # item that IS in this library. Retry title-only and accept a
+            # confident match: an unambiguous single hit, or same-title hits
+            # within ±1 year. The library is already type-correct, so this
+            # won't pull a same-named item of the wrong kind.
+            candidates = section.search(title=item_title)
+            if len(candidates) == 1:
+                items = candidates
+            elif candidates:
+                try:
+                    target_year = int(year)
+                    items = [
+                        c
+                        for c in candidates
+                        if getattr(c, "year", None) is not None
+                        and abs(int(c.year) - target_year) <= YEAR_MATCH_TOLERANCE
+                    ]
+                except (TypeError, ValueError):
+                    items = []
+            if items:
+                self.logger.debug(
+                    f"'{item_title}' matched in '{library_name}' via year-tolerant "
+                    f"fallback (requested year={year})"
+                )
         if not items:
             # Debug, not error — expected when the item is in another library on
             # this instance (e.g. a Film searched against TV Programmes / Anime).
