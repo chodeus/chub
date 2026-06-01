@@ -119,3 +119,58 @@ def test_locate_targets_memoized_per_client():
     client._locate_targets("TV", "Show", year=2021, season_number=1)
     client._locate_targets("TV", "Show", year=2021, season_number=1)
     assert counter["n"] == 2
+
+
+def _client_with_year_aware_search(year_results, titleonly_results):
+    """PlexClient whose section.search distinguishes a year-qualified search
+    (``search(title=, year=)``) from a title-only fallback search."""
+    from backend.util.plex import PlexClient
+
+    class FakeSection:
+        type = "movie"
+
+        def search(self, **kw):
+            if "year" in kw and kw["year"] is not None:
+                return list(year_results)
+            return list(titleonly_results)
+
+    class FakeLibrary:
+        def section(self, name):
+            return FakeSection()
+
+    client = object.__new__(PlexClient)
+    client.plex = type("P", (), {"library": FakeLibrary()})()
+    client.logger = _DebugLog()
+    client._locate_cache = {}
+    return client
+
+
+class _FakeMovie:
+    def __init__(self, year):
+        self.title = "Thanks for Sharing"
+        self.year = year
+        self.editionTitle = None
+
+    def seasons(self):
+        return []
+
+
+def test_locate_targets_year_tolerant_fallback_within_one():
+    """Year drift: strict year= search misses, but a single title-only hit one
+    year off is accepted (Plex 2012 vs *arr 2013)."""
+    plex_2012 = _FakeMovie(2012)
+    client = _client_with_year_aware_search(
+        year_results=[], titleonly_results=[plex_2012]
+    )
+    targets = client._locate_targets("Films", "Thanks for Sharing", year=2013)
+    assert targets == [plex_2012]
+
+
+def test_locate_targets_year_tolerant_fallback_rejects_off_by_two():
+    """A 2-year gap is outside ±1 tolerance and stays a miss when ambiguous."""
+    client = _client_with_year_aware_search(
+        year_results=[],
+        titleonly_results=[_FakeMovie(2010), _FakeMovie(2015)],
+    )
+    targets = client._locate_targets("Films", "Thanks for Sharing", year=2013)
+    assert targets == []

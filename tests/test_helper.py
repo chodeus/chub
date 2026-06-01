@@ -158,6 +158,23 @@ def test_is_match_year_mismatch_blocks_title_match():
     assert matched is False
 
 
+def test_is_match_year_within_one_tolerated():
+    # Plex/TMDB/*arr year drift (production vs. release year): a 1-year gap on a
+    # title match must still match (e.g. Plex says 2012, TMDB says 2013).
+    asset = {"title": "Thanks for Sharing", "year": 2013}
+    media = {"title": "Thanks for Sharing", "year": 2012}
+    matched, _ = is_match(asset, media)
+    assert matched is True
+
+
+def test_is_match_year_off_by_two_blocks():
+    # Tolerance is strictly ±1 — a 2-year gap is still a mismatch.
+    asset = {"title": "Thanks for Sharing", "year": 2014}
+    media = {"title": "Thanks for Sharing", "year": 2012}
+    matched, _ = is_match(asset, media)
+    assert matched is False
+
+
 def test_is_match_normalized_title_match():
     asset = {"normalized_title": "inception", "year": 2010}
     media = {"normalized_title": "inception", "year": 2010}
