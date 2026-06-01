@@ -514,6 +514,7 @@ class UnmatchedAssets(ChubModule):
             "image_type": image_type,
             "match_status": (row or {}).get("match_status"),
             "source": (row or {}).get("source"),
+            "reason": (row or {}).get("detail"),
             "ignored": bool((row or {}).get("ignored")),
         }
 

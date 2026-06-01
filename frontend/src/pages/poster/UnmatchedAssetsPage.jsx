@@ -600,6 +600,7 @@ const ArtworkView = ({ data, status, isLoading, onRefresh }) => {
     const [busyKey, setBusyKey] = useState(null);
 
     const types = useMemo(() => data?.data?.types || {}, [data]);
+    const activeMeta = ARTWORK_TYPES.find(a => a.key === activeType);
 
     // The status tab decides which per-type list we show (missing / review /
     // ignored). Locked has no artwork analogue, so it falls back to missing.
@@ -659,12 +660,12 @@ const ArtworkView = ({ data, status, isLoading, onRefresh }) => {
                             onClick={() => setActiveType(key)}
                             className={`text-left p-4 rounded-lg border transition-colors ${
                                 isActive
-                                    ? 'bg-surface border-brand-primary/60'
-                                    : 'bg-surface border-border hover:border-brand-primary/40'
+                                    ? 'bg-surface border-primary ring-1 ring-primary/40'
+                                    : 'bg-surface border-border hover:border-primary/50'
                             }`}
                         >
-                            <p className="text-sm text-secondary">
-                                <span className="mr-1.5">{icon}</span>
+                            <p className="text-sm text-secondary flex items-center gap-1.5">
+                                <span className="text-base leading-none">{icon}</span>
                                 {label}
                             </p>
                             <p className="text-2xl font-bold text-warning">{t.missing ?? 0}</p>
@@ -721,6 +722,12 @@ const ArtworkView = ({ data, status, isLoading, onRefresh }) => {
                                 <th className="px-3 py-2 font-medium">Type</th>
                                 <th className="px-3 py-2 font-medium">Year</th>
                                 <th className="px-3 py-2 font-medium">Instance</th>
+                                <th className="px-3 py-2 font-medium">
+                                    {status === 'ignored' ? 'Not needed' : 'Missing'}
+                                </th>
+                                {status === 'review' && (
+                                    <th className="px-3 py-2 font-medium">Why</th>
+                                )}
                                 <th className="px-3 py-2 font-medium text-right">Actions</th>
                             </tr>
                         </thead>
@@ -751,6 +758,23 @@ const ArtworkView = ({ data, status, isLoading, onRefresh }) => {
                                         <td className="px-3 py-2 text-secondary">
                                             {item.instance_name || '—'}
                                         </td>
+                                        <td className="px-3 py-2">
+                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-surface-alt text-secondary text-xs whitespace-nowrap">
+                                                <span className="leading-none">
+                                                    {activeMeta?.icon}
+                                                </span>
+                                                {activeMeta?.label}
+                                            </span>
+                                        </td>
+                                        {status === 'review' && (
+                                            <td className="px-3 py-2 text-secondary max-w-md">
+                                                {item.reason || (
+                                                    <span className="text-tertiary">
+                                                        Apply failed — no detail recorded
+                                                    </span>
+                                                )}
+                                            </td>
+                                        )}
                                         <td className="px-3 py-2 text-right whitespace-nowrap">
                                             <IconButton
                                                 icon="content_copy"
@@ -1002,7 +1026,11 @@ const UnmatchedAssetsPage = () => {
             <div className="flex items-center gap-3 flex-wrap">
                 <div className="inline-flex p-1 gap-1 bg-surface-alt border border-border rounded-xl">
                     {[
-                        { key: 'poster', label: '🖼️ Posters', count: null },
+                        {
+                            key: 'poster',
+                            label: '🖼️ Posters',
+                            count: posterViewCounts.unmatched,
+                        },
                         {
                             key: 'art',
                             label: '🎨 Additional artwork',
@@ -1021,13 +1049,19 @@ const UnmatchedAssetsPage = () => {
                             }}
                             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
                                 assetClass === c.key
-                                    ? 'bg-brand-primary text-white'
+                                    ? 'bg-primary text-on-color shadow-sm'
                                     : 'text-secondary hover:text-primary'
                             }`}
                         >
                             {c.label}
                             {c.count != null && (
-                                <span className="text-xs px-1.5 py-0.5 rounded-full bg-surface text-secondary">
+                                <span
+                                    className={`text-xs px-1.5 py-0.5 rounded-full ${
+                                        assetClass === c.key
+                                            ? 'bg-white/25 text-on-color'
+                                            : 'bg-surface text-secondary'
+                                    }`}
+                                >
                                     {c.count}
                                 </span>
                             )}
@@ -1099,8 +1133,8 @@ const UnmatchedAssetsPage = () => {
                                         key={key}
                                         className="p-4 rounded-lg bg-surface border border-border"
                                     >
-                                        <p className="text-sm text-secondary">
-                                            <span className="mr-1.5">{icon}</span>
+                                        <p className="text-sm text-secondary flex items-center gap-1.5">
+                                            <span className="text-base leading-none">{icon}</span>
                                             {label}
                                         </p>
                                         <p className="text-2xl font-bold text-warning">

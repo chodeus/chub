@@ -448,6 +448,11 @@ class SchemaManager:
                 # kometa path.
                 ColumnDefinition("applied_libraries", "TEXT"),
                 ColumnDefinition("match_status", "TEXT"),
+                # Human-readable outcome detail — on success the applied
+                # path/libraries summary, on failure WHY it failed (so the
+                # Needs-Review view can explain itself instead of just saying
+                # "failed"). Additive default NULL; auto-migrates.
+                ColumnDefinition("detail", "TEXT"),
                 ColumnDefinition("matched_at", "TEXT"),
                 # Per-(media, image_type) "not needed" flag set from the
                 # Unmatched → Additional artwork view, so a user can dismiss a
