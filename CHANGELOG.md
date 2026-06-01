@@ -2,6 +2,18 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.25.0](https://github.com/chodeus/chub/compare/v2.24.1...v2.25.0) (2026-06-01)
+
+
+### Features
+
+* **unmatched:** add Additional-artwork view alongside posters ([f2b1a87](https://github.com/chodeus/chub/commit/f2b1a8736859be946682663fc706e35ad982cfc9))
+
+
+### Bug Fixes
+
+* **asset_renamerr:** dry-run must not persist match state or log as applied ([266b868](https://github.com/chodeus/chub/commit/266b8685d90739a1a66d99332ce61dd16967a991))
+
 ## [2.24.1](https://github.com/chodeus/chub/compare/v2.24.0...v2.24.1) (2026-06-01)
 
 
