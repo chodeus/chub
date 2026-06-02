@@ -267,6 +267,16 @@ export function formatTimeAgo(target, from = new Date()) {
 }
 
 /**
+ * Format an elapsed duration (in seconds) as "12m ago" / "2h ago" / "3d ago".
+ * Wraps formatTimeAgo so callers that only have an age (not a timestamp) don't
+ * have to do time math during render.
+ */
+export function formatSecondsAgo(seconds) {
+    if (seconds == null || Number.isNaN(seconds)) return '';
+    return formatTimeAgo(new Date(Date.now() - seconds * 1000));
+}
+
+/**
  * Validate schedule string format
  * @param {string} schedule - Schedule string to validate
  * @returns {boolean} True if valid schedule format
