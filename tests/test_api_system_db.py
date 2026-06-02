@@ -222,3 +222,31 @@ def test_reset_poster_matches_preserves_ignored_and_locked(db_app):
     assert db.worker.execute_query(
         "SELECT matched FROM media_cache WHERE id=3", fetch_one=True
     )["matched"] == 1
+
+
+# --- /api/system/db/artwork-matches/reset ---
+
+
+def test_reset_artwork_matches_keeps_ignored(db_app):
+    app, db, _path = db_app
+
+    db.media_asset_matches.upsert(
+        target_kind="media",
+        target_id=1,
+        image_type="logo",
+        source="fanart",
+        matched_url="http://x/l.png",
+        applied_method="plex",
+        match_status="applied",
+    )
+    db.media_asset_matches.set_ignored("media", 2, "background", True)
+
+    client = TestClient(app)
+    resp = client.post("/api/system/db/artwork-matches/reset")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["success"] is True
+    assert body["data"]["deleted"] == 1  # only the applied row
+
+    assert db.media_asset_matches.get_one("media", 1, "logo") is None
+    assert db.media_asset_matches.get_one("media", 2, "background")["ignored"] == 1

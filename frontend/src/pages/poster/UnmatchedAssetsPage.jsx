@@ -1240,20 +1240,18 @@ const UnmatchedAssetsPage = () => {
     // Primary segregation: posters (default) vs additional artwork.
     const [assetClass, setAssetClass] = useState('poster');
 
-    // Artwork coverage is fetched lazily — only when the user opens that view —
-    // so the default poster experience carries zero extra cost.
+    // Artwork coverage is fetched eagerly (in parallel with the poster data) so
+    // the "Additional artwork" count badge is populated on first page load,
+    // not only after the user opens that view.
     const {
         data: artworkData,
         isLoading: artworkLoading,
         refresh: refreshArtwork,
     } = useApiData({
         apiFunction: postersAPI.fetchUnmatchedArtwork,
-        options: { showErrorToast: false, immediate: false },
+        options: { showErrorToast: false },
     });
     const artworkLoaded = !!artworkData;
-    useEffect(() => {
-        if (assetClass === 'art' && !artworkLoaded) refreshArtwork();
-    }, [assetClass, artworkLoaded, refreshArtwork]);
 
     const artworkSummary = artworkData?.data?.summary || {};
     const artworkCounts = {
@@ -1359,7 +1357,9 @@ const UnmatchedAssetsPage = () => {
                         ? 'Optional extras (Asset Renamerr) — kept separate so posters stay primary.'
                         : 'The main artwork shown in Plex.'}
                 </span>
-                <div className="ml-auto">
+                {/* Both resets are always available, independent of the active
+                    tab — one zeroes poster coverage, the other artwork. */}
+                <div className="ml-auto flex items-center gap-2">
                     <ResetControl
                         assetClass="poster"
                         onComplete={() => {
@@ -1367,6 +1367,7 @@ const UnmatchedAssetsPage = () => {
                             refreshRecent();
                         }}
                     />
+                    <ResetControl assetClass="art" onComplete={refreshArtwork} />
                 </div>
             </div>
 

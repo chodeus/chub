@@ -1178,3 +1178,41 @@ async def reset_poster_matches(
             code="DB_RESET_POSTER_MATCHES_ERROR",
             status_code=500,
         )
+
+
+@router.post(
+    "/system/db/artwork-matches/reset",
+    summary="Reset additional-artwork coverage (preserving ignores)",
+    description="Resets the Unmatched page's additional-artwork figures: drops "
+    "every applied/failed row in media_asset_matches so coverage returns to "
+    "all-missing and the next asset_renamerr run repopulates it. Unlike "
+    "artwork-matches/clear, this PRESERVES the per-type 'not needed' (ignored) "
+    "flags the user set.",
+)
+async def reset_artwork_matches(
+    logger: Any = Depends(get_logger),
+    db: ChubDB = Depends(get_database),
+) -> JSONResponse:
+    try:
+        logger.debug("Serving POST /api/system/db/artwork-matches/reset")
+        count_row = db.worker.execute_query(
+            "SELECT COUNT(*) AS total FROM media_asset_matches "
+            "WHERE ignored IS NULL OR ignored = 0",
+            fetch_one=True,
+        )
+        before = int(count_row["total"]) if count_row else 0
+
+        db.media_asset_matches.clear(keep_ignored=True)
+
+        logger.info(
+            "Reset additional-artwork coverage via "
+            f"/api/system/db/artwork-matches/reset ({before} rows; ignores kept)"
+        )
+        return ok("Artwork match coverage reset", {"deleted": before})
+    except Exception as e:
+        logger.error(f"Error resetting artwork match state: {e}")
+        return error(
+            f"Error resetting artwork match state: {str(e)}",
+            code="DB_RESET_ARTWORK_MATCHES_ERROR",
+            status_code=500,
+        )
