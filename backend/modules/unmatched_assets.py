@@ -391,6 +391,15 @@ class UnmatchedAssets(ChubModule):
     # movies + shows only.
     ARTWORK_TYPES = ["logo", "background", "squareart"]
 
+    def _active_artwork_types(self) -> List[str]:
+        """Artwork types the Unmatched view should surface: the module's
+        configured ``asset_types`` intersected with the supported set (banner is
+        never included). Mirrors asset_renamerr._active_asset_types so the view
+        and the matcher agree on which types exist — a deselected type (e.g.
+        squareart) gets no rows written and is dropped here too."""
+        configured = getattr(self.config, "asset_types", None) or self.ARTWORK_TYPES
+        return [t for t in self.ARTWORK_TYPES if t in configured]
+
     def get_artwork_stats_adhoc(self) -> Dict[str, Any]:
         try:
             with ChubDB(logger=self.logger) as db:
@@ -432,34 +441,48 @@ class UnmatchedAssets(ChubModule):
             if a.get("asset_type") in ("movie", "show") and self.should_include(a)
         ]
 
+        # Only surface the configured artwork types — a deselected type has no
+        # rows written by asset_renamerr, so it must not appear here either.
+        active_types = self._active_artwork_types()
+
         # Presence index: (target_id, image_type) -> match row (media only).
         index: Dict[tuple, Dict[str, Any]] = {}
-        for image_type in self.ARTWORK_TYPES:
+        for image_type in active_types:
             for row in db.media_asset_matches.get_by_type(image_type):
                 if row.get("target_kind") == "media":
                     index[(row.get("target_id"), image_type)] = row
 
+        # Coverage is derived PURELY from media_asset_matches rows (provenance):
+        # an item with no row for a type is "not yet evaluated" and is NOT counted
+        # (not as missing, not in the total). This is what lets a reset — which
+        # empties the table — return every count to 0 until the next run writes
+        # rows back (applied / failed / missing). "missing" rows are the genuine
+        # no-source-artwork gaps asset_renamerr records.
         per_type: Dict[str, Dict[str, Any]] = {}
-        for image_type in self.ARTWORK_TYPES:
+        for image_type in active_types:
             applied = missing = needs_review = ignored = 0
             missing_items: List[Dict[str, Any]] = []
             review_items: List[Dict[str, Any]] = []
             ignored_items: List[Dict[str, Any]] = []
             for media in eligible:
                 row = index.get((media.get("id"), image_type))
+                if not row:
+                    continue  # not evaluated → not counted
                 item = self._serialize_artwork_item(media, image_type, row)
-                if row and row.get("ignored"):
+                if row.get("ignored"):
                     ignored += 1
                     ignored_items.append(item)
-                elif row and row.get("match_status") == "applied":
+                elif row.get("match_status") == "applied":
                     applied += 1
-                elif row and row.get("match_status"):
-                    needs_review += 1
-                    review_items.append(item)
-                else:
+                elif row.get("match_status") == "missing":
                     missing += 1
                     missing_items.append(item)
-            total = len(eligible)
+                else:
+                    # Any other recorded status (e.g. "failed") is an attempted
+                    # match that didn't land → actionable in Needs Review.
+                    needs_review += 1
+                    review_items.append(item)
+            total = applied + missing + needs_review + ignored
             per_type[image_type] = {
                 "total": total,
                 "applied": applied,
@@ -502,18 +525,20 @@ class UnmatchedAssets(ChubModule):
                 "ignored_types": [],
                 "reasons": {},
             }
-            for image_type in self.ARTWORK_TYPES:
+            for image_type in active_types:
                 row = index.get((mid, image_type))
-                if row and row.get("ignored"):
+                if not row:
+                    continue  # not evaluated → contributes nothing
+                if row.get("ignored"):
                     entry["ignored_types"].append(image_type)
-                elif row and row.get("match_status") == "applied":
+                elif row.get("match_status") == "applied":
                     pass  # covered — nothing to show
-                elif row and row.get("match_status"):
+                elif row.get("match_status") == "missing":
+                    entry["missing"].append(image_type)
+                else:
                     entry["failed"].append(image_type)
                     if row.get("detail"):
                         entry["reasons"][image_type] = row.get("detail")
-                else:
-                    entry["missing"].append(image_type)
             media_rows[mid] = entry
 
         rows = list(media_rows.values())

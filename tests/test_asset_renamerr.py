@@ -921,3 +921,52 @@ def test_kometa_apply_does_not_gate(db):
     resolved = _gate_resolved_titles(db, "kometa")
     assert "Avatar 4" in resolved
     assert "Dune" in resolved
+
+
+# --------------------------------------------------------------------------
+# match_and_apply_assets — provenance: record a "missing" row when an item has
+# no source artwork, so the Unmatched view derives coverage from the table
+# (a reset empties it → 0; the next run repopulates it).
+# --------------------------------------------------------------------------
+
+
+def _run_no_source(db, media_id=7, **overrides):
+    """Drive match_and_apply_assets over one released item whose source never
+    resolves (no artwork anywhere). Returns the item id."""
+    media = {
+        "id": media_id, "asset_type": "movie", "title": "No Art",
+        "year": 2021, "status": "released", "has_content": 1,
+    }
+    cfg = dict(sources=["local"], asset_types=["logo"], apply_method="kometa")
+    cfg.update(overrides)
+    m = make_module(**cfg)
+    m._report_progress = lambda *a, **k: None
+    m.is_cancelled = lambda: False
+    m._gather_media = lambda _db: [media]
+    m._resolve_source = lambda *a, **k: None  # no source artwork anywhere
+    m.match_and_apply_assets(db)
+    return media_id
+
+
+def test_missing_row_recorded_when_no_source(db):
+    mid = _run_no_source(db)
+    row = db.media_asset_matches.get_one("media", mid, "logo")
+    assert row is not None
+    assert row["match_status"] == "missing"
+    assert row["detail"] == "no source artwork found"
+
+
+def test_missing_row_not_written_on_dry_run(db):
+    mid = _run_no_source(db, dry_run=True)
+    assert db.media_asset_matches.get_one("media", mid, "logo") is None
+
+
+def test_missing_does_not_downgrade_applied(db):
+    mid = 7
+    db.media_asset_matches.upsert(
+        target_kind="media", target_id=mid, image_type="logo",
+        source="tmdb", match_status="applied",
+    )
+    _run_no_source(db, media_id=mid)
+    row = db.media_asset_matches.get_one("media", mid, "logo")
+    assert row["match_status"] == "applied"  # not flipped to "missing"

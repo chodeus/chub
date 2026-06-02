@@ -757,7 +757,9 @@ const ArtworkView = ({ data, status, isLoading, onRefresh }) => {
         <div className="flex flex-col gap-4">
             {/* Per-type coverage cards — also act as a filter on the per-media list */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {ARTWORK_TYPES.map(({ key, label, icon }) => {
+                {/* Only render cards for types present in the response — a
+                    deselected asset type (e.g. squareart) is omitted entirely. */}
+                {ARTWORK_TYPES.filter(({ key }) => types[key]).map(({ key, label, icon }) => {
                     const t = types[key] || {};
                     const isActive = typeFilter === key;
                     return (
