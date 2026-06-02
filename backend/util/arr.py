@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Union
@@ -1368,15 +1369,63 @@ class SonarrClient(BaseARRClient):
         }
         return self.make_get_request(endpoint, params=params)
 
+    def _fetch_episodes_by_series(
+        self, series_ids: List[int], max_workers: int = 10
+    ) -> Dict[int, Dict[int, List[Dict[str, Any]]]]:
+        """Fetch all episodes for each series in parallel, grouped by season.
+
+        Returns {series_id: {season_number: [episode, ...]}}. One
+        ``/episode?seriesId=X`` call per series replaces the previous
+        per-season fetches, and the calls run concurrently. Each thread uses
+        its own ``requests.Session`` because ``requests.Session`` is not safe
+        to share across threads.
+        """
+        result: Dict[int, Dict[int, List[Dict[str, Any]]]] = {}
+        if not series_ids:
+            return result
+
+        def fetch(sid: int):
+            session = requests.Session()
+            session.headers.update(self.headers)
+            resp = session.get(
+                f"{self.api_base}/episode?seriesId={sid}", timeout=self.timeout
+            )
+            resp.raise_for_status()
+            by_season: Dict[int, List[Dict[str, Any]]] = {}
+            for ep in resp.json() or []:
+                by_season.setdefault(ep.get("seasonNumber"), []).append(ep)
+            return sid, by_season
+
+        workers = min(max_workers, len(series_ids))
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = {pool.submit(fetch, sid): sid for sid in series_ids}
+            for future in as_completed(futures):
+                sid = futures[future]
+                try:
+                    sid, by_season = future.result()
+                    result[sid] = by_season
+                except Exception as e:
+                    self.logger.warning(
+                        f"Failed to fetch episodes for series {sid}: {e}"
+                    )
+                    result[sid] = {}
+        return result
+
     def get_all_media(self, include_episode: bool = False) -> List[Dict[str, Any]]:
         items = self.get_media()
         tags = self.get_all_tags() or []
-        # Only for Sonarr, we can optionally pull episode data for each season:
+        # Only for Sonarr, we can optionally pull episode data for each season.
+        # Prefetch every series' episodes in parallel (one call per series),
+        # then back episode_lookup with the in-memory map so normalization
+        # makes no further HTTP calls.
         episode_lookup = None
-        if include_episode:
-            # Define a closure to fetch episodes for a series+season
-            def episode_lookup(media_id, season_number):
-                return self.get_episode_data_by_season(media_id, season_number)
+        if include_episode and items:
+            episode_map = self._fetch_episodes_by_series(
+                [s["id"] for s in items if s.get("id") is not None]
+            )
+
+            def episode_lookup(media_id, season_number, _map=episode_map):
+                return _map.get(media_id, {}).get(season_number, [])
 
         return [
             normalize_arr_media(
@@ -1528,16 +1577,60 @@ class LidarrClient(BaseARRClient):
         }
         return self.make_get_request(endpoint, headers=self.headers, params=params)
 
+    def _fetch_albums_by_artist(
+        self, artist_ids: List[int], max_workers: int = 10
+    ) -> Dict[int, List[Dict[str, Any]]]:
+        """Fetch all albums for each artist in parallel.
+
+        Returns {artist_id: [album, ...]}. One ``/album?artistId=X`` call per
+        artist (the same count as before) but run concurrently instead of
+        sequentially. Each thread uses its own ``requests.Session`` because
+        ``requests.Session`` is not safe to share across threads.
+        """
+        result: Dict[int, List[Dict[str, Any]]] = {}
+        if not artist_ids:
+            return result
+
+        def fetch(aid: int):
+            session = requests.Session()
+            session.headers.update(self.headers)
+            resp = session.get(
+                f"{self.api_base}/album?artistId={aid}", timeout=self.timeout
+            )
+            resp.raise_for_status()
+            return aid, resp.json() or []
+
+        workers = min(max_workers, len(artist_ids))
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = {pool.submit(fetch, aid): aid for aid in artist_ids}
+            for future in as_completed(futures):
+                aid = futures[future]
+                try:
+                    aid, albums = future.result()
+                    result[aid] = albums
+                except Exception as e:
+                    self.logger.warning(
+                        f"Failed to fetch albums for artist {aid}: {e}"
+                    )
+                    result[aid] = []
+        return result
+
     def get_all_media(self, include_episode: bool = False) -> List[Dict[str, Any]]:
         """Get all artists, optionally with album data."""
         items = self.get_media()
         tags = self.get_all_tags() or []
 
+        # Prefetch every artist's albums in parallel (one call per artist),
+        # then back album_lookup with the in-memory map so normalization makes
+        # no further HTTP calls.
         album_lookup = None
-        if include_episode:
+        if include_episode and items:
+            album_map = self._fetch_albums_by_artist(
+                [a["id"] for a in items if a.get("id") is not None]
+            )
 
-            def album_lookup(artist_id, _season_number=None):
-                return self.get_albums(artist_id)
+            def album_lookup(artist_id, _season_number=None, _map=album_map):
+                return _map.get(artist_id, [])
 
         return [
             normalize_arr_media(

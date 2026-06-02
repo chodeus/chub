@@ -1,5 +1,8 @@
 # modules/upgradinatorr.py
 
+import threading
+import traceback
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Optional, Tuple
 
 from backend.util.arr import BaseARRClient, create_arr_client
@@ -15,9 +18,68 @@ VALID_SEARCH_MODES = {"upgrade", "missing", "cutoff"}
 VALID_COUNT_MODES = {"series_artist", "season_album"}
 
 
+class _BufferingLogger:
+    """Captures log calls in memory so parallel instances don't interleave
+    their output. ``flush_to()`` replays them to the real logger in order.
+
+    Thread-safe: an instance's DB worker thread can log through the same
+    buffer concurrently, so appends are guarded by a lock.
+    """
+
+    def __init__(self) -> None:
+        self._records: List[Tuple[str, Any, tuple, dict]] = []
+        self._lock = threading.Lock()
+
+    def _store(self, level: str, msg: Any, args: tuple, kwargs: dict) -> None:
+        with self._lock:
+            self._records.append((level, msg, args, kwargs))
+
+    def debug(self, msg: Any, *args, **kwargs) -> None:
+        self._store("debug", msg, args, kwargs)
+
+    def info(self, msg: Any, *args, **kwargs) -> None:
+        self._store("info", msg, args, kwargs)
+
+    def warning(self, msg: Any, *args, **kwargs) -> None:
+        self._store("warning", msg, args, kwargs)
+
+    def error(self, msg: Any, *args, **kwargs) -> None:
+        self._store("error", msg, args, kwargs)
+
+    def exception(self, msg: Any, *args, **kwargs) -> None:
+        kwargs.setdefault("exc_info", True)
+        self._store("error", msg, args, kwargs)
+
+    def flush_to(self, logger: Any) -> None:
+        with self._lock:
+            records = list(self._records)
+            self._records.clear()
+        for level, msg, args, kwargs in records:
+            getattr(logger, level)(msg, *args, **kwargs)
+
+
 class Upgradinatorr(ChubModule):
     def __init__(self, logger: Optional[Logger] = None) -> None:
+        # Set up the thread-local logger override before super().__init__ runs,
+        # since it assigns self.logger (routed through the property setter).
+        self._thread_local = threading.local()
+        self._real_logger: Any = None
         super().__init__(logger=logger)
+
+    @property
+    def logger(self) -> Any:
+        """Return the per-thread buffering logger when one is active (parallel
+        instance processing), otherwise the real module logger."""
+        thread_local = getattr(self, "_thread_local", None)
+        if thread_local is not None:
+            buffered = getattr(thread_local, "logger", None)
+            if buffered is not None:
+                return buffered
+        return getattr(self, "_real_logger", None)
+
+    @logger.setter
+    def logger(self, value: Any) -> None:
+        self._real_logger = value
 
     @staticmethod
     def _get_setting(settings: Any, key: str, default: Any = None) -> Any:
@@ -1149,7 +1211,10 @@ class Upgradinatorr(ChubModule):
             if not getattr(self.config, "instances_list", None):
                 self.logger.error("No instances found in config file.")
                 return
-            output: Dict[str, Any] = {}
+
+            # Phase 1: resolve config + connect to every enabled instance
+            # sequentially, so connection/skip logging stays ordered.
+            jobs: List[Tuple[str, str, Any, BaseARRClient]] = []
             for instance_entry in self.config.instances_list:
                 if not self._get_setting(instance_entry, "enabled", True):
                     label = self._get_setting(
@@ -1186,9 +1251,58 @@ class Upgradinatorr(ChubModule):
                     self.logger,
                 )
                 if app and app.connect_status:
-                    result = self.process_instance(instance_type, instance_entry, app)
+                    jobs.append((instance_name, instance_type, instance_entry, app))
+
+            # Phase 2: process instances in parallel. Each instance writes to
+            # its own buffered logger (via the thread-local override) so their
+            # log lines don't interleave; buffers are flushed in config order
+            # once every instance finishes, keeping output grouped per instance.
+            output: Dict[str, Any] = {}
+            if jobs:
+
+                def _run_instance(
+                    index: int,
+                    instance_name: str,
+                    instance_type: str,
+                    instance_entry: Any,
+                    app: BaseARRClient,
+                ) -> Tuple[int, str, Optional[Dict[str, Any]], _BufferingLogger]:
+                    buf = _BufferingLogger()
+                    self._thread_local.logger = buf
+                    try:
+                        result = self.process_instance(
+                            instance_type, instance_entry, app
+                        )
+                    except Exception:
+                        buf.error(
+                            f"An error occurred processing {instance_name}:\n"
+                            f"{traceback.format_exc()}"
+                        )
+                        result = None
+                    finally:
+                        # Worker threads are reused by the pool — clear the
+                        # override so the next task starts with a fresh buffer.
+                        self._thread_local.logger = None
+                    return index, instance_name, result, buf
+
+                results: Dict[
+                    int, Tuple[str, Optional[Dict[str, Any]], _BufferingLogger]
+                ] = {}
+                with ThreadPoolExecutor(max_workers=len(jobs)) as pool:
+                    futures = [
+                        pool.submit(_run_instance, i, name, typ, entry, app)
+                        for i, (name, typ, entry, app) in enumerate(jobs)
+                    ]
+                    for future in as_completed(futures):
+                        index, name, result, buf = future.result()
+                        results[index] = (name, result, buf)
+
+                for i in range(len(jobs)):
+                    name, result, buf = results[i]
+                    buf.flush_to(self._real_logger)
                     if result:
-                        output[instance_name] = result
+                        output[name] = result
+
             self.logger.debug(f"Processed instances: {list(output.keys())}")
             if output:
                 self.print_output(output)
