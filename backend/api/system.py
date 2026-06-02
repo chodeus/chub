@@ -145,7 +145,7 @@ async def health_check(request: Request) -> JSONResponse:
     db = getattr(request.app.state, "db", None)
     if db:
         try:
-            db.execute_query("SELECT 1")
+            db.worker.execute_query("SELECT 1")
             checks["database"] = "ok"
         except Exception:
             checks["database"] = "error"
