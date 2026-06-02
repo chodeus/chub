@@ -19,6 +19,19 @@ const POSTER_FALLBACK_STYLE = {
     justifyContent: 'center',
 };
 
+// genre/tags are stored as JSON-array TEXT (e.g. '["Action","Crime"]'). Parse
+// to a clean array; tolerate a plain string or already-parsed array.
+function parseJsonList(value) {
+    if (Array.isArray(value)) return value.filter(Boolean);
+    if (typeof value !== 'string' || !value.trim()) return [];
+    try {
+        const parsed = JSON.parse(value);
+        return Array.isArray(parsed) ? parsed.filter(Boolean) : [value];
+    } catch {
+        return [value];
+    }
+}
+
 function PosterThumb({ mediaId }) {
     const [errored, setErrored] = useState(false);
     const src = mediaAPI.getPosterUrl(mediaId);
@@ -203,88 +216,158 @@ const MediaSearchPage = () => {
                         Found {total} result{total !== 1 ? 's' : ''} for &quot;{term}&quot;
                     </p>
                     <div className="flex flex-col gap-3">
-                        {items.map(item => (
-                            <div
-                                key={item.id}
-                                className="rounded-xl bg-surface border border-border hover:border-brand-primary/50 transition-fast p-4 group"
-                            >
-                                <div className="flex items-start gap-4">
-                                    <PosterThumb mediaId={item.id} />
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex items-start justify-between gap-3 mb-2">
-                                            <h3 className="font-semibold text-primary text-lg flex items-baseline gap-2 flex-wrap">
-                                                <span>{item.title}</span>
-                                                {item.season_number != null && (
-                                                    <span className="px-1.5 py-0.5 rounded bg-brand-primary/15 text-brand-primary text-xs font-medium">
-                                                        {item.season_number === 0
-                                                            ? 'Specials'
-                                                            : `Season ${item.season_number}`}
-                                                    </span>
-                                                )}
-                                            </h3>
-                                            <div className="flex items-center gap-2 flex-shrink-0">
-                                                {item.matched ? (
-                                                    <span className="px-2 py-0.5 text-xs rounded-full bg-success/20 text-success">
-                                                        Matched
-                                                    </span>
-                                                ) : (
-                                                    <span className="px-2 py-0.5 text-xs rounded-full bg-warning/20 text-warning">
-                                                        Unmatched
-                                                    </span>
-                                                )}
-                                                <IconButton
-                                                    icon="delete"
-                                                    aria-label="Delete"
-                                                    variant="ghost"
-                                                    className="opacity-0 group-hover:opacity-100 transition-fast"
-                                                    onClick={() => setDeleteTarget(item)}
-                                                />
+                        {items.map(item => {
+                            const tmdbPath = item.asset_type === 'movie' ? 'movie' : 'tv';
+                            const externalLinks = [
+                                item.tmdb_id &&
+                                    item.asset_type !== 'artist' && {
+                                        label: 'TMDB',
+                                        value: item.tmdb_id,
+                                        href: `https://www.themoviedb.org/${tmdbPath}/${item.tmdb_id}`,
+                                    },
+                                item.tvdb_id && {
+                                    label: 'TVDB',
+                                    value: item.tvdb_id,
+                                    href: `https://thetvdb.com/dereferrer/series/${item.tvdb_id}`,
+                                },
+                                item.imdb_id && {
+                                    label: 'IMDb',
+                                    value: item.imdb_id,
+                                    href: `https://www.imdb.com/title/${item.imdb_id}`,
+                                },
+                                item.musicbrainz_id && {
+                                    label: 'MusicBrainz',
+                                    value: item.musicbrainz_id,
+                                    href: `https://musicbrainz.org/artist/${item.musicbrainz_id}`,
+                                },
+                            ].filter(Boolean);
+                            const genres = parseJsonList(item.genre);
+                            const tags = parseJsonList(item.tags);
+                            return (
+                                <div
+                                    key={item.id}
+                                    className="rounded-xl bg-surface border border-border hover:border-brand-primary/50 transition-fast p-4 group"
+                                >
+                                    <div className="flex items-start gap-4">
+                                        <PosterThumb mediaId={item.id} />
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-start justify-between gap-3 mb-2">
+                                                <h3 className="font-semibold text-primary text-lg flex items-baseline gap-2 flex-wrap">
+                                                    <span>{item.title}</span>
+                                                    {item.season_number != null && (
+                                                        <span className="px-1.5 py-0.5 rounded bg-brand-primary/15 text-brand-primary text-xs font-medium">
+                                                            {item.season_number === 0
+                                                                ? 'Specials'
+                                                                : `Season ${item.season_number}`}
+                                                        </span>
+                                                    )}
+                                                </h3>
+                                                <div className="flex items-center gap-2 flex-shrink-0">
+                                                    {item.matched ? (
+                                                        <span className="px-2 py-0.5 text-xs rounded-full bg-success/20 text-success">
+                                                            Matched
+                                                        </span>
+                                                    ) : (
+                                                        <span className="px-2 py-0.5 text-xs rounded-full bg-warning/20 text-warning">
+                                                            Unmatched
+                                                        </span>
+                                                    )}
+                                                    <IconButton
+                                                        icon="delete"
+                                                        aria-label="Delete"
+                                                        variant="ghost"
+                                                        className="opacity-0 group-hover:opacity-100 transition-fast"
+                                                        onClick={() => setDeleteTarget(item)}
+                                                    />
+                                                </div>
                                             </div>
+                                            <div className="flex flex-wrap items-center gap-2 text-sm text-secondary mb-2">
+                                                {item.year && <span>{item.year}</span>}
+                                                {item.asset_type && (
+                                                    <span className="px-1.5 py-0.5 rounded bg-surface-alt text-xs capitalize">
+                                                        {item.asset_type}
+                                                    </span>
+                                                )}
+                                                {item.instance_name && (
+                                                    <span className="text-tertiary">
+                                                        {item.instance_name}
+                                                    </span>
+                                                )}
+                                                {item.rating != null && (
+                                                    <span className="text-tertiary">
+                                                        ★ {item.rating}
+                                                    </span>
+                                                )}
+                                                {item.runtime != null && item.runtime > 0 && (
+                                                    <span className="text-tertiary">
+                                                        {item.runtime >= 60
+                                                            ? `${Math.floor(item.runtime / 60)}h ${item.runtime % 60}m`
+                                                            : `${item.runtime}m`}
+                                                    </span>
+                                                )}
+                                                {item.studio && (
+                                                    <span className="text-tertiary">
+                                                        {item.studio}
+                                                    </span>
+                                                )}
+                                                {item.language && (
+                                                    <span className="text-tertiary uppercase">
+                                                        {item.language}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            {genres.length > 0 && (
+                                                <p className="text-xs text-tertiary mb-1">
+                                                    {genres.join(', ')}
+                                                </p>
+                                            )}
+                                            {externalLinks.length > 0 && (
+                                                <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                                                    {externalLinks.map(link => (
+                                                        <a
+                                                            key={link.label}
+                                                            href={link.href}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="px-1.5 py-0.5 rounded bg-surface-alt text-xs text-brand-primary hover:underline"
+                                                        >
+                                                            {link.label} {link.value}
+                                                        </a>
+                                                    ))}
+                                                </div>
+                                            )}
+                                            {tags.length > 0 && (
+                                                <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                                                    {tags.map(tag => (
+                                                        <span
+                                                            key={tag}
+                                                            className="px-1.5 py-0.5 rounded bg-surface-alt text-xs text-tertiary"
+                                                        >
+                                                            {tag}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            )}
+                                            {item.media_file && (
+                                                <p className="text-xs text-tertiary break-all font-mono">
+                                                    {item.media_file}
+                                                </p>
+                                            )}
+                                            {item.folder && (
+                                                <p className="text-xs text-tertiary break-all">
+                                                    {item.folder}
+                                                </p>
+                                            )}
+                                            {item.created_at && (
+                                                <p className="text-xs text-tertiary mt-1">
+                                                    Added {formatDate(item.created_at)}
+                                                </p>
+                                            )}
                                         </div>
-                                        <div className="flex flex-wrap items-center gap-2 text-sm text-secondary mb-2">
-                                            {item.year && <span>{item.year}</span>}
-                                            {item.asset_type && (
-                                                <span className="px-1.5 py-0.5 rounded bg-surface-alt text-xs capitalize">
-                                                    {item.asset_type}
-                                                </span>
-                                            )}
-                                            {item.instance_name && (
-                                                <span className="text-tertiary">
-                                                    {item.instance_name}
-                                                </span>
-                                            )}
-                                            {item.rating != null && (
-                                                <span className="text-tertiary">
-                                                    ★ {item.rating}
-                                                </span>
-                                            )}
-                                            {item.runtime != null && item.runtime > 0 && (
-                                                <span className="text-tertiary">
-                                                    {item.runtime >= 60
-                                                        ? `${Math.floor(item.runtime / 60)}h ${item.runtime % 60}m`
-                                                        : `${item.runtime}m`}
-                                                </span>
-                                            )}
-                                        </div>
-                                        {item.genre && (
-                                            <p className="text-xs text-tertiary mb-1">
-                                                {item.genre}
-                                            </p>
-                                        )}
-                                        {item.path && (
-                                            <p className="text-xs text-tertiary break-all">
-                                                {item.path}
-                                            </p>
-                                        )}
-                                        {item.added_at && (
-                                            <p className="text-xs text-tertiary mt-1">
-                                                Added {formatDate(item.added_at)}
-                                            </p>
-                                        )}
                                     </div>
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
 
                     <Pagination

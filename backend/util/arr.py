@@ -1820,6 +1820,7 @@ def normalize_arr_media(
             "normalized_alternate_titles": normalized_alternate_titles,
             "file_id": file_id,
             "folder": folder,
+            "media_file": movie_file.get("relativePath"),  # e.g. "Movie (2003).mkv"
             "normalized_folder": normalize_titles(folder or ""),
             "has_file": item.get("hasFile"),
             "has_content": bool(item.get("hasFile")),
