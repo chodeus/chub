@@ -83,6 +83,7 @@ class MediaCache(DatabaseBase):
             "musicbrainz_id",
             "folder",
             "root_folder",
+            "media_file",
             "location",
             "tags",
             "season_number",
@@ -146,10 +147,10 @@ class MediaCache(DatabaseBase):
             INSERT INTO media_cache
                 (identity_key, asset_type, title, normalized_title,
                 alternate_titles, normalized_alternate_titles,
-                year, tmdb_id, tvdb_id, imdb_id, musicbrainz_id, folder, root_folder, tags,
+                year, tmdb_id, tvdb_id, imdb_id, musicbrainz_id, folder, root_folder, media_file, tags,
                 season_number, matched, instance_name, source, poster_url, arr_id,
                 status, rating, studio, edition, runtime, language, monitored, has_content, genre)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(identity_key)
             DO UPDATE SET
                 title=excluded.title,
@@ -167,6 +168,7 @@ class MediaCache(DatabaseBase):
                 normalized_alternate_titles=excluded.normalized_alternate_titles,
                 folder=excluded.folder,
                 root_folder=excluded.root_folder,
+                media_file=excluded.media_file,
                 tags=excluded.tags,
                 source=excluded.source,
                 poster_url=excluded.poster_url,
@@ -198,6 +200,7 @@ class MediaCache(DatabaseBase):
                 record.get("musicbrainz_id") or None,
                 record["folder"],
                 record.get("root_folder") or None,
+                record.get("media_file") or None,
                 record["tags"],
                 record["season_number"],
                 0,

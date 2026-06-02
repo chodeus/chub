@@ -164,6 +164,9 @@ class SchemaManager:
                 ColumnDefinition("musicbrainz_id", "TEXT"),
                 ColumnDefinition("folder", "TEXT"),
                 ColumnDefinition("root_folder", "TEXT"),
+                ColumnDefinition(
+                    "media_file", "TEXT"
+                ),  # Media filename from the *arr (Radarr movieFile.relativePath)
                 ColumnDefinition("tags", "TEXT"),
                 ColumnDefinition("season_number", "INTEGER"),
                 ColumnDefinition("matched", "BOOLEAN"),
