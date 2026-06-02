@@ -1254,18 +1254,31 @@ def _live_arr_ids_by_instance(config, logger) -> dict:
     """For each enabled ARR instance we can reach, return the set of live
     media ids. Unreachable instances are omitted so rows from them aren't
     mistakenly labelled orphaned."""
-    live: dict[str, set] = {}
+    from concurrent.futures import ThreadPoolExecutor
+
+    targets = []
     for inst_type in ("radarr", "sonarr", "lidarr"):
         for name, info in getattr(config.instances, inst_type, {}).items():
-            if not info.enabled:
-                continue
-            client = create_arr_client(info.url, info.api, logger)
-            if not client or not client.connect_status:
-                continue
-            items = client.get_all_media() or []
-            live[name] = {
-                it.get("arr_id") for it in items if it.get("arr_id") is not None
-            }
+            if info.enabled:
+                targets.append((name, info))
+
+    # Each instance has its own client/session, so fetch them concurrently
+    # instead of serially (this endpoint backs the orphaned-cache view).
+    def _fetch(target):
+        name, info = target
+        client = create_arr_client(info.url, info.api, logger)
+        if not client or not client.connect_status:
+            return None
+        items = client.get_all_media() or []
+        return name, {it.get("arr_id") for it in items if it.get("arr_id") is not None}
+
+    live: dict[str, set] = {}
+    if targets:
+        with ThreadPoolExecutor(max_workers=min(8, len(targets))) as pool:
+            for result in pool.map(_fetch, targets):
+                if result is not None:
+                    name, ids = result
+                    live[name] = ids
     return live
 
 
@@ -1476,14 +1489,22 @@ def get_duplicate_members(
     try:
         if not body.ids:
             return error("No ids provided", code="NO_IDS", status_code=400)
+        from concurrent.futures import ThreadPoolExecutor
+
         config = load_config()
-        members = []
-        for mid in body.ids:
+
+        # Each member resolves against its own freshly-created ARR client, and
+        # cache reads open their own sqlite connection, so resolve them
+        # concurrently. pool.map preserves input order, so members stays aligned
+        # with body.ids.
+        def _resolve(mid):
             row = db.media.get_by_id(mid)
             if not row:
-                members.append({"id": mid, "error": "not_in_cache"})
-                continue
-            members.append(_fetch_duplicate_member(row, config, logger))
+                return {"id": mid, "error": "not_in_cache"}
+            return _fetch_duplicate_member(row, config, logger)
+
+        with ThreadPoolExecutor(max_workers=min(8, len(body.ids))) as pool:
+            members = list(pool.map(_resolve, body.ids))
         return ok("Duplicate members resolved", {"members": members})
     except Exception as e:
         logger.error(f"Error fetching duplicate members: {e}", exc_info=True)

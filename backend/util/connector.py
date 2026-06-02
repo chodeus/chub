@@ -763,9 +763,16 @@ class Connector:
                     self.logger.warning("No plex items found for mapping")
                 return stats
 
+            # Precompute the normalized Plex index ONCE (parsing guids +
+            # normalizing titles for every Plex row is the expensive part, and
+            # rescanning all rows per media item was O(N×M)).
+            prepared_index = self._prepare_plex_index(plex_items)
+
             # Process each media item for mapping using direct database-to-database matching
             for media_item in media_items:
-                plex_mapping_id = self._find_plex_match(media_item, plex_items)
+                plex_mapping_id = self._find_plex_match(
+                    media_item, plex_items, prepared_index
+                )
 
                 if plex_mapping_id:
                     # Update the media_cache record with the mapping
@@ -789,7 +796,39 @@ class Connector:
 
         return stats
 
-    def _find_plex_match(self, media_item, plex_items):
+    def _prepare_plex_index(self, plex_items):
+        """Precompute normalized fields for every Plex row once, plus id and
+        title indices, so _find_plex_match examines only plausible candidates
+        (O(candidates)) instead of re-parsing/normalizing every row per media
+        item (O(N×M)). Returns (prepared, id_index, title_index)."""
+        from backend.util.normalization import normalize_titles
+
+        prepared = []
+        id_index = {}
+        title_index = {}
+        for idx, plex_item in enumerate(plex_items):
+            guids = self._parse_plex_guids(plex_item.get("guids", ""))
+            entry = {
+                "item": plex_item,
+                "tmdb": self._get_clean_id(guids.get("tmdb")),
+                "tvdb": self._get_clean_id(guids.get("tvdb")),
+                "imdb": self._get_clean_id(guids.get("imdb")),
+                "mbid": self._get_clean_id(guids.get("mbid")),
+                "season": plex_item.get("season_number"),
+                "title": normalize_titles(plex_item.get("title")),
+                "year": self._clean_year(plex_item.get("year")),
+            }
+            prepared.append(entry)
+            for idtype in ("tmdb", "tvdb", "imdb", "mbid"):
+                val = entry[idtype]
+                if val:
+                    id_index.setdefault((idtype, val), []).append(idx)
+            # Title indexed unconditionally (incl. empty) so empty-title
+            # title+year matches behave exactly as the old full scan.
+            title_index.setdefault(entry["title"], []).append(idx)
+        return prepared, id_index, title_index
+
+    def _find_plex_match(self, media_item, plex_items, prepared_index=None):
         """Direct table-to-table matching: media_cache → plex_media_cache.
 
         When multiple Plex rows match (e.g. Plex stores 1080p + 4K as two separate
@@ -813,20 +852,31 @@ class Connector:
         media_folder = media_item.get("folder") or ""
         media_root = media_item.get("root_folder") or ""
 
-        # Collect ALL matching plex items (not just the first)
-        candidates = []
-        for plex_item in plex_items:
-            # Parse plex item data
-            guids = self._parse_plex_guids(plex_item.get("guids", ""))
-            plex_tmdb = self._get_clean_id(guids.get("tmdb"))
-            plex_tvdb = self._get_clean_id(guids.get("tvdb"))
-            plex_imdb = self._get_clean_id(guids.get("imdb"))
-            plex_mbid = self._get_clean_id(guids.get("mbid"))
-            plex_season = plex_item.get("season_number")
-            plex_title = normalize_titles(plex_item.get("title"))
-            plex_year = self._clean_year(plex_item.get("year"))
+        # Build (or reuse) the normalized index, then examine only plausible
+        # candidates (rows sharing an ID or the exact title) rather than every
+        # Plex row. Membership is identical to the old full scan because the
+        # predicate requires id_match OR title_match, both of which are indexed.
+        if prepared_index is None:
+            prepared_index = self._prepare_plex_index(plex_items)
+        prepared, id_index, title_index = prepared_index
 
-            title_match = media_title == plex_title
+        cand_idx = set()
+        for idtype, val in (
+            ("tmdb", media_tmdb),
+            ("tvdb", media_tvdb),
+            ("imdb", media_imdb),
+            ("mbid", media_mbid),
+        ):
+            if val:
+                cand_idx.update(id_index.get((idtype, val), ()))
+        cand_idx.update(title_index.get(media_title, ()))
+
+        # Collect ALL matching plex items (not just the first), in original
+        # Plex-row order so candidates[0] stays the same as the old scan.
+        candidates = []
+        for idx in sorted(cand_idx):
+            entry = prepared[idx]
+            title_match = media_title == entry["title"]
             # ±1 tolerance, and a missing year on either side does not block —
             # exact string equality wrongly dropped TV titles where ARR's
             # release year and Plex's first-air year differ, and yearless ARR
@@ -834,28 +884,28 @@ class Connector:
             # counterpart. Mirrors helper.is_match's year gate.
             year_match = (
                 media_year is None
-                or plex_year is None
-                or abs(media_year - plex_year) <= YEAR_MATCH_TOLERANCE
+                or entry["year"] is None
+                or abs(media_year - entry["year"]) <= YEAR_MATCH_TOLERANCE
             )
 
             if media_season == 0:
-                season_match = plex_season is None or plex_season == 0
+                season_match = entry["season"] is None or entry["season"] == 0
             else:
-                season_match = media_season == plex_season
+                season_match = media_season == entry["season"]
 
             id_match = False
-            if media_tmdb and plex_tmdb and media_tmdb == plex_tmdb:
+            if media_tmdb and entry["tmdb"] and media_tmdb == entry["tmdb"]:
                 id_match = True
-            elif media_tvdb and plex_tvdb and media_tvdb == plex_tvdb:
+            elif media_tvdb and entry["tvdb"] and media_tvdb == entry["tvdb"]:
                 id_match = True
-            elif media_imdb and plex_imdb and media_imdb == plex_imdb:
+            elif media_imdb and entry["imdb"] and media_imdb == entry["imdb"]:
                 id_match = True
-            elif media_mbid and plex_mbid and media_mbid == plex_mbid:
+            elif media_mbid and entry["mbid"] and media_mbid == entry["mbid"]:
                 id_match = True
 
             if season_match and (id_match or (title_match and year_match)):
                 match_type = "ID" if id_match else "title+year"
-                candidates.append((plex_item, match_type))
+                candidates.append((entry["item"], match_type))
 
         if not candidates:
             if self.logger:

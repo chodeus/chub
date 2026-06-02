@@ -332,6 +332,33 @@ class BaseARRClient:
         """
         return self._request_with_retries("DELETE", endpoint, json=json, params=params)
 
+    def make_get_request_threadsafe(
+        self,
+        endpoint: str,
+        headers: Optional[Dict[str, str]] = None,
+        params: Optional[dict] = None,
+    ) -> Any:
+        """Thread-safe GET for concurrent use.
+
+        The shared self.session is not safe to use from multiple threads, so
+        this runs on a private session (same headers/timeout) while reusing the
+        standard retry + error handling. Use from ThreadPoolExecutor workers;
+        prefer make_get_request on the single-threaded hot path.
+        """
+        session = requests.Session()
+        session.headers.update(self.headers)
+        session.timeout = getattr(self.session, "timeout", (10, 60))
+        try:
+            return self._request_with_retries(
+                "GET", endpoint, headers=headers, params=params, session=session
+            )
+        finally:
+            session.close()
+
+    def _requester(self, threadsafe: bool):
+        """Pick the GET requester — a private-session one when concurrent."""
+        return self.make_get_request_threadsafe if threadsafe else self.make_get_request
+
     def get_tag_id_from_name(self, tag_name: str) -> int:
         """
         Retrieve a tag ID by its name, create if not exists.
@@ -434,18 +461,24 @@ class BaseARRClient:
         headers: Optional[Dict[str, str]] = None,
         json: Any = None,
         params: dict = None,
+        session: Any = None,
     ) -> Any:
-        """Enhanced request method with improved error handling and retries"""
+        """Enhanced request method with improved error handling and retries.
+
+        Pass `session` to run on a private requests.Session (the shared
+        self.session is not thread-safe); defaults to self.session.
+        """
+        req_session = session or self.session
 
         for attempt in range(self.retry_handler.config.max_attempts):
             try:
-                response = self.session.request(
+                response = req_session.request(
                     method,
                     endpoint,
                     headers=headers,
                     json=json,
                     params=params,
-                    timeout=self.session.timeout,
+                    timeout=getattr(req_session, "timeout", self.timeout),
                 )
 
                 # Handle specific status codes
@@ -735,16 +768,17 @@ class RadarrClient(BaseARRClient):
         endpoint = f"{self.api_base}/movie/editor"
         return self.make_put_request(endpoint, json=payload)
 
-    def get_rename_list(self, media_id: int) -> Any:
+    def get_rename_list(self, media_id: int, threadsafe: bool = False) -> Any:
         """
         Preview renaming for a movie.
         Args:
             media_id (int): Movie ID.
+            threadsafe (bool): Use a private session for concurrent calls.
         Returns:
             Any: API response.
         """
         endpoint = f"{self.api_base}/rename?movieId={media_id}"
-        return self.make_get_request(endpoint, headers=self.headers)
+        return self._requester(threadsafe)(endpoint, headers=self.headers)
 
     def rename_media(self, media_ids: List[int]) -> Any:
         """
@@ -913,7 +947,9 @@ class RadarrClient(BaseARRClient):
         endpoint = f"{self.api_base}/moviefile/{media_id}"
         return self.make_delete_request(endpoint)
 
-    def get_wanted_missing(self, page: int = 1, page_size: int = 100) -> Any:
+    def get_wanted_missing(
+        self, page: int = 1, page_size: int = 100, threadsafe: bool = False
+    ) -> Any:
         """Get missing (wanted) movies from Radarr."""
         endpoint = f"{self.api_base}/wanted/missing"
         params = {
@@ -923,9 +959,11 @@ class RadarrClient(BaseARRClient):
             "sortDirection": "desc",
             "monitored": "true",
         }
-        return self.make_get_request(endpoint, params=params)
+        return self._requester(threadsafe)(endpoint, params=params)
 
-    def get_wanted_cutoff(self, page: int = 1, page_size: int = 100) -> Any:
+    def get_wanted_cutoff(
+        self, page: int = 1, page_size: int = 100, threadsafe: bool = False
+    ) -> Any:
         """Get cutoff-unmet movies from Radarr."""
         endpoint = f"{self.api_base}/wanted/cutoff"
         params = {
@@ -935,7 +973,7 @@ class RadarrClient(BaseARRClient):
             "sortDirection": "desc",
             "monitored": "true",
         }
-        return self.make_get_request(endpoint, params=params)
+        return self._requester(threadsafe)(endpoint, params=params)
 
     def get_all_media(self, include_episode: bool = False) -> List[Dict[str, Any]]:
         items = self.get_media()
@@ -1068,16 +1106,17 @@ class SonarrClient(BaseARRClient):
         endpoint = f"{self.api_base}/series/editor"
         return self.make_put_request(endpoint, json=payload)
 
-    def get_rename_list(self, media_id: int) -> Any:
+    def get_rename_list(self, media_id: int, threadsafe: bool = False) -> Any:
         """
         Preview renaming for a series.
         Args:
             media_id (int): Series ID.
+            threadsafe (bool): Use a private session for concurrent calls.
         Returns:
             Any: API response.
         """
         endpoint = f"{self.api_base}/rename?seriesId={media_id}"
-        return self.make_get_request(endpoint, headers=self.headers)
+        return self._requester(threadsafe)(endpoint, headers=self.headers)
 
     def rename_media(self, media_ids: List[int]) -> Any:
         """
@@ -1343,7 +1382,9 @@ class SonarrClient(BaseARRClient):
         }
         return self.make_delete_request(endpoint, params=params)
 
-    def get_wanted_missing(self, page: int = 1, page_size: int = 100) -> Any:
+    def get_wanted_missing(
+        self, page: int = 1, page_size: int = 100, threadsafe: bool = False
+    ) -> Any:
         """Get missing (wanted) episodes from Sonarr."""
         endpoint = f"{self.api_base}/wanted/missing"
         params = {
@@ -1354,9 +1395,11 @@ class SonarrClient(BaseARRClient):
             "monitored": "true",
             "includeSeries": "true",
         }
-        return self.make_get_request(endpoint, params=params)
+        return self._requester(threadsafe)(endpoint, params=params)
 
-    def get_wanted_cutoff(self, page: int = 1, page_size: int = 100) -> Any:
+    def get_wanted_cutoff(
+        self, page: int = 1, page_size: int = 100, threadsafe: bool = False
+    ) -> Any:
         """Get cutoff-unmet episodes from Sonarr."""
         endpoint = f"{self.api_base}/wanted/cutoff"
         params = {
@@ -1367,7 +1410,7 @@ class SonarrClient(BaseARRClient):
             "monitored": "true",
             "includeSeries": "true",
         }
-        return self.make_get_request(endpoint, params=params)
+        return self._requester(threadsafe)(endpoint, params=params)
 
     def _fetch_episodes_by_series(
         self, series_ids: List[int], max_workers: int = 10
@@ -1644,7 +1687,9 @@ class LidarrClient(BaseARRClient):
             for item in items or []
         ]
 
-    def get_wanted_missing(self, page: int = 1, page_size: int = 100) -> Any:
+    def get_wanted_missing(
+        self, page: int = 1, page_size: int = 100, threadsafe: bool = False
+    ) -> Any:
         """Get missing (wanted) albums from Lidarr."""
         endpoint = f"{self.api_base}/wanted/missing"
         params = {
@@ -1653,9 +1698,11 @@ class LidarrClient(BaseARRClient):
             "includeArtist": "true",
             "monitored": "true",
         }
-        return self.make_get_request(endpoint, params=params)
+        return self._requester(threadsafe)(endpoint, params=params)
 
-    def get_wanted_cutoff(self, page: int = 1, page_size: int = 100) -> Any:
+    def get_wanted_cutoff(
+        self, page: int = 1, page_size: int = 100, threadsafe: bool = False
+    ) -> Any:
         """Get cutoff-unmet albums from Lidarr."""
         endpoint = f"{self.api_base}/wanted/cutoff"
         params = {
@@ -1664,7 +1711,7 @@ class LidarrClient(BaseARRClient):
             "includeArtist": "true",
             "monitored": "true",
         }
-        return self.make_get_request(endpoint, params=params)
+        return self._requester(threadsafe)(endpoint, params=params)
 
     def refresh_items(self, media_ids: Union[int, List[int]]) -> Any:
         """Refresh metadata for one or more artists."""
