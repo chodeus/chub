@@ -1009,7 +1009,7 @@ export const SETTINGS_SCHEMA = [
                 type: 'object_array',
                 displayType: 'nestarr',
                 description:
-                    'Map Plex libraries to ARR instances for comparison. Only mapped libraries are checked — unmapped libraries (e.g. Music) are excluded. Leave empty to compare everything.',
+                    'Map Plex libraries to ARR instances to enable ARR↔Plex unmatched detection. Only mapped libraries are checked — unmapped libraries (e.g. Music) are excluded. Leave empty to keep unmatched detection off (nested and stray-file detection still run).',
                 fields: [
                     {
                         key: 'arr_instance',
@@ -1377,7 +1377,8 @@ export const SETTINGS_MODULES = [
     {
         name: 'Nestarr',
         key: 'nestarr',
-        description: 'Detect and fix incorrectly nested media folders in Radarr/Sonarr/Lidarr.',
+        description:
+            'Detect unmatched media between ARR and Plex, incorrectly nested folders, and stray or misplaced files in Radarr/Sonarr/Lidarr.',
     },
     {
         name: 'Poster Cleanarr',

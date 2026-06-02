@@ -27,6 +27,7 @@ const MediaManagePage = () => {
     const [editCollectionName, setEditCollectionName] = useState('');
     const [nestedIssues, setNestedIssues] = useState([]);
     const [lastScanTime, setLastScanTime] = useState(null);
+    const [unmatchedEnabled, setUnmatchedEnabled] = useState(true);
     const [fixTarget, setFixTarget] = useState(null);
     const [fixPreview, setFixPreview] = useState(null);
     const [previewLoading, setPreviewLoading] = useState(false);
@@ -106,6 +107,7 @@ const MediaManagePage = () => {
             const result = await nestarrAPI.scan();
             setNestedIssues(result?.data?.issues || []);
             setLastScanTime(result?.data?.scanned_at || null);
+            setUnmatchedEnabled(result?.data?.unmatched_enabled !== false);
             return result;
         },
         {
@@ -126,6 +128,9 @@ const MediaManagePage = () => {
                 if (data?.issues?.length > 0) {
                     setNestedIssues(data.issues);
                     setLastScanTime(data.scanned_at || null);
+                }
+                if (data) {
+                    setUnmatchedEnabled(data.unmatched_enabled !== false);
                 }
             })
             .catch(() => {});
@@ -545,6 +550,18 @@ const MediaManagePage = () => {
                         </span>
                     )}
                 </h3>
+                {!unmatchedEnabled && (
+                    <div className="mb-3 p-3 rounded-lg bg-info/10 border border-info/20 text-sm text-secondary">
+                        <span className="material-symbols-outlined text-info align-middle mr-1 text-base">
+                            info
+                        </span>
+                        Unmatched ARR ↔ Plex detection is off. Add{' '}
+                        <a className="text-brand-primary hover:underline" href="/settings/modules">
+                            library mappings in Nestarr settings
+                        </a>{' '}
+                        to enable it. Nested and stray-file detection still run.
+                    </div>
+                )}
                 {nestedIssues.length > 0 ? (
                     <div className="grid gap-2">
                         {nestedIssues.map(issue => {

@@ -34,23 +34,26 @@ def _empty_results():
 async def get_cached_scan_results(request: Request, db: ChubDB = Depends(get_database)):
     """Return the most recent cached scan results, or empty if no scan has been run."""
     logger = get_module_logger(request, "nestarr")
+    config = load_config()
+    config_hash = nestarr_config_fingerprint(config.nestarr)
+    # Derived live from current config so the UI reflects the present setup
+    # even for caches written before the mappings changed.
+    unmatched_enabled = bool(config.nestarr.library_mappings)
     cached = load_scan_results(db, logger=logger)
-    config_hash = nestarr_config_fingerprint(load_config().nestarr)
-    if cached:
-        if cached.get("config_hash") != config_hash:
-            logger.debug("Ignoring stale Nestarr scan cache after config change")
-            clear_scan_results(db, logger=logger)
-            return ok(
-                message="No cached scan results available",
-                data=_empty_results(),
-            )
+    if cached and cached.get("config_hash") == config_hash:
+        cached["unmatched_enabled"] = unmatched_enabled
         return ok(
             message="Cached scan results loaded",
             data=cached,
         )
+    if cached:
+        logger.debug("Ignoring stale Nestarr scan cache after config change")
+        clear_scan_results(db, logger=logger)
+    data = _empty_results()
+    data["unmatched_enabled"] = unmatched_enabled
     return ok(
         message="No cached scan results available",
-        data=_empty_results(),
+        data=data,
     )
 
 
@@ -97,6 +100,7 @@ def _scan_nested_media_sync(logger, db: ChubDB):
                 "total": len(issues),
                 "instances_checked": sorted_instances,
                 "scanned_at": datetime.now(timezone.utc).isoformat(),
+                "unmatched_enabled": bool(config.nestarr.library_mappings),
             },
         )
     except Exception as e:

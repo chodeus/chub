@@ -1,8 +1,10 @@
 /**
  * CHUB Nestarr API Module
  *
- * Handles nested media detection and resolution:
- * - Scanning for incorrectly nested media folders
+ * Handles unmatched and nested media detection and resolution:
+ * - Comparing ARR media against Plex to find unmatched items (opt-in via
+ *   library mappings)
+ * - Scanning for incorrectly nested media folders and stray/misplaced files
  * - Fixing nested items by moving to correct locations
  */
 
