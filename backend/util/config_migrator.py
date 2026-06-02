@@ -40,6 +40,27 @@ def _has_path(raw: Any, *path: str) -> bool:
     return True
 
 
+def _instance_names_by_type(raw: Dict[str, Any]) -> Tuple[set, set]:
+    """Return (plex_names, non_plex_names) from the `instances` registry.
+
+    Used to classify entries listed in module `instances` fields by their
+    declared service type, so a Plex name can be told apart from an ARR one.
+    """
+    plex: set = set()
+    non_plex: set = set()
+    registry = raw.get("instances")
+    if isinstance(registry, dict):
+        for service_type, entries in registry.items():
+            if not isinstance(entries, dict):
+                continue
+            names = {n for n in entries if isinstance(n, str)}
+            if service_type == "plex":
+                plex |= names
+            else:
+                non_plex |= names
+    return plex, non_plex
+
+
 def is_legacy_config(raw: Dict[str, Any]) -> bool:
     """Heuristic — True iff the dict contains any legacy-only shape signal.
 
@@ -81,6 +102,21 @@ def is_legacy_config(raw: Dict[str, Any]) -> bool:
         not isinstance(item, str) for item in unmatched_instances
     ):
         return True
+
+    # Pre-split `poster_cleanarr`: ARR names were listed in `instances`
+    # (shared between the Plex bloat pass and the ARR orphan pass) before
+    # `orphan_instances` existed. Mixed ARR names there with no
+    # `orphan_instances` set is the pre-split shape.
+    cleanarr = raw.get("poster_cleanarr")
+    if isinstance(cleanarr, dict) and not cleanarr.get("orphan_instances"):
+        cleanarr_instances = cleanarr.get("instances")
+        if isinstance(cleanarr_instances, list):
+            _, non_plex = _instance_names_by_type(raw)
+            if any(
+                isinstance(name, str) and name in non_plex
+                for name in cleanarr_instances
+            ):
+                return True
 
     return False
 
@@ -239,6 +275,46 @@ def _rule_cleanarr_drytun_to_mode(
             message=(
                 f"Converted `poster_cleanarr.dry_run: {dry_run}` to "
                 f"`mode: {sec['mode']}`."
+            ),
+        )
+    )
+
+
+def _rule_split_cleanarr_instances(
+    raw: Dict[str, Any], notes: List[MigrationNote]
+) -> None:
+    """Split `poster_cleanarr.instances` into Plex (bloat) + ARR (orphan).
+
+    Pre-split configs listed both the Plex instance (for the bloat pass) and
+    Radarr/Sonarr instances (for the orphan-asset pass) in one `instances`
+    field. Move the ARR names into the new `orphan_instances` field and leave
+    only Plex (plus any unrecognised names) in `instances`. Idempotent: a
+    no-op once `orphan_instances` is populated.
+    """
+    sec = raw.get("poster_cleanarr")
+    if not isinstance(sec, dict):
+        return
+    if sec.get("orphan_instances"):
+        return  # already split
+    instances = sec.get("instances")
+    if not isinstance(instances, list):
+        return
+
+    _, non_plex = _instance_names_by_type(raw)
+    arr_names = [n for n in instances if isinstance(n, str) and n in non_plex]
+    if not arr_names:
+        return
+
+    sec["orphan_instances"] = arr_names
+    sec["instances"] = [n for n in instances if n not in arr_names]
+    notes.append(
+        MigrationNote(
+            rule="split:poster_cleanarr.instances->orphan_instances",
+            message=(
+                f"Moved ARR instance(s) {arr_names} from "
+                f"`poster_cleanarr.instances` into `orphan_instances` "
+                f"(the orphan-asset comparison set). `instances` now holds "
+                f"only the Plex instance(s) used by the bloat-image pass."
             ),
         )
     )
@@ -404,6 +480,7 @@ def migrate(raw: Dict[str, Any]) -> Tuple[Dict[str, Any], List[MigrationNote]]:
 
     # Shape conversions
     _rule_flatten_unmatched_instances(out, notes)
+    _rule_split_cleanarr_instances(out, notes)
 
     # Type conversions
     _rule_cleanarr_drytun_to_mode(out, notes)

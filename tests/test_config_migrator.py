@@ -329,3 +329,68 @@ def test_migrate_does_not_mutate_input():
     migrate(original)
     assert original["main"] == snapshot["main"]
     assert "main" in original
+
+
+# ─── poster_cleanarr instances split ────────────────────────────────────
+
+
+def _cleanarr_presplit():
+    """A chub-native config that still mixes ARR names into
+    `poster_cleanarr.instances` (the pre-orphan_instances shape)."""
+    return {
+        "instances": {
+            "plex": {"Chodeus": {"url": "x", "api": "y"}},
+            "radarr": {"radarr": {}, "radarr4k": {}},
+            "sonarr": {"sonarr": {}},
+        },
+        "poster_cleanarr": {
+            "mode": "report",
+            "instances": ["Chodeus", "radarr", "radarr4k", "sonarr"],
+        },
+    }
+
+
+def test_detection_cleanarr_presplit_instances_triggers():
+    assert is_legacy_config(_cleanarr_presplit()) is True
+
+
+def test_detection_cleanarr_plex_only_instances_is_native():
+    cfg = {
+        "instances": {"plex": {"Chodeus": {}}},
+        "poster_cleanarr": {"mode": "report", "instances": ["Chodeus"]},
+    }
+    assert is_legacy_config(cfg) is False
+
+
+def test_detection_cleanarr_with_orphan_instances_is_native():
+    cfg = _cleanarr_presplit()
+    cfg["poster_cleanarr"]["orphan_instances"] = ["radarr"]
+    assert is_legacy_config(cfg) is False
+
+
+def test_rule_split_cleanarr_instances_moves_arr_to_orphan():
+    out, notes = migrate(_cleanarr_presplit())
+    sec = out["poster_cleanarr"]
+    assert sec["instances"] == ["Chodeus"]
+    assert sec["orphan_instances"] == ["radarr", "radarr4k", "sonarr"]
+    assert any("split:poster_cleanarr.instances" in n.rule for n in notes)
+
+
+def test_rule_split_cleanarr_keeps_unknown_names_in_instances():
+    cfg = {
+        "instances": {"plex": {"Chodeus": {}}, "radarr": {"radarr": {}}},
+        "poster_cleanarr": {"instances": ["Chodeus", "radarr", "ghost"]},
+    }
+    out, _ = migrate(cfg)
+    sec = out["poster_cleanarr"]
+    assert sec["orphan_instances"] == ["radarr"]
+    assert sec["instances"] == ["Chodeus", "ghost"]  # unknown name preserved
+
+
+def test_rule_split_cleanarr_instances_is_idempotent():
+    once, _ = migrate(_cleanarr_presplit())
+    twice, second_notes = migrate(once)
+    assert twice == once
+    assert not any(
+        "split:poster_cleanarr.instances" in n.rule for n in second_notes
+    )

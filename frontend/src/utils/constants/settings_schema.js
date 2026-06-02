@@ -1080,6 +1080,7 @@ export const SETTINGS_SCHEMA = [
                 type: 'dropdown',
                 options: ['report', 'move', 'remove', 'restore', 'clear', 'nothing'],
                 required: true,
+                section: 'Plex Bloat Cleanup',
                 description:
                     'Operation mode: report (dry run), move (recoverable), remove (permanent), restore (recover moved), clear (delete restore dir), nothing (skip images).',
             },
@@ -1088,6 +1089,7 @@ export const SETTINGS_SCHEMA = [
                 label: 'Plex Path',
                 type: 'text',
                 required: true,
+                section: 'Plex Bloat Cleanup',
                 description:
                     "Path inside the CHUB container that points at your Plex Media Server's data dir " +
                     "— the folder that directly contains 'Metadata/', 'Cache/', 'Plug-in Support/', etc. " +
@@ -1098,6 +1100,7 @@ export const SETTINGS_SCHEMA = [
                 key: 'local_db',
                 label: 'Local Database',
                 type: 'check_box',
+                section: 'Plex Bloat Cleanup',
                 description:
                     'Copy the Plex database locally instead of downloading via API. Requires Plex to be stopped.',
             },
@@ -1105,18 +1108,21 @@ export const SETTINGS_SCHEMA = [
                 key: 'use_existing_db',
                 label: 'Use Existing Database',
                 type: 'check_box',
+                section: 'Plex Bloat Cleanup',
                 description: 'Reuse existing database copy if less than 2 hours old.',
             },
             {
                 key: 'ignore_running',
                 label: 'Ignore Running Check',
                 type: 'check_box',
+                section: 'Plex Bloat Cleanup',
                 description: 'Bypass the Plex running detection when using local database mode.',
             },
             {
                 key: 'overlays_only',
                 label: 'Overlays Only',
                 type: 'check_box',
+                section: 'Plex Bloat Cleanup',
                 description:
                     'Only act on files that carry the Kometa overlay EXIF tag. Custom-uploaded posters/art (which lack the tag) are left alone. Safer for Kometa users — files without the marker are skipped, not deleted.',
             },
@@ -1124,37 +1130,41 @@ export const SETTINGS_SCHEMA = [
                 key: 'sleep',
                 label: 'Sleep Between Operations',
                 type: 'number',
+                section: 'Plex Bloat Cleanup',
                 description: 'Seconds to wait between operations (default: 60).',
             },
             {
                 key: 'timeout',
                 label: 'Connection Timeout',
                 type: 'number',
+                section: 'Plex Bloat Cleanup',
                 description: 'Plex connection timeout in seconds (default: 600).',
             },
             {
                 key: 'instances',
-                label: 'Instances',
+                label: 'Plex Instance(s)',
                 type: 'instances',
                 required: true,
-                instance_types: ['plex', 'radarr', 'sonarr'],
+                instance_types: ['plex'],
                 valueFormat: 'string',
+                section: 'Plex Bloat Cleanup',
                 description:
-                    'Pick at least one Plex instance for bloat-image cleanup. Add Radarr/Sonarr instances here too if you enable Unmatched Asset Cleanup — those libraries widen the comparison set.',
+                    'Plex instance(s) whose metadata directory is scanned for bloat images. The bloat pass uses the first Plex instance selected here.',
             },
-            // ─── Orphan Asset Cleanup ──────────────────────────────────────
             {
                 key: 'orphan_assets_enabled',
                 label: 'Enable Orphan Asset Cleanup',
                 type: 'check_box',
+                section: 'Orphan Asset Cleanup',
                 description:
-                    "Walk Asset Directories and act on poster files with no parent media in the configured instances — orphan = asset with no parent media. A file is kept if its {tmdb-N}/{tvdb-N} id tag matches the library OR its title matches; it's flagged only when both miss. Use Ignore Titles below to exempt specific posters. (Inverse direction of the Unmatched Assets module, which reports media missing a poster.) Comparison set is read from CHUB's media cache (populated by poster_renamerr) — run renamerr first if the cache is stale.",
+                    "Walk Asset Directories and act on poster files with no parent media in the Library Instances below — orphan = asset with no parent media. A file is kept if its {tmdb-N}/{tvdb-N} id tag matches the library OR its title matches; it's flagged only when both miss. Use Ignore Titles below to exempt specific posters. (Inverse direction of the Unmatched Assets module, which reports media missing a poster.) Comparison set is read from CHUB's media cache (populated by poster_renamerr) — run renamerr first if the cache is stale.",
             },
             {
                 key: 'orphan_assets_mode',
                 label: 'Orphan Mode',
                 type: 'dropdown',
                 options: ['report', 'move', 'remove'],
+                section: 'Orphan Asset Cleanup',
                 description:
                     'report (log only), move (relocate to a hidden .chub_orphan_restore subdir inside each asset_dir, fully recoverable), remove (permanent delete).',
             },
@@ -1162,13 +1172,25 @@ export const SETTINGS_SCHEMA = [
                 key: 'asset_dirs',
                 label: 'Asset Directories',
                 type: 'dirlist_dragdrop',
+                section: 'Orphan Asset Cleanup',
                 description:
                     "Directories to scan when this standalone orphan pass runs. Typically poster_renamerr's destination_dir, but you can list any path you want explicitly cleaned — including source dirs or personal folders that the post-rename pass deliberately leaves alone. Each is walked recursively; the hidden .chub_orphan_restore subdir is skipped.",
+            },
+            {
+                key: 'orphan_instances',
+                label: 'Library Instances (Radarr/Sonarr)',
+                type: 'instances',
+                instance_types: ['radarr', 'sonarr'],
+                valueFormat: 'string',
+                section: 'Orphan Asset Cleanup',
+                description:
+                    "Radarr/Sonarr instances whose libraries define which assets are legitimate. An asset is flagged as an orphan only when it matches none of these libraries (by {tmdb-N}/{tvdb-N} id or title). Leave empty to fall back to the Plex Bloat 'Plex Instance(s)' selection above (pre-split behaviour). The comparison set is read from CHUB's media cache, populated by poster_renamerr — run it first if the cache is stale.",
             },
             {
                 key: 'include_collections',
                 label: 'Include Collections',
                 type: 'check_box',
+                section: 'Orphan Asset Cleanup',
                 description:
                     "Treat Plex collection titles as part of the comparison set so collection posters aren't flagged as orphans. Default on.",
             },
@@ -1176,6 +1198,7 @@ export const SETTINGS_SCHEMA = [
                 key: 'orphan_ignore_titles',
                 label: 'Ignore Titles',
                 type: 'textarea',
+                section: 'Orphan Asset Cleanup',
                 description:
                     "Titles to never flag as orphans (one per line), even when they don't match a library entry or carry a stale ID tag. Matched on the same normalized key as the scan, so casing/punctuation/year differences are ignored — e.g. 'The Matrix (1999)' and 'the matrix' are equivalent. Useful for personal or manually-placed posters.",
             },

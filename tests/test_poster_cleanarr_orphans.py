@@ -194,6 +194,34 @@ def test_scan_ignore_list_spares_unmatched(tmp_path):
     assert orphans == []
 
 
+def test_resolve_orphan_instances_prefers_orphan_instances():
+    """When orphan_instances is set, it is used as the comparison-set source."""
+    cfg = SimpleNamespace(
+        orphan_instances=["radarr1", "sonarr1"], instances=["plex1"]
+    )
+    assert PosterCleanarr._resolve_orphan_instances(cfg) == ["radarr1", "sonarr1"]
+
+
+def test_resolve_orphan_instances_falls_back_to_instances_when_empty():
+    """Pre-split configs listed ARR names in `instances`; an empty
+    `orphan_instances` must fall back to `instances` so they keep working."""
+    cfg = SimpleNamespace(
+        orphan_instances=[], instances=["plex1", "radarr1", "sonarr1"]
+    )
+    assert PosterCleanarr._resolve_orphan_instances(cfg) == [
+        "plex1",
+        "radarr1",
+        "sonarr1",
+    ]
+
+
+def test_resolve_orphan_instances_handles_missing_attrs():
+    """Missing/None attributes degrade to an empty list, never raise."""
+    assert PosterCleanarr._resolve_orphan_instances(SimpleNamespace()) == []
+    cfg = SimpleNamespace(orphan_instances=None, instances=None)
+    assert PosterCleanarr._resolve_orphan_instances(cfg) == []
+
+
 def test_build_library_id_sets_filters_by_instance(db):
     m = _make()
     db.media.execute_query(

@@ -527,6 +527,12 @@ class PosterCleanarrConfig(BaseModel):
     orphan_assets_enabled: bool = False
     orphan_assets_mode: str = "report"  # report | move | remove
     asset_dirs: List[str] = Field(default_factory=list)
+    # Radarr/Sonarr instances whose libraries form the orphan comparison set.
+    # Kept separate from `instances` (which selects the Plex instance for the
+    # bloat pass) so the two passes don't share an overloaded field. Falls back
+    # to `instances` when empty, preserving pre-split configs that listed ARR
+    # names alongside Plex in `instances`.
+    orphan_instances: List[str] = Field(default_factory=list)
     include_collections: bool = True
     # Titles that are never flagged as orphans, regardless of whether they
     # match a library entry. Matched on the same normalized key as the scan.

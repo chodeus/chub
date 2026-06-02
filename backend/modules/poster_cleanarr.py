@@ -203,7 +203,7 @@ class PosterCleanarr(ChubModule):
                 with ChubDB(logger=self.logger) as db:
                     orphan_stats = self._run_orphan_pass(
                         db=db,
-                        instances=self.config.instances,
+                        instances=self._resolve_orphan_instances(self.config),
                         asset_dirs=list(getattr(self.config, "asset_dirs", []) or []),
                         mode=getattr(self.config, "orphan_assets_mode", "report"),
                         include_collections=bool(
@@ -730,6 +730,18 @@ class PosterCleanarr(ChubModule):
     # =========================================================================
     # Orphan asset cleanup
     # =========================================================================
+
+    @staticmethod
+    def _resolve_orphan_instances(config: Any) -> List[str]:
+        """ARR instances whose libraries form the orphan comparison set.
+
+        Reads the orphan-specific ``orphan_instances`` and falls back to
+        ``instances`` when it's empty, so pre-split configs that listed ARR
+        names alongside the Plex instance in ``instances`` keep working.
+        """
+        return list(getattr(config, "orphan_instances", []) or []) or list(
+            getattr(config, "instances", []) or []
+        )
 
     def _run_orphan_pass(
         self,
