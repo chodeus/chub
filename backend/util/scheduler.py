@@ -418,6 +418,9 @@ class ChubScheduler:
         threading.Thread(target=_run, name="chub-health-snapshot", daemon=True).start()
 
     def _write_health_snapshot(self) -> None:
+        import time as _t
+        from concurrent.futures import ThreadPoolExecutor
+
         import requests
 
         from backend.util.database import ChubDB
@@ -425,6 +428,7 @@ class ChubScheduler:
 
         now_iso = datetime.now().isoformat()
         rows = []
+        probes = []  # (service, name, test_url, headers) for reachable targets
         for service in ("plex", "radarr", "sonarr", "lidarr"):
             instances = getattr(self.config.instances, service, {})
             for name, details in instances.items():
@@ -445,31 +449,36 @@ class ChubScheduler:
                     rows.append((now_iso, service, name, "blocked", None, None, reason))
                     continue
 
-                import time as _t
+                probes.append((service, name, test_url, headers))
 
-                start = _t.time()
-                try:
-                    resp = requests.get(test_url, headers=headers, timeout=3)
-                    elapsed = int((_t.time() - start) * 1000)
-                    rows.append(
-                        (
-                            now_iso,
-                            service,
-                            name,
-                            "healthy" if resp.ok else "unhealthy",
-                            resp.status_code,
-                            elapsed,
-                            None,
-                        )
-                    )
-                except requests.exceptions.Timeout:
-                    rows.append((now_iso, service, name, "timeout", None, 3000, None))
-                except requests.exceptions.ConnectionError:
-                    rows.append(
-                        (now_iso, service, name, "unreachable", None, None, None)
-                    )
-                except Exception as exc:
-                    rows.append((now_iso, service, name, "error", None, None, str(exc)))
+        # Probe instances concurrently — each requests.get opens its own
+        # connection, so this is thread-safe, and one slow/timing-out instance
+        # no longer serializes a 3s wait per instance.
+        def _probe(probe):
+            service, name, test_url, headers = probe
+            start = _t.time()
+            try:
+                resp = requests.get(test_url, headers=headers, timeout=3)
+                elapsed = int((_t.time() - start) * 1000)
+                return (
+                    now_iso,
+                    service,
+                    name,
+                    "healthy" if resp.ok else "unhealthy",
+                    resp.status_code,
+                    elapsed,
+                    None,
+                )
+            except requests.exceptions.Timeout:
+                return (now_iso, service, name, "timeout", None, 3000, None)
+            except requests.exceptions.ConnectionError:
+                return (now_iso, service, name, "unreachable", None, None, None)
+            except Exception as exc:
+                return (now_iso, service, name, "error", None, None, str(exc))
+
+        if probes:
+            with ThreadPoolExecutor(max_workers=min(10, len(probes))) as pool:
+                rows.extend(pool.map(_probe, probes))
 
         if not rows:
             return

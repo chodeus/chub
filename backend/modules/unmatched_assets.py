@@ -132,64 +132,57 @@ class UnmatchedAssets(ChubModule):
         all_media_grouped = {"movies": [], "series": []}
         all_collections_grouped = []
 
+        # (title, year) -> grouped series entry, so we group in O(1) instead of
+        # rescanning the accumulating list per row (was O(n²)). These index the
+        # SAME dict objects stored in the lists, so mutating via the index
+        # mutates the list entry. At most one entry exists per (title, year)
+        # because new entries are only appended on a miss — identical to the
+        # previous next()-based lookups.
+        unmatched_series_index: Dict[tuple, Dict[str, Any]] = {}
+        all_series_index: Dict[tuple, Dict[str, Any]] = {}
+
         for row in self.unmatched_media:
             key = group_map.get(row.get("asset_type"))
             if not key:
                 continue
             entry = dict(row)
             if key == "series":
+                skey = (entry["title"], entry.get("year"))
+                found = unmatched_series_index.get(skey)
                 if entry.get("season_number") is not None:
-                    found = next(
-                        (
-                            s
-                            for s in unmatched["series"]
-                            if s["title"] == entry["title"]
-                            and s.get("year") == entry.get("year")
-                        ),
-                        None,
-                    )
                     if found:
                         found.setdefault("missing_seasons", []).append(
                             entry["season_number"]
                         )
                     else:
-                        unmatched["series"].append(
-                            {
-                                "title": entry["title"],
-                                "year": entry.get("year"),
-                                "missing_seasons": [entry["season_number"]],
-                                "missing_main_poster": False,
-                                "tmdb_id": entry.get("tmdb_id"),
-                                "tvdb_id": entry.get("tvdb_id"),
-                                "imdb_id": entry.get("imdb_id"),
-                                "instance_name": entry.get("instance_name"),
-                            }
-                        )
+                        new_entry = {
+                            "title": entry["title"],
+                            "year": entry.get("year"),
+                            "missing_seasons": [entry["season_number"]],
+                            "missing_main_poster": False,
+                            "tmdb_id": entry.get("tmdb_id"),
+                            "tvdb_id": entry.get("tvdb_id"),
+                            "imdb_id": entry.get("imdb_id"),
+                            "instance_name": entry.get("instance_name"),
+                        }
+                        unmatched["series"].append(new_entry)
+                        unmatched_series_index[skey] = new_entry
                 else:
-                    found = next(
-                        (
-                            s
-                            for s in unmatched["series"]
-                            if s["title"] == entry["title"]
-                            and s.get("year") == entry.get("year")
-                        ),
-                        None,
-                    )
                     if found:
                         found["missing_main_poster"] = True
                     else:
-                        unmatched["series"].append(
-                            {
-                                "title": entry["title"],
-                                "year": entry.get("year"),
-                                "missing_seasons": [],
-                                "missing_main_poster": True,
-                                "tmdb_id": entry.get("tmdb_id"),
-                                "tvdb_id": entry.get("tvdb_id"),
-                                "imdb_id": entry.get("imdb_id"),
-                                "instance_name": entry.get("instance_name"),
-                            }
-                        )
+                        new_entry = {
+                            "title": entry["title"],
+                            "year": entry.get("year"),
+                            "missing_seasons": [],
+                            "missing_main_poster": True,
+                            "tmdb_id": entry.get("tmdb_id"),
+                            "tvdb_id": entry.get("tvdb_id"),
+                            "imdb_id": entry.get("imdb_id"),
+                            "instance_name": entry.get("instance_name"),
+                        }
+                        unmatched["series"].append(new_entry)
+                        unmatched_series_index[skey] = new_entry
             else:
                 unmatched[key].append(entry)
 
@@ -202,15 +195,8 @@ class UnmatchedAssets(ChubModule):
                 continue
             entry = dict(row)
             if key == "series":
-                found = next(
-                    (
-                        s
-                        for s in all_media_grouped["series"]
-                        if s["title"] == entry["title"]
-                        and s.get("year") == entry.get("year")
-                    ),
-                    None,
-                )
+                skey = (entry["title"], entry.get("year"))
+                found = all_series_index.get(skey)
                 if found:
                     if entry.get("season_number") is not None:
                         found.setdefault("seasons", []).append(entry["season_number"])
@@ -218,13 +204,13 @@ class UnmatchedAssets(ChubModule):
                     seasons = []
                     if entry.get("season_number") is not None:
                         seasons = [entry["season_number"]]
-                    all_media_grouped["series"].append(
-                        {
-                            "title": entry["title"],
-                            "year": entry.get("year"),
-                            "seasons": seasons,
-                        }
-                    )
+                    new_entry = {
+                        "title": entry["title"],
+                        "year": entry.get("year"),
+                        "seasons": seasons,
+                    }
+                    all_media_grouped["series"].append(new_entry)
+                    all_series_index[skey] = new_entry
             else:
                 all_media_grouped[key].append(entry)
 

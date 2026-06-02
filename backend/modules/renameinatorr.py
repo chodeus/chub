@@ -3,6 +3,7 @@
 import re
 import time
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Optional
 
 from backend.util.arr import BaseARRClient, create_arr_client
@@ -214,11 +215,34 @@ class Renameinatorr(ChubModule):
                 grouped_root_folders: Dict[str, List[int]] = defaultdict(list)
                 media_ids: List[int] = []
                 any_renamed: bool = False
+
+                # Prefetch rename previews concurrently — these are read-only
+                # GETs and were the per-item bottleneck (one blocking call per
+                # item in the chunk). Each runs on a private session
+                # (threadsafe=True); all state mutation stays in the sequential
+                # loop below so no locking is needed.
+                rename_lists: Dict[int, Any] = {}
+                fetch_ids = [it["media_id"] for it in media_dict]
+                if fetch_ids:
+
+                    def _fetch_rename(mid):
+                        return mid, app.get_rename_list(mid, threadsafe=True)
+
+                    with ThreadPoolExecutor(
+                        max_workers=min(10, len(fetch_ids))
+                    ) as pool:
+                        futures = {
+                            pool.submit(_fetch_rename, mid): mid for mid in fetch_ids
+                        }
+                        for future in as_completed(futures):
+                            mid, resp = future.result()
+                            rename_lists[mid] = resp
+
                 for item in progress_bar:
                     if self.is_cancelled():
                         break
                     file_info: Dict[str, str] = {}
-                    rename_response = app.get_rename_list(item["media_id"])
+                    rename_response = rename_lists.get(item["media_id"]) or []
                     for items in rename_response:
                         existing_path = items.get("existingPath")
                         new_path = items.get("newPath")
@@ -290,22 +314,22 @@ class Renameinatorr(ChubModule):
                                 f"Fetching updated data for {app.instance_name}..."
                             )
                             new_media_dict = app.get_all_media()
+                            old_by_id = {
+                                old_item["media_id"]: old_item
+                                for old_item in media_dict
+                            }
                             for new_item in new_media_dict:
-                                for old_item in media_dict:
-                                    if new_item["media_id"] == old_item["media_id"]:
-                                        logger.debug(
-                                            f"Checking if item {new_item['media_id']} changed..."
-                                        )
-                                        if (
-                                            new_item["path_name"]
-                                            != old_item["path_name"]
-                                        ):
-                                            logger.debug(
-                                                f"item {new_item['media_id']} changed from {old_item['path_name']} to {new_item['path_name']}"
-                                            )
-                                            old_item["new_path_name"] = new_item[
-                                                "path_name"
-                                            ]
+                                old_item = old_by_id.get(new_item["media_id"])
+                                if old_item is None:
+                                    continue
+                                logger.debug(
+                                    f"Checking if item {new_item['media_id']} changed..."
+                                )
+                                if new_item["path_name"] != old_item["path_name"]:
+                                    logger.debug(
+                                        f"item {new_item['media_id']} changed from {old_item['path_name']} to {new_item['path_name']}"
+                                    )
+                                    old_item["new_path_name"] = new_item["path_name"]
                 final_media_dict.extend(media_dict)
                 total_renamed = sum(
                     len(i["file_info"]) for i in media_dict if i.get("file_info")

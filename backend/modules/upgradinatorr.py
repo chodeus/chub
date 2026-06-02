@@ -666,30 +666,63 @@ class Upgradinatorr(ChubModule):
     def _get_all_wanted(
         self, app: BaseARRClient, search_mode: str
     ) -> Optional[List[Dict[str, Any]]]:
-        """Fetch all pages from the wanted/missing or wanted/cutoff endpoint."""
+        """Fetch all pages from the wanted/missing or wanted/cutoff endpoint.
+
+        Page 1 is fetched first (it reports totalRecords); the remaining pages
+        are fetched concurrently on private sessions (threadsafe=True) since
+        they're independent and the client's shared session is not thread-safe.
+        """
+        page_size = 200
         fetch_fn = (
             app.get_wanted_missing
             if search_mode == "missing"
             else app.get_wanted_cutoff
         )
-        all_records: List[Dict[str, Any]] = []
-        page = 1
-        while True:
-            result = fetch_fn(page=page, page_size=200)
-            if result is None:
-                self.logger.warning(
-                    f"Failed to fetch {search_mode} page {page} from {app.instance_name}; "
-                    "aborting this Upgradinatorr profile."
-                )
-                return None
-            if not result:
-                break
-            records = result.get("records", [])
-            all_records.extend(records)
-            total = result.get("totalRecords", 0)
-            if len(all_records) >= total or not records:
-                break
-            page += 1
+
+        first = fetch_fn(page=1, page_size=page_size)
+        if first is None:
+            self.logger.warning(
+                f"Failed to fetch {search_mode} page 1 from {app.instance_name}; "
+                "aborting this Upgradinatorr profile."
+            )
+            return None
+        if not first:
+            return []
+
+        all_records: List[Dict[str, Any]] = list(first.get("records", []))
+        total = first.get("totalRecords", 0)
+        if not all_records or len(all_records) >= total:
+            return all_records
+
+        last_page = -(-total // page_size)  # ceil division
+        remaining_pages = list(range(2, last_page + 1))
+
+        pages: Dict[int, List[Dict[str, Any]]] = {}
+        failed = False
+
+        def fetch(page: int):
+            return page, fetch_fn(page=page, page_size=page_size, threadsafe=True)
+
+        workers = min(8, len(remaining_pages))
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = {pool.submit(fetch, p): p for p in remaining_pages}
+            for future in as_completed(futures):
+                page, result = future.result()
+                if result is None:
+                    self.logger.warning(
+                        f"Failed to fetch {search_mode} page {page} from "
+                        f"{app.instance_name}; aborting this Upgradinatorr profile."
+                    )
+                    failed = True
+                else:
+                    pages[page] = result.get("records", [])
+
+        if failed:
+            return None
+
+        # Reassemble in page order so output is deterministic.
+        for p in remaining_pages:
+            all_records.extend(pages.get(p, []))
         return all_records
 
     def _convert_wanted_to_media_dict(
@@ -730,6 +763,15 @@ class Upgradinatorr(ChubModule):
             tags = app.get_all_tags() or []
             from backend.util.arr import normalize_arr_media
 
+            # Prefetch every series' episodes in parallel (one call per series)
+            # instead of one blocking call per season inside normalization.
+            episode_map: Dict[int, Dict[int, List[Dict[str, Any]]]] = {}
+            if hasattr(app, "_fetch_episodes_by_series"):
+                episode_map = app._fetch_episodes_by_series(list(series_map.keys()))
+
+            def _wanted_episode_lookup(sid, sn, _map=episode_map):
+                return _map.get(sid, {}).get(sn, [])
+
             result = []
             for series_data in series_map.values():
                 wanted_seasons = series_data.pop("_wanted_seasons", set())
@@ -738,9 +780,7 @@ class Upgradinatorr(ChubModule):
                     tags,
                     arr_type="sonarr",
                     include_episode=True,
-                    episode_lookup=lambda sid, sn, _app=app: (
-                        _app.get_episode_data_by_season(sid, sn)
-                    ),
+                    episode_lookup=_wanted_episode_lookup,
                     logger=self.logger,
                 )
                 # Mark only the wanted seasons as monitored, rest as unmonitored

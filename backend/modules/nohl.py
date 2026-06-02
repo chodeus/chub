@@ -667,6 +667,21 @@ class Nohl(ChubModule):
 
         data_list = {"search_media": [], "filtered_media": []}
 
+        # Index media by every normalized title variant (title, folder,
+        # alternate titles) so each nohl item only examines plausible matches
+        # instead of scanning the whole library — was O(n_nohl × n_media).
+        # title_matches() is still called below as a guard, so semantics are
+        # identical; this only narrows which media items it runs against.
+        title_index = {}
+        for media_item in media_dict:
+            variants = {
+                media_item.get("normalized_title"),
+                media_item.get("normalized_folder"),
+            }
+            variants.update(media_item.get("normalized_alternate_titles") or [])
+            for variant in {v for v in variants if v}:
+                title_index.setdefault(variant, []).append(media_item)
+
         for nohl_item in progress(
             nohl_data,
             desc="Filtering media...",
@@ -674,7 +689,7 @@ class Nohl(ChubModule):
             total=len(nohl_data),
             logger=logger,
         ):
-            for media_item in media_dict:
+            for media_item in title_index.get(nohl_item.get("normalized_title"), ()):
                 if title_matches(media_item, nohl_item) and year_matches(
                     media_item, nohl_item
                 ):

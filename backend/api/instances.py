@@ -351,7 +351,12 @@ def check_all_health(
     """
     try:
         logger.debug("Serving GET /api/instances/health")
+        from concurrent.futures import ThreadPoolExecutor
+
+        from backend.util.ssrf_guard import is_safe_url
+
         results = {}
+        probes = []  # (service, name, test_url, headers) for reachable targets
 
         for service in ["plex", "radarr", "sonarr", "lidarr"]:
             instances = getattr(config.instances, service, {})
@@ -367,8 +372,6 @@ def check_all_health(
                     api_ver = "v1" if service == "lidarr" else "v3"
                     test_url = f"{url}/api/{api_ver}/system/status"
 
-                from backend.util.ssrf_guard import is_safe_url
-
                 safe, reason = is_safe_url(test_url)
                 if not safe:
                     results[name] = {
@@ -378,34 +381,46 @@ def check_all_health(
                     }
                     continue
 
-                start = time.time()
-                try:
-                    resp = requests.get(test_url, headers=headers, timeout=2)
-                    elapsed = round((time.time() - start) * 1000)
-                    results[name] = {
-                        "service": service,
-                        "status": "healthy" if resp.ok else "unhealthy",
-                        "status_code": resp.status_code,
-                        "response_time_ms": elapsed,
-                    }
-                except requests.exceptions.Timeout:
-                    results[name] = {
-                        "service": service,
-                        "status": "timeout",
-                        "response_time_ms": 2000,
-                    }
-                except requests.exceptions.ConnectionError:
-                    results[name] = {
-                        "service": service,
-                        "status": "unreachable",
-                        "response_time_ms": 0,
-                    }
-                except Exception as exc:
-                    results[name] = {
-                        "service": service,
-                        "status": "error",
-                        "error": str(exc),
-                    }
+                probes.append((service, name, test_url, headers))
+
+        # Probe instances concurrently — each requests.get opens its own
+        # connection (thread-safe), so a multi-instance setup no longer waits
+        # serially (was up to ~2s per instance back-to-back).
+        def _probe(probe):
+            service, name, test_url, headers = probe
+            start = time.time()
+            try:
+                resp = requests.get(test_url, headers=headers, timeout=2)
+                elapsed = round((time.time() - start) * 1000)
+                return name, {
+                    "service": service,
+                    "status": "healthy" if resp.ok else "unhealthy",
+                    "status_code": resp.status_code,
+                    "response_time_ms": elapsed,
+                }
+            except requests.exceptions.Timeout:
+                return name, {
+                    "service": service,
+                    "status": "timeout",
+                    "response_time_ms": 2000,
+                }
+            except requests.exceptions.ConnectionError:
+                return name, {
+                    "service": service,
+                    "status": "unreachable",
+                    "response_time_ms": 0,
+                }
+            except Exception as exc:
+                return name, {
+                    "service": service,
+                    "status": "error",
+                    "error": str(exc),
+                }
+
+        if probes:
+            with ThreadPoolExecutor(max_workers=min(10, len(probes))) as pool:
+                for name, result in pool.map(_probe, probes):
+                    results[name] = result
 
         return ok(f"Health checked for {len(results)} instances", {"health": results})
     except Exception as e:
