@@ -1,7 +1,8 @@
-"""Tests for the Unmatched-page poster reset accessors:
+"""Tests for the Unmatched-page reset accessors:
 - MediaCache.reset_match_state / CollectionCache.reset_match_state
+- MediaAssetMatches.clear(keep_ignored=True)
 
-Both preserve user-curated state (ignored / locked) while returning the rest to
+All preserve user-curated state (ignored / locked) while returning the rest to
 all-missing.
 """
 
@@ -75,3 +76,30 @@ def test_reset_match_state_preserves_ignored_and_locked(db, table, accessor):
     assert ignored["matched"] == 1 and ignored["ignored"] == 1
     locked = _row(db, table, 3)
     assert locked["matched"] == 1 and locked["user_confirmed"] == 1
+
+
+def test_clear_artwork_keep_ignored_preserves_not_needed(db):
+    # Applied (not ignored) row — should be dropped.
+    db.media_asset_matches.upsert(
+        target_kind="media",
+        target_id=1,
+        image_type="logo",
+        source="fanart",
+        matched_url="http://x/l.png",
+        applied_method="plex",
+        match_status="applied",
+    )
+    # Per-type "not needed" flag — should survive.
+    db.media_asset_matches.set_ignored("media", 2, "background", True)
+
+    db.media_asset_matches.clear(keep_ignored=True)
+
+    assert db.media_asset_matches.get_one("media", 1, "logo") is None
+    kept = db.media_asset_matches.get_one("media", 2, "background")
+    assert kept is not None and kept["ignored"] == 1
+
+
+def test_clear_artwork_full_wipe(db):
+    db.media_asset_matches.set_ignored("media", 2, "background", True)
+    db.media_asset_matches.clear()  # default: wipe everything
+    assert db.media_asset_matches.get_one("media", 2, "background") is None

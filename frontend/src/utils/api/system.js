@@ -138,6 +138,18 @@ export const systemAPI = {
     },
 
     /**
+     * Reset additional-artwork coverage to all-missing (Unmatched page reset),
+     * preserving the per-type "not needed" (ignored) flags. The next
+     * asset_renamerr run repopulates coverage.
+     * @returns {Promise<Object>} { deleted }
+     */
+    resetArtworkMatches: async (options = {}) => {
+        const res = await apiCore.post('/system/db/artwork-matches/reset', {}, options);
+        apiCore.clearCache('/posters/unmatched/artwork');
+        return res;
+    },
+
+    /**
      * Recent instance health snapshots (Plex / Radarr / Sonarr / Lidarr probes).
      * @param {Object} options - Request options
      * @param {number} options.limit - Max snapshots to return (default 200)

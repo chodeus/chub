@@ -141,5 +141,17 @@ class MediaAssetMatches(DatabaseBase):
         )
         return [dict(r) for r in rows]
 
-    def clear(self) -> None:
-        self.execute_query("DELETE FROM media_asset_matches")
+    def clear(self, keep_ignored: bool = False) -> None:
+        """Delete artwork-match rows.
+
+        With ``keep_ignored`` the per-type "not needed" flags (ignored=1) are
+        preserved and only applied/failed provenance is dropped — used by the
+        Unmatched page's artwork reset, which honours the user's ignores.
+        """
+        if keep_ignored:
+            self.execute_query(
+                "DELETE FROM media_asset_matches "
+                "WHERE ignored IS NULL OR ignored = 0"
+            )
+        else:
+            self.execute_query("DELETE FROM media_asset_matches")
