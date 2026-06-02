@@ -2,6 +2,42 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.27.0](https://github.com/chodeus/chub/compare/v2.26.2...v2.27.0) (2026-06-02)
+
+
+### Features
+
+* **asset:** source logos + backgrounds from fanart.tv ([39ca4b1](https://github.com/chodeus/chub/commit/39ca4b1a756e30e7a01758df2a4282b43d64a0b4))
+* **cleanarr:** add ID matching + ignore list to orphan asset cleanup ([a581b39](https://github.com/chodeus/chub/commit/a581b3919cb576aa4813c27630bddaa3d601ca46))
+* **instances:** show Plex snapshot freshness on instance cards ([1143b65](https://github.com/chodeus/chub/commit/1143b65ef4a1be959785db933317ec26bdd997b7))
+* **media-search:** surface external IDs, file name, and richer metadata ([75f2f50](https://github.com/chodeus/chub/commit/75f2f50e3ef5ce37700ab60cf2b4fafcc5280d32))
+* **sync:** per-instance sync-completion timestamp for accurate freshness ([0f75382](https://github.com/chodeus/chub/commit/0f753824451b49b2d387db64b79eaf50c66ded9d))
+* **unmatched:** add additional-artwork reset + load count on mount ([093173a](https://github.com/chodeus/chub/commit/093173ab2abcc17d1c10a0c0436ce6d27dae88e7))
+* **unmatched:** add poster-match reset to the Unmatched page ([54df7d3](https://github.com/chodeus/chub/commit/54df7d3c3fad031dc05841a7b0de0455c7348d6d))
+* **unmatched:** make additional-artwork coverage provenance-based ([c3eeb92](https://github.com/chodeus/chub/commit/c3eeb9261902c107624f43d0d0d1cf5c0418d60c))
+
+
+### Bug Fixes
+
+* **asset_renamerr:** skip release-unready items on the Plex apply path ([f2b8334](https://github.com/chodeus/chub/commit/f2b8334935d86eeb9fa7e10479bfb6eb55cc9f64))
+* **jduparr:** use jdupes --json scan, honest link count, and harden run loop ([bdde88c](https://github.com/chodeus/chub/commit/bdde88cddc07a5183b9bd234190f1340eff240bb))
+* **nestarr:** make ARR↔Plex unmatched detection opt-in ([499eb8e](https://github.com/chodeus/chub/commit/499eb8e742e1d9e46eb4b8dfebeaeb913a18a2d2))
+* **nestarr:** reduce unmatched-assets false positives ([4e96c0e](https://github.com/chodeus/chub/commit/4e96c0e6cef4f387d22b6bc8116c09630eab6b7f))
+* **settings:** add fanart.tv module card description ([ca217b3](https://github.com/chodeus/chub/commit/ca217b3f20363051665cf607603b575a0b711a5d))
+* **settings:** show the fanart.tv settings section in the UI ([7a94d43](https://github.com/chodeus/chub/commit/7a94d43f4b663747619239beb0c8bec9310e0d2f))
+
+
+### Performance
+
+* **arr:** parallelize Sonarr/Lidarr sub-item fetching; run upgradinatorr instances concurrently ([2cb2889](https://github.com/chodeus/chub/commit/2cb2889bf8fcd9779e977740467be9437ddbe257))
+* eliminate O(n×m)/O(n²) hot loops and parallelize independent I/O ([ed0374e](https://github.com/chodeus/chub/commit/ed0374e2acedc0d46f6bc7a6faeef95c73f9e142))
+
+
+### Refactoring
+
+* **asset:** drop the fanart.tv response cache ([22bb635](https://github.com/chodeus/chub/commit/22bb635d5089b78865d9619ea4e63210f95c3540))
+* **plex:** route all snapshot refreshes through the TTL guard ([5336730](https://github.com/chodeus/chub/commit/5336730a1c19fc9e5c44867cdc16c100ff5d333c))
+
 ## [2.26.2](https://github.com/chodeus/chub/compare/v2.26.1...v2.26.2) (2026-06-01)
 
 
