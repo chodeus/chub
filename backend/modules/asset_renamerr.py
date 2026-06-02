@@ -756,6 +756,25 @@ class AssetRenamerr(ChubModule):
                     media, db, image_type, is_collection, fanart_client
                 )
                 if not resolved:
+                    # No source artwork anywhere for this (item, type). Record a
+                    # "missing" row so the Unmatched view can derive coverage
+                    # purely from this table — a reset empties it (→ all counts 0)
+                    # and the next run repopulates it. Don't downgrade an item
+                    # that's already applied (e.g. the art lives in Plex but the
+                    # local source later vanished), and never persist on a dry run
+                    # (media_asset_matches drives idempotency — see below).
+                    if target_id is not None and not self.config.dry_run:
+                        prev = db.media_asset_matches.get_one(
+                            target_kind, target_id, image_type
+                        )
+                        if not (prev and prev.get("match_status") == "applied"):
+                            db.media_asset_matches.upsert(
+                                target_kind=target_kind,
+                                target_id=target_id,
+                                image_type=image_type,
+                                match_status="missing",
+                                detail="no source artwork found",
+                            )
                     continue
                 source, file, url = resolved
 
