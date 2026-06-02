@@ -278,7 +278,7 @@ export const SETTINGS_SCHEMA = [
                 type: 'check_box',
                 section: 'Pipeline',
                 description:
-                    "After renaming, walk the destination directory and act on every poster file whose title doesn't match any media in the configured instances — i.e. an asset with no parent media. Source directories are deliberately out of scope: gdrive-synced source dirs would just re-download deleted files on the next sync, and personal source dirs aren't CHUB's to delete from. (Not to be confused with the Unmatched Assets module, which reports media missing a poster — the opposite direction.) The action taken (report / move / remove) follows the Orphan Assets Mode set in the Poster Cleanarr module, so a single setting governs both this post-rename pass and a standalone Cleanarr run.",
+                    "After renaming, walk the destination directory and act on every poster file with no parent media in the configured instances — i.e. an orphan asset. A file is kept if its {tmdb-N}/{tvdb-N} id tag matches the library OR its title matches; it's flagged only when both miss (a stale id whose title still matches is kept). Source directories are deliberately out of scope: gdrive-synced source dirs would just re-download deleted files on the next sync, and personal source dirs aren't CHUB's to delete from. (Not to be confused with the Unmatched Assets module, which reports media missing a poster — the opposite direction.) The action taken (report / move / remove) follows the Orphan Assets Mode set in the Poster Cleanarr module, so a single setting governs both this post-rename pass and a standalone Cleanarr run.",
             },
             {
                 key: 'report_unmatched_assets',
@@ -1148,7 +1148,7 @@ export const SETTINGS_SCHEMA = [
                 label: 'Enable Orphan Asset Cleanup',
                 type: 'check_box',
                 description:
-                    "Walk Asset Directories and act on poster files whose title doesn't match any media in the configured instances — orphan = asset with no parent media. (Inverse direction of the Unmatched Assets module, which reports media missing a poster.) Comparison set is read from CHUB's media cache (populated by poster_renamerr) — run renamerr first if the cache is stale.",
+                    "Walk Asset Directories and act on poster files with no parent media in the configured instances — orphan = asset with no parent media. A file is kept if its {tmdb-N}/{tvdb-N} id tag matches the library OR its title matches; it's flagged only when both miss. Use Ignore Titles below to exempt specific posters. (Inverse direction of the Unmatched Assets module, which reports media missing a poster.) Comparison set is read from CHUB's media cache (populated by poster_renamerr) — run renamerr first if the cache is stale.",
             },
             {
                 key: 'orphan_assets_mode',
@@ -1171,6 +1171,13 @@ export const SETTINGS_SCHEMA = [
                 type: 'check_box',
                 description:
                     "Treat Plex collection titles as part of the comparison set so collection posters aren't flagged as orphans. Default on.",
+            },
+            {
+                key: 'orphan_ignore_titles',
+                label: 'Ignore Titles',
+                type: 'textarea',
+                description:
+                    "Titles to never flag as orphans (one per line), even when they don't match a library entry or carry a stale ID tag. Matched on the same normalized key as the scan, so casing/punctuation/year differences are ignored — e.g. 'The Matrix (1999)' and 'the matrix' are equivalent. Useful for personal or manually-placed posters.",
             },
         ],
     },

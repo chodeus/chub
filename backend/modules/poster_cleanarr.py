@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from PIL import Image, UnidentifiedImageError
 
 from backend.util.base_module import ChubModule
-from backend.util.constants import asset_type_regex
+from backend.util.constants import asset_type_regex, tmdb_id_regex, tvdb_id_regex
 from backend.util.database import ChubDB
 from backend.util.helper import create_table
 from backend.util.logger import Logger
@@ -22,6 +22,20 @@ from backend.util.normalization import normalize_titles, parse_asset_filename
 # overlays_only mode to skip user-uploaded customs (which lack the tag).
 KOMETA_OVERLAY_EXIF_TAG = 0x04BC
 KOMETA_OVERLAY_EXIF_VALUE = "overlay"
+
+
+def _first_int_id(regex, names: Tuple[str, ...]) -> Optional[int]:
+    """Return the first integer id `regex` finds across `names` (filename then
+    folder), or None. Used to pull {tmdb-N}/{tvdb-N} off a raw asset path
+    BEFORE normalization strips the id block."""
+    for name in names:
+        match = regex.search(name)
+        if match:
+            try:
+                return int(match.group(1))
+            except (ValueError, TypeError):
+                return None
+    return None
 
 
 def format_bytes(size: int) -> str:
@@ -196,6 +210,9 @@ class PosterCleanarr(ChubModule):
                             getattr(self.config, "include_collections", True)
                         ),
                         logger=self.logger,
+                        ignore_titles=list(
+                            getattr(self.config, "orphan_ignore_titles", []) or []
+                        ),
                     )
 
             # === Clean empty directories ===
@@ -722,6 +739,7 @@ class PosterCleanarr(ChubModule):
         mode: str,
         include_collections: bool,
         logger: Logger,
+        ignore_titles: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """Walk `asset_dirs` and report/move/remove files whose title doesn't
         match any media row cached for the configured `instances`.
@@ -765,12 +783,22 @@ class PosterCleanarr(ChubModule):
             )
             return {"count": 0, "total_size": 0, "mode": mode}
 
+        tmdb_ids, tvdb_ids = self._build_library_id_sets(db, instances)
+        ignore_keys = {
+            normalize_titles(t) for t in (ignore_titles or []) if t and t.strip()
+        }
+        ignore_keys.discard("")
+
         logger.info(
-            f"Comparison set: {len(titles)} normalized titles across "
+            f"Comparison set: {len(titles)} normalized titles, "
+            f"{len(tmdb_ids)} tmdb / {len(tvdb_ids)} tvdb ids across "
             f"{len(instances)} instance(s)."
+            + (f" Ignoring {len(ignore_keys)} title(s)." if ignore_keys else "")
         )
 
-        orphans = self._scan_orphan_assets(valid_dirs, titles)
+        orphans = self._scan_orphan_assets(
+            valid_dirs, titles, tmdb_ids, tvdb_ids, ignore_keys
+        )
         total_size = sum(item["size"] for item in orphans)
         logger.info(f"Found {len(orphans)} orphan assets ({format_bytes(total_size)}).")
 
@@ -813,21 +841,64 @@ class PosterCleanarr(ChubModule):
 
         return titles
 
+    def _build_library_id_sets(
+        self, db: ChubDB, instances: List[str]
+    ) -> Tuple[Set[int], Set[int]]:
+        """Sets of (tmdb_ids, tvdb_ids) across media_cache for the configured
+        instances. Collections are deliberately excluded: a collection's
+        tmdb_id is a TMDB *collection* id, a different namespace from a movie's
+        tmdbId, so mixing them risks a false ID match."""
+        wanted = set(instances)
+        tmdb_ids: Set[int] = set()
+        tvdb_ids: Set[int] = set()
+        for row in db.media.get_all():
+            if row.get("instance_name") not in wanted:
+                continue
+            tmdb = row.get("tmdb_id")
+            tvdb = row.get("tvdb_id")
+            try:
+                if tmdb not in (None, "", 0):
+                    tmdb_ids.add(int(tmdb))
+            except (ValueError, TypeError):
+                pass
+            try:
+                if tvdb not in (None, "", 0):
+                    tvdb_ids.add(int(tvdb))
+            except (ValueError, TypeError):
+                pass
+        return tmdb_ids, tvdb_ids
+
     def _scan_orphan_assets(
-        self, asset_dirs: List[str], library_titles: Set[str]
+        self,
+        asset_dirs: List[str],
+        library_titles: Set[str],
+        tmdb_ids: Optional[Set[int]] = None,
+        tvdb_ids: Optional[Set[int]] = None,
+        ignore_keys: Optional[Set[str]] = None,
     ) -> List[Dict[str, Any]]:
         """Walk each asset_dir and collect images whose media can't be found in
-        `library_titles`.
+        the library. A file is flagged as an orphan ONLY when nothing matches —
+        every check below can only spare a file, never flag one, mirroring the
+        upstream asset_cleanup script's spare-only matching.
 
-        A file is matched by EITHER its filename-derived title OR its parent
-        folder's title, and the asset-type tag is stripped first. This keeps
-        Kometa asset-directory layouts safe: ``<Title (Year)>/logo.png`` resolves
-        via the folder, and a flat ``<Title (Year)>_logo.png`` via the suffix-
-        stripped filename — so the additional artwork written by asset_renamerr
-        (logo/background/squareart) and Kometa's own ``poster.jpg``/``logo.png``
-        are no longer mis-flagged as orphans. Matching on either key can only
-        spare files, never flag new ones.
+        Matching, in priority order, per file:
+
+          1. Ignore list — a normalized title in `ignore_keys` is always spared.
+          2. ID match — a ``{tmdb-N}``/``{tvdb-N}`` tag on the filename or parent
+             folder whose id is in the library's cached ids spares the file
+             (the most reliable signal). An id MISS is neutral: it falls through
+             to the title check rather than flagging, so a stale/renamed id
+             whose title still matches is kept.
+          3. Title — matched by EITHER the filename-derived title OR the parent
+             folder's title (asset-type tag stripped first). This keeps Kometa
+             asset_folders layouts safe: ``<Title (Year)>/logo.png`` resolves
+             via the folder, ``<Title (Year)>_logo.png`` via the filename — so
+             asset_renamerr's additional artwork and Kometa's own
+             ``poster.jpg``/``logo.png`` aren't mis-flagged.
         """
+        tmdb_ids = tmdb_ids or set()
+        tvdb_ids = tvdb_ids or set()
+        ignore_keys = ignore_keys or set()
         orphans: List[Dict[str, Any]] = []
         for asset_dir in asset_dirs:
             restore_real = os.path.realpath(
@@ -841,9 +912,10 @@ class PosterCleanarr(ChubModule):
                 ):
                     dirs[:] = []
                     continue
+                folder_raw = os.path.basename(root.rstrip(os.sep))
                 # Parent-folder title — in Kometa asset_folders layouts the media
                 # title lives on the folder, not the bare asset filename.
-                folder_key = normalize_titles(os.path.basename(root.rstrip(os.sep)))
+                folder_key = normalize_titles(folder_raw)
                 for fname in files:
                     if not fname.lower().endswith(ASSET_IMAGE_EXTS):
                         continue
@@ -855,8 +927,27 @@ class PosterCleanarr(ChubModule):
                     key = normalize_titles(parsed)
                     if not key and not folder_key:
                         continue
+
+                    # 1. Ignore list — always spared.
+                    if key in ignore_keys or folder_key in ignore_keys:
+                        continue
+
+                    # 2. ID match — extract the id from the RAW filename
+                    # (preferred) or folder, before normalization strips it.
+                    # A hit spares the file; a miss falls through to the title
+                    # check (spare-only — never flags on an id miss alone).
+                    names = (fname, folder_raw)
+                    tmdb_id = _first_int_id(tmdb_id_regex, names)
+                    if tmdb_id is not None and tmdb_id in tmdb_ids:
+                        continue
+                    tvdb_id = _first_int_id(tvdb_id_regex, names)
+                    if tvdb_id is not None and tvdb_id in tvdb_ids:
+                        continue
+
+                    # 3. Title — filename- or folder-derived.
                     if key in library_titles or folder_key in library_titles:
                         continue
+
                     fpath = os.path.join(root, fname)
                     try:
                         size = os.path.getsize(fpath)
@@ -1028,6 +1119,7 @@ def run_orphan_assets_pass(
     mode: str,
     logger: Logger,
     include_collections: bool = True,
+    ignore_titles: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """Shared entry point used by poster_renamerr (and any future caller) to
     invoke the orphan-asset cleanup without spinning up a full PosterCleanarr
@@ -1043,4 +1135,5 @@ def run_orphan_assets_pass(
         mode=mode,
         include_collections=include_collections,
         logger=logger,
+        ignore_titles=ignore_titles,
     )

@@ -1284,6 +1284,9 @@ class PosterRenamerr(ChubModule):
                         mode=mode,
                         logger=cleanarr_logger,
                         include_collections=True,
+                        ignore_titles=list(
+                            getattr(cleanarr_cfg, "orphan_ignore_titles", []) or []
+                        ),
                     )
 
                 if self.config.run_border_replacerr:
