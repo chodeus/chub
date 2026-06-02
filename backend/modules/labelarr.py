@@ -324,14 +324,22 @@ class Labelarr(ChubModule):
                     instance_map=instance_map,
                 ) as connector:
                     connector.update_arr_database()
-                    # Walk Plex unconditionally for this run's instance/library
-                    # scope. Unlike the poster/asset apply paths, labelarr has no
-                    # live per-item fallback — its mapping pass below reads only
-                    # the cache snapshot (db.plex.get_by_instance_and_library),
-                    # so a TTL-skipped/partial snapshot would silently drop whole
-                    # libraries. update_plex_database is already scoped to
-                    # instance_map's libraries, so this stays bounded.
-                    connector.update_plex_database()
+                    # Refresh the Plex snapshot through the shared TTL guard
+                    # (general.plex_cache_ttl_seconds) so back-to-back runs reuse
+                    # a fresh snapshot instead of re-walking Plex every time. The
+                    # guard checks freshness per (instance, library), so any
+                    # library this run needs that hasn't been walked within the
+                    # window is still refreshed — labelarr's mapping pass below
+                    # reads the snapshot directly and has no live per-item
+                    # fallback, so a missing library must not be silently skipped.
+                    from backend.util.plex_refresh import refresh_plex_cache_if_stale
+
+                    refresh_plex_cache_if_stale(
+                        db,
+                        self.full_config,
+                        self.logger,
+                        instance_map.get("plex", {}),
+                    )
                     # Update media-plex mappings using connector approach
                     connector.update_media_plex_mappings()
 

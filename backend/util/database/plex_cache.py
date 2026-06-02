@@ -95,27 +95,36 @@ class PlexCache(DatabaseBase):
         return int(row["n"]) if row else 0
 
     def last_synced_age_seconds(
-        self, instance_name: Optional[str] = None
+        self,
+        instance_name: Optional[str] = None,
+        library_name: Optional[str] = None,
     ) -> Optional[float]:
         """Seconds since the most recent upsert into plex_media_cache (optionally
-        scoped to one instance), or None if the cache is empty / has no
-        timestamp. Used by the TTL guard to skip a redundant Plex re-walk when
-        the snapshot is already fresh. Uses SQLite's clock so it can't drift
-        from the CURRENT_TIMESTAMP values written on upsert.
+        scoped to one instance, and within it one library), or None if the cache
+        is empty / has no timestamp for that scope. Used by the TTL guard to skip
+        a redundant Plex re-walk when the snapshot is already fresh. Scoping to a
+        library lets the guard detect a never-walked library (age None) even when
+        the instance's other libraries are fresh. Uses SQLite's clock so it can't
+        drift from the CURRENT_TIMESTAMP values written on upsert.
         """
-        if instance_name is not None:
+        base = (
+            "SELECT CAST(strftime('%s','now') - strftime('%s', MAX(updated_at)) AS REAL) AS age "
+            "FROM plex_media_cache"
+        )
+        if instance_name is not None and library_name is not None:
             row = self.execute_query(
-                "SELECT CAST(strftime('%s','now') - strftime('%s', MAX(updated_at)) AS REAL) AS age "
-                "FROM plex_media_cache WHERE instance_name=?",
+                base + " WHERE instance_name=? AND library_name=?",
+                (instance_name, library_name),
+                fetch_one=True,
+            )
+        elif instance_name is not None:
+            row = self.execute_query(
+                base + " WHERE instance_name=?",
                 (instance_name,),
                 fetch_one=True,
             )
         else:
-            row = self.execute_query(
-                "SELECT CAST(strftime('%s','now') - strftime('%s', MAX(updated_at)) AS REAL) AS age "
-                "FROM plex_media_cache",
-                fetch_one=True,
-            )
+            row = self.execute_query(base, fetch_one=True)
         if not row or row.get("age") is None:
             return None
         try:
