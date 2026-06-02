@@ -296,7 +296,7 @@ Utilities always win over component rules. Stylelint enforces BEM naming (`.bloc
 
 - **`rate_limiter.py`** — token bucket (1 req / 5 s, burst 5) applied to `POST /api/auth/login`.
 - **`ssrf_guard.py`** — blocks `169.254.169.254`, `metadata.google.internal`, reserved/link-local/multicast, and non-http(s) schemes. Enforced on instance-health probes and scheduler snapshots.
-- **`path_safety.py`** — rejects null bytes and values starting with `-` on path-valued config (prevents arg-smuggling in list-form `subprocess` calls for `jduparr`, `sync_gdrive`).
+- **`path_safety.py`** — restricts directory browsing/file access to roots derived from config (`get_allowed_roots` / `is_path_allowed`) and rejects null-byte paths. Arg-smuggling protection for list-form `subprocess` calls (rejecting null bytes and values starting with `-`) is enforced inline by each module that shells out — e.g. `jduparr._is_unsafe_path_value` and the equivalent guard in `sync_gdrive`.
 - **`logger.py` `SmartRedactionFilter`** — scrubs JWTs, Bearer tokens, bcrypt hashes, Radarr/Sonarr `X-Api-Key`, `X-Plex-Token`, JWT/webhook secrets, Discord webhook URLs, Google OAuth IDs/secrets, AWS keys, GitHub tokens.
 - **Auth** — bcrypt password hashing, JWT session tokens stored in `localStorage['chub-auth-token']`, webhook shared-secret via HMAC compare.
 
