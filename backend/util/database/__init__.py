@@ -17,6 +17,7 @@ from .poster_cache import PosterCache
 from .run_state import RunState
 from .schema import SchemaManager
 from .stats import Stats
+from .sync_state import SyncState
 from .tmdb_id_cache import TmdbIdCache
 from .tmdb_details_cache import TmdbDetailsCache
 from .tmdb_images_cache import TmdbImagesCache
@@ -194,6 +195,11 @@ class ChubDB:
         return self._get_interface("stats", Stats)
 
     @property
+    def sync_state(self) -> SyncState:
+        """Access to per-instance last-completed-sync timestamps."""
+        return self._get_interface("sync_state", SyncState)
+
+    @property
     def holiday(self) -> HolidayStatus:
         """Access to holiday status operations."""
         return self._get_interface("holiday", HolidayStatus)
@@ -323,6 +329,7 @@ __all__ = [
     "PosterCache",
     "RunState",
     "Stats",
+    "SyncState",
     "ChubDB",
     "DBWorker",
     "HolidayStatus",
