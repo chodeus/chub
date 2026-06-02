@@ -1875,7 +1875,7 @@ async def delete_media_item(
                 body = await request.json()
                 delete_files = body.get("deleteFiles", False)
         except Exception:
-            pass
+            pass  # optional body; malformed JSON just leaves delete_files=False
 
         # If deleteFiles requested, remove from ARR first. The connect probe +
         # delete request are blocking, so run them off the event loop.

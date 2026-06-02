@@ -860,12 +860,12 @@ class PosterCleanarr(ChubModule):
                 if tmdb not in (None, "", 0):
                     tmdb_ids.add(int(tmdb))
             except (ValueError, TypeError):
-                pass
+                pass  # non-numeric / malformed id — skip it
             try:
                 if tvdb not in (None, "", 0):
                     tvdb_ids.add(int(tvdb))
             except (ValueError, TypeError):
-                pass
+                pass  # non-numeric / malformed id — skip it
         return tmdb_ids, tvdb_ids
 
     def _scan_orphan_assets(
