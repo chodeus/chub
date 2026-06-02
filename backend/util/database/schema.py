@@ -710,6 +710,23 @@ class SchemaManager:
 
         # Tracks which one-shot data migrations have been applied.
         # See _run_rename_migrations for usage.
+        # Per-instance last-completed-sync timestamp. Unlike a cache table's
+        # row updated_at (which only moves when a row changes), this is written
+        # once when a sync run finishes, so the "Synced N ago" signal reflects
+        # the sync — not incidental row churn.
+        sync_state = TableDefinition(
+            name="sync_state",
+            columns=[
+                ColumnDefinition("scope", "TEXT", nullable=False),
+                ColumnDefinition("instance_name", "TEXT", nullable=False),
+                ColumnDefinition(
+                    "synced_at", "TEXT", default="CURRENT_TIMESTAMP"
+                ),
+            ],
+            constraints=["PRIMARY KEY (scope, instance_name)"],
+        )
+        self._add_table(sync_state)
+
         schema_migrations = TableDefinition(
             name="schema_migrations",
             columns=[

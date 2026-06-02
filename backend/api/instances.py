@@ -1291,11 +1291,15 @@ async def get_instance_stats(
             media = db.media.get_by_instance(instance_id)
             total = len(media)
             matched = sum(1 for m in media if m.get("matched"))
-            # ARR snapshot freshness is intentionally omitted: media_cache only
-            # bumps updated_at on *changed* rows (sync_for_instance updates as
-            # needed), so it tracks "last row change", not "last sync" — showing
-            # it would mislead. An accurate ARR signal needs a dedicated
-            # per-instance sync-completion timestamp (follow-up).
+            # ARR freshness comes from sync_state (written when the ARR sync
+            # completes), not media_cache.updated_at — the latter only moves on
+            # changed rows, so it would read "stale" right after a fresh sync of
+            # an unchanged library.
+            snapshot_age = (
+                db.sync_state.age_seconds(service_type, instance_id)
+                if service_type
+                else None
+            )
             return ok(
                 f"Stats for instance '{instance_id}'",
                 {
@@ -1303,7 +1307,7 @@ async def get_instance_stats(
                     "total_media": total,
                     "matched": matched,
                     "unmatched": total - matched,
-                    "snapshot_age_seconds": None,
+                    "snapshot_age_seconds": snapshot_age,
                 },
             )
     except Exception as e:

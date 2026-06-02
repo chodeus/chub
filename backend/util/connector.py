@@ -364,6 +364,7 @@ class Connector:
         except Exception as exc:
             (logger or self.logger).warning(f"TMDB backfill skipped: {exc}")
 
+        self._record_sync_completion(results)
         return results
 
     def _sync_single_arr_instance(
@@ -534,7 +535,23 @@ class Connector:
 
         sys.stdout.write("\r" + " " * 80 + "\r")
         print(f"Plex database sync complete. ({len(results)} instances)\n")
+        self._record_sync_completion(results)
         return results
+
+    def _record_sync_completion(self, results: List[SyncResult]) -> None:
+        """Stamp sync_state for each successfully synced instance so the
+        freshness signal reflects the sync run rather than row churn.
+        Non-critical: a failure here never fails the sync."""
+        db = getattr(self, "db", None)
+        if db is None:
+            return
+        try:
+            for r in results:
+                if r.success:
+                    db.sync_state.mark_synced(r.instance_type, r.instance_name)
+        except Exception as exc:
+            if self.logger:
+                self.logger.warning(f"sync_state update skipped: {exc}")
 
     def _sync_single_plex_instance(
         self, instance_config: InstanceConfig, logger
