@@ -1136,3 +1136,45 @@ async def clear_artwork_matches(
             code="DB_CLEAR_ARTWORK_MATCHES_ERROR",
             status_code=500,
         )
+
+
+@router.post(
+    "/system/db/poster-matches/reset",
+    summary="Reset poster-match coverage to all-missing",
+    description="Resets the Unmatched page's poster figures: clears the "
+    "matched flag + match metadata (status/confidence/reason + matched poster "
+    "file/timestamp) for media and collections, so the next poster_renamerr "
+    "run re-matches from scratch. Preserves user-curated rows — ignored "
+    "(dismissed) and locked (user_confirmed) — and the Plex identity mapping. "
+    "Does not touch posters on disk or media_asset_matches (additional "
+    "artwork).",
+)
+async def reset_poster_matches(
+    logger: Any = Depends(get_logger),
+    db: ChubDB = Depends(get_database),
+) -> JSONResponse:
+    try:
+        logger.debug("Serving POST /api/system/db/poster-matches/reset")
+        media_reset = db.media.reset_match_state()
+        collection_reset = db.collection.reset_match_state()
+        total = media_reset + collection_reset
+        logger.info(
+            "Reset poster-match coverage via /api/system/db/poster-matches/reset "
+            f"({media_reset} media + {collection_reset} collection rows; "
+            "ignored/locked preserved)"
+        )
+        return ok(
+            "Poster match coverage reset",
+            {
+                "reset": total,
+                "media": media_reset,
+                "collections": collection_reset,
+            },
+        )
+    except Exception as e:
+        logger.error(f"Error resetting poster match state: {e}")
+        return error(
+            f"Error resetting poster match state: {str(e)}",
+            code="DB_RESET_POSTER_MATCHES_ERROR",
+            status_code=500,
+        )
