@@ -3,6 +3,7 @@ import { Card } from '../ui/card/Card';
 import { Button } from '../ui/button/Button';
 import { humanize } from '../../utils/tools';
 import { formatDateTime } from '../../utils/datetime';
+import { formatSecondsAgo } from '../../utils/schedule';
 
 /**
  * Instance card component that composes Card primitive for instance display
@@ -138,6 +139,21 @@ export const InstanceCard = ({
                                     </span>
                                 </span>
                             )}
+                        </div>
+                    )}
+
+                    {/* Snapshot freshness — when did we last sync this source's
+                        cache. Only shown when the backend reports a reliable
+                        age (Plex today; ARR omitted until it has a real
+                        sync-completion timestamp). */}
+                    {instanceStats && instanceStats.snapshot_age_seconds != null && (
+                        <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:gap-4">
+                            <span className="font-semibold text-brand-primary shrink-0 sm:min-w-24 text-sm">
+                                Synced:
+                            </span>
+                            <span className="text-secondary flex-1 text-sm">
+                                {formatSecondsAgo(instanceStats.snapshot_age_seconds)}
+                            </span>
                         </div>
                     )}
                 </div>
