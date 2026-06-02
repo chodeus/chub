@@ -124,6 +124,20 @@ export const systemAPI = {
     },
 
     /**
+     * Reset poster-match coverage to all-missing (Unmatched page reset).
+     * Clears matched flag + match metadata for media + collections, preserving
+     * ignored/locked rows; the next poster_renamerr run re-matches.
+     * @returns {Promise<Object>} { reset, media, collections }
+     */
+    resetPosterMatches: async (options = {}) => {
+        const res = await apiCore.post('/system/db/poster-matches/reset', {}, options);
+        // The Unmatched poster details + stats are now stale.
+        apiCore.clearCache('/posters/unmatched/details');
+        apiCore.clearCache('/posters/unmatched/stats');
+        return res;
+    },
+
+    /**
      * Recent instance health snapshots (Plex / Radarr / Sonarr / Lidarr probes).
      * @param {Object} options - Request options
      * @param {number} options.limit - Max snapshots to return (default 200)

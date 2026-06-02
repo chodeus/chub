@@ -277,6 +277,34 @@ class MediaCache(DatabaseBase):
             or []
         )
 
+    def reset_match_state(self) -> int:
+        """Reset poster-match coverage to all-missing for rows the user hasn't
+        curated.
+
+        Clears the ``matched`` flag and all match metadata (status/confidence/
+        reason + the matched poster file/timestamp) so the next poster_renamerr
+        run re-matches from scratch. Preserves user-curated rows — ignored
+        (dismissed) and user_confirmed (locked) — and the plex_mapping_id Plex
+        identity (not poster-match state). Returns the number of previously
+        matched rows that were reset.
+        """
+        predicate = (
+            "(ignored IS NULL OR ignored = 0) "
+            "AND (user_confirmed IS NULL OR user_confirmed = 0)"
+        )
+        row = self.execute_query(
+            f"SELECT COUNT(*) AS n FROM media_cache WHERE matched = 1 AND {predicate}",
+            fetch_one=True,
+        )
+        reset_count = int(row["n"]) if row else 0
+        self.execute_query(
+            "UPDATE media_cache SET matched = 0, match_status = NULL, "
+            "match_confidence = NULL, match_reason = NULL, "
+            "matched_poster_file = NULL, matched_at = NULL "
+            f"WHERE {predicate}"
+        )
+        return reset_count
+
     def get_needs_review(self) -> list:
         """Return rows flagged for human review (weak/ambiguous/unverified
         candidate), excluding ones the user has ignored."""

@@ -178,3 +178,47 @@ def test_clear_poster_cache_empties_table(db_app):
         "SELECT COUNT(*) AS total FROM poster_cache", fetch_one=True
     )
     assert row["total"] == 0
+
+
+# --- /api/system/db/poster-matches/reset ---
+
+
+def test_reset_poster_matches_preserves_ignored_and_locked(db_app):
+    app, db, _path = db_app
+
+    def seed(table, id_, ignored=0, locked=0):
+        cols = ["id", "asset_type", "title", "matched", "match_status",
+                "ignored", "user_confirmed"]
+        vals = [id_, "movie", f"T{id_}", 1, "matched", ignored, locked]
+        if table == "media_cache":  # identity_key NOT NULL + UNIQUE
+            cols.append("identity_key")
+            vals.append(f"key-{id_}")
+        ph = ", ".join("?" for _ in cols)
+        db.worker.execute_query(
+            f"INSERT INTO {table} ({', '.join(cols)}) VALUES ({ph})", tuple(vals)
+        )
+
+    seed("media_cache", 1)
+    seed("media_cache", 2, ignored=1)
+    seed("media_cache", 3, locked=1)
+    seed("collections_cache", 1)
+
+    client = TestClient(app)
+    resp = client.post("/api/system/db/poster-matches/reset")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["success"] is True
+    assert body["data"]["reset"] == 2  # 1 media + 1 collection
+    assert body["data"]["media"] == 1
+    assert body["data"]["collections"] == 1
+
+    # Plain row reset; curated rows preserved.
+    assert db.worker.execute_query(
+        "SELECT matched FROM media_cache WHERE id=1", fetch_one=True
+    )["matched"] == 0
+    assert db.worker.execute_query(
+        "SELECT matched FROM media_cache WHERE id=2", fetch_one=True
+    )["matched"] == 1
+    assert db.worker.execute_query(
+        "SELECT matched FROM media_cache WHERE id=3", fetch_one=True
+    )["matched"] == 1

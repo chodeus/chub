@@ -3,9 +3,10 @@ import { Link } from 'react-router-dom';
 import { useApiData } from '../../hooks/useApiData.js';
 import { useToast } from '../../contexts/ToastContext.jsx';
 import { postersAPI } from '../../utils/api/posters.js';
+import { systemAPI } from '../../utils/api/system.js';
 import { copyText } from '../../utils/clipboard.js';
 import { buildPosterRequestText, formatId } from '../../utils/posterRequest.js';
-import { IconButton, Modal, PageHeader } from '../../components/ui/index.js';
+import { Button, IconButton, Modal, PageHeader } from '../../components/ui/index.js';
 import Spinner from '../../components/ui/Spinner.jsx';
 
 const SUMMARY_TYPES = [
@@ -1138,6 +1139,89 @@ const PosterPickerModal = ({ item, onClose, onApplied }) => {
     );
 };
 
+/**
+ * Destructive "Reset" control for the active class. Resets CHUB's match
+ * tracking to all-missing (posters: matched flag + metadata; artwork: applied
+ * provenance) so the next module run repopulates it. Preserves user-curated
+ * state (ignored / locked) and never deletes posters from disk or Plex.
+ */
+const ResetControl = ({ assetClass, onComplete }) => {
+    const toast = useToast();
+    const [open, setOpen] = useState(false);
+    const [busy, setBusy] = useState(false);
+    const isArt = assetClass === 'art';
+    const label = isArt ? 'Reset artwork coverage' : 'Reset poster matches';
+
+    const doReset = async () => {
+        setBusy(true);
+        try {
+            const res = isArt
+                ? await systemAPI.resetArtworkMatches()
+                : await systemAPI.resetPosterMatches();
+            const n = isArt ? (res?.data?.deleted ?? 0) : (res?.data?.reset ?? 0);
+            toast.success(
+                isArt
+                    ? `Artwork coverage reset — ${n} row(s) cleared`
+                    : `Poster matches reset — ${n} item(s) returned to unmatched`
+            );
+            setOpen(false);
+            onComplete?.();
+        } catch {
+            toast.error('Reset failed');
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    return (
+        <>
+            <Button
+                variant="secondary"
+                size="small"
+                icon="restart_alt"
+                onClick={() => setOpen(true)}
+                title={`Reset the ${isArt ? 'additional-artwork' : 'poster'} figures to all-missing`}
+            >
+                {isArt ? 'Reset artwork' : 'Reset posters'}
+            </Button>
+            <Modal isOpen={open} onClose={() => !busy && setOpen(false)} size="small">
+                <Modal.Header>{label}?</Modal.Header>
+                <Modal.Body>
+                    <div className="flex flex-col gap-3 text-sm text-secondary">
+                        {isArt ? (
+                            <p>
+                                Clears all additional-artwork coverage (logos / backgrounds / square
+                                art) back to all-missing. The next <strong>Asset Renamerr</strong>{' '}
+                                run repopulates it. Your &ldquo;not needed&rdquo; (ignored) marks
+                                are kept.
+                            </p>
+                        ) : (
+                            <p>
+                                Returns every matched poster to unmatched (media &amp; collections)
+                                so the next <strong>Poster Renamerr</strong> run re-matches from
+                                scratch. Your <strong>Ignored</strong> and <strong>Locked</strong>{' '}
+                                items are kept.
+                            </p>
+                        )}
+                        <p className="text-tertiary text-xs">
+                            This only resets CHUB&apos;s tracking — it does not delete posters or
+                            artwork from disk or Plex.
+                        </p>
+                    </div>
+                </Modal.Body>
+                <Modal.Footer align="right">
+                    <Button variant="ghost" disabled={busy} onClick={() => setOpen(false)}>
+                        Cancel
+                    </Button>
+                    <Button variant="danger" disabled={busy} onClick={doReset}>
+                        {busy ? 'Resetting…' : label}
+                    </Button>
+                </Modal.Footer>
+            </Modal>
+        </>
+    );
+};
+
 const UnmatchedAssetsPage = () => {
     const { data, isLoading, refresh } = useApiData({
         apiFunction: postersAPI.fetchUnmatchedDetails,
@@ -1275,6 +1359,15 @@ const UnmatchedAssetsPage = () => {
                         ? 'Optional extras (Asset Renamerr) — kept separate so posters stay primary.'
                         : 'The main artwork shown in Plex.'}
                 </span>
+                <div className="ml-auto">
+                    <ResetControl
+                        assetClass="poster"
+                        onComplete={() => {
+                            refresh();
+                            refreshRecent();
+                        }}
+                    />
+                </div>
             </div>
 
             {/* View switch: Unmatched / Needs Review / Ignored */}

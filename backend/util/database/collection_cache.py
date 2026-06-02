@@ -129,6 +129,28 @@ class CollectionCache(DatabaseBase):
             or []
         )
 
+    def reset_match_state(self) -> int:
+        """Reset poster-match coverage to all-missing for collections the user
+        hasn't curated. Mirrors MediaCache.reset_match_state — preserves
+        ignored + user_confirmed (locked) rows. Returns rows reset."""
+        predicate = (
+            "(ignored IS NULL OR ignored = 0) "
+            "AND (user_confirmed IS NULL OR user_confirmed = 0)"
+        )
+        row = self.execute_query(
+            "SELECT COUNT(*) AS n FROM collections_cache "
+            f"WHERE matched = 1 AND {predicate}",
+            fetch_one=True,
+        )
+        reset_count = int(row["n"]) if row else 0
+        self.execute_query(
+            "UPDATE collections_cache SET matched = 0, match_status = NULL, "
+            "match_confidence = NULL, match_reason = NULL, "
+            "matched_poster_file = NULL, matched_at = NULL "
+            f"WHERE {predicate}"
+        )
+        return reset_count
+
     def get_needs_review(self) -> list:
         """Return collections flagged for human review, excluding ignored."""
         return (
