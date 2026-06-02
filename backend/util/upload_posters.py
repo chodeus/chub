@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from typing import Any, Dict, Generator, List, Optional, Tuple
 
 from backend.util.config import load_config
-from backend.util.connector import Connector
 from backend.util.database import ChubDB
 from backend.util.helper import progress
 from backend.util.logger import Logger
@@ -149,16 +148,20 @@ class PosterUploader:
         return enabled_instances
 
     def _update_plex_database(self, enabled_instances: Dict[str, List[str]]):
-        """Update Plex database for enabled instances"""
-        instance_map = {
-            "plex": {name: libraries for name, libraries in enabled_instances.items()}
-        }
+        """Refresh the Plex snapshot for enabled instances.
+
+        Routed through the shared TTL guard (general.plex_cache_ttl_seconds)
+        so a chained run that just walked Plex — e.g. poster_renamerr →
+        upload — reuses the fresh snapshot instead of re-walking the whole
+        library. A lazy per-item live lookup at apply time still covers items
+        added in the gap.
+        """
+        from backend.util.plex_refresh import refresh_plex_cache_if_stale
 
         try:
-            connector = Connector(
-                db=self.db, logger=self.logger, instance_map=instance_map
+            refresh_plex_cache_if_stale(
+                self.db, self.full_config, self.logger, enabled_instances
             )
-            connector.update_plex_database()
         except Exception as e:
             raise PosterUploadError(f"Failed to update Plex database: {e}")
 
