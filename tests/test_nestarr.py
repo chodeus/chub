@@ -176,6 +176,7 @@ def test_cached_results_clear_stale_config_cache(monkeypatch, stub_logger):
         "total": 0,
         "instances_checked": [],
         "scanned_at": None,
+        "unmatched_enabled": False,
     }
     assert db.media.scan_row is None
     assert any(

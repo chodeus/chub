@@ -250,17 +250,28 @@ class _NestScanner:
                 elif instance_type == "lidarr":
                     lidarr_media.extend(media_items)
 
-        # Phase 1: Database comparison — ARR vs Plex
+        # Phase 1: Database comparison — ARR vs Plex.
+        # Opt-in only: runs when valid library_mappings scope the comparison
+        # to specific Plex libraries. Without that scope the diff would flag
+        # the entire library as unmatched, so it stays off until configured.
         if self.db and not self._cancelled():
-            # Build set of (instance_name, arr_id) for items that actually
-            # have a file on disk. Monitored-but-not-downloaded items get
-            # skipped from ARR→Plex comparison (they can't be in Plex).
-            live_with_file = {
-                (m["instance_name"], m["media_id"])
-                for m in (*radarr_media, *sonarr_media, *lidarr_media)
-                if m.get("has_file") and m.get("media_id") is not None
-            }
-            issues.extend(self._detect_unmatched(live_with_file))
+            _, mapped_libraries = self._build_mapping_lookups()
+            if mapped_libraries:
+                # Build set of (instance_name, arr_id) for items that actually
+                # have a file on disk. Monitored-but-not-downloaded items get
+                # skipped from ARR→Plex comparison (they can't be in Plex).
+                live_with_file = {
+                    (m["instance_name"], m["media_id"])
+                    for m in (*radarr_media, *sonarr_media, *lidarr_media)
+                    if m.get("has_file") and m.get("media_id") is not None
+                }
+                issues.extend(self._detect_unmatched(live_with_file))
+            else:
+                self.logger.info(
+                    "[Phase 1] Skipping ARR/Plex unmatched comparison — no "
+                    "valid library_mappings configured. Add library mappings "
+                    "in Nestarr settings to enable unmatched detection."
+                )
 
         # Phase 2: Path nesting among tracked items
         if not self._cancelled():
