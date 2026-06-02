@@ -58,8 +58,7 @@ def _module(asset_types=None):
     m.plex_libraries = {}
     m.unmatched_media = m.unmatched_collections = []
     m.all_media = m.all_collections = []
-    # config: one ARR instance, no ignore gates. asset_types drives which
-    # artwork types the view surfaces (defaults to all supported types).
+    # config: one ARR instance, no ignore gates.
     m.config = SimpleNamespace(
         instances=["radarr_main"],
         ignore_unmonitored=False,
@@ -68,9 +67,16 @@ def _module(asset_types=None):
         ignore_tags=[],
         ignore_titles=[],
         ignore_collections=[],
-        asset_types=asset_types or ["logo", "background", "squareart"],
     )
-    m.full_config = SimpleNamespace(tmdb=SimpleNamespace(apikey=""))
+    # asset_types drives which artwork types the view surfaces, and lives on the
+    # asset_renamerr config (the matcher that writes the rows) — mirrors the real
+    # FullConfig structure so the deselection path is exercised correctly.
+    m.full_config = SimpleNamespace(
+        tmdb=SimpleNamespace(apikey=""),
+        asset_renamerr=SimpleNamespace(
+            asset_types=asset_types or ["logo", "background", "squareart"]
+        ),
+    )
     return m
 
 

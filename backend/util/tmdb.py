@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import difflib
 import json
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Union
@@ -59,9 +60,21 @@ class TMDBClient:
         self.cfg = cfg
         self.db = db
         self.logger = logger
-        self.session = requests.Session()
+        # requests.Session isn't safe to share across threads, and this client
+        # is driven concurrently by backfill_missing_tmdb_ids' ThreadPoolExecutor.
+        # Give each worker thread its own session, and guard the in-process memo.
+        self._local = threading.local()
         self._memo: dict = {}
+        self._memo_lock = threading.Lock()
         self._auth_failed = False
+
+    @property
+    def session(self) -> requests.Session:
+        s = getattr(self._local, "session", None)
+        if s is None:
+            s = requests.Session()
+            self._local.session = s
+        return s
 
     @property
     def enabled(self) -> bool:
@@ -81,14 +94,16 @@ class TMDBClient:
 
         ext_str = str(external_id)
         key = (ext_str, source, media_type)
-        if key in self._memo:
-            return self._memo[key]
+        with self._memo_lock:
+            if key in self._memo:
+                return self._memo[key]
 
         hit, cached = self.db.tmdb_id_cache.get(
             ext_str, source, media_type, self.cfg.cache_expiration
         )
         if hit:
-            self._memo[key] = cached
+            with self._memo_lock:
+                self._memo[key] = cached
             return cached
 
         tmdb_id = self._fetch(ext_str, source, media_type)
@@ -96,7 +111,8 @@ class TMDBClient:
             self.db.tmdb_id_cache.put(ext_str, source, media_type, tmdb_id)
         except Exception as exc:
             self.logger.warning(f"TMDB cache write failed for {ext_str}: {exc}")
-        self._memo[key] = tmdb_id
+        with self._memo_lock:
+            self._memo[key] = tmdb_id
         return tmdb_id
 
     def _request_with_retry(self, url: str, params: dict, *, what: str):
@@ -366,15 +382,17 @@ class TMDBClient:
 
         mt = "movie" if media_type == "movie" else "tv"
         key = ("images", str(tmdb_id), mt)
-        if key in self._memo:
-            return self._memo[key]
+        with self._memo_lock:
+            if key in self._memo:
+                return self._memo[key]
 
         try:
             hit, cached = self.db.tmdb_images_cache.get(
                 int(tmdb_id), mt, self.cfg.cache_expiration
             )
             if hit:
-                self._memo[key] = cached
+                with self._memo_lock:
+                    self._memo[key] = cached
                 return cached
         except Exception as exc:
             self.logger.warning(f"TMDB images cache read failed for {tmdb_id}: {exc}")
@@ -396,7 +414,8 @@ class TMDBClient:
             self.db.tmdb_images_cache.put(int(tmdb_id), mt, images)
         except Exception as exc:
             self.logger.warning(f"TMDB images cache write failed for {tmdb_id}: {exc}")
-        self._memo[key] = images
+        with self._memo_lock:
+            self._memo[key] = images
         return images
 
     def _fetch_images(

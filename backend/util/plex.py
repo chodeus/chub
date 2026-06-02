@@ -352,8 +352,11 @@ class PlexClient:
         total_size = 1
         spinner = itertools.cycle(["-", "\\", "|", "/"])  # A simple rotating spinner
 
-        while total_size > len(all_entries) and container_start <= total_size:
-            # Your normal loading logic
+        # Terminate on a short/empty page rather than trusting the server-reported
+        # totalSize (which can be stale or under-report under concurrent edits and
+        # would silently truncate the walk). totalSize is kept only as a progress
+        # hint for the spinner line.
+        while True:
             data = section._server.query(
                 key,
                 headers={
@@ -379,6 +382,11 @@ class PlexClient:
             msg = f"{spin} Loading: {len(all_entries)}/{total_size} items from {section.type.title()} for '{section.title}'..."
             sys.stdout.write("\r" + msg.ljust(60))
             sys.stdout.flush()
+
+            # A page shorter than the requested container size (incl. empty) is
+            # the definitive end-of-list signal.
+            if len(subresults) < container_size:
+                break
 
         print()  # Move to next line after done
         return all_entries

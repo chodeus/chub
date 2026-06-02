@@ -137,9 +137,12 @@ class CollectionCache(DatabaseBase):
             "(ignored IS NULL OR ignored = 0) "
             "AND (user_confirmed IS NULL OR user_confirmed = 0)"
         )
+        # Scope COUNT and UPDATE identically (see MediaCache.reset_match_state):
+        # include needs_review rows (status set, matched = 0), exclude
+        # never-evaluated rows, so the count reflects rows actually cleared.
+        scope = f"(matched = 1 OR match_status IS NOT NULL) AND {predicate}"
         row = self.execute_query(
-            "SELECT COUNT(*) AS n FROM collections_cache "
-            f"WHERE matched = 1 AND {predicate}",
+            f"SELECT COUNT(*) AS n FROM collections_cache WHERE {scope}",
             fetch_one=True,
         )
         reset_count = int(row["n"]) if row else 0
@@ -147,7 +150,7 @@ class CollectionCache(DatabaseBase):
             "UPDATE collections_cache SET matched = 0, match_status = NULL, "
             "match_confidence = NULL, match_reason = NULL, "
             "matched_poster_file = NULL, matched_at = NULL "
-            f"WHERE {predicate}"
+            f"WHERE {scope}"
         )
         return reset_count
 

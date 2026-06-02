@@ -295,8 +295,13 @@ class MediaCache(DatabaseBase):
             "(ignored IS NULL OR ignored = 0) "
             "AND (user_confirmed IS NULL OR user_confirmed = 0)"
         )
+        # Scope COUNT and UPDATE identically so the returned count matches the
+        # rows actually cleared. Include needs_review rows (match_status set but
+        # matched = 0) — they carry match metadata that the reset clears too —
+        # while excluding never-evaluated rows (no flag, no status).
+        scope = f"(matched = 1 OR match_status IS NOT NULL) AND {predicate}"
         row = self.execute_query(
-            f"SELECT COUNT(*) AS n FROM media_cache WHERE matched = 1 AND {predicate}",
+            f"SELECT COUNT(*) AS n FROM media_cache WHERE {scope}",
             fetch_one=True,
         )
         reset_count = int(row["n"]) if row else 0
@@ -304,7 +309,7 @@ class MediaCache(DatabaseBase):
             "UPDATE media_cache SET matched = 0, match_status = NULL, "
             "match_confidence = NULL, match_reason = NULL, "
             "matched_poster_file = NULL, matched_at = NULL "
-            f"WHERE {predicate}"
+            f"WHERE {scope}"
         )
         return reset_count
 

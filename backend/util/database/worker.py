@@ -667,27 +667,40 @@ class DBWorker(DatabaseBase):
             where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
 
             if module_name:
-                # Fetch with a generous window and filter by payload.module_name.
-                # We don't know how many will match after the JSON filter, so
-                # we over-fetch and then slice.
-                fetch_limit = limit + offset + 200
-                sql = f"SELECT * FROM jobs {where} ORDER BY received_at DESC LIMIT ?"
-                rows = self.execute_query(
-                    sql, tuple(params) + (fetch_limit,), fetch_all=True
+                # module_name lives in the JSON payload and can't be filtered in
+                # SQL portably, so page through newest-first and post-filter until
+                # we've collected enough matches (offset+limit) or the table is
+                # exhausted. A single fixed over-fetch window would silently drop
+                # matches when the module's runs are sparse among many other jobs.
+                needed = offset + limit
+                page_size = max(needed + 200, 500)
+                sql = (
+                    f"SELECT * FROM jobs {where} "
+                    "ORDER BY received_at DESC LIMIT ? OFFSET ?"
                 )
-                matched = []
-                for row in rows or []:
-                    payload = row["payload"]
-                    if isinstance(payload, str):
-                        try:
-                            payload = json.loads(payload)
-                        except (json.JSONDecodeError, TypeError):
-                            payload = {}
-                    if (
-                        isinstance(payload, dict)
-                        and payload.get("module_name") == module_name
-                    ):
-                        matched.append(dict(row))
+                matched: list = []
+                sql_offset = 0
+                while len(matched) < needed:
+                    rows = self.execute_query(
+                        sql, tuple(params) + (page_size, sql_offset), fetch_all=True
+                    )
+                    if not rows:
+                        break  # table exhausted
+                    for row in rows:
+                        payload = row["payload"]
+                        if isinstance(payload, str):
+                            try:
+                                payload = json.loads(payload)
+                            except (json.JSONDecodeError, TypeError):
+                                payload = {}
+                        if (
+                            isinstance(payload, dict)
+                            and payload.get("module_name") == module_name
+                        ):
+                            matched.append(dict(row))
+                    if len(rows) < page_size:
+                        break  # short page → end of table
+                    sql_offset += page_size
                 jobs = matched[offset : offset + limit]
             else:
                 sql = f"SELECT * FROM jobs {where} ORDER BY received_at DESC LIMIT ? OFFSET ?"

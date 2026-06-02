@@ -26,9 +26,14 @@ class _BufferingLogger:
     buffer concurrently, so appends are guarded by a lock.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, real_logger: Any = None) -> None:
         self._records: List[Tuple[str, Any, tuple, dict]] = []
         self._lock = threading.Lock()
+        # Kept only so __getattr__ can delegate introspection/config calls
+        # (isEnabledFor, setLevel, name, ...). The explicit logging methods
+        # below are found via normal lookup and never reach __getattr__, so
+        # they stay buffered.
+        self._real_logger = real_logger
 
     def _store(self, level: str, msg: Any, args: tuple, kwargs: dict) -> None:
         with self._lock:
@@ -49,6 +54,31 @@ class _BufferingLogger:
     def exception(self, msg: Any, *args, **kwargs) -> None:
         kwargs.setdefault("exc_info", True)
         self._store("error", msg, args, kwargs)
+
+    def get_adapter(self, extra: Any = None) -> "_BufferingLogger":
+        """Stand in for Logger.get_adapter. The source context
+        (DATABASE/WORKER/...) is ignored — it is dropped on flush anyway,
+        since records replay through the real logger's plain level methods.
+        Returning self keeps every chained call buffered and in order, and is
+        chainable because self also provides get_adapter."""
+        return self
+
+    def heartbeat(self, msg: Any, *args, **kwargs) -> None:
+        self.info(f"[hb] {msg}", *args, **kwargs)
+
+    def log_outro(self) -> None:
+        # Only meaningful on the real logger; no-op while buffering.
+        pass
+
+    def __getattr__(self, name: str) -> Any:
+        """Delegate anything not explicitly defined (e.g. isEnabledFor,
+        setLevel, name) to the real logger so the buffer is a faithful
+        drop-in. Reads __dict__ directly to avoid recursing through
+        __getattr__ before _real_logger is set."""
+        real = self.__dict__.get("_real_logger")
+        if real is not None:
+            return getattr(real, name)
+        raise AttributeError(name)
 
     def flush_to(self, logger: Any) -> None:
         with self._lock:
@@ -691,10 +721,16 @@ class Upgradinatorr(ChubModule):
 
         all_records: List[Dict[str, Any]] = list(first.get("records", []))
         total = first.get("totalRecords", 0)
-        if not all_records or len(all_records) >= total:
+        # A page shorter than page_size is the definitive end-of-list signal and
+        # does not depend on totalRecords (which the ARR endpoints can report
+        # stale or under-counted for the monitored-filtered view).
+        if len(all_records) < page_size:
             return all_records
 
-        last_page = -(-total // page_size)  # ceil division
+        # Use totalRecords only as a hint for how many pages to fetch
+        # concurrently; always fetch at least page 2 so an under-reported total
+        # can't truncate the list, and verify the tail sequentially below.
+        last_page = max(2, -(-total // page_size))  # ceil division
         remaining_pages = list(range(2, last_page + 1))
 
         pages: Dict[int, List[Dict[str, Any]]] = {}
@@ -723,6 +759,24 @@ class Upgradinatorr(ChubModule):
         # Reassemble in page order so output is deterministic.
         for p in remaining_pages:
             all_records.extend(pages.get(p, []))
+
+        # Guard against an under-reported totalRecords: if the last computed
+        # page still came back full, more records may exist beyond it. Page
+        # sequentially until a short/empty page confirms the true end.
+        tail = pages.get(last_page, [])
+        next_page = last_page + 1
+        while len(tail) >= page_size:
+            result = fetch_fn(page=next_page, page_size=page_size, threadsafe=True)
+            if result is None:
+                self.logger.warning(
+                    f"Failed to fetch {search_mode} page {next_page} from "
+                    f"{app.instance_name}; aborting this Upgradinatorr profile."
+                )
+                return None
+            tail = result.get("records", [])
+            all_records.extend(tail)
+            next_page += 1
+
         return all_records
 
     def _convert_wanted_to_media_dict(
@@ -1307,8 +1361,14 @@ class Upgradinatorr(ChubModule):
                     instance_entry: Any,
                     app: BaseARRClient,
                 ) -> Tuple[int, str, Optional[Dict[str, Any]], _BufferingLogger]:
-                    buf = _BufferingLogger()
+                    buf = _BufferingLogger(self._real_logger)
                     self._thread_local.logger = buf
+                    # Route the ARR client's own logging (incl. its nested
+                    # prefetch threads) through this instance's buffer too, so
+                    # concurrent instances' client log lines don't interleave.
+                    # Each job has its own client, so this rebind is per-instance.
+                    prev_app_logger = getattr(app, "logger", None)
+                    app.logger = buf
                     try:
                         result = self.process_instance(
                             instance_type, instance_entry, app
@@ -1322,6 +1382,7 @@ class Upgradinatorr(ChubModule):
                     finally:
                         # Worker threads are reused by the pool — clear the
                         # override so the next task starts with a fresh buffer.
+                        app.logger = prev_app_logger
                         self._thread_local.logger = None
                     return index, instance_name, result, buf
 

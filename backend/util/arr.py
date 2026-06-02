@@ -1428,14 +1428,19 @@ class SonarrClient(BaseARRClient):
             return result
 
         def fetch(sid: int):
-            session = requests.Session()
-            session.headers.update(self.headers)
-            resp = session.get(
-                f"{self.api_base}/episode?seriesId={sid}", timeout=self.timeout
+            # Use the thread-safe requester (private session + the shared
+            # retry/429/5xx ladder), so a transient error retries instead of
+            # silently yielding an empty season list for the whole series.
+            data = self.make_get_request_threadsafe(
+                f"{self.api_base}/episode?seriesId={sid}"
             )
-            resp.raise_for_status()
+            if data is None:
+                self.logger.warning(
+                    f"Failed to fetch episodes for series {sid} after retries"
+                )
+                return sid, {}
             by_season: Dict[int, List[Dict[str, Any]]] = {}
-            for ep in resp.json() or []:
+            for ep in data:
                 by_season.setdefault(ep.get("seasonNumber"), []).append(ep)
             return sid, by_season
 
@@ -1635,13 +1640,17 @@ class LidarrClient(BaseARRClient):
             return result
 
         def fetch(aid: int):
-            session = requests.Session()
-            session.headers.update(self.headers)
-            resp = session.get(
-                f"{self.api_base}/album?artistId={aid}", timeout=self.timeout
+            # Thread-safe requester (private session + shared retry ladder) so a
+            # transient error retries rather than dropping the artist's albums.
+            data = self.make_get_request_threadsafe(
+                f"{self.api_base}/album?artistId={aid}"
             )
-            resp.raise_for_status()
-            return aid, resp.json() or []
+            if data is None:
+                self.logger.warning(
+                    f"Failed to fetch albums for artist {aid} after retries"
+                )
+                return aid, []
+            return aid, data
 
         workers = min(max_workers, len(artist_ids))
         with ThreadPoolExecutor(max_workers=workers) as pool:
