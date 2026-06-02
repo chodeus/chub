@@ -383,7 +383,13 @@ class UnmatchedAssets(ChubModule):
         never included). Mirrors asset_renamerr._active_asset_types so the view
         and the matcher agree on which types exist — a deselected type (e.g.
         squareart) gets no rows written and is dropped here too."""
-        configured = getattr(self.config, "asset_types", None) or self.ARTWORK_TYPES
+        # asset_types lives on the asset_renamerr config (the matcher that
+        # writes the rows), NOT on this module's UnmatchedAssetsConfig — reading
+        # self.config here always missed and silently fell back to all types.
+        asset_renamerr_cfg = getattr(self.full_config, "asset_renamerr", None)
+        configured = (
+            getattr(asset_renamerr_cfg, "asset_types", None) or self.ARTWORK_TYPES
+        )
         return [t for t in self.ARTWORK_TYPES if t in configured]
 
     def get_artwork_stats_adhoc(self) -> Dict[str, Any]:
@@ -463,6 +469,11 @@ class UnmatchedAssets(ChubModule):
                 elif row.get("match_status") == "missing":
                     missing += 1
                     missing_items.append(item)
+                elif not row.get("match_status"):
+                    # Row exists but carries no status (e.g. a restored/un-ignored
+                    # row) → treat as a genuine gap, not a failed attempt.
+                    missing += 1
+                    missing_items.append(item)
                 else:
                     # Any other recorded status (e.g. "failed") is an attempted
                     # match that didn't land → actionable in Needs Review.
@@ -520,6 +531,9 @@ class UnmatchedAssets(ChubModule):
                 elif row.get("match_status") == "applied":
                     pass  # covered — nothing to show
                 elif row.get("match_status") == "missing":
+                    entry["missing"].append(image_type)
+                elif not row.get("match_status"):
+                    # Status-less (e.g. restored/un-ignored) row → genuine gap.
                     entry["missing"].append(image_type)
                 else:
                     entry["failed"].append(image_type)
