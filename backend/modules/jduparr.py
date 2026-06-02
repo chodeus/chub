@@ -1,7 +1,7 @@
 # modules/jduparr.py
 
+import json
 import os
-import re
 import subprocess
 from typing import Any, Dict, List, Optional
 
@@ -12,6 +12,11 @@ from backend.util.notification import NotificationManager
 
 
 VIDEO_EXT_FILTER = "onlyext:mp4,mkv,avi"
+
+# jdupes can legitimately run for a long time on large libraries, but it must
+# not be able to wedge the scheduler worker forever (e.g. a stale NFS mount).
+# Generous ceiling; both the scan and link passes are bounded by it.
+JDUPES_TIMEOUT_SECONDS = 6 * 60 * 60  # 6 hours
 
 
 class Jduparr(ChubModule):
@@ -28,35 +33,33 @@ class Jduparr(ChubModule):
         )
 
     @staticmethod
-    def _is_summary_line(line: str) -> bool:
-        return bool(
-            re.search(r"\bduplicate files?\b", line, re.IGNORECASE)
-            or re.search(r"\bNo duplicates found\.?\b", line, re.IGNORECASE)
-            or re.match(r"^\d+\s+(?:files?|sets?)\b", line, re.IGNORECASE)
-        )
+    def parse_duplicate_groups(stdout: str) -> List[List[str]]:
+        """Parse ``jdupes --json`` output into duplicate-file groups.
 
-    @classmethod
-    def parse_duplicate_groups(cls, stdout: str) -> List[List[str]]:
+        jdupes emits ``{"matchSets": [{"fileList": [{"filePath": ...}, ...]}]}``.
+        Using the structured JSON output (instead of the line-oriented ``-M``
+        text) means real file paths can never be mistaken for summary lines.
+        Only sets with more than one file are genuine duplicate groups.
+        """
+        text = (stdout or "").strip()
+        if not text:
+            return []
+        try:
+            data = json.loads(text)
+        except (ValueError, TypeError):
+            return []
+
         groups: List[List[str]] = []
-        current_group: List[str] = []
-
-        def flush_group() -> None:
-            nonlocal current_group
-            if len(current_group) > 1:
-                groups.append(current_group)
-            current_group = []
-
-        for raw_line in stdout.splitlines():
-            line = raw_line.strip()
-            if not line:
-                flush_group()
+        for match_set in data.get("matchSets") or []:
+            if not isinstance(match_set, dict):
                 continue
-            if cls._is_summary_line(line):
-                flush_group()
-                continue
-            current_group.append(line)
-
-        flush_group()
+            paths = [
+                entry.get("filePath")
+                for entry in (match_set.get("fileList") or [])
+                if isinstance(entry, dict) and entry.get("filePath")
+            ]
+            if len(paths) > 1:
+                groups.append(paths)
         return groups
 
     @staticmethod
@@ -68,14 +71,30 @@ class Jduparr(ChubModule):
         return sum(max(len(group) - 1, 0) for group in groups)
 
     @staticmethod
-    def _parse_link_count(stdout: str, fallback: int) -> int:
-        linked = sum(1 for line in stdout.splitlines() if "---->" in line)
-        return linked or fallback
+    def _error_item(
+        source_dirs: List[str], field_message: str, message: str
+    ) -> Dict[str, Any]:
+        """Build an error-status output row for the given source dirs."""
+        return {
+            "source_dir": ", ".join(source_dirs),
+            "source_dirs": list(source_dirs),
+            "field_message": field_message,
+            "output": [],
+            "groups": [],
+            "sub_count": 0,
+            "linked_count": 0,
+            "status": "error",
+            "error": message,
+        }
 
     def _build_scan_command(
         self, source_dirs: List[str], hash_db: Optional[str]
     ) -> List[str]:
-        cmd = ["jdupes", "-r", "-M", "-X", VIDEO_EXT_FILTER]
+        # --json is mutually exclusive with the -L link action (jdupes allows
+        # only one print/action mode per run), so discovery and linking are
+        # necessarily two separate passes. --json gives machine-readable match
+        # sets, avoiding fragile text parsing of the -M output.
+        cmd = ["jdupes", "-r", "--json", "-X", VIDEO_EXT_FILTER]
         if hash_db:
             cmd.extend(["-y", hash_db])
         cmd.extend(source_dirs)
@@ -212,13 +231,36 @@ class Jduparr(ChubModule):
                 self._send_output(output)
                 return
 
+            if self.is_cancelled():
+                self.logger.info("Cancellation requested, stopping jduparr.")
+                return
+
             scan_cmd = self._build_scan_command(valid_source_dirs, hash_db)
             try:
                 scan_result = subprocess.run(
-                    scan_cmd, capture_output=True, text=True, check=False
+                    scan_cmd,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                    timeout=JDUPES_TIMEOUT_SECONDS,
                 )
             except FileNotFoundError:
-                self.logger.error("jdupes not found. Ensure it is installed.")
+                message = "jdupes not found. Ensure it is installed."
+                self.logger.error(message)
+                output.append(
+                    self._error_item(valid_source_dirs, "❌ Duplicate scan failed.", message)
+                )
+                self._send_output(output)
+                return
+            except subprocess.TimeoutExpired:
+                message = (
+                    f"jdupes scan timed out after {JDUPES_TIMEOUT_SECONDS} seconds."
+                )
+                self.logger.error(message)
+                output.append(
+                    self._error_item(valid_source_dirs, "❌ Duplicate scan failed.", message)
+                )
+                self._send_output(output)
                 return
 
             if scan_result.returncode != 0:
@@ -229,17 +271,9 @@ class Jduparr(ChubModule):
                 )
                 self.logger.error(message)
                 output.append(
-                    {
-                        "source_dir": ", ".join(valid_source_dirs),
-                        "source_dirs": valid_source_dirs,
-                        "field_message": "❌ Duplicate scan failed.",
-                        "output": [],
-                        "groups": [],
-                        "sub_count": 0,
-                        "linked_count": 0,
-                        "status": "error",
-                        "error": message,
-                    }
+                    self._error_item(
+                        valid_source_dirs, "❌ Duplicate scan failed.", message
+                    )
                 )
                 self._send_output(output)
                 return
@@ -252,16 +286,35 @@ class Jduparr(ChubModule):
             error_message = None
 
             if duplicate_groups and not self.config.dry_run:
-                link_cmd = self._build_link_command(valid_source_dirs, hash_db)
-                try:
-                    link_result = subprocess.run(
-                        link_cmd, capture_output=True, text=True, check=False
-                    )
-                except FileNotFoundError:
-                    self.logger.error("jdupes not found. Ensure it is installed.")
+                if self.is_cancelled():
+                    self.logger.info("Cancellation requested, stopping jduparr.")
                     return
 
-                if link_result.returncode != 0:
+                link_cmd = self._build_link_command(valid_source_dirs, hash_db)
+                link_result = None
+                try:
+                    link_result = subprocess.run(
+                        link_cmd,
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                        timeout=JDUPES_TIMEOUT_SECONDS,
+                    )
+                except FileNotFoundError:
+                    status = "error"
+                    error_message = "jdupes not found. Ensure it is installed."
+                    self.logger.error(error_message)
+                except subprocess.TimeoutExpired:
+                    status = "error"
+                    error_message = (
+                        f"jdupes hardlink timed out after "
+                        f"{JDUPES_TIMEOUT_SECONDS} seconds."
+                    )
+                    self.logger.error(error_message)
+
+                if link_result is None:
+                    pass  # FileNotFoundError/TimeoutExpired already set error state
+                elif link_result.returncode != 0:
                     status = "error"
                     error_text = (
                         link_result.stderr or link_result.stdout or ""
@@ -272,9 +325,11 @@ class Jduparr(ChubModule):
                     )
                     self.logger.error(error_message)
                 else:
-                    linked_count = self._parse_link_count(
-                        link_result.stdout, candidate_count
-                    )
+                    # jdupes -L is silent on success (exit 0) and hardlinks every
+                    # duplicate it finds; per-file failures are reported with a
+                    # non-zero exit code and handled above. So on success every
+                    # relink candidate was linked.
+                    linked_count = candidate_count
                     for group in duplicate_groups:
                         for relinked_path in group[1:]:
                             self.logger.debug(f"[RELINKED] {relinked_path}")

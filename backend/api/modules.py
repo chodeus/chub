@@ -130,9 +130,7 @@ async def list_modules(
                 {
                     "name": name,
                     "description": MODULE_DESCRIPTIONS.get(name, ""),
-                    "enabled": schedule_val is not None
-                    and schedule_val != ""
-                    and schedule_val is not None,
+                    "enabled": schedule_val is not None and schedule_val != "",
                     "schedule": schedule_val,
                     "running": status.get("running", False),
                     "last_run": run_state.get("last_run") if run_state else None,
@@ -960,9 +958,11 @@ async def toggle_module(
     """
     Enable or disable a module by setting or clearing its schedule.
 
-    Toggles the module's enabled state in the configuration file.
-    Enabling a module without a schedule sets it to a null schedule
-    (enabled but not auto-scheduled).
+    Toggles the module's enabled state in the configuration file. A module is
+    "enabled" iff it has a non-empty schedule string; the scheduler only runs
+    modules with a real schedule. Enabling a module without first setting a
+    schedule therefore cannot persist as enabled — it stays unscheduled, and
+    the response reflects that actual state.
 
     Args:
         name: The module name to toggle
@@ -980,11 +980,11 @@ async def toggle_module(
         config_dict = config.model_dump(mode="python")
         schedule = config_dict.get("schedule", {})
 
-        if enabled:
-            if not schedule.get(name):
-                schedule[name] = None  # Enabled but no schedule set
-        else:
+        if not enabled:
             schedule[name] = None
+        # When enabling, an existing schedule string is preserved as-is; if
+        # none is set there is nothing to persist (the model has no separate
+        # enabled flag), so the module remains unscheduled.
 
         config_dict["schedule"] = schedule
         from backend.util.config import ChubConfig
@@ -992,9 +992,12 @@ async def toggle_module(
         updated = ChubConfig.model_validate(config_dict)
         save_config(updated)
 
+        # Report the actual persisted state rather than the requested one: a
+        # module is enabled only if it ended up with a non-empty schedule.
+        actual_enabled = bool(schedule.get(name))
         return ok(
-            f"Module '{name}' {'enabled' if enabled else 'disabled'}",
-            {"module": name, "enabled": enabled},
+            f"Module '{name}' {'enabled' if actual_enabled else 'disabled'}",
+            {"module": name, "enabled": actual_enabled},
         )
     except Exception as e:
         logger.error(f"Error toggling module {name}: {e}")
