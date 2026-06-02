@@ -17,6 +17,7 @@ from backend.util.notification import NotificationManager
 from backend.util.plex import PlexClient
 from backend.util.ssrf_guard import is_safe_url
 from backend.util.fanart import FanartClient
+from backend.util.release_readiness import is_release_ready
 
 # The additional (non-poster) asset types this module manages. Banner is
 # deliberately absent: Plex has no banner upload API and Kometa does not read
@@ -735,6 +736,20 @@ class AssetRenamerr(ChubModule):
             is_collection = media.get("asset_type") == "collection"
             target_kind = "collection" if is_collection else "media"
             target_id = media.get("id")
+
+            # Release-readiness gate (Plex apply only): an unreleased or
+            # undownloaded *arr item has nothing in Plex to attach artwork to,
+            # so a direct upload can only ever fail with "not found in any
+            # configured Plex library". Skip it instead of recording a noisy
+            # false-positive failure — the unmatched report already hides these
+            # via the same shared gate (release_readiness). The Kometa path is
+            # exempt: it writes to asset folders by name regardless of Plex.
+            if apply_method == "plex" and not is_release_ready(media):
+                self.logger.debug(
+                    f"↳ skipping {media.get('title')}: not released / no "
+                    "downloaded file — nothing in Plex to apply artwork to"
+                )
+                continue
 
             for image_type in applicable:
                 resolved = self._resolve_source(
