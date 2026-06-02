@@ -528,6 +528,9 @@ class PosterCleanarrConfig(BaseModel):
     orphan_assets_mode: str = "report"  # report | move | remove
     asset_dirs: List[str] = Field(default_factory=list)
     include_collections: bool = True
+    # Titles that are never flagged as orphans, regardless of whether they
+    # match a library entry. Matched on the same normalized key as the scan.
+    orphan_ignore_titles: List[str] = Field(default_factory=list)
 
 
 class PlexMaintenanceConfig(BaseModel):
