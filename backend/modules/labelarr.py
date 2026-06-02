@@ -324,7 +324,19 @@ class Labelarr(ChubModule):
                     instance_map=instance_map,
                 ) as connector:
                     connector.update_arr_database()
-                    connector.update_plex_database()
+                    # Refresh the Plex snapshot through the shared TTL guard
+                    # (general.plex_cache_ttl_seconds) so back-to-back runs
+                    # reuse a fresh snapshot instead of re-walking Plex every
+                    # time. The mapping pass below runs against whatever
+                    # snapshot results (fresh walk or reused).
+                    from backend.util.plex_refresh import refresh_plex_cache_if_stale
+
+                    refresh_plex_cache_if_stale(
+                        db,
+                        self.full_config,
+                        self.logger,
+                        instance_map.get("plex", {}),
+                    )
                     # Update media-plex mappings using connector approach
                     connector.update_media_plex_mappings()
 
