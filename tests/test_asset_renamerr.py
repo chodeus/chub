@@ -876,3 +876,48 @@ def test_handle_output_default_shows_all():
     m.handle_output(output)
     joined = "\n".join(logs["info"])
     assert "A (2020)" in joined and "B (2021)" in joined
+
+
+# --------------------------------------------------------------------------
+# release-readiness gate — Plex apply skips items with nothing in Plex
+# --------------------------------------------------------------------------
+
+
+def _gate_resolved_titles(db, apply_method):
+    """Run match_and_apply_assets over one unreleased + one released item and
+    return the titles that reached source resolution (i.e. were NOT gated)."""
+    unreleased = {
+        "id": 1, "asset_type": "movie", "title": "Avatar 4",
+        "year": 2029, "status": "announced", "has_content": 0,
+    }
+    released = {
+        "id": 2, "asset_type": "movie", "title": "Dune",
+        "year": 2021, "status": "released", "has_content": 1,
+    }
+    m = make_module(
+        sources=["local"], asset_types=["logo"],
+        apply_method=apply_method, dry_run=True,
+    )
+    m._report_progress = lambda *a, **k: None
+    m.is_cancelled = lambda: False
+    m._gather_media = lambda _db: [unreleased, released]
+    resolved = []
+    m._resolve_source = lambda media, *a, **k: resolved.append(media["title"])
+    m.match_and_apply_assets(db)
+    return resolved
+
+
+def test_plex_apply_gates_unreleased_item(db):
+    # Plex path: the unreleased/undownloaded item is skipped before resolution;
+    # the released item still resolves.
+    resolved = _gate_resolved_titles(db, "plex")
+    assert "Avatar 4" not in resolved
+    assert "Dune" in resolved
+
+
+def test_kometa_apply_does_not_gate(db):
+    # Kometa path writes to asset folders regardless of Plex — the gate is
+    # exempt, so both items resolve.
+    resolved = _gate_resolved_titles(db, "kometa")
+    assert "Avatar 4" in resolved
+    assert "Dune" in resolved
