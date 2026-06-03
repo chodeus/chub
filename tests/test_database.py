@@ -367,10 +367,6 @@ def test_search_only_rows_are_searchable_but_never_match():
 
 
 def test_media_and_collection_have_mtime_columns():
-    import sqlite3
-    import tempfile
-    from backend.util.database.schema import SchemaManager
-
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
         db_path = f.name
     try:
