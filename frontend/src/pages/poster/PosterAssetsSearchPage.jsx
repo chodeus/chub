@@ -17,7 +17,22 @@ import {
 } from '../../components/ui/index.js';
 import Spinner from '../../components/ui/Spinner.jsx';
 
-function PosterThumbnail({ src, alt }) {
+// Subtle checkerboard so transparent additional-artwork (logos, square art,
+// backgrounds) reads clearly instead of blending into a flat dark panel.
+const TRANSPARENCY_BG = {
+    backgroundColor: '#14121f',
+    backgroundImage:
+        'linear-gradient(45deg,#262238 25%,transparent 25%),' +
+        'linear-gradient(-45deg,#262238 25%,transparent 25%),' +
+        'linear-gradient(45deg,transparent 75%,#262238 75%),' +
+        'linear-gradient(-45deg,transparent 75%,#262238 75%)',
+    backgroundSize: '18px 18px',
+    backgroundPosition: '0 0,0 9px,9px -9px,-9px 0',
+};
+
+const isArtworkType = imageType => !!imageType && imageType !== 'poster';
+
+function PosterThumbnail({ src, alt, imageType }) {
     const [errored, setErrored] = useState(false);
     if (errored) {
         return (
@@ -26,11 +41,16 @@ function PosterThumbnail({ src, alt }) {
             </div>
         );
     }
+    // Posters fill the 2:3 frame (object-cover). Additional artwork is the
+    // wrong shape for that frame, so it's letterboxed (object-contain) on a
+    // transparency backdrop — the whole asset shows instead of a harsh crop.
+    const artwork = isArtworkType(imageType);
     return (
         <img
             src={src}
             alt={alt}
-            className="w-full h-full object-cover"
+            className={`w-full h-full ${artwork ? 'object-contain p-2' : 'object-cover'}`}
+            style={artwork ? TRANSPARENCY_BG : undefined}
             loading="lazy"
             onError={() => setErrored(true)}
         />
@@ -40,6 +60,7 @@ function PosterThumbnail({ src, alt }) {
 PosterThumbnail.propTypes = {
     src: PropTypes.string.isRequired,
     alt: PropTypes.string,
+    imageType: PropTypes.string,
 };
 
 const PAGE_SIZE = 60;
@@ -564,6 +585,7 @@ const PosterAssetsSearchPage = () => {
                                                           )
                                                 }
                                                 alt={displayTitle}
+                                                imageType={item.image_type}
                                             />
                                         </button>
                                     )}
@@ -692,7 +714,12 @@ const PosterAssetsSearchPage = () => {
                                     }
                                     alt={lightboxItem.title}
                                     className="w-auto object-contain"
-                                    style={{ maxHeight: '70vh' }}
+                                    style={{
+                                        maxHeight: '70vh',
+                                        ...(isArtworkType(lightboxItem.image_type)
+                                            ? TRANSPARENCY_BG
+                                            : {}),
+                                    }}
                                 />
                             </div>
                             <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
