@@ -144,6 +144,59 @@ def test_collection_update_persists_file_hash_and_mtime():
         os.unlink(db_path)
 
 
+def test_browse_image_type_filtering():
+    """browse() defaults to posters; image_type='artwork' returns only the
+    additional-artwork set (logo/squareart/background), never posters/banners;
+    a specific image_type returns just that type."""
+    import tempfile
+    from backend.util.database import ChubDB
+
+    class _Log:
+        def __getattr__(self, _):
+            return lambda *a, **k: None
+
+        def get_adapter(self, *a, **k):
+            return self
+
+    rows = [
+        ("Alpha", "/p/Alpha.png", "poster"),
+        ("Beta", "/p/Beta - Logo.png", "logo"),
+        ("Gamma", "/p/Gamma - Background.png", "background"),
+        ("Delta", "/p/Delta - SquareArt.png", "squareart"),
+        ("Epsilon", "/p/Epsilon - Banner.png", "banner"),
+    ]
+
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+        db_path = f.name
+    try:
+        with ChubDB(_Log(), db_path=db_path) as db:
+            for title, file, image_type in rows:
+                db.poster.execute_query(
+                    "INSERT INTO poster_cache (title, file, image_type) VALUES (?, ?, ?)",
+                    (title, file, image_type),
+                )
+
+            # Default: posters only.
+            default = db.poster.browse()
+            assert {r["image_type"] for r in default["items"]} == {"poster"}
+
+            # 'artwork' → the three processable artwork types, excluding
+            # posters and (unprocessed) banners.
+            artwork = db.poster.browse(image_type="artwork")
+            assert {r["image_type"] for r in artwork["items"]} == {
+                "logo",
+                "squareart",
+                "background",
+            }
+            assert artwork["total"] == 3
+
+            # A specific type narrows to exactly that type.
+            logos = db.poster.browse(image_type="logo")
+            assert {r["image_type"] for r in logos["items"]} == {"logo"}
+    finally:
+        os.unlink(db_path)
+
+
 def test_media_and_collection_have_mtime_columns():
     import sqlite3
     import tempfile

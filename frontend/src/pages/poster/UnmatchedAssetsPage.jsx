@@ -155,6 +155,74 @@ const RecentPosterReel = ({ posters, onRefresh }) => {
 
 const UNMATCHED_PAGE_SIZE = 50;
 
+/**
+ * Shared client-side sort for the unmatched / review / artwork tables.
+ * `accessors` maps a column key to a value-extractor. Empty values
+ * (null / '' / undefined) always sink to the bottom regardless of
+ * direction; a null sort key leaves the rows in their incoming order.
+ */
+const sortRows = (rows, sort, accessors) => {
+    const get = sort.key && accessors[sort.key];
+    if (!get) return rows;
+    const dir = sort.dir === 'desc' ? -1 : 1;
+    return rows
+        .map((row, i) => [row, i])
+        .sort(([a, ai], [b, bi]) => {
+            const av = get(a);
+            const bv = get(b);
+            const aEmpty = av == null || av === '';
+            const bEmpty = bv == null || bv === '';
+            if (aEmpty && bEmpty) return ai - bi;
+            if (aEmpty) return 1;
+            if (bEmpty) return -1;
+            let cmp;
+            if (typeof av === 'number' && typeof bv === 'number') cmp = av - bv;
+            else cmp = String(av).localeCompare(String(bv), undefined, { numeric: true });
+            return cmp === 0 ? ai - bi : cmp * dir;
+        })
+        .map(([row]) => row);
+};
+
+/** Toggle helper: click the active column to flip direction, else sort it ascending. */
+const nextSort = (sort, key) =>
+    sort.key === key ? { key, dir: sort.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' };
+
+/** A clickable table header that toggles the table's sort on `sortKey`. */
+const SortHeader = ({ label, sortKey, sort, onSort, align = 'left' }) => {
+    const active = sort.key === sortKey;
+    return (
+        <th className={`px-3 py-2 font-medium ${align === 'right' ? 'text-right' : ''}`}>
+            <button
+                type="button"
+                onClick={() => onSort(sortKey)}
+                aria-label={`Sort by ${label}`}
+                className={`inline-flex items-center gap-1 font-medium hover:text-primary ${
+                    active ? 'text-primary' : ''
+                } ${align === 'right' ? 'flex-row-reverse' : ''}`}
+            >
+                {label}
+                <span className="w-2 text-[10px] leading-none">
+                    {active ? (sort.dir === 'asc' ? '▲' : '▼') : ''}
+                </span>
+            </button>
+        </th>
+    );
+};
+
+// Column value-extractors for the unmatched-poster table.
+const UNMATCHED_SORT = {
+    title: i => i.title,
+    type: i => TYPE_LABELS[i._type] || i._type,
+    year: i => i.year,
+    // Series sort by "how much is missing" (main poster weighted above seasons);
+    // movies/collections have no Missing value and sink to the bottom.
+    missing: i =>
+        i._type === 'series'
+            ? (i.missing_main_poster ? 1000 : 0) + (i.missing_seasons?.length || 0)
+            : null,
+    instance: i => i.instance_name,
+};
+
 /** Unified, filterable + searchable table of every unmatched item. */
 const UnmatchedList = ({ items, onRefresh, typeKey: typeKeyProp, onTypeChange }) => {
     const toast = useToast();
@@ -166,6 +234,11 @@ const UnmatchedList = ({ items, onRefresh, typeKey: typeKeyProp, onTypeChange })
     const [query, setQuery] = useState('');
     const [page, setPage] = useState(0);
     const [busyId, setBusyId] = useState(null);
+    const [sort, setSort] = useState({ key: null, dir: 'asc' });
+    const onSort = key => {
+        setSort(s => nextSort(s, key));
+        setPage(0);
+    };
 
     const handleIgnore = async item => {
         setBusyId(item.id);
@@ -203,9 +276,11 @@ const UnmatchedList = ({ items, onRefresh, typeKey: typeKeyProp, onTypeChange })
         );
     }, [all, typeKey, query]);
 
-    const pageCount = Math.max(1, Math.ceil(filtered.length / UNMATCHED_PAGE_SIZE));
+    const sorted = useMemo(() => sortRows(filtered, sort, UNMATCHED_SORT), [filtered, sort]);
+
+    const pageCount = Math.max(1, Math.ceil(sorted.length / UNMATCHED_PAGE_SIZE));
     const safePage = Math.min(page, pageCount - 1);
-    const visible = filtered.slice(
+    const visible = sorted.slice(
         safePage * UNMATCHED_PAGE_SIZE,
         safePage * UNMATCHED_PAGE_SIZE + UNMATCHED_PAGE_SIZE
     );
@@ -277,11 +352,36 @@ const UnmatchedList = ({ items, onRefresh, typeKey: typeKeyProp, onTypeChange })
                     <table className="w-full text-sm">
                         <thead>
                             <tr className="bg-surface-alt text-secondary text-left">
-                                <th className="px-3 py-2 font-medium">Title</th>
-                                <th className="px-3 py-2 font-medium">Type</th>
-                                <th className="px-3 py-2 font-medium">Year</th>
-                                <th className="px-3 py-2 font-medium">Missing</th>
-                                <th className="px-3 py-2 font-medium">Instance</th>
+                                <SortHeader
+                                    label="Title"
+                                    sortKey="title"
+                                    sort={sort}
+                                    onSort={onSort}
+                                />
+                                <SortHeader
+                                    label="Type"
+                                    sortKey="type"
+                                    sort={sort}
+                                    onSort={onSort}
+                                />
+                                <SortHeader
+                                    label="Year"
+                                    sortKey="year"
+                                    sort={sort}
+                                    onSort={onSort}
+                                />
+                                <SortHeader
+                                    label="Missing"
+                                    sortKey="missing"
+                                    sort={sort}
+                                    onSort={onSort}
+                                />
+                                <SortHeader
+                                    label="Instance"
+                                    sortKey="instance"
+                                    sort={sort}
+                                    onSort={onSort}
+                                />
                                 <th className="px-3 py-2 font-medium">TMDB</th>
                                 <th className="px-3 py-2 font-medium">IMDB</th>
                                 <th className="px-3 py-2 font-medium">TVDB</th>
@@ -413,6 +513,15 @@ const confidenceTone = c => {
 
 const kindOf = row => (row.asset_type === 'collection' ? 'collection' : 'media');
 
+// Column value-extractors for the review / locked / ignored poster table.
+const REVIEW_SORT = {
+    title: r => r.title,
+    type: r => TYPE_LABELS[r.type] || TYPE_LABELS[r.asset_type] || r.type,
+    year: r => r.year,
+    instance: r => r.instance_name,
+    confidence: r => r.match_confidence,
+};
+
 /**
  * Flat table for the Needs-Review and Ignored tabs. Shows the match
  * confidence + reason the backend now records, plus per-row actions:
@@ -422,11 +531,15 @@ const MatchReviewList = ({ rows, mode, onRefresh, onPick }) => {
     const toast = useToast();
     const [query, setQuery] = useState('');
     const [busyId, setBusyId] = useState(null);
+    const [sort, setSort] = useState({ key: null, dir: 'asc' });
+    const onSort = key => setSort(s => nextSort(s, key));
 
     const filtered = useMemo(() => {
         const q = query.trim().toLowerCase();
         return rows.filter(r => !q || (r.title || '').toLowerCase().includes(q));
     }, [rows, query]);
+
+    const sorted = useMemo(() => sortRows(filtered, sort, REVIEW_SORT), [filtered, sort]);
 
     const act = async (fn, row, successMsg) => {
         setBusyId(row.id);
@@ -473,17 +586,42 @@ const MatchReviewList = ({ rows, mode, onRefresh, onPick }) => {
                     <table className="w-full text-sm">
                         <thead>
                             <tr className="bg-surface-alt text-secondary text-left">
-                                <th className="px-3 py-2 font-medium">Title</th>
-                                <th className="px-3 py-2 font-medium">Type</th>
-                                <th className="px-3 py-2 font-medium">Year</th>
-                                <th className="px-3 py-2 font-medium">Instance</th>
-                                <th className="px-3 py-2 font-medium">Confidence</th>
+                                <SortHeader
+                                    label="Title"
+                                    sortKey="title"
+                                    sort={sort}
+                                    onSort={onSort}
+                                />
+                                <SortHeader
+                                    label="Type"
+                                    sortKey="type"
+                                    sort={sort}
+                                    onSort={onSort}
+                                />
+                                <SortHeader
+                                    label="Year"
+                                    sortKey="year"
+                                    sort={sort}
+                                    onSort={onSort}
+                                />
+                                <SortHeader
+                                    label="Instance"
+                                    sortKey="instance"
+                                    sort={sort}
+                                    onSort={onSort}
+                                />
+                                <SortHeader
+                                    label="Confidence"
+                                    sortKey="confidence"
+                                    sort={sort}
+                                    onSort={onSort}
+                                />
                                 <th className="px-3 py-2 font-medium">Why</th>
                                 <th className="px-3 py-2 font-medium text-right">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-border">
-                            {filtered.map((item, idx) => (
+                            {sorted.map((item, idx) => (
                                 <tr
                                     key={`${item.id ?? idx}`}
                                     className="bg-surface hover:bg-surface-alt align-top"
@@ -677,6 +815,11 @@ const ArtworkView = ({ data, status, isLoading, onRefresh }) => {
     const [query, setQuery] = useState('');
     const [page, setPage] = useState(0);
     const [busyKey, setBusyKey] = useState(null);
+    const [sort, setSort] = useState({ key: null, dir: 'asc' });
+    const onSort = key => {
+        setSort(s => nextSort(s, key));
+        setPage(0);
+    };
 
     const types = useMemo(() => data?.data?.types || {}, [data]);
     const media = useMemo(() => data?.data?.media || {}, [data]);
@@ -704,10 +847,30 @@ const ArtworkView = ({ data, status, isLoading, onRefresh }) => {
         );
     }, [baseRows, mediaTypeKey, typeFilter, cfg.typesKey, query]);
 
+    // Column value-extractors. Type mirrors the rendered label; the dynamic
+    // missing/failed/not-needed column sorts by how many artwork types apply.
+    const accessors = useMemo(
+        () => ({
+            title: r => r.title,
+            type: r =>
+                r.asset_type === 'show'
+                    ? r.season_number != null
+                        ? 'Season'
+                        : 'Series'
+                    : TYPE_LABELS[r.asset_type] || r.asset_type,
+            year: r => r.year,
+            missing: r => (r[cfg.typesKey] || []).length,
+            instance: r => r.instance_name,
+        }),
+        [cfg.typesKey]
+    );
+
+    const sorted = useMemo(() => sortRows(filtered, sort, accessors), [filtered, sort, accessors]);
+
     // Reset to page 0 whenever the result set changes underneath us.
-    const pageCount = Math.max(1, Math.ceil(filtered.length / ARTWORK_PAGE_SIZE));
+    const pageCount = Math.max(1, Math.ceil(sorted.length / ARTWORK_PAGE_SIZE));
     const safePage = Math.min(page, pageCount - 1);
-    const visible = filtered.slice(
+    const visible = sorted.slice(
         safePage * ARTWORK_PAGE_SIZE,
         safePage * ARTWORK_PAGE_SIZE + ARTWORK_PAGE_SIZE
     );
@@ -823,18 +986,6 @@ const ArtworkView = ({ data, status, isLoading, onRefresh }) => {
                             </button>
                         ))}
                     </div>
-                    <input
-                        type="text"
-                        value={query}
-                        onChange={e => {
-                            setQuery(e.target.value);
-                            setPage(0);
-                        }}
-                        placeholder="Search title…"
-                        aria-label="Search titles"
-                        className="px-3 py-2 bg-input border border-border rounded-md text-primary text-sm"
-                        style={{ minWidth: '14rem' }}
-                    />
                     {typeFilter && (
                         <button
                             type="button"
@@ -845,13 +996,18 @@ const ArtworkView = ({ data, status, isLoading, onRefresh }) => {
                         </button>
                     )}
                 </div>
-                <Link
-                    to="/settings/modules#asset_renamerr"
-                    className="text-sm text-accent hover:underline whitespace-nowrap"
-                    title="Configure / run the module that applies this artwork"
-                >
-                    ⚙️ Asset Renamerr settings
-                </Link>
+                <input
+                    type="text"
+                    value={query}
+                    onChange={e => {
+                        setQuery(e.target.value);
+                        setPage(0);
+                    }}
+                    placeholder="Search title…"
+                    aria-label="Search titles"
+                    className="px-3 py-2 bg-input border border-border rounded-md text-primary text-sm"
+                    style={{ minWidth: '14rem' }}
+                />
             </div>
 
             {filtered.length === 0 ? (
@@ -868,12 +1024,37 @@ const ArtworkView = ({ data, status, isLoading, onRefresh }) => {
                         <table className="w-full text-sm">
                             <thead>
                                 <tr className="bg-surface-alt text-secondary text-left">
-                                    <th className="px-3 py-2 font-medium">Title</th>
-                                    <th className="px-3 py-2 font-medium">Type</th>
-                                    <th className="px-3 py-2 font-medium">Year</th>
-                                    <th className="px-3 py-2 font-medium">{missingColLabel}</th>
+                                    <SortHeader
+                                        label="Title"
+                                        sortKey="title"
+                                        sort={sort}
+                                        onSort={onSort}
+                                    />
+                                    <SortHeader
+                                        label="Type"
+                                        sortKey="type"
+                                        sort={sort}
+                                        onSort={onSort}
+                                    />
+                                    <SortHeader
+                                        label="Year"
+                                        sortKey="year"
+                                        sort={sort}
+                                        onSort={onSort}
+                                    />
+                                    <SortHeader
+                                        label={missingColLabel}
+                                        sortKey="missing"
+                                        sort={sort}
+                                        onSort={onSort}
+                                    />
                                     {isReviewTab && <th className="px-3 py-2 font-medium">Why</th>}
-                                    <th className="px-3 py-2 font-medium">Instance</th>
+                                    <SortHeader
+                                        label="Instance"
+                                        sortKey="instance"
+                                        sort={sort}
+                                        onSort={onSort}
+                                    />
                                     <th className="px-3 py-2 font-medium">TMDB</th>
                                     <th className="px-3 py-2 font-medium">IMDB</th>
                                     <th className="px-3 py-2 font-medium">TVDB</th>
@@ -888,7 +1069,7 @@ const ArtworkView = ({ data, status, isLoading, onRefresh }) => {
                                     >
                                         <td className="px-3 py-2 text-primary">
                                             <Link
-                                                to={`/poster/search/assets?q=${encodeURIComponent(item.title || '')}`}
+                                                to={`/poster/search/assets?q=${encodeURIComponent(item.title || '')}&image_type=${typeFilter || 'artwork'}`}
                                                 className="hover:text-accent hover:underline"
                                                 title="Search synced assets for this title"
                                             >
@@ -1356,7 +1537,7 @@ const UnmatchedAssetsPage = () => {
                 </div>
                 <span className="text-xs text-tertiary">
                     {assetClass === 'art'
-                        ? 'Optional extras (Asset Renamerr) — kept separate so posters stay primary.'
+                        ? 'Asset renamer for logos, backgrounds and square art'
                         : 'The main artwork shown in Plex.'}
                 </span>
                 {/* Both resets are always available, independent of the active

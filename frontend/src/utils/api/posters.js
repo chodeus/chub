@@ -306,6 +306,7 @@ export const postersAPI = {
         if (options.type) params.set('type', options.type);
         if (options.query) params.set('query', options.query);
         if (options.style) params.set('style', options.style);
+        if (options.image_type) params.set('image_type', options.image_type);
         if (options.limit) params.set('limit', options.limit);
         if (options.offset) params.set('offset', options.offset);
         const url = params.toString() ? `/posters/browse?${params}` : '/posters/browse';

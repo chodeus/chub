@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useRef, useCallback } from 'react';
 import PropTypes from 'prop-types';
+import { useLocation } from 'react-router-dom';
 import { useApiData, useApiMutation } from '../../hooks/useApiData.js';
 import { useDebounce } from '../../hooks/useDebounce.js';
 import { useModuleExecution } from '../../hooks/useModuleExecution.js';
@@ -64,6 +65,7 @@ function saveFilters(filters) {
 
 const PosterAssetsSearchPage = () => {
     const toast = useToast();
+    const location = useLocation();
     const { isRunning } = useModuleExecution();
     const fileInputRef = useRef(null);
 
@@ -86,6 +88,12 @@ const PosterAssetsSearchPage = () => {
     const [type, setType] = useState(saved?.type || '');
     const [style, setStyle] = useState(saved?.style || '');
     const [offset, setOffset] = useState(0);
+
+    // Image-type filter (posters vs additional artwork). Seeded from the URL
+    // so an artwork title link (?image_type=artwork|logo|…) lands pre-filtered,
+    // but intentionally NOT persisted — arriving here normally shows posters.
+    const urlImageType = new URLSearchParams(location.search).get('image_type') || '';
+    const [imageType, setImageType] = useState(urlImageType);
 
     // Top-bar search input → SearchCoordinator (SEARCH_TYPES.POSTERS) → this term.
     // We use the term as a filter passed to the browse endpoint; the no-op
@@ -111,16 +119,27 @@ const PosterAssetsSearchPage = () => {
         setOffset(0);
     }
 
+    // Reseed the image-type filter when the URL param changes (navigation from
+    // an artwork title link), mirroring the search-term reset above. The
+    // dropdown otherwise drives `imageType` directly without touching the URL.
+    const [prevUrlImageType, setPrevUrlImageType] = useState(urlImageType);
+    if (prevUrlImageType !== urlImageType) {
+        setPrevUrlImageType(urlImageType);
+        setImageType(urlImageType);
+        setOffset(0);
+    }
+
     const browseParams = useMemo(
         () => ({
             owner: owner || undefined,
             type: type || undefined,
             query: debouncedSearch || undefined,
             style: style || undefined,
+            image_type: imageType || undefined,
             limit: PAGE_SIZE,
             offset,
         }),
-        [owner, type, style, debouncedSearch, offset]
+        [owner, type, style, imageType, debouncedSearch, offset]
     );
 
     const {
@@ -347,6 +366,23 @@ const PosterAssetsSearchPage = () => {
                             </option>
                         ))}
                         <option value="other">Other</option>
+                    </select>
+                </div>
+                <div className="flex items-center gap-2">
+                    <label className="text-sm text-secondary">Image</label>
+                    <select
+                        value={imageType}
+                        onChange={e => {
+                            setImageType(e.target.value);
+                            setOffset(0);
+                        }}
+                        className="px-3 py-1.5 rounded-lg bg-surface border border-border text-primary text-sm"
+                    >
+                        <option value="">Posters</option>
+                        <option value="artwork">All additional artwork</option>
+                        <option value="logo">Logos</option>
+                        <option value="background">Backgrounds</option>
+                        <option value="squareart">Square art</option>
                     </select>
                 </div>
             </div>
