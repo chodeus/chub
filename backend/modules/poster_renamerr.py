@@ -44,7 +44,11 @@ _POSTER_CACHE_REBUILD_LOCK = threading.Lock()
 
 
 def build_asset_record(
-    fname: str, root: str, style: Optional[str] = None, priority: int = 0
+    fname: str,
+    root: str,
+    style: Optional[str] = None,
+    priority: int = 0,
+    search_only: int = 0,
 ) -> dict:
     """Parse one image file into a poster_cache record.
 
@@ -105,6 +109,7 @@ def build_asset_record(
         "style": style,
         "priority": priority,
         "image_type": image_type,
+        "search_only": search_only,
     }
 
 
@@ -926,7 +931,11 @@ class PosterRenamerr(ChubModule):
         return best_style
 
     def _get_assets_files(
-        self, source_dir: str, priority: int = 0, include_assets: bool = False
+        self,
+        source_dir: str,
+        priority: int = 0,
+        include_assets: bool = False,
+        search_only: int = 0,
     ):
         """Walk source_dir and parse each image into a cache record.
 
@@ -955,7 +964,11 @@ class PosterRenamerr(ChubModule):
                 if not fname.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
                     continue
                 record = build_asset_record(
-                    fname, root, style=style, priority=priority
+                    fname,
+                    root,
+                    style=style,
+                    priority=priority,
+                    search_only=search_only,
                 )
                 if not include_assets and record.get("image_type") != "poster":
                     continue
@@ -1057,6 +1070,65 @@ class PosterRenamerr(ChubModule):
         formatted_duration = f"{int(hours)}h {int(minutes)}m {int(seconds)}s"
         self.logger.info(f"Merge run time: {formatted_duration}")
 
+    def _matchable_source_dirs(self) -> List[str]:
+        """Realpath'd source_dirs that own *matchable* rows — the union of
+        poster_renamerr's and asset_renamerr's source_dirs. A gdrive_list
+        folder under any of these is already indexed by a renamer scan and is
+        excluded from the search-only gdrive pass."""
+        full_config = getattr(self, "full_config", None)
+        ar_cfg = getattr(full_config, "asset_renamerr", None)
+        covered = list(getattr(self.config, "source_dirs", []) or []) + list(
+            getattr(ar_cfg, "source_dirs", []) or []
+        )
+        return [os.path.realpath(sd).rstrip("/") for sd in covered if sd]
+
+    def merge_gdrive_search_index(self, db: ChubDB):
+        """Index gdrive_list locations that aren't a renamer source_dir into
+        poster_cache as SEARCH-ONLY rows.
+
+        These assets (e.g. an "Extras" drive the user downloads but hasn't
+        wired into poster_renamerr/asset_renamerr) become findable in Assets
+        Search across ALL image types, while ``search_only=1`` keeps them out
+        of poster matching/apply (see poster_cache.py match-phase queries).
+        Folders already owned by a source_dir are skipped — whole-location when
+        the gdrive folder is/under a source_dir, and per-file when a source_dir
+        nests under the gdrive folder — so the matchable rows merge_assets just
+        wrote are never shadowed.
+        """
+        full_config = getattr(self, "full_config", None)
+        sync_cfg = getattr(full_config, "sync_gdrive", None)
+        gdrive_list = getattr(sync_cfg, "gdrive_list", None) or []
+        if not gdrive_list:
+            return
+
+        owned = self._matchable_source_dirs()
+
+        def _is_owned(path: str) -> bool:
+            rp = os.path.realpath(path).rstrip("/")
+            return any(rp == sd or rp.startswith(sd + os.sep) for sd in owned)
+
+        indexed = 0
+        for entry in gdrive_list:
+            loc = (getattr(entry, "location", "") or "").strip()
+            if not loc or not os.path.isdir(loc) or _is_owned(loc):
+                continue
+            # include_assets=True: Assets Search wants every local image type
+            # (posters AND logos/backgrounds/squareart), independent of whether
+            # Asset Renamerr is enabled.
+            assets = self._get_assets_files(
+                loc, priority=0, include_assets=True, search_only=1
+            )
+            for asset in assets:
+                if _is_owned(asset["file"]):
+                    continue  # a source_dir nested under this gdrive folder
+                db.poster.upsert(asset)
+                indexed += 1
+        if indexed:
+            self.logger.info(
+                f"Indexed {indexed} search-only asset(s) from gdrive_list "
+                "locations outside source_dirs"
+            )
+
     def _orphan_pass_scan_roots(self) -> List[str]:
         """The directories the post-rename orphan-asset pass walks.
 
@@ -1115,6 +1187,9 @@ class PosterRenamerr(ChubModule):
                 with _POSTER_CACHE_REBUILD_LOCK:
                     db.poster.clear()
                     self.merge_assets(source_dirs=self.config.source_dirs, db=db)
+                    # Index gdrive_list folders outside source_dirs as
+                    # search-only so Assets Search covers all local assets.
+                    self.merge_gdrive_search_index(db)
 
                 # Process each media item
                 output = {"collection": [], "movie": [], "show": []}
@@ -1225,6 +1300,9 @@ class PosterRenamerr(ChubModule):
                 with _POSTER_CACHE_REBUILD_LOCK:
                     db.poster.clear()
                     self.merge_assets(source_dirs=self.config.source_dirs, db=db)
+                    # Index gdrive_list folders outside source_dirs as
+                    # search-only so Assets Search covers all local assets.
+                    self.merge_gdrive_search_index(db)
                 from backend.util.connector import build_instance_map
 
                 connector = Connector(

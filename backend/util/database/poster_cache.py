@@ -56,6 +56,10 @@ class PosterCache(DatabaseBase):
         """
         if image_type is None:
             return "", []
+        if image_type == "artwork":
+            # The whole additional-artwork set (logo/squareart/background).
+            placeholders = ",".join("?" * len(ARTWORK_IMAGE_TYPES))
+            return f" AND image_type IN ({placeholders})", list(ARTWORK_IMAGE_TYPES)
         return " AND image_type=?", [image_type]
 
     @staticmethod
@@ -111,13 +115,18 @@ class PosterCache(DatabaseBase):
         # exactly as before. See asset_renamerr / AssetRenamerrConfig.
         image_type = record.get("image_type") or "poster"
 
+        # search_only: indexed for Assets Search but excluded from matching.
+        # Defaults to 0 (matchable) so direct DB writes and source_dir assets
+        # behave exactly as before. See schema.py / merge_gdrive_search_index.
+        search_only = int(record.get("search_only") or 0)
+
         self.execute_query(
             """
             INSERT INTO poster_cache
                 (asset_type, title, normalized_title, year,
                  tmdb_id, tvdb_id, imdb_id, season_number, folder, file, style,
-                 created_at, priority, image_type)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 created_at, priority, image_type, search_only)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(title, year, tmdb_id, tvdb_id, imdb_id, season_number, file)
             DO UPDATE SET
                 asset_type=excluded.asset_type,
@@ -125,7 +134,8 @@ class PosterCache(DatabaseBase):
                 folder=excluded.folder,
                 style=excluded.style,
                 priority=excluded.priority,
-                image_type=excluded.image_type
+                image_type=excluded.image_type,
+                search_only=excluded.search_only
             """,
             (
                 record.get("asset_type"),
@@ -142,6 +152,7 @@ class PosterCache(DatabaseBase):
                 created_at,
                 priority,
                 image_type,
+                search_only,
             ),
         )
 
@@ -220,6 +231,9 @@ class PosterCache(DatabaseBase):
         sql += it_sql
         params.extend(it_params)
 
+        # Search-only rows (gdrive-only assets) are never match candidates.
+        sql += " AND search_only=0"
+
         if season_number is not None:
             sql += " AND season_number=?"
             params.append(season_number)
@@ -252,6 +266,9 @@ class PosterCache(DatabaseBase):
         it_sql, it_params = self._image_type_clause(image_type)
         sql += it_sql
         params.extend(it_params)
+
+        # Search-only rows (gdrive-only assets) are never match candidates.
+        sql += " AND search_only=0"
 
         if year is not None:
             sql += " AND year=?"
@@ -518,6 +535,9 @@ class PosterCache(DatabaseBase):
         it_sql, it_params = self._image_type_clause(image_type)
         sql += it_sql
         params.extend(it_params)
+
+        # Search-only rows (gdrive-only assets) are never match candidates.
+        sql += " AND search_only=0"
 
         sql += " ORDER BY priority DESC, id DESC"
         return self.execute_query(sql, params, fetch_all=True) or []
