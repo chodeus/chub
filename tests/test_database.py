@@ -197,6 +197,61 @@ def test_browse_image_type_filtering():
         os.unlink(db_path)
 
 
+def test_browse_title_wildcard_search():
+    """A '*' in the browse query anchors a LIKE wildcard: '*1952' = ends-with,
+    '1952*' = starts-with, '*1952*' = contains; no '*' = substring (legacy)."""
+    import tempfile
+    from backend.util.database import ChubDB
+    from backend.util.normalization import normalize_titles
+
+    class _Log:
+        def __getattr__(self, _):
+            return lambda *a, **k: None
+
+        def get_adapter(self, *a, **k):
+            return self
+
+    titles = [
+        "Time Capsule 1952",
+        "The 1952 Incident",
+        "Blade Runner 2049",
+        "2001 A Space Odyssey",
+        "Plain Movie",
+    ]
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+        db_path = f.name
+    try:
+        with ChubDB(_Log(), db_path=db_path) as db:
+            for i, t in enumerate(titles):
+                db.poster.upsert(
+                    {
+                        "title": t,
+                        "normalized_title": normalize_titles(t),
+                        "year": None,
+                        "tmdb_id": None,
+                        "tvdb_id": None,
+                        "imdb_id": None,
+                        "season_number": None,
+                        "folder": "Owner",
+                        "file": f"/src/{i}.png",
+                        "style": None,
+                        "priority": 0,
+                        "image_type": "poster",
+                        "asset_type": "movie",
+                    }
+                )
+
+            def found(q):
+                return {r["title"] for r in db.poster.browse(query=q, limit=100)["items"]}
+
+            assert found("*1952") == {"Time Capsule 1952"}  # ends with
+            assert found("*1952*") == {"Time Capsule 1952", "The 1952 Incident"}  # any
+            assert found("2001*") == {"2001 A Space Odyssey"}  # starts with
+            assert found("2049") == {"Blade Runner 2049"}  # no '*' => substring
+    finally:
+        os.unlink(db_path)
+
+
 def test_poster_cache_search_only_defaults_to_zero():
     """A row inserted without search_only back-fills to 0 (matchable), so the
     column addition doesn't change existing rows' matchability."""

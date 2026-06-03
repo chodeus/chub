@@ -63,6 +63,33 @@ class PosterCache(DatabaseBase):
         return " AND image_type=?", [image_type]
 
     @staticmethod
+    def _title_search_clause(query: str) -> tuple:
+        """Return an ``(sql, params)`` title filter matching normalized_title
+        and raw title.
+
+        A ``*`` in the query is a wildcard (SQL ``LIKE %``): ``*1952`` matches
+        titles ENDING in 1952, ``1952*`` those STARTING with it, ``*1952*``
+        anywhere. Literal ``%``/``_``/``\\`` in the query are escaped so they
+        match literally. With no ``*`` the query is a plain substring match
+        (legacy behaviour), so existing searches are unchanged.
+        """
+
+        def esc(s: str) -> str:
+            return s.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+        if "*" in query:
+            parts = query.split("*")
+            norm_pat = "%".join(esc(normalize_titles(p)) for p in parts)
+            raw_pat = "%".join(esc(p) for p in parts)
+            sql = "(normalized_title LIKE ? ESCAPE '\\' OR title LIKE ? ESCAPE '\\')"
+            return sql, [norm_pat, raw_pat]
+
+        return (
+            "(normalized_title LIKE ? OR title LIKE ?)",
+            [f"%{normalize_titles(query)}%", f"%{query}%"],
+        )
+
+    @staticmethod
     def _canonical_key(item: dict) -> tuple:
         """Returns a tuple key matching the UNIQUE constraint on poster_cache."""
 
@@ -455,8 +482,10 @@ class PosterCache(DatabaseBase):
             # column so hyphenated / special-char searches ("x-men") still
             # find rows where the stored value collapsed to "xmen". Fall back
             # to a raw `title LIKE` so exact stored substrings still hit too.
-            conditions.append("(normalized_title LIKE ? OR title LIKE ?)")
-            params.extend([f"%{normalize_titles(query)}%", f"%{query}%"])
+            # A '*' in the query acts as a wildcard (see _title_search_clause).
+            sql, qp = self._title_search_clause(query)
+            conditions.append(sql)
+            params.extend(qp)
 
         if owner:
             conditions.append("(folder = ? OR folder LIKE ?)")
