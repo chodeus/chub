@@ -349,7 +349,6 @@ class PlexClient:
         key = f"/library/sections/{section.key}/all?includeGuids=1&type={plexutils.searchType(section.type)}"
         container_start = 0
         container_size = plexapi.X_PLEX_CONTAINER_SIZE
-        total_size = 1
         spinner = itertools.cycle(["-", "\\", "|", "/"])  # A simple rotating spinner
 
         # Terminate on a short/empty page rather than trusting the server-reported
