@@ -515,14 +515,14 @@ async def browse_posters(
             offset=offset,
             image_type=safe_image_type,
         )
-        # Scope the dropdown owners to the image_type being browsed, so the
-        # artwork view lists artwork owners (e.g. a logos-only "Extras" drive)
-        # rather than only poster owners.
-        result["owners"] = db.poster.get_distinct_owners(image_type=safe_image_type)
+        # Owner/Style are independent of the Image filter: list EVERY location
+        # (image_type=None) so an owner like a logos-only "Extras" drive is
+        # selectable regardless of which image type is being browsed.
+        result["owners"] = db.poster.get_distinct_owners(image_type=None)
         # Merge styles already stamped on rows with styles derivable from the
         # current gdrive_list config so the dropdown is useful even before
         # poster_renamerr has re-upserted existing rows with the new column.
-        db_styles = set(db.poster.get_distinct_styles(image_type=safe_image_type))
+        db_styles = set(db.poster.get_distinct_styles(image_type=None))
         configured_styles = set()
         try:
             from backend.util.config import load_config
