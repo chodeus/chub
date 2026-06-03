@@ -2,6 +2,26 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.28.0](https://github.com/chodeus/chub/compare/v2.27.0...v2.28.0) (2026-06-03)
+
+
+### Features
+
+* **assets:** index all local assets in Assets Search via search-only rows ([5ecfa13](https://github.com/chodeus/chub/commit/5ecfa13fe2051caa7fcdd395404704151841741d))
+* **assets:** sortable unmatched tables + additional-artwork asset search ([d76e687](https://github.com/chodeus/chub/commit/d76e6872ab7b20959e9693f12cf483dbec99d5ba))
+* **poster_cleanarr:** separate orphan-asset cleanup from bloat settings ([8cb06f4](https://github.com/chodeus/chub/commit/8cb06f4de90a129b8efcefba1d4e3277d0ef8196))
+
+
+### Bug Fixes
+
+* **assets:** list all owners/styles regardless of the Image filter ([1b246b1](https://github.com/chodeus/chub/commit/1b246b10a12a078cfd3644dac67cbfa6d83f4195))
+* **assets:** render additional artwork with object-contain on a transparency backdrop ([f4c01ae](https://github.com/chodeus/chub/commit/f4c01aecfd7f7375ea407ed21a7c57c94eec90a5))
+* **concurrency:** harden parallel runs + fix correctness bugs from today's audit ([c0cd93f](https://github.com/chodeus/chub/commit/c0cd93fda8d82af858225b23d8d26d55a0d8cafc))
+* **health:** report DB status via worker so /api/health isn't falsely degraded ([2b8cf3b](https://github.com/chodeus/chub/commit/2b8cf3bb14a324f12682961b0b26f4ba6fd81218))
+* **plex:** scope the snapshot TTL guard per-library so labelarr keeps the reuse optimization ([e0f2669](https://github.com/chodeus/chub/commit/e0f266944461b9e1850396f99bd400950640e40b))
+* **security:** document intentional empty-except blocks to clear CodeQL notes ([2939344](https://github.com/chodeus/chub/commit/2939344ceeeeccba635cfa7fe3bda41f116e76ff))
+* **sync_gdrive:** bind priority on the search-only refresh path ([d10aa7b](https://github.com/chodeus/chub/commit/d10aa7b1b627ca58023e352a9b53fa9975844f56))
+
 ## [2.27.0](https://github.com/chodeus/chub/compare/v2.26.2...v2.27.0) (2026-06-02)
 
 
