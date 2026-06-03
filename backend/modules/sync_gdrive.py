@@ -400,10 +400,10 @@ class SyncGDrive(ChubModule):
                 target == sd or target.startswith(sd + os.sep) for sd in owned
             )
 
+            priority = 0
             if is_owned:
                 # Existing behaviour: matchable row, priority from the matching
                 # source_dir (bottom-wins contract); assets gated on the feature.
-                priority = 0
                 for idx, sd in enumerate(getattr(pr.config, "source_dirs", []) or []):
                     if os.path.realpath(sd).rstrip("/") == target:
                         priority = idx
@@ -426,8 +426,10 @@ class SyncGDrive(ChubModule):
             self.db.poster.delete_by_path_prefix(sync_location)
             for asset in assets:
                 self.db.poster.upsert(asset)
+            scope = "search-only" if not is_owned else f"priority={priority}"
             self.logger.info(
-                f"Refreshed poster_cache for {sync_location}: {len(assets)} rows (priority={priority})"
+                f"Refreshed poster_cache for {sync_location}: "
+                f"{len(assets)} rows ({scope})"
             )
         except Exception as e:
             # Cache refresh is a best-effort follow-up to the sync; a
