@@ -12,7 +12,6 @@ import {
 
 // Pre-compiled regex patterns (outside component for performance)
 const PATTERNS = {
-    htmlEscape: /[&<>]/g,
     quotedString: /(['"])(.*?)\1/g,
     combined:
         /\b\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}:\d{2}\b|\b(CRITICAL|ERROR|WARNING|INFO|DEBUG)\b|https?:\/\/[^\s<>"{}|\\^`\]]+|\[[^\]]+\.(py|js|jsx|ts|tsx|json|yml|yaml|md|txt|log)\]|\b[\w_]+(\.[\w_]+)+\b|\b\d+(\.\d+)?\b|__QUOTED_PLACEHOLDER_\d+__/g,
@@ -25,12 +24,6 @@ const PATTERNS = {
     number: /^\d+(\.\d+)?$/,
 };
 
-// HTML escape map for performance
-const HTML_ESCAPE_MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;' };
-
-// Optimized HTML escape function
-const escapeHtml = text => text.replace(PATTERNS.htmlEscape, char => HTML_ESCAPE_MAP[char]);
-
 /**
  * LogLine - Render log line with syntax highlighting using Phase 1 primitives
  * @param {Object} props
@@ -42,12 +35,16 @@ export const LogLine = React.memo(
     ({ line, searchTerm }) => {
         // Memoize expensive parsing - only re-parse when line changes
         const segments = useMemo(() => {
-            let escaped = escapeHtml(line);
+            // Operate on the RAW line. Segments below are rendered as React
+            // text children ({content}), which React already escapes safely —
+            // pre-escaping here double-encoded and showed literal entities
+            // (e.g. a "<->" match arrow displayed as "&lt;-&gt;").
+            let working = line;
             const result = [];
 
             // 1. Extract quoted strings
             const quotedMatches = [];
-            escaped = escaped.replace(PATTERNS.quotedString, match => {
+            working = working.replace(PATTERNS.quotedString, match => {
                 quotedMatches.push(match);
                 return `__QUOTED_PLACEHOLDER_${quotedMatches.length - 1}__`;
             });
@@ -59,10 +56,10 @@ export const LogLine = React.memo(
             // Reset regex lastIndex for reuse
             PATTERNS.combined.lastIndex = 0;
 
-            while ((match = PATTERNS.combined.exec(escaped)) !== null) {
+            while ((match = PATTERNS.combined.exec(working)) !== null) {
                 // Add text before match
                 if (match.index > currentIndex) {
-                    const text = escaped.slice(currentIndex, match.index);
+                    const text = working.slice(currentIndex, match.index);
                     if (text) result.push({ type: 'text', content: text });
                 }
 
@@ -93,8 +90,8 @@ export const LogLine = React.memo(
             }
 
             // Add remaining text
-            if (currentIndex < escaped.length) {
-                const text = escaped.slice(currentIndex);
+            if (currentIndex < working.length) {
+                const text = working.slice(currentIndex);
                 if (text) result.push({ type: 'text', content: text });
             }
 
