@@ -197,6 +197,120 @@ def test_browse_image_type_filtering():
         os.unlink(db_path)
 
 
+def test_poster_cache_search_only_defaults_to_zero():
+    """A row inserted without search_only back-fills to 0 (matchable), so the
+    column addition doesn't change existing rows' matchability."""
+    import sqlite3
+    import tempfile
+    from backend.util.database.schema import SchemaManager
+
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+        db_path = f.name
+    try:
+        conn = sqlite3.connect(db_path)
+        SchemaManager.init_database(conn)
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(poster_cache)")}
+        assert "search_only" in cols
+        conn.execute("INSERT INTO poster_cache (title, file) VALUES ('Y', '/y/Y.png')")
+        conn.commit()
+        row = conn.execute(
+            "SELECT search_only FROM poster_cache WHERE file='/y/Y.png'"
+        ).fetchone()
+        assert row[0] == 0
+        conn.close()
+    finally:
+        os.unlink(db_path)
+
+
+def test_search_only_rows_are_searchable_but_never_match():
+    """search_only=1 rows (gdrive-only assets) appear in browse/owners but are
+    excluded from every match-phase query, so they can't change applied
+    posters."""
+    import tempfile
+    from backend.util.database import ChubDB
+
+    class _Log:
+        def __getattr__(self, _):
+            return lambda *a, **k: None
+
+        def get_adapter(self, *a, **k):
+            return self
+
+    def _logo(title, norm, year, folder, file, search_only):
+        return {
+            "title": title,
+            "normalized_title": norm,
+            "year": year,
+            "tmdb_id": None,
+            "tvdb_id": None,
+            "imdb_id": None,
+            "season_number": None,
+            "folder": folder,
+            "file": file,
+            "style": None,
+            "priority": 0,
+            "image_type": "logo",
+            "asset_type": "movie",
+            "search_only": search_only,
+        }
+
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+        db_path = f.name
+    try:
+        with ChubDB(_Log(), db_path=db_path) as db:
+            db.poster.upsert(
+                _logo(
+                    "Extras Movie",
+                    "extrasmovie",
+                    2023,
+                    "Owned",
+                    "/src/Owned/Extras Movie (2023) - Logo.png",
+                    0,
+                )
+            )
+            db.poster.upsert(
+                _logo(
+                    "Extras Only",
+                    "extrasonly",
+                    2024,
+                    "Tarantula212",
+                    "/gdrive/Extras/Tarantula212/Extras Only (2024) - Logo.png",
+                    1,
+                )
+            )
+
+            # Matching: the owned logo matches; the search-only one never does.
+            assert (
+                db.poster.get_by_normalized_title(
+                    "extrasmovie", year=2023, image_type="logo"
+                )
+                is not None
+            )
+            assert (
+                db.poster.get_by_normalized_title(
+                    "extrasonly", year=2024, image_type="logo"
+                )
+                is None
+            )
+            cand_titles = {
+                c["title"]
+                for c in db.poster.get_candidates_by_prefix(
+                    "Extras Only", image_type="logo"
+                )
+            }
+            assert "Extras Only" not in cand_titles  # search-only excluded
+            assert "Extras Movie" in cand_titles  # owned, shares the 'ext' prefix
+
+            # Search surfaces: both rows appear; the search-only owner is listed.
+            artwork = db.poster.browse(image_type="artwork")
+            assert {"Extras Movie", "Extras Only"} <= {
+                r["title"] for r in artwork["items"]
+            }
+            assert "Tarantula212" in db.poster.get_distinct_owners(image_type="artwork")
+    finally:
+        os.unlink(db_path)
+
+
 def test_media_and_collection_have_mtime_columns():
     import sqlite3
     import tempfile

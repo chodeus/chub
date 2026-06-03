@@ -375,10 +375,12 @@ class SyncGDrive(ChubModule):
         next scheduled poster_renamerr run. Scoped to this folder's path
         prefix — other contributors' rows are untouched.
 
-        Looks up the folder's priority from poster_renamerr.source_dirs so
-        the per-folder refresh preserves the bottom-wins source_dir
-        contract (see poster_cache.py CONTRACT block). Without the lookup,
-        rows would be re-stamped with priority=0 and silently demoted.
+        A folder that's a renamer source_dir is re-indexed as before — its
+        priority looked up from poster_renamerr.source_dirs so the per-folder
+        refresh preserves the bottom-wins source_dir contract (see
+        poster_cache.py CONTRACT block). A gdrive_list folder OUTSIDE every
+        source_dir is indexed across all image types as search_only=1:
+        findable in Assets Search but excluded from poster matching.
         """
         if not self.db:
             return
@@ -389,23 +391,38 @@ class SyncGDrive(ChubModule):
 
             pr = PosterRenamerr(logger=self.logger)
 
-            # Resolve this folder's priority by matching against
-            # poster_renamerr.source_dirs (normalized for trailing slashes).
-            # If the folder isn't in source_dirs, poster_renamerr won't
-            # pick from it anyway — priority is moot, default to 0.
-            sd_list = list(getattr(pr.config, "source_dirs", []) or [])
-            target = os.path.normpath(sync_location)
-            priority = 0
-            for idx, sd in enumerate(sd_list):
-                if os.path.normpath(sd) == target:
-                    priority = idx
-                    break
-
-            assets = pr._get_assets_files(
-                sync_location,
-                priority=priority,
-                include_assets=getattr(pr.config, "run_asset_renamerr", False),
+            # Is this folder owned by a renamer source_dir (poster_renamerr or
+            # asset_renamerr)? Owned folders are matchable; a gdrive_list folder
+            # outside every source_dir (e.g. an "Extras" drive) is search-only.
+            owned = pr._matchable_source_dirs()
+            target = os.path.realpath(sync_location).rstrip("/")
+            is_owned = any(
+                target == sd or target.startswith(sd + os.sep) for sd in owned
             )
+
+            if is_owned:
+                # Existing behaviour: matchable row, priority from the matching
+                # source_dir (bottom-wins contract); assets gated on the feature.
+                priority = 0
+                for idx, sd in enumerate(getattr(pr.config, "source_dirs", []) or []):
+                    if os.path.realpath(sd).rstrip("/") == target:
+                        priority = idx
+                        break
+                assets = pr._get_assets_files(
+                    sync_location,
+                    priority=priority,
+                    include_assets=getattr(pr.config, "run_asset_renamerr", False),
+                )
+            else:
+                # gdrive-only folder: index ALL image types as search-only so
+                # Assets Search shows them without making them match candidates.
+                assets = pr._get_assets_files(
+                    sync_location,
+                    priority=0,
+                    include_assets=True,
+                    search_only=1,
+                )
+
             self.db.poster.delete_by_path_prefix(sync_location)
             for asset in assets:
                 self.db.poster.upsert(asset)

@@ -398,6 +398,14 @@ class SchemaManager:
                 # image_type="poster" so assets never leak into poster flows.
                 # See backend/modules/asset_renamerr.py.
                 ColumnDefinition("image_type", "TEXT", default="poster"),
+                # Search-only rows are indexed for Assets Search but excluded
+                # from poster matching/apply. Set on assets that live under a
+                # gdrive_list location not covered by a poster_renamerr/
+                # asset_renamerr source_dir (e.g. an "Extras" drive the user
+                # hasn't wired into a renamer). Defaults to 0 so every existing
+                # row and every source_dir asset stays fully matchable. The
+                # match-phase queries filter search_only=0.
+                ColumnDefinition("search_only", "INTEGER", default=0),
             ],
             constraints=[
                 "UNIQUE(title, year, tmdb_id, tvdb_id, imdb_id, season_number, file)"
@@ -412,6 +420,7 @@ class SchemaManager:
                 "CREATE INDEX IF NOT EXISTS poster_cache_created_at_idx ON poster_cache (created_at)",
                 "CREATE INDEX IF NOT EXISTS poster_cache_resolution_idx ON poster_cache (width, height)",
                 "CREATE INDEX IF NOT EXISTS poster_cache_image_type_idx ON poster_cache (image_type)",
+                "CREATE INDEX IF NOT EXISTS poster_cache_search_only_idx ON poster_cache (search_only)",
             ],
         )
         self._add_table(poster_cache)
