@@ -6,6 +6,12 @@ from backend.util.normalization import normalize_titles
 from .db_base import DatabaseBase
 
 
+# Additional-artwork image_type values (everything that isn't a poster and
+# isn't an unprocessed banner). browse(image_type="artwork") matches this set
+# so the asset-search page can show only logos/square art/backgrounds.
+ARTWORK_IMAGE_TYPES = ("logo", "squareart", "background")
+
+
 # ─────────────────────────────────────────────────────────────────────
 # CONTRACT: source_dirs bottom-wins priority
 # ─────────────────────────────────────────────────────────────────────
@@ -417,7 +423,13 @@ class PosterCache(DatabaseBase):
         conditions = []
         params: list = []
 
-        if image_type is not None:
+        if image_type == "artwork":
+            # The whole additional-artwork set (logo/squareart/background),
+            # excluding posters and unprocessed banners.
+            placeholders = ",".join("?" * len(ARTWORK_IMAGE_TYPES))
+            conditions.append(f"image_type IN ({placeholders})")
+            params.extend(ARTWORK_IMAGE_TYPES)
+        elif image_type is not None:
             conditions.append("image_type=?")
             params.append(image_type)
 

@@ -468,6 +468,10 @@ async def browse_posters(
         None,
         description="Filter by poster style (e.g. CL2K, MM2K). Use 'other' for rows whose source dir didn't match a configured gdrive entry.",
     ),
+    image_type: Optional[str] = Query(
+        None,
+        description="Image type to browse: poster (default), logo, background, squareart, banner, or 'artwork' for the logo+squareart+background set.",
+    ),
     limit: int = Query(
         60, ge=0, le=200, description="Results per page (0 for owners only)"
     ),
@@ -491,6 +495,17 @@ async def browse_posters(
     """
     try:
         logger.debug("Serving GET /api/posters/browse")
+        # Default to posters; clamp anything unrecognised so the param can't be
+        # used to inject an arbitrary image_type value into the query.
+        allowed_image_types = {
+            "poster",
+            "logo",
+            "background",
+            "squareart",
+            "banner",
+            "artwork",
+        }
+        safe_image_type = image_type if image_type in allowed_image_types else "poster"
         result = db.poster.browse(
             owner=owner,
             asset_type=type,
@@ -498,6 +513,7 @@ async def browse_posters(
             style=style,
             limit=limit,
             offset=offset,
+            image_type=safe_image_type,
         )
         result["owners"] = db.poster.get_distinct_owners()
         # Merge styles already stamped on rows with styles derivable from the
