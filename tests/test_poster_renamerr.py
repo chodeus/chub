@@ -733,3 +733,61 @@ def test_rename_file_collection_names_by_title(tmp_path):
     expected = tmp_path / "Phineas and Ferb Collection.jpg"
     assert expected.exists()
     assert item["renamed_file"].endswith("Phineas and Ferb Collection.jpg")
+
+
+def test_match_item_skips_unchanged_write(tmp_path):
+    """Steady-state skip (#6): a second match_item on byte-identical state
+    issues NO row UPDATE and NO provenance UPDATE, but a real change forces both
+    writes again. Provably safe — only a no-op write is skipped."""
+    m = make_module()
+    db = _open_db(tmp_path, m.logger)
+    try:
+        db.poster.execute_query(
+            "INSERT INTO poster_cache (asset_type,title,normalized_title,year,tmdb_id,file,priority) "
+            "VALUES ('movie','Inception','inception',2010,27205,'/a.jpg',0)"
+        )
+        db.media.execute_query(
+            "INSERT INTO media_cache (identity_key,asset_type,title,normalized_title,year,tmdb_id,instance_name) "
+            "VALUES ('mk','movie','Inception','inception','2010',27205,'radarr')"
+        )
+
+        def media_row():
+            return dict(
+                db.media.execute_query(
+                    "SELECT * FROM media_cache WHERE identity_key='mk'", fetch_one=True
+                )
+            )
+
+        # Wrap update / set_match_provenance to count actual writes.
+        counts = {"update": 0, "prov": 0}
+        real_update = db.media.update
+        real_prov = db.media.set_match_provenance
+
+        def counting_update(*a, **k):
+            counts["update"] += 1
+            return real_update(*a, **k)
+
+        def counting_prov(*a, **k):
+            counts["prov"] += 1
+            return real_prov(*a, **k)
+
+        db.media.update = counting_update
+        db.media.set_match_provenance = counting_prov
+
+        # First run populates the row -> both writes happen.
+        m.match_item(media_row(), db)
+        assert counts == {"update": 1, "prov": 1}
+
+        # Second run, identical state -> both writes skipped.
+        m.match_item(media_row(), db)
+        assert counts["update"] == 1, "unchanged match must skip the row UPDATE"
+        assert counts["prov"] == 1, "unchanged match must skip the provenance UPDATE"
+
+        # Real change: remove the matching poster so the row now UNmatches.
+        db.poster.execute_query("DELETE FROM poster_cache")
+        m.match_item(media_row(), db)
+        assert counts["update"] == 2, "a real change must write the row again"
+        assert counts["prov"] == 2, "clearing the match must write provenance"
+        assert media_row()["matched"] == 0
+    finally:
+        db.__exit__(None, None, None)

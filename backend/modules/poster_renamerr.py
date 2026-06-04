@@ -463,35 +463,56 @@ class PosterRenamerr(ChubModule):
                 ]
             )
 
-        if is_collection:
-            db.collection.update(
-                title=title,
-                year=year,
-                library_name=library_name,
-                instance_name=instance_name,
-                matched_value=matched,
-                original_file=candidate.get("file") if candidate else None,
-                match_status=match_status,
-                match_confidence=match_confidence,
-                match_reason=win_reason or None,
-                conflict_ids=conflict_json,
-                id=media.get("id"),
-            )
-        else:
-            db.media.update(
-                asset_type=asset_type,
-                title=title,
-                year=year,
-                instance_name=instance_name,
-                matched_value=matched,
-                season_number=season_number,
-                original_file=candidate.get("file") if candidate else None,
-                match_status=match_status,
-                match_confidence=match_confidence,
-                match_reason=win_reason or None,
-                conflict_ids=conflict_json,
-                id=media.get("id"),
-            )
+        # Steady-state skip: on a re-scan most rows match exactly as before, so
+        # the row UPDATE would write byte-identical values. Skip it when every
+        # field update() would set already equals the stored value. PROVABLY
+        # SAFE — only a write that would be a no-op is skipped, so a real change
+        # is never dropped (a mismatched type just means "don't skip"). The
+        # predicate mirrors update()'s write set, identical for media_cache and
+        # collections_cache: matched / match_status / match_confidence(float) /
+        # conflict_ids are always written; original_file only when a candidate
+        # matched; match_reason only when a reason exists. If update()'s written
+        # fields change, update this predicate too — guarded by
+        # test_match_item_skips_unchanged_write.
+        new_original = candidate.get("file") if candidate else None
+        update_is_noop = (
+            int(bool(matched)) == media.get("matched")
+            and match_status == media.get("match_status")
+            and float(match_confidence) == media.get("match_confidence")
+            and conflict_json == media.get("conflict_ids")
+            and (new_original is None or new_original == media.get("original_file"))
+            and (not win_reason or win_reason == media.get("match_reason"))
+        )
+        if not update_is_noop:
+            if is_collection:
+                db.collection.update(
+                    title=title,
+                    year=year,
+                    library_name=library_name,
+                    instance_name=instance_name,
+                    matched_value=matched,
+                    original_file=new_original,
+                    match_status=match_status,
+                    match_confidence=match_confidence,
+                    match_reason=win_reason or None,
+                    conflict_ids=conflict_json,
+                    id=media.get("id"),
+                )
+            else:
+                db.media.update(
+                    asset_type=asset_type,
+                    title=title,
+                    year=year,
+                    instance_name=instance_name,
+                    matched_value=matched,
+                    season_number=season_number,
+                    original_file=new_original,
+                    match_status=match_status,
+                    match_confidence=match_confidence,
+                    match_reason=win_reason or None,
+                    conflict_ids=conflict_json,
+                    id=media.get("id"),
+                )
 
         # Recently-matched provenance: stamp matched_at only when the match is
         # NEW or CHANGED — never re-stamped for a stable, re-confirmed match —
@@ -506,10 +527,17 @@ class PosterRenamerr(ChubModule):
             new_matched_at = media.get("matched_at")  # unchanged — keep
         else:
             new_matched_at = None  # no match — clear
-        if is_collection:
-            db.collection.set_match_provenance(media.get("id"), new_matched_at, new_file)
-        else:
-            db.media.set_match_provenance(media.get("id"), new_matched_at, new_file)
+        # Skip the provenance UPDATE too when both fields are unchanged — the
+        # same provably-safe no-op skip.
+        if new_matched_at != media.get("matched_at") or new_file != prev_file:
+            if is_collection:
+                db.collection.set_match_provenance(
+                    media.get("id"), new_matched_at, new_file
+                )
+            else:
+                db.media.set_match_provenance(
+                    media.get("id"), new_matched_at, new_file
+                )
 
         if asset_type == "show":
             if season_number is not None:
