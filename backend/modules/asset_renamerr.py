@@ -569,7 +569,6 @@ class AssetRenamerr(ChubModule):
         # this is a defensive guard.
         if source == "fanart":
             return False, "fanart art is Plex-only and is never downloaded for Kometa"
-        temp_file = None  # no downloads here; kept for the _cleanup() no-ops
         src = file
         if not src:
             return False, "no local source file to apply"
@@ -595,7 +594,6 @@ class AssetRenamerr(ChubModule):
         real_dest = os.path.realpath(dest_dir)
         real_base = os.path.realpath(dest_root)
         if not (real_dest == real_base or real_dest.startswith(real_base + os.sep)):
-            self._cleanup(temp_file)
             return False, f"path traversal blocked for folder '{folder}'"
 
         new_path = os.path.join(dest_dir, new_name)
@@ -604,14 +602,7 @@ class AssetRenamerr(ChubModule):
                 os.makedirs(dest_dir, exist_ok=True)
                 self._file_op(src, new_path, self.config.action_type)
             except OSError as exc:
-                self._cleanup(temp_file)
                 return False, f"file op failed: {exc}"
-            finally:
-                # move/copy from a temp download leaves the temp behind on copy.
-                if temp_file and self.config.action_type != "move":
-                    self._cleanup(temp_file)
-        else:
-            self._cleanup(temp_file)
         return True, new_path
 
     def _file_op(self, src: str, dest: str, action_type: str) -> None:
