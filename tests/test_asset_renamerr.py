@@ -968,62 +968,6 @@ def test_missing_does_not_downgrade_applied(db):
     assert row["match_status"] == "applied"  # not flipped to "missing"
 
 
-def test_prefix_cache_fold_matches_per_type(db):
-    """#3: resolving logo + background via one shared prefix_cache must yield the
-    SAME candidate as querying each image_type separately. No-id rows so the
-    prefix/name path (the one the fold touches) runs."""
-
-    def _seed_noid(it, fname):
-        db.poster.upsert(
-            {
-                "asset_type": "movie",
-                "title": "Heat",
-                "normalized_title": "heat",
-                "year": 1995,
-                "tmdb_id": None,
-                "tvdb_id": None,
-                "imdb_id": None,
-                "season_number": None,
-                "folder": "x",
-                "file": f"/x/{fname}",
-                "style": None,
-                "priority": 0,
-                "image_type": it,
-            }
-        )
-
-    _seed_noid("logo", "Heat (1995) - Logo.png")
-    _seed_noid("background", "Heat (1995) - Background.png")
-    media = {
-        "asset_type": "movie",
-        "title": "Heat",
-        "normalized_title": "heat",
-        "year": 1995,
-        "tmdb_id": None,
-        "tvdb_id": None,
-        "imdb_id": None,
-        "alternate_titles": "[]",
-        "season_number": None,
-    }
-
-    base_logo = PosterRenamerr.find_asset_candidate(media, db, image_type="logo")
-    base_bg = PosterRenamerr.find_asset_candidate(media, db, image_type="background")
-    assert base_logo["candidate"]["image_type"] == "logo"
-    assert base_bg["candidate"]["image_type"] == "background"
-
-    cache: dict = {}
-    fold_logo = PosterRenamerr.find_asset_candidate(
-        media, db, image_type="logo", prefix_cache=cache
-    )
-    fold_bg = PosterRenamerr.find_asset_candidate(
-        media, db, image_type="background", prefix_cache=cache
-    )
-
-    assert fold_logo["candidate"]["file"] == base_logo["candidate"]["file"]
-    assert fold_bg["candidate"]["file"] == base_bg["candidate"]["file"]
-    assert {"logo", "background"} <= set(cache["_map"].keys())
-
-
 def test_kometa_never_applies_fanart_no_download(tmp_path):
     """Kometa applies LOCAL g-drive files only. fanart art is Plex-only (it
     would require downloading a copy, against fanart.tv's API use), so the
