@@ -1022,3 +1022,21 @@ def test_prefix_cache_fold_matches_per_type(db):
     assert fold_logo["candidate"]["file"] == base_logo["candidate"]["file"]
     assert fold_bg["candidate"]["file"] == base_bg["candidate"]["file"]
     assert {"logo", "background"} <= set(cache["_map"].keys())
+
+
+def test_kometa_never_applies_fanart_no_download(tmp_path):
+    """Kometa applies LOCAL g-drive files only. fanart art is Plex-only (it
+    would require downloading a copy, against fanart.tv's API use), so the
+    Kometa apply refuses a fanart source outright and writes nothing."""
+    m = make_module(
+        sources=["local", "fanart"],
+        apply_method="kometa",
+        destination_dir=str(tmp_path),
+    )
+    applied, reason = m._apply_kometa(
+        _media(), "logo", "fanart", None, "https://assets.fanart.tv/x/logo.png"
+    )
+    assert applied is False
+    assert "plex" in reason.lower()
+    # Nothing was downloaded or written to disk.
+    assert list(tmp_path.iterdir()) == []

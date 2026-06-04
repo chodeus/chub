@@ -3,10 +3,7 @@
 import json
 import os
 import shutil
-import tempfile
 from typing import Any, Dict, List, Optional, Set, Tuple
-
-import requests
 
 from backend.util.base_module import ChubModule
 from backend.util.connector import Connector
@@ -15,7 +12,6 @@ from backend.util.helper import create_table, print_settings
 from backend.util.logger import Logger
 from backend.util.notification import NotificationManager
 from backend.util.plex import PlexClient
-from backend.util.ssrf_guard import is_safe_url
 from backend.util.fanart import FanartClient
 from backend.util.release_readiness import is_release_ready
 
@@ -551,26 +547,6 @@ class AssetRenamerr(ChubModule):
             return True, ", ".join(applied_to), applied_to
         return False, "not found in any configured Plex library", []
 
-    def _download_to_temp(self, url: str) -> Optional[str]:
-        ok, reason = is_safe_url(url, allow_private=False)
-        if not ok:
-            self.logger.warning(f"Refusing to download unsafe URL ({reason}): {url}")
-            return None
-        try:
-            resp = requests.get(url, timeout=20, stream=True)
-            if not resp.ok:
-                self.logger.warning(f"Download failed ({resp.status_code}): {url}")
-                return None
-            ext = os.path.splitext(url.split("?")[0])[1] or ".png"
-            fd, path = tempfile.mkstemp(suffix=ext)
-            with os.fdopen(fd, "wb") as fh:
-                for chunk in resp.iter_content(8192):
-                    fh.write(chunk)
-            return path
-        except requests.RequestException as exc:
-            self.logger.warning(f"Download error for {url}: {exc}")
-            return None
-
     def _apply_kometa(
         self,
         media: dict,
@@ -583,23 +559,18 @@ class AssetRenamerr(ChubModule):
         if not dest_root:
             return False, "no destination_dir configured for Kometa apply"
 
-        # Obtain a local source file (download remote fanart.tv urls first).
-        temp_file = None
-        src = file
+        # Kometa applies LOCAL files only — fanart art is never downloaded to
+        # disk (it's Plex-only, streamed straight to Plex). fanart is already
+        # filtered out of the Kometa source set in match_and_apply_assets, so
+        # this is a defensive guard.
         if source == "fanart":
-            if self.config.dry_run:
-                src = "<fanart>"  # placeholder; nothing is written in dry-run
-            else:
-                temp_file = self._download_to_temp(url) if url else None
-                src = temp_file
-                if not src:
-                    return False, "tmdb download failed"
+            return False, "fanart art is Plex-only and is never downloaded for Kometa"
+        temp_file = None  # no downloads here; kept for the _cleanup() no-ops
+        src = file
+        if not src:
+            return False, "no local source file to apply"
 
-        ext = (
-            os.path.splitext(src)[1]
-            if src and src != "<tmdb>"
-            else (os.path.splitext((url or "").split("?")[0])[1] or ".png")
-        )
+        ext = os.path.splitext(src)[1] or ".png"
         folder = self._kometa_folder(media)
 
         # Kometa asset-name stem (logo/background). Season-level assets on a show
@@ -720,16 +691,29 @@ class AssetRenamerr(ChubModule):
                     f"Plex cache refresh skipped ({exc}); using existing snapshot."
                 )
 
+        # fanart.tv is a PLEX-ONLY source: its art is streamed straight to Plex
+        # (Plex fetches the URL) and is never written to disk. Kometa needs
+        # local files, so using fanart there would mean downloading/storing a
+        # copy — against fanart.tv's API use — so Kometa uses local g-drive
+        # assets only and the fanart client is simply never created for it.
         fanart_client = None
         if "fanart" in self._sources():
-            fanart_client = FanartClient(self.full_config.fanart, self.logger)
-            if not fanart_client.enabled:
+            if apply_method != "plex":
                 self.logger.info(
-                    "fanart.tv source requested but no personal API key is "
-                    "configured; add your fanart.tv key in settings. Falling "
-                    "back to local sources only."
+                    "fanart.tv source ignored for Kometa apply — fanart art is "
+                    "only applied via direct-to-Plex upload (never downloaded to "
+                    "disk). Kometa uses local g-drive assets only; switch "
+                    "apply_method to 'plex' to use fanart."
                 )
-                fanart_client = None
+            else:
+                fanart_client = FanartClient(self.full_config.fanart, self.logger)
+                if not fanart_client.enabled:
+                    self.logger.info(
+                        "fanart.tv source requested but no personal API key is "
+                        "configured; add your fanart.tv key in settings. Falling "
+                        "back to local sources only."
+                    )
+                    fanart_client = None
 
         # Preload every match row once into an in-memory map, keyed by
         # (target_kind, target_id, image_type). The idempotency check + the
