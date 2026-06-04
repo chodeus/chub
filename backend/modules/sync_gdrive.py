@@ -5,9 +5,11 @@ import os
 import re
 import shlex
 import subprocess
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from shutil import which
-from typing import List, Optional
+from typing import Any, List, Optional, Tuple
 
 from backend.util.base_module import ChubModule
 from backend.util.database import ChubDB
@@ -104,13 +106,108 @@ def _format_counter_summary(counters: dict) -> str:
     )
 
 
+# Number of gdrive folders synced concurrently. Drive listing is round-trip
+# latency-bound (measured ~600 items/s, far under the tpslimit=8 ceiling), so
+# overlapping folders collapses wall-clock from sum-of-latencies to max. Four
+# workers gets essentially to the floor set by the single largest folder;
+# higher counts add bandwidth/RAM pressure for negligible gain. --bwlimit is
+# divided across workers (see sync_folder) so aggregate egress stays constant.
+_SYNC_WORKERS = 4
+
+
+class _BufferingLogger:
+    """Captures log calls in memory so parallel folder syncs don't interleave
+    their output. ``flush_to()`` replays them to the real logger in order.
+
+    Mirrors the proven pattern in upgradinatorr._BufferingLogger. Kept as a
+    local copy to avoid cross-module coupling; if a third module needs it,
+    promote both to a shared util. Thread-safe: appends are lock-guarded so a
+    folder's DB worker thread can log through the same buffer concurrently.
+    """
+
+    def __init__(self, real_logger: Any = None) -> None:
+        self._records: List[Tuple[str, Any, tuple, dict]] = []
+        self._lock = threading.Lock()
+        self._real_logger = real_logger
+
+    def _store(self, level: str, msg: Any, args: tuple, kwargs: dict) -> None:
+        with self._lock:
+            self._records.append((level, msg, args, kwargs))
+
+    def debug(self, msg: Any, *args, **kwargs) -> None:
+        self._store("debug", msg, args, kwargs)
+
+    def info(self, msg: Any, *args, **kwargs) -> None:
+        self._store("info", msg, args, kwargs)
+
+    def warning(self, msg: Any, *args, **kwargs) -> None:
+        self._store("warning", msg, args, kwargs)
+
+    def error(self, msg: Any, *args, **kwargs) -> None:
+        self._store("error", msg, args, kwargs)
+
+    def exception(self, msg: Any, *args, **kwargs) -> None:
+        kwargs.setdefault("exc_info", True)
+        self._store("error", msg, args, kwargs)
+
+    def heartbeat(self, msg: Any, *args, **kwargs) -> None:
+        self.info(f"[hb] {msg}", *args, **kwargs)
+
+    def get_adapter(self, extra: Any = None) -> "_BufferingLogger":
+        """Stand in for Logger.get_adapter. Source context is dropped on flush
+        (records replay through the real logger's plain level methods), and
+        returning self keeps every chained call buffered and in order."""
+        return self
+
+    def log_outro(self) -> None:
+        # Only meaningful on the real logger; no-op while buffering.
+        pass
+
+    def __getattr__(self, name: str) -> Any:
+        """Delegate anything not explicitly defined (isEnabledFor, setLevel,
+        name, ...) to the real logger so the buffer is a faithful drop-in.
+        Reads __dict__ directly to avoid recursing before _real_logger is set."""
+        real = self.__dict__.get("_real_logger")
+        if real is not None:
+            return getattr(real, name)
+        raise AttributeError(name)
+
+    def flush_to(self, logger: Any) -> None:
+        with self._lock:
+            records = list(self._records)
+            self._records.clear()
+        for level, msg, args, kwargs in records:
+            getattr(logger, level)(msg, *args, **kwargs)
+
+
 class SyncGDrive(ChubModule):
     def __init__(self, logger: Optional[Logger] = None) -> None:
+        # Set up the thread-local logger override before super().__init__ runs,
+        # since it assigns self.logger through the property setter below. During
+        # parallel folder syncs each worker thread installs a _BufferingLogger
+        # here so its lines stay grouped instead of interleaving (see run()).
+        self._thread_local = threading.local()
+        self._real_logger: Any = None
         super().__init__(logger=logger)
         self.rclone_path = self.get_rclone_path()
         self.db = None
         # Track current job ID for progress updates
         self.current_job_id = None
+
+    @property
+    def logger(self) -> Any:
+        """Return the per-thread buffering logger when one is active (parallel
+        folder sync), otherwise the real module logger."""
+        thread_local = getattr(self, "_thread_local", None)
+        if thread_local is not None:
+            buffered = getattr(thread_local, "logger", None)
+            if buffered is not None:
+                return buffered
+        return getattr(self, "_real_logger", None)
+
+    @logger.setter
+    def logger(self, value: Any) -> None:
+        self._real_logger = value
 
     def set_job_id(self, job_id):
         """Set the current job ID for progress tracking"""
@@ -179,13 +276,24 @@ class SyncGDrive(ChubModule):
             return False
         return True
 
-    def sync_folder(self, sync_location, sync_id, progress_cb=lambda pct: None):
+    def sync_folder(
+        self,
+        sync_location,
+        sync_id,
+        progress_cb=lambda pct: None,
+        report_job_progress: bool = True,
+    ):
         """Run rclone sync for a single folder.
 
         Returns (success, counters) where counters is a dict with
         {copied, deleted, updated, renamed} parsed from rclone's per-file
         action lines. Empty counters dict accompanies all failure paths
         so the caller can unpack without conditionals.
+
+        report_job_progress: when False (parallel mode), skip the direct
+        jobs-table progress writes — the run() orchestrator owns a single
+        monotonic progress signal driven by folder-completion count, so four
+        workers don't fight over the same row with non-monotonic percents.
         """
         counters = _empty_counters()
 
@@ -212,7 +320,7 @@ class SyncGDrive(ChubModule):
         # Starting sync
         progress_cb(10)
         # FIXED: Direct call to update_progress, no redundant wrapper
-        if self.current_job_id and self.db:
+        if report_job_progress and self.current_job_id and self.db:
             try:
                 self.db.worker.update_progress("jobs", self.current_job_id, 10)
             except Exception as e:
@@ -224,7 +332,7 @@ class SyncGDrive(ChubModule):
             if pct > last_pct[0]:
                 progress_cb(pct)
                 # FIXED: Direct call to update_progress, no redundant wrapper
-                if self.current_job_id and self.db:
+                if report_job_progress and self.current_job_id and self.db:
                     try:
                         self.db.worker.update_progress("jobs", self.current_job_id, pct)
                     except Exception as e:
@@ -251,7 +359,9 @@ class SyncGDrive(ChubModule):
             "--drive-chunk-size=64M",
             "--exclude=**.partial",
             "--check-first",
-            "--bwlimit=80M",
+            # Divided across _SYNC_WORKERS concurrent syncs so aggregate egress
+            # stays at the original 80M regardless of parallelism.
+            f"--bwlimit={80 // _SYNC_WORKERS}M",
             "--size-only",
             "--delete-after",
             "-v",
@@ -504,6 +614,85 @@ class SyncGDrive(ChubModule):
                     f"{file_count} files, {size_bytes} bytes, last updated {last_updated}"
                 )
 
+    def _sync_one(
+        self, sync_item, skip_cache_refresh: bool
+    ) -> Tuple[Optional[dict], "_BufferingLogger"]:
+        """Sync a single gdrive folder end-to-end on a worker thread.
+
+        Runs rclone, refreshes this folder's gdrive_stats, and (unless the
+        caller does its own full rebuild) re-indexes its poster_cache slice.
+        All log output is captured in a per-thread _BufferingLogger and
+        returned so run() can flush it in completion order — output stays
+        grouped per folder instead of interleaving across the workers. Returns
+        (result, buffer); result is None if cancelled before work began.
+
+        Shared self.db is safe here: each accessor serializes its own writes
+        with a lock and SQLite runs WAL + a 30s busy_timeout, so concurrent
+        folders never corrupt or hard-error.
+        """
+        buf = _BufferingLogger(self._real_logger)
+        self._thread_local.logger = buf
+        try:
+            if self.is_cancelled():
+                return None, buf
+
+            sync_location = sync_item.location
+            success, counters = self.sync_folder(
+                sync_location,
+                sync_item.id,
+                progress_cb=lambda pct: None,
+                report_job_progress=False,
+            )
+
+            file_count, size_bytes, last_updated = self.gather_folder_stats(
+                sync_location
+            )
+            owner = sync_item.name
+            self.db.stats.upsert_gdrive_stat(
+                location=sync_location,
+                folder_name=owner,
+                owner=owner,
+                file_count=file_count,
+                size_bytes=size_bytes,
+                last_updated=last_updated,
+            )
+            self.logger.info(
+                f"Updated gdrive_stats for {sync_location}: {file_count} files, "
+                f"{size_bytes} bytes, last updated {last_updated}"
+            )
+
+            # Refresh this folder's poster_cache slice unless the caller does a
+            # full rebuild right after (skip_cache_refresh), or nothing changed
+            # and it's already cached. The has_rows_under_prefix guard still
+            # populates a freshly cleared/empty cache on a 0-change sync.
+            if success and not skip_cache_refresh:
+                changed = any(counters.values())
+                if changed or not self.db.poster.has_rows_under_prefix(
+                    sync_location
+                ):
+                    self._refresh_poster_cache_for_folder(sync_location)
+                else:
+                    self.logger.info(
+                        f"poster_cache for {sync_location} already current "
+                        "(0 changes) — skipping refresh"
+                    )
+
+            return (
+                {
+                    "location": sync_location,
+                    "owner": owner,
+                    "file_count": file_count,
+                    "size_bytes": size_bytes,
+                    "success": success,
+                    "counters": counters,
+                },
+                buf,
+            )
+        finally:
+            # The pooled thread is reused for the next folder, so drop our
+            # buffer reference; run() already holds it via the returned tuple.
+            self._thread_local.logger = None
+
     def run(
         self,
         progress_cb=lambda pct: None,
@@ -578,32 +767,20 @@ class SyncGDrive(ChubModule):
                 failed_count = 0
                 synced_items = []  # captured for the notification payload
 
-                for idx, sync_item in enumerate(sync_list, 1):
-                    if self.is_cancelled():
-                        self.logger.info(
-                            "Cancellation requested, stopping sync_gdrive."
-                        )
-                        break
-                    progress_pct = int(10 + 80 * (idx - 1) / total)
-                    progress_cb(progress_pct)  # Start for each
-                    if self.current_job_id and self.db:
-                        try:
-                            self.db.worker.update_progress(
-                                "jobs", self.current_job_id, progress_pct
-                            )
-                        except Exception as e:
-                            self.logger.debug(f"Failed to update progress: {e}")
+                # Sync folders concurrently (_SYNC_WORKERS at a time). Drive
+                # listing is latency-bound, so overlapping folders collapses
+                # wall-clock to roughly the largest single folder. Each worker
+                # buffers its log lines; the main thread flushes them per folder
+                # in completion order, so output stays grouped instead of
+                # interleaving. Progress is one monotonic signal driven by
+                # completed-folder count — workers pass report_job_progress=False
+                # so they don't fight over the jobs row.
+                completed = 0
 
-                    sync_location = sync_item.location
-                    sync_id = sync_item.id
-                    success, counters = self.sync_folder(
-                        sync_location, sync_id, progress_cb=progress_cb
-                    )
-                    if not success:
-                        failed_count += 1
-
-                    # GATHER STATS AND UPSERT
-                    progress_pct = int(10 + 80 * (idx - 0.5) / total)
+                def _record_result(result):
+                    nonlocal completed, failed_count
+                    completed += 1
+                    progress_pct = int(10 + 80 * completed / total)
                     progress_cb(progress_pct)
                     if self.current_job_id and self.db:
                         try:
@@ -612,69 +789,42 @@ class SyncGDrive(ChubModule):
                             )
                         except Exception as e:
                             self.logger.debug(f"Failed to update progress: {e}")
+                    if result is None:
+                        return  # cancelled before it ran
+                    if not result["success"]:
+                        failed_count += 1
+                    synced_items.append(result)
 
-                    file_count, size_bytes, last_updated = self.gather_folder_stats(
-                        sync_location
-                    )
-                    owner = sync_item.name
-                    self.db.stats.upsert_gdrive_stat(
-                        location=sync_location,
-                        folder_name=owner,
-                        owner=owner,
-                        file_count=file_count,
-                        size_bytes=size_bytes,
-                        last_updated=last_updated,
-                    )
-                    self.logger.info(
-                        f"Updated gdrive_stats for {sync_location}: {file_count} files, {size_bytes} bytes, last updated {last_updated}"
-                    )
-                    synced_items.append(
-                        {
-                            "location": sync_location,
-                            "owner": owner,
-                            "file_count": file_count,
-                            "size_bytes": size_bytes,
-                            "success": success,
-                            "counters": counters,
-                        }
-                    )
-
-                    # Refresh this folder's slice of poster_cache so a
-                    # standalone bulk run() (e.g. triggered via module_run
-                    # from the Modules or Schedule page) keeps Assets
-                    # Search aligned with disk.
-                    #
-                    # Skips:
-                    #   - skip_cache_refresh: poster_renamerr wraps us and does
-                    #     a full clear() + merge_assets right after, so the
-                    #     per-folder refresh is pure duplicated work.
-                    #   - zero-change: rclone moved nothing (all counters 0) AND
-                    #     this folder's slice is already cached, so re-deleting
-                    #     and re-inserting unchanged rows is wasted disk I/O.
-                    #     The has_rows_under_prefix guard ensures a freshly
-                    #     cleared/empty cache still gets populated on a 0-change
-                    #     sync.
-                    if success and not skip_cache_refresh:
-                        changed = any(counters.values())
-                        if changed or not self.db.poster.has_rows_under_prefix(
-                            sync_location
-                        ):
-                            self._refresh_poster_cache_for_folder(sync_location)
-                        else:
-                            self.logger.info(
-                                f"poster_cache for {sync_location} already current "
-                                "(0 changes) — skipping refresh"
-                            )
-
-                    progress_pct = int(10 + 80 * idx / total)
-                    progress_cb(progress_pct)  # Step up after folder done
-                    if self.current_job_id and self.db:
+                with ThreadPoolExecutor(
+                    max_workers=_SYNC_WORKERS, thread_name_prefix="gdrive_"
+                ) as pool:
+                    futures = {
+                        pool.submit(self._sync_one, item, skip_cache_refresh): item
+                        for item in sync_list
+                    }
+                    for fut in as_completed(futures):
+                        item = futures[fut]
                         try:
-                            self.db.worker.update_progress(
-                                "jobs", self.current_job_id, progress_pct
-                            )
+                            result, buf = fut.result()
                         except Exception as e:
-                            self.logger.debug(f"Failed to update progress: {e}")
+                            # A single folder raising must not sink the batch:
+                            # log against the real logger and count it failed.
+                            result, buf = None, None
+                            failed_count += 1
+                            self._real_logger.error(
+                                f"Unhandled error syncing {item.name}: {e}",
+                                exc_info=True,
+                            )
+                        # Flush this folder's buffered lines as one block, in
+                        # completion order, serialized on the main thread.
+                        if buf is not None:
+                            buf.flush_to(self._real_logger)
+                        _record_result(result)
+
+                if self.is_cancelled():
+                    self._real_logger.info(
+                        "Cancellation requested, stopping sync_gdrive."
+                    )
 
                 progress_cb(100)
                 if self.current_job_id and self.db:
@@ -682,6 +832,14 @@ class SyncGDrive(ChubModule):
                         self.db.worker.update_progress("jobs", self.current_job_id, 100)
                     except Exception as e:
                         self.logger.debug(f"Failed to update progress: {e}")
+
+                # Workers complete out of order; restore the configured
+                # gdrive_list order for the notification's per-folder listing.
+                # Aggregation below is order-independent.
+                _order = {s.location: i for i, s in enumerate(sync_list)}
+                synced_items.sort(
+                    key=lambda it: _order.get(it["location"], len(_order))
+                )
 
                 # Aggregate per-folder counters into a single dict for
                 # the notification top-line. Per-item counters stay on
