@@ -14,6 +14,11 @@ from pydantic import BaseModel
 from backend.api.utils import error, get_logger, ok
 from backend.modules import MODULES
 from backend.util.config import ChubConfig, load_config, save_config
+from backend.util.scheduler import (
+    _profile_value,
+    _upgradinatorr_profile_label,
+    cron_next_run,
+)
 
 router = APIRouter(
     prefix="/api",
@@ -76,9 +81,44 @@ async def get_all_schedules(
         logger.debug("Serving GET /api/schedule")
         schedule_data = config.schedule
 
+        # Next-run timestamps for top-level modules that use a cron(...) schedule.
+        # The frontend computes hourly/daily/weekly/monthly itself but can't parse
+        # cron, so those would otherwise drop off the dashboard's "Upcoming" list.
+        next_runs: dict[str, str] = {}
+        for module_name, expr in (schedule_data or {}).items():
+            nr = cron_next_run(expr)
+            if nr is not None:
+                next_runs[module_name] = nr.isoformat()
+
+        # Per-instance Upgradinatorr sub-schedules. These are honored by the
+        # scheduler (see _tick_upgradinatorr_profiles) but live under
+        # upgradinatorr.instances_list, not config.schedule, so the UI never saw
+        # them. Surface them read-only alongside the module schedules.
+        sub_schedules: list[dict[str, Any]] = []
+        upgradinatorr_config = getattr(config, "upgradinatorr", None)
+        profiles = getattr(upgradinatorr_config, "instances_list", None) or []
+        for index, profile in enumerate(profiles):
+            sched = (_profile_value(profile, "schedule", "") or "").strip()
+            if not sched:
+                continue
+            nr = cron_next_run(sched)
+            sub_schedules.append(
+                {
+                    "module": "upgradinatorr",
+                    "label": _upgradinatorr_profile_label(profile, index),
+                    "schedule": sched,
+                    "enabled": bool(_profile_value(profile, "enabled", True)),
+                    "next_run": nr.isoformat() if nr is not None else None,
+                }
+            )
+
         return ok(
             "Schedules retrieved successfully",
-            {"schedule": schedule_data},
+            {
+                "schedule": schedule_data,
+                "next_runs": next_runs,
+                "sub_schedules": sub_schedules,
+            },
         )
 
     except Exception as e:

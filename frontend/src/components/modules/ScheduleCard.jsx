@@ -29,7 +29,17 @@ import { Button } from '../ui/button/Button';
  * />
  */
 export const ScheduleCard = React.memo(
-    ({ moduleKey, moduleLabel, schedule, isRunning = false, onRun, onEdit, onCancel, onTest }) => {
+    ({
+        moduleKey,
+        moduleLabel,
+        schedule,
+        subSchedules = [],
+        isRunning = false,
+        onRun,
+        onEdit,
+        onCancel,
+        onTest,
+    }) => {
         const hasSchedule = !!schedule;
         const humanReadableSchedule = hasSchedule ? scheduleToHuman(schedule) : 'Not scheduled';
 
@@ -92,6 +102,31 @@ export const ScheduleCard = React.memo(
                         {humanReadableSchedule}
                     </div>
 
+                    {/* Per-instance sub-schedules (read-only). Edited in the
+                        module's own instance settings, surfaced here for visibility. */}
+                    {subSchedules.length > 0 && (
+                        <div className="mt-2 pt-2 border-t border-default">
+                            <div className="text-xs font-semibold uppercase tracking-wider text-tertiary mb-1">
+                                Per-instance schedules
+                            </div>
+                            <ul className="flex flex-col gap-0.5 m-0 p-0 list-none">
+                                {subSchedules.map(sub => (
+                                    <li
+                                        key={sub.label}
+                                        className={`text-xs flex justify-between gap-2 ${sub.enabled ? 'text-secondary' : 'text-tertiary opacity-60'}`}
+                                    >
+                                        <span className="truncate">{sub.label}</span>
+                                        <span className="shrink-0 text-right">
+                                            {sub.enabled
+                                                ? scheduleToHuman(sub.schedule)
+                                                : 'Disabled'}
+                                        </span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+
                     {/* Test button */}
                     {onTest && !isRunning && (
                         <button
@@ -122,6 +157,13 @@ ScheduleCard.propTypes = {
     moduleKey: PropTypes.string.isRequired,
     moduleLabel: PropTypes.string.isRequired,
     schedule: PropTypes.string,
+    subSchedules: PropTypes.arrayOf(
+        PropTypes.shape({
+            label: PropTypes.string,
+            schedule: PropTypes.string,
+            enabled: PropTypes.bool,
+        })
+    ),
     isRunning: PropTypes.bool,
     onRun: PropTypes.func.isRequired,
     onEdit: PropTypes.func.isRequired,
