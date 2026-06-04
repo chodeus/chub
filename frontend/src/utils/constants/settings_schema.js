@@ -36,6 +36,14 @@ export const SETTINGS_SCHEMA = [
                 description:
                     'Your personal fanart.tv API key. Required to use fanart.tv as an Asset Renamerr source for logos + backgrounds — a personal key authenticates on its own, so it is all CHUB needs. It also cuts the delay for newly-added artwork from 7 days to 2 (immediate for VIP accounts). Get one free at fanart.tv/get-an-api-key (Personal API Keys).',
             },
+            {
+                key: 'cache_expiration',
+                label: 'Cache Expiration (days)',
+                type: 'number',
+                required: false,
+                description:
+                    'How long to cache resolved fanart.tv logo/background URLs before re-querying. fanart.tv asks that apps make no more requests than necessary, so this cache keeps repeat runs from re-hitting their servers. Default 2 — matching the personal key’s own 2-day delay for newly-added art, so a shorter window cannot surface anything newer anyway.',
+            },
         ],
     },
     {

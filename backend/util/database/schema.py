@@ -736,6 +736,33 @@ class SchemaManager:
         )
         self._add_table(tmdb_images_cache)
 
+        # fanart.tv logo/background URL cache. Keyed by the id fanart is queried
+        # with (tmdb for movies, tvdb for TV) + media_type + season. `season`
+        # defaults to -1 for movies/show-level rows (NULLs would be distinct in
+        # a UNIQUE, breaking upserts); a real season number is used for
+        # season-specific backgrounds. Expiration enforced in FanartClient.
+        fanart_images_cache = TableDefinition(
+            name="fanart_images_cache",
+            columns=[
+                ColumnDefinition("id", "INTEGER", primary_key=True, nullable=False),
+                ColumnDefinition("lookup_id", "TEXT", nullable=False),
+                ColumnDefinition("media_type", "TEXT", nullable=False),
+                ColumnDefinition("season", "INTEGER", nullable=False, default="-1"),
+                # JSON {"logo": url|null, "background": url|null}
+                ColumnDefinition("images", "TEXT"),
+                ColumnDefinition(
+                    "cached_at", "TEXT", nullable=False, default="CURRENT_TIMESTAMP"
+                ),
+            ],
+            constraints=[
+                "UNIQUE (lookup_id, media_type, season)",
+            ],
+            indexes=[
+                "CREATE INDEX IF NOT EXISTS fanart_images_cache_lookup_idx ON fanart_images_cache (lookup_id, media_type, season)",
+            ],
+        )
+        self._add_table(fanart_images_cache)
+
         # Tracks which one-shot data migrations have been applied.
         # See _run_rename_migrations for usage.
         # Per-instance last-completed-sync timestamp. Unlike a cache table's
