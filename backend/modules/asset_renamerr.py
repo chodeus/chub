@@ -4,6 +4,7 @@ import json
 import os
 import shutil
 import tempfile
+import time
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 import requests
@@ -740,6 +741,11 @@ class AssetRenamerr(ChubModule):
                 ] = _row
 
         total = len(all_media)
+        # Lightweight timing to find the per-item bottleneck (resolve = DB
+        # candidate lookup + fanart; stat = FUSE source-file stat; apply =
+        # Plex/Kometa write). Summarised once at the end — see the
+        # "[asset timing]" line. Cheap (perf_counter deltas), temporary.
+        _t_resolve = _t_stat = _t_apply = 0.0
         for idx, media in enumerate(all_media, 1):
             if self.is_cancelled():
                 break
@@ -768,9 +774,11 @@ class AssetRenamerr(ChubModule):
                 continue
 
             for image_type in applicable:
+                _t0 = time.perf_counter()
                 resolved = self._resolve_source(
                     media, db, image_type, is_collection, fanart_client
                 )
+                _t_resolve += time.perf_counter() - _t0
                 if not resolved:
                     # No source artwork anywhere for this (item, type). Record a
                     # "missing" row so the Unmatched view can derive coverage
@@ -801,10 +809,12 @@ class AssetRenamerr(ChubModule):
                 # mtime; TMDB by URL.
                 src_mtime = None
                 if source == "local" and file:
+                    _t0 = time.perf_counter()
                     try:
                         src_mtime = os.stat(file).st_mtime
                     except OSError:
                         src_mtime = None
+                    _t_stat += time.perf_counter() - _t0
                 prev = (
                     applied_map.get((target_kind, int(target_id), image_type))
                     if target_id is not None
@@ -827,6 +837,7 @@ class AssetRenamerr(ChubModule):
                     continue
 
                 applied_libs: Optional[List[str]] = None
+                _t0 = time.perf_counter()
                 if apply_method == "plex":
                     applied, detail, applied_libs = self._apply_direct(
                         db, media, image_type, file, url, is_collection
@@ -835,6 +846,7 @@ class AssetRenamerr(ChubModule):
                     applied, detail = self._apply_kometa(
                         media, image_type, source, file, url
                     )
+                _t_apply += time.perf_counter() - _t0
 
                 # On a dry run, NEVER persist match state: media_asset_matches
                 # drives idempotency (_already_applied), so recording a dry-run
@@ -877,6 +889,13 @@ class AssetRenamerr(ChubModule):
                         f"{prefix} {image_type} [{source}] "
                         f"{media.get('title')} -> {detail}"
                     )
+        # Bottleneck breakdown for the per-item loop (temporary diagnostic):
+        # whichever of resolve / stat / apply dominates decides the next
+        # optimization (stat-bound -> parallelize; resolve-bound -> fold lookups).
+        self.logger.info(
+            f"[asset timing] {total} items | resolve {_t_resolve:.1f}s | "
+            f"stat {_t_stat:.1f}s | apply {_t_apply:.1f}s"
+        )
         return output
 
     def handle_output(self, output: Dict[str, List[dict]]) -> None:
