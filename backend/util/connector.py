@@ -295,6 +295,10 @@ class Connector:
         # Enhanced components
         self.connection_manager = ConnectionManager(self.logger)
         self.spinner = itertools.cycle(["-", "\\", "|", "/"])
+        # \r progress spinners only make sense on a TTY. Headless (container
+        # stdout is a pipe) they never redraw and just spam the log, so gate
+        # them and route the completion line through the logger instead.
+        self._tty = sys.stdout.isatty()
 
         # Parse and validate instances using internal config
         try:
@@ -322,10 +326,11 @@ class Connector:
 
         results = []
         for i, instance_config in enumerate(arr_instances, 1):
-            sys.stdout.write(
-                f"\rIndexing '{instance_config.name}' ({i}/{len(arr_instances)})... {next(self.spinner)}"
-            )
-            sys.stdout.flush()
+            if self._tty:
+                sys.stdout.write(
+                    f"\rIndexing '{instance_config.name}' ({i}/{len(arr_instances)})... {next(self.spinner)}"
+                )
+                sys.stdout.flush()
 
             result = self._sync_single_arr_instance(instance_config, logger)
             results.append(result)
@@ -337,8 +342,10 @@ class Connector:
 
             time.sleep(0.05)
 
-        sys.stdout.write("\r" + " " * 80 + "\r")
-        print(f"ARR database sync complete. ({len(results)} instances)\n")
+        if self._tty:
+            sys.stdout.write("\r" + " " * 80 + "\r")
+        if logger:
+            logger.info(f"ARR database sync complete. ({len(results)} instances)")
 
         # Backfill missing tmdb_id values for rows we just synced. No-op if
         # the user hasn't configured a TMDB API key. Running here (after all
@@ -518,10 +525,11 @@ class Connector:
 
         results = []
         for i, instance_config in enumerate(plex_instances, 1):
-            sys.stdout.write(
-                f"\rIndexing Plex '{instance_config.name}' ({i}/{len(plex_instances)})... {next(self.spinner)}"
-            )
-            sys.stdout.flush()
+            if self._tty:
+                sys.stdout.write(
+                    f"\rIndexing Plex '{instance_config.name}' ({i}/{len(plex_instances)})... {next(self.spinner)}"
+                )
+                sys.stdout.flush()
 
             result = self._sync_single_plex_instance(instance_config, logger)
             results.append(result)
@@ -533,8 +541,10 @@ class Connector:
 
             time.sleep(0.05)
 
-        sys.stdout.write("\r" + " " * 80 + "\r")
-        print(f"Plex database sync complete. ({len(results)} instances)\n")
+        if self._tty:
+            sys.stdout.write("\r" + " " * 80 + "\r")
+        if logger:
+            logger.info(f"Plex database sync complete. ({len(results)} instances)")
         self._record_sync_completion(results)
         return results
 
@@ -640,10 +650,11 @@ class Connector:
 
         results = []
         for i, instance_config in enumerate(plex_instances, 1):
-            sys.stdout.write(
-                f"\rIndexing collections '{instance_config.name}' ({i}/{len(plex_instances)})... {next(self.spinner)}"
-            )
-            sys.stdout.flush()
+            if self._tty:
+                sys.stdout.write(
+                    f"\rIndexing collections '{instance_config.name}' ({i}/{len(plex_instances)})... {next(self.spinner)}"
+                )
+                sys.stdout.flush()
 
             result = self._sync_single_plex_collections(instance_config, logger)
             results.append(result)
@@ -653,8 +664,10 @@ class Connector:
                     f"Failed to sync collections for {instance_config.name}: {result.error_message}"
                 )
 
-        sys.stdout.write("\r" + " " * 80 + "\r")
-        print(f"Collections sync complete. ({len(results)} instances)\n")
+        if self._tty:
+            sys.stdout.write("\r" + " " * 80 + "\r")
+        if logger:
+            logger.info(f"Collections sync complete. ({len(results)} instances)")
         return results
 
     def _sync_single_plex_collections(

@@ -350,6 +350,11 @@ class PlexClient:
         container_start = 0
         container_size = plexapi.X_PLEX_CONTAINER_SIZE
         spinner = itertools.cycle(["-", "\\", "|", "/"])  # A simple rotating spinner
+        # The \r spinner only makes sense on a TTY. In a container (stdout is a
+        # pipe) it never redraws — it just accumulates and glues onto the next
+        # writer's line. Skip it when headless; emit one summary to the module
+        # log instead.
+        interactive = sys.stdout.isatty()
 
         # Terminate on a short/empty page rather than trusting the server-reported
         # totalSize (which can be stale or under-report under concurrent edits and
@@ -376,18 +381,24 @@ class PlexClient:
             all_entries.extend(subresults)
             container_start += container_size
 
-            # --- Spinner/Status line ---
-            spin = next(spinner)
-            msg = f"{spin} Loading: {len(all_entries)}/{total_size} items from {section.type.title()} for '{section.title}'..."
-            sys.stdout.write("\r" + msg.ljust(60))
-            sys.stdout.flush()
+            # --- Spinner/Status line (interactive TTY only) ---
+            if interactive:
+                spin = next(spinner)
+                msg = f"{spin} Loading: {len(all_entries)}/{total_size} items from {section.type.title()} for '{section.title}'..."
+                sys.stdout.write("\r" + msg.ljust(60))
+                sys.stdout.flush()
 
             # A page shorter than the requested container size (incl. empty) is
             # the definitive end-of-list signal.
             if len(subresults) < container_size:
                 break
 
-        print()  # Move to next line after done
+        if interactive:
+            print()  # Move to next line after done
+        else:
+            logger.debug(
+                f"Loaded {len(all_entries)} items from {section.type.title()} for '{section.title}'"
+            )
         return all_entries
 
     def _fetch_by_rating_key(self, plex_id: Any, season_number: Any = None):
