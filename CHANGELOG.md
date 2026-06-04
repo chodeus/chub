@@ -2,6 +2,37 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.29.0](https://github.com/chodeus/chub/compare/v2.28.0...v2.29.0) (2026-06-04)
+
+
+### Features
+
+* **assets:** wildcard (*) title search in Assets Search ([40161e1](https://github.com/chodeus/chub/commit/40161e148bb21594d83d7aafac386c07b9ff8cff))
+* **dashboard:** show per-instance sub-schedules on module status cards ([bc7bdfe](https://github.com/chodeus/chub/commit/bc7bdfe483e1d20bfda3e6122d80b9ce763de3c1))
+* **jobs:** per-phase timing for orchestrated module runs ([8e35d65](https://github.com/chodeus/chub/commit/8e35d653160418748c9595fafc4c5a858b72d658))
+* **schedule:** surface Upgradinatorr per-instance sub-schedules in UI ([2e248b2](https://github.com/chodeus/chub/commit/2e248b22c351e1b4c1e272364254c7d15c816cda))
+
+
+### Bug Fixes
+
+* **asset:** fanart is Plex-only (stream, never download); Kometa = g-drive only ([973bd1a](https://github.com/chodeus/chub/commit/973bd1abf4ea7bfd9479d3d14ba265eb55128eb9))
+* **logs:** keep container stdout ordered and free of TTY/raw-stdout noise ([cc6cbba](https://github.com/chodeus/chub/commit/cc6cbba9737eb0fd54bf98c6ff33b147a3b8f3aa))
+* **logs:** stop double-encoding &lt; and &gt; in the log viewer ([f21cae4](https://github.com/chodeus/chub/commit/f21cae4397a92e3bd84285c0bdf6e1e77225d95c))
+* resolve CodeQL alerts (dead assignment, repeated imports) ([54ab470](https://github.com/chodeus/chub/commit/54ab47070de0685b2f8f2cbb0d0e6c217c4179c2))
+
+
+### Performance
+
+* **asset:** cache fanart.tv URLs (2-day TTL) to kill the per-run refetch storm ([05df4a4](https://github.com/chodeus/chub/commit/05df4a4087aa742dafaa104cc3e68ea5c87741bf))
+* **asset:** fold per-image_type local lookups into one fetch ([#3](https://github.com/chodeus/chub/issues/3)) ([846a6cf](https://github.com/chodeus/chub/commit/846a6cf90a3affed76a6588efcbda15ede8ccf64))
+* **asset:** preload media_asset_matches + thread-safe fanart client ([55e7543](https://github.com/chodeus/chub/commit/55e7543343e9bf4b7af3ca5104cdcd57c5f9bb3f))
+* **asset:** reuse one read connection across the resolve loop (Option A) ([92a4b71](https://github.com/chodeus/chub/commit/92a4b71808378b15b508c45a679830c03be3f7c1))
+* **border:** add skip-gate so unchanged posters aren't re-encoded ([2cebe98](https://github.com/chodeus/chub/commit/2cebe98d0331b4d5dea2f8f51c8f41358d6282a3))
+* **border:** parallelize processing, atomic same-fs writes, real content compare ([460d4d3](https://github.com/chodeus/chub/commit/460d4d38cb79251c5405d90396f72bc97eb98a40))
+* **jobs:** per-phase progress windows so the bar advances through every phase ([fd436e4](https://github.com/chodeus/chub/commit/fd436e44dcb1760559d411bfa8f0c45e0ecd0c0f))
+* **match:** skip match-phase row writes when the result is unchanged ([e67ddb8](https://github.com/chodeus/chub/commit/e67ddb851dd9d53b7b50f0505b73102077c9ba20))
+* **pipeline:** batch cache writes, honor synchronous=NORMAL, skip redundant gdrive work ([c032bd3](https://github.com/chodeus/chub/commit/c032bd3d33e9464427f2012b47bb34679a54656f))
+
 ## [2.28.0](https://github.com/chodeus/chub/compare/v2.27.0...v2.28.0) (2026-06-03)
 
 
