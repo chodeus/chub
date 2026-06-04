@@ -7,6 +7,7 @@ from typing import List, Optional
 from backend.util.helper import get_config_dir
 from backend.util.logger import Logger
 
+from .border_state import BorderState
 from .collection_cache import CollectionCache
 from .db_base import DatabaseBase
 from .holiday import HolidayStatus
@@ -178,6 +179,11 @@ class ChubDB:
     def poster(self) -> PosterCache:
         """Access to poster cache operations."""
         return self._get_interface("poster", PosterCache)
+
+    @property
+    def border(self) -> BorderState:
+        """Access to border-replacerr skip-gate state."""
+        return self._get_interface("border", BorderState)
 
     @property
     def media_asset_matches(self) -> MediaAssetMatches:

@@ -497,6 +497,20 @@ class SchemaManager:
         )
         self._add_table(holiday_status)
 
+        border_state = TableDefinition(
+            name="border_state",
+            columns=[
+                ColumnDefinition(
+                    "renamed_file", "TEXT", primary_key=True, nullable=False
+                ),
+                ColumnDefinition("source_mtime", "REAL"),
+                ColumnDefinition("source_size", "INTEGER"),
+                ColumnDefinition("variant_sig", "TEXT"),
+                ColumnDefinition("updated_at", "TEXT"),
+            ],
+        )
+        self._add_table(border_state)
+
         # Run State
         run_state = TableDefinition(
             name="run_state",
