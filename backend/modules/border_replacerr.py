@@ -4,7 +4,8 @@ import filecmp
 import logging
 import os
 import re
-import shutil
+import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -175,6 +176,44 @@ class BorderReplacerr(ChubModule):
             return (255, 255, 255)
         return color_code
 
+    def _save_if_changed(self, out_img: "Image.Image", renamed_file: str) -> bool:
+        """Write ``out_img`` next to ``renamed_file`` via a temp file, then
+        atomically move it into place only if the bytes differ from the
+        current file. Returns True if written, False if unchanged.
+
+        Two fixes over the old `/tmp/{basename}` approach:
+          - The temp lives in the destination directory, so the move is an
+            atomic same-filesystem ``os.replace`` rather than a cross-device
+            copy (the dest is typically a FUSE/array mount, /tmp is not), and
+            concurrent workers compositing the same basename can't collide
+            (mkstemp gives each a unique name) — the prerequisite for #11.
+          - filecmp uses shallow=False (content compare). The old default
+            shallow=True compared stat signatures; a freshly written temp
+            always has a new mtime, so "unchanged" never fired and every
+            poster was rewritten each run. Content compare makes the skip real.
+        """
+        dest_dir = os.path.dirname(renamed_file)
+        os.makedirs(dest_dir, exist_ok=True)
+        suffix = os.path.splitext(renamed_file)[1] or ".jpg"
+        fd, tmp_path = tempfile.mkstemp(prefix=".border-", suffix=suffix, dir=dest_dir)
+        os.close(fd)
+        try:
+            out_img.save(tmp_path)
+            if not os.path.exists(renamed_file) or not filecmp.cmp(
+                renamed_file, tmp_path, shallow=False
+            ):
+                os.replace(tmp_path, renamed_file)
+                return True
+            os.remove(tmp_path)
+            return False
+        except Exception:
+            if os.path.exists(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except OSError:
+                    pass
+            raise
+
     def replace_borders_with_image(
         self, original_file: str, renamed_file: str, border_image_path: str
     ) -> bool:
@@ -186,19 +225,17 @@ class BorderReplacerr(ChubModule):
         """
         try:
             with Image.open(original_file) as image:
-                poster = image.resize((1000, 1500)).convert("RGBA")
+                # Skip the resample when the source is already target size
+                # (often, since our own output is 1000x1500).
+                if image.size != (1000, 1500):
+                    image = image.resize((1000, 1500))
+                poster = image.convert("RGBA")
             with Image.open(border_image_path) as border:
                 overlay = border.convert("RGBA")
                 if overlay.size != (1000, 1500):
                     overlay = overlay.resize((1000, 1500))
             out_img = Image.alpha_composite(poster, overlay).convert("RGB")
-            tmp_path = f"/tmp/{os.path.basename(renamed_file)}"
-            out_img.save(tmp_path)
-            if not os.path.exists(renamed_file) or not filecmp.cmp(
-                renamed_file, tmp_path
-            ):
-                os.makedirs(os.path.dirname(renamed_file), exist_ok=True)
-                shutil.move(tmp_path, renamed_file)
+            if self._save_if_changed(out_img, renamed_file):
                 self.logger.debug(
                     f"Composited border: {os.path.basename(original_file)} "
                     f"+ {os.path.basename(border_image_path)} → "
@@ -206,7 +243,6 @@ class BorderReplacerr(ChubModule):
                 )
                 self.logger.debug(f"[BORDER_COMPOSITED] {renamed_file}")
                 return True
-            os.remove(tmp_path)
             self.logger.debug(
                 f"No border update needed for {os.path.basename(renamed_file)}"
             )
@@ -236,22 +272,17 @@ class BorderReplacerr(ChubModule):
                 new_height = cropped.height + 2 * border_width
                 out_img = Image.new("RGB", (new_width, new_height), border_color)
                 out_img.paste(cropped, (border_width, border_width))
-                out_img = out_img.resize((1000, 1500)).convert("RGB")
+                if out_img.size != (1000, 1500):
+                    out_img = out_img.resize((1000, 1500))
+                out_img = out_img.convert("RGB")
 
-                tmp_path = f"/tmp/{os.path.basename(renamed_file)}"
-                out_img.save(tmp_path)
-                if not os.path.exists(renamed_file) or not filecmp.cmp(
-                    renamed_file, tmp_path
-                ):
-                    os.makedirs(os.path.dirname(renamed_file), exist_ok=True)
-                    shutil.move(tmp_path, renamed_file)
+                if self._save_if_changed(out_img, renamed_file):
                     self.logger.debug(
                         f"Replaced border: {os.path.basename(original_file)} → {os.path.basename(renamed_file)}"
                     )
                     self.logger.debug(f"[BORDER_REPLACED] {renamed_file}")
                     return True
                 else:
-                    os.remove(tmp_path)
                     self.logger.debug(
                         f"No border update needed for {os.path.basename(renamed_file)}"
                     )
@@ -274,22 +305,17 @@ class BorderReplacerr(ChubModule):
                         height - border_width,
                     )
                 )
-                cropped = cropped.resize((1000, 1500)).convert("RGB")
+                if cropped.size != (1000, 1500):
+                    cropped = cropped.resize((1000, 1500))
+                cropped = cropped.convert("RGB")
 
-                tmp_path = f"/tmp/{os.path.basename(renamed_file)}"
-                cropped.save(tmp_path)
-                if not os.path.exists(renamed_file) or not filecmp.cmp(
-                    renamed_file, tmp_path
-                ):
-                    os.makedirs(os.path.dirname(renamed_file), exist_ok=True)
-                    shutil.move(tmp_path, renamed_file)
+                if self._save_if_changed(cropped, renamed_file):
                     self.logger.debug(
                         f"Removed border: {os.path.basename(original_file)} → {os.path.basename(renamed_file)}"
                     )
                     self.logger.debug(f"[BORDER_REMOVED] {renamed_file}")
                     return True
                 else:
-                    os.remove(tmp_path)
                     self.logger.debug(
                         f"No border update needed for {os.path.basename(renamed_file)}"
                     )
@@ -322,8 +348,6 @@ class BorderReplacerr(ChubModule):
                 )
 
             assets = []
-            color_index = 0
-            border_index = 0
             processed = 0
             replaced = 0
             removed = 0
@@ -415,99 +439,103 @@ class BorderReplacerr(ChubModule):
             # DEBUG. Skips dry-run because `result=True` there is unconditional
             # and the list would just be every input.
             changes: List[Dict[str, str]] = []
+
+            # Pre-filter assets missing file info (tally as skipped) and assign
+            # each remaining asset its round-robin border/color variant up front,
+            # so the worker carries no shared mutable index — the prerequisite
+            # for processing them concurrently.
+            work: List[Tuple[dict, object]] = []
+            for asset in assets:
+                if not asset.get("original_file") or not asset.get("renamed_file"):
+                    self.logger.warning(
+                        f"Asset '{asset.get('title')}' missing file info. Skipping."
+                    )
+                    skipped += 1
+                    continue
+                if border_paths:
+                    variant = border_paths[len(work) % len(border_paths)]
+                elif border_colors:
+                    variant = border_colors[len(work) % len(border_colors)]
+                else:
+                    variant = None
+                work.append((asset, variant))
+
+            def _process(item: Tuple[dict, object]):
+                """Apply the active border op to one poster. Returns
+                (result, title, action, detail); result is True (written),
+                False (unchanged) or None (failed)."""
+                asset, variant = item
+                original_file = asset["original_file"]
+                renamed_file = asset["renamed_file"]
+                title = asset["title"]
+                if border_paths:
+                    action, detail = "composited", os.path.basename(variant)
+                    if dry_run:
+                        self.logger.debug(
+                            f"[DRY RUN] Would composite {detail} onto: {renamed_file}"
+                        )
+                        return True, title, action, detail
+                    result = self.replace_borders_with_image(
+                        original_file, renamed_file, variant
+                    )
+                elif border_colors:
+                    action, detail = "replaced", variant
+                    if dry_run:
+                        self.logger.debug(
+                            f"[DRY RUN] Would replace border for: {renamed_file}"
+                        )
+                        return True, title, action, detail
+                    result = self.replace_borders(
+                        original_file, renamed_file, variant, self.config.border_width
+                    )
+                else:
+                    action, detail = "removed", ""
+                    if dry_run:
+                        self.logger.debug(
+                            f"[DRY RUN] Would remove border for: {renamed_file}"
+                        )
+                        return True, title, action, detail
+                    result = self.remove_borders(
+                        original_file, renamed_file, self.config.border_width
+                    )
+                return result, title, action, detail
+
+            # PIL releases the GIL during decode/resize/composite/encode, so a
+            # thread pool gives real parallelism on the CPU-bound encode without
+            # the pickling cost of processes (and self.logger keeps working).
+            # dry-run forces 1 worker: no I/O, and it keeps the "Would ..." debug
+            # lines in asset order. map() preserves submission order so the
+            # changes table and counters stay deterministic regardless of workers.
+            if dry_run:
+                workers = 1
+            else:
+                configured = getattr(self.config, "border_workers", None)
+                workers = (
+                    int(configured) if configured else min(8, os.cpu_count() or 4)
+                )
+                workers = max(1, min(workers, len(work) or 1))
+
             with progress(
-                assets,
+                work,
                 desc="Processing Posters",
-                total=len(assets),
+                total=len(work),
                 unit="posters",
                 logger=self.logger,
             ) as bar:
-                for asset in bar:
-                    original_file = asset["original_file"]
-                    renamed_file = asset["renamed_file"]
-                    title = asset["title"]
-                    if not original_file or not renamed_file:
-                        self.logger.warning(
-                            f"Asset '{title}' missing file info. Skipping."
-                        )
-                        skipped += 1
-                        continue
-
-                    if border_paths:
-                        border_path = border_paths[border_index]
-                        if not dry_run:
-                            result = self.replace_borders_with_image(
-                                original_file, renamed_file, border_path
-                            )
-                        else:
-                            self.logger.debug(
-                                f"[DRY RUN] Would composite "
-                                f"{os.path.basename(border_path)} onto: "
-                                f"{renamed_file}"
-                            )
-                            result = True
-                        border_index = (border_index + 1) % len(border_paths)
+                with ThreadPoolExecutor(max_workers=workers) as pool:
+                    for result, title, action, detail in pool.map(_process, work):
+                        bar.update(1)
                         if result:
-                            replaced += 1
+                            if action == "removed":
+                                removed += 1
+                            else:
+                                replaced += 1
                             if not dry_run:
                                 changes.append(
                                     {
                                         "title": title,
-                                        "action": "composited",
-                                        "detail": os.path.basename(border_path),
-                                    }
-                                )
-                        elif result is None:
-                            failed += 1
-                        processed += 1
-                    elif border_colors:
-                        color = border_colors[color_index]
-                        if not dry_run:
-                            result = self.replace_borders(
-                                original_file,
-                                renamed_file,
-                                color,
-                                self.config.border_width,
-                            )
-                        else:
-                            self.logger.debug(
-                                f"[DRY RUN] Would replace border for: {renamed_file}"
-                            )
-                            result = True
-                        color_index = (color_index + 1) % len(border_colors)
-                        if result:
-                            replaced += 1
-                            if not dry_run:
-                                changes.append(
-                                    {
-                                        "title": title,
-                                        "action": "replaced",
-                                        "detail": color,
-                                    }
-                                )
-                        elif result is None:
-                            failed += 1
-                        processed += 1
-                    else:
-                        if not dry_run:
-                            result = self.remove_borders(
-                                original_file,
-                                renamed_file,
-                                self.config.border_width,
-                            )
-                        else:
-                            self.logger.debug(
-                                f"[DRY RUN] Would remove border for: {renamed_file}"
-                            )
-                            result = True
-                        if result:
-                            removed += 1
-                            if not dry_run:
-                                changes.append(
-                                    {
-                                        "title": title,
-                                        "action": "removed",
-                                        "detail": "",
+                                        "action": action,
+                                        "detail": detail,
                                     }
                                 )
                         elif result is None:
