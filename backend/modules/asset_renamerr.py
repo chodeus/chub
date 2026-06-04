@@ -406,17 +406,26 @@ class AssetRenamerr(ChubModule):
         image_type: str,
         is_collection: bool,
         fanart_client: Optional[FanartClient],
+        conn=None,
     ) -> Optional[Tuple[str, Optional[str], Optional[str]]]:
         """Resolve one (media, image_type) to an image, honouring the ordered
         ``sources`` preference. Returns ``(source, file, url)`` for the first
         source that yields one, or None.
+
+        ``conn`` (optional) is a reused read-only poster_cache connection — the
+        loop passes one so the per-item candidate lookups don't each open a
+        fresh connection.
         """
         from backend.modules.poster_renamerr import PosterRenamerr
 
         for source in self._sources():
             if source == "local":
                 found = PosterRenamerr.find_asset_candidate(
-                    media, db, image_type=image_type, is_collection=is_collection
+                    media,
+                    db,
+                    image_type=image_type,
+                    is_collection=is_collection,
+                    conn=conn,
                 )
                 cand = found.get("candidate")
                 if found.get("matched") and cand and cand.get("file"):
@@ -724,6 +733,12 @@ class AssetRenamerr(ChubModule):
                 ] = _row
 
         total = len(all_media)
+        # One reused read-only connection for the loop's poster_cache lookups
+        # (find_asset_candidate fires several per item). This replaces the
+        # per-query connect/PRAGMA/close churn with a single connect for the
+        # whole loop. Read-only (query_only); closed after the loop — on an
+        # exception it's reclaimed on GC, which is safe for a read connection.
+        poster_conn = db.poster.open_read_connection()
         for idx, media in enumerate(all_media, 1):
             if self.is_cancelled():
                 break
@@ -753,7 +768,7 @@ class AssetRenamerr(ChubModule):
 
             for image_type in applicable:
                 resolved = self._resolve_source(
-                    media, db, image_type, is_collection, fanart_client
+                    media, db, image_type, is_collection, fanart_client, conn=poster_conn
                 )
                 if not resolved:
                     # No source artwork anywhere for this (item, type). Record a
@@ -861,6 +876,7 @@ class AssetRenamerr(ChubModule):
                         f"{prefix} {image_type} [{source}] "
                         f"{media.get('title')} -> {detail}"
                     )
+        poster_conn.close()
         return output
 
     def handle_output(self, output: Dict[str, List[dict]]) -> None:

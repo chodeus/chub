@@ -296,6 +296,7 @@ class PosterRenamerr(ChubModule):
         db: ChubDB,
         image_type: str = "poster",
         is_collection: bool = False,
+        conn=None,
     ) -> dict:
         """Find the best poster_cache candidate for ``media``, scoped to
         ``image_type``.
@@ -342,6 +343,7 @@ class PosterRenamerr(ChubModule):
                     season_number,
                     asset_type=expected_asset_type,
                     image_type=image_type,
+                    conn=conn,
                 )
                 if c:
                     matched, reason = is_match(c, media)
@@ -367,7 +369,7 @@ class PosterRenamerr(ChubModule):
             seen_files = set()
             for st in search_titles:
                 for c in db.poster.get_candidates_by_prefix(
-                    st, asset_type=expected_asset_type, image_type=image_type
+                    st, asset_type=expected_asset_type, image_type=image_type, conn=conn
                 ):
                     key = c.get("file")
                     if key not in seen_files:

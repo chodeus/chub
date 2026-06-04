@@ -208,6 +208,43 @@ def test_poster_match_ignores_logo_rows(db):
     assert logo["matched"] and logo["candidate"]["image_type"] == "logo"
 
 
+def test_find_asset_candidate_reused_conn_matches(db):
+    """Option A: resolving via a reused read connection yields the SAME
+    candidate as the default connect-per-query path — both the ID path and the
+    no-id prefix path."""
+    _seed(db, "logo", "8 A.M. Metro (2023) - Logo.png")  # ID-matched
+    base = PosterRenamerr.find_asset_candidate(_media(), db, image_type="logo")
+    conn = db.poster.open_read_connection()
+    try:
+        reused = PosterRenamerr.find_asset_candidate(
+            _media(), db, image_type="logo", conn=conn
+        )
+        # No-id media exercises the prefix path on the same reused connection.
+        noid = _media(tmdb_id=None, tvdb_id=None, imdb_id=None)
+        reused_prefix = PosterRenamerr.find_asset_candidate(
+            noid, db, image_type="logo", conn=conn
+        )
+    finally:
+        conn.close()
+    assert reused["matched"]
+    assert reused["candidate"]["file"] == base["candidate"]["file"]
+    assert reused_prefix["candidate"]["file"] == base["candidate"]["file"]
+
+
+def test_open_read_connection_is_read_only(db):
+    """The reused connection enforces query_only — it can read but never write,
+    so it can't corrupt the cache or hold a write transaction open."""
+    conn = db.poster.open_read_connection()
+    try:
+        assert conn.execute("SELECT COUNT(*) FROM poster_cache").fetchone() is not None
+        with pytest.raises(Exception):
+            conn.execute(
+                "INSERT INTO poster_cache (asset_type, file) VALUES ('movie', '/x/y')"
+            )
+    finally:
+        conn.close()
+
+
 # --------------------------------------------------------------------------
 # source priority resolution
 # --------------------------------------------------------------------------

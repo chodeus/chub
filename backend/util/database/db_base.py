@@ -4,7 +4,7 @@ import os
 import sqlite3
 import threading
 from contextlib import contextmanager
-from typing import Any, Dict, Generator, List, Tuple, Union
+from typing import Any, Dict, Generator, List, Optional, Tuple, Union
 
 from backend.util.logger import Logger
 
@@ -80,6 +80,26 @@ class DatabaseBase:
         """Return rows as dictionaries."""
         return {col[0]: row[idx] for idx, col in enumerate(cursor.description)}
 
+    def open_read_connection(self) -> sqlite3.Connection:
+        """Open a reusable READ-ONLY connection for tight read loops (e.g. the
+        asset resolve loop, which fires several poster_cache lookups per item).
+
+        Pass the returned connection to ``execute_query(conn=...)`` to skip the
+        per-query connect/PRAGMA/close churn — the caller pays one connect for
+        the whole loop. **The caller owns it and must ``close()`` it.**
+
+        Unlike :meth:`get_connection` this does NOT hold ``self.lock`` for its
+        lifetime: it issues only SELECTs and WAL keeps readers non-blocking, so
+        there's no writer to serialize against. ``query_only=ON`` enforces the
+        read-only contract (any write raises), so it can never corrupt data or
+        hold a write transaction open.
+        """
+        conn = sqlite3.connect(self.db_path, check_same_thread=False, timeout=30)
+        conn.execute("PRAGMA busy_timeout=30000")
+        conn.execute("PRAGMA query_only=ON")
+        conn.row_factory = self._dict_factory
+        return conn
+
     def execute_query(
         self,
         sql: str,
@@ -87,6 +107,7 @@ class DatabaseBase:
         fetch_all: bool = False,
         fetch_one: bool = False,
         last_row_id: bool = False,
+        conn: Optional[sqlite3.Connection] = None,
     ) -> Union[List[Dict[str, Any]], Dict[str, Any], int, None]:
         """
         Execute a query with proper connection handling.
@@ -96,10 +117,20 @@ class DatabaseBase:
             params: Parameters for the query
             fetch_all: Return all results
             fetch_one: Return one result
+            conn: Reuse this caller-owned connection instead of opening one
+                (see open_read_connection). Read-only — only the fetch paths are
+                valid; writes raise (the connection is query_only).
 
         Returns:
             Query results or None
         """
+        if conn is not None:
+            cursor = conn.execute(sql, params)
+            if fetch_all:
+                return cursor.fetchall()
+            if fetch_one:
+                return cursor.fetchone()
+            return cursor.rowcount
         with self.get_connection() as conn:
             cursor = conn.execute(sql, params)
             if fetch_all:

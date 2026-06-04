@@ -288,6 +288,7 @@ class PosterCache(DatabaseBase):
         season_number=None,
         asset_type: Optional[str] = None,
         image_type: Optional[str] = "poster",
+        conn=None,
     ) -> Optional[dict]:
         """Get poster cache record by ID field.
 
@@ -316,7 +317,7 @@ class PosterCache(DatabaseBase):
             sql += " AND season_number IS NULL"
 
         sql += " ORDER BY priority DESC, id DESC LIMIT 1"
-        return self.execute_query(sql, params, fetch_one=True)
+        return self.execute_query(sql, params, fetch_one=True, conn=conn)
 
     def get_by_normalized_title(
         self,
@@ -584,6 +585,7 @@ class PosterCache(DatabaseBase):
         length: int = 3,
         asset_type: Optional[str] = None,
         image_type: Optional[str] = "poster",
+        conn=None,
     ) -> list:
         """Get poster candidates by title prefix.
 
@@ -622,4 +624,4 @@ class PosterCache(DatabaseBase):
         sql += " AND search_only=0"
 
         sql += " ORDER BY priority DESC, id DESC"
-        return self.execute_query(sql, params, fetch_all=True) or []
+        return self.execute_query(sql, params, fetch_all=True, conn=conn) or []
