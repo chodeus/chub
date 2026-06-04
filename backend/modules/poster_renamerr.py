@@ -180,7 +180,10 @@ class PosterRenamerr(ChubModule):
             try:
                 from backend.modules.sync_gdrive import SyncGDrive
 
-                SyncGDrive(logger=self.logger).run()
+                # skip_cache_refresh: merge_assets below does a full
+                # clear() + rebuild, so the per-folder refresh would be
+                # immediately overwritten — pure duplicated work.
+                SyncGDrive(logger=self.logger).run(skip_cache_refresh=True)
                 self.logger.info("Finished running sync_gdrive")
                 self._report_progress(self._SYNC_PROGRESS_CEILING_PCT)
             except FileNotFoundError as e:
@@ -1034,20 +1037,27 @@ class PosterRenamerr(ChubModule):
             total = len(assets)
             self.logger.info(f"Processing {total} assets from '{source_dir}'")
 
+            # The cache mirrors disk 1:1: one row per file in source_dirs.
+            # db.poster.clear() ran before this merge, and the UNIQUE
+            # constraint on (..., file) prevents duplicate-path inserts,
+            # so we just upsert each parsed file as-is. No title-based
+            # dedup (which previously wiped distinct shows sharing a
+            # normalized title, e.g. The Traitors UK vs AU) and no
+            # ID backfill from other rows (a row's fields should reflect
+            # only what its own filename/folder yielded; ID inference
+            # belongs in the match-to-media phase, not here).
+            #
+            # Writes are buffered and flushed via bulk_upsert at each
+            # heartbeat boundary: one transaction per batch instead of a
+            # fresh connection + commit(fsync) per row. merge_assets is the
+            # longest phase of a run, so this is the dominant write-path win.
+            batch: List[dict] = []
             for idx, asset in enumerate(assets, 1):
-                # The cache mirrors disk 1:1: one row per file in source_dirs.
-                # db.poster.clear() ran before this merge, and the UNIQUE
-                # constraint on (..., file) prevents duplicate-path inserts,
-                # so we just upsert each parsed file as-is. No title-based
-                # dedup (which previously wiped distinct shows sharing a
-                # normalized title, e.g. The Traitors UK vs AU) and no
-                # ID backfill from other rows (a row's fields should reflect
-                # only what its own filename/folder yielded; ID inference
-                # belongs in the match-to-media phase, not here).
-                db.poster.upsert(asset)
-
+                batch.append(asset)
                 processed_all += 1
                 if idx % self._MERGE_PROGRESS_EVERY == 0 and idx != total:
+                    db.poster.bulk_upsert(batch)
+                    batch = []
                     self.logger.heartbeat(f"  Merged {idx} / {total} assets")
                     if total_all > 0:
                         merge_span = (
@@ -1058,6 +1068,8 @@ class PosterRenamerr(ChubModule):
                             self._SYNC_PROGRESS_CEILING_PCT
                             + int(processed_all / total_all * merge_span)
                         )
+            if batch:
+                db.poster.bulk_upsert(batch)
 
             self.logger.info(f"Finished merging {total} assets from '{source_dir}'")
         # Pin progress at the ceiling once all source_dirs are scanned so
@@ -1118,11 +1130,11 @@ class PosterRenamerr(ChubModule):
             assets = self._get_assets_files(
                 loc, priority=0, include_assets=True, search_only=1
             )
-            for asset in assets:
-                if _is_owned(asset["file"]):
-                    continue  # a source_dir nested under this gdrive folder
-                db.poster.upsert(asset)
-                indexed += 1
+            # Drop assets owned by a nested source_dir, then batch the rest.
+            to_index = [a for a in assets if not _is_owned(a["file"])]
+            if to_index:
+                db.poster.bulk_upsert(to_index)
+                indexed += len(to_index)
         if indexed:
             self.logger.info(
                 f"Indexed {indexed} search-only asset(s) from gdrive_list "
