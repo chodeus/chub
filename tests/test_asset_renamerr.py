@@ -72,7 +72,7 @@ def make_module(**config_overrides):
     m.config = SimpleNamespace(**cfg)
     m.full_config = SimpleNamespace(
         tmdb=SimpleNamespace(apikey="", cache_expiration=60),
-        fanart=SimpleNamespace(client_key=""),
+        fanart=SimpleNamespace(client_key="", cache_expiration=2),
         instances=SimpleNamespace(plex={}),
     )
     return m
