@@ -237,10 +237,18 @@ class SyncGDrive(ChubModule):
             "--drive-root-folder-id",
             sync_id,
             "--fast-list",
-            "--tpslimit=5",
+            "--tpslimit=8",
+            # On an already-synced library the dominant cost is the
+            # --check-first compare phase, gated by --checkers concurrency
+            # (rclone default 8). Posters are tiny and the bottleneck is
+            # round-trip latency, not bandwidth, so more checkers helps.
+            "--checkers=16",
             "--no-update-modtime",
             "--drive-use-trash=false",
-            "--drive-chunk-size=512M",
+            # 64M (was 512M): chunk size is reserved memory per concurrent
+            # transfer. For 1-5MB posters 512M is pure memory pressure with
+            # no throughput benefit.
+            "--drive-chunk-size=64M",
             "--exclude=**.partial",
             "--check-first",
             "--bwlimit=80M",
@@ -424,8 +432,10 @@ class SyncGDrive(ChubModule):
                 )
 
             self.db.poster.delete_by_path_prefix(sync_location)
-            for asset in assets:
-                self.db.poster.upsert(asset)
+            # Batch the upserts: one transaction per chunk instead of a fresh
+            # connection + commit(fsync) per row. On a spinning/FUSE array this
+            # is the difference between ~25-37ms/row and a near-instant write.
+            self.db.poster.bulk_upsert(assets)
             scope = "search-only" if not is_owned else f"priority={priority}"
             self.logger.info(
                 f"Refreshed poster_cache for {sync_location}: "
@@ -499,6 +509,7 @@ class SyncGDrive(ChubModule):
         progress_cb=lambda pct: None,
         only_folders: Optional[List[str]] = None,
         notify: bool = True,
+        skip_cache_refresh: bool = False,
     ):
         """Sync configured gdrive folders to local disk.
 
@@ -514,6 +525,11 @@ class SyncGDrive(ChubModule):
                 represent a single-folder targeted UI action set this to
                 False — UI feedback already covers them and a per-click
                 Discord ping would be noise.
+            skip_cache_refresh: When True, skip the per-folder
+                _refresh_poster_cache_for_folder pass entirely. Set by
+                poster_renamerr, which does a full clear() + merge_assets
+                rebuild immediately after, making the per-folder refresh
+                pure duplicated work.
         """
         start_time = time.time()
         try:
@@ -626,13 +642,29 @@ class SyncGDrive(ChubModule):
                     # Refresh this folder's slice of poster_cache so a
                     # standalone bulk run() (e.g. triggered via module_run
                     # from the Modules or Schedule page) keeps Assets
-                    # Search aligned with disk. When run() is wrapped by
-                    # poster_renamerr, the parent does a full clear() +
-                    # merge_assets afterward, so this per-folder refresh
-                    # becomes redundant — still fine, just briefly
-                    # duplicated work.
-                    if success:
-                        self._refresh_poster_cache_for_folder(sync_location)
+                    # Search aligned with disk.
+                    #
+                    # Skips:
+                    #   - skip_cache_refresh: poster_renamerr wraps us and does
+                    #     a full clear() + merge_assets right after, so the
+                    #     per-folder refresh is pure duplicated work.
+                    #   - zero-change: rclone moved nothing (all counters 0) AND
+                    #     this folder's slice is already cached, so re-deleting
+                    #     and re-inserting unchanged rows is wasted disk I/O.
+                    #     The has_rows_under_prefix guard ensures a freshly
+                    #     cleared/empty cache still gets populated on a 0-change
+                    #     sync.
+                    if success and not skip_cache_refresh:
+                        changed = any(counters.values())
+                        if changed or not self.db.poster.has_rows_under_prefix(
+                            sync_location
+                        ):
+                            self._refresh_poster_cache_for_folder(sync_location)
+                        else:
+                            self.logger.info(
+                                f"poster_cache for {sync_location} already current "
+                                "(0 changes) — skipping refresh"
+                            )
 
                     progress_pct = int(10 + 80 * idx / total)
                     progress_cb(progress_pct)  # Step up after folder done

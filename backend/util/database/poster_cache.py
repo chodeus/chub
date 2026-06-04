@@ -116,8 +116,31 @@ class PosterCache(DatabaseBase):
             norm_str(item.get("file")),
         )
 
-    def upsert(self, record: dict) -> None:
-        """Insert or update a record in poster_cache table."""
+    _UPSERT_SQL = """
+            INSERT INTO poster_cache
+                (asset_type, title, normalized_title, year,
+                 tmdb_id, tvdb_id, imdb_id, season_number, folder, file, style,
+                 created_at, priority, image_type, search_only)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(title, year, tmdb_id, tvdb_id, imdb_id, season_number, file)
+            DO UPDATE SET
+                asset_type=excluded.asset_type,
+                normalized_title=excluded.normalized_title,
+                folder=excluded.folder,
+                style=excluded.style,
+                priority=excluded.priority,
+                image_type=excluded.image_type,
+                search_only=excluded.search_only
+            """
+
+    @staticmethod
+    def _prepare_upsert(record: dict) -> tuple:
+        """Normalize a record and return the param tuple for ``_UPSERT_SQL``.
+
+        Mutates ``record`` in place to JSON-serialize its list/dict fields
+        (preserving prior behavior). Shared by ``upsert`` and ``bulk_upsert``
+        so single-row and batched writes stay byte-identical.
+        """
         # Serialize list/dict fields to JSON
         for key in ("alternate_titles", "normalized_alternate_titles"):
             if isinstance(record.get(key), (list, dict)):
@@ -147,41 +170,66 @@ class PosterCache(DatabaseBase):
         # behave exactly as before. See schema.py / merge_gdrive_search_index.
         search_only = int(record.get("search_only") or 0)
 
-        self.execute_query(
-            """
-            INSERT INTO poster_cache
-                (asset_type, title, normalized_title, year,
-                 tmdb_id, tvdb_id, imdb_id, season_number, folder, file, style,
-                 created_at, priority, image_type, search_only)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(title, year, tmdb_id, tvdb_id, imdb_id, season_number, file)
-            DO UPDATE SET
-                asset_type=excluded.asset_type,
-                normalized_title=excluded.normalized_title,
-                folder=excluded.folder,
-                style=excluded.style,
-                priority=excluded.priority,
-                image_type=excluded.image_type,
-                search_only=excluded.search_only
-            """,
-            (
-                record.get("asset_type"),
-                record["title"],
-                record["normalized_title"],
-                record["year"],
-                record["tmdb_id"],
-                record["tvdb_id"],
-                record["imdb_id"],
-                record["season_number"],
-                record["folder"],
-                record["file"],
-                record.get("style"),
-                created_at,
-                priority,
-                image_type,
-                search_only,
-            ),
+        return (
+            record.get("asset_type"),
+            record["title"],
+            record["normalized_title"],
+            record["year"],
+            record["tmdb_id"],
+            record["tvdb_id"],
+            record["imdb_id"],
+            record["season_number"],
+            record["folder"],
+            record["file"],
+            record.get("style"),
+            created_at,
+            priority,
+            image_type,
+            search_only,
         )
+
+    def upsert(self, record: dict) -> None:
+        """Insert or update a single record in poster_cache table."""
+        self.execute_query(self._UPSERT_SQL, self._prepare_upsert(record))
+
+    def bulk_upsert(self, records: list, chunk_size: int = 500) -> int:
+        """Upsert many records, batching each chunk into one transaction.
+
+        Collapses the per-row connect+commit(+fsync) cycle that dominates
+        large cache refreshes (e.g. a 34k-row gdrive folder) into one commit
+        per ``chunk_size`` rows. Chunking (rather than a single giant txn)
+        keeps WAL growth and write-lock hold time bounded and lets callers
+        interleave progress heartbeats between chunks. Returns the number of
+        records written.
+        """
+        written = 0
+        chunk: list = []
+        for record in records:
+            chunk.append((self._UPSERT_SQL, self._prepare_upsert(record)))
+            if len(chunk) >= chunk_size:
+                self.execute_transaction(chunk)
+                written += len(chunk)
+                chunk = []
+        if chunk:
+            self.execute_transaction(chunk)
+            written += len(chunk)
+        return written
+
+    def has_rows_under_prefix(self, path_prefix: str) -> bool:
+        """True if any cache row's ``file`` lives under ``path_prefix``.
+
+        Cheap existence check (LIMIT 1) used to guard skip-on-zero-change:
+        a folder that synced 0 changes is only safe to skip-refresh if its
+        slice is already present (otherwise a freshly-cleared/empty cache
+        would be left stale).
+        """
+        prefix = path_prefix.rstrip("/") + "/"
+        row = self.execute_query(
+            "SELECT 1 FROM poster_cache WHERE file LIKE ? LIMIT 1",
+            (prefix + "%",),
+            fetch_one=True,
+        )
+        return row is not None
 
     def record_dimensions(self, poster_id: int, width: int, height: int) -> None:
         """Persist width/height for a poster row (populated lazily by the API)."""
@@ -555,7 +603,12 @@ class PosterCache(DatabaseBase):
         if not prefix:
             return []
 
-        sql = "SELECT * FROM poster_cache WHERE LOWER(normalized_title) LIKE ?"
+        # normalized_title is already lowercased by normalize_titles (the same
+        # function that built `prefix` above), so LOWER() here is redundant and
+        # makes the column non-sargable — it forces a full table scan instead
+        # of a range scan on poster_cache_normalized_title_idx. Comparing the
+        # raw column lets SQLite use the index for the `prefix%` range.
+        sql = "SELECT * FROM poster_cache WHERE normalized_title LIKE ?"
         params = [f"{prefix}%"]
         if asset_type:
             sql += " AND asset_type=?"

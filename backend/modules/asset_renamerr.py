@@ -377,7 +377,7 @@ class AssetRenamerr(ChubModule):
                 continue
             # Drop stale asset rows for this source_dir before re-inserting.
             db.poster.delete_asset_rows_by_path_prefix(source_dir)
-            count = 0
+            records = []
             for root, dirs, files in os.walk(source_dir):
                 dirs.sort(key=str.lower)
                 for fname in sorted(files, key=str.lower):
@@ -388,8 +388,9 @@ class AssetRenamerr(ChubModule):
                         # classify asset_type (movie/show/collection) per-record;
                         # season detection is already in the record.
                         record["asset_type"] = self._classify(record)
-                        db.poster.upsert(record)
-                        count += 1
+                        records.append(record)
+            # Batch the upserts: one transaction per chunk, not per row.
+            count = db.poster.bulk_upsert(records)
             self.logger.info(f"Scanned {count} asset files from '{source_dir}'")
 
     @staticmethod

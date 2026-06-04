@@ -50,6 +50,15 @@ class DatabaseBase:
                     self.db_path, check_same_thread=False, timeout=30
                 )
                 conn.execute("PRAGMA busy_timeout=30000")
+                # journal_mode=WAL is persistent (lives in the DB header), but
+                # synchronous is per-connection and resets to the compile-time
+                # default (FULL) on every new connection. schema.py declares
+                # NORMAL at init; without re-asserting it here every runtime
+                # commit fsyncs (FULL), which dominates per-row write loops on
+                # spinning/FUSE arrays (~25-37ms/row vs sub-ms). NORMAL+WAL
+                # cannot corrupt and only risks the last txn on power loss —
+                # acceptable for these regenerable caches.
+                conn.execute("PRAGMA synchronous=NORMAL")
                 conn.row_factory = self._dict_factory
                 yield conn
         except Exception as e:
