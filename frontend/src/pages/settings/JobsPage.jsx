@@ -21,6 +21,15 @@ const STATUS_COLORS = {
     cancelled: 'bg-secondary/20 text-secondary',
 };
 
+// Icon + colour per phase status for the per-job phase timeline.
+const PHASE_META = {
+    success: { icon: 'check_circle', cls: 'text-success' },
+    running: { icon: 'progress_activity', cls: 'text-primary animate-spin' },
+    error: { icon: 'error', cls: 'text-error' },
+    skipped: { icon: 'do_not_disturb_on', cls: 'text-secondary' },
+    pending: { icon: 'schedule', cls: 'text-tertiary' },
+};
+
 export const JobsPage = () => {
     const toast = useToast();
     const { isMobile } = useUIState();
@@ -78,6 +87,30 @@ export const JobsPage = () => {
             }
         }
     };
+
+    // While a job is expanded and still running/pending, re-fetch its detail
+    // every few seconds so the phase timeline advances live. Bypasses the
+    // getJob cache for freshness; stops once the job reaches a terminal status.
+    useEffect(() => {
+        if (expandedJobId == null) return undefined;
+        const status = jobDetail?.status;
+        if (status && status !== 'running' && status !== 'pending') return undefined;
+        const id = setInterval(async () => {
+            try {
+                const result = await jobsAPI.getJob(expandedJobId, { useCache: false });
+                const detail = result?.data?.job || result?.data || {};
+                if (detailReqRef.current === expandedJobId) {
+                    setJobDetail(prev => ({
+                        ...detail,
+                        _executionStatus: prev?._executionStatus,
+                    }));
+                }
+            } catch {
+                /* transient fetch error — keep the last detail */
+            }
+        }, 3000);
+        return () => clearInterval(id);
+    }, [expandedJobId, jobDetail?.status]);
 
     const fetchJobsFiltered = useCallback(
         () =>
@@ -206,6 +239,45 @@ export const JobsPage = () => {
     const formatTime = ts => {
         if (!ts) return '-';
         return formatDateTime(ts);
+    };
+
+    // Per-job phase timeline (poster_renamerr / asset_renamerr emit phases).
+    // Running phases show a live-ticking elapsed time; finished phases show
+    // their recorded duration; pending/skipped show none.
+    const renderPhases = phases => {
+        if (!Array.isArray(phases) || phases.length === 0) return null;
+        return (
+            <div className="col-span-full">
+                <span className="text-tertiary capitalize block mb-1">Phases</span>
+                <div className="flex flex-col gap-1">
+                    {phases.map((p, i) => {
+                        const meta = PHASE_META[p.status] || PHASE_META.pending;
+                        let dur = '';
+                        if (typeof p.duration_s === 'number') {
+                            dur = formatSeconds(p.duration_s);
+                        } else if (p.status === 'running' && p.started_at) {
+                            dur = formatSeconds((now - new Date(p.started_at).getTime()) / 1000);
+                        }
+                        return (
+                            <div
+                                key={`${p.name}-${i}`}
+                                className="flex items-center justify-between gap-2 px-2 py-1 rounded bg-surface-alt"
+                            >
+                                <span className="flex items-center gap-1.5 min-w-0">
+                                    <span
+                                        className={`material-symbols-outlined text-base leading-none ${meta.cls}`}
+                                    >
+                                        {meta.icon}
+                                    </span>
+                                    <span className="text-primary truncate">{p.name}</span>
+                                </span>
+                                <span className="text-secondary shrink-0 tabular-nums">{dur}</span>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+        );
     };
 
     if (statsLoading && jobsLoading) {
@@ -349,6 +421,7 @@ export const JobsPage = () => {
                                                             </span>
                                                         </div>
                                                     ))}
+                                                {renderPhases(jobDetail.phases)}
                                                 {jobDetail.error && (
                                                     <div className="col-span-full p-2 rounded bg-error/10 text-error text-xs">
                                                         {jobDetail.error}
@@ -472,6 +545,7 @@ export const JobsPage = () => {
                                                                     </span>
                                                                 </div>
                                                             ))}
+                                                        {renderPhases(jobDetail.phases)}
                                                         {jobDetail.error && (
                                                             <div className="col-span-full p-2 rounded bg-error/10 text-error text-xs">
                                                                 {jobDetail.error}

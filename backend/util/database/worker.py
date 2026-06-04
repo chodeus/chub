@@ -483,6 +483,118 @@ class DBWorker(DatabaseBase):
             (progress, job_id),
         )
 
+    # ----- per-phase timing -------------------------------------------------
+    # An orchestrating module (poster_renamerr, asset_renamerr) records the
+    # sub-steps it runs and their timing into the job's `phases` JSON column so
+    # the Jobs page can show a per-phase timeline. Safe as read-modify-write:
+    # a job runs in a single worker thread, so its own phases are never written
+    # concurrently. Each phase: {name, status, started_at, finished_at,
+    # duration_s}, status in pending|running|success|error|skipped.
+
+    def _load_phases(self, table_name: str, job_id: int) -> list:
+        row = self.execute_query(
+            f"SELECT phases FROM {table_name} WHERE id=?", (job_id,), fetch_one=True
+        )
+        if not row or not row.get("phases"):
+            return []
+        try:
+            return json.loads(row["phases"]) or []
+        except (json.JSONDecodeError, TypeError):
+            return []
+
+    def _save_phases(self, table_name: str, job_id: int, phases: list) -> None:
+        self.execute_query(
+            f"UPDATE {table_name} SET phases=? WHERE id=?",
+            (json.dumps(phases), job_id),
+        )
+
+    def declare_phases(self, table_name: str, job_id: int, names: list) -> None:
+        """Seed the ordered list of phases a run intends to execute as
+        ``pending`` so the UI can show what's coming, not just what's done."""
+        self._check_table(table_name)
+        phases = [
+            {
+                "name": n,
+                "status": "pending",
+                "started_at": None,
+                "finished_at": None,
+                "duration_s": None,
+            }
+            for n in names
+        ]
+        self._save_phases(table_name, job_id, phases)
+
+    def start_phase(self, table_name: str, job_id: int, name: str) -> None:
+        """Mark a phase ``running`` and stamp its start. Reuses the declared
+        pending entry if present, else appends a new one."""
+        self._check_table(table_name)
+        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        phases = self._load_phases(table_name, job_id)
+        entry = next(
+            (
+                p
+                for p in phases
+                if p.get("name") == name and p.get("status") == "pending"
+            ),
+            None,
+        )
+        if entry is None:
+            entry = {"name": name, "finished_at": None, "duration_s": None}
+            phases.append(entry)
+        entry["status"] = "running"
+        entry["started_at"] = now
+        self._save_phases(table_name, job_id, phases)
+
+    def finish_phase(
+        self,
+        table_name: str,
+        job_id: int,
+        name: str,
+        status: str = "success",
+        error: str = None,
+    ) -> None:
+        """Stamp a running phase's end + duration and set its final status."""
+        self._check_table(table_name)
+        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        phases = self._load_phases(table_name, job_id)
+        # Most-recent running entry with this name (handles a re-run of the
+        # same phase name within one job).
+        entry = next(
+            (
+                p
+                for p in reversed(phases)
+                if p.get("name") == name and p.get("status") == "running"
+            ),
+            None,
+        )
+        if entry is None:
+            return
+        entry["status"] = status
+        entry["finished_at"] = now
+        if error:
+            entry["error"] = str(error)[:500]
+        try:
+            start = datetime.datetime.fromisoformat(entry["started_at"])
+            entry["duration_s"] = round(
+                (datetime.datetime.fromisoformat(now) - start).total_seconds(), 1
+            )
+        except (ValueError, TypeError, KeyError):
+            entry["duration_s"] = None
+        self._save_phases(table_name, job_id, phases)
+
+    def skip_pending_phases(self, table_name: str, job_id: int) -> None:
+        """Mark any still-``pending`` phases ``skipped`` — called at the end of a
+        run so a declared-but-not-reached phase doesn't linger as pending."""
+        self._check_table(table_name)
+        phases = self._load_phases(table_name, job_id)
+        changed = False
+        for p in phases:
+            if p.get("status") == "pending":
+                p["status"] = "skipped"
+                changed = True
+        if changed:
+            self._save_phases(table_name, job_id, phases)
+
     def enqueue_job(
         self,
         table_name: str,

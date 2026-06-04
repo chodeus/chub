@@ -2,6 +2,7 @@
 
 import threading
 from abc import ABC, abstractmethod
+from contextlib import contextmanager
 from typing import Any, Dict, Optional
 
 from backend.util.config import load_config
@@ -114,6 +115,64 @@ class ChubModule(ABC):
             pct = max(0, min(100, int(percent)))
             db.worker.update_progress("jobs", job_id, pct)
         except Exception:  # noqa: S110 — progress is non-critical
+            pass
+
+    def _declare_phases(self, names) -> None:
+        """Seed the ordered list of pipeline phases this run will execute so the
+        Jobs page shows what's coming. No-op without job context (CLI / nested
+        sub-module calls). See _phase()."""
+        job_id = getattr(self, "_job_id", None)
+        db = getattr(self, "_job_db", None)
+        if not job_id or db is None:
+            return
+        try:
+            db.worker.declare_phases("jobs", job_id, list(names))
+        except Exception:  # noqa: S110 — phase tracking is non-critical
+            pass
+
+    @contextmanager
+    def _phase(self, name: str):
+        """Record one sub-step's timing on the job (start → success/error).
+
+        Wrap an orchestrated sub-phase: ``with self._phase("sync_gdrive"): ...``.
+        No-op when there's no job context, so nested context-less sub-module
+        instances don't double-record — the parent owns the phase. Phase
+        bookkeeping never masks a real error: the work's exception propagates
+        after the phase is marked ``error``.
+        """
+        job_id = getattr(self, "_job_id", None)
+        db = getattr(self, "_job_db", None)
+        if not job_id or db is None:
+            yield
+            return
+        try:
+            db.worker.start_phase("jobs", job_id, name)
+        except Exception:  # noqa: S110 — phase tracking is non-critical
+            pass
+        try:
+            yield
+        except Exception as e:
+            try:
+                db.worker.finish_phase("jobs", job_id, name, status="error", error=e)
+            except Exception:  # noqa: S110
+                pass
+            raise
+        else:
+            try:
+                db.worker.finish_phase("jobs", job_id, name, status="success")
+            except Exception:  # noqa: S110
+                pass
+
+    def _finalize_phases(self) -> None:
+        """Mark any declared-but-unreached phases ``skipped``. Call once at the
+        end of a run (in a finally). No-op without job context."""
+        job_id = getattr(self, "_job_id", None)
+        db = getattr(self, "_job_db", None)
+        if not job_id or db is None:
+            return
+        try:
+            db.worker.skip_pending_phases("jobs", job_id)
+        except Exception:  # noqa: S110 — phase tracking is non-critical
             pass
 
     @abstractmethod
