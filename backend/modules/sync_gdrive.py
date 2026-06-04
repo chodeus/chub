@@ -191,8 +191,6 @@ class SyncGDrive(ChubModule):
         super().__init__(logger=logger)
         self.rclone_path = self.get_rclone_path()
         self.db = None
-        # Track current job ID for progress updates
-        self.current_job_id = None
 
     @property
     def logger(self) -> Any:
@@ -208,10 +206,6 @@ class SyncGDrive(ChubModule):
     @logger.setter
     def logger(self, value: Any) -> None:
         self._real_logger = value
-
-    def set_job_id(self, job_id):
-        """Set the current job ID for progress tracking"""
-        self.current_job_id = job_id
 
     def parse_rclone_progress(self, line):
         """
@@ -250,7 +244,7 @@ class SyncGDrive(ChubModule):
         """Ensure the rclone remote 'posters' exists by creating it if missing."""
         try:
             self.logger.debug("Ensuring rclone remote 'posters' exists")
-            subprocess.run(
+            result = subprocess.run(
                 [
                     self.rclone_path,
                     "config",
@@ -260,7 +254,15 @@ class SyncGDrive(ChubModule):
                     "config_is_local=false",
                 ],
                 check=False,
+                # Capture rather than inherit stdout — otherwise "config create"
+                # echoes the remote's config block ([posters]/type=drive/...)
+                # straight to the container log on every run.
+                capture_output=True,
+                text=True,
             )
+            output = (result.stdout or "").strip()
+            if output:
+                self.logger.debug(f"rclone config create output:\n{output}")
         except Exception as e:
             self.logger.error(f"Error ensuring rclone remote 'posters' exists: {e}")
 
@@ -281,7 +283,6 @@ class SyncGDrive(ChubModule):
         sync_location,
         sync_id,
         progress_cb=lambda pct: None,
-        report_job_progress: bool = True,
     ):
         """Run rclone sync for a single folder.
 
@@ -290,10 +291,9 @@ class SyncGDrive(ChubModule):
         action lines. Empty counters dict accompanies all failure paths
         so the caller can unpack without conditionals.
 
-        report_job_progress: when False (parallel mode), skip the direct
-        jobs-table progress writes — the run() orchestrator owns a single
-        monotonic progress signal driven by folder-completion count, so four
-        workers don't fight over the same row with non-monotonic percents.
+        Job-page progress is owned by run() (driven by folder-completion
+        count); a folder's own rclone percent only feeds the optional
+        ``progress_cb`` callback, not the shared jobs row.
         """
         counters = _empty_counters()
 
@@ -319,24 +319,12 @@ class SyncGDrive(ChubModule):
 
         # Starting sync
         progress_cb(10)
-        # FIXED: Direct call to update_progress, no redundant wrapper
-        if report_job_progress and self.current_job_id and self.db:
-            try:
-                self.db.worker.update_progress("jobs", self.current_job_id, 10)
-            except Exception as e:
-                self.logger.debug(f"Failed to update progress: {e}")
 
         last_pct = [10]
 
         def guarded_progress_cb(pct):
             if pct > last_pct[0]:
                 progress_cb(pct)
-                # FIXED: Direct call to update_progress, no redundant wrapper
-                if report_job_progress and self.current_job_id and self.db:
-                    try:
-                        self.db.worker.update_progress("jobs", self.current_job_id, pct)
-                    except Exception as e:
-                        self.logger.debug(f"Failed to update progress: {e}")
                 last_pct[0] = pct
 
         cmd = [
@@ -469,20 +457,10 @@ class SyncGDrive(ChubModule):
                     f"❌ RClone sync failed with return code {process.returncode}"
                 )
                 progress_cb(100)
-                if self.current_job_id and self.db:
-                    try:
-                        self.db.worker.update_progress("jobs", self.current_job_id, 100)
-                    except Exception as e:
-                        self.logger.debug(f"Failed to update progress: {e}")
                 return False, counters
         except Exception as e:
             self.logger.error(f"Exception occurred while running rclone: {e}")
             progress_cb(100)
-            if self.current_job_id and self.db:
-                try:
-                    self.db.worker.update_progress("jobs", self.current_job_id, 100)
-                except Exception as e:
-                    self.logger.debug(f"Failed to update progress: {e}")
             return False, counters
 
     def _refresh_poster_cache_for_folder(self, sync_location: str) -> None:
@@ -641,7 +619,6 @@ class SyncGDrive(ChubModule):
                 sync_location,
                 sync_item.id,
                 progress_cb=lambda pct: None,
-                report_job_progress=False,
             )
 
             file_count, size_bytes, last_updated = self.gather_folder_stats(
@@ -773,22 +750,20 @@ class SyncGDrive(ChubModule):
                 # buffers its log lines; the main thread flushes them per folder
                 # in completion order, so output stays grouped instead of
                 # interleaving. Progress is one monotonic signal driven by
-                # completed-folder count — workers pass report_job_progress=False
-                # so they don't fight over the jobs row.
+                # completed-folder count (reported from this main thread, so the
+                # workers never touch the jobs row).
                 completed = 0
 
                 def _record_result(result):
                     nonlocal completed, failed_count
                     completed += 1
-                    progress_pct = int(10 + 80 * completed / total)
+                    # Clean 0..100 over completed folders. _report_progress maps
+                    # it through this run's progress window — identity (0..100)
+                    # for a standalone sync job, or the parent's reserved slice
+                    # when nested inside poster_renamerr / asset_renamerr.
+                    progress_pct = int(100 * completed / total) if total else 100
                     progress_cb(progress_pct)
-                    if self.current_job_id and self.db:
-                        try:
-                            self.db.worker.update_progress(
-                                "jobs", self.current_job_id, progress_pct
-                            )
-                        except Exception as e:
-                            self.logger.debug(f"Failed to update progress: {e}")
+                    self._report_progress(progress_pct)
                     if result is None:
                         return  # cancelled before it ran
                     if not result["success"]:
@@ -827,11 +802,7 @@ class SyncGDrive(ChubModule):
                     )
 
                 progress_cb(100)
-                if self.current_job_id and self.db:
-                    try:
-                        self.db.worker.update_progress("jobs", self.current_job_id, 100)
-                    except Exception as e:
-                        self.logger.debug(f"Failed to update progress: {e}")
+                self._report_progress(100)
 
                 # Workers complete out of order; restore the configured
                 # gdrive_list order for the notification's per-folder listing.
@@ -887,8 +858,4 @@ class SyncGDrive(ChubModule):
         except Exception as exc:
             self.logger.error(f"\n\nAn error occurred: {exc}\n", exc_info=True)
             progress_cb(100)
-            if self.current_job_id and self.db:
-                try:
-                    self.db.worker.update_progress("jobs", self.current_job_id, 100)
-                except Exception as e:
-                    self.logger.debug(f"Failed to update progress: {e}")
+            self._report_progress(100)
