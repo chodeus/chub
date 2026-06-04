@@ -443,9 +443,7 @@ class AssetRenamerr(ChubModule):
     def _already_applied(
         self,
         db: ChubDB,
-        target_kind: str,
-        target_id: int,
-        image_type: str,
+        prev: Optional[dict],
         apply_method: str,
         source: str,
         file: Optional[str],
@@ -456,10 +454,14 @@ class AssetRenamerr(ChubModule):
     ) -> bool:
         """True when this asset was already applied with the same source and the
         source hasn't changed — so we can skip re-applying it. Never skip on a
-        dry run (we still want the would-do report)."""
+        dry run (we still want the would-do report).
+
+        ``prev`` is the preloaded media_asset_matches row for this
+        (target, image_type), or None — looked up from the run's applied_map so
+        this is a per-item DB read no longer.
+        """
         if self.config.dry_run:
             return False
-        prev = db.media_asset_matches.get_one(target_kind, target_id, image_type)
         if not prev or prev.get("match_status") != "applied":
             return False
         if prev.get("applied_method") != apply_method or prev.get("source") != source:
@@ -724,6 +726,19 @@ class AssetRenamerr(ChubModule):
                 )
                 fanart_client = None
 
+        # Preload every match row once into an in-memory map, keyed by
+        # (target_kind, target_id, image_type). The idempotency check + the
+        # missing-row guard used to do a single-row DB read (get_one) per
+        # (item, image_type) — thousands of connections on a large library.
+        # One query + dict lookups replaces all of them.
+        applied_map: Dict[Tuple[str, int, str], dict] = {}
+        for _row in db.media_asset_matches.get_all():
+            _tid = _row.get("target_id")
+            if _tid is not None:
+                applied_map[
+                    (_row.get("target_kind"), int(_tid), _row.get("image_type"))
+                ] = _row
+
         total = len(all_media)
         for idx, media in enumerate(all_media, 1):
             if self.is_cancelled():
@@ -765,8 +780,8 @@ class AssetRenamerr(ChubModule):
                     # local source later vanished), and never persist on a dry run
                     # (media_asset_matches drives idempotency — see below).
                     if target_id is not None and not self.config.dry_run:
-                        prev = db.media_asset_matches.get_one(
-                            target_kind, target_id, image_type
+                        prev = applied_map.get(
+                            (target_kind, int(target_id), image_type)
                         )
                         if not (prev and prev.get("match_status") == "applied"):
                             db.media_asset_matches.upsert(
@@ -790,11 +805,14 @@ class AssetRenamerr(ChubModule):
                         src_mtime = os.stat(file).st_mtime
                     except OSError:
                         src_mtime = None
+                prev = (
+                    applied_map.get((target_kind, int(target_id), image_type))
+                    if target_id is not None
+                    else None
+                )
                 if target_id is not None and self._already_applied(
                     db,
-                    target_kind,
-                    target_id,
-                    image_type,
+                    prev,
                     apply_method,
                     source,
                     file,
@@ -923,10 +941,21 @@ class AssetRenamerr(ChubModule):
                             self.logger.info("Running sync_gdrive")
                             from backend.modules.sync_gdrive import SyncGDrive
 
-                            SyncGDrive(logger=self.logger).run()
+                            sync = SyncGDrive(logger=self.logger)
+                            # Sync drives the bar's 0..10 slice as folders
+                            # complete; the rest of this run drives 10..100.
+                            sync.set_job_context(
+                                getattr(self, "_job_id", None),
+                                getattr(self, "_job_db", None),
+                            )
+                            sync.set_progress_window(0, 10)
+                            sync.run()
                             self.logger.info("Finished running sync_gdrive")
                     except Exception as exc:
                         self.logger.error(f"sync_gdrive failed: {exc}")
+                    # Reserve the sync slice: the remaining phases (scan /
+                    # arr-collections / match & apply) report into 10..100.
+                    self.set_progress_window(10, 100)
 
                 if "local" in self._sources():
                     with self._phase("scan"):

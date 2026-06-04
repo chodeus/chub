@@ -494,14 +494,14 @@ def test_already_applied_skips_unchanged_fanart(db):
     # same url + applied + same method -> skip
     assert (
         m._already_applied(
-            db, "media", 1, "logo", "plex", "fanart", None, "http://x/l.png", None
+            db, db.media_asset_matches.get_one("media", 1, "logo"), "plex", "fanart", None, "http://x/l.png", None
         )
         is True
     )
     # different url -> don't skip
     assert (
         m._already_applied(
-            db, "media", 1, "logo", "plex", "fanart", None, "http://x/OTHER.png", None
+            db, db.media_asset_matches.get_one("media", 1, "logo"), "plex", "fanart", None, "http://x/OTHER.png", None
         )
         is False
     )
@@ -531,13 +531,13 @@ def test_already_applied_local_mtime(db, tmp_path):
     )
     # unchanged mtime + applied_path exists -> skip
     assert (
-        m._already_applied(db, "media", 2, "logo", "kometa", "local", f, None, mtime)
+        m._already_applied(db, db.media_asset_matches.get_one("media", 2, "logo"), "kometa", "local", f, None, mtime)
         is True
     )
     # changed mtime -> don't skip
     assert (
         m._already_applied(
-            db, "media", 2, "logo", "kometa", "local", f, None, mtime + 5
+            db, db.media_asset_matches.get_one("media", 2, "logo"), "kometa", "local", f, None, mtime + 5
         )
         is False
     )
@@ -566,9 +566,7 @@ def test_already_applied_direct_backfills_new_library(db):
     assert (
         m._already_applied(
             db,
-            "media",
-            3,
-            "logo",
+            db.media_asset_matches.get_one("media", 3, "logo"),
             "plex",
             "fanart",
             None,
@@ -593,9 +591,7 @@ def test_already_applied_direct_backfills_new_library(db):
     assert (
         m._already_applied(
             db,
-            "media",
-            3,
-            "logo",
+            db.media_asset_matches.get_one("media", 3, "logo"),
             "plex",
             "fanart",
             None,
@@ -621,7 +617,7 @@ def test_already_applied_never_skips_in_dry_run(db):
     )
     assert (
         m._already_applied(
-            db, "media", 3, "logo", "plex", "fanart", None, "http://x/l.png", None
+            db, db.media_asset_matches.get_one("media", 3, "logo"), "plex", "fanart", None, "http://x/l.png", None
         )
         is False
     )
