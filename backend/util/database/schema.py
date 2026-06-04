@@ -543,6 +543,11 @@ class SchemaManager:
                 ColumnDefinition("scheduled_at", "TEXT"),
                 ColumnDefinition("priority", "INTEGER", default=0),
                 ColumnDefinition("progress", "INTEGER", default=0),
+                # phases: JSON array of per-sub-step records
+                # [{name, status, started_at, finished_at, duration_s}], written
+                # by orchestrating modules (poster_renamerr, asset_renamerr) so
+                # the Jobs page can show each pipeline phase and its timing.
+                ColumnDefinition("phases", "TEXT"),
                 ColumnDefinition("started_at", "TEXT"),
                 ColumnDefinition("completed_at", "TEXT"),
             ],

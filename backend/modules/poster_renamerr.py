@@ -1332,12 +1332,40 @@ class PosterRenamerr(ChubModule):
                         create_table([["Dry Run"], ["NO CHANGES WILL BE MADE"]])
                     )
 
-                self.sync_posters()
+                # Declare the pipeline phases this run will execute (gated by
+                # config) so the Jobs page shows each sub-step and its timing.
+                phase_plan = []
+                if self.config.sync_posters:
+                    phase_plan.append("sync_gdrive")
+                phase_plan += [
+                    "merge cache",
+                    "arr/collections sync",
+                    "match",
+                    "match-quality",
+                    "rename",
+                ]
+                if self.config.report_unmatched_assets:
+                    phase_plan.append("unmatched report")
+                if apply_method == "kometa" and self.config.clean_orphan_assets:
+                    phase_plan.append("orphan cleanup")
+                if self.config.run_border_replacerr:
+                    phase_plan.append("border_replacerr")
+                if apply_method == "plex":
+                    phase_plan.append("plex upload")
+                if self.config.run_asset_renamerr:
+                    phase_plan.append("asset_renamerr")
+                self._declare_phases(phase_plan)
+
+                if self.config.sync_posters:
+                    with self._phase("sync_gdrive"):
+                        self.sync_posters()
+                else:
+                    self.sync_posters()
 
                 # Serialized against the webhook adhoc rebuild (see
                 # _POSTER_CACHE_REBUILD_LOCK) so a clear can't wipe rows the
                 # other path just inserted.
-                with _POSTER_CACHE_REBUILD_LOCK:
+                with self._phase("merge cache"), _POSTER_CACHE_REBUILD_LOCK:
                     db.poster.clear()
                     self.merge_assets(source_dirs=self.config.source_dirs, db=db)
                     # Index gdrive_list folders outside source_dirs as
@@ -1345,24 +1373,29 @@ class PosterRenamerr(ChubModule):
                     self.merge_gdrive_search_index(db)
                 from backend.util.connector import build_instance_map
 
-                connector = Connector(
-                    db=db,
-                    logger=self.logger,
-                    instance_map=build_instance_map(self.config),
-                )
-                connector.update_arr_database()
-                connector.update_collections_database()
+                with self._phase("arr/collections sync"):
+                    connector = Connector(
+                        db=db,
+                        logger=self.logger,
+                        instance_map=build_instance_map(self.config),
+                    )
+                    connector.update_arr_database()
+                    connector.update_collections_database()
 
-                self.match_assets_to_media(db=db)
-                self._run_match_quality_pass(db)
-                output, manifest = self.rename_files(db)
+                with self._phase("match"):
+                    self.match_assets_to_media(db=db)
+                with self._phase("match-quality"):
+                    self._run_match_quality_pass(db)
+                with self._phase("rename"):
+                    output, manifest = self.rename_files(db)
 
                 if self.config.report_unmatched_assets:
                     from backend.modules.unmatched_assets import UnmatchedAssets
 
-                    unmatched_reporter = UnmatchedAssets(logger=self.logger)
-                    with ChubDB(logger=self.logger) as unmatched_db:
-                        unmatched_reporter.print_stats(unmatched_db)
+                    with self._phase("unmatched report"):
+                        unmatched_reporter = UnmatchedAssets(logger=self.logger)
+                        with ChubDB(logger=self.logger) as unmatched_db:
+                            unmatched_reporter.print_stats(unmatched_db)
 
                 # Orphan cleanup walks the on-disk destination_dir, so it only
                 # applies to the kometa path (the plex path keeps no files).
@@ -1371,52 +1404,59 @@ class PosterRenamerr(ChubModule):
                         run_orphan_assets_pass,
                     )
 
-                    cleanarr_logger = Logger(self.config.log_level, "cleanarr")
-                    allowed_roots = self._orphan_pass_scan_roots()
-                    # In dry-run, force report mode regardless of configured
-                    # action — never delete during a dry-run. Otherwise defer
-                    # to Poster Cleanarr's mode so a single setting governs
-                    # both the standalone Cleanarr run and Renamerr's
-                    # post-rename orphan pass (mirrors how Renamerr triggers
-                    # Border Replacerr — downstream module owns its policy).
-                    cleanarr_cfg = getattr(self.full_config, "poster_cleanarr", None)
-                    mode = (
-                        "report"
-                        if self.config.dry_run
-                        else (
-                            getattr(cleanarr_cfg, "orphan_assets_mode", "report")
-                            or "report"
+                    with self._phase("orphan cleanup"):
+                        cleanarr_logger = Logger(self.config.log_level, "cleanarr")
+                        allowed_roots = self._orphan_pass_scan_roots()
+                        # In dry-run, force report mode regardless of configured
+                        # action — never delete during a dry-run. Otherwise defer
+                        # to Poster Cleanarr's mode so a single setting governs
+                        # both the standalone Cleanarr run and Renamerr's
+                        # post-rename orphan pass (mirrors how Renamerr triggers
+                        # Border Replacerr — downstream module owns its policy).
+                        cleanarr_cfg = getattr(
+                            self.full_config, "poster_cleanarr", None
                         )
-                    )
-                    instance_names = [
-                        name
-                        for entry in (self.config.instances or [])
-                        for name in (
-                            [entry] if isinstance(entry, str) else list(entry.keys())
+                        mode = (
+                            "report"
+                            if self.config.dry_run
+                            else (
+                                getattr(cleanarr_cfg, "orphan_assets_mode", "report")
+                                or "report"
+                            )
                         )
-                    ]
-                    run_orphan_assets_pass(
-                        db=db,
-                        instances=instance_names,
-                        asset_dirs=allowed_roots,
-                        mode=mode,
-                        logger=cleanarr_logger,
-                        include_collections=True,
-                        ignore_titles=list(
-                            getattr(cleanarr_cfg, "orphan_ignore_titles", []) or []
-                        ),
-                    )
+                        instance_names = [
+                            name
+                            for entry in (self.config.instances or [])
+                            for name in (
+                                [entry]
+                                if isinstance(entry, str)
+                                else list(entry.keys())
+                            )
+                        ]
+                        run_orphan_assets_pass(
+                            db=db,
+                            instances=instance_names,
+                            asset_dirs=allowed_roots,
+                            mode=mode,
+                            logger=cleanarr_logger,
+                            include_collections=True,
+                            ignore_titles=list(
+                                getattr(cleanarr_cfg, "orphan_ignore_titles", []) or []
+                            ),
+                        )
 
                 if self.config.run_border_replacerr:
-                    self.run_border_replacerr(manifest)
+                    with self._phase("border_replacerr"):
+                        self.run_border_replacerr(manifest)
 
                 # Strict either/or: upload to Plex only on the "plex" path. The
                 # uploader still gates per-instance on add_posters, so only
                 # opted-in Plex servers receive the staged posters.
                 if apply_method == "plex":
-                    PosterUploader(
-                        db=db, logger=self.logger, manifest=manifest
-                    ).run()
+                    with self._phase("plex upload"):
+                        PosterUploader(
+                            db=db, logger=self.logger, manifest=manifest
+                        ).run()
 
                 # Additional asset types (logo / squareart / background /
                 # banner) ride this run when enabled: the gdrive sync, the single
@@ -1426,11 +1466,12 @@ class PosterRenamerr(ChubModule):
                 if self.config.run_asset_renamerr:
                     from backend.modules.asset_renamerr import AssetRenamerr
 
-                    self.logger.info("Running asset_renamerr")
-                    asset_output = AssetRenamerr(
-                        logger=self.logger
-                    ).match_and_apply_assets(db)
-                    self.logger.info("Finished running asset_renamerr")
+                    with self._phase("asset_renamerr"):
+                        self.logger.info("Running asset_renamerr")
+                        asset_output = AssetRenamerr(
+                            logger=self.logger
+                        ).match_and_apply_assets(db)
+                        self.logger.info("Finished running asset_renamerr")
                     # Notify under asset_renamerr so its own notification config
                     # governs (mirrors how each chained module owns its policy).
                     NotificationManager(
@@ -1453,4 +1494,7 @@ class PosterRenamerr(ChubModule):
         except Exception:
             self.logger.error("\n\nAn error occurred:\n", exc_info=True)
         finally:
+            # Mark any declared-but-unreached phases skipped (e.g. an early
+            # failure) so the Jobs timeline doesn't leave them stuck pending.
+            self._finalize_phases()
             self.logger.log_outro()

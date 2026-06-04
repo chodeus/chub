@@ -8,7 +8,7 @@ from backend.util.database import ChubDB
 
 
 def _enrich_jobs(jobs):
-    """Extract module_name from payload for module_run jobs."""
+    """Extract module_name from payload and parse the phases JSON for the UI."""
     for job in jobs:
         if job.get("type") == "module_run" and job.get("payload"):
             payload = job["payload"]
@@ -19,6 +19,14 @@ def _enrich_jobs(jobs):
                     payload = {}
             if isinstance(payload, dict):
                 job["module_name"] = payload.get("module_name", "")
+        # phases is stored as a JSON string; hand the UI a parsed list so it can
+        # render the per-sub-step timeline without re-parsing.
+        phases = job.get("phases")
+        if isinstance(phases, str):
+            try:
+                job["phases"] = json.loads(phases)
+            except (json.JSONDecodeError, TypeError):
+                job["phases"] = []
     return jobs
 
 
@@ -195,6 +203,7 @@ async def get_job_detail(
         if not job:
             return error(f"Job {job_id} not found", "JOB_NOT_FOUND", status_code=404)
 
+        _enrich_jobs([job])
         return ok(f"Job {job_id} details retrieved", {"job": job})
 
     except Exception as e:

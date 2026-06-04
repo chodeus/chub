@@ -904,30 +904,47 @@ class AssetRenamerr(ChubModule):
                         create_table([["Dry Run"], ["NO CHANGES WILL BE MADE"]])
                     )
 
+                # Declare the phases this run will execute (gated by config) so
+                # the Jobs page shows each sub-step and its timing.
+                phase_plan = []
                 if self.config.sync_assets:
-                    self.logger.info("Running sync_gdrive")
-                    try:
-                        from backend.modules.sync_gdrive import SyncGDrive
+                    phase_plan.append("sync_gdrive")
+                if "local" in self._sources():
+                    phase_plan.append("scan")
+                phase_plan += ["arr/collections sync", "match & apply"]
+                self._declare_phases(phase_plan)
 
-                        SyncGDrive(logger=self.logger).run()
-                        self.logger.info("Finished running sync_gdrive")
+                if self.config.sync_assets:
+                    # try/except is OUTSIDE the phase so a sync failure marks the
+                    # phase 'error' (accurate timeline) while the outer handler
+                    # swallows it — sync is non-fatal, the run still continues.
+                    try:
+                        with self._phase("sync_gdrive"):
+                            self.logger.info("Running sync_gdrive")
+                            from backend.modules.sync_gdrive import SyncGDrive
+
+                            SyncGDrive(logger=self.logger).run()
+                            self.logger.info("Finished running sync_gdrive")
                     except Exception as exc:
                         self.logger.error(f"sync_gdrive failed: {exc}")
 
                 if "local" in self._sources():
-                    self._scan_local_sources(db)
+                    with self._phase("scan"):
+                        self._scan_local_sources(db)
 
                 from backend.util.connector import build_instance_map
 
-                connector = Connector(
-                    db=db,
-                    logger=self.logger,
-                    instance_map=build_instance_map(self.config),
-                )
-                connector.update_arr_database()
-                connector.update_collections_database()
+                with self._phase("arr/collections sync"):
+                    connector = Connector(
+                        db=db,
+                        logger=self.logger,
+                        instance_map=build_instance_map(self.config),
+                    )
+                    connector.update_arr_database()
+                    connector.update_collections_database()
 
-                output = self.match_and_apply_assets(db)
+                with self._phase("match & apply"):
+                    output = self.match_and_apply_assets(db)
                 self.handle_output(output)
 
                 manager = NotificationManager(
@@ -939,3 +956,7 @@ class AssetRenamerr(ChubModule):
             self.logger.info("Asset Renamerr interrupted. Exiting...")
         except Exception:
             self.logger.error("\n\nAn error occurred:\n", exc_info=True)
+        finally:
+            # Mark any declared-but-unreached phases skipped so the Jobs
+            # timeline doesn't leave them stuck pending after an early failure.
+            self._finalize_phases()
