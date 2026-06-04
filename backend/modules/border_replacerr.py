@@ -1,6 +1,7 @@
 # modules/border_replacerr.py
 
 import filecmp
+import hashlib
 import logging
 import os
 import re
@@ -175,6 +176,26 @@ class BorderReplacerr(ChubModule):
             )
             return (255, 255, 255)
         return color_code
+
+    @staticmethod
+    def _safe_stat(path: str):
+        """os.stat(path) or None if it can't be stat'd."""
+        try:
+            return os.stat(path)
+        except OSError:
+            return None
+
+    @staticmethod
+    def _file_digest(path: str) -> str:
+        """MD5 of a file's bytes (used to fingerprint border PNGs)."""
+        h = hashlib.md5()
+        try:
+            with open(path, "rb") as fh:
+                for chunk in iter(lambda: fh.read(65536), b""):
+                    h.update(chunk)
+        except OSError:
+            return ""
+        return h.hexdigest()
 
     def _save_if_changed(self, out_img: "Image.Image", renamed_file: str) -> bool:
         """Write ``out_img`` next to ``renamed_file`` via a temp file, then
@@ -353,6 +374,7 @@ class BorderReplacerr(ChubModule):
             removed = 0
             skipped = 0
             failed = 0
+            gate_skipped = 0
             if reset_all:
                 self.logger.debug(
                     "Holiday state changed (or startup). Doing full reprocessing of all matched assets."
@@ -440,11 +462,36 @@ class BorderReplacerr(ChubModule):
             # and the list would just be every input.
             changes: List[Dict[str, str]] = []
 
-            # Pre-filter assets missing file info (tally as skipped) and assign
-            # each remaining asset its round-robin border/color variant up front,
-            # so the worker carries no shared mutable index — the prerequisite
-            # for processing them concurrently.
-            work: List[Tuple[dict, object]] = []
+            # Skip-gate state: the (mtime, size, settings-signature) of each
+            # output we last wrote. A poster whose output file is unchanged and
+            # whose signature still matches would re-encode to byte-identical
+            # bytes, so it's skipped entirely (no decode/resize/encode).
+            # Disabled on dry-run (we want to report what WOULD happen). Empty
+            # on first run, so the first pass processes everything as before.
+            gate_enabled = not dry_run
+            state_map = db.border.get_all_map() if gate_enabled else {}
+
+            # Hash each border PNG's bytes once so swapping a PNG's contents
+            # (same filename) invalidates the gate.
+            png_hash = (
+                {p: self._file_digest(p) for p in border_paths} if border_paths else {}
+            )
+
+            def _variant_sig(variant) -> str:
+                if border_paths:
+                    return f"image:{png_hash.get(variant, '')}"
+                if border_colors:
+                    return f"color:{self.config.border_width}:{variant}"
+                return f"remove:{self.config.border_width}"
+
+            # Pre-filter: drop assets missing file info (tally skipped), assign
+            # each survivor its round-robin variant (positional over ALL valid
+            # assets, so the assignment is stable regardless of which get
+            # gate-skipped), then apply the skip-gate. Pre-assigning the variant
+            # means the worker holds no shared mutable index — the prerequisite
+            # for concurrency.
+            work: List[Tuple[dict, object, str]] = []
+            variant_index = 0
             for asset in assets:
                 if not asset.get("original_file") or not asset.get("renamed_file"):
                     self.logger.warning(
@@ -453,18 +500,42 @@ class BorderReplacerr(ChubModule):
                     skipped += 1
                     continue
                 if border_paths:
-                    variant = border_paths[len(work) % len(border_paths)]
+                    variant = border_paths[variant_index % len(border_paths)]
                 elif border_colors:
-                    variant = border_colors[len(work) % len(border_colors)]
+                    variant = border_colors[variant_index % len(border_colors)]
                 else:
                     variant = None
-                work.append((asset, variant))
+                variant_index += 1
+                sig = _variant_sig(variant)
+                original_file = asset["original_file"]
+                renamed_file = asset["renamed_file"]
+                # Gate on the SOURCE file (the border op's actual input): if the
+                # input poster is unchanged and the settings signature matches,
+                # the output we'd produce is byte-identical, so the decode/encode
+                # is skippable. Output existence is required so a deleted output
+                # is regenerated. Keying on source (not output) is correct
+                # whether the border is applied in place (source == output) or to
+                # a separate path: a re-downloaded source bumps its mtime/size
+                # and forces a reprocess even if the stale output was untouched.
+                if gate_enabled and os.path.exists(renamed_file):
+                    prev = state_map.get(renamed_file)
+                    if prev and prev["variant_sig"] == sig:
+                        st = self._safe_stat(original_file)
+                        if (
+                            st is not None
+                            and prev["source_mtime"] == st.st_mtime
+                            and prev["source_size"] == st.st_size
+                        ):
+                            gate_skipped += 1
+                            processed += 1
+                            continue
+                work.append((asset, variant, sig))
 
-            def _process(item: Tuple[dict, object]):
+            def _process(item: Tuple[dict, object, str]):
                 """Apply the active border op to one poster. Returns
-                (result, title, action, detail); result is True (written),
-                False (unchanged) or None (failed)."""
-                asset, variant = item
+                (result, title, action, detail, original_file, renamed_file, sig);
+                result is True (written), False (unchanged) or None (failed)."""
+                asset, variant, sig = item
                 original_file = asset["original_file"]
                 renamed_file = asset["renamed_file"]
                 title = asset["title"]
@@ -474,7 +545,7 @@ class BorderReplacerr(ChubModule):
                         self.logger.debug(
                             f"[DRY RUN] Would composite {detail} onto: {renamed_file}"
                         )
-                        return True, title, action, detail
+                        return True, title, action, detail, original_file, renamed_file, sig
                     result = self.replace_borders_with_image(
                         original_file, renamed_file, variant
                     )
@@ -484,7 +555,7 @@ class BorderReplacerr(ChubModule):
                         self.logger.debug(
                             f"[DRY RUN] Would replace border for: {renamed_file}"
                         )
-                        return True, title, action, detail
+                        return True, title, action, detail, original_file, renamed_file, sig
                     result = self.replace_borders(
                         original_file, renamed_file, variant, self.config.border_width
                     )
@@ -494,11 +565,11 @@ class BorderReplacerr(ChubModule):
                         self.logger.debug(
                             f"[DRY RUN] Would remove border for: {renamed_file}"
                         )
-                        return True, title, action, detail
+                        return True, title, action, detail, original_file, renamed_file, sig
                     result = self.remove_borders(
                         original_file, renamed_file, self.config.border_width
                     )
-                return result, title, action, detail
+                return result, title, action, detail, original_file, renamed_file, sig
 
             # PIL releases the GIL during decode/resize/composite/encode, so a
             # thread pool gives real parallelism on the CPU-bound encode without
@@ -515,6 +586,16 @@ class BorderReplacerr(ChubModule):
                 )
                 workers = max(1, min(workers, len(work) or 1))
 
+            # Refresh each processed asset's gate state (mtime/size of the SOURCE
+            # file + the signature it was made with) so the next run can skip it.
+            # Keyed by the output path (stable per-asset identity). Recorded for
+            # written (True) and unchanged (False) results, not failures (None) —
+            # failures should retry next run. Timestamp computed once.
+            from datetime import timezone
+
+            now_iso = datetime.now(timezone.utc).isoformat()
+            new_states: List[dict] = []
+
             with progress(
                 work,
                 desc="Processing Posters",
@@ -523,7 +604,15 @@ class BorderReplacerr(ChubModule):
                 logger=self.logger,
             ) as bar:
                 with ThreadPoolExecutor(max_workers=workers) as pool:
-                    for result, title, action, detail in pool.map(_process, work):
+                    for (
+                        result,
+                        title,
+                        action,
+                        detail,
+                        original_file,
+                        renamed_file,
+                        sig,
+                    ) in pool.map(_process, work):
                         bar.update(1)
                         if result:
                             if action == "removed":
@@ -540,7 +629,22 @@ class BorderReplacerr(ChubModule):
                                 )
                         elif result is None:
                             failed += 1
+                        if gate_enabled and result is not None:
+                            st = self._safe_stat(original_file)
+                            if st is not None:
+                                new_states.append(
+                                    {
+                                        "renamed_file": renamed_file,
+                                        "source_mtime": st.st_mtime,
+                                        "source_size": st.st_size,
+                                        "variant_sig": sig,
+                                        "updated_at": now_iso,
+                                    }
+                                )
                         processed += 1
+
+            if new_states:
+                db.border.bulk_record(new_states)
 
             if changes:
                 self.logger.info("")  # Spacing
@@ -563,6 +667,8 @@ class BorderReplacerr(ChubModule):
                 ["Processed", processed],
                 ["Skipped", skipped],
             ]
+            if gate_skipped:
+                summary_table.append(["Unchanged (gate)", gate_skipped])
             if failed:
                 summary_table.append(["Failed", failed])
             if replaced:

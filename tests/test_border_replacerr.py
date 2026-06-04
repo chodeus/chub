@@ -120,3 +120,84 @@ def test_bundled_borders_dir_exists():
     # Spot-check a handful — full inventory is enforced by the rasterize
     # script + Dockerfile, not the test.
     assert {"christmas", "halloween", "pride"}.issubset(holidays)
+
+
+# ---- skip-gate primitives (#12) ------------------------------------------
+
+
+def test_save_if_changed_writes_then_skips_identical(tmp_path):
+    """First save writes; an identical re-save is skipped via content compare
+    (shallow=False), and no temp files are left behind in the dest dir."""
+    br = _make_br()
+    dest = tmp_path / "media" / "poster.jpg"
+    img = Image.new("RGB", (10, 15), (1, 2, 3))
+
+    assert br._save_if_changed(img, str(dest)) is True
+    assert dest.exists()
+    # Identical output -> deterministic JPEG bytes -> skip.
+    assert br._save_if_changed(img, str(dest)) is False
+    # Different output -> rewrite.
+    assert br._save_if_changed(Image.new("RGB", (10, 15), (9, 9, 9)), str(dest)) is True
+
+    leftovers = [p.name for p in dest.parent.iterdir() if p.name.startswith(".border-")]
+    assert leftovers == []
+
+
+def test_file_digest_and_safe_stat(tmp_path):
+    a = tmp_path / "a.png"
+    Image.new("RGBA", (4, 4), (0, 0, 0, 0)).save(a)
+    d1 = BorderReplacerr._file_digest(str(a))
+    assert d1 and BorderReplacerr._file_digest(str(a)) == d1  # stable
+    Image.new("RGBA", (4, 4), (255, 0, 0, 255)).save(a)
+    assert BorderReplacerr._file_digest(str(a)) != d1  # content-sensitive
+    assert BorderReplacerr._file_digest(str(tmp_path / "missing.png")) == ""
+    assert BorderReplacerr._safe_stat(str(a)) is not None
+    assert BorderReplacerr._safe_stat(str(tmp_path / "missing.png")) is None
+
+
+def test_border_state_roundtrip_and_upsert(tmp_path):
+    from backend.util.database.border_state import BorderState
+
+    bs = BorderState(logger=StubLogger(), db_path=str(tmp_path / "t.db"))
+    n = bs.bulk_record(
+        [
+            {
+                "renamed_file": "/m/a.jpg",
+                "source_mtime": 1.5,
+                "source_size": 10,
+                "variant_sig": "color:8:(255, 0, 0)",
+                "updated_at": "t0",
+            },
+            {
+                "renamed_file": "/m/b.jpg",
+                "source_mtime": 2.0,
+                "source_size": 20,
+                "variant_sig": "remove:8",
+                "updated_at": "t0",
+            },
+        ]
+    )
+    assert n == 2
+    m = bs.get_all_map()
+    assert set(m) == {"/m/a.jpg", "/m/b.jpg"}
+    assert m["/m/a.jpg"]["source_size"] == 10
+    assert m["/m/a.jpg"]["variant_sig"] == "color:8:(255, 0, 0)"
+
+    # PK conflict updates in place.
+    bs.bulk_record(
+        [
+            {
+                "renamed_file": "/m/a.jpg",
+                "source_mtime": 9.0,
+                "source_size": 99,
+                "variant_sig": "x",
+                "updated_at": "t1",
+            }
+        ]
+    )
+    m2 = bs.get_all_map()
+    assert m2["/m/a.jpg"]["source_size"] == 99
+    assert m2["/m/a.jpg"]["variant_sig"] == "x"
+
+    bs.clear()
+    assert bs.get_all_map() == {}
