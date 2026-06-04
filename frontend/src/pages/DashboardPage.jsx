@@ -271,6 +271,14 @@ const DashboardPage = () => {
     const nextRuns = useMemo(() => scheduleData?.data?.next_runs || {}, [scheduleData]);
     // Per-instance Upgradinatorr sub-schedules (read-only here).
     const subSchedules = useMemo(() => scheduleData?.data?.sub_schedules || [], [scheduleData]);
+    // Grouped by module key so each module status card can list its own.
+    const subSchedulesByModule = useMemo(() => {
+        const grouped = {};
+        for (const sub of subSchedules) {
+            (grouped[sub.module] ||= []).push(sub);
+        }
+        return grouped;
+    }, [subSchedules]);
     const moduleList = useMemo(() => modulesData?.data?.modules || [], [modulesData]);
     const moduleCount = moduleList.length;
     const scheduledCount = useMemo(
@@ -502,6 +510,7 @@ const DashboardPage = () => {
                         // hidden by a stale 'success' from the previous completed run.
                         const lastStatus = state?.status || mod.last_run_status;
                         const schedule = mod.schedule;
+                        const moduleSubSchedules = subSchedulesByModule[mod.name] || [];
                         const jobId = state?.job_id;
                         const isRunning = lastStatus === 'running';
                         const stopProp = e => e.stopPropagation();
@@ -575,6 +584,28 @@ const DashboardPage = () => {
                                         </span>
                                     )}
                                 </div>
+                                {moduleSubSchedules.length > 0 && (
+                                    <div className="text-xs text-tertiary">
+                                        <span className="font-semibold uppercase tracking-wider">
+                                            Per-instance
+                                        </span>
+                                        <ul className="flex flex-col gap-0.5 m-0 mt-0.5 p-0 list-none">
+                                            {moduleSubSchedules.map(sub => (
+                                                <li
+                                                    key={sub.label}
+                                                    className={`flex justify-between gap-2 ${sub.enabled ? '' : 'opacity-60'}`}
+                                                >
+                                                    <span className="truncate">{sub.label}</span>
+                                                    <span className="shrink-0 text-right">
+                                                        {sub.enabled
+                                                            ? scheduleToHuman(sub.schedule)
+                                                            : 'Disabled'}
+                                                    </span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
                                 {lastRun && (
                                     <div className="text-xs text-tertiary">
                                         Last run: {formatTimeAgo(lastRun, new Date(tick))}
