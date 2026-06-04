@@ -232,6 +232,8 @@ class BorderReplacerr(ChubModule):
                 try:
                     os.remove(tmp_path)
                 except OSError:
+                    # Best-effort cleanup of our own temp file; failing to
+                    # remove it must not mask the original error re-raised below.
                     pass
             raise
 
