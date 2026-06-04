@@ -406,7 +406,6 @@ class AssetRenamerr(ChubModule):
         image_type: str,
         is_collection: bool,
         fanart_client: Optional[FanartClient],
-        prefix_cache: Optional[dict] = None,
     ) -> Optional[Tuple[str, Optional[str], Optional[str]]]:
         """Resolve one (media, image_type) to an image, honouring the ordered
         ``sources`` preference. Returns ``(source, file, url)`` for the first
@@ -417,11 +416,7 @@ class AssetRenamerr(ChubModule):
         for source in self._sources():
             if source == "local":
                 found = PosterRenamerr.find_asset_candidate(
-                    media,
-                    db,
-                    image_type=image_type,
-                    is_collection=is_collection,
-                    prefix_cache=prefix_cache,
+                    media, db, image_type=image_type, is_collection=is_collection
                 )
                 cand = found.get("candidate")
                 if found.get("matched") and cand and cand.get("file"):
@@ -756,14 +751,9 @@ class AssetRenamerr(ChubModule):
                 )
                 continue
 
-            # One shared prefix-candidate cache per item folds the per-
-            # image_type local lookups into a single all-types fetch (#3) —
-            # built lazily inside find_asset_candidate, reused for every
-            # image_type of this item.
-            prefix_cache: dict = {}
             for image_type in applicable:
                 resolved = self._resolve_source(
-                    media, db, image_type, is_collection, fanart_client, prefix_cache
+                    media, db, image_type, is_collection, fanart_client
                 )
                 if not resolved:
                     # No source artwork anywhere for this (item, type). Record a

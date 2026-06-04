@@ -19,7 +19,6 @@ each run fetches fresh art and always reflects the latest uploads.
 
 from __future__ import annotations
 
-import threading
 import time
 from typing import Any, Dict, List, Optional, Union
 
@@ -58,11 +57,6 @@ class FanartClient:
         self.session = requests.Session()
         self._memo: dict = {}
         self._auth_failed = False
-        # Serializes get_images across threads: guards the memo check-then-set
-        # (so two workers asking for the same id don't double-fetch) and bounds
-        # fanart.tv to <=1 concurrent request — exactly today's behavior, so the
-        # asset pipeline's parallel loop is never harsher on the API than serial.
-        self._lock = threading.Lock()
 
     @property
     def enabled(self) -> bool:
@@ -108,22 +102,19 @@ class FanartClient:
 
         langs = self._normalize_langs(language)
         memo_key = ("images", kind, str(lookup_id), season_key)
-        # Lock spans the memo check, the network fetch, and the memo write so
-        # concurrent callers never double-fetch and fanart sees <=1 request.
-        with self._lock:
-            if memo_key in self._memo:
-                return self._memo[memo_key]
+        if memo_key in self._memo:
+            return self._memo[memo_key]
 
-            raw = self._fetch(kind, str(lookup_id))
-            if raw is None:
-                return None  # transient — don't memo, let a later run retry
+        raw = self._fetch(kind, str(lookup_id))
+        if raw is None:
+            return None  # transient — don't memo, let a later run retry
 
-            images = {
-                "logo": self._pick_logo(raw, kind, langs),
-                "background": self._pick_background(raw, kind, langs, season_key),
-            }
-            self._memo[memo_key] = images
-            return images
+        images = {
+            "logo": self._pick_logo(raw, kind, langs),
+            "background": self._pick_background(raw, kind, langs, season_key),
+        }
+        self._memo[memo_key] = images
+        return images
 
     # ----- selection ------------------------------------------------------
 
