@@ -115,5 +115,9 @@ ENV TZ=America/Los_Angeles
 ENV PORT=8000
 ENV HOST=0.0.0.0
 ENV DOCKER_ENV=true
+# Flush stdout/stderr per write so container logs stay chronologically
+# ordered — without this, print() block-buffers to the pipe and interleaves
+# out of order with the per-record-flushed logging handlers.
+ENV PYTHONUNBUFFERED=1
 
 ENTRYPOINT ["bash", "scripts/start.sh"]
