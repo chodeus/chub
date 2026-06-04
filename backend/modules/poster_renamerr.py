@@ -8,7 +8,7 @@ import shutil
 import tempfile
 import threading
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from backend.util.base_module import ChubModule
 from backend.util.connector import Connector
@@ -183,7 +183,14 @@ class PosterRenamerr(ChubModule):
                 # skip_cache_refresh: merge_assets below does a full
                 # clear() + rebuild, so the per-folder refresh would be
                 # immediately overwritten — pure duplicated work.
-                SyncGDrive(logger=self.logger).run(skip_cache_refresh=True)
+                sync = SyncGDrive(logger=self.logger)
+                # Drive the parent bar's 0..ceiling slice as folders complete,
+                # so the longest phase isn't flat. No-ops without job context.
+                sync.set_job_context(
+                    getattr(self, "_job_id", None), getattr(self, "_job_db", None)
+                )
+                sync.set_progress_window(0, self._SYNC_PROGRESS_CEILING_PCT)
+                sync.run(skip_cache_refresh=True)
                 self.logger.info("Finished running sync_gdrive")
                 self._report_progress(self._SYNC_PROGRESS_CEILING_PCT)
             except FileNotFoundError as e:
@@ -829,7 +836,7 @@ class PosterRenamerr(ChubModule):
     # assets, not the full media list).
     _RENAME_PROGRESS_EVERY = 100
 
-    def rename_files(self, db: ChubDB) -> tuple:
+    def rename_files(self, db: ChubDB, progress_ceiling: int = 100) -> tuple:
         output: Dict[str, List[Dict[str, Any]]] = {
             "collection": [],
             "movie": [],
@@ -841,7 +848,7 @@ class PosterRenamerr(ChubModule):
         if matched_assets:
             self.logger.info("Renaming assets please wait...")
             total = len(matched_assets)
-            rename_span = 100 - self._MATCH_PROGRESS_CEILING_PCT
+            rename_span = progress_ceiling - self._MATCH_PROGRESS_CEILING_PCT
             with progress(
                 matched_assets,
                 desc="Renaming assets",
@@ -866,9 +873,10 @@ class PosterRenamerr(ChubModule):
                             self._MATCH_PROGRESS_CEILING_PCT
                             + int(idx / total * rename_span)
                         )
-        # Final pin at 100 — covered by job_processor's completion path too,
-        # but explicit here keeps the ladder symmetric with merge/match.
-        self._report_progress(100)
+        # Pin at the rename ceiling (100 unless a post-rename phase like
+        # asset_renamerr reserved the tail). The job_processor pins 100 on
+        # completion, so the bar still lands exactly at done.
+        self._report_progress(progress_ceiling)
         return output, manifest
 
     def handle_output(self, output: Dict[str, List[Dict[str, Any]]]):
@@ -1187,7 +1195,7 @@ class PosterRenamerr(ChubModule):
         """
         return [self.config.destination_dir] if self.config.destination_dir else []
 
-    def run_border_replacerr(self, manifest: dict):
+    def run_border_replacerr(self, manifest: dict, progress_window=None):
         from backend.modules.border_replacerr import BorderReplacerr
 
         self.logger.debug(
@@ -1197,7 +1205,14 @@ class PosterRenamerr(ChubModule):
             f"  Total assets to process: {len(manifest.get('media_cache', [])) + len(manifest.get('collections_cache', []))}\n"
         )
 
-        BorderReplacerr(logger=self.logger).run(manifest)
+        border = BorderReplacerr(logger=self.logger)
+        # Drive the parent bar's reserved slice as posters complete.
+        if progress_window is not None:
+            border.set_job_context(
+                getattr(self, "_job_id", None), getattr(self, "_job_db", None)
+            )
+            border.set_progress_window(*progress_window)
+        border.run(manifest)
 
         self.logger.info("Finished running border_replacerr.")
 
@@ -1386,8 +1401,31 @@ class PosterRenamerr(ChubModule):
                     self.match_assets_to_media(db=db)
                 with self._phase("match-quality"):
                     self._run_match_quality_pass(db)
+                # Post-rename tail allocation. rename always runs (small slice);
+                # the heavy tail phases (border, asset) split the remainder so the
+                # bar keeps advancing through them instead of pinning early. No
+                # tail phase => rename runs the bar to 100 as before.
+                _heavy = []
+                if self.config.run_border_replacerr:
+                    _heavy.append("border")
+                if self.config.run_asset_renamerr:
+                    _heavy.append("asset")
+                rename_ceiling = 92 if _heavy else 100
+                tail_windows: Dict[str, Tuple[int, int]] = {}
+                if _heavy:
+                    _span = (100 - rename_ceiling) / len(_heavy)
+                    for _i, _name in enumerate(_heavy):
+                        tail_windows[_name] = (
+                            int(rename_ceiling + _i * _span),
+                            int(rename_ceiling + (_i + 1) * _span),
+                        )
+                    # The last phase ends exactly at 100.
+                    _last = _heavy[-1]
+                    tail_windows[_last] = (tail_windows[_last][0], 100)
                 with self._phase("rename"):
-                    output, manifest = self.rename_files(db)
+                    output, manifest = self.rename_files(
+                        db, progress_ceiling=rename_ceiling
+                    )
 
                 if self.config.report_unmatched_assets:
                     from backend.modules.unmatched_assets import UnmatchedAssets
@@ -1447,7 +1485,9 @@ class PosterRenamerr(ChubModule):
 
                 if self.config.run_border_replacerr:
                     with self._phase("border_replacerr"):
-                        self.run_border_replacerr(manifest)
+                        self.run_border_replacerr(
+                            manifest, progress_window=tail_windows.get("border")
+                        )
 
                 # Strict either/or: upload to Plex only on the "plex" path. The
                 # uploader still gates per-instance on add_posters, so only
@@ -1468,9 +1508,16 @@ class PosterRenamerr(ChubModule):
 
                     with self._phase("asset_renamerr"):
                         self.logger.info("Running asset_renamerr")
-                        asset_output = AssetRenamerr(
-                            logger=self.logger
-                        ).match_and_apply_assets(db)
+                        asset_module = AssetRenamerr(logger=self.logger)
+                        # Drive the reserved tail of the parent's bar so the %
+                        # advances through this long phase instead of sitting at
+                        # 100. No-ops cleanly when this run has no job context.
+                        asset_module.set_job_context(
+                            getattr(self, "_job_id", None),
+                            getattr(self, "_job_db", None),
+                        )
+                        asset_module.set_progress_window(*tail_windows["asset"])
+                        asset_output = asset_module.match_and_apply_assets(db)
                         self.logger.info("Finished running asset_renamerr")
                     # Notify under asset_renamerr so its own notification config
                     # governs (mirrors how each chained module owns its policy).

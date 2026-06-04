@@ -595,11 +595,12 @@ class BorderReplacerr(ChubModule):
 
             now_iso = datetime.now(timezone.utc).isoformat()
             new_states: List[dict] = []
+            total_work = len(work)
 
             with progress(
                 work,
                 desc="Processing Posters",
-                total=len(work),
+                total=total_work,
                 unit="posters",
                 logger=self.logger,
             ) as bar:
@@ -642,6 +643,11 @@ class BorderReplacerr(ChubModule):
                                     }
                                 )
                         processed += 1
+                        # Drive the Jobs-page bar (no-op without job context; maps
+                        # into the parent's reserved slice when chained from
+                        # poster_renamerr). Report periodically + at the end.
+                        if total_work and (processed % 25 == 0 or processed == total_work):
+                            self._report_progress(int(processed / total_work * 100))
 
             if new_states:
                 db.border.bulk_record(new_states)

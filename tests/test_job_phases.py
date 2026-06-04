@@ -167,3 +167,53 @@ def test_phase_error_swallowed_by_caller_marks_error_and_continues(tmp_path):
         assert continued
     finally:
         db.__exit__(None, None, None)
+
+
+def _progress(db, jid):
+    row = db.worker.execute_query(
+        "SELECT progress FROM jobs WHERE id=?", (jid,), fetch_one=True
+    )
+    return row["progress"]
+
+
+def test_progress_window_maps_into_reserved_slice(tmp_path):
+    """A non-identity progress window maps the module's 0..100 into [floor,
+    ceiling] of the parent bar (poster_renamerr -> asset_renamerr tail)."""
+    db = _open_db(tmp_path)
+    try:
+        jid = _new_job(db)
+        fake = SimpleNamespace(
+            _job_id=jid, _job_db=db, _progress_floor=92, _progress_ceiling=100
+        )
+        ChubModule._report_progress(fake, 0)
+        assert _progress(db, jid) == 92
+        ChubModule._report_progress(fake, 50)  # halfway through [92,100]
+        assert _progress(db, jid) == 96
+        ChubModule._report_progress(fake, 100)
+        assert _progress(db, jid) == 100
+    finally:
+        db.__exit__(None, None, None)
+
+
+def test_progress_default_window_is_identity(tmp_path):
+    """No window set -> 0..100 reported verbatim (unchanged for every other
+    module)."""
+    db = _open_db(tmp_path)
+    try:
+        jid = _new_job(db)
+        fake = SimpleNamespace(_job_id=jid, _job_db=db)
+        ChubModule._report_progress(fake, 42)
+        assert _progress(db, jid) == 42
+    finally:
+        db.__exit__(None, None, None)
+
+
+def test_set_progress_window_clamps(tmp_path):
+    fake = SimpleNamespace()
+    ChubModule.set_progress_window(fake, -5, 250)
+    assert fake._progress_floor == 0
+    assert fake._progress_ceiling == 100
+    # ceiling never below floor
+    ChubModule.set_progress_window(fake, 90, 50)
+    assert fake._progress_floor == 90
+    assert fake._progress_ceiling == 90

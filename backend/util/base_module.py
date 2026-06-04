@@ -113,9 +113,29 @@ class ChubModule(ABC):
             return
         try:
             pct = max(0, min(100, int(percent)))
-            db.worker.update_progress("jobs", job_id, pct)
+            # Map the module's 0..100 into its progress window (default 0..100,
+            # i.e. identity). A non-identity window lets a module that runs
+            # another inline have the child advance a reserved slice of the
+            # parent's bar — see set_progress_window().
+            floor = getattr(self, "_progress_floor", 0)
+            ceiling = getattr(self, "_progress_ceiling", 100)
+            mapped = floor + (ceiling - floor) * pct / 100
+            mapped = max(0, min(100, int(round(mapped))))
+            db.worker.update_progress("jobs", job_id, mapped)
         except Exception:  # noqa: S110 — progress is non-critical
             pass
+
+    def set_progress_window(self, floor: int, ceiling: int) -> None:
+        """Map this module's 0..100 progress reports into [floor, ceiling] of
+        the parent job's bar (default is the full 0..100 — identity).
+
+        Used when an orchestrating module runs another inline and wants the
+        child's progress to advance only a reserved tail of the bar, so the
+        percentage keeps moving during a long final phase instead of pinning
+        100 early. See poster_renamerr -> asset_renamerr.
+        """
+        self._progress_floor = max(0, min(100, int(floor)))
+        self._progress_ceiling = max(self._progress_floor, min(100, int(ceiling)))
 
     def _declare_phases(self, names) -> None:
         """Seed the ordered list of pipeline phases this run will execute so the
