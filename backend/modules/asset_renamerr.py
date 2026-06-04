@@ -3,6 +3,7 @@
 import json
 import os
 import shutil
+import time  # TEMP: asset-phase measurement (remove with the [asset measure] patch)
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from backend.util.base_module import ChubModule
@@ -415,9 +416,13 @@ class AssetRenamerr(ChubModule):
 
         for source in self._sources():
             if source == "local":
+                _t0 = time.perf_counter()  # TEMP measure
                 found = PosterRenamerr.find_asset_candidate(
                     media, db, image_type=image_type, is_collection=is_collection
                 )
+                self._m_local_db = getattr(self, "_m_local_db", 0.0) + (
+                    time.perf_counter() - _t0
+                )  # TEMP measure
                 cand = found.get("candidate")
                 if found.get("matched") and cand and cand.get("file"):
                     return ("local", cand["file"], None)
@@ -426,9 +431,13 @@ class AssetRenamerr(ChubModule):
                 # fanart has no squareart/banner; collections aren't supported.
                 if not fanart_key or is_collection or not fanart_client:
                     continue
+                _t0 = time.perf_counter()  # TEMP measure
                 images = fanart_client.get_images(
                     media, language=self.config.tmdb_language
                 )
+                self._m_fanart = getattr(self, "_m_fanart", 0.0) + (
+                    time.perf_counter() - _t0
+                )  # TEMP measure
                 url = (images or {}).get(fanart_key)
                 if url:
                     return ("fanart", None, url)
@@ -724,6 +733,18 @@ class AssetRenamerr(ChubModule):
                 ] = _row
 
         total = len(all_media)
+        # --- TEMP measurement (remove after): split the asset phase into its
+        # cost centers so the next optimization is proven, not guessed.
+        # local_db = per-item candidate lookups (connect-per-query DB churn);
+        # fanart = fanart.tv network; applied_chk = the idempotency check
+        # (incl. _direct_target_lib_keys plex_cache reads); apply = Plex POST /
+        # Kometa copy (only for changed items).
+        self._m_local_db = 0.0
+        self._m_fanart = 0.0
+        _m_applied_chk = 0.0
+        _m_apply = 0.0
+        _m_skip = 0
+        _m_apply_n = 0
         for idx, media in enumerate(all_media, 1):
             if self.is_cancelled():
                 break
@@ -794,7 +815,8 @@ class AssetRenamerr(ChubModule):
                     if target_id is not None
                     else None
                 )
-                if target_id is not None and self._already_applied(
+                _t0 = time.perf_counter()  # TEMP measure
+                _skip = target_id is not None and self._already_applied(
                     db,
                     prev,
                     apply_method,
@@ -804,13 +826,17 @@ class AssetRenamerr(ChubModule):
                     src_mtime,
                     media=media,
                     is_collection=is_collection,
-                ):
+                )
+                _m_applied_chk += time.perf_counter() - _t0  # TEMP measure
+                if _skip:
+                    _m_skip += 1  # TEMP measure
                     self.logger.debug(
                         f"↳ unchanged, skipping {image_type} for {media.get('title')}"
                     )
                     continue
 
                 applied_libs: Optional[List[str]] = None
+                _t0 = time.perf_counter()  # TEMP measure
                 if apply_method == "plex":
                     applied, detail, applied_libs = self._apply_direct(
                         db, media, image_type, file, url, is_collection
@@ -819,6 +845,8 @@ class AssetRenamerr(ChubModule):
                     applied, detail = self._apply_kometa(
                         media, image_type, source, file, url
                     )
+                _m_apply += time.perf_counter() - _t0  # TEMP measure
+                _m_apply_n += 1  # TEMP measure
 
                 # On a dry run, NEVER persist match state: media_asset_matches
                 # drives idempotency (_already_applied), so recording a dry-run
@@ -861,6 +889,16 @@ class AssetRenamerr(ChubModule):
                         f"{prefix} {image_type} [{source}] "
                         f"{media.get('title')} -> {detail}"
                     )
+        # TEMP measurement summary — decides DB-churn vs fanart vs apply. Remove
+        # this block (and the time import / accumulators) once read.
+        self.logger.info(
+            f"[asset measure] {total} items | "
+            f"local_db {self._m_local_db:.1f}s | "
+            f"fanart {self._m_fanart:.1f}s | "
+            f"applied_chk {_m_applied_chk:.1f}s | "
+            f"apply {_m_apply:.1f}s | "
+            f"skipped {_m_skip} | applied {_m_apply_n}"
+        )
         return output
 
     def handle_output(self, output: Dict[str, List[dict]]) -> None:
