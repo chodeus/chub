@@ -266,11 +266,18 @@ const DashboardPage = () => {
     }, [jobStatsData]);
 
     const schedules = useMemo(() => scheduleData?.data?.schedule || {}, [scheduleData]);
+    // Server-computed next-run timestamps for cron(...) modules — the frontend
+    // can't parse cron, so it leans on these for the "Upcoming" list.
+    const nextRuns = useMemo(() => scheduleData?.data?.next_runs || {}, [scheduleData]);
+    // Per-instance Upgradinatorr sub-schedules (read-only here).
+    const subSchedules = useMemo(() => scheduleData?.data?.sub_schedules || [], [scheduleData]);
     const moduleList = useMemo(() => modulesData?.data?.modules || [], [modulesData]);
     const moduleCount = moduleList.length;
     const scheduledCount = useMemo(
-        () => Object.values(schedules).filter(v => v && v.trim()).length,
-        [schedules]
+        () =>
+            Object.values(schedules).filter(v => v && v.trim()).length +
+            subSchedules.filter(s => s.enabled && s.schedule && s.schedule.trim()).length,
+        [schedules, subSchedules]
     );
     const runningCount = useMemo(() => moduleList.filter(m => m.running).length, [moduleList]);
 
@@ -373,19 +380,41 @@ const DashboardPage = () => {
     const upcomingRuns = useMemo(() => {
         const now = new Date(tick);
         const entries = [];
+        // Parse a server-supplied ISO next-run, guarding against bad values.
+        const parseIso = iso => {
+            if (!iso) return null;
+            const d = new Date(iso);
+            return Number.isNaN(d.getTime()) ? null : d;
+        };
         for (const [moduleName, expr] of Object.entries(schedules)) {
             if (!expr || !expr.trim()) continue;
-            const next = scheduleToNextFire(expr, now);
+            // Fall back to the server's cron next-run when the client can't parse it.
+            const next = scheduleToNextFire(expr, now) || parseIso(nextRuns[moduleName]);
             if (!next) continue;
             entries.push({
+                id: moduleName,
                 module: moduleName,
+                label: humanize(moduleName),
                 schedule: expr,
+                next,
+            });
+        }
+        // Per-instance Upgradinatorr sub-schedules ride alongside the modules.
+        for (const sub of subSchedules) {
+            if (!sub.enabled || !sub.schedule || !sub.schedule.trim()) continue;
+            const next = scheduleToNextFire(sub.schedule, now) || parseIso(sub.next_run);
+            if (!next) continue;
+            entries.push({
+                id: `${sub.module}:${sub.label}`,
+                module: sub.module,
+                label: `${humanize(sub.module)} · ${sub.label}`,
+                schedule: sub.schedule,
                 next,
             });
         }
         entries.sort((a, b) => a.next.getTime() - b.next.getTime());
         return entries.slice(0, UPCOMING_LIMIT);
-    }, [schedules, tick]);
+    }, [schedules, nextRuns, subSchedules, tick]);
 
     if (isLoading && moduleList.length === 0) {
         // Skeleton placeholders for the module-card grid + health row so the
@@ -617,19 +646,18 @@ const DashboardPage = () => {
                     </div>
                     {upcomingRuns.length === 0 ? (
                         <div className="text-sm text-tertiary italic">
-                            No scheduled runs within the next day — cron-scheduled modules
-                            aren&apos;t shown here.
+                            No scheduled runs coming up.
                         </div>
                     ) : (
                         <ul className="flex flex-col gap-2 m-0 p-0 list-none">
                             {upcomingRuns.map(entry => (
                                 <li
-                                    key={entry.module}
+                                    key={entry.id}
                                     className="flex items-center justify-between gap-3 bg-surface rounded-lg px-3 py-2 text-sm"
                                 >
                                     <div className="min-w-0">
                                         <div className="font-semibold text-primary truncate">
-                                            {humanize(entry.module)}
+                                            {entry.label}
                                         </div>
                                         <div className="text-xs text-tertiary truncate">
                                             {scheduleToHuman(entry.schedule)}

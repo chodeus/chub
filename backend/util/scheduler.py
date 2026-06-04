@@ -162,6 +162,28 @@ def check_schedule(script_name: str, schedule: str, logger: Optional[Logger]) ->
         return False
 
 
+def cron_next_run(
+    schedule: Optional[str], now: Optional[datetime] = None
+) -> Optional[datetime]:
+    """Compute the next fire time for a ``cron(...)`` schedule.
+
+    Stateless on purpose — unlike :func:`check_schedule` it never touches the
+    ``_next_run_times`` trigger cache, so it is safe to call from API handlers
+    that only want to display the upcoming run. Returns ``None`` for non-cron,
+    empty, or invalid schedules (the frontend computes the other frequencies).
+    """
+    if not schedule or not schedule.startswith("cron(") or not schedule.endswith(")"):
+        return None
+    expr = schedule[len("cron(") : -1].strip()
+    if not expr:
+        return None
+    try:
+        base = now or datetime.now(tz.tzlocal())
+        return croniter(expr, base).get_next(datetime)
+    except (ValueError, KeyError):
+        return None
+
+
 def print_schedule_table(logger: Optional[Any], schedule: Dict[str, str]) -> None:
     """Print scheduled modules in a table and list unscheduled ones on a single line."""
     if logger is None:

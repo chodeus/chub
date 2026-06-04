@@ -71,6 +71,14 @@ export const SchedulePage = () => {
         () => scheduleData?.data?.schedule || {},
         [scheduleData?.data?.schedule]
     );
+    // Per-instance sub-schedules grouped by module key (read-only display).
+    const subSchedulesByModule = useMemo(() => {
+        const grouped = {};
+        for (const sub of scheduleData?.data?.sub_schedules || []) {
+            (grouped[sub.module] ||= []).push(sub);
+        }
+        return grouped;
+    }, [scheduleData?.data?.sub_schedules]);
     const availableModules = useMemo(
         () =>
             moduleOrder
@@ -252,6 +260,7 @@ export const SchedulePage = () => {
                         moduleKey={module.key}
                         moduleLabel={module.label}
                         schedule={schedules[module.key]}
+                        subSchedules={subSchedulesByModule[module.key]}
                         isRunning={isRunning(module.key)}
                         onRun={handleModuleRun}
                         onEdit={handleScheduleEdit}
