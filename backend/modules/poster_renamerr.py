@@ -296,6 +296,7 @@ class PosterRenamerr(ChubModule):
         db: ChubDB,
         image_type: str = "poster",
         is_collection: bool = False,
+        prefix_cache: Optional[dict] = None,
     ) -> dict:
         """Find the best poster_cache candidate for ``media``, scoped to
         ``image_type``.
@@ -363,16 +364,41 @@ class PosterRenamerr(ChubModule):
             # is what makes TMDB AKA hydration actually pay off.
             search_titles = [title] if title else []
             search_titles += [t for t in alt_titles if t]
-            candidates = []
-            seen_files = set()
-            for st in search_titles:
-                for c in db.poster.get_candidates_by_prefix(
-                    st, asset_type=expected_asset_type, image_type=image_type
-                ):
-                    key = c.get("file")
-                    if key not in seen_files:
-                        seen_files.add(key)
-                        candidates.append(c)
+            if prefix_cache is not None:
+                # Asset path (#3): fold the per-image_type prefix queries into
+                # ONE all-types fetch per item, shared across this item's
+                # image_types (logo + background). Built lazily on first
+                # prefix-path use, so ID-matched items pay nothing. The per-type
+                # partition is identical to querying each type separately —
+                # asset files are unique per type and ORDER BY priority/id is
+                # type-agnostic, so removing the SQL image_type filter and
+                # partitioning in Python yields the same rows in the same order.
+                if "_map" not in prefix_cache:
+                    _m: Dict[str, list] = {}
+                    _seen: Dict[str, set] = {}
+                    for st in search_titles:
+                        for c in db.poster.get_candidates_by_prefix(
+                            st, asset_type=expected_asset_type, image_type=None
+                        ):
+                            it = c.get("image_type")
+                            key = c.get("file")
+                            s = _seen.setdefault(it, set())
+                            if key not in s:
+                                s.add(key)
+                                _m.setdefault(it, []).append(c)
+                    prefix_cache["_map"] = _m
+                candidates = list(prefix_cache["_map"].get(image_type, []))
+            else:
+                candidates = []
+                seen_files = set()
+                for st in search_titles:
+                    for c in db.poster.get_candidates_by_prefix(
+                        st, asset_type=expected_asset_type, image_type=image_type
+                    ):
+                        key = c.get("file")
+                        if key not in seen_files:
+                            seen_files.add(key)
+                            candidates.append(c)
 
             all_titles = set()
             if normalized_title:
