@@ -123,8 +123,8 @@ class Renameinatorr(ChubModule):
 
         # Ignore-tag filtering: skip items with the ignore tag, if configured
         skipped_count = 0
-        if getattr(config, "ignore_tag", None):
-            ignore_tag_id = app.get_tag_id_from_name(config.ignore_tag)
+        if getattr(config, "ignore_tags", None):
+            ignore_tag_id = app.get_tag_id_from_name(config.ignore_tags)
             if ignore_tag_id:
                 before_count = len(media_dict)
                 media_dict = [
@@ -135,7 +135,7 @@ class Renameinatorr(ChubModule):
                 skipped_count = before_count - len(media_dict)
                 if skipped_count > 0:
                     logger.info(
-                        f"Skipped {skipped_count} items due to ignore tag '{config.ignore_tag}'."
+                        f"Skipped {skipped_count} items due to ignore tag '{config.ignore_tags}'."
                     )
 
         # Tagging logic: filter untagged, clear if all tagged, then chunk
@@ -205,6 +205,32 @@ class Renameinatorr(ChubModule):
             logger.debug(f"Processing {len(media_dict)} media items in current chunk")
             if media_dict:
                 logger.info("Processing data... This may take a while.")
+                # Optional pre-rename metadata refresh. When enabled, force a
+                # refresh for every item in the chunk and wait for it to finish
+                # before reading the rename list, so the rename reflects the
+                # latest episode/movie titles from TVDB/TMDB (e.g. a Sonarr
+                # "TBA" episode that has since been named). Unlike the upstream
+                # script, which only sleeps, we wait on the command for
+                # correctness. Skipped on dry runs.
+                if getattr(config, "refresh_before_rename", False) and not getattr(
+                    config, "dry_run", False
+                ):
+                    refresh_ids = [it["media_id"] for it in media_dict]
+                    logger.info(
+                        f"Refreshing metadata for {len(refresh_ids)} item(s) "
+                        f"before rename check..."
+                    )
+                    refresh_resp = app.refresh_items(refresh_ids)
+                    if refresh_resp and "id" in refresh_resp:
+                        if app.wait_for_command(refresh_resp["id"]):
+                            logger.info(
+                                "Metadata refresh complete; checking rename list..."
+                            )
+                        else:
+                            logger.warning(
+                                "Metadata refresh did not complete cleanly; "
+                                "proceeding with rename check anyway."
+                            )
                 progress_bar = progress(
                     media_dict,
                     desc=f"Processing single batch for '{app.instance_name}'...",

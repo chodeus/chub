@@ -757,6 +757,13 @@ export const SETTINGS_SCHEMA = [
                 description: 'Enable to rename folders as well as files.',
             },
             {
+                key: 'refresh_before_rename',
+                label: 'Refresh Before Rename',
+                type: 'check_box',
+                description:
+                    'Refresh metadata before checking what needs renaming, so renames pick up the latest titles (e.g. Sonarr TBA episodes). Slower; waits for each refresh to finish.',
+            },
+            {
                 key: 'count',
                 label: 'Count',
                 type: 'number',
@@ -779,6 +786,13 @@ export const SETTINGS_SCHEMA = [
                 label: 'Tag Name',
                 type: 'text',
                 description: 'Tag name to filter items for renaming.',
+            },
+            {
+                key: 'ignore_tags',
+                label: 'Ignore Tag',
+                type: 'text',
+                description:
+                    'Skip any item carrying this tag. Items with this tag are excluded from renaming.',
             },
             {
                 key: 'enable_batching',

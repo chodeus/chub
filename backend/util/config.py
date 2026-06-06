@@ -321,6 +321,7 @@ class RenameinatorrConfig(BaseModel):
     log_level: str = "info"
     dry_run: bool = False
     rename_folders: bool = True
+    refresh_before_rename: bool = False
     count: Union[int, str] = 100
     radarr_count: int = 0
     sonarr_count: int = 0
