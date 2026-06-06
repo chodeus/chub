@@ -527,6 +527,27 @@ class SchemaManager:
         )
         self._add_table(run_state)
 
+        # CL2K maker — provenance of generated posters (review / re-run / revert)
+        cl2k_generated = TableDefinition(
+            name="cl2k_generated",
+            columns=[
+                ColumnDefinition("id", "INTEGER", primary_key=True, nullable=False),
+                ColumnDefinition("kind", "TEXT"),  # movie/show/collection/season
+                ColumnDefinition("tmdb_id", "INTEGER"),
+                ColumnDefinition("tvdb_id", "INTEGER"),
+                ColumnDefinition("imdb_id", "TEXT"),
+                ColumnDefinition("season_number", "INTEGER"),
+                ColumnDefinition("title", "TEXT"),
+                ColumnDefinition("year", "INTEGER"),
+                ColumnDefinition("file", "TEXT", nullable=False, unique=True),
+                ColumnDefinition("backdrop_path", "TEXT"),  # TMDB path used
+                ColumnDefinition("logo_source", "TEXT"),  # tmdb | fanart | text
+                ColumnDefinition("uploaded", "INTEGER", default=0),
+                ColumnDefinition("generated_at", "TEXT"),
+            ],
+        )
+        self._add_table(cl2k_generated)
+
         # Jobs
         jobs = TableDefinition(
             name="jobs",

@@ -55,8 +55,24 @@ WORKDIR /app
 # Install minimal runtime dependencies. jdupes comes from Debian instead
 # of being built from codeberg source — sidesteps recurring codeberg
 # outages, and libjodycode is pulled in automatically as a dep.
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends curl git tzdata jdupes && \
+#
+# CL2K maker adds: imagemagick (Wand's libMagickWand), librsvg2-2 (so IM can
+# read SVG clear logos), fonts-dejavu-core (guaranteed fallback font), and the
+# REAL Microsoft Arial via ttf-mscorefonts-installer (needs the `contrib`
+# component + EULA pre-accept + cabextract; it downloads from SourceForge at
+# build). fc-cache registers the fonts.
+RUN set -eux; \
+    ( sed -i 's/^Components: main$/Components: main contrib/' \
+        /etc/apt/sources.list.d/debian.sources 2>/dev/null || true ); \
+    ( sed -i 's/ main$/ main contrib/' /etc/apt/sources.list 2>/dev/null || true ); \
+    echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true" \
+        | debconf-set-selections; \
+    apt-get update; \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        curl git tzdata jdupes \
+        imagemagick librsvg2-2 fonts-dejavu-core \
+        fontconfig cabextract ttf-mscorefonts-installer; \
+    fc-cache -f; \
     rm -rf /var/lib/apt/lists/*
 
 # Copy only Python runtime and site-packages from builder

@@ -448,6 +448,58 @@ class TMDBClient:
         except ValueError:
             return None
 
+    # ----- art picker / search (CL2K maker) -------------------------------
+    @staticmethod
+    def _image_mt(media_type: str) -> str:
+        """Map a media kind to the TMDB path segment."""
+        mt = (media_type or "").lower()
+        if mt == "movie":
+            return "movie"
+        if mt == "collection":
+            return "collection"
+        return "tv"
+
+    def list_images(
+        self, tmdb_id: int, media_type: str, languages: Union[str, List[str]] = "en"
+    ) -> Any:
+        """Return the full TMDB images payload (every logo + backdrop) for a
+        media item — for the CL2K art picker.
+
+        Unlike :meth:`get_images` (which auto-picks one of each), this exposes
+        all candidates so callers can choose by resolution. Returns None on a
+        transient failure, or ``{"logos": [], "backdrops": []}`` for a bad id.
+        """
+        if not self.enabled or not tmdb_id:
+            return None
+        mt = self._image_mt(media_type)
+        key = ("list_images", str(tmdb_id), mt)
+        with self._memo_lock:
+            if key in self._memo:
+                return self._memo[key]
+        result = self._fetch_images(tmdb_id, mt, languages)
+        with self._memo_lock:
+            self._memo[key] = result
+        return result
+
+    def search_titles(self, query: str, media_type: str) -> List[Dict[str, Any]]:
+        """Search TMDB by title for the maker's entry point.
+
+        ``media_type`` is movie / show / collection. Returns the raw results
+        list (id, title/name, year, overview, ...), or [] on failure / disabled.
+        """
+        if not self.enabled or not query:
+            return []
+        mt = self._image_mt(media_type)
+        url = f"{self.BASE}/search/{mt}"
+        params = {"api_key": self.cfg.apikey, "query": query}
+        resp = self._request_with_retry(url, params, what=f"search/{mt}")
+        if resp is None or not resp.ok:
+            return []
+        try:
+            return resp.json().get("results", [])
+        except ValueError:
+            return []
+
 
 def backfill_missing_tmdb_ids(
     db: ChubDB,
