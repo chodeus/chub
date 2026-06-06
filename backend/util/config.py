@@ -297,6 +297,41 @@ class BorderReplacerrConfig(BaseModel):
     holidays: List[BorderHoliday] = Field(default_factory=list)
 
 
+class Cl2kMakerConfig(BaseModel):
+    log_level: str = "info"
+    enabled: bool = False
+    # Local source_dir where generated CL2K posters land (then matched by
+    # poster_renamerr). Should be one of poster_renamerr.source_dirs.
+    output_dir: str = ""
+    language: str = "en"
+    logo_max_width: int = Field(default=600, ge=100, le=800)  # guide 600 std / 800 max
+    whiten_logo: bool = True
+    text_logo_fallback: bool = True  # synth a typeset wordmark when no real logo
+    skip_existing: bool = True
+    style: str = "CL2K"  # poster_cache style tag
+    priority: int = 0
+    # Google Drive upload (rclone copy) — optional, off by default.
+    upload_to_gdrive: bool = False
+    gdrive_folder_id: str = ""
+    gdrive_sa_location: str = ""
+    # AI text removal (provider-agnostic; off by default = textless-art strategy).
+    # Requires a user-brushed mask. lama_sidecar = free/local; openai = paid;
+    # huggingface = free tier (rate-limited). Firefly/ChatGPT-free have no usable
+    # API — use the manual export/import handoff for those.
+    ai_provider: str = "none"  # none | lama_sidecar | openai | huggingface
+    ai_endpoint: str = ""  # lama sidecar URL, or HF model inference URL
+    ai_api_key: str = ""  # openai / huggingface token
+    ai_model: str = ""  # openai model id (default gpt-image-1) / HF model id
+    ai_timeout: int = 120
+    # OpenAI/HF prompt. OpenAI can remove text from this prompt ALONE (no mask);
+    # a brushed mask, when present, restricts the edit to that region.
+    ai_prompt: str = (
+        "Remove all text, titles, credits, logos and watermarks from this image. "
+        "Seamlessly reconstruct the underlying artwork and background where the "
+        "text was. Do not change anything else."
+    )
+
+
 class UpgradinatorrInstance(BaseModel):
     label: str = ""
     enabled: bool = True
@@ -621,6 +656,7 @@ class ConfigNotifications(BaseModel):
     poster_cleanarr: Optional[Dict[str, Any]] = Field(default_factory=dict)
     plex_maintenance: Optional[Dict[str, Any]] = Field(default_factory=dict)
     border_replacerr: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    cl2k_maker: Optional[Dict[str, Any]] = Field(default_factory=dict)
     sync_gdrive: Optional[Dict[str, Any]] = Field(default_factory=dict)
     main: Optional[Dict[str, Any]] = Field(default_factory=dict)
 
@@ -641,6 +677,7 @@ class ChubConfig(BaseModel):
     border_replacerr: BorderReplacerrConfig = Field(
         default_factory=BorderReplacerrConfig
     )
+    cl2k_maker: Cl2kMakerConfig = Field(default_factory=Cl2kMakerConfig)
     upgradinatorr: UpgradinatorrConfig = Field(default_factory=UpgradinatorrConfig)
     renameinatorr: RenameinatorrConfig = Field(default_factory=RenameinatorrConfig)
     nohl: NohlConfig = Field(default_factory=NohlConfig)

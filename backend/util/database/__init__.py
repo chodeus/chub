@@ -15,6 +15,7 @@ from .media_asset_matches import MediaAssetMatches
 from .media_cache import MediaCache
 from .plex_cache import PlexCache
 from .poster_cache import PosterCache
+from .cl2k_generated import Cl2kGenerated
 from .run_state import RunState
 from .schema import SchemaManager
 from .stats import Stats
@@ -195,6 +196,11 @@ class ChubDB:
     def run_state(self) -> RunState:
         """Access to run state operations."""
         return self._get_interface("run_state", RunState)
+
+    @property
+    def cl2k_generated(self) -> Cl2kGenerated:
+        """Access to CL2K generated-poster provenance."""
+        return self._get_interface("cl2k_generated", Cl2kGenerated)
 
     @property
     def stats(self) -> Stats:

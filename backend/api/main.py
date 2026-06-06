@@ -19,6 +19,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from backend.api import (
     auth as auth_router,
     border_replacerr as border_replacerr_router,
+    cl2k_maker as cl2k_maker_router,
     config as config_router,
     instances as instances_router,
     jobs as jobs_router,
@@ -406,6 +407,7 @@ app.include_router(nestarr_router.router)
 app.include_router(notifications_router.router)
 app.include_router(labelarr_router.router)
 app.include_router(border_replacerr_router.router)
+app.include_router(cl2k_maker_router.router)
 app.include_router(router)
 
 
