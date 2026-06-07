@@ -301,21 +301,37 @@ def _persist_poster(
     return {"status": "generated", "file": out_path, "logo_source": logo_source}
 
 
-def _to_jpeg(image_bytes: bytes) -> bytes:
-    """Return ``image_bytes`` as JPEG, re-encoding only non-JPEG input (no resize).
+def _cover_to_canvas(im):
+    """Cover-resize + center-crop a PIL image to the locked CL2K canvas."""
+    w, h = geo.CANVAS_W, geo.CANVAS_H
+    scale = max(w / im.width, h / im.height)
+    im = im.resize((round(im.width * scale), round(im.height * scale)))
+    left = (im.width - w) // 2
+    top = (im.height - h) // 2
+    return im.crop((left, top, left + w, top + h))
 
-    The finished-poster upload is stored as-is per the locked spec; we only
-    guarantee the lowercase ``.jpg`` container DAPS requires.
+
+def _normalize_poster(image_bytes: bytes) -> bytes:
+    """Force a finished poster to the locked 1000×1500 canvas (JPEG, quality 88).
+
+    A poster that is already a 1000×1500 JPEG passes through untouched. Anything
+    else — wrong dimensions, wrong aspect, or a non-JPEG container — is
+    center-cropped to 2:3, scaled to the canvas, and re-encoded, so every stored
+    poster matches DAPS dimensions.
     """
     import io
 
     from PIL import Image
 
     im = Image.open(io.BytesIO(image_bytes))
-    if (im.format or "").upper() == "JPEG":
+    correct_size = (im.width, im.height) == (geo.CANVAS_W, geo.CANVAS_H)
+    if correct_size and (im.format or "").upper() == "JPEG":
         return image_bytes
+    im = im.convert("RGB")
+    if not correct_size:
+        im = _cover_to_canvas(im)
     buf = io.BytesIO()
-    im.convert("RGB").save(buf, format="JPEG", quality=geo.OUTPUT_QUALITY)
+    im.save(buf, format="JPEG", quality=geo.OUTPUT_QUALITY)
     return buf.getvalue()
 
 
@@ -334,11 +350,12 @@ def save_finished_poster(
     season_number: Optional[int] = None,
     logo_source: str = "upload",
 ) -> Dict[str, Any]:
-    """File a pre-made poster as-is (no rendering) into source_dir + caches.
+    """File a pre-made poster (no rendering) into source_dir + caches.
 
     Used by the manual finished-poster upload and the G-Drive .psd source (both
-    supply a complete poster). Names it per DAPS and registers it so the rest of
-    CHUB picks it up.
+    supply a complete poster). The image is forced to the locked 1000×1500 canvas
+    (cropped if needed), named per DAPS, and registered so the rest of CHUB picks
+    it up.
     """
     cfg = full_config.cl2k_maker
     kind = (kind or "").lower()
@@ -350,7 +367,7 @@ def save_finished_poster(
         db,
         cfg,
         logger,
-        blob=_to_jpeg(image_bytes),
+        blob=_normalize_poster(image_bytes),
         kind=kind,
         title=title,
         year=year,
