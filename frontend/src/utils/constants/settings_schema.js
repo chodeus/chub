@@ -117,7 +117,13 @@ export const SETTINGS_SCHEMA = [
                     condition: 'is_empty',
                 },
                 description:
-                    'OAuth2 token JSON. Only used when no service-account file is set above.',
+                    'OAuth2 token JSON — authenticates as YOU, so uploaded posters are owned by ' +
+                    'you and can be shared (unlike a service account, which has no storage quota ' +
+                    'and cannot own files in a personal Drive). Used when no service-account file ' +
+                    'is set. To get it: install rclone (rclone.org/install), run ' +
+                    'rclone authorize "drive" (or rclone authorize "drive" "CLIENT_ID" ' +
+                    '"CLIENT_SECRET" with your own OAuth app), sign in + authorize in the browser, ' +
+                    'then paste the entire token JSON (from { to }) here.',
             },
             {
                 key: 'gdrive_list',
