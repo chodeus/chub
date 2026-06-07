@@ -594,6 +594,215 @@ export const SETTINGS_SCHEMA = [
     },
 
     {
+        key: 'cl2k_maker',
+        label: 'CL2K Maker',
+        fields: [
+            {
+                key: 'log_level',
+                label: 'Log Level',
+                type: 'dropdown',
+                options: ['debug', 'info'],
+                required: true,
+                description:
+                    '"debug" prints per-poster art/logo resolution; "info" is the normal cron-friendly level.',
+            },
+            {
+                key: 'enabled',
+                label: 'Enabled',
+                type: 'check_box',
+                description:
+                    'Enable the scheduled batch run (walks matched movies/shows lacking a CL2K poster). On-demand generation from the CL2K Poster Maker page works regardless.',
+            },
+            // ─── Output ────────────────────────────────────────────────
+            {
+                key: 'output_dir',
+                label: 'Output Directory',
+                type: 'dir',
+                section: 'Output',
+                required: true,
+                description:
+                    'Where generated CL2K posters are written. Make this one of Poster Renamerr’s source directories so the rest of CHUB picks them up.',
+            },
+            {
+                key: 'skip_existing',
+                label: 'Skip Existing',
+                type: 'check_box',
+                section: 'Output',
+                description:
+                    'Skip items that already have a generated CL2K poster (the duplicate guard). The page’s force option overrides this per generation.',
+            },
+            {
+                key: 'style',
+                label: 'Style Tag',
+                type: 'text',
+                section: 'Output',
+                placeholder: 'CL2K',
+                description: 'poster_cache style tag recorded for generated posters.',
+            },
+            {
+                key: 'priority',
+                label: 'Priority',
+                type: 'number',
+                section: 'Output',
+                placeholder: '0',
+                description: 'poster_cache priority for generated posters (higher wins on match).',
+            },
+            // ─── Logo & text ───────────────────────────────────────────
+            {
+                key: 'logo_max_width',
+                label: 'Logo Max Width (px)',
+                type: 'number',
+                section: 'Logo & Text',
+                placeholder: '600',
+                description:
+                    'Target logo width on the 1000×1500 canvas (guide: 600 standard, 800 max).',
+            },
+            {
+                key: 'whiten_logo',
+                label: 'Whiten Logo',
+                type: 'check_box',
+                section: 'Logo & Text',
+                description: 'Recolor the clear logo to solid white (the CL2K look).',
+            },
+            {
+                key: 'text_logo_fallback',
+                label: 'Text Logo Fallback',
+                type: 'check_box',
+                section: 'Logo & Text',
+                description:
+                    'When no clear logo is found on TMDB or fanart.tv, synthesize an ALL-CAPS typeset wordmark from the title.',
+            },
+            {
+                key: 'language',
+                label: 'Language',
+                type: 'text',
+                section: 'Logo & Text',
+                placeholder: 'en',
+                description: 'ISO-639-1 language preferred for logo selection.',
+            },
+            // ─── Google Drive upload ───────────────────────────────────
+            {
+                key: 'upload_to_gdrive',
+                label: 'Upload to Google Drive',
+                type: 'check_box',
+                section: 'Google Drive Upload',
+                description:
+                    'After saving, copy the generated poster to a Drive folder via rclone.',
+            },
+            {
+                key: 'gdrive_folder_id',
+                label: 'Upload Folder ID',
+                type: 'text',
+                section: 'Google Drive Upload',
+                description: 'Destination Google Drive folder ID for uploads.',
+            },
+            {
+                key: 'gdrive_sa_location',
+                label: 'Service Account Location',
+                type: 'text',
+                section: 'Google Drive Upload',
+                description:
+                    'Path to a service-account JSON for the upload. Falls back to Sync Gdrive’s credentials when blank.',
+            },
+            // ─── G-Drive .psd source ───────────────────────────────────
+            {
+                key: 'psd_source_drives',
+                label: 'PSD Source Drives',
+                type: 'object_array',
+                displayType: 'gdrive',
+                section: 'PSD Source',
+                required: false,
+                description:
+                    'A subset of your Sync Gdrive locations to browse for finished CL2K .psd files (mirrors Poster Renamerr’s source directories). Each entry has id, location, and name.',
+                fields: [
+                    {
+                        key: 'preset',
+                        label: 'Gdrive Presets',
+                        type: 'presets',
+                        presetType: 'gdrive',
+                        presetUrl: '/api/gdrive-presets',
+                        identifierField: 'name',
+                        moduleConfigKey: 'psd_source_drives',
+                        targetFields: ['name', 'id'],
+                        required: false,
+                        exclude_on_save: true,
+                        description: 'Select a preset configuration for Google Drive.',
+                        presetHandler: true,
+                    },
+                    {
+                        key: 'name',
+                        label: 'Name',
+                        type: 'text',
+                        required: true,
+                        description: 'Friendly name for this Google Drive entry.',
+                    },
+                    {
+                        key: 'id',
+                        label: 'GDrive ID',
+                        type: 'text',
+                        required: true,
+                        description: 'Unique ID of the Google Drive folder.',
+                    },
+                    {
+                        key: 'location',
+                        label: 'Location',
+                        type: 'dir',
+                        required: true,
+                        description: 'Local directory this Google Drive ID maps to.',
+                    },
+                ],
+            },
+            // ─── AI text removal ───────────────────────────────────────
+            {
+                key: 'ai_provider',
+                label: 'AI Provider',
+                type: 'dropdown',
+                options: ['none', 'lama_sidecar', 'openai', 'huggingface'],
+                section: 'AI Text Removal',
+                required: true,
+                description:
+                    'Inpainter used when "Remove text" is enabled with a brushed mask. "none" disables it; "lama_sidecar" is free/local; "openai" is paid; "huggingface" is a rate-limited free tier.',
+            },
+            {
+                key: 'ai_endpoint',
+                label: 'AI Endpoint',
+                type: 'text',
+                section: 'AI Text Removal',
+                description: 'LaMa sidecar URL, or the Hugging Face inference URL.',
+            },
+            {
+                key: 'ai_api_key',
+                label: 'AI API Key',
+                type: 'password',
+                section: 'AI Text Removal',
+                description: 'OpenAI / Hugging Face token. Leave blank for the LaMa sidecar.',
+            },
+            {
+                key: 'ai_model',
+                label: 'AI Model',
+                type: 'text',
+                section: 'AI Text Removal',
+                description: 'OpenAI model id (default gpt-image-1) or Hugging Face model id.',
+            },
+            {
+                key: 'ai_timeout',
+                label: 'AI Timeout (s)',
+                type: 'number',
+                section: 'AI Text Removal',
+                placeholder: '120',
+                description: 'Seconds to wait for the AI provider before giving up.',
+            },
+            {
+                key: 'ai_prompt',
+                label: 'AI Prompt',
+                type: 'textarea',
+                section: 'AI Text Removal',
+                description: 'Prompt sent to OpenAI / Hugging Face when removing text.',
+            },
+        ],
+    },
+
+    {
         key: 'upgradinatorr',
         label: 'Upgradinatorr',
         fields: [
@@ -1398,6 +1607,12 @@ export const SETTINGS_MODULES = [
         name: 'Border Replacerr',
         key: 'border_replacerr',
         description: 'Replace and manage borders for your posters.',
+    },
+    {
+        name: 'CL2K Maker',
+        key: 'cl2k_maker',
+        description:
+            'Generate DAPS-named CL2K posters from TMDB/fanart art, .psd sources, or uploads. Configure output, logo, AI text-removal, and .psd source drives here; build posters on the CL2K Poster Maker page.',
     },
     {
         name: 'Upgradinatorr',

@@ -197,6 +197,45 @@ def generate_for_item(
         return {"status": "skipped", "reason": info.get("reason", "render failed")}
     logo_source = info.get("logo_source", "none")
 
+    return _persist_poster(
+        db,
+        cfg,
+        logger,
+        blob=blob,
+        kind=kind,
+        title=title,
+        year=year,
+        tmdb_id=tmdb_id,
+        tvdb_id=tvdb_id,
+        imdb_id=imdb_id,
+        season_number=season_number,
+        backdrop_path=info.get("backdrop_path"),
+        logo_source=logo_source,
+    )
+
+
+def _persist_poster(
+    db: ChubDB,
+    cfg,
+    logger,
+    *,
+    blob: bytes,
+    kind: str,
+    title: str,
+    year: Optional[int],
+    tmdb_id: int,
+    tvdb_id: Optional[int],
+    imdb_id: Optional[str],
+    season_number: Optional[int],
+    backdrop_path: Optional[str],
+    logo_source: str,
+) -> Dict[str, Any]:
+    """Write a finished poster to source_dir + poster_cache + provenance.
+
+    Shared sink for rendered (:func:`generate_for_item`), uploaded-finished
+    (:func:`save_finished_poster`) and .psd-flattened posters. ``backdrop_path``
+    is None for posters that didn't go through the renderer.
+    """
     filename = build_poster_filename(
         kind=kind,
         title=title,
@@ -243,7 +282,7 @@ def generate_for_item(
             "title": title,
             "year": year,
             "file": out_path,
-            "backdrop_path": info.get("backdrop_path"),
+            "backdrop_path": backdrop_path,
             "logo_source": logo_source,
             "uploaded": 0,
         }
@@ -260,6 +299,111 @@ def generate_for_item(
 
     logger.info(f"CL2K poster generated: {filename} (logo: {logo_source})")
     return {"status": "generated", "file": out_path, "logo_source": logo_source}
+
+
+def _to_jpeg(image_bytes: bytes) -> bytes:
+    """Return ``image_bytes`` as JPEG, re-encoding only non-JPEG input (no resize).
+
+    The finished-poster upload is stored as-is per the locked spec; we only
+    guarantee the lowercase ``.jpg`` container DAPS requires.
+    """
+    import io
+
+    from PIL import Image
+
+    im = Image.open(io.BytesIO(image_bytes))
+    if (im.format or "").upper() == "JPEG":
+        return image_bytes
+    buf = io.BytesIO()
+    im.convert("RGB").save(buf, format="JPEG", quality=geo.OUTPUT_QUALITY)
+    return buf.getvalue()
+
+
+def save_finished_poster(
+    *,
+    db: ChubDB,
+    full_config,
+    logger,
+    kind: str,
+    title: str,
+    tmdb_id: int,
+    image_bytes: bytes,
+    year: Optional[int] = None,
+    tvdb_id: Optional[int] = None,
+    imdb_id: Optional[str] = None,
+    season_number: Optional[int] = None,
+    logo_source: str = "upload",
+) -> Dict[str, Any]:
+    """File a pre-made poster as-is (no rendering) into source_dir + caches.
+
+    Used by the manual finished-poster upload and the G-Drive .psd source (both
+    supply a complete poster). Names it per DAPS and registers it so the rest of
+    CHUB picks it up.
+    """
+    cfg = full_config.cl2k_maker
+    kind = (kind or "").lower()
+    if kind not in _VALID_KINDS:
+        return {"status": "error", "reason": f"invalid kind {kind!r}"}
+    if not cfg.output_dir:
+        return {"status": "error", "reason": "cl2k_maker.output_dir is not configured"}
+    return _persist_poster(
+        db,
+        cfg,
+        logger,
+        blob=_to_jpeg(image_bytes),
+        kind=kind,
+        title=title,
+        year=year,
+        tmdb_id=tmdb_id,
+        tvdb_id=tvdb_id,
+        imdb_id=imdb_id,
+        season_number=season_number,
+        backdrop_path=None,
+        logo_source=logo_source,
+    )
+
+
+def fanart_images(
+    full_config,
+    db: ChubDB,
+    logger,
+    *,
+    kind: str,
+    tmdb_id: int,
+    tvdb_id: Optional[int] = None,
+    imdb_id: Optional[str] = None,
+    season_number: Optional[int] = None,
+) -> Dict[str, Optional[str]]:
+    """Return fanart.tv ``{logo, background}`` URLs for the art picker (None on miss)."""
+    cfg = full_config.cl2k_maker
+    lang = cfg.language or "en"
+    try:
+        asset_type = "movie" if kind in ("movie", "collection") else "show"
+        client = FanartClient(full_config.fanart, db, logger)
+        res = client.get_images(
+            {
+                "asset_type": asset_type,
+                "tmdb_id": tmdb_id,
+                "tvdb_id": tvdb_id,
+                "imdb_id": imdb_id,
+                "season_number": season_number,
+            },
+            language=lang,
+        )
+        res = res or {}
+        return {"logo": res.get("logo"), "background": res.get("background")}
+    except Exception as exc:
+        logger.debug(f"fanart image lookup failed: {exc}")
+        return {"logo": None, "background": None}
+
+
+def gdrive_psd_bytes(full_config, drive_id: str, path: str) -> bytes:
+    """Fetch a .psd from a configured source drive and flatten it to a JPEG poster."""
+    from backend.util.cl2k.gdrive_upload import fetch_file
+    from backend.util.cl2k.psd_export import flatten_psd
+
+    psd_bytes = fetch_file(full_config.sync_gdrive, drive_id, path)
+    return flatten_psd(psd_bytes)
 
 
 def generate_seasons(

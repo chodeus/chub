@@ -59,6 +59,7 @@ const PosterAssetsSearchPage = React.lazy(
 );
 const PosterCleanarrPage = React.lazy(() => import('./pages/poster/PosterCleanarrPage.jsx'));
 const BorderPreviewPage = React.lazy(() => import('./pages/poster/BorderPreviewPage.jsx'));
+const Cl2kMakerPage = React.lazy(() => import('./pages/poster/Cl2kMakerPage.jsx'));
 const UnmatchedAssetsPage = React.lazy(() => import('./pages/poster/UnmatchedAssetsPage.jsx'));
 const PosterStatsPage = React.lazy(() => import('./pages/poster/PosterStatsPage.jsx'));
 
@@ -292,6 +293,17 @@ const App = () => {
                                                                 pageDescription="Pick colors and themed border art, with live preview on a sample of your matched posters"
                                                             >
                                                                 <BorderPreviewPage />
+                                                            </PageErrorBoundary>
+                                                        }
+                                                    />
+                                                    <Route
+                                                        path="poster/cl2k-maker"
+                                                        element={
+                                                            <PageErrorBoundary
+                                                                pageName="CL2K Poster Maker"
+                                                                pageDescription="Build DAPS-named CL2K posters from TMDB/fanart art, .psd sources, or uploads"
+                                                            >
+                                                                <Cl2kMakerPage />
                                                             </PageErrorBoundary>
                                                         }
                                                     />

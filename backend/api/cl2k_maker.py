@@ -24,10 +24,13 @@ from pydantic import BaseModel
 
 from backend.api.utils import error, get_database, get_logger, ok
 from backend.modules.cl2k_maker import (
+    fanart_images,
+    gdrive_psd_bytes,
     generate_for_item,
     generate_seasons,
     psd_for_item,
     render_preview,
+    save_finished_poster,
 )
 from backend.util.cl2k.image_fetch import TMDB_IMAGE_CDN
 from backend.util.config import load_config
@@ -266,3 +269,132 @@ async def upload_generate(
     if result.get("status") == "generated":
         return ok("Poster generated", result)
     return error(result.get("reason", "generation failed"), "CL2K_GENERATE", data=result)
+
+
+@router.get("/fanart-images", summary="fanart.tv logo + background for the art picker")
+def fanart_images_endpoint(
+    tmdb_id: int = Query(...),
+    media_type: str = Query("movie", alias="type"),
+    tvdb_id: Optional[int] = Query(None),
+    imdb_id: Optional[str] = Query(None),
+    season_number: Optional[int] = Query(None),
+    db: ChubDB = Depends(get_database),
+    logger: Any = Depends(get_logger),
+) -> JSONResponse:
+    res = fanart_images(
+        load_config(),
+        db,
+        logger,
+        kind=media_type,
+        tmdb_id=tmdb_id,
+        tvdb_id=tvdb_id,
+        imdb_id=imdb_id,
+        season_number=season_number,
+    )
+    # Shape like /images so the picker can merge sources. fanart returns absolute
+    # URLs; image_fetch.download and the render request accept those as-is, so
+    # file_path == url here.
+    logos = [{"file_path": res["logo"], "url": res["logo"]}] if res.get("logo") else []
+    backdrops = (
+        [{"file_path": res["background"], "url": res["background"]}]
+        if res.get("background")
+        else []
+    )
+    return ok("ok", {"logos": logos, "backdrops": backdrops})
+
+
+@router.post("/upload-poster", summary="File a finished poster as-is (no rendering)")
+async def upload_poster(
+    file: UploadFile = File(...),
+    kind: str = Form(...),
+    title: str = Form(...),
+    tmdb_id: int = Form(...),
+    year: Optional[int] = Form(None),
+    tvdb_id: Optional[int] = Form(None),
+    imdb_id: Optional[str] = Form(None),
+    season_number: Optional[int] = Form(None),
+    db: ChubDB = Depends(get_database),
+    logger: Any = Depends(get_logger),
+) -> JSONResponse:
+    image_bytes = await file.read()
+    result = save_finished_poster(
+        db=db,
+        full_config=load_config(),
+        logger=logger,
+        kind=kind,
+        title=title,
+        tmdb_id=tmdb_id,
+        year=year,
+        tvdb_id=tvdb_id,
+        imdb_id=imdb_id,
+        season_number=season_number,
+        image_bytes=image_bytes,
+        logo_source="upload",
+    )
+    if result.get("status") == "generated":
+        return ok("Poster saved", result)
+    return error(result.get("reason", "save failed"), "CL2K_UPLOAD", data=result)
+
+
+@router.get("/gdrive-list", summary="Configured .psd source drives, or .psd files in one")
+def gdrive_list(
+    drive_id: Optional[str] = Query(None),
+    db: ChubDB = Depends(get_database),
+    logger: Any = Depends(get_logger),
+) -> JSONResponse:
+    cfg = load_config()
+    if not drive_id:
+        drives = [d.model_dump() for d in cfg.cl2k_maker.psd_source_drives]
+        return ok("ok", {"drives": drives})
+    from backend.util.cl2k.gdrive_upload import list_psd
+
+    try:
+        files = list_psd(cfg.sync_gdrive, drive_id)
+    except Exception as exc:
+        return error(str(exc), "CL2K_GDRIVE_LIST")
+    return ok("ok", {"files": files})
+
+
+class GDrivePsdRequest(BaseModel):
+    drive_id: str
+    path: str
+    kind: str
+    title: str
+    tmdb_id: int
+    year: Optional[int] = None
+    tvdb_id: Optional[int] = None
+    imdb_id: Optional[str] = None
+    season_number: Optional[int] = None
+    preview: bool = False
+
+
+@router.post("/gdrive-psd", summary="Flatten a Drive .psd to a poster (preview or save)")
+def gdrive_psd(
+    req: GDrivePsdRequest,
+    db: ChubDB = Depends(get_database),
+    logger: Any = Depends(get_logger),
+) -> JSONResponse:
+    cfg = load_config()
+    try:
+        blob = gdrive_psd_bytes(cfg, req.drive_id, req.path)
+    except Exception as exc:
+        return error(str(exc), "CL2K_GDRIVE_PSD")
+    if req.preview:
+        return ok("ok", {"preview_b64": base64.b64encode(blob).decode()})
+    result = save_finished_poster(
+        db=db,
+        full_config=cfg,
+        logger=logger,
+        kind=req.kind,
+        title=req.title,
+        tmdb_id=req.tmdb_id,
+        year=req.year,
+        tvdb_id=req.tvdb_id,
+        imdb_id=req.imdb_id,
+        season_number=req.season_number,
+        image_bytes=blob,
+        logo_source="gdrive_psd",
+    )
+    if result.get("status") == "generated":
+        return ok("Poster saved", result)
+    return error(result.get("reason", "save failed"), "CL2K_GDRIVE_PSD", data=result)
