@@ -74,6 +74,20 @@ class AuthMiddleware(BaseHTTPMiddleware):
     so the setup flow can proceed.
     """
 
+    @staticmethod
+    def _log_unauthorized(request: Request, reason: str, path: str) -> None:
+        """Warn (with the request path) on a rejected API call so 401s are
+        diagnosable in the logs. Best-effort: a logging failure must never
+        affect the auth response itself."""
+        try:
+            logger = getattr(request.app.state, "logger", None)
+            if logger is not None:
+                logger.get_adapter("API").warning(
+                    f"Unauthorized API request – {reason} ({path})"
+                )
+        except Exception:
+            pass
+
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
 
@@ -107,6 +121,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             token = request.query_params.get("token", "")
 
         if not token:
+            self._log_unauthorized(request, "missing Bearer token", path)
             return JSONResponse(
                 status_code=401,
                 content={
@@ -117,6 +132,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             )
         payload = decode_access_token(token, config.auth.jwt_secret)
         if payload is None:
+            self._log_unauthorized(request, "invalid or expired token", path)
             return JSONResponse(
                 status_code=401,
                 content={
