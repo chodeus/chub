@@ -56,6 +56,8 @@ class GenerateRequest(BaseModel):
     logo_path: Optional[str] = None
     mask_b64: Optional[str] = None  # user-brushed mask (PNG, white=remove) for AI
     remove_text: bool = False  # run AI text removal (OpenAI can do it mask-less)
+    focus_x: float = 0.5  # crop focal point (0..1); 0.5 = centre
+    focus_y: float = 0.5
     force: bool = False
 
 
@@ -135,6 +137,8 @@ def preview(
         imdb_id=req.imdb_id,
         mask_bytes=_mask_bytes(req.mask_b64),
         apply_ai=req.remove_text,
+        focus_x=req.focus_x,
+        focus_y=req.focus_y,
     )
     if blob is None:
         return error("No textless backdrop available", "NO_BACKDROP")
@@ -164,6 +168,8 @@ def generate(
         logo_path=req.logo_path,
         mask_bytes=_mask_bytes(req.mask_b64),
         apply_ai=req.remove_text,
+        focus_x=req.focus_x,
+        focus_y=req.focus_y,
         force=req.force,
     )
     if result.get("status") == "generated":

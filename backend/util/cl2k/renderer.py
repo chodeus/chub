@@ -28,12 +28,25 @@ from backend.util.cl2k import geometry as geo
 
 
 # ----- helpers ---------------------------------------------------------------
-def _cover_resize(img: Image, width: int, height: int) -> None:
-    """Resize + centre-crop ``img`` in place to exactly width×height (cover fill)."""
+def _cover_resize(
+    img: Image,
+    width: int,
+    height: int,
+    focus_x: float = 0.5,
+    focus_y: float = 0.5,
+) -> None:
+    """Resize + crop ``img`` in place to exactly width×height (cover fill).
+
+    ``focus_x``/``focus_y`` (0..1) choose what stays in frame: the focal point of
+    the scaled image is centred in the crop, clamped to the edges. 0.5/0.5 is the
+    centre crop (the default, unchanged behaviour).
+    """
     scale = max(width / img.width, height / img.height)
     img.resize(int(round(img.width * scale)), int(round(img.height * scale)))
-    left = (img.width - width) // 2
-    top = (img.height - height) // 2
+    left = int(round(focus_x * img.width - width / 2))
+    top = int(round(focus_y * img.height - height / 2))
+    left = max(0, min(left, img.width - width))
+    top = max(0, min(top, img.height - height))
     img.crop(left, top, width=width, height=height)
 
 
@@ -148,12 +161,16 @@ def render_cl2k(
     logo_max_width: int = geo.LOGO_WIDTH_STD,
     whiten: bool = True,
     font_path: Optional[str] = None,
+    focus_x: float = 0.5,
+    focus_y: float = 0.5,
 ) -> bytes:
     """Render a CL2K poster and return JPEG bytes.
 
     ``kind`` is one of ``movie`` / ``show`` / ``collection`` / ``season``. A
     clear logo is preferred; when none is supplied (or usable) the ``title`` is
-    drawn as all-caps text in the logo area (MM2K fallback).
+    drawn as all-caps text in the logo area (MM2K fallback). ``focus_x``/
+    ``focus_y`` (0..1) choose which part of the wide backdrop is kept when it is
+    cover-cropped to the 2:3 canvas (0.5/0.5 = centre).
     """
     kind = kind.lower()
     baseline = geo.logo_baseline(kind)
@@ -161,7 +178,7 @@ def render_cl2k(
     title_font = font_path or geo.resolve_font(bold=True)
 
     with Image(blob=backdrop_bytes) as base:
-        _cover_resize(base, geo.CANVAS_W, geo.CANVAS_H)
+        _cover_resize(base, geo.CANVAS_W, geo.CANVAS_H, focus_x, focus_y)
 
         with Image(filename=str(geo.GRADIENT_PNG)) as grad:
             base.composite(grad, left=0, top=0)
