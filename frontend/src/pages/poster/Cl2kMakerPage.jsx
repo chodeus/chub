@@ -87,6 +87,14 @@ const Cl2kMakerPage = () => {
         };
     });
 
+    // Bumped only when a NEW title is picked, so editing the ids in-place doesn't
+    // remount the Builder (which would wipe panel state).
+    const [selectionKey, setSelectionKey] = useState(0);
+    const pickItem = useCallback(it => {
+        setItem(it);
+        setSelectionKey(k => k + 1);
+    }, []);
+
     useEffect(() => {
         let cancelled = false;
         (async () => {
@@ -113,13 +121,14 @@ const Cl2kMakerPage = () => {
             <ConfigBanner config={config} />
 
             {!item ? (
-                <TitlePicker onPick={setItem} toast={toast} />
+                <TitlePicker onPick={pickItem} toast={toast} />
             ) : (
                 <Builder
-                    key={`${item.tmdb_id}:${item.kind}`}
+                    key={selectionKey}
                     item={item}
                     config={config}
                     onReset={() => setItem(null)}
+                    onItemChange={patch => setItem(prev => (prev ? { ...prev, ...patch } : prev))}
                     toast={toast}
                 />
             )}
@@ -330,8 +339,80 @@ const TitlePicker = ({ onPick, toast }) => {
 
 // ─── Stage 2–4: builder ────────────────────────────────────────────────────
 
-const Builder = ({ item, config, onReset, toast }) => {
+// ─── ID editor (attach/clear tmdb/tvdb/imdb so filenames match the library) ──
+
+const IdEditor = ({ item, onItemChange }) => {
+    const numOrNull = v => (String(v).trim() === '' ? null : Number(v));
+    const strOrNull = v => (String(v).trim() === '' ? null : String(v).trim());
+    const inputCls =
+        'flex-1 bg-surface border border-border rounded px-2 py-1 text-sm text-primary';
+    const row = (lbl, el) => (
+        <label className="flex items-center gap-2 text-sm text-secondary">
+            <span className="w-16 shrink-0">{lbl}</span>
+            {el}
+        </label>
+    );
+    return (
+        <div className="mt-3 pt-3 border-t border-border-subtle flex flex-col gap-2">
+            <p className="text-xs text-tertiary">
+                Set the ids that match your library — only the ids you fill get written to the
+                filename. For a TVDB-only title (no TMDB entry), clear TMDB and add TVDB/IMDB.
+            </p>
+            {row(
+                'Title',
+                <input
+                    type="text"
+                    value={item.title || ''}
+                    onChange={e => onItemChange({ title: e.target.value })}
+                    className={inputCls}
+                />
+            )}
+            {row(
+                'Year',
+                <input
+                    type="number"
+                    value={item.year ?? ''}
+                    onChange={e => onItemChange({ year: numOrNull(e.target.value) })}
+                    className={inputCls}
+                />
+            )}
+            {row(
+                'TMDB',
+                <input
+                    type="number"
+                    value={item.tmdb_id ?? ''}
+                    placeholder="(none)"
+                    onChange={e => onItemChange({ tmdb_id: numOrNull(e.target.value) })}
+                    className={inputCls}
+                />
+            )}
+            {row(
+                'TVDB',
+                <input
+                    type="number"
+                    value={item.tvdb_id ?? ''}
+                    placeholder="(none)"
+                    onChange={e => onItemChange({ tvdb_id: numOrNull(e.target.value) })}
+                    className={inputCls}
+                />
+            )}
+            {row(
+                'IMDB',
+                <input
+                    type="text"
+                    value={item.imdb_id || ''}
+                    placeholder="tt…"
+                    onChange={e => onItemChange({ imdb_id: strOrNull(e.target.value) })}
+                    className={inputCls}
+                />
+            )}
+        </div>
+    );
+};
+
+const Builder = ({ item, config, onReset, onItemChange, toast }) => {
     const [tab, setTab] = useState('tmdb');
+    const [editIds, setEditIds] = useState(false);
 
     // Art (shared across the TMDB / fanart tabs)
     const [tmdbArt, setTmdbArt] = useState(null);
@@ -502,23 +583,37 @@ const Builder = ({ item, config, onReset, toast }) => {
     return (
         <>
             {/* Selected title bar */}
-            <section className="mt-6 p-4 bg-surface border border-border rounded-lg flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                    <div className="text-lg font-semibold text-primary truncate">
-                        {item.title || `TMDB #${item.tmdb_id}`}
-                        {item.year ? (
-                            <span className="text-tertiary font-normal"> ({item.year})</span>
-                        ) : null}
+            <section className="mt-6 p-4 bg-surface border border-border rounded-lg">
+                <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                        <div className="text-lg font-semibold text-primary truncate">
+                            {item.title || `TMDB #${item.tmdb_id}`}
+                            {item.year ? (
+                                <span className="text-tertiary font-normal"> ({item.year})</span>
+                            ) : null}
+                        </div>
+                        <div className="text-xs text-tertiary mt-0.5">
+                            {item.kind}
+                            {item.tmdb_id ? ` · TMDB ${item.tmdb_id}` : ''}
+                            {item.tvdb_id ? ` · TVDB ${item.tvdb_id}` : ''}
+                            {item.imdb_id ? ` · ${item.imdb_id}` : ''}
+                        </div>
                     </div>
-                    <div className="text-xs text-tertiary mt-0.5">
-                        {item.kind} · TMDB #{item.tmdb_id}
-                        {item.tvdb_id ? ` · TVDB ${item.tvdb_id}` : ''}
-                        {item.imdb_id ? ` · ${item.imdb_id}` : ''}
+                    <div className="flex items-center gap-2 shrink-0">
+                        <Button
+                            onClick={() => setEditIds(v => !v)}
+                            variant="secondary"
+                            icon="tag"
+                            size="small"
+                        >
+                            Edit IDs
+                        </Button>
+                        <Button onClick={onReset} variant="secondary" icon="arrow_back">
+                            Change title
+                        </Button>
                     </div>
                 </div>
-                <Button onClick={onReset} variant="secondary" icon="arrow_back">
-                    Change title
-                </Button>
+                {editIds && <IdEditor item={item} onItemChange={onItemChange} />}
             </section>
 
             {/* Stage 2: source tabs */}
