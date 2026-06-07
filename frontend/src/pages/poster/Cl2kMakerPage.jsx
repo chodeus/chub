@@ -1592,10 +1592,12 @@ const EditPosterPanel = ({ item, effectiveKind, config, toast }) => {
     const [prompt, setPrompt] = useState(() => config?.ai_prompt || '');
     const [label, setLabel] = useState('');
     const [textY, setTextY] = useState(0.96);
+    const [seasonNum, setSeasonNum] = useState('');
     const [previewB64, setPreviewB64] = useState(null);
     const [busy, setBusy] = useState(false);
 
     const provider = config?.ai_provider || 'none';
+    const isSeason = String(seasonNum).trim() !== '';
 
     const onFile = useCallback(e => {
         const f = e.target.files?.[0];
@@ -1617,7 +1619,8 @@ const EditPosterPanel = ({ item, effectiveKind, config, toast }) => {
             prompt,
             label_text: label,
             text_y: textY,
-            kind: effectiveKind,
+            kind: isSeason ? 'season' : effectiveKind,
+            season_number: isSeason ? Number(seasonNum) : null,
             title: item.title,
             tmdb_id: item.tmdb_id,
             year: item.year,
@@ -1625,7 +1628,18 @@ const EditPosterPanel = ({ item, effectiveKind, config, toast }) => {
             imdb_id: item.imdb_id,
             preview,
         }),
-        [imageDataUrl, removeText, maskB64, prompt, label, textY, effectiveKind, item]
+        [
+            imageDataUrl,
+            removeText,
+            maskB64,
+            prompt,
+            label,
+            textY,
+            isSeason,
+            seasonNum,
+            effectiveKind,
+            item,
+        ]
     );
 
     const runPreview = useCallback(async () => {
@@ -1752,6 +1766,22 @@ const EditPosterPanel = ({ item, effectiveKind, config, toast }) => {
                             </label>
                             <p className="text-xs text-tertiary">
                                 Vertical position of the label (default 96% ≈ CL2K season line).
+                            </p>
+                            <label className="flex items-center gap-2 text-sm text-secondary">
+                                <span className="w-24">Season #</span>
+                                <input
+                                    type="number"
+                                    value={seasonNum}
+                                    onChange={e => setSeasonNum(e.target.value)}
+                                    placeholder="blank = base poster; e.g. 2026"
+                                    className="flex-1 bg-surface border border-border rounded px-2 py-1 text-sm text-primary"
+                                />
+                            </label>
+                            <p className="text-xs text-tertiary">
+                                Set this to file it as a season poster (filename gets{' '}
+                                <code className="text-secondary">_Season{seasonNum || 'NN'}</code>),
+                                so Poster Renamerr applies it to that season. For year-based shows
+                                (F1), use the year (e.g. 2026).
                             </p>
                         </div>
                     </>
