@@ -2,6 +2,7 @@
 
 import pytest
 from PIL import Image
+from types import SimpleNamespace
 
 from backend.modules.border_replacerr import (
     _BUNDLED_BORDERS_DIR,
@@ -204,8 +205,6 @@ def test_border_state_roundtrip_and_upsert(tmp_path):
 
 
 # ---- full-library asset collection -----------------------------------------
-
-from types import SimpleNamespace
 
 
 class _StubTable:

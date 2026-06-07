@@ -374,6 +374,9 @@ class BorderReplacerr(ChubModule):
         the not-yet-moved subset carried in a manifest. Collections are
         included here (the old reset_all branch processed media only)."""
         assets: list = []
+        # Use .get() defensively: db rows are trusted but may be partial in
+        # edge cases (e.g. a row mid-write); a missing key skips the row rather
+        # than crashing the whole library pass.
         for row in db.media.get_all():
             if row.get("matched") != 1:
                 continue
