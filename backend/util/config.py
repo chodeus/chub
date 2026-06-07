@@ -297,6 +297,21 @@ class BorderReplacerrConfig(BaseModel):
     holidays: List[BorderHoliday] = Field(default_factory=list)
 
 
+def _default_cl2k_psd_drives() -> List[GDriveListEntry]:
+    """Community CL2K PSD drives (finished CL2K posters saved as layered PSDs)."""
+    return [
+        GDriveListEntry(name=name, id=drive_id)
+        for name, drive_id in (
+            ("Mario CL2K PSD", "15y5mGCGzJKkMM6Nk6bu63Kak3QBlXALP"),
+            ("BZ CL2K PSD", "1x7A0L5ylknUWaEcMOl2MWjm4qbnSjc5T"),
+            ("TokenMinal CL2K PSD", "1dR8cAw1HPzTnQyXBnjFpiI6nxdO_OJS-"),
+            ("MiniMyself CL2K PSD", "1r3zwtZ4VbLGWWvQLZdUR8DwUVt9TE9VQ"),
+            ("Iamspartacus CL2K PSD", "1sQD0L_TjQN1_VFq1qu2OFueIZnSCMyUX"),
+            ("Dweagle79 CL2K PSD", "1ElqdLgwHHnOIpDNpV0IRXtJZHouGzRs9"),
+        )
+    ]
+
+
 class Cl2kMakerConfig(BaseModel):
     log_level: str = "info"
     enabled: bool = False
@@ -317,7 +332,9 @@ class Cl2kMakerConfig(BaseModel):
     # G-Drive .psd source: this module's own subset of sync_gdrive.gdrive_list
     # (each {id,location,name}), mirroring how poster_renamerr.source_dirs pick a
     # subset of synced locations. Browsed via rclone for finished CL2K .psd files.
-    psd_source_drives: List[GDriveListEntry] = Field(default_factory=list)
+    psd_source_drives: List[GDriveListEntry] = Field(
+        default_factory=_default_cl2k_psd_drives
+    )
     # AI text removal (provider-agnostic; off by default = textless-art strategy).
     # Requires a user-brushed mask. lama_sidecar = free/local; openai = paid;
     # huggingface = free tier (rate-limited). Firefly/ChatGPT-free have no usable
