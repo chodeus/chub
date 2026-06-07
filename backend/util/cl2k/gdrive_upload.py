@@ -10,9 +10,10 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 from shutil import which
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 
 def _rclone_path() -> str:
@@ -100,23 +101,32 @@ def _auth_args(sync_cfg: Any) -> List[str]:
     ]
 
 
-def list_psd(sync_cfg: Any, drive_id: str) -> List[Dict[str, str]]:
+def list_psd(
+    sync_cfg: Any, drive_id: str, query: Optional[str] = None
+) -> List[Dict[str, str]]:
     """List ``*.psd`` files under the Drive folder ``drive_id`` (recursive).
 
-    Returns ``[{"name": basename, "path": relative_path}]`` where ``path`` is the
-    Drive-relative path to pass to :func:`fetch_file`.
+    When ``query`` is given, only files whose name contains it are returned
+    (case-insensitive substring) — essential for the community drives, which hold
+    hundreds-to-thousands of PSDs. Returns ``[{"name": basename, "path":
+    relative_path}]`` where ``path`` is passed to :func:`fetch_file`.
     """
     _reject_unsafe(drive_id, "drive_id")
     rclone = _rclone_path()
     _ensure_remote(rclone)
+    # Strip rclone glob metacharacters so the query is a literal substring, not a
+    # pattern (subprocess is list-form, so this is correctness, not shell safety).
+    safe = re.sub(r"[*?\[\]{}\\\x00]", "", str(query or "")).strip()
+    include = f"*{safe}*.psd" if safe else "*.psd"
     cmd = [
         rclone,
         "lsf",
         "posters:",
         "--drive-root-folder-id",
         drive_id,
+        *(["--ignore-case"] if safe else []),
         "--include",
-        "*.psd",
+        include,
         "--files-only",
         "-R",
         *_auth_args(sync_cfg),

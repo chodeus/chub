@@ -136,9 +136,12 @@ export const cl2kMakerAPI = {
         return apiCore.post('/cl2k-maker/upload-poster', fd);
     },
 
-    /** List configured .psd source drives, or (with driveId) .psd files in one. */
-    gdriveList: driveId =>
-        apiCore.get(`/cl2k-maker/gdrive-list${driveId ? `?${qs({ drive_id: driveId })}` : ''}`, {
+    /**
+     * List configured .psd source drives, or (with driveId) .psd files in one.
+     * Pass `q` to filter by case-insensitive title substring (server-side rclone).
+     */
+    gdriveList: (driveId, q) =>
+        apiCore.get(`/cl2k-maker/gdrive-list${driveId ? `?${qs({ drive_id: driveId, q })}` : ''}`, {
             useCache: false,
         }),
 

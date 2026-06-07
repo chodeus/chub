@@ -1097,6 +1097,7 @@ const UploadPosterPanel = ({ item, effectiveKind, toast }) => {
 const GdrivePsdPanel = ({ item, effectiveKind, toast }) => {
     const [drives, setDrives] = useState(null);
     const [driveId, setDriveId] = useState('');
+    const [query, setQuery] = useState(item.title || '');
     const [files, setFiles] = useState(null);
     const [loadingFiles, setLoadingFiles] = useState(false);
     const [path, setPath] = useState('');
@@ -1121,16 +1122,17 @@ const GdrivePsdPanel = ({ item, effectiveKind, toast }) => {
         };
     }, [toast]);
 
-    const loadFiles = useCallback(
-        async id => {
-            setDriveId(id);
-            setFiles(null);
-            setPath('');
-            setPreviewB64(null);
+    // Search a drive for .psd files matching `q` (case-insensitive substring).
+    // The community drives hold hundreds–thousands of PSDs, so we search rather
+    // than list everything.
+    const search = useCallback(
+        async (id, q) => {
             if (!id) return;
             setLoadingFiles(true);
+            setPath('');
+            setPreviewB64(null);
             try {
-                const resp = await cl2kMakerAPI.gdriveList(id);
+                const resp = await cl2kMakerAPI.gdriveList(id, q);
                 setFiles(resp?.data?.files || []);
             } catch (err) {
                 setFiles([]);
@@ -1140,6 +1142,19 @@ const GdrivePsdPanel = ({ item, effectiveKind, toast }) => {
             }
         },
         [toast]
+    );
+
+    const onDriveChange = useCallback(
+        id => {
+            setDriveId(id);
+            setFiles(null);
+            setPath('');
+            setPreviewB64(null);
+            // Auto-search for the current title so the matching template surfaces
+            // immediately on drive select.
+            if (id) search(id, query);
+        },
+        [search, query]
     );
 
     const baseReq = useMemo(
@@ -1182,6 +1197,8 @@ const GdrivePsdPanel = ({ item, effectiveKind, toast }) => {
         }
     }, [baseReq, path, toast]);
 
+    const shown = files ? files.slice(0, 200) : [];
+
     return (
         <section className="mt-4 bg-surface border border-border rounded-lg p-4 flex flex-col gap-3">
             <h3 className="text-sm font-medium text-primary">Drive .psd → flatten</h3>
@@ -1201,7 +1218,7 @@ const GdrivePsdPanel = ({ item, effectiveKind, toast }) => {
                         <span className="w-20">Drive</span>
                         <select
                             value={driveId}
-                            onChange={e => loadFiles(e.target.value)}
+                            onChange={e => onDriveChange(e.target.value)}
                             className="flex-1 bg-surface border border-border rounded px-2 py-1 text-sm text-primary"
                         >
                             <option value="">Select a drive…</option>
@@ -1213,31 +1230,67 @@ const GdrivePsdPanel = ({ item, effectiveKind, toast }) => {
                         </select>
                     </label>
 
-                    {loadingFiles && (
-                        <div className="text-xs text-tertiary">Listing .psd files…</div>
+                    {driveId && (
+                        <form
+                            onSubmit={e => {
+                                e.preventDefault();
+                                search(driveId, query);
+                            }}
+                            className="flex items-center gap-2"
+                        >
+                            <span className="w-20 text-sm text-secondary">Search</span>
+                            <input
+                                type="text"
+                                value={query}
+                                onChange={e => setQuery(e.target.value)}
+                                placeholder="Title substring (blank = list all)"
+                                className="flex-1 bg-surface border border-border rounded px-2 py-1 text-sm text-primary"
+                            />
+                            <LoadingButton
+                                type="submit"
+                                loading={loadingFiles}
+                                icon="search"
+                                size="small"
+                            >
+                                Search
+                            </LoadingButton>
+                        </form>
                     )}
+
+                    {loadingFiles && <div className="text-xs text-tertiary">Searching…</div>}
                     {files && files.length === 0 && !loadingFiles && (
-                        <div className="text-xs text-tertiary">No .psd files in this drive.</div>
+                        <div className="text-xs text-tertiary">
+                            No matching .psd files — try a different title or clear the search.
+                        </div>
                     )}
                     {files && files.length > 0 && (
-                        <label className="flex items-center gap-2 text-sm text-secondary">
-                            <span className="w-20">File</span>
-                            <select
-                                value={path}
-                                onChange={e => {
-                                    setPath(e.target.value);
-                                    setPreviewB64(null);
-                                }}
-                                className="flex-1 bg-surface border border-border rounded px-2 py-1 text-sm text-primary"
-                            >
-                                <option value="">Select a .psd…</option>
-                                {files.map(f => (
-                                    <option key={f.path} value={f.path}>
+                        <div>
+                            <div className="text-xs text-tertiary mb-1">
+                                {files.length} match{files.length === 1 ? '' : 'es'}
+                                {files.length > 200
+                                    ? ' — showing first 200, refine your search'
+                                    : ''}
+                            </div>
+                            <div className="max-h-72 overflow-auto border border-border rounded-md divide-y divide-border">
+                                {shown.map(f => (
+                                    <button
+                                        key={f.path}
+                                        type="button"
+                                        onClick={() => {
+                                            setPath(f.path);
+                                            setPreviewB64(null);
+                                        }}
+                                        className={`w-full text-left px-3 py-1.5 text-sm hover:bg-surface-alt ${
+                                            path === f.path
+                                                ? 'bg-surface-alt text-primary'
+                                                : 'text-secondary'
+                                        }`}
+                                    >
                                         {f.name}
-                                    </option>
+                                    </button>
                                 ))}
-                            </select>
-                        </label>
+                            </div>
+                        </div>
                     )}
 
                     {previewB64 && (
