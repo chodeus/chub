@@ -58,6 +58,8 @@ def _resolve_and_render(
     mask_bytes: Optional[bytes] = None,
     backdrop_bytes: Optional[bytes] = None,
     apply_ai: bool = False,
+    focus_x: float = 0.5,
+    focus_y: float = 0.5,
 ) -> Tuple[Optional[bytes], Dict[str, Any]]:
     """Resolve art (textless backdrop + logo: TMDB->fanart->text) and render.
 
@@ -127,6 +129,8 @@ def _resolve_and_render(
         season_text=season_text,
         logo_max_width=cfg.logo_max_width,
         whiten=cfg.whiten_logo,
+        focus_x=focus_x,
+        focus_y=focus_y,
     )
     return blob, {"backdrop_path": backdrop_path, "logo_source": logo_source}
 
@@ -155,6 +159,8 @@ def generate_for_item(
     mask_bytes: Optional[bytes] = None,
     backdrop_bytes: Optional[bytes] = None,
     apply_ai: bool = False,
+    focus_x: float = 0.5,
+    focus_y: float = 0.5,
     force: bool = False,
 ) -> Dict[str, Any]:
     """Render + name + write to source_dir + upsert poster_cache + provenance.
@@ -192,6 +198,8 @@ def generate_for_item(
         mask_bytes=mask_bytes,
         backdrop_bytes=backdrop_bytes,
         apply_ai=apply_ai,
+        focus_x=focus_x,
+        focus_y=focus_y,
     )
     if blob is None:
         return {"status": "skipped", "reason": info.get("reason", "render failed")}

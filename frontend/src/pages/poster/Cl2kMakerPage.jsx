@@ -339,6 +339,10 @@ const Builder = ({ item, config, onReset, toast }) => {
     const [backdrop, setBackdrop] = useState(null); // file_path | absolute url
     const [logo, setLogo] = useState(null);
 
+    // Crop framing: focal point (0..1) for the backdrop cover-crop. 0.5 = centre.
+    const [focusX, setFocusX] = useState(0.5);
+    const [focusY, setFocusY] = useState(0.5);
+
     // Season variant (shows only)
     const [seasonNumber, setSeasonNumber] = useState('');
     const [bulkSeasons, setBulkSeasons] = useState('');
@@ -403,8 +407,21 @@ const Builder = ({ item, config, onReset, toast }) => {
             logo_path: logo,
             remove_text: removeText,
             mask_b64: removeText ? maskB64 : null,
+            focus_x: focusX,
+            focus_y: focusY,
         }),
-        [effectiveKind, item, isSeasonPoster, seasonNumber, backdrop, logo, removeText, maskB64]
+        [
+            effectiveKind,
+            item,
+            isSeasonPoster,
+            seasonNumber,
+            backdrop,
+            logo,
+            removeText,
+            maskB64,
+            focusX,
+            focusY,
+        ]
     );
 
     const setPreview = useCallback(blob => {
@@ -532,6 +549,12 @@ const Builder = ({ item, config, onReset, toast }) => {
                     setBackdrop={setBackdrop}
                     logo={logo}
                     setLogo={setLogo}
+                    focusX={focusX}
+                    focusY={focusY}
+                    onFocusChange={(fx, fy) => {
+                        setFocusX(fx);
+                        setFocusY(fy);
+                    }}
                     item={item}
                     config={config}
                     seasonNumber={seasonNumber}
@@ -578,6 +601,9 @@ const RenderPanel = ({
     setBackdrop,
     logo,
     setLogo,
+    focusX,
+    focusY,
+    onFocusChange,
     item,
     config,
     seasonNumber,
@@ -614,6 +640,16 @@ const RenderPanel = ({
                     aspect="aspect-video"
                     emptyText="No backdrops from this source."
                 />
+
+                {backdropUrl && (
+                    <CropFramer
+                        imageUrl={backdropUrl}
+                        focusX={focusX}
+                        focusY={focusY}
+                        onChange={onFocusChange}
+                    />
+                )}
+
                 <Picker
                     label={`Logo (${source})`}
                     items={logos}
@@ -933,6 +969,121 @@ const BrushMask = ({ imageUrl, brushSize, onMaskChange }) => {
                 <Button onClick={clear} variant="secondary" icon="ink_eraser" size="small">
                     Clear mask
                 </Button>
+            </div>
+        </div>
+    );
+};
+
+// ─── Crop framing (draggable focal point) ───────────────────────────────────
+
+const clamp01 = v => Math.max(0, Math.min(1, v));
+
+/**
+ * Drag a 2:3 crop box over the wide backdrop to choose what stays in frame.
+ * The box mirrors exactly what the backend keeps: the largest 2:3 rectangle that
+ * fits the backdrop, positioned by the focal point. Everything outside is dimmed.
+ * Reports focus_x/focus_y (0..1, the box centre) so /preview + /generate crop the
+ * same way. Drag anywhere on the image to move the focal point.
+ */
+const CropFramer = ({ imageUrl, focusX, focusY, onChange }) => {
+    const wrapRef = useRef(null);
+    const [dims, setDims] = useState(null);
+    const dragging = useRef(false);
+
+    const rect = useMemo(() => {
+        if (!dims) return null;
+        const target = 2 / 3; // CL2K canvas aspect (w:h)
+        let w, h;
+        if (dims.w / dims.h > target) {
+            h = dims.h;
+            w = h * target;
+        } else {
+            w = dims.w;
+            h = w / target;
+        }
+        const left = Math.max(0, Math.min(focusX * dims.w - w / 2, dims.w - w));
+        const top = Math.max(0, Math.min(focusY * dims.h - h / 2, dims.h - h));
+        return { left, top, w, h };
+    }, [dims, focusX, focusY]);
+
+    const setFromEvent = useCallback(
+        e => {
+            const el = wrapRef.current;
+            if (!el || !dims) return;
+            const r = el.getBoundingClientRect();
+            const cx = (e.touches?.[0]?.clientX ?? e.clientX) - r.left;
+            const cy = (e.touches?.[0]?.clientY ?? e.clientY) - r.top;
+            onChange(clamp01(cx / dims.w), clamp01(cy / dims.h));
+        },
+        [dims, onChange]
+    );
+
+    const down = useCallback(
+        e => {
+            e.preventDefault();
+            dragging.current = true;
+            setFromEvent(e);
+        },
+        [setFromEvent]
+    );
+    const moveEvt = useCallback(
+        e => {
+            if (dragging.current) setFromEvent(e);
+        },
+        [setFromEvent]
+    );
+    const up = useCallback(() => {
+        dragging.current = false;
+    }, []);
+
+    return (
+        <div className="bg-surface border border-border rounded-lg p-3">
+            <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-medium text-primary">Crop framing</h3>
+                <Button
+                    onClick={() => onChange(0.5, 0.5)}
+                    variant="secondary"
+                    icon="filter_center_focus"
+                    size="small"
+                >
+                    Center
+                </Button>
+            </div>
+            <p className="text-xs text-tertiary mb-2">
+                Drag to choose what stays in the 2:3 crop. The dimmed area is cut. Re-render the
+                preview to see the result.
+            </p>
+            <div
+                ref={wrapRef}
+                className="relative inline-block leading-none select-none overflow-hidden rounded cursor-crosshair"
+                onMouseDown={down}
+                onMouseMove={moveEvt}
+                onMouseUp={up}
+                onMouseLeave={up}
+                onTouchStart={down}
+                onTouchMove={moveEvt}
+                onTouchEnd={up}
+            >
+                <img
+                    src={imageUrl}
+                    alt="Crop framing"
+                    onLoad={e => setDims({ w: e.target.clientWidth, h: e.target.clientHeight })}
+                    className="block max-w-full"
+                    draggable={false}
+                />
+                {rect && (
+                    <div
+                        className="absolute border-2 border-primary"
+                        style={{
+                            left: rect.left,
+                            top: rect.top,
+                            width: rect.w,
+                            height: rect.h,
+                            boxShadow: '0 0 0 9999px rgba(0,0,0,0.5)',
+                            pointerEvents: 'none',
+                        }}
+                    />
+                )}
             </div>
         </div>
     );
