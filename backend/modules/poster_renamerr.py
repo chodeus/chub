@@ -1197,15 +1197,22 @@ class PosterRenamerr(ChubModule):
         """
         return [self.config.destination_dir] if self.config.destination_dir else []
 
-    def run_border_replacerr(self, manifest: dict, progress_window=None, process_all=False):
+    def run_border_replacerr(self, manifest: Optional[dict], progress_window=None, process_all=False):
         from backend.modules.border_replacerr import BorderReplacerr
 
-        self.logger.debug(
-            "\nRunning border replacerr:\n"
-            f"  Media assets to process: {len(manifest.get('media_cache', []))}\n"
-            f"  Collection assets to process: {len(manifest.get('collections_cache', []))}\n"
-            f"  Total assets to process: {len(manifest.get('media_cache', [])) + len(manifest.get('collections_cache', []))}\n"
-        )
+        if process_all:
+            self.logger.debug(
+                "\nRunning border replacerr (full-library pass — re-bordering "
+                "all matched media and collections, including already-moved "
+                "posters; manifest counts are not representative).\n"
+            )
+        else:
+            self.logger.debug(
+                "\nRunning border replacerr:\n"
+                f"  Media assets to process: {len(manifest.get('media_cache', []))}\n"
+                f"  Collection assets to process: {len(manifest.get('collections_cache', []))}\n"
+                f"  Total assets to process: {len(manifest.get('media_cache', [])) + len(manifest.get('collections_cache', []))}\n"
+            )
 
         border = BorderReplacerr(logger=self.logger)
         # Drive the parent bar's reserved slice as posters complete.
