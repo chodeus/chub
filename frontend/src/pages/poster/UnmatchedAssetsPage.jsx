@@ -443,6 +443,29 @@ const UnmatchedList = ({ items, onRefresh, typeKey: typeKeyProp, onTypeChange })
                                         {formatId(item.tvdb_id) || '—'}
                                     </td>
                                     <td className="px-3 py-2 text-right whitespace-nowrap">
+                                        {item.tmdb_id && (
+                                            <Link
+                                                to={`/poster/cl2k-maker?${new URLSearchParams({
+                                                    tmdb_id: item.tmdb_id,
+                                                    type: item._type,
+                                                    title: item.title || '',
+                                                    ...(item.year ? { year: item.year } : {}),
+                                                    ...(item.tvdb_id
+                                                        ? { tvdb_id: item.tvdb_id }
+                                                        : {}),
+                                                    ...(item.imdb_id
+                                                        ? { imdb_id: item.imdb_id }
+                                                        : {}),
+                                                }).toString()}`}
+                                                className="inline-flex items-center justify-center w-8 h-8 rounded text-tertiary hover:text-accent hover:bg-surface-alt align-middle"
+                                                aria-label="Make a CL2K poster"
+                                                title="Make a CL2K poster"
+                                            >
+                                                <span className="material-symbols-outlined text-base">
+                                                    wallpaper
+                                                </span>
+                                            </Link>
+                                        )}
                                         {item._type !== 'collection' && (
                                             <IconButton
                                                 icon="content_copy"

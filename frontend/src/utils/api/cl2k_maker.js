@@ -1,0 +1,149 @@
+/**
+ * CL2K Poster Maker API client.
+ *
+ * Powers the CL2K Poster Maker page. Entry points (TMDB title search, ID/URL
+ * paste, Unmatched-Assets deep link) all resolve to a tmdb_id + kind; the art
+ * picker lists every logo/backdrop; preview renders without saving; generate
+ * writes the poster into the configured source_dir and records provenance.
+ *
+ *   GET  /api/cl2k-maker/search            TMDB title search
+ *   GET  /api/cl2k-maker/resolve           tvdb/imdb id -> tmdb id
+ *   GET  /api/cl2k-maker/images            all TMDB logos + backdrops (picker)
+ *   GET  /api/cl2k-maker/fanart-images     fanart.tv logo + background (picker)
+ *   POST /api/cl2k-maker/preview           render to JPEG, no save (binary)
+ *   POST /api/cl2k-maker/generate          render + write + cache + provenance
+ *   GET  /api/cl2k-maker/generated         provenance (recent)
+ *   POST /api/cl2k-maker/psd-export        layered .psd (binary)
+ *   POST /api/cl2k-maker/generate-seasons  generate posters for many seasons
+ *   POST /api/cl2k-maker/upload-generate   render from a cleaned backdrop (file)
+ *   POST /api/cl2k-maker/upload-poster     file a finished poster as-is (file)
+ *   GET  /api/cl2k-maker/gdrive-list       source drives, or .psd files in one
+ *   POST /api/cl2k-maker/gdrive-psd        flatten a Drive .psd (preview or save)
+ *
+ * /preview and /psd-export return raw bytes, so they bypass apiCore (which reads
+ * the body as JSON/text) and use a small fetch helper that returns a Blob.
+ */
+
+import { apiCore } from './core.js';
+
+const ENCODE = encodeURIComponent;
+const TOKEN_STORAGE_KEY = 'chub-auth-token';
+
+const qs = params => {
+    const sp = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => {
+        if (v !== undefined && v !== null && v !== '') sp.set(k, String(v));
+    });
+    return sp.toString();
+};
+
+/**
+ * POST JSON and return the raw response body as a Blob. Used for the binary
+ * preview / .psd endpoints, which apiCore would corrupt by reading as text.
+ * Mirrors apiCore's Bearer-token injection.
+ */
+const postBlob = async (path, body) => {
+    const headers = { 'Content-Type': 'application/json' };
+    try {
+        const token = localStorage.getItem(TOKEN_STORAGE_KEY);
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+    } catch {
+        /* localStorage unavailable — skip */
+    }
+    const resp = await fetch(`/api${path}`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+    });
+    if (!resp.ok) {
+        // Error bodies are JSON ({message, error_code}); surface the message.
+        let message = `HTTP ${resp.status}`;
+        try {
+            const data = await resp.json();
+            message = data?.message || message;
+        } catch {
+            /* non-JSON error body */
+        }
+        throw new Error(message);
+    }
+    return resp.blob();
+};
+
+export const cl2kMakerAPI = {
+    /** TMDB title search. type = movie | show | collection. */
+    search: (q, type = 'movie') =>
+        apiCore.get(`/cl2k-maker/search?${qs({ q, type })}`, { useCache: false }),
+
+    /** Resolve an external id (tvdb/imdb) to a tmdb id. */
+    resolve: (externalId, source, type = 'movie') =>
+        apiCore.get(`/cl2k-maker/resolve?${qs({ external_id: externalId, source, type })}`, {
+            useCache: false,
+        }),
+
+    /** All TMDB logos + backdrops for the art picker. */
+    images: (tmdbId, type = 'movie') =>
+        apiCore.get(`/cl2k-maker/images?${qs({ tmdb_id: tmdbId, type })}`, {
+            useCache: true,
+            cacheTTL: 5 * 60 * 1000,
+        }),
+
+    /** fanart.tv logo + background for the art picker. */
+    fanartImages: ({ tmdbId, type = 'movie', tvdbId, imdbId, seasonNumber } = {}) =>
+        apiCore.get(
+            `/cl2k-maker/fanart-images?${qs({
+                tmdb_id: tmdbId,
+                type,
+                tvdb_id: tvdbId,
+                imdb_id: imdbId,
+                season_number: seasonNumber,
+            })}`,
+            { useCache: true, cacheTTL: 5 * 60 * 1000 }
+        ),
+
+    /** Render a preview JPEG without saving. Returns a Blob. */
+    preview: req => postBlob('/cl2k-maker/preview', req),
+
+    /** Render + write + cache + record provenance. */
+    generate: req => apiCore.post('/cl2k-maker/generate', req),
+
+    /** Recently generated posters (provenance). */
+    generated: (limit = 200) =>
+        apiCore.get(`/cl2k-maker/generated?${qs({ limit })}`, { useCache: false }),
+
+    /** Export the poster as a layered .psd. Returns a Blob. */
+    psdExport: req => postBlob('/cl2k-maker/psd-export', req),
+
+    /** Generate CL2K posters for multiple seasons. */
+    generateSeasons: req => apiCore.post('/cl2k-maker/generate-seasons', req),
+
+    /** Generate from a manually-cleaned backdrop (multipart). */
+    uploadGenerate: (file, meta) => {
+        const fd = new FormData();
+        fd.append('file', file);
+        Object.entries(meta).forEach(([k, v]) => {
+            if (v !== undefined && v !== null && v !== '') fd.append(k, String(v));
+        });
+        return apiCore.post('/cl2k-maker/upload-generate', fd);
+    },
+
+    /** File a finished poster as-is (multipart). */
+    uploadPoster: (file, meta) => {
+        const fd = new FormData();
+        fd.append('file', file);
+        Object.entries(meta).forEach(([k, v]) => {
+            if (v !== undefined && v !== null && v !== '') fd.append(k, String(v));
+        });
+        return apiCore.post('/cl2k-maker/upload-poster', fd);
+    },
+
+    /** List configured .psd source drives, or (with driveId) .psd files in one. */
+    gdriveList: driveId =>
+        apiCore.get(`/cl2k-maker/gdrive-list${driveId ? `?${qs({ drive_id: driveId })}` : ''}`, {
+            useCache: false,
+        }),
+
+    /** Flatten a Drive .psd: preview=true returns base64; else saves the poster. */
+    gdrivePsd: req => apiCore.post('/cl2k-maker/gdrive-psd', req),
+};
+
+export { ENCODE };

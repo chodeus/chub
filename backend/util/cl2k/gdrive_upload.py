@@ -8,9 +8,11 @@ sync_gdrive does.
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 from shutil import which
+from typing import Any, Dict, List
 
 
 def _rclone_path() -> str:
@@ -69,3 +71,83 @@ def upload_file(
     if result.returncode != 0:
         raise RuntimeError(f"rclone copy failed: {result.stderr.strip()[:300]}")
     logger.debug(f"uploaded {os.path.basename(local_path)} to drive {folder_id}")
+
+
+def _auth_args(sync_cfg: Any) -> List[str]:
+    """Build rclone Drive auth flags from the sync_gdrive config.
+
+    Prefers a service-account file (matching :func:`upload_file`); falls back to
+    the OAuth client_id/secret/token triple the way ``sync_gdrive.sync_folder``
+    does. The .psd source drives are a subset of ``sync_gdrive.gdrive_list``, so
+    they authenticate with the same credentials.
+    """
+    sa = getattr(sync_cfg, "gdrive_sa_location", None)
+    if sa:
+        _reject_unsafe(sa, "gdrive_sa_location")
+        return ["--drive-service-account-file", sa]
+    token = getattr(sync_cfg, "token", "") or ""
+    if not isinstance(token, str):
+        token = json.dumps(
+            token.model_dump() if hasattr(token, "model_dump") else dict(token)
+        )
+    return [
+        "--drive-client-id",
+        getattr(sync_cfg, "client_id", "") or "",
+        "--drive-client-secret",
+        getattr(sync_cfg, "client_secret", "") or "",
+        "--drive-token",
+        token,
+    ]
+
+
+def list_psd(sync_cfg: Any, drive_id: str) -> List[Dict[str, str]]:
+    """List ``*.psd`` files under the Drive folder ``drive_id`` (recursive).
+
+    Returns ``[{"name": basename, "path": relative_path}]`` where ``path`` is the
+    Drive-relative path to pass to :func:`fetch_file`.
+    """
+    _reject_unsafe(drive_id, "drive_id")
+    rclone = _rclone_path()
+    _ensure_remote(rclone)
+    cmd = [
+        rclone,
+        "lsf",
+        "posters:",
+        "--drive-root-folder-id",
+        drive_id,
+        "--include",
+        "*.psd",
+        "--files-only",
+        "-R",
+        *_auth_args(sync_cfg),
+    ]
+    result = subprocess.run(cmd, check=False, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(f"rclone lsf failed: {result.stderr.strip()[:300]}")
+    files = []
+    for line in result.stdout.splitlines():
+        rel = line.strip()
+        if rel:
+            files.append({"name": os.path.basename(rel), "path": rel})
+    return files
+
+
+def fetch_file(sync_cfg: Any, drive_id: str, path: str) -> bytes:
+    """Download a single file from Drive folder ``drive_id`` and return its bytes."""
+    _reject_unsafe(drive_id, "drive_id")
+    _reject_unsafe(path, "path")
+    rclone = _rclone_path()
+    _ensure_remote(rclone)
+    cmd = [
+        rclone,
+        "cat",
+        f"posters:{path}",
+        "--drive-root-folder-id",
+        drive_id,
+        *_auth_args(sync_cfg),
+    ]
+    result = subprocess.run(cmd, check=False, capture_output=True)
+    if result.returncode != 0:
+        err = result.stderr.decode("utf-8", "replace").strip()[:300]
+        raise RuntimeError(f"rclone cat failed: {err}")
+    return result.stdout

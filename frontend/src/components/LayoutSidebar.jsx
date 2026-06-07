@@ -56,6 +56,11 @@ const NAV_SECTIONS = [
                         path: '/poster/border-replacerr',
                     },
                     {
+                        id: 'cl2k-maker',
+                        label: 'CL2K Poster Maker',
+                        path: '/poster/cl2k-maker',
+                    },
+                    {
                         id: 'unmatched-assets',
                         label: 'Unmatched Assets',
                         path: '/poster/unmatched',
