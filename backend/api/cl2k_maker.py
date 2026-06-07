@@ -339,6 +339,7 @@ async def upload_poster(
 @router.get("/gdrive-list", summary="Configured .psd source drives, or .psd files in one")
 def gdrive_list(
     drive_id: Optional[str] = Query(None),
+    q: Optional[str] = Query(None, description="case-insensitive title substring"),
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_logger),
 ) -> JSONResponse:
@@ -349,7 +350,7 @@ def gdrive_list(
     from backend.util.cl2k.gdrive_upload import list_psd
 
     try:
-        files = list_psd(cfg.sync_gdrive, drive_id)
+        files = list_psd(cfg.sync_gdrive, drive_id, query=q)
     except Exception as exc:
         return error(str(exc), "CL2K_GDRIVE_LIST")
     return ok("ok", {"files": files})
