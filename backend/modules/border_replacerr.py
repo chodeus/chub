@@ -391,6 +391,17 @@ class BorderReplacerr(ChubModule):
             assets.append(row)
         return assets
 
+    @staticmethod
+    def _should_process_all(manifest, process_all: bool, reset_all: bool) -> bool:
+        """Decide whether to border the full matched library vs only the
+        manifest subset.
+
+        Full library when: the caller asked (process_all, e.g. a renamerr
+        full run), or the holiday state just changed (reset_all), or no
+        manifest was supplied (standalone module run). Otherwise the
+        manifest subset (webhook/adhoc imports)."""
+        return bool(process_all or reset_all or manifest is None)
+
     def run(self, manifest: dict):
         with ChubDB(logger=self.logger) as db:
             if self.config.log_level.lower() == "debug":

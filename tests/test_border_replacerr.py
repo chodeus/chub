@@ -278,3 +278,22 @@ def test_collect_matched_assets_applies_exclusion_and_ignore_filters():
     )
     assets = br._collect_matched_assets(_StubDB(media, []))
     assert {a["title"] for a in assets} == {"Keep"}
+
+
+# ---- selection rule: full-library vs manifest subset -----------------------
+
+
+@pytest.mark.parametrize(
+    "manifest,process_all,reset_all,expected",
+    [
+        ({"media_cache": [1]}, False, False, False),  # webhook/adhoc subset
+        ({"media_cache": [1]}, True, False, True),    # renamerr full run
+        ({"media_cache": [1]}, False, True, True),    # holiday transition
+        (None, False, False, True),                   # standalone run (no manifest)
+    ],
+)
+def test_should_process_all(manifest, process_all, reset_all, expected):
+    assert (
+        BorderReplacerr._should_process_all(manifest, process_all, reset_all)
+        is expected
+    )
