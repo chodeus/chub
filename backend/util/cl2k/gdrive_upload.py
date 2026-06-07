@@ -43,50 +43,18 @@ def _ensure_remote(rclone: str) -> None:
     )
 
 
-def upload_file(
-    local_path: str, folder_id: str, sa_location: str, logger
-) -> None:
-    """Copy a single local poster into the Drive folder ``folder_id``.
-
-    Raises on a non-zero rclone exit so the caller can record the failure.
-    """
-    _reject_unsafe(folder_id, "gdrive_folder_id")
-    rclone = _rclone_path()
-    _ensure_remote(rclone)
-    cmd = [
-        rclone,
-        "copy",
-        local_path,
-        "posters:",
-        "--drive-root-folder-id",
-        folder_id,
-        "--drive-use-trash=false",
-        "--no-update-modtime",
-        "-v",
-    ]
-    if sa_location:
-        _reject_unsafe(sa_location, "gdrive_sa_location")
-        cmd.extend(["--drive-service-account-file", sa_location])
-
-    result = subprocess.run(cmd, check=False, capture_output=True, text=True)
-    if result.returncode != 0:
-        raise RuntimeError(f"rclone copy failed: {result.stderr.strip()[:300]}")
-    logger.debug(f"uploaded {os.path.basename(local_path)} to drive {folder_id}")
+def _sa_args(sa_location: Optional[str]) -> List[str]:
+    if not sa_location:
+        return []
+    _reject_unsafe(sa_location, "gdrive_sa_location")
+    return ["--drive-service-account-file", sa_location]
 
 
-def _auth_args(sync_cfg: Any) -> List[str]:
-    """Build rclone Drive auth flags from the sync_gdrive config.
-
-    Prefers a service-account file (matching :func:`upload_file`); falls back to
-    the OAuth client_id/secret/token triple the way ``sync_gdrive.sync_folder``
-    does. The .psd source drives are a subset of ``sync_gdrive.gdrive_list``, so
-    they authenticate with the same credentials.
-    """
-    sa = getattr(sync_cfg, "gdrive_sa_location", None)
-    if sa:
-        _reject_unsafe(sa, "gdrive_sa_location")
-        return ["--drive-service-account-file", sa]
+def _oauth_args(sync_cfg: Any) -> List[str]:
+    """rclone OAuth flags from the sync_gdrive config (empty if no token)."""
     token = getattr(sync_cfg, "token", "") or ""
+    if not token:
+        return []
     if not isinstance(token, str):
         token = json.dumps(
             token.model_dump() if hasattr(token, "model_dump") else dict(token)
@@ -99,6 +67,70 @@ def _auth_args(sync_cfg: Any) -> List[str]:
         "--drive-token",
         token,
     ]
+
+
+def _auth_args(sync_cfg: Any) -> List[str]:
+    """Auth for READING shared drives (browse): service account first, then OAuth.
+
+    The community .psd drives are shared with the service account, so SA is the
+    natural credential; OAuth is the fallback.
+    """
+    sa = _sa_args(getattr(sync_cfg, "gdrive_sa_location", None))
+    return sa or _oauth_args(sync_cfg)
+
+
+def _upload_auth_args(sync_cfg: Any, sa_override: Optional[str] = None) -> List[str]:
+    """Auth for WRITING to the user's own drive (upload): OAuth first, then SA.
+
+    Uploading with the user's OAuth token writes as the user, so files land in
+    their own Drive folder and are owned by them — no service-account sharing
+    needed (this is how PosterFlow does it). An explicit ``sa_override``
+    (cl2k_maker.gdrive_sa_location) takes precedence for users who deliberately
+    upload through a service account; the sync_gdrive SA is the last resort.
+    """
+    if sa_override:
+        return _sa_args(sa_override)
+    return _oauth_args(sync_cfg) or _sa_args(getattr(sync_cfg, "gdrive_sa_location", None))
+
+
+def upload_file(
+    local_path: str,
+    folder_id: str,
+    sync_cfg: Any,
+    logger,
+    sa_override: Optional[str] = None,
+) -> None:
+    """Copy a single local poster into the Drive folder ``folder_id``.
+
+    Authenticates as the user via OAuth by default (so the poster lands in their
+    own Drive, owned by them); falls back to a service account. Raises on a
+    non-zero rclone exit so the caller can record the failure.
+    """
+    _reject_unsafe(folder_id, "gdrive_folder_id")
+    auth = _upload_auth_args(sync_cfg, sa_override)
+    if not auth:
+        raise RuntimeError(
+            "no Google Drive credentials configured "
+            "(set Sync GDrive OAuth token or a service account)"
+        )
+    rclone = _rclone_path()
+    _ensure_remote(rclone)
+    cmd = [
+        rclone,
+        "copy",
+        local_path,
+        "posters:",
+        "--drive-root-folder-id",
+        folder_id,
+        "--drive-use-trash=false",
+        "--no-update-modtime",
+        "-v",
+        *auth,
+    ]
+    result = subprocess.run(cmd, check=False, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(f"rclone copy failed: {result.stderr.strip()[:300]}")
+    logger.debug(f"uploaded {os.path.basename(local_path)} to drive {folder_id}")
 
 
 def list_psd(

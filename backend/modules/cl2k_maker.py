@@ -209,6 +209,7 @@ def generate_for_item(
         db,
         cfg,
         logger,
+        sync_cfg=full_config.sync_gdrive,
         blob=blob,
         kind=kind,
         title=title,
@@ -227,6 +228,7 @@ def _persist_poster(
     cfg,
     logger,
     *,
+    sync_cfg=None,
     blob: bytes,
     kind: str,
     title: str,
@@ -300,7 +302,13 @@ def _persist_poster(
         from backend.util.cl2k.gdrive_upload import upload_file
 
         try:
-            upload_file(out_path, cfg.gdrive_folder_id, cfg.gdrive_sa_location, logger)
+            upload_file(
+                out_path,
+                cfg.gdrive_folder_id,
+                sync_cfg,
+                logger,
+                sa_override=cfg.gdrive_sa_location or None,
+            )
             db.cl2k_generated.mark_uploaded(out_path)
         except Exception as exc:
             logger.warning(f"CL2K gdrive upload failed for {filename}: {exc}")
@@ -375,6 +383,7 @@ def save_finished_poster(
         db,
         cfg,
         logger,
+        sync_cfg=full_config.sync_gdrive,
         blob=_normalize_poster(image_bytes),
         kind=kind,
         title=title,
