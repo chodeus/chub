@@ -440,6 +440,66 @@ def gdrive_psd_bytes(full_config, drive_id: str, path: str) -> bytes:
     return flatten_psd(psd_bytes)
 
 
+def retext_poster(
+    *,
+    db: ChubDB,
+    full_config,
+    logger,
+    image_bytes: bytes,
+    mask_bytes: Optional[bytes] = None,
+    apply_ai: bool = False,
+    prompt: Optional[str] = None,
+    label_text: str = "",
+    text_y_frac: Optional[float] = None,
+    save: bool = False,
+    kind: str = "movie",
+    title: str = "",
+    tmdb_id: int = 0,
+    year: Optional[int] = None,
+    tvdb_id: Optional[int] = None,
+    imdb_id: Optional[str] = None,
+    season_number: Optional[int] = None,
+):
+    """Re-text a finished poster: AI-erase the brushed old text, then draw a new
+    CL2K-style label (e.g. swap a season year).
+
+    AI handles only the *erase* (reliable); the new label is drawn deterministically
+    in the CL2K font, so it's always crisp. Returns JPEG bytes when ``save`` is
+    False (preview); otherwise files it via :func:`save_finished_poster` and
+    returns that result dict. ``text_y_frac`` (0..1) places the label vertically
+    (defaults to the CL2K season-label position).
+    """
+    from backend.util.cl2k.renderer import overlay_label
+
+    cfg = full_config.cl2k_maker
+    img = _normalize_poster(image_bytes)
+    if apply_ai and mask_bytes:
+        img = text_removal.remove_text(
+            img, config=cfg, mask_bytes=mask_bytes, prompt=prompt
+        )
+    if label_text:
+        center_y = None
+        if text_y_frac is not None:
+            center_y = int(max(0.0, min(1.0, text_y_frac)) * geo.CANVAS_H)
+        img = overlay_label(img, label_text, center_y=center_y)
+    if not save:
+        return img
+    return save_finished_poster(
+        db=db,
+        full_config=full_config,
+        logger=logger,
+        kind=kind,
+        title=title,
+        tmdb_id=tmdb_id,
+        year=year,
+        tvdb_id=tvdb_id,
+        imdb_id=imdb_id,
+        season_number=season_number,
+        image_bytes=img,
+        logo_source="retext",
+    )
+
+
 def generate_seasons(
     *,
     db: ChubDB,

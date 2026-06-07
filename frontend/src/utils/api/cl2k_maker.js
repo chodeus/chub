@@ -147,6 +147,12 @@ export const cl2kMakerAPI = {
 
     /** Flatten a Drive .psd: preview=true returns base64; else saves the poster. */
     gdrivePsd: req => apiCore.post('/cl2k-maker/gdrive-psd', req),
+
+    /**
+     * Re-text a finished poster: AI-erase the brushed old text + redraw a label
+     * in CL2K font. preview=true returns {preview_b64}; else saves the poster.
+     */
+    retext: req => apiCore.post('/cl2k-maker/retext', req),
 };
 
 export { ENCODE };

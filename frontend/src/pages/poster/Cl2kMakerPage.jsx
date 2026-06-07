@@ -37,6 +37,7 @@ const SOURCE_TABS = [
     { key: 'upload-backdrop', label: 'Cleaned backdrop', icon: 'auto_fix_high' },
     { key: 'upload-poster', label: 'Finished poster', icon: 'image' },
     { key: 'gdrive-psd', label: 'Drive .psd', icon: 'cloud' },
+    { key: 'edit', label: 'Edit poster', icon: 'edit' },
 ];
 
 // Map a deep-link / paste media type onto the kind strings the maker uses.
@@ -584,6 +585,14 @@ const Builder = ({ item, config, onReset, toast }) => {
             )}
             {tab === 'gdrive-psd' && (
                 <GdrivePsdPanel item={item} effectiveKind={effectiveKind} toast={toast} />
+            )}
+            {tab === 'edit' && (
+                <EditPosterPanel
+                    item={item}
+                    effectiveKind={effectiveKind}
+                    config={config}
+                    toast={toast}
+                />
             )}
 
             <HistorySection toast={toast} />
@@ -1473,6 +1482,237 @@ const GdrivePsdPanel = ({ item, effectiveKind, toast }) => {
                     </div>
                 </>
             )}
+        </section>
+    );
+};
+
+// ─── Edit poster (AI-erase old text + redraw label in CL2K font) ────────────
+
+const EditPosterPanel = ({ item, effectiveKind, config, toast }) => {
+    const [imageDataUrl, setImageDataUrl] = useState(null);
+    const [maskB64, setMaskB64] = useState(null);
+    const [removeText, setRemoveText] = useState(true);
+    const [brushSize, setBrushSize] = useState(18);
+    // Prompt defaults to the module-settings ai_prompt, editable per-edit.
+    const [prompt, setPrompt] = useState(() => config?.ai_prompt || '');
+    const [label, setLabel] = useState('');
+    const [textY, setTextY] = useState(0.96);
+    const [previewB64, setPreviewB64] = useState(null);
+    const [busy, setBusy] = useState(false);
+
+    const provider = config?.ai_provider || 'none';
+
+    const onFile = useCallback(e => {
+        const f = e.target.files?.[0];
+        if (!f) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+            setImageDataUrl(reader.result);
+            setMaskB64(null);
+            setPreviewB64(null);
+        };
+        reader.readAsDataURL(f);
+    }, []);
+
+    const makeReq = useCallback(
+        preview => ({
+            image_b64: imageDataUrl,
+            mask_b64: removeText ? maskB64 : null,
+            apply_ai: removeText,
+            prompt,
+            label_text: label,
+            text_y: textY,
+            kind: effectiveKind,
+            title: item.title,
+            tmdb_id: item.tmdb_id,
+            year: item.year,
+            tvdb_id: item.tvdb_id,
+            imdb_id: item.imdb_id,
+            preview,
+        }),
+        [imageDataUrl, removeText, maskB64, prompt, label, textY, effectiveKind, item]
+    );
+
+    const runPreview = useCallback(async () => {
+        if (!imageDataUrl) return;
+        setBusy(true);
+        try {
+            const resp = await cl2kMakerAPI.retext(makeReq(true));
+            setPreviewB64(resp?.data?.preview_b64 || null);
+        } catch (err) {
+            toast.error(err.message || 'Preview failed');
+        } finally {
+            setBusy(false);
+        }
+    }, [imageDataUrl, makeReq, toast]);
+
+    const runSave = useCallback(async () => {
+        if (!imageDataUrl) return;
+        setBusy(true);
+        try {
+            const resp = await cl2kMakerAPI.retext(makeReq(false));
+            toast.success(`Saved: ${resp?.data?.file || 'poster'}`);
+        } catch (err) {
+            toast.error(err.message || 'Save failed');
+        } finally {
+            setBusy(false);
+        }
+    }, [imageDataUrl, makeReq, toast]);
+
+    return (
+        <section className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="flex flex-col gap-4">
+                <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-3">
+                    <h3 className="text-sm font-medium text-primary">Edit poster → re-text</h3>
+                    <p className="text-xs text-tertiary">
+                        Upload a finished poster, brush over the old text (e.g. the season year),
+                        let AI erase it, then draw a new label in the CL2K font. Saved as-is — no
+                        CL2K logo/gradient/border added.
+                    </p>
+                    <input type="file" accept="image/*" onChange={onFile} />
+                </div>
+
+                {imageDataUrl && (
+                    <>
+                        <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-3">
+                            <label className="flex items-center gap-2 text-sm text-primary font-medium">
+                                <input
+                                    type="checkbox"
+                                    checked={removeText}
+                                    onChange={e => setRemoveText(e.target.checked)}
+                                />
+                                Erase old text with AI
+                            </label>
+                            <p className="text-xs text-tertiary">
+                                Provider: <span className="text-secondary">{provider}</span>. Brush
+                                over the old label; AI fills it in. Set the provider/key in{' '}
+                                <Link
+                                    to="/settings/modules"
+                                    className="text-primary underline hover:no-underline"
+                                >
+                                    Module Settings
+                                </Link>
+                                .
+                            </p>
+                            {removeText && provider === 'none' && (
+                                <div className="text-xs text-warning">
+                                    AI provider is “none” — enable OpenAI in settings or the old
+                                    text won’t be erased.
+                                </div>
+                            )}
+                            {removeText && (
+                                <>
+                                    <label className="flex items-center gap-2 text-sm text-secondary">
+                                        <span className="w-20">Brush</span>
+                                        <input
+                                            type="range"
+                                            min="4"
+                                            max="60"
+                                            value={brushSize}
+                                            onChange={e => setBrushSize(Number(e.target.value))}
+                                            className="flex-1"
+                                        />
+                                        <span className="w-10 text-right">{brushSize}px</span>
+                                    </label>
+                                    <BrushMask
+                                        imageUrl={imageDataUrl}
+                                        brushSize={brushSize}
+                                        onMaskChange={setMaskB64}
+                                    />
+                                    <label className="flex flex-col gap-1 text-sm text-secondary">
+                                        <span>AI prompt (defaults to module settings)</span>
+                                        <textarea
+                                            value={prompt}
+                                            onChange={e => setPrompt(e.target.value)}
+                                            rows={3}
+                                            className="bg-surface border border-border rounded px-2 py-1 text-sm text-primary"
+                                        />
+                                    </label>
+                                </>
+                            )}
+                        </div>
+
+                        <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-3">
+                            <h3 className="text-sm font-medium text-primary">
+                                New label (CL2K font)
+                            </h3>
+                            <input
+                                type="text"
+                                value={label}
+                                onChange={e => setLabel(e.target.value)}
+                                placeholder="e.g. SEASON 2026 (leave blank to only erase)"
+                                className="bg-surface border border-border rounded px-2 py-1 text-sm text-primary"
+                            />
+                            <label className="flex items-center gap-2 text-sm text-secondary">
+                                <span className="w-24">Position</span>
+                                <input
+                                    type="range"
+                                    min="0"
+                                    max="100"
+                                    value={Math.round(textY * 100)}
+                                    onChange={e => setTextY(Number(e.target.value) / 100)}
+                                    className="flex-1"
+                                />
+                                <span className="w-10 text-right">{Math.round(textY * 100)}%</span>
+                            </label>
+                            <p className="text-xs text-tertiary">
+                                Vertical position of the label (default 96% ≈ CL2K season line).
+                            </p>
+                        </div>
+                    </>
+                )}
+            </div>
+
+            <div className="flex flex-col gap-3">
+                <div className="bg-surface border border-border rounded-lg p-3">
+                    <div className="flex items-center justify-between mb-2">
+                        <h3 className="text-sm font-medium text-primary">Preview</h3>
+                        <LoadingButton
+                            onClick={runPreview}
+                            loading={busy}
+                            disabled={!imageDataUrl}
+                            icon="visibility"
+                            size="small"
+                        >
+                            Render preview
+                        </LoadingButton>
+                    </div>
+                    <div className="aspect-[2/3] bg-black rounded overflow-hidden flex items-center justify-center">
+                        {previewB64 ? (
+                            <img
+                                src={`data:image/jpeg;base64,${previewB64}`}
+                                alt="Edited preview"
+                                className="w-full h-full object-contain"
+                            />
+                        ) : imageDataUrl ? (
+                            <img
+                                src={imageDataUrl}
+                                alt="Uploaded poster"
+                                className="w-full h-full object-contain"
+                            />
+                        ) : (
+                            <span className="text-xs text-tertiary px-4 text-center">
+                                Upload a poster to start.
+                            </span>
+                        )}
+                    </div>
+                </div>
+                <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-2">
+                    <h3 className="text-sm font-medium text-primary">Output</h3>
+                    <LoadingButton
+                        onClick={runSave}
+                        loading={busy}
+                        disabled={!imageDataUrl}
+                        icon="save"
+                    >
+                        Save edited poster
+                    </LoadingButton>
+                    <p className="text-xs text-tertiary">
+                        Files the edited poster (1000×1500, DAPS-named) and uploads it to your Drive
+                        if upload is enabled.
+                    </p>
+                </div>
+            </div>
         </section>
     );
 };

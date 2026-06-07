@@ -206,6 +206,38 @@ def render_cl2k(
         return base.make_blob()
 
 
+def overlay_label(
+    image_bytes: bytes,
+    text: str,
+    center_y: Optional[int] = None,
+    font_path: Optional[str] = None,
+) -> bytes:
+    """Draw a CL2K-style label (white, centred, tracked Arial) onto an existing
+    image and return JPEG bytes.
+
+    Used to re-text a finished poster — e.g. swap a season year — without running
+    the full CL2K render (no logo/gradient/border added). ``center_y`` defaults to
+    the locked CL2K season-label y; pass another value to match a custom poster's
+    band. Pairs with AI text-removal: erase the old label, then draw the new one
+    here so the new text is always crisp and in the CL2K font.
+    """
+    if center_y is None:
+        center_y = geo.SEASON_TEXT_Y
+    font = font_path or geo.resolve_font(bold=False)
+    with Image(blob=image_bytes) as base:
+        _draw_text(
+            base,
+            (text or "").upper(),
+            int(center_y),
+            font,
+            geo.LABEL_FONT_PX,
+            kerning=geo.tracking_to_kerning(geo.LABEL_TRACKING),
+        )
+        base.format = "jpeg"
+        base.compression_quality = geo.OUTPUT_QUALITY
+        return base.make_blob()
+
+
 # ----- CLI harness (P1 visual check) -----------------------------------------
 def main() -> None:
     import argparse

@@ -30,6 +30,7 @@ from backend.modules.cl2k_maker import (
     generate_seasons,
     psd_for_item,
     render_preview,
+    retext_poster,
     save_finished_poster,
 )
 from backend.util.cl2k.image_fetch import TMDB_IMAGE_CDN
@@ -373,6 +374,62 @@ class GDrivePsdRequest(BaseModel):
     imdb_id: Optional[str] = None
     season_number: Optional[int] = None
     preview: bool = False
+
+
+class RetextRequest(BaseModel):
+    image_b64: str  # uploaded poster (base64; data-URL prefix allowed)
+    mask_b64: Optional[str] = None  # brushed mask over the old text (white=erase)
+    apply_ai: bool = False  # run AI text-removal on the masked region
+    prompt: Optional[str] = None  # per-edit AI prompt (defaults to ai_prompt)
+    label_text: str = ""  # new label to draw in CL2K font (e.g. "SEASON 2026")
+    text_y: Optional[float] = None  # label vertical position, 0..1 fraction
+    kind: str = "movie"
+    title: str = ""
+    tmdb_id: int = 0
+    year: Optional[int] = None
+    tvdb_id: Optional[int] = None
+    imdb_id: Optional[str] = None
+    season_number: Optional[int] = None
+    preview: bool = False
+
+
+@router.post("/retext", summary="Re-text a finished poster (AI-erase old text + redraw label)")
+def retext(
+    req: RetextRequest,
+    db: ChubDB = Depends(get_database),
+    logger: Any = Depends(get_logger),
+) -> JSONResponse:
+    if not req.image_b64:
+        return error("no image provided", "CL2K_RETEXT")
+    try:
+        image_bytes = base64.b64decode(req.image_b64.split(",")[-1])
+    except Exception:
+        return error("invalid image data", "CL2K_RETEXT")
+    out = retext_poster(
+        db=db,
+        full_config=load_config(),
+        logger=logger,
+        image_bytes=image_bytes,
+        mask_bytes=_mask_bytes(req.mask_b64),
+        apply_ai=req.apply_ai,
+        prompt=req.prompt,
+        label_text=req.label_text,
+        text_y_frac=req.text_y,
+        save=not req.preview,
+        kind=req.kind,
+        title=req.title,
+        tmdb_id=req.tmdb_id,
+        year=req.year,
+        tvdb_id=req.tvdb_id,
+        imdb_id=req.imdb_id,
+        season_number=req.season_number,
+    )
+    if req.preview:
+        return ok("ok", {"preview_b64": base64.b64encode(out).decode()})
+    if isinstance(out, dict) and out.get("status") == "generated":
+        return ok("Poster saved", out)
+    reason = out.get("reason", "retext failed") if isinstance(out, dict) else "retext failed"
+    return error(reason, "CL2K_RETEXT", data=out if isinstance(out, dict) else None)
 
 
 @router.post("/gdrive-psd", summary="Flatten a Drive .psd to a poster (preview or save)")
