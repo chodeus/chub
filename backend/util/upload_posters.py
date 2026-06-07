@@ -552,6 +552,10 @@ class PosterUploader:
                 "imdb": asset.get("imdb_id"),
                 "tvdb": str(asset.get("tvdb_id")) if asset.get("tvdb_id") else None,
                 "title": title_override or normalize_titles(asset_title),
+                # Year-disambiguates title-only matches so a same-title/different-
+                # year collision can't upload the wrong release (see
+                # PlexMediaIndex._match). Inert for guid hits.
+                "year": asset.get("year"),
             }
 
             # Season entries are indexed with a ":S{n}" suffix on EVERY key
