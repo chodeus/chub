@@ -37,8 +37,14 @@ def remove_text(
     *,
     config=None,
     mask_bytes: Optional[bytes] = None,
+    prompt: Optional[str] = None,
 ) -> bytes:
-    """Erase the masked regions via the configured provider; else pass-through."""
+    """Erase the masked regions via the configured provider; else pass-through.
+
+    ``prompt`` overrides the module-settings ``ai_prompt`` for this one call
+    (used by the poster-editor so a per-edit prompt can be supplied while still
+    defaulting to the configured prompt).
+    """
     if not is_enabled(config):
         return image_bytes
     provider = getattr(config, "ai_provider", "none")
@@ -54,7 +60,7 @@ def remove_text(
             return image_bytes
         result = _huggingface(image_bytes, mask_bytes, config)
     elif provider == "openai":
-        result = _openai(image_bytes, mask_bytes, config)
+        result = _openai(image_bytes, mask_bytes, config, prompt=prompt)
     else:
         return image_bytes
 
@@ -106,13 +112,20 @@ def _lama_sidecar(image_bytes: bytes, mask_bytes: bytes, config) -> bytes:
     return resp.content
 
 
-def _openai(image_bytes: bytes, mask_bytes: Optional[bytes], config) -> bytes:
+def _openai(
+    image_bytes: bytes,
+    mask_bytes: Optional[bytes],
+    config,
+    prompt: Optional[str] = None,
+) -> bytes:
     """OpenAI images.edit (gpt-image-1).
 
     Mask-optional: with no mask, the prompt alone drives removal (the model finds
     the text — but it regenerates the whole image, so fidelity isn't pixel-exact).
     With a mask, only that region is edited; OpenAI marks the edit area with
     TRANSPARENCY, so we invert our white=remove mask to alpha-0-where-remove.
+
+    ``prompt`` (per-call) overrides ``config.ai_prompt`` when provided.
     """
     import requests
     from PIL import Image
@@ -121,7 +134,7 @@ def _openai(image_bytes: bytes, mask_bytes: Optional[bytes], config) -> bytes:
     if not key:
         return image_bytes
     model = getattr(config, "ai_model", "") or "gpt-image-1"
-    prompt = getattr(config, "ai_prompt", "") or (
+    prompt = (prompt or "").strip() or getattr(config, "ai_prompt", "") or (
         "Remove all text from this image and reconstruct the background."
     )
 
