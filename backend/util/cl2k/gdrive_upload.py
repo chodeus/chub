@@ -51,14 +51,23 @@ def _sa_args(sa_location: Optional[str]) -> List[str]:
 
 
 def _oauth_args(sync_cfg: Any) -> List[str]:
-    """rclone OAuth flags from the sync_gdrive config (empty if no token)."""
-    token = getattr(sync_cfg, "token", "") or ""
-    if not token:
-        return []
-    if not isinstance(token, str):
+    """rclone OAuth flags from the sync_gdrive config; [] when there is no
+    *usable* token, so callers fall back to the service account.
+
+    sync_gdrive stores a placeholder token (often the literal ``"{}"``) when only
+    a service account is configured. That is truthy but NOT a real OAuth token,
+    so we require it to actually carry an access/refresh token before taking the
+    OAuth path — otherwise an SA-only setup would try (and fail) bogus OAuth
+    instead of using its service account.
+    """
+    token = getattr(sync_cfg, "token", "")
+    if token and not isinstance(token, str):
         token = json.dumps(
             token.model_dump() if hasattr(token, "model_dump") else dict(token)
         )
+    token = (token or "").strip()
+    if "access_token" not in token and "refresh_token" not in token:
+        return []
     return [
         "--drive-client-id",
         getattr(sync_cfg, "client_id", "") or "",
