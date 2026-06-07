@@ -112,10 +112,9 @@ export const SETTINGS_SCHEMA = [
                 required: false,
                 placeholder:
                     '{\n  "access_token": "ya29.a0AfH6SMBEXAMPLEEXAMPLETOKEN",\n  "refresh_token": "1",\n  "scope": "https://www.googleapis.com/auth/drive",\n  "token_type": "Bearer",\n  "expiry_date": 1712345678901\n}',
-                conditional: {
-                    field: 'gdrive_sa_location',
-                    condition: 'is_empty',
-                },
+                // Intentionally NOT hidden when a service account is set: you can
+                // sync via the SA (reads need no quota) yet still upload via OAuth
+                // (as you), since an SA can't own files in a personal Drive.
                 description:
                     'OAuth2 token JSON — authenticates as YOU, so uploaded posters are owned by ' +
                     'you and can be shared (unlike a service account, which has no storage quota ' +
