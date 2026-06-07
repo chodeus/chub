@@ -24,6 +24,7 @@ from __future__ import annotations
 import json
 from typing import Any, Dict, List, Optional, Tuple
 
+from backend.util.helper import YEAR_MATCH_TOLERANCE
 from backend.util.normalization import normalize_titles
 
 # Priority order of match keys per media type (highest-confidence first). Guids
@@ -32,6 +33,18 @@ MOVIE_PRIORITY_KEYS = ["tmdb", "imdb", "title"]
 SHOW_PRIORITY_KEYS = ["tvdb", "tmdb", "imdb", "title"]
 SEASON_PRIORITY_KEYS = ["tvdb", "tmdb", "imdb", "title"]
 COLLECTION_PRIORITY_KEYS = ["title"]
+
+
+def _coerce_year(value: Any) -> Optional[int]:
+    """Best-effort int year from a cache/asset field that may be int, the TEXT
+    "2007", or an empty/None/"None" placeholder. Returns None when absent or
+    unparseable so callers can treat "no year" as "can't disambiguate"."""
+    if value in (None, "", "None", "null"):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _coerce_guids(value: Any) -> Dict[str, Any]:
@@ -116,31 +129,81 @@ class PlexMediaIndex:
     # ----- lookup ---------------------------------------------------------
 
     @staticmethod
+    def _disambiguate_by_year(
+        entries: List[Dict], asset_year: Optional[int]
+    ) -> List[Dict]:
+        """Drop same-title collisions of the clearly-wrong year.
+
+        A title-only match can return more than one item that shares a
+        normalized title but is a different release (e.g. "3:10 to Yuma" 1957
+        vs 2007). Without the year we'd hand back every copy and the caller
+        could upload the wrong-year poster — or, when only the wrong-year item
+        is in Plex, upload to it because Plex hasn't scanned ours yet.
+
+        A candidate is dropped ONLY when both it and the asset carry a year and
+        they differ by more than ``YEAR_MATCH_TOLERANCE`` (Plex's year can lag
+        *arr/TMDB by a year — production vs release — so the same ±1 tolerance
+        the live search uses applies here). Candidates with no year are kept, so
+        a metadata gap can never cause a false skip. When nothing is dropped the
+        original list is returned unchanged; when a wrong-year copy IS dropped
+        the (possibly empty) survivors are returned — an empty result means the
+        caller should treat it as a miss rather than match the wrong year.
+        """
+        target = _coerce_year(asset_year)
+        if target is None:
+            return entries
+        kept: List[Dict] = []
+        dropped_wrong_year = False
+        for e in entries:
+            ey = _coerce_year(e.get("year"))
+            if ey is None or abs(ey - target) <= YEAR_MATCH_TOLERANCE:
+                kept.append(e)
+            else:
+                dropped_wrong_year = True
+        return kept if dropped_wrong_year else entries
+
+    @staticmethod
     def _match(
         index: Dict[str, List[Dict]], priority_keys: List[str], values: Dict[str, Any]
     ) -> Tuple[List[Dict], Optional[str]]:
         """Return (entries, matched_key_name) for the first priority key that
-        hits, or ([], None). Entries is the list of every library copy."""
+        hits, or ([], None). Entries is the list of every library copy.
+
+        Guid hits (tmdb/imdb/tvdb) are exact and returned as-is. A TITLE hit is
+        year-disambiguated against ``values['year']`` so a same-title/different-
+        year collision can't return the wrong release; if that leaves no
+        year-correct copy the title key is treated as a miss (([], None))."""
         for key in priority_keys:
             value = values.get(key)
             if value and f"{key}:{value}" in index:
-                return index[f"{key}:{value}"], key.upper()
+                entries = index[f"{key}:{value}"]
+                if key == "title":
+                    entries = PlexMediaIndex._disambiguate_by_year(
+                        entries, values.get("year")
+                    )
+                    if not entries:
+                        return [], None
+                return entries, key.upper()
         return [], None
 
     @staticmethod
     def _search_values(
         asset: Dict, *, season_number: Optional[int] = None,
         title_override: Optional[str] = None,
-    ) -> Dict[str, Optional[str]]:
+    ) -> Dict[str, Any]:
         """Build the guid/title lookup values from a media/asset row. Season
         rows suffix EVERY key with ":S{n}" so guid keys match the season index
         (a bare guid would collide across a show's seasons)."""
         title = asset.get("title", "")
-        values: Dict[str, Optional[str]] = {
+        values: Dict[str, Any] = {
             "tmdb": str(asset.get("tmdb_id")) if asset.get("tmdb_id") else None,
             "imdb": asset.get("imdb_id"),
             "tvdb": str(asset.get("tvdb_id")) if asset.get("tvdb_id") else None,
             "title": title_override or (normalize_titles(title) if title else None),
+            # Carried for title-match year-disambiguation (see _match). Inert for
+            # guid hits; None when the row has no year, which keeps current
+            # behavior.
+            "year": _coerce_year(asset.get("year")),
         }
         if season_number is not None:
             for k in ("tmdb", "imdb", "tvdb"):
