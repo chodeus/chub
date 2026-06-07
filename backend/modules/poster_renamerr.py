@@ -1197,7 +1197,7 @@ class PosterRenamerr(ChubModule):
         """
         return [self.config.destination_dir] if self.config.destination_dir else []
 
-    def run_border_replacerr(self, manifest: dict, progress_window=None):
+    def run_border_replacerr(self, manifest: dict, progress_window=None, process_all=False):
         from backend.modules.border_replacerr import BorderReplacerr
 
         self.logger.debug(
@@ -1214,7 +1214,7 @@ class PosterRenamerr(ChubModule):
                 getattr(self, "_job_id", None), getattr(self, "_job_db", None)
             )
             border.set_progress_window(*progress_window)
-        border.run(manifest)
+        border.run(manifest, process_all=process_all)
 
         self.logger.info("Finished running border_replacerr.")
 
@@ -1488,7 +1488,9 @@ class PosterRenamerr(ChubModule):
                 if self.config.run_border_replacerr:
                     with self._phase("border_replacerr"):
                         self.run_border_replacerr(
-                            manifest, progress_window=tail_windows.get("border")
+                            manifest,
+                            progress_window=tail_windows.get("border"),
+                            process_all=True,
                         )
 
                 # Strict either/or: upload to Plex only on the "plex" path. The

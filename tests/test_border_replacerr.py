@@ -297,3 +297,40 @@ def test_should_process_all(manifest, process_all, reset_all, expected):
         BorderReplacerr._should_process_all(manifest, process_all, reset_all)
         is expected
     )
+
+
+# ---- poster_renamerr wiring ------------------------------------------------
+
+
+def test_renamerr_run_border_replacerr_forwards_process_all(monkeypatch):
+    """poster_renamerr.run_border_replacerr must forward process_all into
+    BorderReplacerr.run so a full renamerr run sweeps the whole library."""
+    import backend.modules.border_replacerr as border_mod
+    from backend.modules.poster_renamerr import PosterRenamerr
+
+    captured = {}
+
+    class _FakeBorder:
+        def __init__(self, logger=None):
+            pass
+
+        def set_job_context(self, *a, **k):
+            pass
+
+        def set_progress_window(self, *a, **k):
+            pass
+
+        def run(self, manifest=None, process_all=False):
+            captured["manifest"] = manifest
+            captured["process_all"] = process_all
+
+    monkeypatch.setattr(border_mod, "BorderReplacerr", _FakeBorder)
+
+    renamer = PosterRenamerr.__new__(PosterRenamerr)
+    renamer.logger = StubLogger()
+
+    manifest = {"media_cache": [1, 2], "collections_cache": []}
+    renamer.run_border_replacerr(manifest, process_all=True)
+
+    assert captured["process_all"] is True
+    assert captured["manifest"] == manifest

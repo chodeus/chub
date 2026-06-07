@@ -402,7 +402,7 @@ class BorderReplacerr(ChubModule):
         manifest subset (webhook/adhoc imports)."""
         return bool(process_all or reset_all or manifest is None)
 
-    def run(self, manifest: dict):
+    def run(self, manifest: Optional[dict] = None, process_all: bool = False):
         with ChubDB(logger=self.logger) as db:
             if self.config.log_level.lower() == "debug":
                 print_settings(self.logger, self.config)
@@ -430,31 +430,12 @@ class BorderReplacerr(ChubModule):
             skipped = 0
             failed = 0
             gate_skipped = 0
-            if reset_all:
+            if self._should_process_all(manifest, process_all, reset_all):
                 self.logger.debug(
-                    "Holiday state changed (or startup). Doing full reprocessing of all matched assets."
+                    "Full-library border pass: reprocessing all matched media "
+                    "and collections (includes already-moved posters)."
                 )
-                for row in db.media.get_all():
-                    if row["matched"] == 1:
-                        if (
-                            self.config.exclusion_list
-                            and row["title"] in self.config.exclusion_list
-                        ):
-                            self.logger.debug(
-                                f"Skipping '{row['title']}' (in exclusion_list)."
-                            )
-                            skipped += 1
-                            continue
-                        if (
-                            self.config.ignore_folders
-                            and row.get("folder") in self.config.ignore_folders
-                        ):
-                            self.logger.debug(
-                                f"Skipping '{row['title']}' (folder in ignore_folders)."
-                            )
-                            skipped += 1
-                            continue
-                        assets.append(row)
+                assets = self._collect_matched_assets(db)
             else:
                 all_ids = [("media_cache", i) for i in manifest["media_cache"]] + [
                     ("collections_cache", i) for i in manifest["collections_cache"]
