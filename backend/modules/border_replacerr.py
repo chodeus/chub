@@ -349,6 +349,45 @@ class BorderReplacerr(ChubModule):
             )
             return None  # None = failure (vs False = no change needed)
 
+    def _asset_excluded(self, asset: dict) -> bool:
+        """True if this asset should be skipped per exclusion_list /
+        ignore_folders. Logs a debug line so the user can see why."""
+        title = asset.get("title")
+        if self.config.exclusion_list and title in self.config.exclusion_list:
+            self.logger.debug(f"Skipping '{title}' (in exclusion_list).")
+            return True
+        if (
+            self.config.ignore_folders
+            and asset.get("folder") in self.config.ignore_folders
+        ):
+            self.logger.debug(f"Skipping '{title}' (folder in ignore_folders).")
+            return True
+        return False
+
+    def _collect_matched_assets(self, db) -> list:
+        """Return every matched media row + matched collection row, with
+        exclusion_list / ignore_folders applied.
+
+        Unlike poster_renamerr.get_matched_assets(), this does NOT drop
+        already-moved posters (those whose renamed_file exists on disk), so
+        the full-library border pass re-borders the whole library, not just
+        the not-yet-moved subset carried in a manifest. Collections are
+        included here (the old reset_all branch processed media only)."""
+        assets: list = []
+        for row in db.media.get_all():
+            if row.get("matched") != 1:
+                continue
+            if self._asset_excluded(row):
+                continue
+            assets.append(row)
+        for row in db.collection.get_all():
+            if row.get("matched") != 1:
+                continue
+            if self._asset_excluded(row):
+                continue
+            assets.append(row)
+        return assets
+
     def run(self, manifest: dict):
         with ChubDB(logger=self.logger) as db:
             if self.config.log_level.lower() == "debug":

@@ -201,3 +201,81 @@ def test_border_state_roundtrip_and_upsert(tmp_path):
 
     bs.clear()
     assert bs.get_all_map() == {}
+
+
+# ---- full-library asset collection -----------------------------------------
+
+from types import SimpleNamespace
+
+
+class _StubTable:
+    """Stands in for db.media / db.collection with a get_all()."""
+
+    def __init__(self, rows):
+        self._rows = rows
+
+    def get_all(self):
+        return self._rows
+
+
+class _StubDB:
+    def __init__(self, media=None, collections=None):
+        self.media = _StubTable(media or [])
+        self.collection = _StubTable(collections or [])
+
+
+def _make_br_with_config(exclusion_list=None, ignore_folders=None):
+    br = _make_br()
+    br.config = SimpleNamespace(
+        exclusion_list=exclusion_list or [],
+        ignore_folders=ignore_folders or [],
+    )
+    return br
+
+
+def test_collect_matched_assets_includes_moved_and_collections(tmp_path):
+    """The full pass must include matched posters that are ALREADY MOVED
+    (renamed_file exists on disk) and matched collections — the exact set
+    get_matched_assets() drops. This is the core regression guard."""
+    moved_dest = tmp_path / "Movie (2020)" / "poster.jpg"
+    moved_dest.parent.mkdir(parents=True)
+    moved_dest.write_bytes(b"already-moved")
+
+    media = [
+        {
+            "title": "Moved Movie",
+            "folder": "Movie (2020)",
+            "matched": 1,
+            "original_file": str(tmp_path / "src" / "movie.jpg"),
+            "renamed_file": str(moved_dest),  # exists on disk == "moved"
+        },
+        {"title": "Unmatched", "folder": "x", "matched": 0},
+    ]
+    collections = [
+        {
+            "title": "My Collection",
+            "folder": "",
+            "matched": 1,
+            "original_file": str(tmp_path / "src" / "coll.jpg"),
+            "renamed_file": str(tmp_path / "dest" / "My Collection.jpg"),
+        }
+    ]
+
+    br = _make_br_with_config()
+    assets = br._collect_matched_assets(_StubDB(media, collections))
+
+    titles = {a["title"] for a in assets}
+    assert titles == {"Moved Movie", "My Collection"}  # moved + collection in; unmatched out
+
+
+def test_collect_matched_assets_applies_exclusion_and_ignore_filters():
+    media = [
+        {"title": "Keep", "folder": "keepdir", "matched": 1},
+        {"title": "ByTitle", "folder": "okdir", "matched": 1},
+        {"title": "ByFolder", "folder": "skipdir", "matched": 1},
+    ]
+    br = _make_br_with_config(
+        exclusion_list=["ByTitle"], ignore_folders=["skipdir"]
+    )
+    assets = br._collect_matched_assets(_StubDB(media, []))
+    assert {a["title"] for a in assets} == {"Keep"}
