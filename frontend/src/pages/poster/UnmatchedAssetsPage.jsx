@@ -443,7 +443,7 @@ const UnmatchedList = ({ items, onRefresh, typeKey: typeKeyProp, onTypeChange })
                                         {formatId(item.tvdb_id) || '—'}
                                     </td>
                                     <td className="px-3 py-2 text-right whitespace-nowrap">
-                                        {item.tmdb_id && (
+                                        {item.tmdb_id ? (
                                             <Link
                                                 to={`/poster/cl2k-maker?${new URLSearchParams({
                                                     tmdb_id: item.tmdb_id,
@@ -465,7 +465,7 @@ const UnmatchedList = ({ items, onRefresh, typeKey: typeKeyProp, onTypeChange })
                                                     wallpaper
                                                 </span>
                                             </Link>
-                                        )}
+                                        ) : null}
                                         {item._type !== 'collection' && (
                                             <IconButton
                                                 icon="content_copy"
