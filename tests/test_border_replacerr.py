@@ -334,3 +334,95 @@ def test_renamerr_run_border_replacerr_forwards_process_all(monkeypatch):
 
     assert captured["process_all"] is True
     assert captured["manifest"] == manifest
+
+
+# ---- end-to-end: full pass borders all, second pass re-encodes nothing -----
+
+
+def test_full_pass_borders_all_then_skips_unchanged(tmp_path, monkeypatch):
+    import backend.modules.border_replacerr as border_mod
+    from backend.util.database.border_state import BorderState
+
+    # Real source posters on disk (1000x1500 so border ops are cheap/no-resize).
+    src_dir = tmp_path / "src"
+    src_dir.mkdir()
+    dest_dir = tmp_path / "dest"
+    dest_dir.mkdir()
+
+    rows = []
+    for name in ("alpha", "beta"):
+        src = src_dir / f"{name}.jpg"
+        Image.new("RGB", (1000, 1500), (10, 20, 30)).save(src, "JPEG")
+        rows.append(
+            {
+                "title": name,
+                "folder": name,
+                "matched": 1,
+                "original_file": str(src),
+                "renamed_file": str(dest_dir / f"{name}.jpg"),
+            }
+        )
+
+    border_state = BorderState(logger=StubLogger(), db_path=str(tmp_path / "b.db"))
+
+    class _FakeDB:
+        def __init__(self):
+            self.media = _StubTable(rows)
+            self.collection = _StubTable([])
+            self.holiday = SimpleNamespace(
+                get_status=lambda: {"last_active_holiday": None},
+                set_status=lambda *a, **k: None,
+            )
+            self.border = border_state
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    monkeypatch.setattr(border_mod, "ChubDB", lambda *a, **k: _FakeDB())
+    # Notifications are irrelevant here; stub them so the run never touches one.
+    monkeypatch.setattr(
+        border_mod,
+        "NotificationManager",
+        lambda *a, **k: SimpleNamespace(send_notification=lambda *a, **k: None),
+    )
+
+    br = _make_br()
+    br.full_config = SimpleNamespace()
+    br.config = SimpleNamespace(
+        log_level="info",
+        holidays=[],
+        border_colors=["#FF0000"],  # color mode
+        skip=False,
+        exclusion_list=[],
+        ignore_folders=[],
+        dry_run=False,
+        border_width=26,
+        border_workers=1,  # deterministic, single-threaded
+    )
+
+    # Count actual border encodes so we can prove the gate skips the 2nd pass.
+    real_replace = BorderReplacerr.replace_borders.__get__(br, BorderReplacerr)
+    calls = {"n": 0}
+
+    def _counting_replace(*a, **k):
+        calls["n"] += 1
+        return real_replace(*a, **k)
+
+    br.replace_borders = _counting_replace
+
+    # First full pass: every asset is bordered and written.
+    br.run(process_all=True)
+    assert calls["n"] == 2
+    dest_alpha = dest_dir / "alpha.jpg"
+    dest_beta = dest_dir / "beta.jpg"
+    assert dest_alpha.exists() and dest_beta.exists()
+    first_bytes = (dest_alpha.read_bytes(), dest_beta.read_bytes())
+
+    # Second identical full pass: gate skips both -> no re-encode, no rewrite.
+    calls["n"] = 0
+    br.run(process_all=True)
+    assert calls["n"] == 0  # the skip-gate prevented any encode
+    assert (dest_alpha.read_bytes(), dest_beta.read_bytes()) == first_bytes
