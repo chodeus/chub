@@ -977,7 +977,7 @@ const Picker = ({ label, items, loading, selected, onSelect, aspect, onBlack, em
                                 </span>
                             )}
                             {it.width ? (
-                                <span className="absolute bottom-0 right-0 text-[10px] font-mono text-white bg-black/60 px-1">
+                                <span className="absolute bottom-0 right-0 text-[11px] font-mono text-white bg-black/60 px-1">
                                     {it.width}×{it.height}
                                 </span>
                             ) : null}
