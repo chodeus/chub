@@ -426,3 +426,159 @@ def test_full_pass_borders_all_then_skips_unchanged(tmp_path, monkeypatch):
     br.run(process_all=True)
     assert calls["n"] == 0  # the skip-gate prevented any encode
     assert (dest_alpha.read_bytes(), dest_beta.read_bytes()) == first_bytes
+
+
+def test_full_pass_skips_poster_with_missing_source(tmp_path, monkeypatch):
+    """A matched poster whose source file is gone from disk must be counted
+    as 'skipped' (no encode attempt, no dest written), not run through the
+    encoder and tallied as 'failed'."""
+    import backend.modules.border_replacerr as border_mod
+    from backend.util.database.border_state import BorderState
+
+    dest_dir = tmp_path / "dest"
+    dest_dir.mkdir()
+    row = {
+        "title": "ghost",
+        "folder": "ghost",
+        "matched": 1,
+        "original_file": str(tmp_path / "src" / "ghost.jpg"),  # never created
+        "renamed_file": str(dest_dir / "ghost.jpg"),
+    }
+    border_state = BorderState(logger=StubLogger(), db_path=str(tmp_path / "b.db"))
+
+    class _FakeDB:
+        def __init__(self):
+            self.media = _StubTable([row])
+            self.collection = _StubTable([])
+            self.holiday = SimpleNamespace(
+                get_status=lambda: {"last_active_holiday": None},
+                set_status=lambda *a, **k: None,
+            )
+            self.border = border_state
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    monkeypatch.setattr(border_mod, "ChubDB", lambda *a, **k: _FakeDB())
+    monkeypatch.setattr(
+        border_mod,
+        "NotificationManager",
+        lambda *a, **k: SimpleNamespace(send_notification=lambda *a, **k: None),
+    )
+
+    br = _make_br()
+    br.full_config = SimpleNamespace()
+    br.config = SimpleNamespace(
+        log_level="info",
+        holidays=[],
+        border_colors=["#FF0000"],
+        skip=False,
+        exclusion_list=[],
+        ignore_folders=[],
+        dry_run=False,
+        border_width=26,
+        border_workers=1,
+    )
+
+    calls = {"n": 0}
+    real_replace = BorderReplacerr.replace_borders.__get__(br, BorderReplacerr)
+
+    def _counting(*a, **k):
+        calls["n"] += 1
+        return real_replace(*a, **k)
+
+    br.replace_borders = _counting
+
+    br.run(process_all=True)
+    assert calls["n"] == 0  # missing source -> skipped before any encode
+    assert not (dest_dir / "ghost.jpg").exists()
+
+
+def test_subset_pass_only_borders_manifest_items(tmp_path, monkeypatch):
+    """With process_all=False and a manifest, only manifest items are
+    bordered; a matched, already-moved poster NOT in the manifest is left
+    untouched (webhook/adhoc stays subset-only)."""
+    import backend.modules.border_replacerr as border_mod
+    from backend.util.database.border_state import BorderState
+
+    src_dir = tmp_path / "src"
+    src_dir.mkdir()
+    dest_dir = tmp_path / "dest"
+    dest_dir.mkdir()
+
+    def _mkrow(id_, name):
+        src = src_dir / f"{name}.jpg"
+        Image.new("RGB", (1000, 1500), (10, 20, 30)).save(src, "JPEG")
+        return {
+            "id": id_,
+            "title": name,
+            "folder": name,
+            "matched": 1,
+            "original_file": str(src),
+            "renamed_file": str(dest_dir / f"{name}.jpg"),
+        }
+
+    in_manifest = _mkrow(1, "inman")
+    out_manifest = _mkrow(2, "outman")
+    by_id = {1: in_manifest, 2: out_manifest}
+    border_state = BorderState(logger=StubLogger(), db_path=str(tmp_path / "b.db"))
+
+    class _MediaTable:
+        def get_by_id(self, i):
+            return by_id.get(i)
+
+        def get_all(self):
+            return [in_manifest, out_manifest]
+
+    class _CollTable:
+        def get_by_id(self, i):
+            return None
+
+        def get_all(self):
+            return []
+
+    class _FakeDB:
+        def __init__(self):
+            self.media = _MediaTable()
+            self.collection = _CollTable()
+            self.holiday = SimpleNamespace(
+                get_status=lambda: {"last_active_holiday": None},
+                set_status=lambda *a, **k: None,
+            )
+            self.border = border_state
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    monkeypatch.setattr(border_mod, "ChubDB", lambda *a, **k: _FakeDB())
+    monkeypatch.setattr(
+        border_mod,
+        "NotificationManager",
+        lambda *a, **k: SimpleNamespace(send_notification=lambda *a, **k: None),
+    )
+
+    br = _make_br()
+    br.full_config = SimpleNamespace()
+    br.config = SimpleNamespace(
+        log_level="info",
+        holidays=[],
+        border_colors=["#FF0000"],
+        skip=False,
+        exclusion_list=[],
+        ignore_folders=[],
+        dry_run=False,
+        border_width=26,
+        border_workers=1,
+    )
+
+    manifest = {"media_cache": [1], "collections_cache": []}
+    br.run(manifest, process_all=False)
+
+    assert (dest_dir / "inman.jpg").exists()        # manifest item bordered
+    assert not (dest_dir / "outman.jpg").exists()   # non-manifest item untouched

@@ -535,6 +535,17 @@ class BorderReplacerr(ChubModule):
                     )
                     skipped += 1
                     continue
+                if not os.path.exists(asset["original_file"]):
+                    # Full-library sweeps re-encounter posters whose source was
+                    # since removed (gdrive cleanup, one-time drops). Skip them
+                    # quietly instead of letting the encoder fail and tallying a
+                    # scary 'failed' every run.
+                    self.logger.debug(
+                        f"Skipping '{asset.get('title')}' — source poster missing "
+                        f"on disk ({asset['original_file']})."
+                    )
+                    skipped += 1
+                    continue
                 if border_paths:
                     variant = border_paths[variant_index % len(border_paths)]
                 elif border_colors:
