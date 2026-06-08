@@ -65,16 +65,41 @@ def select_logo(
     return pool[0].get("file_path")
 
 
+def _is_allowed_image_host(url: str) -> bool:
+    """Allow only the known image CDNs (TMDB + fanart.tv).
+
+    ``download`` accepts absolute URLs that originate from request data
+    (``backdrop_path`` / ``logo_path``), so without a host allowlist the server
+    could be coerced into fetching arbitrary internal URLs (SSRF — e.g. cloud
+    metadata). Restricting to the hosts the maker legitimately uses closes that.
+    """
+    from urllib.parse import urlparse
+
+    host = (urlparse(url).hostname or "").lower()
+    return (
+        host == "image.tmdb.org"
+        or host == "assets.fanart.tv"
+        or host.endswith(".fanart.tv")
+    )
+
+
 def download(file_path: str, session=None) -> bytes:
     """Download an image by TMDB path or absolute URL.
 
     A bare TMDB ``file_path`` is fetched at original resolution from the CDN (no
     API key needed); an absolute ``http(s)`` URL (e.g. a fanart.tv logo) is
-    fetched as-is.
+    fetched as-is — but only from the allowed image hosts (TMDB / fanart.tv), so a
+    crafted ``logo_path`` / ``backdrop_path`` can't turn this into an SSRF.
     """
     import requests
 
     url = file_path if file_path.startswith("http") else TMDB_IMAGE_CDN + file_path
+    if not _is_allowed_image_host(url):
+        from urllib.parse import urlparse
+
+        raise ValueError(
+            f"refusing to fetch image from disallowed host: {urlparse(url).hostname!r}"
+        )
     resp = (session or requests).get(url, timeout=15)
     resp.raise_for_status()
     return resp.content

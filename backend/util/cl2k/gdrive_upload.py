@@ -33,6 +33,23 @@ def _reject_unsafe(value: str, field: str) -> None:
         raise ValueError(f"Refusing unsafe {field} value: {value!r}")
 
 
+# First char must NOT be '-' (real Drive IDs start alphanumeric), so an ID can't
+# be smuggled in as an rclone option even though '-' is otherwise a valid char.
+_DRIVE_ID_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_-]*$")
+
+
+def _reject_unsafe_id(value: str, field: str) -> None:
+    """Strict validator for Google Drive folder/file IDs.
+
+    Drive IDs are always ``[A-Za-z0-9_-]``. Restricting to that charset (on top of
+    the list-form subprocess call, which is never shell-interpreted) makes it
+    provably impossible for an ID to smuggle an rclone option or any other token
+    into the command line.
+    """
+    if not isinstance(value, str) or not _DRIVE_ID_RE.fullmatch(value):
+        raise ValueError(f"Refusing unsafe {field} value: {value!r}")
+
+
 def _ensure_remote(rclone: str) -> None:
     """Create the rclone 'posters' remote if missing (idempotent)."""
     subprocess.run(
@@ -122,7 +139,7 @@ def upload_file(
     lands in their own Drive, owned by them). Raises on a missing token or a
     non-zero rclone exit so the caller can record the failure.
     """
-    _reject_unsafe(folder_id, "gdrive_folder_id")
+    _reject_unsafe_id(folder_id, "gdrive_folder_id")
     auth = _upload_auth_args(sync_cfg)
     if not auth:
         raise RuntimeError(
@@ -185,7 +202,7 @@ def list_psd(
     hundreds-to-thousands of PSDs. Returns ``[{"name": basename, "path":
     relative_path}]`` where ``path`` is passed to :func:`fetch_file`.
     """
-    _reject_unsafe(drive_id, "drive_id")
+    _reject_unsafe_id(drive_id, "drive_id")
     rclone = _rclone_path()
     _ensure_remote(rclone)
     # Strip rclone glob metacharacters so the query is a literal substring, not a
@@ -218,7 +235,7 @@ def list_psd(
 
 def fetch_file(sync_cfg: Any, drive_id: str, path: str) -> bytes:
     """Download a single file from Drive folder ``drive_id`` and return its bytes."""
-    _reject_unsafe(drive_id, "drive_id")
+    _reject_unsafe_id(drive_id, "drive_id")
     _reject_unsafe(path, "path")
     rclone = _rclone_path()
     _ensure_remote(rclone)
