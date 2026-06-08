@@ -118,6 +118,35 @@ def images(
     )
 
 
+@router.get("/upload-status", summary="Whether CL2K Drive upload has a usable OAuth token")
+def upload_status(
+    db: ChubDB = Depends(get_database),
+    logger: Any = Depends(get_logger),
+) -> JSONResponse:
+    from backend.util.cl2k.gdrive_upload import has_upload_token
+
+    cfg = load_config()
+    return ok(
+        "ok",
+        {
+            "upload_to_gdrive": bool(cfg.cl2k_maker.upload_to_gdrive),
+            "folder_id_set": bool(cfg.cl2k_maker.gdrive_folder_id),
+            "token_ok": has_upload_token(cfg.sync_gdrive),
+        },
+    )
+
+
+@router.get("/external-ids", summary="TMDB external ids (tvdb_id + imdb_id) for a title")
+def external_ids(
+    tmdb_id: int = Query(...),
+    media_type: str = Query("movie", alias="type"),
+    db: ChubDB = Depends(get_database),
+    logger: Any = Depends(get_logger),
+) -> JSONResponse:
+    tmdb = TMDBClient(load_config().tmdb, db, logger)
+    return ok("ok", tmdb.external_ids(tmdb_id, media_type))
+
+
 @router.post("/preview", summary="Render a CL2K poster without saving")
 def preview(
     req: GenerateRequest,
@@ -405,25 +434,36 @@ def retext(
         image_bytes = base64.b64decode(req.image_b64.split(",")[-1])
     except Exception:
         return error("invalid image data", "CL2K_RETEXT")
-    out = retext_poster(
-        db=db,
-        full_config=load_config(),
-        logger=logger,
-        image_bytes=image_bytes,
-        mask_bytes=_mask_bytes(req.mask_b64),
-        apply_ai=req.apply_ai,
-        prompt=req.prompt,
-        label_text=req.label_text,
-        text_y_frac=req.text_y,
-        save=not req.preview,
-        kind=req.kind,
-        title=req.title,
-        tmdb_id=req.tmdb_id,
-        year=req.year,
-        tvdb_id=req.tvdb_id,
-        imdb_id=req.imdb_id,
-        season_number=req.season_number,
+    logger.info(
+        f"CL2K retext: {'preview' if req.preview else 'save'} "
+        f"(apply_ai={req.apply_ai}, mask={'yes' if req.mask_b64 else 'no'}, "
+        f"label={req.label_text!r})"
     )
+    try:
+        out = retext_poster(
+            db=db,
+            full_config=load_config(),
+            logger=logger,
+            image_bytes=image_bytes,
+            mask_bytes=_mask_bytes(req.mask_b64),
+            apply_ai=req.apply_ai,
+            prompt=req.prompt,
+            label_text=req.label_text,
+            text_y_frac=req.text_y,
+            save=not req.preview,
+            kind=req.kind,
+            title=req.title,
+            tmdb_id=req.tmdb_id,
+            year=req.year,
+            tvdb_id=req.tvdb_id,
+            imdb_id=req.imdb_id,
+            season_number=req.season_number,
+        )
+    except Exception as exc:
+        # Without this, an AI/timeout failure produced a bare 500 with nothing in
+        # the logs — log it and return a readable error to the client instead.
+        logger.error(f"CL2K retext failed: {exc}", exc_info=True)
+        return error(f"retext failed: {exc}", "CL2K_RETEXT")
     if req.preview:
         return ok("ok", {"preview_b64": base64.b64encode(out).decode()})
     if isinstance(out, dict) and out.get("status") == "generated":

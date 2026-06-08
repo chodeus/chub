@@ -500,6 +500,42 @@ class TMDBClient:
         except ValueError:
             return []
 
+    def external_ids(
+        self, tmdb_id: int, media_type: str
+    ) -> Dict[str, Any]:
+        """Return ``{tvdb_id, imdb_id}`` from TMDB for a movie/show.
+
+        Used by the CL2K maker to auto-populate ids when a title is picked from
+        search, so generated filenames match TVDB/IMDB-keyed libraries without
+        manual entry. Collections have no external_ids endpoint (returns empty).
+        Missing ids come back as None; ``{}``-ish on any failure / disabled.
+        """
+        if not self.enabled or not tmdb_id:
+            return {"tvdb_id": None, "imdb_id": None}
+        mt = self._image_mt(media_type)
+        if mt == "collection":
+            return {"tvdb_id": None, "imdb_id": None}
+        key = ("external_ids", str(tmdb_id), mt)
+        with self._memo_lock:
+            if key in self._memo:
+                return self._memo[key]
+        url = f"{self.BASE}/{mt}/{tmdb_id}/external_ids"
+        params = {"api_key": self.cfg.apikey}
+        resp = self._request_with_retry(url, params, what=f"{mt}/{tmdb_id}/external_ids")
+        out: Dict[str, Any] = {"tvdb_id": None, "imdb_id": None}
+        if resp is not None and resp.ok:
+            try:
+                data = resp.json()
+            except ValueError:
+                data = {}
+            tvdb = data.get("tvdb_id")
+            imdb = data.get("imdb_id")
+            out["tvdb_id"] = tvdb if isinstance(tvdb, int) else None
+            out["imdb_id"] = imdb or None
+        with self._memo_lock:
+            self._memo[key] = out
+        return out
+
 
 def backfill_missing_tmdb_ids(
     db: ChubDB,

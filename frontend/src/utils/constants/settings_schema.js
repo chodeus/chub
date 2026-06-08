@@ -692,22 +692,15 @@ export const SETTINGS_SCHEMA = [
                 type: 'check_box',
                 section: 'Google Drive Upload',
                 description:
-                    'After saving, copy the generated poster to a Drive folder via rclone.',
+                    'After saving, copy the generated poster to a Drive folder via rclone. Uploads use your Sync GDrive OAuth token — set one under Sync GDrive (a service account can’t own files in a personal Drive, so it has no usable upload path).',
             },
             {
                 key: 'gdrive_folder_id',
                 label: 'Upload Folder ID',
                 type: 'text',
                 section: 'Google Drive Upload',
-                description: 'Destination Google Drive folder ID for uploads.',
-            },
-            {
-                key: 'gdrive_sa_location',
-                label: 'Service Account Location',
-                type: 'text',
-                section: 'Google Drive Upload',
                 description:
-                    'Path to a service-account JSON for the upload. Falls back to Sync Gdrive’s credentials when blank.',
+                    'Destination Google Drive folder ID for uploads. The folder is written to as you (via the Sync GDrive OAuth token), so the posters are owned by you.',
             },
             // ─── G-Drive .psd source ───────────────────────────────────
             {

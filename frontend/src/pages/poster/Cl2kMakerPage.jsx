@@ -65,42 +65,125 @@ const parsePastedId = raw => {
     return null;
 };
 
+// ─── In-progress state persistence ───────────────────────────────────────────
+// The page component unmounts on navigation, dropping all React state — so the
+// poster you were building vanishes when you leave and come back. Persist the
+// selected title + builder selections in sessionStorage (survives route changes,
+// clears on tab close) so returning restores the work.
+const SS_ITEM = 'cl2k:item';
+const SS_SELKEY = 'cl2k:selKey';
+const SS_BUILDER = 'cl2k:builder';
+
+const ssRead = (key, fallback) => {
+    try {
+        const raw = sessionStorage.getItem(key);
+        return raw == null ? fallback : JSON.parse(raw);
+    } catch {
+        return fallback;
+    }
+};
+const ssWrite = (key, value) => {
+    try {
+        sessionStorage.setItem(key, JSON.stringify(value));
+    } catch {
+        /* sessionStorage unavailable (private mode / quota) — skip */
+    }
+};
+const ssRemove = key => {
+    try {
+        sessionStorage.removeItem(key);
+    } catch {
+        /* noop */
+    }
+};
+
+// Fetch TMDB external ids for a picked title and merge tvdb_id/imdb_id in where
+// they're not already set, so filenames/matching are right without manual entry.
+// Collections have no external ids; a lookup failure leaves the item untouched.
+const withExternalIds = async base => {
+    if (!base?.tmdb_id || base.kind === 'collection') return base;
+    if (base.tvdb_id && base.imdb_id) return base;
+    try {
+        const resp = await cl2kMakerAPI.externalIds(base.tmdb_id, base.kind);
+        const ext = resp?.data || {};
+        return {
+            ...base,
+            tvdb_id: base.tvdb_id ?? (ext.tvdb_id || null),
+            imdb_id: base.imdb_id ?? (ext.imdb_id || null),
+        };
+    } catch {
+        return base;
+    }
+};
+
 const Cl2kMakerPage = () => {
     const toast = useToast();
     const [searchParams] = useSearchParams();
 
     const [config, setConfig] = useState(null);
+    // Drive-upload status (enabled + has a usable OAuth token) for the banner warning.
+    const [uploadStatus, setUploadStatus] = useState(null);
 
     // Selected item: { tmdb_id, kind, title, year, tvdb_id, imdb_id } | null.
-    // Seeded once from an Unmatched-Assets deep link
-    // (?tmdb_id=&type=&title=&year=&tvdb_id=&imdb_id=) when present.
+    // Seeded from an Unmatched-Assets deep link
+    // (?tmdb_id=&type=&title=&year=&tvdb_id=&imdb_id=) when present; otherwise
+    // restored from sessionStorage so an in-progress poster survives navigation.
     const [item, setItem] = useState(() => {
         const tmdbId = searchParams.get('tmdb_id');
-        if (!tmdbId) return null;
-        return {
-            tmdb_id: Number(tmdbId),
-            kind: normalizeKind(searchParams.get('type')),
-            title: searchParams.get('title') || '',
-            year: searchParams.get('year') ? Number(searchParams.get('year')) : null,
-            tvdb_id: searchParams.get('tvdb_id') ? Number(searchParams.get('tvdb_id')) : null,
-            imdb_id: searchParams.get('imdb_id') || null,
-        };
+        if (tmdbId) {
+            // A fresh deep link is a new title — drop any stale builder snapshot.
+            ssRemove(SS_BUILDER);
+            return {
+                tmdb_id: Number(tmdbId),
+                kind: normalizeKind(searchParams.get('type')),
+                title: searchParams.get('title') || '',
+                year: searchParams.get('year') ? Number(searchParams.get('year')) : null,
+                tvdb_id: searchParams.get('tvdb_id') ? Number(searchParams.get('tvdb_id')) : null,
+                imdb_id: searchParams.get('imdb_id') || null,
+            };
+        }
+        return ssRead(SS_ITEM, null);
     });
 
     // Bumped only when a NEW title is picked, so editing the ids in-place doesn't
-    // remount the Builder (which would wipe panel state).
-    const [selectionKey, setSelectionKey] = useState(0);
+    // remount the Builder (which would wipe panel state). Restored too, so the
+    // Builder remounts with the same key and re-reads its saved selections.
+    const [selectionKey, setSelectionKey] = useState(() => ssRead(SS_SELKEY, 0));
     const pickItem = useCallback(it => {
+        ssRemove(SS_BUILDER); // a new title starts the builder fresh
         setItem(it);
         setSelectionKey(k => k + 1);
+    }, []);
+
+    // Persist the selected title + selection key across navigation.
+    useEffect(() => {
+        ssWrite(SS_ITEM, item);
+    }, [item]);
+    useEffect(() => {
+        ssWrite(SS_SELKEY, selectionKey);
+    }, [selectionKey]);
+
+    const resetItem = useCallback(() => {
+        ssRemove(SS_ITEM);
+        ssRemove(SS_BUILDER);
+        setItem(null);
     }, []);
 
     useEffect(() => {
         let cancelled = false;
         (async () => {
             try {
-                const resp = await configAPI.fetchConfig({ useCache: false });
-                if (!cancelled) setConfig(resp?.data?.cl2k_maker || {});
+                const [cfgResp, statusResp] = await Promise.allSettled([
+                    configAPI.fetchConfig({ useCache: false }),
+                    cl2kMakerAPI.uploadStatus(),
+                ]);
+                if (cancelled) return;
+                setConfig(
+                    cfgResp.status === 'fulfilled' ? cfgResp.value?.data?.cl2k_maker || {} : {}
+                );
+                if (statusResp.status === 'fulfilled') {
+                    setUploadStatus(statusResp.value?.data || null);
+                }
             } catch {
                 if (!cancelled) setConfig({});
             }
@@ -118,7 +201,7 @@ const Cl2kMakerPage = () => {
                 icon="wallpaper"
             />
 
-            <ConfigBanner config={config} />
+            <ConfigBanner config={config} uploadStatus={uploadStatus} />
 
             {!item ? (
                 <TitlePicker onPick={pickItem} toast={toast} />
@@ -127,7 +210,7 @@ const Cl2kMakerPage = () => {
                     key={selectionKey}
                     item={item}
                     config={config}
-                    onReset={() => setItem(null)}
+                    onReset={resetItem}
                     onItemChange={patch => setItem(prev => (prev ? { ...prev, ...patch } : prev))}
                     toast={toast}
                 />
@@ -138,9 +221,12 @@ const Cl2kMakerPage = () => {
 
 // ─── Config banner ───────────────────────────────────────────────────────
 
-const ConfigBanner = ({ config }) => {
+const ConfigBanner = ({ config, uploadStatus }) => {
     if (config === null) return null;
     const missingDir = !config.output_dir;
+    // Upload is enabled but there's no usable Sync GDrive OAuth token, so every
+    // upload will fail (a service account can't own files in a personal Drive).
+    const uploadNoToken = uploadStatus?.upload_to_gdrive && uploadStatus?.token_ok === false;
     return (
         <section className="mt-4 p-3 bg-surface border border-border rounded-lg text-sm">
             <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-secondary">
@@ -176,6 +262,20 @@ const ConfigBanner = ({ config }) => {
                     Set an output directory before generating, or saves will fail.
                 </div>
             )}
+            {uploadNoToken && (
+                <div className="mt-2 text-xs text-warning">
+                    Google Drive upload is enabled, but no usable Sync GDrive OAuth token is set —
+                    uploads will fail. Add a token under{' '}
+                    <Link
+                        to="/settings/modules"
+                        className="text-primary underline hover:no-underline"
+                    >
+                        Sync GDrive
+                    </Link>{' '}
+                    (a service account can’t own files in a personal Drive). Generation still
+                    succeeds locally.
+                </div>
+            )}
         </section>
     );
 };
@@ -189,6 +289,7 @@ const TitlePicker = ({ onPick, toast }) => {
     const [searching, setSearching] = useState(false);
     const [paste, setPaste] = useState('');
     const [resolving, setResolving] = useState(false);
+    const [picking, setPicking] = useState(false);
 
     const runSearch = useCallback(
         async e => {
@@ -208,17 +309,25 @@ const TitlePicker = ({ onPick, toast }) => {
     );
 
     const pickResult = useCallback(
-        r => {
+        async r => {
             const title = r.title || r.name || '';
             const dateStr = r.release_date || r.first_air_date || '';
-            onPick({
+            const base = {
                 tmdb_id: r.id,
                 kind,
                 title,
                 year: dateStr ? Number(dateStr.slice(0, 4)) : null,
                 tvdb_id: null,
                 imdb_id: null,
-            });
+            };
+            setPicking(true);
+            try {
+                // Auto-populate tvdb_id/imdb_id from TMDB so filenames match the
+                // library; the manual "Edit IDs" editor stays as the fallback.
+                onPick(await withExternalIds(base));
+            } finally {
+                setPicking(false);
+            }
         },
         [kind, onPick]
     );
@@ -241,14 +350,16 @@ const TitlePicker = ({ onPick, toast }) => {
                 toast.error('Could not resolve that ID to a TMDB id');
                 return;
             }
-            onPick({
+            const base = {
                 tmdb_id: Number(tmdbId),
                 kind: pasteKind,
                 title: '',
                 year: null,
                 tvdb_id: parsed.source === 'tvdb_id' ? Number(parsed.id) : null,
                 imdb_id: parsed.source === 'imdb_id' ? parsed.id : null,
-            });
+            };
+            // Fill in whichever of tvdb/imdb the paste didn't already supply.
+            onPick(await withExternalIds(base));
         } catch (err) {
             toast.error(err.message || 'Resolve failed');
         } finally {
@@ -298,7 +409,10 @@ const TitlePicker = ({ onPick, toast }) => {
                                 <button
                                     type="button"
                                     onClick={() => pickResult(r)}
-                                    className="w-full text-left px-3 py-2 hover:bg-surface-alt flex items-center justify-between gap-3"
+                                    disabled={picking}
+                                    className={`w-full text-left px-3 py-2 hover:bg-surface-alt flex items-center justify-between gap-3 ${
+                                        picking ? 'opacity-60 cursor-wait' : ''
+                                    }`}
                                 >
                                     <span className="text-primary truncate">{title}</span>
                                     <span className="text-xs text-tertiary shrink-0">
@@ -411,28 +525,48 @@ const IdEditor = ({ item, onItemChange }) => {
 };
 
 const Builder = ({ item, config, onReset, onItemChange, toast }) => {
-    const [tab, setTab] = useState('tmdb');
+    // Restore the builder's selections from the session snapshot (written by the
+    // effect below, cleared when a new title is picked) so they survive
+    // navigation. Read once on mount.
+    const saved = useMemo(() => ssRead(SS_BUILDER, {}), []);
+
+    const [tab, setTab] = useState(saved.tab ?? 'tmdb');
     const [editIds, setEditIds] = useState(false);
 
     // Art (shared across the TMDB / fanart tabs)
     const [tmdbArt, setTmdbArt] = useState(null);
     const [fanartArt, setFanartArt] = useState(null);
     const [loadingArt, setLoadingArt] = useState(true);
-    const [backdrop, setBackdrop] = useState(null); // file_path | absolute url
-    const [logo, setLogo] = useState(null);
+    const [backdrop, setBackdrop] = useState(saved.backdrop ?? null); // file_path | absolute url
+    const [logo, setLogo] = useState(saved.logo ?? null);
 
     // Crop framing: focal point (0..1) for the backdrop cover-crop. 0.5 = centre.
-    const [focusX, setFocusX] = useState(0.5);
-    const [focusY, setFocusY] = useState(0.5);
+    const [focusX, setFocusX] = useState(saved.focusX ?? 0.5);
+    const [focusY, setFocusY] = useState(saved.focusY ?? 0.5);
 
     // Season variant (shows only)
-    const [seasonNumber, setSeasonNumber] = useState('');
-    const [bulkSeasons, setBulkSeasons] = useState('');
+    const [seasonNumber, setSeasonNumber] = useState(saved.seasonNumber ?? '');
+    const [bulkSeasons, setBulkSeasons] = useState(saved.bulkSeasons ?? '');
 
     // AI text-removal
-    const [removeText, setRemoveText] = useState(false);
+    const [removeText, setRemoveText] = useState(saved.removeText ?? false);
     const [maskB64, setMaskB64] = useState(null);
     const [brushSize, setBrushSize] = useState(18);
+
+    // Persist the builder selections (not the ephemeral mask/preview) so the
+    // in-progress poster is restored on return.
+    useEffect(() => {
+        ssWrite(SS_BUILDER, {
+            tab,
+            backdrop,
+            logo,
+            focusX,
+            focusY,
+            seasonNumber,
+            bulkSeasons,
+            removeText,
+        });
+    }, [tab, backdrop, logo, focusX, focusY, seasonNumber, bulkSeasons, removeText]);
 
     // Preview
     const [previewUrl, setPreviewUrl] = useState(null);

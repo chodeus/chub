@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import base64
 import io
+import time
 from typing import Optional
 
 _TIMEOUT_DEFAULT = 120
@@ -38,12 +39,15 @@ def remove_text(
     config=None,
     mask_bytes: Optional[bytes] = None,
     prompt: Optional[str] = None,
+    logger=None,
 ) -> bytes:
     """Erase the masked regions via the configured provider; else pass-through.
 
     ``prompt`` overrides the module-settings ``ai_prompt`` for this one call
     (used by the poster-editor so a per-edit prompt can be supplied while still
-    defaulting to the configured prompt).
+    defaulting to the configured prompt). ``logger`` (optional) receives
+    start/elapsed/status lines so a slow or failing AI call is visible in the
+    logs instead of timing out silently.
     """
     if not is_enabled(config):
         return image_bytes
@@ -60,7 +64,7 @@ def remove_text(
             return image_bytes
         result = _huggingface(image_bytes, mask_bytes, config)
     elif provider == "openai":
-        result = _openai(image_bytes, mask_bytes, config, prompt=prompt)
+        result = _openai(image_bytes, mask_bytes, config, prompt=prompt, logger=logger)
     else:
         return image_bytes
 
@@ -117,6 +121,7 @@ def _openai(
     mask_bytes: Optional[bytes],
     config,
     prompt: Optional[str] = None,
+    logger=None,
 ) -> bytes:
     """OpenAI images.edit (gpt-image-1).
 
@@ -125,13 +130,17 @@ def _openai(
     With a mask, only that region is edited; OpenAI marks the edit area with
     TRANSPARENCY, so we invert our white=remove mask to alpha-0-where-remove.
 
-    ``prompt`` (per-call) overrides ``config.ai_prompt`` when provided.
+    ``prompt`` (per-call) overrides ``config.ai_prompt`` when provided. ``logger``
+    (optional) logs the model, image size, elapsed time and HTTP status so a slow
+    or failing edit is diagnosable (gpt-image-1 edits routinely take 30–120s).
     """
     import requests
     from PIL import Image
 
     key = getattr(config, "ai_api_key", "")
     if not key:
+        if logger:
+            logger.warning("CL2K AI (openai): no ai_api_key set — skipping text removal")
         return image_bytes
     model = getattr(config, "ai_model", "") or "gpt-image-1"
     prompt = (prompt or "").strip() or getattr(config, "ai_prompt", "") or (
@@ -152,14 +161,45 @@ def _openai(
         rgba.save(mask_buf, "PNG")
         files["mask"] = ("mask.png", mask_buf.getvalue(), "image/png")
 
-    resp = requests.post(
-        "https://api.openai.com/v1/images/edits",
-        headers={"Authorization": f"Bearer {key}"},
-        files=files,
-        data=data,
-        timeout=_timeout(config),
-    )
-    resp.raise_for_status()
+    timeout = _timeout(config)
+    if logger:
+        logger.info(
+            f"CL2K AI (openai): images.edit start — model={model}, "
+            f"image={src.width}x{src.height}, mask={'yes' if mask_bytes else 'no'}, "
+            f"timeout={timeout}s"
+        )
+    started = time.time()
+    try:
+        resp = requests.post(
+            "https://api.openai.com/v1/images/edits",
+            headers={"Authorization": f"Bearer {key}"},
+            files=files,
+            data=data,
+            timeout=timeout,
+        )
+    except requests.RequestException as exc:
+        elapsed = time.time() - started
+        if logger:
+            logger.error(
+                f"CL2K AI (openai): images.edit failed after {elapsed:.1f}s "
+                f"(network/timeout): {exc}"
+            )
+        raise
+    elapsed = time.time() - started
+    if logger:
+        logger.info(
+            f"CL2K AI (openai): images.edit responded {resp.status_code} "
+            f"in {elapsed:.1f}s"
+        )
+    if not resp.ok:
+        # Surface the API's own error message (e.g. quota/content-policy) so it
+        # lands in the logs rather than a bare status code.
+        body = (resp.text or "")[:300]
+        if logger:
+            logger.error(
+                f"CL2K AI (openai): images.edit returned {resp.status_code}: {body}"
+            )
+        resp.raise_for_status()
     return base64.b64decode(resp.json()["data"][0]["b64_json"])
 
 

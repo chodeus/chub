@@ -88,18 +88,26 @@ def _auth_args(sync_cfg: Any) -> List[str]:
     return sa or _oauth_args(sync_cfg)
 
 
-def _upload_auth_args(sync_cfg: Any, sa_override: Optional[str] = None) -> List[str]:
-    """Auth for WRITING to the user's own drive (upload): OAuth first, then SA.
+def _upload_auth_args(sync_cfg: Any) -> List[str]:
+    """Auth for WRITING to the user's own drive (upload): the OAuth token ONLY.
 
     Uploading with the user's OAuth token writes as the user, so files land in
-    their own Drive folder and are owned by them — no service-account sharing
-    needed (this is how PosterFlow does it). An explicit ``sa_override``
-    (cl2k_maker.gdrive_sa_location) takes precedence for users who deliberately
-    upload through a service account; the sync_gdrive SA is the last resort.
+    their own Drive folder and are owned by them (this is how PosterFlow does it).
+    A service account is intentionally NOT used here: an SA has no storage quota
+    and cannot own files in a personal Drive ("Service Accounts do not have
+    storage quota"), so the SA upload path always fails. ``[]`` when there is no
+    usable OAuth token, so the caller can raise a clear error.
     """
-    if sa_override:
-        return _sa_args(sa_override)
-    return _oauth_args(sync_cfg) or _sa_args(getattr(sync_cfg, "gdrive_sa_location", None))
+    return _oauth_args(sync_cfg)
+
+
+def has_upload_token(sync_cfg: Any) -> bool:
+    """True when a usable OAuth token is configured for CL2K uploads.
+
+    Lets callers (e.g. the maker UI) warn the user that upload is enabled but
+    will fail, without exposing the (redacted) token itself.
+    """
+    return bool(_upload_auth_args(sync_cfg))
 
 
 def upload_file(
@@ -107,20 +115,19 @@ def upload_file(
     folder_id: str,
     sync_cfg: Any,
     logger,
-    sa_override: Optional[str] = None,
 ) -> None:
     """Copy a single local poster into the Drive folder ``folder_id``.
 
-    Authenticates as the user via OAuth by default (so the poster lands in their
-    own Drive, owned by them); falls back to a service account. Raises on a
+    Authenticates as the user via the Sync GDrive OAuth token (so the poster
+    lands in their own Drive, owned by them). Raises on a missing token or a
     non-zero rclone exit so the caller can record the failure.
     """
     _reject_unsafe(folder_id, "gdrive_folder_id")
-    auth = _upload_auth_args(sync_cfg, sa_override)
+    auth = _upload_auth_args(sync_cfg)
     if not auth:
         raise RuntimeError(
-            "no Google Drive credentials configured "
-            "(set Sync GDrive OAuth token or a service account)"
+            "no usable Google Drive OAuth token configured — set a token under "
+            "Sync GDrive (a service account cannot own files in a personal Drive)"
         )
     rclone = _rclone_path()
     _ensure_remote(rclone)
