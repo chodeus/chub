@@ -256,6 +256,9 @@ def _persist_poster(
         season_number=season_number,
         ext=geo.OUTPUT_EXT,
     )
+    # build_poster_filename already strips path-illegal chars, but basename makes it
+    # provably impossible for a crafted title to escape output_dir (path-injection).
+    filename = os.path.basename(filename)
     os.makedirs(cfg.output_dir, exist_ok=True)
     out_path = os.path.join(cfg.output_dir, filename)
     with open(out_path, "wb") as fh:
