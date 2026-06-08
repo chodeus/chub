@@ -1737,6 +1737,12 @@ const EditPosterPanel = ({ item, effectiveKind, config, toast }) => {
     const [aiBusy, setAiBusy] = useState(false);
     const [labelBusy, setLabelBusy] = useState(false);
     const [saving, setSaving] = useState(false);
+    // Live label positioning: a CSS text overlay tracks the slider instantly while
+    // dragging, then snaps to the accurate server render on release. `imgW` scales
+    // the overlay font to the rendered poster so it closely matches the CL2K render.
+    const [dragging, setDragging] = useState(false);
+    const [imgW, setImgW] = useState(0);
+    const workImgRef = useRef(null);
 
     const provider = config?.ai_provider || 'none';
     const isSeason = String(seasonNum).trim() !== '';
@@ -1836,6 +1842,29 @@ const EditPosterPanel = ({ item, effectiveKind, config, toast }) => {
         };
     }, [workingB64, label, textY, idFields, toast]);
 
+    // Re-measure the rendered poster width on resize so the live overlay font scales
+    // with it (initial measure happens on the image's onLoad).
+    useEffect(() => {
+        const measure = () => {
+            if (workImgRef.current) setImgW(workImgRef.current.clientWidth);
+        };
+        window.addEventListener('resize', measure);
+        return () => window.removeEventListener('resize', measure);
+    }, []);
+
+    // Clear the drag state on any pointer release (even outside the slider), so the
+    // view reliably snaps back to the accurate server render.
+    useEffect(() => {
+        if (!dragging) return undefined;
+        const stop = () => setDragging(false);
+        window.addEventListener('mouseup', stop);
+        window.addEventListener('touchend', stop);
+        return () => {
+            window.removeEventListener('mouseup', stop);
+            window.removeEventListener('touchend', stop);
+        };
+    }, [dragging]);
+
     // Save the working copy + label. apply_ai=false → NO second OpenAI call.
     const runSave = useCallback(async () => {
         if (!workingB64) return;
@@ -1858,14 +1887,18 @@ const EditPosterPanel = ({ item, effectiveKind, config, toast }) => {
         }
     }, [workingB64, label, textY, idFields, toast]);
 
-    // What the working-copy pane shows: the labeled render if present, else the
-    // erased working copy, else the original upload (with its own correct mime).
-    const workingSrc =
-        labeledB64 && label.trim()
-            ? `data:image/jpeg;base64,${labeledB64}`
-            : aiErased
-              ? `data:image/jpeg;base64,${workingB64}`
-              : imageDataUrl;
+    // What the working-copy pane shows.
+    // bareSrc = working copy with NO baked label; labeledSrc = the accurate server
+    // render (label baked in). While dragging the position, or before the server
+    // render catches up, show bareSrc + a live CSS label; otherwise show the
+    // pixel-accurate render.
+    const bareSrc = aiErased ? `data:image/jpeg;base64,${workingB64}` : imageDataUrl;
+    const labeledSrc = labeledB64 ? `data:image/jpeg;base64,${labeledB64}` : null;
+    const liveLabel = !!label.trim() && (dragging || labelBusy || !labeledSrc);
+    const workingSrc = !label.trim() || liveLabel ? bareSrc : labeledSrc || bareSrc;
+    // CL2K label metrics scaled to the rendered poster: 32px per 1000px canvas width,
+    // tracking 0.8em — an approximation of overlay_label, replaced by the real render.
+    const overlayPx = imgW ? (32 * imgW) / 1000 : 0;
 
     return (
         <section className="mt-4 flex flex-col gap-4">
@@ -1959,13 +1992,40 @@ const EditPosterPanel = ({ item, effectiveKind, config, toast }) => {
                             <h3 className="text-sm font-medium text-primary">Working copy</h3>
                             {labelBusy && <span className="text-xs text-tertiary">updating…</span>}
                         </div>
-                        <div className="aspect-[2/3] bg-black rounded overflow-hidden flex items-center justify-center">
+                        <div className="aspect-[2/3] bg-black rounded overflow-hidden flex items-center justify-center relative">
                             {workingSrc ? (
-                                <img
-                                    src={workingSrc}
-                                    alt="Working copy"
-                                    className="w-full h-full object-contain"
-                                />
+                                <>
+                                    <img
+                                        ref={workImgRef}
+                                        src={workingSrc}
+                                        alt="Working copy"
+                                        onLoad={e => setImgW(e.target.clientWidth)}
+                                        className="w-full h-full object-contain"
+                                    />
+                                    {liveLabel && overlayPx > 0 && (
+                                        <div
+                                            style={{
+                                                position: 'absolute',
+                                                left: 0,
+                                                right: 0,
+                                                top: `${textY * 100}%`,
+                                                transform: 'translateY(-50%)',
+                                                textAlign: 'center',
+                                                color: '#fff',
+                                                textTransform: 'uppercase',
+                                                fontFamily: 'Arial, Helvetica, sans-serif',
+                                                fontWeight: 400,
+                                                fontSize: `${overlayPx}px`,
+                                                letterSpacing: `${overlayPx * 0.8}px`,
+                                                lineHeight: 1,
+                                                whiteSpace: 'nowrap',
+                                                pointerEvents: 'none',
+                                            }}
+                                        >
+                                            {label}
+                                        </div>
+                                    )}
+                                </>
                             ) : (
                                 <span className="text-xs text-tertiary px-4 text-center">
                                     Upload a poster to start.
@@ -1990,13 +2050,26 @@ const EditPosterPanel = ({ item, effectiveKind, config, toast }) => {
                                 max="100"
                                 value={Math.round(textY * 100)}
                                 onChange={e => setTextY(Number(e.target.value) / 100)}
+                                onMouseDown={() => setDragging(true)}
+                                onTouchStart={() => setDragging(true)}
                                 className="flex-1"
                             />
                             <span className="w-10 text-right">{Math.round(textY * 100)}%</span>
                         </label>
                         <p className="text-xs text-tertiary">
-                            Vertical position of the label (default 96% ≈ CL2K season line). The
-                            preview updates automatically — no AI call.
+                            <span className="text-secondary">96% is the locked CL2K default</span> —
+                            the season/specials band from the CL2K PSD (y=1440 on the 1500px
+                            canvas). Drag for a live preview; it snaps to the exact CL2K render on
+                            release.{' '}
+                            {Math.round(textY * 100) !== 96 && (
+                                <button
+                                    type="button"
+                                    onClick={() => setTextY(0.96)}
+                                    className="text-primary underline hover:no-underline"
+                                >
+                                    Reset to CL2K default
+                                </button>
+                            )}
                         </p>
                         <label className="flex flex-col gap-1 text-sm text-secondary">
                             <span>Season number (filename + Plex match — not drawn)</span>
