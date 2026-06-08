@@ -1922,7 +1922,9 @@ const EditPosterPanel = ({ item, effectiveKind, config, toast }) => {
                 )}
             </div>
 
-            <div className="flex flex-col gap-3">
+            {/* Sticky so the preview stays pinned beside the mask as you scroll —
+                makes the AI before/after easy to compare while brushing. */}
+            <div className="flex flex-col gap-3 sticky top-4 self-start h-fit">
                 <div className="bg-surface border border-border rounded-lg p-3">
                     <div className="flex items-center justify-between mb-2">
                         <h3 className="text-sm font-medium text-primary">Preview</h3>
