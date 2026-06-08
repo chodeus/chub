@@ -145,8 +145,34 @@ def upload_file(
     ]
     result = subprocess.run(cmd, check=False, capture_output=True, text=True)
     if result.returncode != 0:
-        raise RuntimeError(f"rclone copy failed: {result.stderr.strip()[:300]}")
+        raise RuntimeError(f"rclone copy failed: {_rclone_error_detail(result.stderr)}")
     logger.debug(f"uploaded {os.path.basename(local_path)} to drive {folder_id}")
+
+
+def _rclone_error_detail(stderr: str) -> str:
+    """Pull the meaningful cause out of rclone stderr.
+
+    rclone prints a long Drive-API request URL *before* the real error, so a plain
+    head-truncation (``[:300]``) hides the cause (the 403/404/auth detail). Prefer
+    the explicit Google/OAuth error line; otherwise fall back to the TAIL (where
+    rclone's final summary lives), and strip query strings so a redirect/URL with a
+    token can't leak into the log.
+    """
+    err = (stderr or "").strip()
+    if not err:
+        return "rclone exited non-zero with no stderr"
+    # Drop query strings (may contain tokens) before logging anything.
+    err = re.sub(r"\?[^\s\"']+", "?…", err)
+    m = re.search(
+        r"(googleapi: Error \d+:[^\n]+|Error \d{3}[^\n]*|invalid_grant[^\n]*"
+        r"|oauth2:[^\n]+|couldn't fetch token[^\n]*|insufficient[^\n]*"
+        r"|File not found[^\n]*|not found:[^\n]*)",
+        err,
+        re.IGNORECASE,
+    )
+    if m:
+        return m.group(1).strip()[:300]
+    return err[-300:]  # tail: rclone's final error summary
 
 
 def list_psd(
