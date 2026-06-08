@@ -1430,6 +1430,7 @@ const UploadBackdropPanel = ({ item, effectiveKind, toast }) => {
 const UploadPosterPanel = ({ item, effectiveKind, toast }) => {
     const [file, setFile] = useState(null);
     const [busy, setBusy] = useState(false);
+    const [addBorder, setAddBorder] = useState(true);
     const localUrl = useMemo(() => (file ? URL.createObjectURL(file) : null), [file]);
     useEffect(() => () => localUrl && URL.revokeObjectURL(localUrl), [localUrl]);
 
@@ -1444,6 +1445,7 @@ const UploadPosterPanel = ({ item, effectiveKind, toast }) => {
                 year: item.year,
                 tvdb_id: item.tvdb_id,
                 imdb_id: item.imdb_id,
+                border: addBorder,
             });
             toast.success(`Saved: ${resp?.data?.file || 'poster'}`);
         } catch (err) {
@@ -1451,7 +1453,7 @@ const UploadPosterPanel = ({ item, effectiveKind, toast }) => {
         } finally {
             setBusy(false);
         }
-    }, [file, item, effectiveKind, toast]);
+    }, [file, item, effectiveKind, addBorder, toast]);
 
     return (
         <section className="mt-4 bg-surface border border-border rounded-lg p-4 flex flex-col gap-3">
@@ -1472,6 +1474,18 @@ const UploadPosterPanel = ({ item, effectiveKind, toast }) => {
                     className="max-h-80 w-auto rounded border border-border bg-black"
                 />
             )}
+            <label className="flex items-center gap-2 text-sm text-primary font-medium">
+                <input
+                    type="checkbox"
+                    checked={addBorder}
+                    onChange={e => setAddBorder(e.target.checked)}
+                />
+                Add CL2K white border
+            </label>
+            <p className="text-xs text-tertiary">
+                The DAPS default 26px white frame (per the CL2K PSD). Uncheck only if this poster
+                already has the required border.
+            </p>
             <div>
                 <LoadingButton onClick={submit} loading={busy} disabled={!file} icon="save">
                     Save poster
@@ -1492,6 +1506,7 @@ const GdrivePsdPanel = ({ item, effectiveKind, toast }) => {
     const [path, setPath] = useState('');
     const [previewB64, setPreviewB64] = useState(null);
     const [busy, setBusy] = useState(false);
+    const [addBorder, setAddBorder] = useState(true);
 
     useEffect(() => {
         let cancelled = false;
@@ -1556,8 +1571,9 @@ const GdrivePsdPanel = ({ item, effectiveKind, toast }) => {
             year: item.year,
             tvdb_id: item.tvdb_id,
             imdb_id: item.imdb_id,
+            border: addBorder,
         }),
-        [driveId, path, effectiveKind, item]
+        [driveId, path, effectiveKind, item, addBorder]
     );
 
     const runPreview = useCallback(async () => {
@@ -1690,6 +1706,19 @@ const GdrivePsdPanel = ({ item, effectiveKind, toast }) => {
                         />
                     )}
 
+                    <label className="flex items-center gap-2 text-sm text-primary font-medium">
+                        <input
+                            type="checkbox"
+                            checked={addBorder}
+                            onChange={e => setAddBorder(e.target.checked)}
+                        />
+                        Add CL2K white border
+                    </label>
+                    <p className="text-xs text-tertiary">
+                        The DAPS default 26px white frame (per the CL2K PSD). Uncheck only if the
+                        .psd already has the required border.
+                    </p>
+
                     <div className="flex gap-2">
                         <LoadingButton
                             onClick={runPreview}
@@ -1743,6 +1772,9 @@ const EditPosterPanel = ({ item, effectiveKind, config, toast }) => {
     const [dragging, setDragging] = useState(false);
     const [imgW, setImgW] = useState(0);
     const workImgRef = useRef(null);
+    // Add the default 26px white CL2K border on save (DAPS rule); uncheck for a
+    // poster that already has the required border.
+    const [addBorder, setAddBorder] = useState(true);
 
     const provider = config?.ai_provider || 'none';
     const isSeason = String(seasonNum).trim() !== '';
@@ -1788,6 +1820,7 @@ const EditPosterPanel = ({ item, effectiveKind, config, toast }) => {
                 apply_ai: true,
                 prompt,
                 label_text: '',
+                border: false, // keep the working copy clean; border is applied later
                 preview: true,
                 ...idFields,
             });
@@ -1813,9 +1846,9 @@ const EditPosterPanel = ({ item, effectiveKind, config, toast }) => {
     // the label can be positioned without spending AI credits. Debounced auto-render
     // whenever the label text / position / working copy changes.
     useEffect(() => {
-        // Nothing to draw — the display falls back to the bare working copy
-        // (workingSrc ignores a stale labeled render when the label is empty).
-        if (!workingB64 || !label.trim()) return undefined;
+        // Nothing to bake (no label and no border) — the display falls back to the
+        // bare working copy (workingSrc ignores a stale render in that case).
+        if (!workingB64 || (!label.trim() && !addBorder)) return undefined;
         let cancelled = false;
         const timer = setTimeout(async () => {
             setLabelBusy(true);
@@ -1826,12 +1859,13 @@ const EditPosterPanel = ({ item, effectiveKind, config, toast }) => {
                     apply_ai: false,
                     label_text: label,
                     text_y: textY,
+                    border: addBorder,
                     preview: true,
                     ...idFields,
                 });
                 if (!cancelled) setLabeledB64(resp?.data?.preview_b64 || null);
             } catch (err) {
-                if (!cancelled) toast.error(err.message || 'Label preview failed');
+                if (!cancelled) toast.error(err.message || 'Preview failed');
             } finally {
                 if (!cancelled) setLabelBusy(false);
             }
@@ -1840,7 +1874,7 @@ const EditPosterPanel = ({ item, effectiveKind, config, toast }) => {
             cancelled = true;
             clearTimeout(timer);
         };
-    }, [workingB64, label, textY, idFields, toast]);
+    }, [workingB64, label, textY, addBorder, idFields, toast]);
 
     // Re-measure the rendered poster width on resize so the live overlay font scales
     // with it (initial measure happens on the image's onLoad).
@@ -1876,6 +1910,7 @@ const EditPosterPanel = ({ item, effectiveKind, config, toast }) => {
                 apply_ai: false,
                 label_text: label,
                 text_y: textY,
+                border: addBorder,
                 preview: false,
                 ...idFields,
             });
@@ -1885,7 +1920,7 @@ const EditPosterPanel = ({ item, effectiveKind, config, toast }) => {
         } finally {
             setSaving(false);
         }
-    }, [workingB64, label, textY, idFields, toast]);
+    }, [workingB64, label, textY, addBorder, idFields, toast]);
 
     // What the working-copy pane shows.
     // bareSrc = working copy with NO baked label; labeledSrc = the accurate server
@@ -1894,8 +1929,10 @@ const EditPosterPanel = ({ item, effectiveKind, config, toast }) => {
     // pixel-accurate render.
     const bareSrc = aiErased ? `data:image/jpeg;base64,${workingB64}` : imageDataUrl;
     const labeledSrc = labeledB64 ? `data:image/jpeg;base64,${labeledB64}` : null;
+    // Something to bake server-side (a label and/or the border)?
+    const hasRender = !!label.trim() || addBorder;
     const liveLabel = !!label.trim() && (dragging || labelBusy || !labeledSrc);
-    const workingSrc = !label.trim() || liveLabel ? bareSrc : labeledSrc || bareSrc;
+    const workingSrc = liveLabel ? bareSrc : hasRender && labeledSrc ? labeledSrc : bareSrc;
     // CL2K label metrics scaled to the rendered poster: 32px per 1000px canvas width,
     // tracking 0.8em — an approximation of overlay_label, replaced by the real render.
     const overlayPx = imgW ? (32 * imgW) / 1000 : 0;
@@ -2086,6 +2123,18 @@ const EditPosterPanel = ({ item, effectiveKind, config, toast }) => {
                             <code className="text-secondary">_Season{seasonNum || 'NN'}</code> so
                             Poster Renamerr applies it to that season. For year-based shows (F1) use
                             the year (e.g. 2026). Metadata only — it isn’t printed on the poster.
+                        </p>
+                        <label className="flex items-center gap-2 text-sm text-primary font-medium">
+                            <input
+                                type="checkbox"
+                                checked={addBorder}
+                                onChange={e => setAddBorder(e.target.checked)}
+                            />
+                            Add CL2K white border
+                        </label>
+                        <p className="text-xs text-tertiary">
+                            The DAPS default 26px white frame (per the CL2K PSD). Uncheck only if
+                            your uploaded poster already has the required border.
                         </p>
                         <LoadingButton
                             onClick={runSave}

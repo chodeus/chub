@@ -349,6 +349,7 @@ async def upload_poster(
     tvdb_id: Optional[int] = Form(None),
     imdb_id: Optional[str] = Form(None),
     season_number: Optional[int] = Form(None),
+    border: bool = Form(True),
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_logger),
 ) -> JSONResponse:
@@ -366,6 +367,7 @@ async def upload_poster(
         season_number=season_number,
         image_bytes=image_bytes,
         logo_source="upload",
+        add_border=border,
     )
     if result.get("status") == "generated":
         return ok("Poster saved", result)
@@ -402,6 +404,7 @@ class GDrivePsdRequest(BaseModel):
     tvdb_id: Optional[int] = None
     imdb_id: Optional[str] = None
     season_number: Optional[int] = None
+    border: bool = True  # composite the default 26px white CL2K border on save
     preview: bool = False
 
 
@@ -419,6 +422,7 @@ class RetextRequest(BaseModel):
     tvdb_id: Optional[int] = None
     imdb_id: Optional[str] = None
     season_number: Optional[int] = None
+    border: bool = True  # composite the default 26px white CL2K border
     preview: bool = False
 
 
@@ -458,6 +462,7 @@ def retext(
             tvdb_id=req.tvdb_id,
             imdb_id=req.imdb_id,
             season_number=req.season_number,
+            add_border=req.border,
         )
     except Exception as exc:
         # Without this, an AI/timeout failure produced a bare 500 with nothing in
@@ -484,6 +489,13 @@ def gdrive_psd(
     except Exception as exc:
         return error(str(exc), "CL2K_GDRIVE_PSD")
     if req.preview:
+        # Mirror the saved result so the preview shows the border too.
+        if req.border:
+            from backend.util.cl2k.renderer import apply_border
+
+            from backend.modules.cl2k_maker import _normalize_poster
+
+            blob = apply_border(_normalize_poster(blob))
         return ok("ok", {"preview_b64": base64.b64encode(blob).decode()})
     result = save_finished_poster(
         db=db,
@@ -497,6 +509,7 @@ def gdrive_psd(
         imdb_id=req.imdb_id,
         season_number=req.season_number,
         image_bytes=blob,
+        add_border=req.border,
         logo_source="gdrive_psd",
     )
     if result.get("status") == "generated":
