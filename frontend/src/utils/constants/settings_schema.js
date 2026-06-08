@@ -529,14 +529,6 @@ export const SETTINGS_SCHEMA = [
             },
             // ─── Holidays ──────────────────────────────────────────────
             {
-                key: 'skip',
-                label: 'Holiday-only mode',
-                type: 'check_box',
-                section: 'Holidays',
-                description:
-                    'When on, Border Replacerr only runs on days that fall inside an active holiday window below — outside those windows it skips the run entirely. Use this if you only want themed borders during holidays and would rather leave the default white border untouched the rest of the year.',
-            },
-            {
                 key: 'holidays',
                 label: 'Holidays',
                 type: 'object_array',

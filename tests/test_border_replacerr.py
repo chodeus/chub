@@ -395,7 +395,6 @@ def test_full_pass_borders_all_then_skips_unchanged(tmp_path, monkeypatch):
         log_level="info",
         holidays=[],
         border_colors=["#FF0000"],  # color mode
-        skip=False,
         exclusion_list=[],
         ignore_folders=[],
         dry_run=False,
@@ -475,7 +474,6 @@ def test_full_pass_skips_poster_with_missing_source(tmp_path, monkeypatch):
         log_level="info",
         holidays=[],
         border_colors=["#FF0000"],
-        skip=False,
         exclusion_list=[],
         ignore_folders=[],
         dry_run=False,
@@ -569,7 +567,6 @@ def test_subset_pass_only_borders_manifest_items(tmp_path, monkeypatch):
         log_level="info",
         holidays=[],
         border_colors=["#FF0000"],
-        skip=False,
         exclusion_list=[],
         ignore_folders=[],
         dry_run=False,
