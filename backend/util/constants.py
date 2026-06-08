@@ -17,8 +17,15 @@ from typing import List, Pattern, Set
 # so folder-based layouts still work — a bare "Season01.jpg" file or a "Season
 # 01" folder (chub searches both the filename and the folder). "Open Season 2"
 # matches neither the delimiter nor the start anchor, so it stays a movie.
+# Whitespace runs are bounded (``\s{0,8}`` not ``\s*``) so the delimiter can't
+# cause polynomial-time backtracking (ReDoS) on a crafted title — no real
+# filename has 8+ consecutive spaces around the season delimiter.
+# The delimiter prefix is factored out (one ``(?:^|…)`` instead of two) so there is
+# a single, matchable start anchor — equivalent to the old two-branch form but
+# without the spurious "unmatchable caret" the duplicated anchor produced.
 season_number_regex = re.compile(
-    r"(?:^|\s*-\s*|_)Season\s*(\d{1,4})|(?:^|\s*-\s*|_)Specials\b", re.IGNORECASE
+    r"(?:^|\s{0,8}-\s{0,8}|_)(?:Season\s{0,8}(\d{1,4})|Specials\b)",
+    re.IGNORECASE,
 )
 
 # Matches an additional-asset type tag suffix — " - Logo"/"_Logo", "- SquareArt",
@@ -38,7 +45,7 @@ season_number_regex = re.compile(
 # recognising "Movie (2020) - Banner.png" as a banner means it's classified and
 # ignored rather than mis-parsed as a poster titled "Movie - Banner".
 asset_type_regex = re.compile(
-    r"(?:\s*-\s*|_)(Logo|SquareArt|Background|Banner)\b", re.IGNORECASE
+    r"(?:\s{0,8}-\s{0,8}|_)(Logo|SquareArt|Background|Banner)\b", re.IGNORECASE
 )
 
 # Matches the literal "Season " followed by 1–4 digits (e.g. "Season 1", "Season 12", up to "Season 9999"), capturing those digits as group 1
