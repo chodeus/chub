@@ -94,7 +94,12 @@ BORDER_COLOR = "white"
 
 # ----- output (DAPS rules) ---------------------------------------------------
 OUTPUT_EXT = ".jpg"            # lowercase, per DAPS
-OUTPUT_QUALITY = 88            # Photoshop "7" ≈ libjpeg ~88
+# Real CL2K community posters encode at ~q99 with NO chroma subsampling (4:4:4).
+# The old q88 (+ libjpeg's default 4:2:0) made our output visibly softer and ~3x
+# smaller than a hand-made poster. 95 + 4:4:4 is visually indistinguishable from
+# q99 at a fraction of the size.
+OUTPUT_QUALITY = 95            # was 88; match designer-class quality
+JPEG_SAMPLING_FACTOR = "1x1,1x1,1x1"  # 4:4:4 — no chroma subsampling (full colour)
 TEXT_UPPERCASE = True          # text is ALWAYS all-caps
 
 # ----- bundled assets --------------------------------------------------------
