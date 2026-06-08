@@ -20,8 +20,11 @@ from typing import List, Pattern, Set
 # Whitespace runs are bounded (``\s{0,8}`` not ``\s*``) so the delimiter can't
 # cause polynomial-time backtracking (ReDoS) on a crafted title — no real
 # filename has 8+ consecutive spaces around the season delimiter.
+# The delimiter prefix is factored out (one ``(?:^|…)`` instead of two) so there is
+# a single, matchable start anchor — equivalent to the old two-branch form but
+# without the spurious "unmatchable caret" the duplicated anchor produced.
 season_number_regex = re.compile(
-    r"(?:^|\s{0,8}-\s{0,8}|_)Season\s{0,8}(\d{1,4})|(?:^|\s{0,8}-\s{0,8}|_)Specials\b",
+    r"(?:^|\s{0,8}-\s{0,8}|_)(?:Season\s{0,8}(\d{1,4})|Specials\b)",
     re.IGNORECASE,
 )
 
