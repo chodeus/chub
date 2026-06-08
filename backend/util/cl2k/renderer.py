@@ -238,6 +238,22 @@ def overlay_label(
         return base.make_blob()
 
 
+def apply_border(image_bytes: bytes) -> bytes:
+    """Composite the default 26px white CL2K frame onto a finished poster.
+
+    Used by the save-as-is paths (re-text / finished-poster upload / Drive .psd) so
+    a borderless poster still satisfies the DAPS white-border rule, mirroring the
+    frame ``render_cl2k`` bakes in. The frame is painted inset over the canvas
+    edges, so re-applying it to an already-26px-white-bordered poster is a no-op.
+    Returns JPEG bytes.
+    """
+    with Image(blob=image_bytes) as base:
+        _draw_border(base)
+        base.format = "jpeg"
+        base.compression_quality = geo.OUTPUT_QUALITY
+        return base.make_blob()
+
+
 # ----- CLI harness (P1 visual check) -----------------------------------------
 def main() -> None:
     import argparse

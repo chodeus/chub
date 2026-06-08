@@ -364,13 +364,15 @@ def save_finished_poster(
     imdb_id: Optional[str] = None,
     season_number: Optional[int] = None,
     logo_source: str = "upload",
+    add_border: bool = True,
 ) -> Dict[str, Any]:
     """File a pre-made poster (no rendering) into source_dir + caches.
 
     Used by the manual finished-poster upload and the G-Drive .psd source (both
     supply a complete poster). The image is forced to the locked 1000×1500 canvas
     (cropped if needed), named per DAPS, and registered so the rest of CHUB picks
-    it up.
+    it up. ``add_border`` (default True, per the DAPS rule) composites the default
+    26px white frame; uncheck it for a poster that already has the required border.
     """
     cfg = full_config.cl2k_maker
     kind = (kind or "").lower()
@@ -378,12 +380,17 @@ def save_finished_poster(
         return {"status": "error", "reason": f"invalid kind {kind!r}"}
     if not cfg.output_dir:
         return {"status": "error", "reason": "cl2k_maker.output_dir is not configured"}
+    blob = _normalize_poster(image_bytes)
+    if add_border:
+        from backend.util.cl2k.renderer import apply_border
+
+        blob = apply_border(blob)
     return _persist_poster(
         db,
         cfg,
         logger,
         sync_cfg=full_config.sync_gdrive,
-        blob=_normalize_poster(image_bytes),
+        blob=blob,
         kind=kind,
         title=title,
         year=year,
@@ -458,6 +465,7 @@ def retext_poster(
     tvdb_id: Optional[int] = None,
     imdb_id: Optional[str] = None,
     season_number: Optional[int] = None,
+    add_border: bool = True,
 ):
     """Re-text a finished poster: AI-erase the brushed old text, then draw a new
     CL2K-style label (e.g. swap a season year).
@@ -466,9 +474,11 @@ def retext_poster(
     in the CL2K font, so it's always crisp. Returns JPEG bytes when ``save`` is
     False (preview); otherwise files it via :func:`save_finished_poster` and
     returns that result dict. ``text_y_frac`` (0..1) places the label vertically
-    (defaults to the CL2K season-label position).
+    (defaults to the CL2K season-label position). ``add_border`` (default True, per
+    the DAPS rule) composites the default 26px white frame onto both the preview and
+    the saved file; uncheck it for a poster that already has the required border.
     """
-    from backend.util.cl2k.renderer import overlay_label
+    from backend.util.cl2k.renderer import apply_border, overlay_label
 
     cfg = full_config.cl2k_maker
     img = _normalize_poster(image_bytes)
@@ -481,8 +491,11 @@ def retext_poster(
         if text_y_frac is not None:
             center_y = int(max(0.0, min(1.0, text_y_frac)) * geo.CANVAS_H)
         img = overlay_label(img, label_text, center_y=center_y)
+    if add_border:
+        img = apply_border(img)
     if not save:
         return img
+    # The border is already composited above, so don't add it again on save.
     return save_finished_poster(
         db=db,
         full_config=full_config,
@@ -496,6 +509,7 @@ def retext_poster(
         season_number=season_number,
         image_bytes=img,
         logo_source="retext",
+        add_border=False,
     )
 
 
