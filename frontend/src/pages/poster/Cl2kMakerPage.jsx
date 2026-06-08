@@ -1718,17 +1718,25 @@ const GdrivePsdPanel = ({ item, effectiveKind, toast }) => {
 // ─── Edit poster (AI-erase old text + redraw label in CL2K font) ────────────
 
 const EditPosterPanel = ({ item, effectiveKind, config, toast }) => {
+    // The uploaded poster (data URL) is the immutable SOURCE. `workingB64` is the
+    // base we draw labels onto — it starts as the upload and becomes the AI-erased
+    // image after "Send to AI". That's the whole cost trick: the paid OpenAI erase
+    // runs ONCE; every label tweak after is a free, deterministic server overlay
+    // (apply_ai=false) onto the working copy — no more AI calls.
     const [imageDataUrl, setImageDataUrl] = useState(null);
+    const [workingB64, setWorkingB64] = useState(null); // raw base64 (no data prefix)
+    const [aiErased, setAiErased] = useState(false);
     const [maskB64, setMaskB64] = useState(null);
-    const [removeText, setRemoveText] = useState(true);
     const [brushSize, setBrushSize] = useState(18);
     // Prompt defaults to the module-settings ai_prompt, editable per-edit.
     const [prompt, setPrompt] = useState(() => config?.ai_prompt || '');
     const [label, setLabel] = useState('');
     const [textY, setTextY] = useState(0.96);
     const [seasonNum, setSeasonNum] = useState('');
-    const [previewB64, setPreviewB64] = useState(null);
-    const [busy, setBusy] = useState(false);
+    const [labeledB64, setLabeledB64] = useState(null); // working copy + label drawn
+    const [aiBusy, setAiBusy] = useState(false);
+    const [labelBusy, setLabelBusy] = useState(false);
+    const [saving, setSaving] = useState(false);
 
     const provider = config?.ai_provider || 'none';
     const isSeason = String(seasonNum).trim() !== '';
@@ -1739,20 +1747,18 @@ const EditPosterPanel = ({ item, effectiveKind, config, toast }) => {
         const reader = new FileReader();
         reader.onload = () => {
             setImageDataUrl(reader.result);
+            setWorkingB64(String(reader.result).split(',').pop());
+            setAiErased(false);
             setMaskB64(null);
-            setPreviewB64(null);
+            setLabeledB64(null);
         };
         reader.readAsDataURL(f);
     }, []);
 
-    const makeReq = useCallback(
-        preview => ({
-            image_b64: imageDataUrl,
-            mask_b64: removeText ? maskB64 : null,
-            apply_ai: removeText,
-            prompt,
-            label_text: label,
-            text_y: textY,
+    // Id/kind fields shared by every /retext call (drive the save filename; inert
+    // on previews).
+    const idFields = useMemo(
+        () => ({
             kind: isSeason ? 'season' : effectiveKind,
             season_number: isSeason ? Number(seasonNum) : null,
             title: item.title,
@@ -1760,220 +1766,269 @@ const EditPosterPanel = ({ item, effectiveKind, config, toast }) => {
             year: item.year,
             tvdb_id: item.tvdb_id,
             imdb_id: item.imdb_id,
-            preview,
         }),
-        [
-            imageDataUrl,
-            removeText,
-            maskB64,
-            prompt,
-            label,
-            textY,
-            isSeason,
-            seasonNum,
-            effectiveKind,
-            item,
-        ]
+        [isSeason, seasonNum, effectiveKind, item]
     );
 
-    const runPreview = useCallback(async () => {
-        if (!imageDataUrl) return;
-        setBusy(true);
+    // Send to AI — the ONLY paid step. Erase the masked region of the ORIGINAL
+    // upload and keep the result as the working copy. No label drawn here.
+    const runErase = useCallback(async () => {
+        if (!imageDataUrl || !maskB64) return;
+        setAiBusy(true);
         try {
-            const resp = await cl2kMakerAPI.retext(makeReq(true));
-            setPreviewB64(resp?.data?.preview_b64 || null);
+            const resp = await cl2kMakerAPI.retext({
+                image_b64: imageDataUrl,
+                mask_b64: maskB64,
+                apply_ai: true,
+                prompt,
+                label_text: '',
+                preview: true,
+                ...idFields,
+            });
+            const erased = resp?.data?.preview_b64;
+            if (erased) {
+                setWorkingB64(erased);
+                setAiErased(true);
+                setLabeledB64(null);
+                toast.success(
+                    'Old text erased — position the label, then save (no more AI calls).'
+                );
+            } else {
+                toast.error('AI returned no image');
+            }
         } catch (err) {
-            toast.error(err.message || 'Preview failed');
+            toast.error(err.message || 'AI erase failed');
         } finally {
-            setBusy(false);
+            setAiBusy(false);
         }
-    }, [imageDataUrl, makeReq, toast]);
+    }, [imageDataUrl, maskB64, prompt, idFields, toast]);
 
+    // Free, deterministic label overlay onto the working copy (apply_ai=false), so
+    // the label can be positioned without spending AI credits. Debounced auto-render
+    // whenever the label text / position / working copy changes.
+    useEffect(() => {
+        // Nothing to draw — the display falls back to the bare working copy
+        // (workingSrc ignores a stale labeled render when the label is empty).
+        if (!workingB64 || !label.trim()) return undefined;
+        let cancelled = false;
+        const timer = setTimeout(async () => {
+            setLabelBusy(true);
+            try {
+                const resp = await cl2kMakerAPI.retext({
+                    image_b64: workingB64,
+                    mask_b64: null,
+                    apply_ai: false,
+                    label_text: label,
+                    text_y: textY,
+                    preview: true,
+                    ...idFields,
+                });
+                if (!cancelled) setLabeledB64(resp?.data?.preview_b64 || null);
+            } catch (err) {
+                if (!cancelled) toast.error(err.message || 'Label preview failed');
+            } finally {
+                if (!cancelled) setLabelBusy(false);
+            }
+        }, 500);
+        return () => {
+            cancelled = true;
+            clearTimeout(timer);
+        };
+    }, [workingB64, label, textY, idFields, toast]);
+
+    // Save the working copy + label. apply_ai=false → NO second OpenAI call.
     const runSave = useCallback(async () => {
-        if (!imageDataUrl) return;
-        setBusy(true);
+        if (!workingB64) return;
+        setSaving(true);
         try {
-            const resp = await cl2kMakerAPI.retext(makeReq(false));
+            const resp = await cl2kMakerAPI.retext({
+                image_b64: workingB64,
+                mask_b64: null,
+                apply_ai: false,
+                label_text: label,
+                text_y: textY,
+                preview: false,
+                ...idFields,
+            });
             toast.success(`Saved: ${resp?.data?.file || 'poster'}`);
         } catch (err) {
             toast.error(err.message || 'Save failed');
         } finally {
-            setBusy(false);
+            setSaving(false);
         }
-    }, [imageDataUrl, makeReq, toast]);
+    }, [workingB64, label, textY, idFields, toast]);
+
+    // What the working-copy pane shows: the labeled render if present, else the
+    // erased working copy, else the original upload (with its own correct mime).
+    const workingSrc =
+        labeledB64 && label.trim()
+            ? `data:image/jpeg;base64,${labeledB64}`
+            : aiErased
+              ? `data:image/jpeg;base64,${workingB64}`
+              : imageDataUrl;
 
     return (
-        <section className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div className="flex flex-col gap-4">
-                <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-3">
-                    <h3 className="text-sm font-medium text-primary">Edit poster → re-text</h3>
-                    <p className="text-xs text-tertiary">
-                        Upload a finished poster, brush over the old text (e.g. the season year),
-                        let AI erase it, then draw a new label in the CL2K font. Saved as-is — no
-                        CL2K logo/gradient/border added.
-                    </p>
-                    <input type="file" accept="image/*" onChange={onFile} />
-                </div>
+        <section className="mt-4 flex flex-col gap-4">
+            {/* Full-width upload bar — keeps the two posters below it top-aligned. */}
+            <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-2">
+                <h3 className="text-sm font-medium text-primary">Edit poster → re-text</h3>
+                <p className="text-xs text-tertiary">
+                    Upload a finished poster, brush over the old season text and{' '}
+                    <span className="text-secondary">Send to AI</span> once to erase it, then
+                    position the new label on the working copy — preview and adjust as much as you
+                    like for free. Only the erase step uses AI credits. Saved as-is — no CL2K
+                    logo/gradient/border added.
+                </p>
+                <input type="file" accept="image/*" onChange={onFile} />
+            </div>
 
-                {imageDataUrl && (
-                    <>
-                        <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-3">
-                            <label className="flex items-center gap-2 text-sm text-primary font-medium">
-                                <input
-                                    type="checkbox"
-                                    checked={removeText}
-                                    onChange={e => setRemoveText(e.target.checked)}
-                                />
-                                Erase old text with AI
-                            </label>
-                            <p className="text-xs text-tertiary">
-                                Provider: <span className="text-secondary">{provider}</span>. Brush
-                                over the old label; AI fills it in. Set the provider/key in{' '}
+            {imageDataUrl && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {/* LEFT — source: brush the old text, send to AI once */}
+                    <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-3">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-sm font-medium text-primary">
+                                Source — brush the old text
+                            </h3>
+                            {aiErased && (
+                                <span className="inline-flex items-center gap-1 text-xs text-success">
+                                    <span className="material-symbols-outlined text-sm">
+                                        check_circle
+                                    </span>
+                                    erased
+                                </span>
+                            )}
+                        </div>
+                        <BrushMask
+                            imageUrl={imageDataUrl}
+                            brushSize={brushSize}
+                            onMaskChange={setMaskB64}
+                        />
+                        <label className="flex items-center gap-2 text-sm text-secondary">
+                            <span className="w-20">Brush</span>
+                            <input
+                                type="range"
+                                min="4"
+                                max="60"
+                                value={brushSize}
+                                onChange={e => setBrushSize(Number(e.target.value))}
+                                className="flex-1"
+                            />
+                            <span className="w-10 text-right">{brushSize}px</span>
+                        </label>
+                        <label className="flex flex-col gap-1 text-sm text-secondary">
+                            <span>AI prompt (defaults to module settings)</span>
+                            <textarea
+                                value={prompt}
+                                onChange={e => setPrompt(e.target.value)}
+                                rows={2}
+                                className="bg-surface border border-border rounded px-2 py-1 text-sm text-primary"
+                            />
+                        </label>
+                        {provider === 'none' && (
+                            <div className="text-xs text-warning">
+                                AI provider is “none” — enable OpenAI in{' '}
                                 <Link
                                     to="/settings/modules"
                                     className="text-primary underline hover:no-underline"
                                 >
                                     Module Settings
-                                </Link>
-                                .
-                            </p>
-                            {removeText && provider === 'none' && (
-                                <div className="text-xs text-warning">
-                                    AI provider is “none” — enable OpenAI in settings or the old
-                                    text won’t be erased.
-                                </div>
-                            )}
-                            {removeText && (
-                                <>
-                                    <label className="flex items-center gap-2 text-sm text-secondary">
-                                        <span className="w-20">Brush</span>
-                                        <input
-                                            type="range"
-                                            min="4"
-                                            max="60"
-                                            value={brushSize}
-                                            onChange={e => setBrushSize(Number(e.target.value))}
-                                            className="flex-1"
-                                        />
-                                        <span className="w-10 text-right">{brushSize}px</span>
-                                    </label>
-                                    <BrushMask
-                                        imageUrl={imageDataUrl}
-                                        brushSize={brushSize}
-                                        onMaskChange={setMaskB64}
-                                    />
-                                    <label className="flex flex-col gap-1 text-sm text-secondary">
-                                        <span>AI prompt (defaults to module settings)</span>
-                                        <textarea
-                                            value={prompt}
-                                            onChange={e => setPrompt(e.target.value)}
-                                            rows={3}
-                                            className="bg-surface border border-border rounded px-2 py-1 text-sm text-primary"
-                                        />
-                                    </label>
-                                </>
+                                </Link>{' '}
+                                to erase text.
+                            </div>
+                        )}
+                        <LoadingButton
+                            onClick={runErase}
+                            loading={aiBusy}
+                            disabled={!maskB64 || provider === 'none'}
+                            icon="auto_fix_high"
+                        >
+                            {aiErased
+                                ? 'Re-send to AI (erase again)'
+                                : 'Send to AI — erase masked text'}
+                        </LoadingButton>
+                        <p className="text-xs text-tertiary">
+                            Provider: <span className="text-secondary">{provider}</span>. This is
+                            the only step that uses AI credits — brush the old text, then send once.
+                        </p>
+                    </div>
+
+                    {/* RIGHT — working copy: position the label, save (no AI) */}
+                    <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-3">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-sm font-medium text-primary">Working copy</h3>
+                            {labelBusy && <span className="text-xs text-tertiary">updating…</span>}
+                        </div>
+                        <div className="aspect-[2/3] bg-black rounded overflow-hidden flex items-center justify-center">
+                            {workingSrc ? (
+                                <img
+                                    src={workingSrc}
+                                    alt="Working copy"
+                                    className="w-full h-full object-contain"
+                                />
+                            ) : (
+                                <span className="text-xs text-tertiary px-4 text-center">
+                                    Upload a poster to start.
+                                </span>
                             )}
                         </div>
-
-                        <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-3">
-                            <h3 className="text-sm font-medium text-primary">
-                                New label (CL2K font)
-                            </h3>
+                        <label className="flex flex-col gap-1 text-sm text-secondary">
+                            <span>Label text (drawn on the poster)</span>
                             <input
                                 type="text"
                                 value={label}
                                 onChange={e => setLabel(e.target.value)}
-                                placeholder="e.g. SEASON 2026 (leave blank to only erase)"
+                                placeholder="e.g. SEASON 2026"
                                 className="bg-surface border border-border rounded px-2 py-1 text-sm text-primary"
                             />
-                            <label className="flex items-center gap-2 text-sm text-secondary">
-                                <span className="w-24">Position</span>
-                                <input
-                                    type="range"
-                                    min="0"
-                                    max="100"
-                                    value={Math.round(textY * 100)}
-                                    onChange={e => setTextY(Number(e.target.value) / 100)}
-                                    className="flex-1"
-                                />
-                                <span className="w-10 text-right">{Math.round(textY * 100)}%</span>
-                            </label>
-                            <p className="text-xs text-tertiary">
-                                Vertical position of the label (default 96% ≈ CL2K season line).
-                            </p>
-                            <label className="flex items-center gap-2 text-sm text-secondary">
-                                <span className="w-24">Season #</span>
-                                <input
-                                    type="number"
-                                    value={seasonNum}
-                                    onChange={e => setSeasonNum(e.target.value)}
-                                    placeholder="blank = base poster; e.g. 2026"
-                                    className="flex-1 bg-surface border border-border rounded px-2 py-1 text-sm text-primary"
-                                />
-                            </label>
-                            <p className="text-xs text-tertiary">
-                                Set this to file it as a season poster (filename gets{' '}
-                                <code className="text-secondary">_Season{seasonNum || 'NN'}</code>),
-                                so Poster Renamerr applies it to that season. For year-based shows
-                                (F1), use the year (e.g. 2026).
-                            </p>
-                        </div>
-                    </>
-                )}
-            </div>
-
-            {/* Sticky so the preview stays pinned beside the mask as you scroll —
-                makes the AI before/after easy to compare while brushing. */}
-            <div className="flex flex-col gap-3 sticky top-4 self-start h-fit">
-                <div className="bg-surface border border-border rounded-lg p-3">
-                    <div className="flex items-center justify-between mb-2">
-                        <h3 className="text-sm font-medium text-primary">Preview</h3>
+                        </label>
+                        <label className="flex items-center gap-2 text-sm text-secondary">
+                            <span className="w-24">Position</span>
+                            <input
+                                type="range"
+                                min="0"
+                                max="100"
+                                value={Math.round(textY * 100)}
+                                onChange={e => setTextY(Number(e.target.value) / 100)}
+                                className="flex-1"
+                            />
+                            <span className="w-10 text-right">{Math.round(textY * 100)}%</span>
+                        </label>
+                        <p className="text-xs text-tertiary">
+                            Vertical position of the label (default 96% ≈ CL2K season line). The
+                            preview updates automatically — no AI call.
+                        </p>
+                        <label className="flex flex-col gap-1 text-sm text-secondary">
+                            <span>Season number (filename + Plex match — not drawn)</span>
+                            <input
+                                type="number"
+                                value={seasonNum}
+                                onChange={e => setSeasonNum(e.target.value)}
+                                placeholder="blank = base poster; e.g. 2026"
+                                className="bg-surface border border-border rounded px-2 py-1 text-sm text-primary"
+                            />
+                        </label>
+                        <p className="text-xs text-tertiary">
+                            Sets the filename suffix{' '}
+                            <code className="text-secondary">_Season{seasonNum || 'NN'}</code> so
+                            Poster Renamerr applies it to that season. For year-based shows (F1) use
+                            the year (e.g. 2026). Metadata only — it isn’t printed on the poster.
+                        </p>
                         <LoadingButton
-                            onClick={runPreview}
-                            loading={busy}
-                            disabled={!imageDataUrl}
-                            icon="visibility"
-                            size="small"
+                            onClick={runSave}
+                            loading={saving}
+                            disabled={!workingB64}
+                            icon="save"
                         >
-                            Render preview
+                            Save edited poster
                         </LoadingButton>
-                    </div>
-                    <div className="aspect-[2/3] bg-black rounded overflow-hidden flex items-center justify-center">
-                        {previewB64 ? (
-                            <img
-                                src={`data:image/jpeg;base64,${previewB64}`}
-                                alt="Edited preview"
-                                className="w-full h-full object-contain"
-                            />
-                        ) : imageDataUrl ? (
-                            <img
-                                src={imageDataUrl}
-                                alt="Uploaded poster"
-                                className="w-full h-full object-contain"
-                            />
-                        ) : (
-                            <span className="text-xs text-tertiary px-4 text-center">
-                                Upload a poster to start.
-                            </span>
-                        )}
+                        <p className="text-xs text-tertiary">
+                            Saving draws the label and files it (1000×1500, DAPS-named) — no extra
+                            AI call. Uploads to your Drive if upload is enabled.
+                        </p>
                     </div>
                 </div>
-                <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-2">
-                    <h3 className="text-sm font-medium text-primary">Output</h3>
-                    <LoadingButton
-                        onClick={runSave}
-                        loading={busy}
-                        disabled={!imageDataUrl}
-                        icon="save"
-                    >
-                        Save edited poster
-                    </LoadingButton>
-                    <p className="text-xs text-tertiary">
-                        Files the edited poster (1000×1500, DAPS-named) and uploads it to your Drive
-                        if upload is enabled.
-                    </p>
-                </div>
-            </div>
+            )}
         </section>
     );
 };
