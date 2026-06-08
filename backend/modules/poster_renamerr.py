@@ -1197,15 +1197,22 @@ class PosterRenamerr(ChubModule):
         """
         return [self.config.destination_dir] if self.config.destination_dir else []
 
-    def run_border_replacerr(self, manifest: dict, progress_window=None):
+    def run_border_replacerr(self, manifest: Optional[dict], progress_window=None, process_all=False):
         from backend.modules.border_replacerr import BorderReplacerr
 
-        self.logger.debug(
-            "\nRunning border replacerr:\n"
-            f"  Media assets to process: {len(manifest.get('media_cache', []))}\n"
-            f"  Collection assets to process: {len(manifest.get('collections_cache', []))}\n"
-            f"  Total assets to process: {len(manifest.get('media_cache', [])) + len(manifest.get('collections_cache', []))}\n"
-        )
+        if process_all:
+            self.logger.debug(
+                "\nRunning border replacerr (full-library pass — re-bordering "
+                "all matched media and collections, including already-moved "
+                "posters; manifest counts are not representative).\n"
+            )
+        else:
+            self.logger.debug(
+                "\nRunning border replacerr:\n"
+                f"  Media assets to process: {len(manifest.get('media_cache', []))}\n"
+                f"  Collection assets to process: {len(manifest.get('collections_cache', []))}\n"
+                f"  Total assets to process: {len(manifest.get('media_cache', [])) + len(manifest.get('collections_cache', []))}\n"
+            )
 
         border = BorderReplacerr(logger=self.logger)
         # Drive the parent bar's reserved slice as posters complete.
@@ -1214,7 +1221,7 @@ class PosterRenamerr(ChubModule):
                 getattr(self, "_job_id", None), getattr(self, "_job_db", None)
             )
             border.set_progress_window(*progress_window)
-        border.run(manifest)
+        border.run(manifest, process_all=process_all)
 
         self.logger.info("Finished running border_replacerr.")
 
@@ -1488,7 +1495,9 @@ class PosterRenamerr(ChubModule):
                 if self.config.run_border_replacerr:
                     with self._phase("border_replacerr"):
                         self.run_border_replacerr(
-                            manifest, progress_window=tail_windows.get("border")
+                            manifest,
+                            progress_window=tail_windows.get("border"),
+                            process_all=True,
                         )
 
                 # Strict either/or: upload to Plex only on the "plex" path. The

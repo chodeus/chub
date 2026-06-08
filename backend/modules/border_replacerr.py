@@ -349,7 +349,60 @@ class BorderReplacerr(ChubModule):
             )
             return None  # None = failure (vs False = no change needed)
 
-    def run(self, manifest: dict):
+    def _asset_excluded(self, asset: dict) -> bool:
+        """True if this asset should be skipped per exclusion_list /
+        ignore_folders. Logs a debug line so the user can see why."""
+        title = asset.get("title")
+        if self.config.exclusion_list and title in self.config.exclusion_list:
+            self.logger.debug(f"Skipping '{title}' (in exclusion_list).")
+            return True
+        if (
+            self.config.ignore_folders
+            and asset.get("folder") in self.config.ignore_folders
+        ):
+            self.logger.debug(f"Skipping '{title}' (folder in ignore_folders).")
+            return True
+        return False
+
+    def _collect_matched_assets(self, db) -> list:
+        """Return every matched media row + matched collection row, with
+        exclusion_list / ignore_folders applied.
+
+        Unlike poster_renamerr.get_matched_assets(), this does NOT drop
+        already-moved posters (those whose renamed_file exists on disk), so
+        the full-library border pass re-borders the whole library, not just
+        the not-yet-moved subset carried in a manifest. Collections are
+        included here (the old reset_all branch processed media only)."""
+        assets: list = []
+        # Use .get() defensively: db rows are trusted but may be partial in
+        # edge cases (e.g. a row mid-write); a missing key skips the row rather
+        # than crashing the whole library pass.
+        for row in db.media.get_all():
+            if row.get("matched") != 1:
+                continue
+            if self._asset_excluded(row):
+                continue
+            assets.append(row)
+        for row in db.collection.get_all():
+            if row.get("matched") != 1:
+                continue
+            if self._asset_excluded(row):
+                continue
+            assets.append(row)
+        return assets
+
+    @staticmethod
+    def _should_process_all(manifest, process_all: bool, reset_all: bool) -> bool:
+        """Decide whether to border the full matched library vs only the
+        manifest subset.
+
+        Full library when: the caller asked (process_all, e.g. a renamerr
+        full run), or the holiday state just changed (reset_all), or no
+        manifest was supplied (standalone module run). Otherwise the
+        manifest subset (webhook/adhoc imports)."""
+        return bool(process_all or reset_all or manifest is None)
+
+    def run(self, manifest: Optional[dict] = None, process_all: bool = False):
         with ChubDB(logger=self.logger) as db:
             if self.config.log_level.lower() == "debug":
                 print_settings(self.logger, self.config)
@@ -377,31 +430,12 @@ class BorderReplacerr(ChubModule):
             skipped = 0
             failed = 0
             gate_skipped = 0
-            if reset_all:
+            if self._should_process_all(manifest, process_all, reset_all):
                 self.logger.debug(
-                    "Holiday state changed (or startup). Doing full reprocessing of all matched assets."
+                    "Full-library border pass: reprocessing all matched media "
+                    "and collections (includes already-moved posters)."
                 )
-                for row in db.media.get_all():
-                    if row["matched"] == 1:
-                        if (
-                            self.config.exclusion_list
-                            and row["title"] in self.config.exclusion_list
-                        ):
-                            self.logger.debug(
-                                f"Skipping '{row['title']}' (in exclusion_list)."
-                            )
-                            skipped += 1
-                            continue
-                        if (
-                            self.config.ignore_folders
-                            and row.get("folder") in self.config.ignore_folders
-                        ):
-                            self.logger.debug(
-                                f"Skipping '{row['title']}' (folder in ignore_folders)."
-                            )
-                            skipped += 1
-                            continue
-                        assets.append(row)
+                assets = self._collect_matched_assets(db)
             else:
                 all_ids = [("media_cache", i) for i in manifest["media_cache"]] + [
                     ("collections_cache", i) for i in manifest["collections_cache"]
@@ -498,6 +532,17 @@ class BorderReplacerr(ChubModule):
                 if not asset.get("original_file") or not asset.get("renamed_file"):
                     self.logger.warning(
                         f"Asset '{asset.get('title')}' missing file info. Skipping."
+                    )
+                    skipped += 1
+                    continue
+                if not os.path.exists(asset["original_file"]):
+                    # Full-library sweeps re-encounter posters whose source was
+                    # since removed (gdrive cleanup, one-time drops). Skip them
+                    # quietly instead of letting the encoder fail and tallying a
+                    # scary 'failed' every run.
+                    self.logger.debug(
+                        f"Skipping '{asset.get('title')}' — source poster missing "
+                        f"on disk ({asset['original_file']})."
                     )
                     skipped += 1
                     continue
