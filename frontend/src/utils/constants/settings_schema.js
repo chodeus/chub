@@ -291,7 +291,7 @@ export const SETTINGS_SCHEMA = [
                 type: 'check_box',
                 section: 'Pipeline',
                 description:
-                    "After renaming, walk the destination directory and act on every poster file with no parent media in the configured instances — i.e. an orphan asset. A file is kept if its {tmdb-N}/{tvdb-N} id tag matches the library OR its title matches; it's flagged only when both miss (a stale id whose title still matches is kept). Source directories are deliberately out of scope: gdrive-synced source dirs would just re-download deleted files on the next sync, and personal source dirs aren't CHUB's to delete from. (Not to be confused with the Unmatched Assets module, which reports media missing a poster — the opposite direction.) The action taken (report / move / remove) follows the Orphan Assets Mode set in the Poster Cleanarr module, so a single setting governs both this post-rename pass and a standalone Cleanarr run.",
+                    "After renaming, scans the destination for orphan posters — files whose media no longer exists in your instances — and acts on them. A poster is kept if its {tmdb-N}/{tvdb-N} tag or its title still matches the library; it's flagged only when both miss. Source dirs are excluded (gdrive sources re-download on next sync; personal dirs aren't CHUB's to touch). The action (report / move / remove) follows Orphan Assets Mode in Poster Cleanarr.",
             },
             {
                 key: 'report_unmatched_assets',
