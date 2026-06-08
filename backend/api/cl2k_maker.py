@@ -18,11 +18,11 @@ Module settings are read/saved through the generic /api/config endpoints.
 import base64
 from typing import Any, List, Optional
 
-from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 
-from backend.api.utils import error, get_database, get_logger, ok
+from backend.api.utils import error, get_database, get_module_logger, ok
 from backend.modules.cl2k_maker import (
     fanart_images,
     gdrive_psd_bytes,
@@ -43,6 +43,13 @@ router = APIRouter(
     tags=["CL2K Maker"],
     responses={500: {"description": "Internal server error"}},
 )
+
+
+def get_cl2k_logger(request: Request) -> Any:
+    """Log on-demand CL2K operations to the cl2k_maker module log (not the general
+    log), so generation/upload activity and errors show up under the Logs page's
+    CL2K Maker section instead of vanishing into the general log."""
+    return get_module_logger(request, "cl2k_maker")
 
 
 class GenerateRequest(BaseModel):
@@ -81,7 +88,7 @@ def search(
     q: str = Query(..., min_length=1),
     media_type: str = Query("movie", alias="type"),
     db: ChubDB = Depends(get_database),
-    logger: Any = Depends(get_logger),
+    logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
     tmdb = TMDBClient(load_config().tmdb, db, logger)
     return ok("ok", {"results": tmdb.search_titles(q, media_type)})
@@ -93,7 +100,7 @@ def resolve(
     source: str = Query(..., description="tvdb_id | imdb_id"),
     media_type: str = Query("movie", alias="type"),
     db: ChubDB = Depends(get_database),
-    logger: Any = Depends(get_logger),
+    logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
     tmdb = TMDBClient(load_config().tmdb, db, logger)
     mt = "movie" if media_type == "movie" else "tv"
@@ -105,7 +112,7 @@ def images(
     tmdb_id: int = Query(...),
     media_type: str = Query("movie", alias="type"),
     db: ChubDB = Depends(get_database),
-    logger: Any = Depends(get_logger),
+    logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
     tmdb = TMDBClient(load_config().tmdb, db, logger)
     imgs = tmdb.list_images(tmdb_id, media_type) or {"logos": [], "backdrops": []}
@@ -121,7 +128,7 @@ def images(
 @router.get("/upload-status", summary="Whether CL2K Drive upload has a usable OAuth token")
 def upload_status(
     db: ChubDB = Depends(get_database),
-    logger: Any = Depends(get_logger),
+    logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
     from backend.util.cl2k.gdrive_upload import has_upload_token
 
@@ -141,7 +148,7 @@ def external_ids(
     tmdb_id: int = Query(...),
     media_type: str = Query("movie", alias="type"),
     db: ChubDB = Depends(get_database),
-    logger: Any = Depends(get_logger),
+    logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
     tmdb = TMDBClient(load_config().tmdb, db, logger)
     return ok("ok", tmdb.external_ids(tmdb_id, media_type))
@@ -151,7 +158,7 @@ def external_ids(
 def preview(
     req: GenerateRequest,
     db: ChubDB = Depends(get_database),
-    logger: Any = Depends(get_logger),
+    logger: Any = Depends(get_cl2k_logger),
 ):
     blob = render_preview(
         db,
@@ -181,7 +188,7 @@ def preview(
 def generate(
     req: GenerateRequest,
     db: ChubDB = Depends(get_database),
-    logger: Any = Depends(get_logger),
+    logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
     result = generate_for_item(
         db=db,
@@ -213,7 +220,7 @@ def generate(
 def generated(
     limit: int = Query(200, ge=1, le=1000),
     db: ChubDB = Depends(get_database),
-    logger: Any = Depends(get_logger),
+    logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
     return ok("ok", {"items": db.cl2k_generated.list_recent(limit)})
 
@@ -222,7 +229,7 @@ def generated(
 def psd_export(
     req: GenerateRequest,
     db: ChubDB = Depends(get_database),
-    logger: Any = Depends(get_logger),
+    logger: Any = Depends(get_cl2k_logger),
 ):
     blob = psd_for_item(
         db=db,
@@ -257,7 +264,7 @@ class SeasonsRequest(BaseModel):
 def generate_seasons_endpoint(
     req: SeasonsRequest,
     db: ChubDB = Depends(get_database),
-    logger: Any = Depends(get_logger),
+    logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
     out = generate_seasons(
         db=db,
@@ -285,7 +292,7 @@ async def upload_generate(
     imdb_id: Optional[str] = Form(None),
     season_number: Optional[int] = Form(None),
     db: ChubDB = Depends(get_database),
-    logger: Any = Depends(get_logger),
+    logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
     backdrop_bytes = await file.read()
     result = generate_for_item(
@@ -315,7 +322,7 @@ def fanart_images_endpoint(
     imdb_id: Optional[str] = Query(None),
     season_number: Optional[int] = Query(None),
     db: ChubDB = Depends(get_database),
-    logger: Any = Depends(get_logger),
+    logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
     res = fanart_images(
         load_config(),
@@ -351,7 +358,7 @@ async def upload_poster(
     season_number: Optional[int] = Form(None),
     border: bool = Form(True),
     db: ChubDB = Depends(get_database),
-    logger: Any = Depends(get_logger),
+    logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
     image_bytes = await file.read()
     result = save_finished_poster(
@@ -379,7 +386,7 @@ def gdrive_list(
     drive_id: Optional[str] = Query(None),
     q: Optional[str] = Query(None, description="case-insensitive title substring"),
     db: ChubDB = Depends(get_database),
-    logger: Any = Depends(get_logger),
+    logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
     cfg = load_config()
     if not drive_id:
@@ -430,7 +437,7 @@ class RetextRequest(BaseModel):
 def retext(
     req: RetextRequest,
     db: ChubDB = Depends(get_database),
-    logger: Any = Depends(get_logger),
+    logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
     if not req.image_b64:
         return error("no image provided", "CL2K_RETEXT")
@@ -481,7 +488,7 @@ def retext(
 def gdrive_psd(
     req: GDrivePsdRequest,
     db: ChubDB = Depends(get_database),
-    logger: Any = Depends(get_logger),
+    logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
     cfg = load_config()
     try:
