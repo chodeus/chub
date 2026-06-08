@@ -338,12 +338,13 @@ def _cover_to_canvas(im):
 
 
 def _normalize_poster(image_bytes: bytes) -> bytes:
-    """Force a finished poster to the locked 1000×1500 canvas (JPEG, quality 88).
+    """Force a finished poster to the locked 1000×1500 canvas (JPEG, CL2K quality).
 
-    A poster that is already a 1000×1500 JPEG passes through untouched. Anything
-    else — wrong dimensions, wrong aspect, or a non-JPEG container — is
-    center-cropped to 2:3, scaled to the canvas, and re-encoded, so every stored
-    poster matches DAPS dimensions.
+    A poster that is already a 1000×1500 JPEG passes through untouched (no re-encode,
+    so a high-quality source keeps its quality). Anything else — wrong dimensions,
+    wrong aspect, or a non-JPEG container — is center-cropped to 2:3, scaled to the
+    canvas, and re-encoded at the CL2K quality with NO chroma subsampling (4:4:4),
+    matching hand-made posters.
     """
     import io
 
@@ -357,7 +358,7 @@ def _normalize_poster(image_bytes: bytes) -> bytes:
     if not correct_size:
         im = _cover_to_canvas(im)
     buf = io.BytesIO()
-    im.save(buf, format="JPEG", quality=geo.OUTPUT_QUALITY)
+    im.save(buf, format="JPEG", quality=geo.OUTPUT_QUALITY, subsampling=0)
     return buf.getvalue()
 
 

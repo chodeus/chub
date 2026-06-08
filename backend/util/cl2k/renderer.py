@@ -108,6 +108,16 @@ def _draw_text(
         draw(base)
 
 
+def _encode_jpeg(base: Image) -> bytes:
+    """Encode a Wand image to JPEG at the CL2K quality with NO chroma subsampling
+    (4:4:4), matching hand-made CL2K posters (which use ~q99 / full colour). The
+    default libjpeg 4:2:0 subsampling softens coloured edges, so we force 4:4:4."""
+    base.format = "jpeg"
+    base.compression_quality = geo.OUTPUT_QUALITY
+    base.options["jpeg:sampling-factor"] = geo.JPEG_SAMPLING_FACTOR
+    return base.make_blob()
+
+
 def _draw_border(base: Image) -> None:
     """Composite the default white frame (DAPS rule)."""
     bw = geo.BORDER_WIDTH
@@ -201,9 +211,7 @@ def render_cl2k(
 
         _draw_border(base)
 
-        base.format = "jpeg"
-        base.compression_quality = geo.OUTPUT_QUALITY
-        return base.make_blob()
+        return _encode_jpeg(base)
 
 
 def overlay_label(
@@ -233,9 +241,7 @@ def overlay_label(
             geo.LABEL_FONT_PX,
             kerning=geo.tracking_to_kerning(geo.LABEL_TRACKING),
         )
-        base.format = "jpeg"
-        base.compression_quality = geo.OUTPUT_QUALITY
-        return base.make_blob()
+        return _encode_jpeg(base)
 
 
 def apply_border(image_bytes: bytes) -> bytes:
@@ -249,9 +255,7 @@ def apply_border(image_bytes: bytes) -> bytes:
     """
     with Image(blob=image_bytes) as base:
         _draw_border(base)
-        base.format = "jpeg"
-        base.compression_quality = geo.OUTPUT_QUALITY
-        return base.make_blob()
+        return _encode_jpeg(base)
 
 
 # ----- CLI harness (P1 visual check) -----------------------------------------
