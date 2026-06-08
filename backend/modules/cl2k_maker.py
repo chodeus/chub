@@ -94,7 +94,7 @@ def _resolve_and_render(
     # apply_ai flag for OpenAI's maskless mode) — never on every auto-render.
     if apply_ai or mask_bytes:
         backdrop_bytes = text_removal.remove_text(
-            backdrop_bytes, config=cfg, mask_bytes=mask_bytes
+            backdrop_bytes, config=cfg, mask_bytes=mask_bytes, logger=logger
         )
 
     logo_bytes = None
@@ -307,7 +307,6 @@ def _persist_poster(
                 cfg.gdrive_folder_id,
                 sync_cfg,
                 logger,
-                sa_override=cfg.gdrive_sa_location or None,
             )
             db.cl2k_generated.mark_uploaded(out_path)
         except Exception as exc:
@@ -475,7 +474,7 @@ def retext_poster(
     img = _normalize_poster(image_bytes)
     if apply_ai and mask_bytes:
         img = text_removal.remove_text(
-            img, config=cfg, mask_bytes=mask_bytes, prompt=prompt
+            img, config=cfg, mask_bytes=mask_bytes, prompt=prompt, logger=logger
         )
     if label_text:
         center_y = None

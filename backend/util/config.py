@@ -310,10 +310,12 @@ class Cl2kMakerConfig(BaseModel):
     skip_existing: bool = True
     style: str = "CL2K"  # poster_cache style tag
     priority: int = 0
-    # Google Drive upload (rclone copy) — optional, off by default.
+    # Google Drive upload (rclone copy) — optional, off by default. Uploads use
+    # the Sync GDrive OAuth token (a service account can't own files in a personal
+    # Drive — "Service Accounts do not have storage quota"), so there is no
+    # per-module SA option here.
     upload_to_gdrive: bool = False
     gdrive_folder_id: str = ""
-    gdrive_sa_location: str = ""
     # G-Drive .psd source: this module's own subset of sync_gdrive.gdrive_list
     # (each {id,location,name}), mirroring how poster_renamerr.source_dirs pick a
     # subset of synced locations. Browsed via rclone for finished CL2K .psd files.
