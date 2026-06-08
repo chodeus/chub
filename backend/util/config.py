@@ -290,7 +290,6 @@ class BorderReplacerrConfig(BaseModel):
     # poster into a no-op reported as success. 200px is far above any real
     # border and stays valid on normalized poster dimensions.
     border_width: int = Field(default=26, ge=0, le=200)
-    skip: bool = False
     exclusion_list: Optional[List[str]] = None
     ignore_folders: List[str] = Field(default_factory=list)
     border_colors: List[str] = Field(default_factory=list)

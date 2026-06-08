@@ -65,7 +65,6 @@ class BorderReplacerr(ChubModule):
         now = datetime.now()
         holidays = self.config.holidays
         default_colors = self.config.border_colors
-        skip_enabled = self.config.skip
 
         last_status = db.holiday.get_status()
         last_active_holiday = last_status["last_active_holiday"]
@@ -118,7 +117,6 @@ class BorderReplacerr(ChubModule):
             "last_active_holiday": last_active_holiday,
             "border_colors": border_colors,
             "border_paths": border_paths,
-            "skip_enabled": skip_enabled,
             "reset_all": reset_all,
         }
         return result
@@ -408,20 +406,8 @@ class BorderReplacerr(ChubModule):
                 print_settings(self.logger, self.config)
 
             results = self.get_holiday_status(db=db)
-            skip_enabled = results["skip_enabled"]
             reset_all = results["reset_all"]
             active_holiday = results["active_holiday"]
-
-            if skip_enabled and not active_holiday:
-                self.logger.info(
-                    "Border replacerr is in skip mode and today is not a holiday. Skipping all processing."
-                )
-                db.holiday.set_status(active_holiday)
-                return
-            if skip_enabled and active_holiday:
-                self.logger.info(
-                    "Border replacerr skip mode: Overriding skip due to active holiday."
-                )
 
             assets = []
             processed = 0
