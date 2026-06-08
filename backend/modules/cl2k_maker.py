@@ -298,9 +298,13 @@ def _persist_poster(
         }
     )
 
+    upload_error = None
     if cfg.upload_to_gdrive and cfg.gdrive_folder_id:
         from backend.util.cl2k.gdrive_upload import upload_file
 
+        logger.info(
+            f"CL2K uploading {filename} to Drive folder {cfg.gdrive_folder_id}…"
+        )
         try:
             upload_file(
                 out_path,
@@ -309,11 +313,18 @@ def _persist_poster(
                 logger,
             )
             db.cl2k_generated.mark_uploaded(out_path)
+            logger.info(f"CL2K uploaded {filename} to Drive")
         except Exception as exc:
+            upload_error = str(exc)
             logger.warning(f"CL2K gdrive upload failed for {filename}: {exc}")
 
     logger.info(f"CL2K poster generated: {filename} (logo: {logo_source})")
-    return {"status": "generated", "file": out_path, "logo_source": logo_source}
+    result = {"status": "generated", "file": out_path, "logo_source": logo_source}
+    # Surface a non-fatal upload failure so the caller can tell the user the file
+    # saved locally but didn't reach Drive (generation still succeeds).
+    if upload_error:
+        result["upload_error"] = upload_error
+    return result
 
 
 def _cover_to_canvas(im):

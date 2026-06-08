@@ -664,7 +664,7 @@ const Builder = ({ item, config, onReset, onItemChange, toast }) => {
         setBusy(true);
         try {
             const resp = await cl2kMakerAPI.generate({ ...baseRequest, force: false });
-            toast.success(`Generated: ${resp?.data?.file || 'poster'}`);
+            savedToast(toast, resp?.data, 'Generated');
         } catch (err) {
             toast.error(err.message || 'Generate failed');
         } finally {
@@ -1396,7 +1396,7 @@ const UploadBackdropPanel = ({ item, effectiveKind, toast }) => {
                 tvdb_id: item.tvdb_id,
                 imdb_id: item.imdb_id,
             });
-            toast.success(`Generated: ${resp?.data?.file || 'poster'}`);
+            savedToast(toast, resp?.data, 'Generated');
         } catch (err) {
             toast.error(err.message || 'Generate failed');
         } finally {
@@ -1447,7 +1447,7 @@ const UploadPosterPanel = ({ item, effectiveKind, toast }) => {
                 imdb_id: item.imdb_id,
                 border: addBorder,
             });
-            toast.success(`Saved: ${resp?.data?.file || 'poster'}`);
+            savedToast(toast, resp?.data);
         } catch (err) {
             toast.error(err.message || 'Save failed');
         } finally {
@@ -1594,7 +1594,7 @@ const GdrivePsdPanel = ({ item, effectiveKind, toast }) => {
         setBusy(true);
         try {
             const resp = await cl2kMakerAPI.gdrivePsd({ ...baseReq, preview: false });
-            toast.success(`Saved: ${resp?.data?.file || 'poster'}`);
+            savedToast(toast, resp?.data);
         } catch (err) {
             toast.error(err.message || 'Save failed');
         } finally {
@@ -1914,7 +1914,7 @@ const EditPosterPanel = ({ item, effectiveKind, config, toast }) => {
                 preview: false,
                 ...idFields,
             });
-            toast.success(`Saved: ${resp?.data?.file || 'poster'}`);
+            savedToast(toast, resp?.data);
         } catch (err) {
             toast.error(err.message || 'Save failed');
         } finally {
@@ -2255,6 +2255,18 @@ const downloadBlob = (blob, filename) => {
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
+};
+
+// Toast for a save/generate that also surfaces a non-fatal Drive-upload failure
+// (the poster still saved locally) so the user isn't left guessing why nothing
+// reached Drive. Backend returns data.upload_error on the save response.
+const savedToast = (toast, data, verb = 'Saved') => {
+    const file = data?.file || 'poster';
+    if (data?.upload_error) {
+        toast.error(`${verb} ${file} locally, but Drive upload failed: ${data.upload_error}`);
+    } else {
+        toast.success(`${verb}: ${file}`);
+    }
 };
 
 export default Cl2kMakerPage;
