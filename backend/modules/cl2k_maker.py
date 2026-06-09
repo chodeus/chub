@@ -6,6 +6,7 @@ import tempfile
 from typing import Any, Dict, Optional, Tuple
 
 from backend.util.base_module import ChubModule
+from backend.util.cl2k import color
 from backend.util.cl2k import geometry as geo
 from backend.util.cl2k import image_fetch, text_removal
 from backend.util.cl2k.naming import build_poster_filename
@@ -462,7 +463,14 @@ def _normalize_poster(image_bytes: bytes) -> bytes:
     if not correct_size:
         im = _cover_to_canvas(im)
     buf = io.BytesIO()
-    im.save(buf, format="JPEG", quality=geo.OUTPUT_QUALITY, subsampling=0)
+    im.save(
+        buf,
+        format="JPEG",
+        quality=geo.OUTPUT_QUALITY,
+        subsampling=0,
+        progressive=geo.JPEG_PROGRESSIVE,
+        icc_profile=color.srgb_icc_bytes(),
+    )
     return buf.getvalue()
 
 

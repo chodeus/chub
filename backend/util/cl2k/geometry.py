@@ -100,6 +100,9 @@ OUTPUT_EXT = ".jpg"            # lowercase, per DAPS
 # encode exactly.
 OUTPUT_QUALITY = 99            # was 88→95; match hand-made CL2K reference exactly
 JPEG_SAMPLING_FACTOR = "1x1,1x1,1x1"  # 4:4:4 — no chroma subsampling (full colour)
+JPEG_PROGRESSIVE = True        # progressive scan (SOF2), as hand-made refs encode.
+# Purely the storage byte-order, NOT a quality change (same pixels); matches the
+# reference convention and is often marginally smaller.
 TEXT_UPPERCASE = True          # text is ALWAYS all-caps
 
 # ----- bundled assets --------------------------------------------------------

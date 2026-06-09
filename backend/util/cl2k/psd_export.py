@@ -13,6 +13,7 @@ from typing import Optional
 
 from PIL import Image, ImageDraw, ImageFont
 
+from backend.util.cl2k import color
 from backend.util.cl2k import geometry as geo
 
 
@@ -139,5 +140,12 @@ def flatten_psd(psd_bytes: bytes, quality: int = geo.OUTPUT_QUALITY) -> bytes:
     buf = io.BytesIO()
     # subsampling=0 forces 4:4:4 (no chroma subsampling) — matches the renderer and
     # cl2k_maker encode paths; PIL's default can emit 4:2:0 and soften coloured edges.
-    im.save(buf, format="JPEG", quality=quality, subsampling=0)
+    im.save(
+        buf,
+        format="JPEG",
+        quality=quality,
+        subsampling=0,
+        progressive=geo.JPEG_PROGRESSIVE,
+        icc_profile=color.srgb_icc_bytes(),
+    )
     return buf.getvalue()
