@@ -24,7 +24,7 @@ from wand.color import Color
 from wand.drawing import Drawing
 from wand.image import Image
 
-from backend.util.cl2k import geometry as geo
+from backend.util.cl2k import color, geometry as geo
 
 
 # ----- helpers ---------------------------------------------------------------
@@ -115,6 +115,19 @@ def _encode_jpeg(base: Image) -> bytes:
     base.format = "jpeg"
     base.compression_quality = geo.OUTPUT_QUALITY
     base.options["jpeg:sampling-factor"] = geo.JPEG_SAMPLING_FACTOR
+    # Embed a standard sRGB profile so colour-managed viewers render the (sRGB)
+    # pixels correctly instead of stretching an untagged file into their gamut.
+    base.profiles["icc"] = color.srgb_icc_bytes()
+    if geo.JPEG_PROGRESSIVE:
+        # Write a progressive (SOF2) JPEG to match the hand-made reference
+        # convention. Quality is unaffected — only the scan order changes.
+        # NOTE: Wand's `interlace_scheme` property sets image->interlace, but the
+        # JPEG writer reads image_info->interlace; only MagickSetInterlaceScheme
+        # sets that, so the property alone produces a baseline file. 6 =
+        # JPEGInterlace in MagickCore's InterlaceType enum.
+        from wand.api import library
+
+        library.MagickSetInterlaceScheme(base.wand, 6)
     return base.make_blob()
 
 
