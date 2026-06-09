@@ -18,7 +18,11 @@ from backend.util.cl2k import geometry as geo
 
 def _cover(im: Image.Image, w: int, h: int) -> Image.Image:
     scale = max(w / im.width, h / im.height)
-    im = im.resize((round(im.width * scale), round(im.height * scale)))
+    # LANCZOS — sharpest downscale to canvas; PIL's default BICUBIC is softer.
+    im = im.resize(
+        (round(im.width * scale), round(im.height * scale)),
+        Image.Resampling.LANCZOS,
+    )
     left = (im.width - w) // 2
     top = (im.height - h) // 2
     return im.crop((left, top, left + w, top + h))
@@ -82,7 +86,7 @@ def export_psd(
         if th > max_h:
             th = max_h
             tw = round(lg.width * th / lg.height)
-        lg = lg.resize((tw, th))
+        lg = lg.resize((tw, th), Image.Resampling.LANCZOS)
         logo_layer.alpha_composite(lg, (geo.CENTER_X - tw // 2, baseline - th))
 
     text_layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
@@ -133,5 +137,7 @@ def flatten_psd(psd_bytes: bytes, quality: int = geo.OUTPUT_QUALITY) -> bytes:
     if (im.width, im.height) != (geo.CANVAS_W, geo.CANVAS_H):
         im = _cover(im, geo.CANVAS_W, geo.CANVAS_H)
     buf = io.BytesIO()
-    im.save(buf, format="JPEG", quality=quality)
+    # subsampling=0 forces 4:4:4 (no chroma subsampling) — matches the renderer and
+    # cl2k_maker encode paths; PIL's default can emit 4:2:0 and soften coloured edges.
+    im.save(buf, format="JPEG", quality=quality, subsampling=0)
     return buf.getvalue()

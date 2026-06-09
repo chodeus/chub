@@ -332,9 +332,16 @@ def _persist_poster(
 
 def _cover_to_canvas(im):
     """Cover-resize + center-crop a PIL image to the locked CL2K canvas."""
+    from PIL import Image
+
     w, h = geo.CANVAS_W, geo.CANVAS_H
     scale = max(w / im.width, h / im.height)
-    im = im.resize((round(im.width * scale), round(im.height * scale)))
+    # LANCZOS — sharpest resample for the downscale to canvas (matches the Wand
+    # renderer); PIL's default is BICUBIC, which is softer on fine detail.
+    im = im.resize(
+        (round(im.width * scale), round(im.height * scale)),
+        Image.Resampling.LANCZOS,
+    )
     left = (im.width - w) // 2
     top = (im.height - h) // 2
     return im.crop((left, top, left + w, top + h))
