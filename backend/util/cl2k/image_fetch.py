@@ -19,27 +19,50 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
+from backend.util.cl2k import geometry as geo
+
 TMDB_IMAGE_CDN = "https://image.tmdb.org/t/p/original"
 
 
 def select_backdrop(
     backdrops: List[Dict[str, Any]],
+    min_height: int = geo.CANVAS_H,
 ) -> Optional[str]:
-    """Return the best *textless* backdrop ``file_path`` (top vote), or None.
+    """Return the best *textless* backdrop ``file_path``, or None.
+
+    The backdrop *is* the whole poster background — cover-resized to the 1000×1500
+    canvas — so resolution matters as much as curation. Selection is therefore
+    two-tier:
+
+    1. Among textless candidates, prefer those tall enough to fill the canvas
+       without upscaling (``height >= min_height``) and rank *those* by vote, so
+       TMDB's curation decides among the sharp options.
+    2. If none are tall enough, fall back to the highest-resolution candidate so
+       we upscale as little as possible.
 
     Language-neutral art (no ``iso_639_1``) is strongly preferred; only if none
-    exists do we fall back to the highest-voted of whatever is available.
+    exists do we consider language-tagged backdrops.
     """
     if not backdrops:
         return None
     textless = [b for b in backdrops if not b.get("iso_639_1")]
     pool = textless or backdrops
-    pool = sorted(
-        pool,
-        key=lambda b: (b.get("vote_average", 0), b.get("vote_count", 0)),
-        reverse=True,
-    )
-    return pool[0].get("file_path")
+    sharp = [b for b in pool if b.get("height", 0) >= min_height]
+    if sharp:
+        ranked = sorted(
+            sharp,
+            key=lambda b: (b.get("vote_average", 0), b.get("vote_count", 0)),
+            reverse=True,
+        )
+    else:
+        # Nothing fills the canvas natively — minimise upscaling by taking the
+        # largest available (vote only as a tiebreaker between equal sizes).
+        ranked = sorted(
+            pool,
+            key=lambda b: (b.get("height", 0), b.get("width", 0), b.get("vote_average", 0)),
+            reverse=True,
+        )
+    return ranked[0].get("file_path")
 
 
 def select_logo(
