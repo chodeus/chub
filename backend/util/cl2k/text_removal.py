@@ -83,7 +83,11 @@ def _composite_masked(original_bytes: bytes, result_bytes: bytes, mask_bytes: by
     from PIL import Image, ImageFilter
 
     orig = Image.open(io.BytesIO(original_bytes)).convert("RGB")
-    res = Image.open(io.BytesIO(result_bytes)).convert("RGB").resize(orig.size)
+    res = (
+        Image.open(io.BytesIO(result_bytes))
+        .convert("RGB")
+        .resize(orig.size, Image.Resampling.LANCZOS)
+    )
     mask = (
         Image.open(io.BytesIO(mask_bytes))
         .convert("L")
@@ -162,6 +166,13 @@ def _openai(
         files["mask"] = ("mask.png", mask_buf.getvalue(), "image/png")
 
     timeout = _timeout(config)
+    if not mask_bytes and logger:
+        logger.warning(
+            "CL2K AI (openai): no mask supplied — the WHOLE poster is regenerated "
+            "(faces altered, fidelity not pixel-exact, resolution capped at the "
+            "model's native size). Brush a mask to preserve the artwork outside "
+            "the text."
+        )
     if logger:
         logger.info(
             f"CL2K AI (openai): images.edit start — model={model}, "
