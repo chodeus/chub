@@ -258,6 +258,29 @@ def apply_border(image_bytes: bytes) -> bytes:
         return _encode_jpeg(base)
 
 
+def overlay_logo(
+    image_bytes: bytes,
+    logo_bytes: bytes,
+    *,
+    kind: str = "movie",
+    logo_max_width: int = geo.LOGO_WIDTH_STD,
+    whiten: bool = True,
+) -> bytes:
+    """Composite a clear logo onto a finished poster at the locked CL2K baseline.
+
+    Trims, whitens and width-normalises the logo to the CL2K guides exactly like
+    a fresh render (via the shared :func:`_place_logo`), then bottom-aligns it on
+    the kind's baseline. Used to add a TMDB / fanart / custom logo onto an
+    already-finished uploaded poster (the save-as-is flow), where no full render
+    happens. The poster should already be the locked 1000×1500 canvas. Returns
+    JPEG bytes.
+    """
+    baseline = geo.logo_baseline((kind or "movie").lower())
+    with Image(blob=image_bytes) as base:
+        _place_logo(base, logo_bytes, baseline, logo_max_width, whiten)
+        return _encode_jpeg(base)
+
+
 # ----- CLI harness (P1 visual check) -----------------------------------------
 def main() -> None:
     import argparse
