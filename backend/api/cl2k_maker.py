@@ -33,7 +33,7 @@ from backend.modules.cl2k_maker import (
     retext_poster,
     save_finished_poster,
 )
-from backend.util.cl2k.image_fetch import TMDB_IMAGE_CDN
+from backend.util.cl2k.image_fetch import TMDB_IMAGE_CDN, download as download_image
 from backend.util.config import load_config
 from backend.util.database import ChubDB
 from backend.util.tmdb import TMDBClient
@@ -62,6 +62,7 @@ class GenerateRequest(BaseModel):
     season_number: Optional[int] = None
     backdrop_path: Optional[str] = None
     logo_path: Optional[str] = None
+    logo_b64: Optional[str] = None  # custom uploaded logo (PNG, base64); wins over logo_path
     mask_b64: Optional[str] = None  # user-brushed mask (PNG, white=remove) for AI
     remove_text: bool = False  # run AI text removal (OpenAI can do it mask-less)
     focus_x: float = 0.5  # crop focal point (0..1); 0.5 = centre
@@ -75,6 +76,24 @@ class GenerateRequest(BaseModel):
 
 def _mask_bytes(b64: Optional[str]) -> Optional[bytes]:
     return base64.b64decode(b64) if b64 else None
+
+
+def _b64_to_bytes(b64: Optional[str]) -> Optional[bytes]:
+    """Decode a base64 image, tolerating a ``data:...;base64,`` URL prefix."""
+    return base64.b64decode(b64.split(",")[-1]) if b64 else None
+
+
+def _resolve_logo_bytes(
+    logo_path: Optional[str], logo_b64: Optional[str]
+) -> Optional[bytes]:
+    """Bytes for a chosen logo (or None). An uploaded PNG (``logo_b64``) wins over
+    a chosen TMDB/fanart ``logo_path``, which is fetched via the host-allowlisted
+    image downloader (so a crafted path can't trigger an SSRF)."""
+    if logo_b64:
+        return _b64_to_bytes(logo_b64)
+    if logo_path:
+        return download_image(logo_path)
+    return None
 
 
 def _decorate(items: List[dict]) -> List[dict]:
@@ -174,6 +193,7 @@ def preview(
         season_number=req.season_number,
         backdrop_path=req.backdrop_path,
         logo_path=req.logo_path,
+        custom_logo_bytes=_b64_to_bytes(req.logo_b64),
         tvdb_id=req.tvdb_id,
         imdb_id=req.imdb_id,
         mask_bytes=_mask_bytes(req.mask_b64),
@@ -207,6 +227,7 @@ def generate(
         season_number=req.season_number,
         backdrop_path=req.backdrop_path,
         logo_path=req.logo_path,
+        custom_logo_bytes=_b64_to_bytes(req.logo_b64),
         mask_bytes=_mask_bytes(req.mask_b64),
         apply_ai=req.remove_text,
         focus_x=req.focus_x,
@@ -297,6 +318,8 @@ async def upload_generate(
     tvdb_id: Optional[int] = Form(None),
     imdb_id: Optional[str] = Form(None),
     season_number: Optional[int] = Form(None),
+    logo_path: Optional[str] = Form(None),
+    logo_b64: Optional[str] = Form(None),
     save_local: bool = Form(True),
     upload_gdrive: Optional[bool] = Form(None),
     db: ChubDB = Depends(get_database),
@@ -315,6 +338,8 @@ async def upload_generate(
         imdb_id=imdb_id,
         season_number=season_number,
         backdrop_bytes=backdrop_bytes,
+        logo_path=logo_path,
+        custom_logo_bytes=_b64_to_bytes(logo_b64),
         force=True,
         save_local=save_local,
         upload_gdrive=upload_gdrive,
@@ -356,7 +381,7 @@ def fanart_images_endpoint(
     return ok("ok", {"logos": logos, "backdrops": backdrops})
 
 
-@router.post("/upload-poster", summary="File a finished poster as-is (no rendering)")
+@router.post("/upload-poster", summary="File a finished poster (optionally add a logo)")
 async def upload_poster(
     file: UploadFile = File(...),
     kind: str = Form(...),
@@ -367,12 +392,36 @@ async def upload_poster(
     imdb_id: Optional[str] = Form(None),
     season_number: Optional[int] = Form(None),
     border: bool = Form(True),
+    logo_path: Optional[str] = Form(None),
+    logo_b64: Optional[str] = Form(None),
+    preview: bool = Form(False),
     save_local: bool = Form(True),
     upload_gdrive: Optional[bool] = Form(None),
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
     image_bytes = await file.read()
+    logo_bytes = _resolve_logo_bytes(logo_path, logo_b64)
+    logo_source = "custom" if logo_b64 else "tmdb" if logo_path else "upload"
+    if preview:
+        # Mirror the save pipeline (normalize -> overlay logo -> border) so the
+        # preview matches the file that would be written, without persisting it.
+        from backend.modules.cl2k_maker import _normalize_poster
+        from backend.util.cl2k.renderer import apply_border, overlay_logo
+
+        cfg = load_config().cl2k_maker
+        blob = _normalize_poster(image_bytes)
+        if logo_bytes:
+            blob = overlay_logo(
+                blob,
+                logo_bytes,
+                kind=(kind or "movie").lower(),
+                logo_max_width=cfg.logo_max_width,
+                whiten=cfg.whiten_logo,
+            )
+        if border:
+            blob = apply_border(blob)
+        return ok("ok", {"preview_b64": base64.b64encode(blob).decode()})
     result = save_finished_poster(
         db=db,
         full_config=load_config(),
@@ -385,8 +434,9 @@ async def upload_poster(
         imdb_id=imdb_id,
         season_number=season_number,
         image_bytes=image_bytes,
-        logo_source="upload",
+        logo_source=logo_source,
         add_border=border,
+        logo_bytes=logo_bytes,
         save_local=save_local,
         upload_gdrive=upload_gdrive,
     )

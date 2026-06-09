@@ -55,6 +55,7 @@ def _resolve_and_render(
     season_text: str = "",
     backdrop_path: Optional[str] = None,
     logo_path: Optional[str] = None,
+    custom_logo_bytes: Optional[bytes] = None,
     tvdb_id: Optional[int] = None,
     imdb_id: Optional[str] = None,
     mask_bytes: Optional[bytes] = None,
@@ -63,11 +64,13 @@ def _resolve_and_render(
     focus_x: float = 0.5,
     focus_y: float = 0.5,
 ) -> Tuple[Optional[bytes], Dict[str, Any]]:
-    """Resolve art (textless backdrop + logo: TMDB->fanart->text) and render.
+    """Resolve art (textless backdrop + logo) and render.
 
-    Returns ``(jpeg_bytes, info)``; ``jpeg_bytes`` is None with ``info['reason']``
-    set when no textless backdrop is available. Shared by the preview endpoint
-    and :func:`generate_for_item`.
+    The logo source chain is: ``custom_logo_bytes`` (an uploaded PNG, used as-is)
+    -> ``logo_path`` (a chosen TMDB/fanart logo) -> auto TMDB -> fanart.tv ->
+    generated text wordmark. Returns ``(jpeg_bytes, info)``; ``jpeg_bytes`` is None
+    with ``info['reason']`` set when no textless backdrop is available. Shared by
+    the preview endpoint and :func:`generate_for_item`.
     """
     cfg = full_config.cl2k_maker
     lang = cfg.language or "en"
@@ -78,14 +81,17 @@ def _resolve_and_render(
     if kind == "season" and backdrop_path is None and backdrop_bytes is None:
         backdrop_path = db.cl2k_generated.get_backdrop_for(tmdb_id)
 
-    # Resolve a logo (always) and a backdrop path (unless bytes were uploaded
-    # for the manual-handoff flow).
-    if logo_path is None or (backdrop_bytes is None and backdrop_path is None):
+    # Resolve a logo path (unless a custom logo was uploaded or one was chosen)
+    # and a backdrop path (unless bytes were uploaded for the manual-handoff flow).
+    need_logo = custom_logo_bytes is None and logo_path is None
+    need_backdrop = backdrop_bytes is None and backdrop_path is None
+    if need_logo or need_backdrop:
         images = tmdb.list_images(tmdb_id, kind, languages=lang) or {}
         sel = image_fetch.select_cl2k_inputs(images, lang=lang)
         if backdrop_bytes is None:
             backdrop_path = backdrop_path or sel.get("backdrop")
-        logo_path = logo_path or sel.get("logo")
+        if custom_logo_bytes is None:
+            logo_path = logo_path or sel.get("logo")
 
     if backdrop_bytes is None:
         if not backdrop_path:
@@ -101,7 +107,10 @@ def _resolve_and_render(
 
     logo_bytes = None
     logo_source = "text" if cfg.text_logo_fallback else "none"
-    if logo_path:
+    if custom_logo_bytes is not None:
+        logo_bytes = custom_logo_bytes
+        logo_source = "custom"
+    elif logo_path:
         logo_bytes = image_fetch.download(logo_path)
         logo_source = "tmdb"
     else:
@@ -158,6 +167,7 @@ def generate_for_item(
     season_text: str = "",
     backdrop_path: Optional[str] = None,
     logo_path: Optional[str] = None,
+    custom_logo_bytes: Optional[bytes] = None,
     mask_bytes: Optional[bytes] = None,
     backdrop_bytes: Optional[bytes] = None,
     apply_ai: bool = False,
@@ -200,6 +210,7 @@ def generate_for_item(
         season_text=season_text,
         backdrop_path=backdrop_path,
         logo_path=logo_path,
+        custom_logo_bytes=custom_logo_bytes,
         tvdb_id=tvdb_id,
         imdb_id=imdb_id,
         mask_bytes=mask_bytes,
@@ -470,6 +481,7 @@ def save_finished_poster(
     season_number: Optional[int] = None,
     logo_source: str = "upload",
     add_border: bool = True,
+    logo_bytes: Optional[bytes] = None,
     save_local: bool = True,
     upload_gdrive: Optional[bool] = None,
 ) -> Dict[str, Any]:
@@ -478,9 +490,11 @@ def save_finished_poster(
     Used by the manual finished-poster upload and the G-Drive .psd source (both
     supply a complete poster). The image is forced to the locked 1000×1500 canvas
     (cropped if needed), named per DAPS, and registered so the rest of CHUB picks
-    it up. ``add_border`` (default True, per the DAPS rule) composites the default
-    26px white frame; uncheck it for a poster that already has the required border.
-    ``save_local`` / ``upload_gdrive`` choose the destination(s).
+    it up. When ``logo_bytes`` is given (a TMDB/fanart/custom clear logo), it is
+    composited at the locked CL2K baseline first, with the same whitening/sizing a
+    fresh render uses. ``add_border`` (default True, per the DAPS rule) composites
+    the default 26px white frame; uncheck it for a poster that already has the
+    required border. ``save_local`` / ``upload_gdrive`` choose the destination(s).
     """
     cfg = full_config.cl2k_maker
     kind = (kind or "").lower()
@@ -489,6 +503,16 @@ def save_finished_poster(
     if save_local and not cfg.output_dir:
         return {"status": "error", "reason": "cl2k_maker.output_dir is not configured"}
     blob = _normalize_poster(image_bytes)
+    if logo_bytes:
+        from backend.util.cl2k.renderer import overlay_logo
+
+        blob = overlay_logo(
+            blob,
+            logo_bytes,
+            kind=kind,
+            logo_max_width=cfg.logo_max_width,
+            whiten=cfg.whiten_logo,
+        )
     if add_border:
         from backend.util.cl2k.renderer import apply_border
 

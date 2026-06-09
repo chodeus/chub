@@ -628,6 +628,13 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
     const [loadingArt, setLoadingArt] = useState(true);
     const [backdrop, setBackdrop] = useState(saved.backdrop ?? null); // file_path | absolute url
     const [logo, setLogo] = useState(saved.logo ?? null);
+    // Custom uploaded logo (one-off, not persisted): { b64, name, url }. When set
+    // it overrides the chosen TMDB/fanart `logo` path.
+    const [customLogo, setCustomLogo] = useState(null);
+    const setCustomLogoExclusive = useCallback(c => {
+        setCustomLogo(c);
+        if (c) setLogo(null); // custom logo replaces a chosen TMDB/fanart logo
+    }, []);
 
     // Crop framing: focal point (0..1) for the backdrop cover-crop. 0.5 = centre.
     const [focusX, setFocusX] = useState(saved.focusX ?? 0.5);
@@ -710,6 +717,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             season_number: isSeasonPoster ? Number(seasonNumber) : null,
             backdrop_path: backdrop,
             logo_path: logo,
+            logo_b64: customLogo?.b64 || null,
             remove_text: removeText,
             mask_b64: removeText ? maskB64 : null,
             focus_x: focusX,
@@ -725,6 +733,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             seasonNumber,
             backdrop,
             logo,
+            customLogo,
             removeText,
             maskB64,
             focusX,
@@ -808,6 +817,18 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
     const activeArt = tab === 'fanart' ? fanartArt : tmdbArt;
     const isRenderTab = tab === 'tmdb' || tab === 'fanart';
 
+    // TMDB + fanart logos merged, for the uploaded-canvas tabs (which have no
+    // source sub-tab of their own). De-duplicated by file_path.
+    const allLogos = useMemo(() => {
+        const merged = [...(tmdbArt?.logos || []), ...(fanartArt?.logos || [])];
+        const seen = new Set();
+        return merged.filter(l => {
+            if (!l?.file_path || seen.has(l.file_path)) return false;
+            seen.add(l.file_path);
+            return true;
+        });
+    }, [tmdbArt, fanartArt]);
+
     return (
         <>
             {/* Selected title bar */}
@@ -873,6 +894,8 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                     setBackdrop={setBackdrop}
                     logo={logo}
                     setLogo={setLogo}
+                    customLogo={customLogo}
+                    setCustomLogo={setCustomLogoExclusive}
                     focusX={focusX}
                     focusY={focusY}
                     onFocusChange={(fx, fy) => {
@@ -905,6 +928,8 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                 <UploadBackdropPanel
                     item={item}
                     effectiveKind={effectiveKind}
+                    logos={allLogos}
+                    loadingArt={loadingArt}
                     saveTargets={saveTargets}
                     toast={toast}
                 />
@@ -913,6 +938,8 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                 <UploadPosterPanel
                     item={item}
                     effectiveKind={effectiveKind}
+                    logos={allLogos}
+                    loadingArt={loadingArt}
                     saveTargets={saveTargets}
                     toast={toast}
                 />
@@ -950,6 +977,8 @@ const RenderPanel = ({
     setBackdrop,
     logo,
     setLogo,
+    customLogo,
+    setCustomLogo,
     focusX,
     focusY,
     onFocusChange,
@@ -1000,15 +1029,15 @@ const RenderPanel = ({
                     />
                 )}
 
-                <Picker
+                <LogoSelector
                     label={`Logo (${source})`}
-                    items={logos}
+                    logos={logos}
                     loading={loadingArt}
                     selected={logo}
                     onSelect={setLogo}
-                    aspect="aspect-video"
-                    onBlack
-                    emptyText="No logos from this source — a text wordmark is used as fallback."
+                    customLogo={customLogo}
+                    onCustomChange={setCustomLogo}
+                    emptyText="No logos from this source — upload a custom one, or a text wordmark is used as fallback."
                 />
 
                 {item.kind === 'show' && (
@@ -1491,11 +1520,122 @@ const Picker = ({ label, items, loading, selected, onSelect, aspect, onBlack, em
     </div>
 );
 
+// ─── Logo selector (TMDB / fanart grid + custom upload) ─────────────────────
+
+// A logo source picker shared by the render + uploaded-canvas flows. Pick a
+// TMDB/fanart logo, or upload a custom PNG. A custom logo takes priority and
+// hides the grid until removed; the chosen logo is whitened + placed on the CL2K
+// guides by the backend (renderer._place_logo), so any source is CL2K-correct.
+const LogoSelector = ({
+    label = 'Logo',
+    logos = [],
+    loading = false,
+    selected,
+    onSelect,
+    customLogo,
+    onCustomChange,
+    emptyText = 'No logos from this source — a text wordmark is used as fallback.',
+}) => {
+    const onFile = e => {
+        const f = e.target.files?.[0];
+        e.target.value = ''; // allow re-selecting the same file
+        if (!f) return;
+        const reader = new FileReader();
+        reader.onload = () =>
+            onCustomChange({
+                b64: String(reader.result).split(',').pop(),
+                name: f.name,
+                url: String(reader.result),
+            });
+        reader.readAsDataURL(f);
+    };
+    return (
+        <div className="bg-surface border border-border rounded-lg p-3">
+            <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-medium text-primary">{label}</h3>
+                <label className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs border border-border text-secondary hover:border-border-strong cursor-pointer">
+                    <span className="material-symbols-outlined text-sm">upload</span>
+                    Upload custom
+                    <input type="file" accept="image/*" className="hidden" onChange={onFile} />
+                </label>
+            </div>
+            {customLogo ? (
+                <div className="flex items-center gap-3 rounded-md border-2 border-primary bg-black p-2">
+                    <img
+                        src={customLogo.url}
+                        alt="Custom logo"
+                        className="h-14 w-auto max-w-[60%] object-contain"
+                    />
+                    <span className="flex-1 truncate text-xs text-secondary">
+                        {customLogo.name}
+                    </span>
+                    <Button
+                        onClick={() => onCustomChange(null)}
+                        variant="secondary"
+                        icon="close"
+                        size="small"
+                    >
+                        Remove
+                    </Button>
+                </div>
+            ) : loading ? (
+                <div className="text-xs text-tertiary py-4">Loading…</div>
+            ) : logos.length === 0 ? (
+                <div className="text-xs text-tertiary py-2">{emptyText}</div>
+            ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-72 overflow-auto">
+                    {logos.map((it, idx) => {
+                        const path = it.file_path;
+                        const isSel = selected === path;
+                        return (
+                            <button
+                                key={`${path}-${idx}`}
+                                type="button"
+                                onClick={() => onSelect(isSel ? null : path)}
+                                aria-pressed={isSel}
+                                className={`relative aspect-video rounded-md overflow-hidden border-2 bg-black transition-all ${
+                                    isSel
+                                        ? 'border-primary ring-2 ring-primary/40'
+                                        : 'border-border hover:border-border-strong'
+                                }`}
+                                title={it.width ? `${it.width}×${it.height}` : path}
+                            >
+                                <img
+                                    src={it.url || urlForPath(path)}
+                                    alt=""
+                                    loading="lazy"
+                                    className="absolute inset-0 w-full h-full object-contain"
+                                />
+                                {isSel && (
+                                    <span className="absolute top-1 right-1 inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary text-white">
+                                        <span className="material-symbols-outlined text-sm">
+                                            check
+                                        </span>
+                                    </span>
+                                )}
+                            </button>
+                        );
+                    })}
+                </div>
+            )}
+            <p className="mt-2 text-xs text-tertiary">
+                Whitened, trimmed and placed on the CL2K guides automatically.
+            </p>
+        </div>
+    );
+};
+
 // ─── Upload-backdrop tab ────────────────────────────────────────────────────
 
-const UploadBackdropPanel = ({ item, effectiveKind, saveTargets, toast }) => {
+const UploadBackdropPanel = ({ item, effectiveKind, logos, loadingArt, saveTargets, toast }) => {
     const [file, setFile] = useState(null);
     const [busy, setBusy] = useState(false);
+    const [logo, setLogo] = useState(null); // chosen TMDB/fanart logo file_path
+    const [customLogo, setCustomLogo] = useState(null); // { b64, name, url }
+    const onCustomLogo = useCallback(c => {
+        setCustomLogo(c);
+        if (c) setLogo(null);
+    }, []);
 
     const submit = useCallback(async () => {
         if (!file) return;
@@ -1508,6 +1648,8 @@ const UploadBackdropPanel = ({ item, effectiveKind, saveTargets, toast }) => {
                 year: item.year,
                 tvdb_id: item.tvdb_id,
                 imdb_id: item.imdb_id,
+                logo_path: customLogo ? null : logo,
+                logo_b64: customLogo?.b64 || null,
                 ...saveTargets.fields,
             });
             savedToast(toast, resp?.data, 'Generated');
@@ -1516,19 +1658,29 @@ const UploadBackdropPanel = ({ item, effectiveKind, saveTargets, toast }) => {
         } finally {
             setBusy(false);
         }
-    }, [file, item, effectiveKind, saveTargets.fields, toast]);
+    }, [file, item, effectiveKind, logo, customLogo, saveTargets.fields, toast]);
 
     return (
         <section className="mt-4 bg-surface border border-border rounded-lg p-4 flex flex-col gap-3">
             <h3 className="text-sm font-medium text-primary">Cleaned backdrop → render CL2K</h3>
             <p className="text-xs text-tertiary">
                 Upload a backdrop you cleaned externally (text removed). CL2K renders the logo,
-                gradient and border over it.
+                gradient and border over it. Leave the logo unset to auto-pick from TMDB/fanart.
             </p>
             <input
                 type="file"
                 accept="image/*"
                 onChange={e => setFile(e.target.files?.[0] || null)}
+            />
+            <LogoSelector
+                label="Logo (TMDB / fanart / custom)"
+                logos={logos}
+                loading={loadingArt}
+                selected={logo}
+                onSelect={setLogo}
+                customLogo={customLogo}
+                onCustomChange={onCustomLogo}
+                emptyText="No TMDB/fanart logos — upload a custom one, or leave unset for the text-wordmark fallback."
             />
             <SaveTargets targets={saveTargets} />
             <div>
@@ -1547,25 +1699,71 @@ const UploadBackdropPanel = ({ item, effectiveKind, saveTargets, toast }) => {
 
 // ─── Upload finished-poster tab ─────────────────────────────────────────────
 
-const UploadPosterPanel = ({ item, effectiveKind, saveTargets, toast }) => {
+const UploadPosterPanel = ({ item, effectiveKind, logos, loadingArt, saveTargets, toast }) => {
     const [file, setFile] = useState(null);
     const [busy, setBusy] = useState(false);
     const [addBorder, setAddBorder] = useState(true);
+    const [logo, setLogo] = useState(null); // chosen TMDB/fanart logo file_path
+    const [customLogo, setCustomLogo] = useState(null); // { b64, name, url }
+    const [previewB64, setPreviewB64] = useState(null); // server-rendered preview
+    const [previewing, setPreviewing] = useState(false);
     const localUrl = useMemo(() => (file ? URL.createObjectURL(file) : null), [file]);
     useEffect(() => () => localUrl && URL.revokeObjectURL(localUrl), [localUrl]);
+
+    // Any input that affects the render also drops a stale server preview, so the
+    // shown image never misrepresents the current logo/border.
+    const onCustomLogo = useCallback(c => {
+        setCustomLogo(c);
+        setPreviewB64(null);
+        if (c) setLogo(null);
+    }, []);
+    const onPickLogo = useCallback(p => {
+        setLogo(p);
+        setPreviewB64(null);
+    }, []);
+    const onPickFile = useCallback(f => {
+        setFile(f);
+        setPreviewB64(null);
+    }, []);
+    const onToggleBorder = useCallback(v => {
+        setAddBorder(v);
+        setPreviewB64(null);
+    }, []);
+
+    const meta = useMemo(
+        () => ({
+            kind: effectiveKind,
+            title: item.title,
+            tmdb_id: item.tmdb_id,
+            year: item.year,
+            tvdb_id: item.tvdb_id,
+            imdb_id: item.imdb_id,
+            border: addBorder,
+            logo_path: customLogo ? null : logo,
+            logo_b64: customLogo?.b64 || null,
+        }),
+        [effectiveKind, item, addBorder, logo, customLogo]
+    );
+
+    const runPreview = useCallback(async () => {
+        if (!file) return;
+        setPreviewing(true);
+        try {
+            const resp = await cl2kMakerAPI.uploadPoster(file, { ...meta, preview: true });
+            setPreviewB64(resp?.data?.preview_b64 || null);
+        } catch (err) {
+            toast.error(err.message || 'Preview failed');
+        } finally {
+            setPreviewing(false);
+        }
+    }, [file, meta, toast]);
 
     const submit = useCallback(async () => {
         if (!file) return;
         setBusy(true);
         try {
             const resp = await cl2kMakerAPI.uploadPoster(file, {
-                kind: effectiveKind,
-                title: item.title,
-                tmdb_id: item.tmdb_id,
-                year: item.year,
-                tvdb_id: item.tvdb_id,
-                imdb_id: item.imdb_id,
-                border: addBorder,
+                ...meta,
                 ...saveTargets.fields,
             });
             savedToast(toast, resp?.data);
@@ -1574,32 +1772,47 @@ const UploadPosterPanel = ({ item, effectiveKind, saveTargets, toast }) => {
         } finally {
             setBusy(false);
         }
-    }, [file, item, effectiveKind, addBorder, saveTargets.fields, toast]);
+    }, [file, meta, saveTargets.fields, toast]);
+
+    const shownSrc = previewB64 ? `data:image/jpeg;base64,${previewB64}` : localUrl;
 
     return (
         <section className="mt-4 bg-surface border border-border rounded-lg p-4 flex flex-col gap-3">
-            <h3 className="text-sm font-medium text-primary">Finished poster → file as-is</h3>
+            <h3 className="text-sm font-medium text-primary">Finished poster → file</h3>
             <p className="text-xs text-tertiary">
-                Upload a complete poster. It&apos;s stored unchanged (only DAPS-named) and
-                registered so the rest of CHUB picks it up.
+                Upload a complete poster. It&apos;s DAPS-named and registered so the rest of CHUB
+                picks it up. Optionally drop a logo onto it — leave the logo unset to store the
+                poster unchanged.
             </p>
             <input
                 type="file"
                 accept="image/*"
-                onChange={e => setFile(e.target.files?.[0] || null)}
+                onChange={e => onPickFile(e.target.files?.[0] || null)}
             />
-            {localUrl && (
+            {shownSrc && (
                 <img
-                    src={localUrl}
+                    src={shownSrc}
                     alt="Finished poster preview"
                     className="max-h-80 w-auto rounded border border-border bg-black"
+                />
+            )}
+            {file && (
+                <LogoSelector
+                    label="Add a logo (optional)"
+                    logos={logos}
+                    loading={loadingArt}
+                    selected={logo}
+                    onSelect={onPickLogo}
+                    customLogo={customLogo}
+                    onCustomChange={onCustomLogo}
+                    emptyText="No TMDB/fanart logos — upload a custom one, or leave unset to keep the poster as-is."
                 />
             )}
             <label className="flex items-center gap-2 text-sm text-primary font-medium">
                 <input
                     type="checkbox"
                     checked={addBorder}
-                    onChange={e => setAddBorder(e.target.checked)}
+                    onChange={e => onToggleBorder(e.target.checked)}
                 />
                 Add CL2K white border
             </label>
@@ -1608,7 +1821,16 @@ const UploadPosterPanel = ({ item, effectiveKind, saveTargets, toast }) => {
                 already has the required border.
             </p>
             <SaveTargets targets={saveTargets} />
-            <div>
+            <div className="flex gap-2">
+                <LoadingButton
+                    onClick={runPreview}
+                    loading={previewing}
+                    disabled={!file}
+                    variant="secondary"
+                    icon="visibility"
+                >
+                    Preview
+                </LoadingButton>
                 <LoadingButton
                     onClick={submit}
                     loading={busy}

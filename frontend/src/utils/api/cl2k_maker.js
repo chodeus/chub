@@ -131,7 +131,11 @@ export const cl2kMakerAPI = {
         return apiCore.post('/cl2k-maker/upload-generate', fd);
     },
 
-    /** File a finished poster as-is (multipart). */
+    /**
+     * File a finished poster (multipart). `meta` may include a logo to composite
+     * (logo_path or logo_b64), border, save targets (save_local/upload_gdrive),
+     * and preview=true to get { preview_b64 } back instead of saving.
+     */
     uploadPoster: (file, meta) => {
         const fd = new FormData();
         fd.append('file', file);
