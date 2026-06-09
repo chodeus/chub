@@ -67,6 +67,10 @@ class GenerateRequest(BaseModel):
     focus_x: float = 0.5  # crop focal point (0..1); 0.5 = centre
     focus_y: float = 0.5
     force: bool = False
+    # Save destinations (independent). upload_gdrive=None falls back to the module
+    # config flag; at least one must be selected at save time.
+    save_local: bool = True
+    upload_gdrive: Optional[bool] = None
 
 
 def _mask_bytes(b64: Optional[str]) -> Optional[bytes]:
@@ -208,6 +212,8 @@ def generate(
         focus_x=req.focus_x,
         focus_y=req.focus_y,
         force=req.force,
+        save_local=req.save_local,
+        upload_gdrive=req.upload_gdrive,
     )
     if result.get("status") == "generated":
         return ok("Poster generated", result)
@@ -291,6 +297,8 @@ async def upload_generate(
     tvdb_id: Optional[int] = Form(None),
     imdb_id: Optional[str] = Form(None),
     season_number: Optional[int] = Form(None),
+    save_local: bool = Form(True),
+    upload_gdrive: Optional[bool] = Form(None),
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
@@ -308,6 +316,8 @@ async def upload_generate(
         season_number=season_number,
         backdrop_bytes=backdrop_bytes,
         force=True,
+        save_local=save_local,
+        upload_gdrive=upload_gdrive,
     )
     if result.get("status") == "generated":
         return ok("Poster generated", result)
@@ -357,6 +367,8 @@ async def upload_poster(
     imdb_id: Optional[str] = Form(None),
     season_number: Optional[int] = Form(None),
     border: bool = Form(True),
+    save_local: bool = Form(True),
+    upload_gdrive: Optional[bool] = Form(None),
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
@@ -375,6 +387,8 @@ async def upload_poster(
         image_bytes=image_bytes,
         logo_source="upload",
         add_border=border,
+        save_local=save_local,
+        upload_gdrive=upload_gdrive,
     )
     if result.get("status") == "generated":
         return ok("Poster saved", result)
@@ -413,6 +427,8 @@ class GDrivePsdRequest(BaseModel):
     season_number: Optional[int] = None
     border: bool = True  # composite the default 26px white CL2K border on save
     preview: bool = False
+    save_local: bool = True
+    upload_gdrive: Optional[bool] = None
 
 
 class RetextRequest(BaseModel):
@@ -431,6 +447,8 @@ class RetextRequest(BaseModel):
     season_number: Optional[int] = None
     border: bool = True  # composite the default 26px white CL2K border
     preview: bool = False
+    save_local: bool = True
+    upload_gdrive: Optional[bool] = None
 
 
 @router.post("/retext", summary="Re-text a finished poster (AI-erase old text + redraw label)")
@@ -470,6 +488,8 @@ def retext(
             imdb_id=req.imdb_id,
             season_number=req.season_number,
             add_border=req.border,
+            save_local=req.save_local,
+            upload_gdrive=req.upload_gdrive,
         )
     except Exception as exc:
         # Without this, an AI/timeout failure produced a bare 500 with nothing in
@@ -518,6 +538,8 @@ def gdrive_psd(
         image_bytes=blob,
         add_border=req.border,
         logo_source="gdrive_psd",
+        save_local=req.save_local,
+        upload_gdrive=req.upload_gdrive,
     )
     if result.get("status") == "generated":
         return ok("Poster saved", result)

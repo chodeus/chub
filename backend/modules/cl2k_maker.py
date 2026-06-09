@@ -1,6 +1,8 @@
 # modules/cl2k_maker.py
 
 import os
+import shutil
+import tempfile
 from typing import Any, Dict, Optional, Tuple
 
 from backend.util.base_module import ChubModule
@@ -162,17 +164,22 @@ def generate_for_item(
     focus_x: float = 0.5,
     focus_y: float = 0.5,
     force: bool = False,
+    save_local: bool = True,
+    upload_gdrive: Optional[bool] = None,
 ) -> Dict[str, Any]:
-    """Render + name + write to source_dir + upsert poster_cache + provenance.
+    """Render + name + write to the selected destinations + provenance.
 
-    Shared core for the API (on-demand) and run() (batch). Returns
-    ``{status, file?, reason?, logo_source?}``.
+    Shared core for the API (on-demand) and run() (batch). ``save_local`` /
+    ``upload_gdrive`` choose the destination(s) (see :func:`_persist_poster`).
+    Returns ``{status, file?, reason?, logo_source?}``.
     """
     cfg = full_config.cl2k_maker
     kind = (kind or "").lower()
     if kind not in _VALID_KINDS:
         return {"status": "error", "reason": f"invalid kind {kind!r}"}
-    if not cfg.output_dir:
+    # output_dir is only required when actually saving locally; a Drive-only save
+    # uploads from a temp copy and never touches output_dir.
+    if save_local and not cfg.output_dir:
         return {"status": "error", "reason": "cl2k_maker.output_dir is not configured"}
 
     if (
@@ -220,6 +227,8 @@ def generate_for_item(
         season_number=season_number,
         backdrop_path=info.get("backdrop_path"),
         logo_source=logo_source,
+        save_local=save_local,
+        upload_gdrive=upload_gdrive,
     )
 
 
@@ -239,13 +248,38 @@ def _persist_poster(
     season_number: Optional[int],
     backdrop_path: Optional[str],
     logo_source: str,
+    save_local: bool = True,
+    upload_gdrive: Optional[bool] = None,
 ) -> Dict[str, Any]:
-    """Write a finished poster to source_dir + poster_cache + provenance.
+    """Write a finished poster to the selected destinations + provenance.
 
     Shared sink for rendered (:func:`generate_for_item`), uploaded-finished
     (:func:`save_finished_poster`) and .psd-flattened posters. ``backdrop_path``
     is None for posters that didn't go through the renderer.
+
+    Destinations are independent: ``save_local`` writes the poster into
+    ``output_dir`` and registers it in poster_cache (so the rest of CHUB
+    matches/uploads it); ``upload_gdrive`` copies it to the configured Drive
+    folder. ``upload_gdrive=None`` falls back to ``cfg.upload_to_gdrive`` (the
+    batch ``run()`` default). At least one destination must be selected. A
+    Drive-only save (``save_local=False``) has no persistent local file, so it is
+    uploaded from a temporary copy and is recorded only in provenance, NOT in
+    poster_cache (nothing local for CHUB to match).
     """
+    if upload_gdrive is None:
+        upload_gdrive = bool(cfg.upload_to_gdrive)
+    do_upload = bool(upload_gdrive)
+    if not save_local and not do_upload:
+        return {"status": "error", "reason": "no save destination selected"}
+    if do_upload and not cfg.gdrive_folder_id:
+        if not save_local:
+            return {
+                "status": "error",
+                "reason": "Google Drive selected but gdrive_folder_id is not configured",
+            }
+        # Local save still proceeds; just skip the (unconfigured) upload.
+        do_upload = False
+
     filename = build_poster_filename(
         kind=kind,
         title=title,
@@ -259,70 +293,119 @@ def _persist_poster(
     # build_poster_filename already strips path-illegal chars, but basename makes it
     # provably impossible for a crafted title to escape output_dir (path-injection).
     filename = os.path.basename(filename)
-    os.makedirs(cfg.output_dir, exist_ok=True)
-    out_path = os.path.join(cfg.output_dir, filename)
-    with open(out_path, "wb") as fh:
-        fh.write(blob)
 
-    # poster_cache so CHUB's matching/upload picks it up
-    db.poster.bulk_upsert(
-        [
+    out_path = None
+    if save_local:
+        os.makedirs(cfg.output_dir, exist_ok=True)
+        out_path = os.path.join(cfg.output_dir, filename)
+        with open(out_path, "wb") as fh:
+            fh.write(blob)
+
+        # poster_cache so CHUB's matching/upload picks it up
+        db.poster.bulk_upsert(
+            [
+                {
+                    "title": title,
+                    "normalized_title": normalize_titles(title),
+                    "year": year,
+                    "tmdb_id": tmdb_id,
+                    "tvdb_id": tvdb_id,
+                    "imdb_id": imdb_id,
+                    "season_number": season_number,
+                    "folder": os.path.basename(cfg.output_dir.rstrip("/")),
+                    "file": out_path,
+                    "style": cfg.style,
+                    "priority": cfg.priority,
+                    "image_type": "poster",
+                    "search_only": 0,
+                }
+            ]
+        )
+
+        db.cl2k_generated.record(
             {
-                "title": title,
-                "normalized_title": normalize_titles(title),
-                "year": year,
+                "kind": kind,
                 "tmdb_id": tmdb_id,
                 "tvdb_id": tvdb_id,
                 "imdb_id": imdb_id,
                 "season_number": season_number,
-                "folder": os.path.basename(cfg.output_dir.rstrip("/")),
+                "title": title,
+                "year": year,
                 "file": out_path,
-                "style": cfg.style,
-                "priority": cfg.priority,
-                "image_type": "poster",
-                "search_only": 0,
+                "backdrop_path": backdrop_path,
+                "logo_source": logo_source,
+                "uploaded": 0,
             }
-        ]
-    )
-
-    db.cl2k_generated.record(
-        {
-            "kind": kind,
-            "tmdb_id": tmdb_id,
-            "tvdb_id": tvdb_id,
-            "imdb_id": imdb_id,
-            "season_number": season_number,
-            "title": title,
-            "year": year,
-            "file": out_path,
-            "backdrop_path": backdrop_path,
-            "logo_source": logo_source,
-            "uploaded": 0,
-        }
-    )
+        )
 
     upload_error = None
-    if cfg.upload_to_gdrive and cfg.gdrive_folder_id:
+    uploaded = False
+    if do_upload:
         from backend.util.cl2k.gdrive_upload import upload_file
 
         logger.info(
             f"CL2K uploading {filename} to Drive folder {cfg.gdrive_folder_id}…"
         )
+        # rclone needs a real on-disk file named with the DAPS filename. Reuse the
+        # local save when present; otherwise stage a temp copy just for the upload.
+        tmpdir = None
         try:
-            upload_file(
-                out_path,
-                cfg.gdrive_folder_id,
-                sync_cfg,
-                logger,
-            )
-            db.cl2k_generated.mark_uploaded(out_path)
+            if out_path:
+                src_path = out_path
+            else:
+                tmpdir = tempfile.mkdtemp(prefix="cl2k_")
+                src_path = os.path.join(tmpdir, filename)
+                with open(src_path, "wb") as fh:
+                    fh.write(blob)
+            upload_file(src_path, cfg.gdrive_folder_id, sync_cfg, logger)
+            uploaded = True
             logger.info(f"CL2K uploaded {filename} to Drive")
         except Exception as exc:
             upload_error = str(exc)
             logger.warning(f"CL2K gdrive upload failed for {filename}: {exc}")
+        finally:
+            if tmpdir:
+                shutil.rmtree(tmpdir, ignore_errors=True)
+
+        if uploaded:
+            if out_path:
+                db.cl2k_generated.mark_uploaded(out_path)
+            else:
+                # Drive-only: no persistent local file, so record provenance keyed
+                # on the basename (poster_cache is skipped — nothing local to match).
+                db.cl2k_generated.record(
+                    {
+                        "kind": kind,
+                        "tmdb_id": tmdb_id,
+                        "tvdb_id": tvdb_id,
+                        "imdb_id": imdb_id,
+                        "season_number": season_number,
+                        "title": title,
+                        "year": year,
+                        "file": filename,
+                        "backdrop_path": backdrop_path,
+                        "logo_source": logo_source,
+                        "uploaded": 1,
+                    }
+                )
+
+    # A Drive-only save whose upload failed saved nothing — report it as an error
+    # instead of a misleading success.
+    if not save_local and not uploaded:
+        return {
+            "status": "error",
+            "reason": f"Drive upload failed: {upload_error}",
+            "logo_source": logo_source,
+        }
 
     logger.info(f"CL2K poster generated: {filename} (logo: {logo_source})")
-    result = {"status": "generated", "file": out_path, "logo_source": logo_source}
+    result = {
+        "status": "generated",
+        "file": out_path or filename,
+        "logo_source": logo_source,
+        "saved_local": bool(save_local),
+        "uploaded": uploaded,
+    }
     # Surface a non-fatal upload failure so the caller can tell the user the file
     # saved locally but didn't reach Drive (generation still succeeds).
     if upload_error:
@@ -387,20 +470,23 @@ def save_finished_poster(
     season_number: Optional[int] = None,
     logo_source: str = "upload",
     add_border: bool = True,
+    save_local: bool = True,
+    upload_gdrive: Optional[bool] = None,
 ) -> Dict[str, Any]:
-    """File a pre-made poster (no rendering) into source_dir + caches.
+    """File a pre-made poster (no rendering) into the selected destinations.
 
     Used by the manual finished-poster upload and the G-Drive .psd source (both
     supply a complete poster). The image is forced to the locked 1000×1500 canvas
     (cropped if needed), named per DAPS, and registered so the rest of CHUB picks
     it up. ``add_border`` (default True, per the DAPS rule) composites the default
     26px white frame; uncheck it for a poster that already has the required border.
+    ``save_local`` / ``upload_gdrive`` choose the destination(s).
     """
     cfg = full_config.cl2k_maker
     kind = (kind or "").lower()
     if kind not in _VALID_KINDS:
         return {"status": "error", "reason": f"invalid kind {kind!r}"}
-    if not cfg.output_dir:
+    if save_local and not cfg.output_dir:
         return {"status": "error", "reason": "cl2k_maker.output_dir is not configured"}
     blob = _normalize_poster(image_bytes)
     if add_border:
@@ -422,6 +508,8 @@ def save_finished_poster(
         season_number=season_number,
         backdrop_path=None,
         logo_source=logo_source,
+        save_local=save_local,
+        upload_gdrive=upload_gdrive,
     )
 
 
@@ -488,6 +576,8 @@ def retext_poster(
     imdb_id: Optional[str] = None,
     season_number: Optional[int] = None,
     add_border: bool = True,
+    save_local: bool = True,
+    upload_gdrive: Optional[bool] = None,
 ):
     """Re-text a finished poster: AI-erase the brushed old text, then draw a new
     CL2K-style label (e.g. swap a season year).
@@ -532,6 +622,8 @@ def retext_poster(
         image_bytes=img,
         logo_source="retext",
         add_border=False,
+        save_local=save_local,
+        upload_gdrive=upload_gdrive,
     )
 
 
