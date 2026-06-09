@@ -210,6 +210,7 @@ const Cl2kMakerPage = () => {
                     key={selectionKey}
                     item={item}
                     config={config}
+                    uploadStatus={uploadStatus}
                     onReset={resetItem}
                     onItemChange={patch => setItem(prev => (prev ? { ...prev, ...patch } : prev))}
                     toast={toast}
@@ -277,6 +278,91 @@ const ConfigBanner = ({ config, uploadStatus }) => {
                 </div>
             )}
         </section>
+    );
+};
+
+// ─── Save destinations (shared across every save flow) ──────────────────────
+
+// Hook owning the two independent save-target toggles. Drive defaults ON only
+// when the module has Drive upload enabled AND a usable folder + token; output
+// directory defaults ON. The default is applied once `uploadStatus` arrives so
+// it never clobbers a user toggle.
+const useSaveTargets = uploadStatus => {
+    const [saveLocal, setSaveLocal] = useState(true);
+    const [uploadGdrive, setUploadGdrive] = useState(false);
+    const initRef = useRef(false);
+    useEffect(() => {
+        if (!uploadStatus || initRef.current) return;
+        initRef.current = true;
+        setUploadGdrive(
+            !!uploadStatus.upload_to_gdrive &&
+                !!uploadStatus.folder_id_set &&
+                uploadStatus.token_ok !== false
+        );
+    }, [uploadStatus]);
+    const noTarget = !saveLocal && !uploadGdrive;
+    return {
+        saveLocal,
+        setSaveLocal,
+        uploadGdrive,
+        setUploadGdrive,
+        uploadStatus,
+        noTarget,
+        // Request fields the backend reads (independent of how the UI is wired).
+        fields: { save_local: saveLocal, upload_gdrive: uploadGdrive },
+    };
+};
+
+// The two tick boxes. Drive is disabled (with a hint) when no folder is
+// configured; an enabled-but-tokenless Drive choice warns it will fail.
+const SaveTargets = ({ targets }) => {
+    const { saveLocal, setSaveLocal, uploadGdrive, setUploadGdrive, uploadStatus, noTarget } =
+        targets;
+    const folderSet = !!uploadStatus?.folder_id_set;
+    const tokenOk = uploadStatus?.token_ok !== false;
+    return (
+        <div className="border-t border-border-subtle pt-2 mt-1 flex flex-col gap-1">
+            <span className="text-xs font-medium text-secondary">Save to</span>
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
+                <label className="flex items-center gap-2 text-sm text-primary">
+                    <input
+                        type="checkbox"
+                        checked={saveLocal}
+                        onChange={e => setSaveLocal(e.target.checked)}
+                    />
+                    Output directory
+                </label>
+                <label
+                    className={`flex items-center gap-2 text-sm text-primary ${
+                        folderSet ? '' : 'opacity-60'
+                    }`}
+                >
+                    <input
+                        type="checkbox"
+                        checked={uploadGdrive}
+                        disabled={!folderSet}
+                        onChange={e => setUploadGdrive(e.target.checked)}
+                    />
+                    Google Drive
+                </label>
+            </div>
+            {!folderSet && (
+                <p className="text-xs text-tertiary">
+                    Set a Drive folder under{' '}
+                    <Link to="/settings/modules" className="text-primary underline">
+                        Module Settings
+                    </Link>{' '}
+                    to enable Drive upload.
+                </p>
+            )}
+            {uploadGdrive && folderSet && !tokenOk && (
+                <p className="text-xs text-warning">
+                    No usable Sync GDrive OAuth token — the Drive upload will fail (the poster still
+                    saves locally if that box is ticked).
+                </p>
+            )}
+            {noTarget && <p className="text-xs text-error">Select at least one destination.</p>}
+        </div>
     );
 };
 
@@ -524,7 +610,7 @@ const IdEditor = ({ item, onItemChange }) => {
     );
 };
 
-const Builder = ({ item, config, onReset, onItemChange, toast }) => {
+const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) => {
     // Restore the builder's selections from the session snapshot (written by the
     // effect below, cleared when a new title is picked) so they survive
     // navigation. Read once on mount.
@@ -532,6 +618,9 @@ const Builder = ({ item, config, onReset, onItemChange, toast }) => {
 
     const [tab, setTab] = useState(saved.tab ?? 'tmdb');
     const [editIds, setEditIds] = useState(false);
+
+    // Save destinations (output dir / Drive) — shared by every save flow below.
+    const saveTargets = useSaveTargets(uploadStatus);
 
     // Art (shared across the TMDB / fanart tabs)
     const [tmdbArt, setTmdbArt] = useState(null);
@@ -625,6 +714,9 @@ const Builder = ({ item, config, onReset, onItemChange, toast }) => {
             mask_b64: removeText ? maskB64 : null,
             focus_x: focusX,
             focus_y: focusY,
+            // Save destinations (ignored by /preview, honoured by /generate).
+            save_local: saveTargets.saveLocal,
+            upload_gdrive: saveTargets.uploadGdrive,
         }),
         [
             effectiveKind,
@@ -637,6 +729,8 @@ const Builder = ({ item, config, onReset, onItemChange, toast }) => {
             maskB64,
             focusX,
             focusY,
+            saveTargets.saveLocal,
+            saveTargets.uploadGdrive,
         ]
     );
 
@@ -803,23 +897,40 @@ const Builder = ({ item, config, onReset, onItemChange, toast }) => {
                     onGenerate={runGenerate}
                     onPsdExport={runPsdExport}
                     busy={busy}
+                    saveTargets={saveTargets}
                 />
             )}
 
             {tab === 'upload-backdrop' && (
-                <UploadBackdropPanel item={item} effectiveKind={effectiveKind} toast={toast} />
+                <UploadBackdropPanel
+                    item={item}
+                    effectiveKind={effectiveKind}
+                    saveTargets={saveTargets}
+                    toast={toast}
+                />
             )}
             {tab === 'upload-poster' && (
-                <UploadPosterPanel item={item} effectiveKind={effectiveKind} toast={toast} />
+                <UploadPosterPanel
+                    item={item}
+                    effectiveKind={effectiveKind}
+                    saveTargets={saveTargets}
+                    toast={toast}
+                />
             )}
             {tab === 'gdrive-psd' && (
-                <GdrivePsdPanel item={item} effectiveKind={effectiveKind} toast={toast} />
+                <GdrivePsdPanel
+                    item={item}
+                    effectiveKind={effectiveKind}
+                    saveTargets={saveTargets}
+                    toast={toast}
+                />
             )}
             {tab === 'edit' && (
                 <EditPosterPanel
                     item={item}
                     effectiveKind={effectiveKind}
                     config={config}
+                    saveTargets={saveTargets}
                     toast={toast}
                 />
             )}
@@ -860,6 +971,7 @@ const RenderPanel = ({
     onGenerate,
     onPsdExport,
     busy,
+    saveTargets,
 }) => {
     const backdrops = art?.backdrops || [];
     const logos = art?.logos || [];
@@ -955,10 +1067,11 @@ const RenderPanel = ({
 
                 <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-2">
                     <h3 className="text-sm font-medium text-primary">Output</h3>
+                    <SaveTargets targets={saveTargets} />
                     <LoadingButton
                         onClick={onGenerate}
                         loading={busy}
-                        disabled={!backdrop}
+                        disabled={!backdrop || saveTargets.noTarget}
                         icon="save"
                     >
                         Generate &amp; save
@@ -1380,7 +1493,7 @@ const Picker = ({ label, items, loading, selected, onSelect, aspect, onBlack, em
 
 // ─── Upload-backdrop tab ────────────────────────────────────────────────────
 
-const UploadBackdropPanel = ({ item, effectiveKind, toast }) => {
+const UploadBackdropPanel = ({ item, effectiveKind, saveTargets, toast }) => {
     const [file, setFile] = useState(null);
     const [busy, setBusy] = useState(false);
 
@@ -1395,6 +1508,7 @@ const UploadBackdropPanel = ({ item, effectiveKind, toast }) => {
                 year: item.year,
                 tvdb_id: item.tvdb_id,
                 imdb_id: item.imdb_id,
+                ...saveTargets.fields,
             });
             savedToast(toast, resp?.data, 'Generated');
         } catch (err) {
@@ -1402,7 +1516,7 @@ const UploadBackdropPanel = ({ item, effectiveKind, toast }) => {
         } finally {
             setBusy(false);
         }
-    }, [file, item, effectiveKind, toast]);
+    }, [file, item, effectiveKind, saveTargets.fields, toast]);
 
     return (
         <section className="mt-4 bg-surface border border-border rounded-lg p-4 flex flex-col gap-3">
@@ -1416,8 +1530,14 @@ const UploadBackdropPanel = ({ item, effectiveKind, toast }) => {
                 accept="image/*"
                 onChange={e => setFile(e.target.files?.[0] || null)}
             />
+            <SaveTargets targets={saveTargets} />
             <div>
-                <LoadingButton onClick={submit} loading={busy} disabled={!file} icon="save">
+                <LoadingButton
+                    onClick={submit}
+                    loading={busy}
+                    disabled={!file || saveTargets.noTarget}
+                    icon="save"
+                >
                     Generate from backdrop
                 </LoadingButton>
             </div>
@@ -1427,7 +1547,7 @@ const UploadBackdropPanel = ({ item, effectiveKind, toast }) => {
 
 // ─── Upload finished-poster tab ─────────────────────────────────────────────
 
-const UploadPosterPanel = ({ item, effectiveKind, toast }) => {
+const UploadPosterPanel = ({ item, effectiveKind, saveTargets, toast }) => {
     const [file, setFile] = useState(null);
     const [busy, setBusy] = useState(false);
     const [addBorder, setAddBorder] = useState(true);
@@ -1446,6 +1566,7 @@ const UploadPosterPanel = ({ item, effectiveKind, toast }) => {
                 tvdb_id: item.tvdb_id,
                 imdb_id: item.imdb_id,
                 border: addBorder,
+                ...saveTargets.fields,
             });
             savedToast(toast, resp?.data);
         } catch (err) {
@@ -1453,7 +1574,7 @@ const UploadPosterPanel = ({ item, effectiveKind, toast }) => {
         } finally {
             setBusy(false);
         }
-    }, [file, item, effectiveKind, addBorder, toast]);
+    }, [file, item, effectiveKind, addBorder, saveTargets.fields, toast]);
 
     return (
         <section className="mt-4 bg-surface border border-border rounded-lg p-4 flex flex-col gap-3">
@@ -1486,8 +1607,14 @@ const UploadPosterPanel = ({ item, effectiveKind, toast }) => {
                 The DAPS default 26px white frame (per the CL2K PSD). Uncheck only if this poster
                 already has the required border.
             </p>
+            <SaveTargets targets={saveTargets} />
             <div>
-                <LoadingButton onClick={submit} loading={busy} disabled={!file} icon="save">
+                <LoadingButton
+                    onClick={submit}
+                    loading={busy}
+                    disabled={!file || saveTargets.noTarget}
+                    icon="save"
+                >
                     Save poster
                 </LoadingButton>
             </div>
@@ -1497,7 +1624,7 @@ const UploadPosterPanel = ({ item, effectiveKind, toast }) => {
 
 // ─── G-Drive .psd tab ───────────────────────────────────────────────────────
 
-const GdrivePsdPanel = ({ item, effectiveKind, toast }) => {
+const GdrivePsdPanel = ({ item, effectiveKind, saveTargets, toast }) => {
     const [drives, setDrives] = useState(null);
     const [driveId, setDriveId] = useState('');
     const [query, setQuery] = useState(item.title || '');
@@ -1572,8 +1699,19 @@ const GdrivePsdPanel = ({ item, effectiveKind, toast }) => {
             tvdb_id: item.tvdb_id,
             imdb_id: item.imdb_id,
             border: addBorder,
+            // Honoured on save; ignored by the preview branch.
+            save_local: saveTargets.saveLocal,
+            upload_gdrive: saveTargets.uploadGdrive,
         }),
-        [driveId, path, effectiveKind, item, addBorder]
+        [
+            driveId,
+            path,
+            effectiveKind,
+            item,
+            addBorder,
+            saveTargets.saveLocal,
+            saveTargets.uploadGdrive,
+        ]
     );
 
     const runPreview = useCallback(async () => {
@@ -1719,6 +1857,8 @@ const GdrivePsdPanel = ({ item, effectiveKind, toast }) => {
                         .psd already has the required border.
                     </p>
 
+                    <SaveTargets targets={saveTargets} />
+
                     <div className="flex gap-2">
                         <LoadingButton
                             onClick={runPreview}
@@ -1732,7 +1872,7 @@ const GdrivePsdPanel = ({ item, effectiveKind, toast }) => {
                         <LoadingButton
                             onClick={runSave}
                             loading={busy}
-                            disabled={!path}
+                            disabled={!path || saveTargets.noTarget}
                             icon="save"
                         >
                             Flatten &amp; save
@@ -1746,7 +1886,7 @@ const GdrivePsdPanel = ({ item, effectiveKind, toast }) => {
 
 // ─── Edit poster (AI-erase old text + redraw label in CL2K font) ────────────
 
-const EditPosterPanel = ({ item, effectiveKind, config, toast }) => {
+const EditPosterPanel = ({ item, effectiveKind, config, saveTargets, toast }) => {
     // The uploaded poster (data URL) is the immutable SOURCE. `workingB64` is the
     // base we draw labels onto — it starts as the upload and becomes the AI-erased
     // image after "Send to AI". That's the whole cost trick: the paid OpenAI erase
@@ -1913,6 +2053,7 @@ const EditPosterPanel = ({ item, effectiveKind, config, toast }) => {
                 border: addBorder,
                 preview: false,
                 ...idFields,
+                ...saveTargets.fields,
             });
             savedToast(toast, resp?.data);
         } catch (err) {
@@ -1920,7 +2061,7 @@ const EditPosterPanel = ({ item, effectiveKind, config, toast }) => {
         } finally {
             setSaving(false);
         }
-    }, [workingB64, label, textY, addBorder, idFields, toast]);
+    }, [workingB64, label, textY, addBorder, idFields, saveTargets.fields, toast]);
 
     // What the working-copy pane shows.
     // bareSrc = working copy with NO baked label; labeledSrc = the accurate server
@@ -2136,17 +2277,18 @@ const EditPosterPanel = ({ item, effectiveKind, config, toast }) => {
                             The DAPS default 26px white frame (per the CL2K PSD). Uncheck only if
                             your uploaded poster already has the required border.
                         </p>
+                        <SaveTargets targets={saveTargets} />
                         <LoadingButton
                             onClick={runSave}
                             loading={saving}
-                            disabled={!workingB64}
+                            disabled={!workingB64 || saveTargets.noTarget}
                             icon="save"
                         >
                             Save edited poster
                         </LoadingButton>
                         <p className="text-xs text-tertiary">
                             Saving draws the label and files it (1000×1500, DAPS-named) — no extra
-                            AI call. Uploads to your Drive if upload is enabled.
+                            AI call.
                         </p>
                     </div>
                 </div>
@@ -2264,6 +2406,14 @@ const savedToast = (toast, data, verb = 'Saved') => {
     const file = data?.file || 'poster';
     if (data?.upload_error) {
         toast.error(`${verb} ${file} locally, but Drive upload failed: ${data.upload_error}`);
+        return;
+    }
+    const local = data?.saved_local;
+    const uploaded = data?.uploaded;
+    if (local && uploaded) {
+        toast.success(`${verb}: ${file} (local + Drive)`);
+    } else if (uploaded && !local) {
+        toast.success(`${verb} to Drive: ${file}`);
     } else {
         toast.success(`${verb}: ${file}`);
     }
