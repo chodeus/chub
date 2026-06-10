@@ -496,6 +496,10 @@ class GeneralConfig(BaseModel):
     # was refreshed within this window, chained/back-to-back runs skip a
     # redundant full Plex walk. 0 = always refresh. Default 5 minutes.
     plex_cache_ttl_seconds: int = Field(default=300, ge=0, le=86400)
+    # Module keys (see backend.modules.MODULES) to show on the dashboard, in
+    # the given order. Empty = show all modules. Drives only which cards the
+    # dashboard renders; does not affect scheduling or execution.
+    dashboard_modules: List[str] = Field(default_factory=list)
 
     @field_validator("log_level", mode="before")
     @classmethod
