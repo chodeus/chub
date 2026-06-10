@@ -346,6 +346,18 @@ class SyncGDrive(ChubModule):
             # no throughput benefit.
             "--drive-chunk-size=64M",
             "--exclude=**.partial",
+            # Pull only poster image types. A shared/community Drive folder can
+            # hold arbitrary files (videos, archives, readmes) that have no
+            # business in the poster cache. An --include implies "exclude
+            # everything else", so non-image files are skipped for both the copy
+            # and the --delete-after pass. Case-insensitive ({{...}} = regex);
+            # extensions match what the poster scanner recognises
+            # (poster_renamerr). PSDs are browsed on demand, never synced here.
+            "--include={{(?i).*\\.(jpg|jpeg|png|webp)$}}",
+            # Disk-fill protection: skip pathologically large files. Posters are
+            # ~1-5MB; 250M sits far above any real poster yet stops one stray
+            # huge file from filling the cache volume.
+            "--max-size=250M",
             "--check-first",
             # Divided across _SYNC_WORKERS concurrent syncs so aggregate egress
             # stays at the original 80M regardless of parallelism.
