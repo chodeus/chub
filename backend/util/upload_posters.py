@@ -8,10 +8,10 @@ from typing import Any, Dict, Generator, List, Optional, Tuple
 
 from backend.util.config import load_config
 from backend.util.database import ChubDB
-from backend.util.helper import progress
+from backend.util.helper import progress, YEAR_MATCH_TOLERANCE
 from backend.util.logger import Logger
 from backend.util.normalization import normalize_titles
-from backend.util.plex_index import PlexMediaIndex
+from backend.util.plex_index import PlexMediaIndex, _coerce_year
 from backend.util.plex import PlexClient
 
 
@@ -80,6 +80,11 @@ class PosterUploader:
         # Cache for connections and indexes
         self._plex_clients = {}
         self._media_indexes = {}
+
+        # ID-matched uploads whose on-disk folder year (from *arr) disagrees
+        # with the Plex item's year by more than the normal lag. Accumulated
+        # across instances within a run and surfaced in the final summary.
+        self._year_discrepancies: List[Dict[str, Any]] = []
 
     def run(self) -> Dict[str, Any]:
         """
@@ -736,6 +741,8 @@ class PosterUploader:
                     ),
                 )
 
+                self._note_year_discrepancy(asset, matched_entries, match_type)
+
                 return UploadResult(
                     asset_title=asset_title,
                     asset_type=asset_type,
@@ -769,6 +776,49 @@ class PosterUploader:
                 action="failed",
                 reason=f"Processing error: {e}",
             )
+
+    def _note_year_discrepancy(
+        self,
+        asset: Dict,
+        matched_entries: List[Dict],
+        match_type: Optional[str],
+    ) -> None:
+        """Warn when a poster was matched to Plex by a unique ID (tmdb/tvdb/imdb)
+        but the on-disk folder year (from Radarr/Sonarr) disagrees with the Plex
+        item's year by more than the normal ±tolerance lag.
+
+        The upload itself is correct — a guid match is authoritative (see
+        ``PlexMediaIndex._match``), so we trust the ID over the folder year. But
+        a large year gap signals stale metadata on one side (a wrong ID entered,
+        or an un-refreshed Plex item) that the user may want to reconcile. A
+        TITLE match is already year-disambiguated upstream and can never reach
+        here with a mismatch, so only guid matches are inspected. Recorded once
+        per asset and only on an actual upload, so unchanged files don't re-warn
+        every run."""
+        if not match_type or match_type.upper() == "TITLE":
+            return
+        folder_year = _coerce_year(asset.get("year"))
+        if folder_year is None:
+            return
+        for entry in matched_entries:
+            plex_year = _coerce_year(entry.get("year"))
+            if plex_year is None or abs(plex_year - folder_year) <= YEAR_MATCH_TOLERANCE:
+                continue
+            title = str(asset.get("title") or "Unknown")
+            descriptor = {
+                "title": title,
+                "folder_year": folder_year,
+                "plex_year": plex_year,
+                "match_type": match_type,
+            }
+            if descriptor not in self._year_discrepancies:
+                self._year_discrepancies.append(descriptor)
+            self.logger.warning(
+                f"Year discrepancy: matched '{title}' by {match_type} and uploaded, "
+                f"but Plex year {plex_year} differs from the Radarr/Sonarr folder "
+                f"year {folder_year} — uploaded by ID, review for stale metadata"
+            )
+            return
 
     def _throttle(self) -> None:
         """Sleep the configured inter-upload delay (poster_renamerr.upload_delay_ms)."""
@@ -855,6 +905,21 @@ class PosterUploader:
             f"Upload summary: {total_updated} updated, {total_skipped} skipped, {total_failed} failed"
         )
 
+        # Surface ID-matched uploads whose *arr folder year disagrees with Plex.
+        # These uploaded correctly (the ID is authoritative); the warning just
+        # flags stale metadata worth reconciling.
+        if self._year_discrepancies:
+            self.logger.warning(
+                f"{len(self._year_discrepancies)} ID-matched upload(s) had a year "
+                "mismatch between the Radarr/Sonarr folder and Plex (uploaded "
+                "correctly by ID — review for stale metadata):\n"
+                + "\n".join(
+                    f"  • {d['title']}: folder {d['folder_year']} vs Plex "
+                    f"{d['plex_year']} ({d['match_type']})"
+                    for d in self._year_discrepancies
+                )
+            )
+
         # Log detailed failures only if there are failures
         if total_failed > 0:
             failed_details = []
@@ -879,6 +944,7 @@ class PosterUploader:
                 "updated": total_updated,
                 "skipped": total_skipped,
                 "failed": total_failed,
+                "year_discrepancies": list(self._year_discrepancies),
                 "instances_processed": successful_instances,
                 "instance_results": [
                     {
