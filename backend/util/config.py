@@ -500,6 +500,14 @@ class GeneralConfig(BaseModel):
     # the given order. Empty = show all modules. Drives only which cards the
     # dashboard renders; does not affect scheduling or execution.
     dashboard_modules: List[str] = Field(default_factory=list)
+    # Dashboard section keys (health, modules, scheduler, quick_start) to show,
+    # in the given order. Empty = show all in the default order.
+    dashboard_sections: List[str] = Field(default_factory=list)
+    # How often (seconds) the dashboard re-polls when live SSE updates are not
+    # connected, and how often its countdowns tick. 0 = no auto-refresh.
+    dashboard_refresh_seconds: int = Field(default=30, ge=0, le=3600)
+    # How many upcoming scheduled runs the dashboard Scheduler panel lists.
+    dashboard_upcoming_limit: int = Field(default=5, ge=1, le=50)
 
     @field_validator("log_level", mode="before")
     @classmethod
