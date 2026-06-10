@@ -18,7 +18,7 @@ Run standalone for a quick visual check::
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Optional, Tuple
 
 from wand.color import Color
 from wand.drawing import Drawing
@@ -50,9 +50,171 @@ def _cover_resize(
     img.crop(left, top, width=width, height=height)
 
 
+def _apply_crop(
+    img: Image, crop: Optional[Tuple[float, float, float, float]]
+) -> None:
+    """Crop ``img`` in place to a normalized ``(x, y, w, h)`` region (0..1), or no-op.
+
+    Clamped to the image bounds. Shared by the fit + extend framings to isolate the
+    subject region of a wide backdrop before scaling.
+    """
+    if not crop:
+        return
+    cx, cy, cw, ch = crop
+    x = max(0, min(int(round(cx * img.width)), img.width - 1))
+    y = max(0, min(int(round(cy * img.height)), img.height - 1))
+    w = max(1, min(int(round(cw * img.width)), img.width - x))
+    h = max(1, min(int(round(ch * img.height)), img.height - y))
+    img.crop(x, y, width=w, height=h)
+
+
+def _extend_fill(img: Image, width: int, fill_h: int, from_top: bool) -> bytes:
+    """Build a ``width``×``fill_h`` edge-extend fill from ``img``'s top or bottom strip.
+
+    The strip is vertically stretched + blurred so it reads as a continuation of the
+    scene. A *bottom* fill samples a thick strip and is faded to black toward the
+    canvas edge so it merges into the CL2K gradient/black cleanly. A *top* fill (the
+    sky above the subjects) samples only a THIN edge strip so it captures the sky
+    sliver, not the subjects' heads — extending a thick strip would ghost a blurred
+    copy of them upward — and is NOT faded (the CL2K top has no gradient). Returns
+    PNG bytes.
+    """
+    if from_top:
+        strip_h = max(2, min(img.height, 12))  # thin: the sky edge, not the heads
+        src_top = 0
+    else:
+        strip_h = max(1, min(img.height, img.height // 3, 240))
+        src_top = img.height - strip_h
+    with img.clone() as s:
+        s.crop(0, src_top, width=width, height=strip_h)
+        s.resize(width, fill_h, filter="triangle")
+        s.blur(radius=0, sigma=max(8.0, fill_h / 24.0))
+        if not from_top:
+            # Fade DOWN to black (white at the seam -> black at the canvas edge).
+            with Image(width=width, height=fill_h, pseudo="gradient:white-black") as ramp:
+                s.composite(ramp, left=0, top=0, operator="multiply")
+        s.format = "png"
+        return s.make_blob()
+
+
+def _fit_resize(
+    img: Image,
+    width: int,
+    height: int,
+    crop: Optional[Tuple[float, float, float, float]] = None,
+    v_pos: float = 0.0,
+) -> None:
+    """Contain-fit ``img`` to ``width`` and place it on a black canvas — the CL2K
+    "fit" framing, in place.
+
+    Unlike :func:`_cover_resize` (which scales up and crops the *sides* to fill the
+    2:3 canvas — cutting off subjects spread across a wide 16:9 backdrop), this
+    scales the image *down* so its full width is preserved (everyone stays in
+    frame) and fills the empty band(s). This reproduces how a poster artist fits a
+    wide key-art into the 2:3 frame.
+
+    ``v_pos`` (0..1) positions the photo vertically when it's shorter than the
+    canvas: 0 = top-anchored (default), 1 = bottom-anchored, 0.4 ≈ headroom above
+    the subjects. The freed space is edge-extended — **sky upward** above the photo
+    (no black fade; the CL2K top has no gradient) and **faded to black downward**
+    below it (so it merges into the gradient/logo zone). ``crop`` (``x, y, w, h``
+    0..1) optionally isolates the subject region before fitting.
+    """
+    _apply_crop(img, crop)
+    new_h = int(round(img.height * width / img.width))
+    img.resize(width, new_h, filter="lanczos")
+    v_pos = max(0.0, min(1.0, v_pos))
+    if new_h >= height:
+        # Taller than the canvas: keep the v_pos-chosen vertical slice.
+        top = int(round(v_pos * (new_h - height)))
+        img.crop(0, top, width=width, height=height)
+        return
+    # Shorter than the canvas: position the photo and edge-extend the freed band(s).
+    gap = height - new_h
+    top_off = int(round(v_pos * gap))
+    bot_h = gap - top_off
+    top_blob = _extend_fill(img, width, top_off, from_top=True) if top_off > 0 else None
+    bot_blob = _extend_fill(img, width, bot_h, from_top=False) if bot_h > 0 else None
+    img.background_color = Color("black")
+    if top_off > 0:
+        img.splice(width=0, height=top_off, x=0, y=0)  # push photo down
+    img.extent(width=width, height=height, x=0, y=0)  # pad bottom to full height
+    if top_blob:
+        with Image(blob=top_blob) as t:
+            img.composite(t, left=0, top=0)
+    if bot_blob:
+        with Image(blob=bot_blob) as b:
+            img.composite(b, left=0, top=top_off + new_h)
+
+
+def fit_extend_canvas(
+    backdrop_bytes: bytes,
+    crop: Optional[Tuple[float, float, float, float]] = None,
+    width: int = geo.CANVAS_W,
+    height: int = geo.CANVAS_H,
+    feather: int = 28,
+) -> Tuple[bytes, Optional[bytes]]:
+    """Prepare the canvas + mask for AI outpaint ("extend" framing).
+
+    Fits the (optionally cropped) backdrop to the canvas *width* and top-anchors it,
+    leaving the empty bottom band for an AI inpainter to fill so the subjects stay
+    full-size (no shrink, no side-crop) — the artist's "extend the bottom, crop the
+    wasted top" trick. Returns ``(canvas_png, mask_png)`` where the mask is white
+    (=generate) over the empty band and black (=keep) over the photo, feathered at
+    the seam. Returns ``(canvas_png, None)`` when the fitted photo already fills the
+    height — nothing to extend, the caller should just fit/cover it.
+
+    The mask convention matches :mod:`text_removal` (white = fill), so the canvas +
+    mask feed straight into ``text_removal.remove_text`` for any provider.
+    """
+    with Image(blob=backdrop_bytes) as img:
+        _apply_crop(img, crop)
+        new_h = int(round(img.height * width / img.width))
+        img.resize(width, new_h, filter="lanczos")
+        if new_h >= height:
+            img.crop(0, 0, width=width, height=height)
+            img.format = "png"
+            return img.make_blob(), None
+        img.background_color = Color("black")
+        img.extent(width=width, height=height, x=0, y=0)
+        img.format = "png"
+        canvas_png = img.make_blob()
+
+    # Mask: white over the empty band (start a little above the seam so the AI
+    # blends into the photo edge), black over the kept photo, soft-feathered.
+    band_top = max(0, new_h - feather)
+    with Image(width=width, height=height, background=Color("black")) as mask:
+        with Drawing() as draw:
+            draw.fill_color = Color("white")
+            draw.rectangle(left=0, top=band_top, width=width, height=height - band_top)
+            draw(mask)
+        mask.blur(radius=0, sigma=feather / 2.0)
+        mask.format = "png"
+        mask_png = mask.make_blob()
+    return canvas_png, mask_png
+
+
 def _whiten(logo: Image) -> None:
     """Recolour the logo to solid white while preserving its alpha (CL2K rule)."""
     logo.colorize(color=Color("white"), alpha=Color("white"))
+
+
+def logo_is_usable(logo_bytes: bytes, min_width: int = geo.LOGO_MIN_WIDTH) -> bool:
+    """True if the clear logo is sharp enough to place at the CL2K logo box.
+
+    Measures the logo's *trimmed* content width (transparent padding removed, the
+    same trim :func:`_place_logo` does) and rejects anything narrower than
+    ``min_width`` — those would have to be upscaled heavily to the ~600px box and
+    render fuzzy. Per the CL2K rule, a too-small logo should yield to drawn title
+    text instead. Returns True on any decode error (fail open — don't drop a logo
+    we simply couldn't measure)."""
+    try:
+        with Image(blob=logo_bytes) as logo:
+            logo.background_color = Color("transparent")
+            logo.trim(color=Color("transparent"))
+            return logo.width >= min_width
+    except Exception:
+        return True
 
 
 def _place_logo(
@@ -186,14 +348,31 @@ def render_cl2k(
     font_path: Optional[str] = None,
     focus_x: float = 0.5,
     focus_y: float = 0.5,
+    fit_mode: str = "cover",
+    crop: Optional[Tuple[float, float, float, float]] = None,
+    v_pos: float = 0.0,
+    band_label: str = "",
 ) -> bytes:
     """Render a CL2K poster and return JPEG bytes.
 
     ``kind`` is one of ``movie`` / ``show`` / ``collection`` / ``season``. A
     clear logo is preferred; when none is supplied (or usable) the ``title`` is
-    drawn as all-caps text in the logo area (MM2K fallback). ``focus_x``/
-    ``focus_y`` (0..1) choose which part of the wide backdrop is kept when it is
-    cover-cropped to the 2:3 canvas (0.5/0.5 = centre).
+    drawn as all-caps text in the logo area (MM2K fallback).
+
+    ``band_label`` draws an explicit banner in the bottom label band (e.g.
+    ``COMPLETE LIMITED SERIES`` or ``SPECIALS``), overriding the automatic
+    COLLECTION / season label. Long strings use the tighter PSD tracking.
+
+    ``fit_mode`` controls how the backdrop fills the 2:3 canvas:
+
+    - ``"cover"`` (default): scale up and crop to fill; ``focus_x``/``focus_y``
+      (0..1) choose which part is kept (0.5/0.5 = centre). Best when the subject
+      already fills a roughly 2:3 region.
+    - ``"fit"``: scale the backdrop *down* to the canvas width and top-anchor it
+      on black, keeping the full width so subjects spread across a wide backdrop
+      all stay in frame (the artist technique). ``crop`` (``x, y, w, h`` in 0..1)
+      optionally isolates the subject region first; the black bottom band is the
+      gradient/logo zone.
     """
     kind = kind.lower()
     baseline = geo.logo_baseline(kind)
@@ -201,7 +380,10 @@ def render_cl2k(
     title_font = font_path or geo.resolve_font(bold=True)
 
     with Image(blob=backdrop_bytes) as base:
-        _cover_resize(base, geo.CANVAS_W, geo.CANVAS_H, focus_x, focus_y)
+        if fit_mode == "fit":
+            _fit_resize(base, geo.CANVAS_W, geo.CANVAS_H, crop, v_pos)
+        else:
+            _cover_resize(base, geo.CANVAS_W, geo.CANVAS_H, focus_x, focus_y)
 
         with Image(filename=str(geo.GRADIENT_PNG)) as grad:
             base.composite(grad, left=0, top=0)
@@ -215,7 +397,14 @@ def render_cl2k(
             _place_logo(base, logo_bytes, baseline, logo_max_width, whiten)
 
         label_kerning = geo.tracking_to_kerning(geo.LABEL_TRACKING)
-        if kind == "collection":
+        if band_label:
+            # Explicit banner (e.g. COMPLETE LIMITED SERIES). Long strings use the
+            # tighter tracking the PSD specifies so they fit the width.
+            txt = band_label.upper()
+            tracking = geo.LABEL_TRACKING_LONG if len(txt) > 16 else geo.LABEL_TRACKING
+            _draw_text(base, txt, geo.SEASON_TEXT_Y, label_font, geo.LABEL_FONT_PX,
+                       kerning=geo.tracking_to_kerning(tracking))
+        elif kind == "collection":
             _draw_text(base, "COLLECTION", geo.COLLECTION_LABEL_Y, label_font,
                        geo.LABEL_FONT_PX, kerning=label_kerning)
         elif kind == "season" and season_text:

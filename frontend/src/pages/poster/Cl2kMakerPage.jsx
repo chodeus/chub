@@ -32,6 +32,13 @@ const KIND_OPTIONS = [
     { value: 'collection', label: 'Collection' },
 ];
 
+// CL2K bottom-banner labels (from the template). Empty = no banner / auto label.
+const BAND_LABEL_OPTIONS = [
+    { value: '', label: 'None' },
+    { value: 'COMPLETE LIMITED SERIES', label: 'Complete Limited Series' },
+    { value: 'SPECIALS', label: 'Specials' },
+];
+
 const SOURCE_TABS = [
     { key: 'tmdb', label: 'TMDB', icon: 'movie' },
     { key: 'fanart', label: 'fanart.tv', icon: 'palette' },
@@ -625,6 +632,8 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
     // Art (shared across the TMDB / fanart tabs)
     const [tmdbArt, setTmdbArt] = useState(null);
     const [fanartArt, setFanartArt] = useState(null);
+    // TMDB season-level posters (portrait 2:3) — only for season posters.
+    const [seasonArt, setSeasonArt] = useState(null);
     const [loadingArt, setLoadingArt] = useState(true);
     const [backdrop, setBackdrop] = useState(saved.backdrop ?? null); // file_path | absolute url
     const [logo, setLogo] = useState(saved.logo ?? null);
@@ -636,13 +645,24 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
         if (c) setLogo(null); // custom logo replaces a chosen TMDB/fanart logo
     }, []);
 
-    // Crop framing: focal point (0..1) for the backdrop cover-crop. 0.5 = centre.
+    // Crop framing. "cover" scales up + crops to fill (focal point below); "fit"
+    // scales the backdrop down to the canvas width and black-pads the bottom so
+    // subjects spread across a wide backdrop all stay in frame (the artist
+    // technique). `crop` (0..1 {x,y,w,h}) isolates the subject region for fit mode.
+    const [fitMode, setFitMode] = useState(saved.fitMode ?? 'cover');
+    const [crop, setCrop] = useState(saved.crop ?? null);
+    // Vertical position of the fitted photo (0..1; ~0.4 adds headroom above the
+    // subjects). Only meaningful in fit/extend framing.
+    const [vPos, setVPos] = useState(saved.vPos ?? 0);
     const [focusX, setFocusX] = useState(saved.focusX ?? 0.5);
     const [focusY, setFocusY] = useState(saved.focusY ?? 0.5);
 
     // Season variant (shows only)
     const [seasonNumber, setSeasonNumber] = useState(saved.seasonNumber ?? '');
     const [bulkSeasons, setBulkSeasons] = useState(saved.bulkSeasons ?? '');
+    // Optional bottom banner (e.g. COMPLETE LIMITED SERIES). Overrides the auto
+    // COLLECTION / season label; not applied to season posters (they show SEASON N).
+    const [bandLabel, setBandLabel] = useState(saved.bandLabel ?? '');
 
     // AI text-removal
     const [removeText, setRemoveText] = useState(saved.removeText ?? false);
@@ -656,13 +676,30 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             tab,
             backdrop,
             logo,
+            fitMode,
+            crop,
+            vPos,
             focusX,
             focusY,
             seasonNumber,
             bulkSeasons,
+            bandLabel,
             removeText,
         });
-    }, [tab, backdrop, logo, focusX, focusY, seasonNumber, bulkSeasons, removeText]);
+    }, [
+        tab,
+        backdrop,
+        logo,
+        fitMode,
+        crop,
+        vPos,
+        focusX,
+        focusY,
+        seasonNumber,
+        bulkSeasons,
+        bandLabel,
+        removeText,
+    ]);
 
     // Preview
     const [previewUrl, setPreviewUrl] = useState(null);
@@ -699,6 +736,24 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
         };
     }, [item]);
 
+    // Season posters: TMDB has portrait 2:3 season-level key-art, a better source
+    // than fitting a show backdrop. Fetch it when building a season poster.
+    useEffect(() => {
+        if (!isSeasonPoster || !item.tmdb_id) return undefined;
+        let cancelled = false;
+        (async () => {
+            try {
+                const resp = await cl2kMakerAPI.seasonImages(item.tmdb_id, Number(seasonNumber));
+                if (!cancelled) setSeasonArt(resp?.data || null);
+            } catch {
+                if (!cancelled) setSeasonArt(null);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [item.tmdb_id, isSeasonPoster, seasonNumber]);
+
     // Revoke the preview object URL when it changes / unmounts.
     useEffect(() => {
         return () => {
@@ -720,8 +775,16 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             logo_b64: customLogo?.b64 || null,
             remove_text: removeText,
             mask_b64: removeText ? maskB64 : null,
+            fit_mode: fitMode,
             focus_x: focusX,
             focus_y: focusY,
+            crop_x: (fitMode === 'fit' || fitMode === 'extend') && crop ? crop.x : null,
+            crop_y: (fitMode === 'fit' || fitMode === 'extend') && crop ? crop.y : null,
+            crop_w: (fitMode === 'fit' || fitMode === 'extend') && crop ? crop.w : null,
+            crop_h: (fitMode === 'fit' || fitMode === 'extend') && crop ? crop.h : null,
+            v_pos: fitMode === 'fit' || fitMode === 'extend' ? vPos : 0,
+            // Banner overrides the auto label, but a season poster keeps its SEASON N.
+            band_label: isSeasonPoster ? '' : bandLabel,
             // Save destinations (ignored by /preview, honoured by /generate).
             save_local: saveTargets.saveLocal,
             upload_gdrive: saveTargets.uploadGdrive,
@@ -736,8 +799,12 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             customLogo,
             removeText,
             maskB64,
+            fitMode,
+            crop,
+            vPos,
             focusX,
             focusY,
+            bandLabel,
             saveTargets.saveLocal,
             saveTargets.uploadGdrive,
         ]
@@ -802,6 +869,14 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                 year: item.year,
                 tvdb_id: item.tvdb_id,
                 imdb_id: item.imdb_id,
+                fit_mode: fitMode,
+                focus_x: focusX,
+                focus_y: focusY,
+                crop_x: (fitMode === 'fit' || fitMode === 'extend') && crop ? crop.x : null,
+                crop_y: (fitMode === 'fit' || fitMode === 'extend') && crop ? crop.y : null,
+                crop_w: (fitMode === 'fit' || fitMode === 'extend') && crop ? crop.w : null,
+                crop_h: (fitMode === 'fit' || fitMode === 'extend') && crop ? crop.h : null,
+                v_pos: fitMode === 'fit' || fitMode === 'extend' ? vPos : 0,
                 force: false,
             });
             const results = resp?.data?.results || [];
@@ -812,7 +887,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
         } finally {
             setBusy(false);
         }
-    }, [bulkSeasons, item, toast]);
+    }, [bulkSeasons, item, fitMode, focusX, focusY, crop, vPos, toast]);
 
     const activeArt = tab === 'fanart' ? fanartArt : tmdbArt;
     const isRenderTab = tab === 'tmdb' || tab === 'fanart';
@@ -888,6 +963,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             {isRenderTab && (
                 <RenderPanel
                     art={activeArt}
+                    seasonArt={tab === 'tmdb' && isSeasonPoster ? seasonArt : null}
                     loadingArt={loadingArt}
                     source={tab}
                     backdrop={backdrop}
@@ -896,6 +972,12 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                     setLogo={setLogo}
                     customLogo={customLogo}
                     setCustomLogo={setCustomLogoExclusive}
+                    fitMode={fitMode}
+                    setFitMode={setFitMode}
+                    crop={crop}
+                    setCrop={setCrop}
+                    vPos={vPos}
+                    setVPos={setVPos}
                     focusX={focusX}
                     focusY={focusY}
                     onFocusChange={(fx, fy) => {
@@ -906,6 +988,9 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                     config={config}
                     seasonNumber={seasonNumber}
                     setSeasonNumber={setSeasonNumber}
+                    bandLabel={bandLabel}
+                    setBandLabel={setBandLabel}
+                    isSeasonPoster={isSeasonPoster}
                     bulkSeasons={bulkSeasons}
                     setBulkSeasons={setBulkSeasons}
                     onBulkSeasons={runBulkSeasons}
@@ -963,6 +1048,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
 
 const RenderPanel = ({
     art,
+    seasonArt,
     loadingArt,
     source,
     backdrop,
@@ -971,6 +1057,12 @@ const RenderPanel = ({
     setLogo,
     customLogo,
     setCustomLogo,
+    fitMode,
+    setFitMode,
+    crop,
+    setCrop,
+    vPos,
+    setVPos,
     focusX,
     focusY,
     onFocusChange,
@@ -978,6 +1070,9 @@ const RenderPanel = ({
     config,
     seasonNumber,
     setSeasonNumber,
+    bandLabel,
+    setBandLabel,
+    isSeasonPoster,
     bulkSeasons,
     setBulkSeasons,
     onBulkSeasons,
@@ -996,12 +1091,24 @@ const RenderPanel = ({
 }) => {
     const backdrops = art?.backdrops || [];
     const logos = art?.logos || [];
+    const seasonPosters = seasonArt?.posters || [];
     const backdropUrl = backdrop ? urlForPath(backdrop) : null;
 
     return (
         <section className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Left: pickers + AI */}
             <div className="flex flex-col gap-4">
+                {seasonPosters.length > 0 && (
+                    <Picker
+                        label="Season poster (tmdb)"
+                        items={seasonPosters}
+                        loading={false}
+                        selected={backdrop}
+                        onSelect={setBackdrop}
+                        aspect="aspect-poster"
+                        emptyText="No TMDB season posters."
+                    />
+                )}
                 <Picker
                     label={`Backdrop (${source})`}
                     items={backdrops}
@@ -1015,6 +1122,12 @@ const RenderPanel = ({
                 {backdropUrl && (
                     <CropFramer
                         imageUrl={backdropUrl}
+                        fitMode={fitMode}
+                        setFitMode={setFitMode}
+                        crop={crop}
+                        setCrop={setCrop}
+                        vPos={vPos}
+                        setVPos={setVPos}
                         focusX={focusX}
                         focusY={focusY}
                         onChange={onFocusChange}
@@ -1041,6 +1154,28 @@ const RenderPanel = ({
                         onBulkSeasons={onBulkSeasons}
                         busy={busy}
                     />
+                )}
+
+                {!isSeasonPoster && item.kind !== 'collection' && (
+                    <div className="bg-surface border border-border rounded-lg p-3">
+                        <label className="flex items-center gap-2 text-sm text-secondary">
+                            <span className="w-28 text-primary font-medium">Banner</span>
+                            <select
+                                value={bandLabel}
+                                onChange={e => setBandLabel(e.target.value)}
+                                className="flex-1 bg-surface border border-border rounded px-2 py-1 text-sm text-primary"
+                            >
+                                {BAND_LABEL_OPTIONS.map(o => (
+                                    <option key={o.value} value={o.value}>
+                                        {o.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                        <p className="text-xs text-tertiary mt-2">
+                            Optional bottom banner in the CL2K label band (e.g. a limited series).
+                        </p>
+                    </div>
                 )}
 
                 <AiPanel
@@ -1357,12 +1492,43 @@ const clamp01 = v => Math.max(0, Math.min(1, v));
  * Reports focus_x/focus_y (0..1, the box centre) so /preview + /generate crop the
  * same way. Drag anywhere on the image to move the focal point.
  */
-const CropFramer = ({ imageUrl, focusX, focusY, onChange }) => {
+// Two framing modes:
+//  - "cover" (Fill): drag a focal point; a fixed 2:3 box scales up + crops to fill
+//    the canvas. Best when the subject already fills a ~2:3 region.
+//  - "fit" (Fit): drag a free-form rectangle around the subjects; that region is
+//    scaled DOWN to the canvas width and black-padded at the bottom, so subjects
+//    spread across a wide backdrop all stay in frame (the artist technique). The
+//    black band is the CL2K gradient/logo zone.
+const FULL_CROP = { x: 0, y: 0, w: 1, h: 1 };
+
+const FRAMING_HELP = {
+    cover: 'Drag to choose what stays in the 2:3 crop. The dimmed area is cut. Re-render the preview to see the result.',
+    fit: 'Drag a box around the subjects. That region is shrunk to fit the poster width; the empty bottom is filled by edge-extending the backdrop (the logo/gradient zone), so nothing on the sides is cut. Re-render the preview to see it.',
+    extend: 'Drag a box around the subjects. They stay full-size; the empty bottom is filled by AI (your configured CL2K AI provider). Preview shows the free edge-extend — the AI fill is applied only when you Generate (slower and, on OpenAI, paid).',
+};
+
+const CropFramer = ({
+    imageUrl,
+    fitMode,
+    setFitMode,
+    crop,
+    setCrop,
+    vPos,
+    setVPos,
+    focusX,
+    focusY,
+    onChange,
+}) => {
     const wrapRef = useRef(null);
     const [dims, setDims] = useState(null);
     const dragging = useRef(false);
+    const anchor = useRef(null); // box-draw anchor (normalized)
+    // Both "fit" and "extend" use the free-form keep-region box; only "cover" uses
+    // the focal-point 2:3 box.
+    const isBox = fitMode === 'fit' || fitMode === 'extend';
 
-    const rect = useMemo(() => {
+    // Cover-mode 2:3 box positioned by the focal point.
+    const coverRect = useMemo(() => {
         if (!dims) return null;
         const target = 2 / 3; // CL2K canvas aspect (w:h)
         let w, h;
@@ -1378,53 +1544,132 @@ const CropFramer = ({ imageUrl, focusX, focusY, onChange }) => {
         return { left, top, w, h };
     }, [dims, focusX, focusY]);
 
-    const setFromEvent = useCallback(
+    // Box-mode kept-region from the normalized crop.
+    const boxRect = useMemo(() => {
+        if (!dims || !isBox) return null;
+        const c = crop || FULL_CROP;
+        return { left: c.x * dims.w, top: c.y * dims.h, w: c.w * dims.w, h: c.h * dims.h };
+    }, [dims, isBox, crop]);
+
+    const pointFromEvent = useCallback(
         e => {
             const el = wrapRef.current;
-            if (!el || !dims) return;
+            if (!el || !dims) return null;
             const r = el.getBoundingClientRect();
             const cx = (e.touches?.[0]?.clientX ?? e.clientX) - r.left;
             const cy = (e.touches?.[0]?.clientY ?? e.clientY) - r.top;
-            onChange(clamp01(cx / dims.w), clamp01(cy / dims.h));
+            return { nx: clamp01(cx / dims.w), ny: clamp01(cy / dims.h) };
         },
-        [dims, onChange]
+        [dims]
     );
 
     const down = useCallback(
         e => {
             e.preventDefault();
+            const p = pointFromEvent(e);
+            if (!p) return;
             dragging.current = true;
-            setFromEvent(e);
+            if (isBox) {
+                anchor.current = p;
+                setCrop({ x: p.nx, y: p.ny, w: 0, h: 0 });
+            } else {
+                onChange(p.nx, p.ny);
+            }
         },
-        [setFromEvent]
+        [isBox, pointFromEvent, onChange, setCrop]
     );
     const moveEvt = useCallback(
         e => {
-            if (dragging.current) setFromEvent(e);
+            if (!dragging.current) return;
+            const p = pointFromEvent(e);
+            if (!p) return;
+            if (isBox && anchor.current) {
+                const a = anchor.current;
+                setCrop({
+                    x: Math.min(a.nx, p.nx),
+                    y: Math.min(a.ny, p.ny),
+                    w: Math.abs(p.nx - a.nx),
+                    h: Math.abs(p.ny - a.ny),
+                });
+            } else if (!isBox) {
+                onChange(p.nx, p.ny);
+            }
         },
-        [setFromEvent]
+        [isBox, pointFromEvent, onChange, setCrop]
     );
     const up = useCallback(() => {
+        // A tiny accidental box collapses back to the whole image.
+        if (isBox && crop && (crop.w < 0.05 || crop.h < 0.05)) setCrop(FULL_CROP);
         dragging.current = false;
-    }, []);
+        anchor.current = null;
+    }, [isBox, crop, setCrop]);
+
+    const selectBox = useCallback(
+        mode => {
+            setFitMode(mode);
+            if (!crop) setCrop(FULL_CROP);
+        },
+        [setFitMode, crop, setCrop]
+    );
+
+    const activeRect = isBox ? boxRect : coverRect;
 
     return (
         <div className="bg-surface border border-border rounded-lg p-3">
             <div className="flex items-center justify-between mb-2">
                 <h3 className="text-sm font-medium text-primary">Crop framing</h3>
-                <Button
-                    onClick={() => onChange(0.5, 0.5)}
-                    variant="secondary"
-                    icon="filter_center_focus"
-                    size="small"
-                >
-                    Center
-                </Button>
+                <div className="flex items-center gap-1">
+                    <Button
+                        onClick={() => setFitMode('cover')}
+                        variant={fitMode === 'cover' ? 'primary' : 'secondary'}
+                        size="small"
+                    >
+                        Fill
+                    </Button>
+                    <Button
+                        onClick={() => selectBox('fit')}
+                        variant={fitMode === 'fit' ? 'primary' : 'secondary'}
+                        size="small"
+                    >
+                        Fit
+                    </Button>
+                    <Button
+                        onClick={() => selectBox('extend')}
+                        variant={fitMode === 'extend' ? 'primary' : 'secondary'}
+                        size="small"
+                    >
+                        Extend (AI)
+                    </Button>
+                    <Button
+                        onClick={() => (isBox ? setCrop(FULL_CROP) : onChange(0.5, 0.5))}
+                        variant="secondary"
+                        icon={isBox ? 'crop_free' : 'filter_center_focus'}
+                        size="small"
+                    >
+                        {isBox ? 'Whole image' : 'Center'}
+                    </Button>
+                </div>
             </div>
             <p className="text-xs text-tertiary mb-2">
-                Drag to choose what stays in the 2:3 crop. The dimmed area is cut. Re-render the
-                preview to see the result.
+                {FRAMING_HELP[fitMode] || FRAMING_HELP.cover}
             </p>
+            {isBox && (
+                <label className="flex items-center gap-2 text-xs text-secondary mb-2">
+                    <span className="shrink-0">Vertical position</span>
+                    <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.01"
+                        value={vPos}
+                        onChange={e => setVPos(Number(e.target.value))}
+                        className="flex-1"
+                    />
+                    <span className="w-16 shrink-0 text-tertiary">
+                        {vPos < 0.05 ? 'top' : `${Math.round(vPos * 100)}% down`}
+                    </span>
+                </label>
+            )}
             <div
                 ref={wrapRef}
                 className="relative inline-block leading-none select-none overflow-hidden rounded cursor-crosshair"
@@ -1443,14 +1688,14 @@ const CropFramer = ({ imageUrl, focusX, focusY, onChange }) => {
                     className="block max-w-full"
                     draggable={false}
                 />
-                {rect && (
+                {activeRect && (
                     <div
                         className="absolute border-2 border-primary"
                         style={{
-                            left: rect.left,
-                            top: rect.top,
-                            width: rect.w,
-                            height: rect.h,
+                            left: activeRect.left,
+                            top: activeRect.top,
+                            width: activeRect.w,
+                            height: activeRect.h,
                             boxShadow: '0 0 0 9999px rgba(0,0,0,0.5)',
                             pointerEvents: 'none',
                         }}

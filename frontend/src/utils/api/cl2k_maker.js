@@ -103,6 +103,13 @@ export const cl2kMakerAPI = {
             { useCache: true, cacheTTL: 5 * 60 * 1000 }
         ),
 
+    /** TMDB season-level posters (portrait 2:3) for the art picker. */
+    seasonImages: (tmdbId, seasonNumber) =>
+        apiCore.get(
+            `/cl2k-maker/season-images?${qs({ tmdb_id: tmdbId, season_number: seasonNumber })}`,
+            { useCache: true, cacheTTL: 5 * 60 * 1000 }
+        ),
+
     /** Render a preview JPEG without saving. Returns a Blob. */
     preview: req => postBlob('/cl2k-maker/preview', req),
 
