@@ -13,7 +13,7 @@ import os
 import re
 import subprocess
 from shutil import which
-from typing import Any, Dict, List, Optional
+from typing import Any, List, Optional
 
 
 def _rclone_path() -> str:
@@ -190,65 +190,3 @@ def _rclone_error_detail(stderr: str) -> str:
     if m:
         return m.group(1).strip()[:300]
     return err[-300:]  # tail: rclone's final error summary
-
-
-def list_psd(
-    sync_cfg: Any, drive_id: str, query: Optional[str] = None
-) -> List[Dict[str, str]]:
-    """List ``*.psd`` files under the Drive folder ``drive_id`` (recursive).
-
-    When ``query`` is given, only files whose name contains it are returned
-    (case-insensitive substring) — essential for the community drives, which hold
-    hundreds-to-thousands of PSDs. Returns ``[{"name": basename, "path":
-    relative_path}]`` where ``path`` is passed to :func:`fetch_file`.
-    """
-    _reject_unsafe_id(drive_id, "drive_id")
-    rclone = _rclone_path()
-    _ensure_remote(rclone)
-    # Strip rclone glob metacharacters so the query is a literal substring, not a
-    # pattern (subprocess is list-form, so this is correctness, not shell safety).
-    safe = re.sub(r"[*?\[\]{}\\\x00]", "", str(query or "")).strip()
-    include = f"*{safe}*.psd" if safe else "*.psd"
-    cmd = [
-        rclone,
-        "lsf",
-        "posters:",
-        "--drive-root-folder-id",
-        drive_id,
-        *(["--ignore-case"] if safe else []),
-        "--include",
-        include,
-        "--files-only",
-        "-R",
-        *_auth_args(sync_cfg),
-    ]
-    result = subprocess.run(cmd, check=False, capture_output=True, text=True)
-    if result.returncode != 0:
-        raise RuntimeError(f"rclone lsf failed: {result.stderr.strip()[:300]}")
-    files = []
-    for line in result.stdout.splitlines():
-        rel = line.strip()
-        if rel:
-            files.append({"name": os.path.basename(rel), "path": rel})
-    return files
-
-
-def fetch_file(sync_cfg: Any, drive_id: str, path: str) -> bytes:
-    """Download a single file from Drive folder ``drive_id`` and return its bytes."""
-    _reject_unsafe_id(drive_id, "drive_id")
-    _reject_unsafe(path, "path")
-    rclone = _rclone_path()
-    _ensure_remote(rclone)
-    cmd = [
-        rclone,
-        "cat",
-        f"posters:{path}",
-        "--drive-root-folder-id",
-        drive_id,
-        *_auth_args(sync_cfg),
-    ]
-    result = subprocess.run(cmd, check=False, capture_output=True)
-    if result.returncode != 0:
-        err = result.stderr.decode("utf-8", "replace").strip()[:300]
-        raise RuntimeError(f"rclone cat failed: {err}")
-    return result.stdout

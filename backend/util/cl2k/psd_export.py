@@ -13,7 +13,6 @@ from typing import Optional
 
 from PIL import Image, ImageDraw, ImageFont
 
-from backend.util.cl2k import color
 from backend.util.cl2k import geometry as geo
 
 
@@ -120,32 +119,3 @@ def export_psd(
     return buf.getvalue()
 
 
-def flatten_psd(psd_bytes: bytes, quality: int = geo.OUTPUT_QUALITY) -> bytes:
-    """Flatten a ``.psd`` to a JPEG poster (its rendered composite).
-
-    Used by the G-Drive .psd source: the drives hold finished CL2K posters saved
-    as layered PSDs, so the composite *is* the poster. Cover-resizes to the CL2K
-    canvas only if the source dimensions differ, then encodes JPEG at the locked
-    quality. Raises if the PSD has no renderable composite.
-    """
-    from psd_tools import PSDImage
-
-    psd = PSDImage.open(io.BytesIO(psd_bytes))
-    im = psd.composite()
-    if im is None:
-        raise ValueError("PSD has no renderable composite")
-    im = im.convert("RGB")
-    if (im.width, im.height) != (geo.CANVAS_W, geo.CANVAS_H):
-        im = _cover(im, geo.CANVAS_W, geo.CANVAS_H)
-    buf = io.BytesIO()
-    # subsampling=0 forces 4:4:4 (no chroma subsampling) — matches the renderer and
-    # cl2k_maker encode paths; PIL's default can emit 4:2:0 and soften coloured edges.
-    im.save(
-        buf,
-        format="JPEG",
-        quality=quality,
-        subsampling=0,
-        progressive=geo.JPEG_PROGRESSIVE,
-        icc_profile=color.srgb_icc_bytes(),
-    )
-    return buf.getvalue()
