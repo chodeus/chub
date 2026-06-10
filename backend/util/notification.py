@@ -175,6 +175,14 @@ class NotificationManager:
     @sleep_and_retry
     @limits(calls=5, period=5)
     def safe_post(url: str, payload: Dict[str, Any]) -> requests.Response:
+        # Webhook URLs come from admin config, but guard them like every
+        # other outbound fetch — a misconfigured URL must not become a probe
+        # of link-local/metadata services.
+        from backend.util.ssrf_guard import is_safe_url
+
+        safe, reason = is_safe_url(url)
+        if not safe:
+            raise ValueError(f"Notification URL blocked by SSRF guard: {reason}")
         return requests.post(url, json=payload)
 
     def send_and_log_response(
@@ -185,9 +193,9 @@ class NotificationManager:
             if resp.status_code not in (200, 204):
                 err = self.format_notification_error(resp, label)
                 self.logger.error(
-                    f"[Notification] ❌ {label} failed ({resp.status_code}): {err}\n"
-                    f"Payload:\n{json.dumps(payload, indent=2)}"
+                    f"[Notification] ❌ {label} failed ({resp.status_code}): {err}"
                 )
+                self.logger.debug(f"Failed payload:\n{json.dumps(payload, indent=2)}")
                 return False, err
             else:
                 self.logger.info(f"[Notification] ✅ {label} notification sent.")
@@ -529,7 +537,8 @@ class ErrorNotifyHandler(logging.Handler):
         except Exception as e:
             if self.manager.logger:
                 self.manager.logger.error(
-                    f"[ErrorNotifyHandler] Failed to send error notification: {e}"
+                    f"[ErrorNotifyHandler] Failed to send error notification: {e}",
+                    exc_info=True,
                 )
         finally:
             ErrorNotifyHandler._reentry.active = False

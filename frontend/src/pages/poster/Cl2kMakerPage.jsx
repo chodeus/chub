@@ -2606,6 +2606,19 @@ const EditPosterPanel = ({ item, effectiveKind, config, saveTargets, toast }) =>
         }
     }, [workingB64, label, textY, addBorder, idFields, saveTargets.fields, toast]);
 
+    // Download the working copy as shown (label/border baked when rendered) so the
+    // cleaned poster can be taken elsewhere — e.g. the Finished-poster tab to add a
+    // clear logo. Pure client-side: the bytes are already here as base64.
+    const downloadWorking = useCallback(() => {
+        const baked = (label.trim() || addBorder) && labeledB64;
+        const b64 = baked ? labeledB64 : workingB64;
+        if (!b64) return;
+        const a = document.createElement('a');
+        a.href = `data:image/jpeg;base64,${b64}`;
+        a.download = `${item.title || 'poster'} (cleaned).jpg`;
+        a.click();
+    }, [label, addBorder, labeledB64, workingB64, item.title]);
+
     // What the working-copy pane shows.
     // bareSrc = working copy with NO baked label; labeledSrc = the accurate server
     // render (label baked in). While dragging the position, or before the server
@@ -2869,6 +2882,19 @@ const EditPosterPanel = ({ item, effectiveKind, config, saveTargets, toast }) =>
                         <p className="text-xs text-tertiary">
                             Saving draws the label and files it (1000×1500, DAPS-named) — no extra
                             AI call.
+                        </p>
+                        <Button
+                            onClick={downloadWorking}
+                            disabled={!workingB64}
+                            variant="secondary"
+                            icon="download"
+                        >
+                            Download working copy
+                        </Button>
+                        <p className="text-xs text-tertiary">
+                            Downloads what’s shown (label/border included if set) — e.g. to add a
+                            clear logo via the Finished poster tab. Uncheck the border first if
+                            you’ll add it there instead.
                         </p>
                     </div>
                 </div>

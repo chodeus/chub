@@ -534,7 +534,7 @@ class SyncGDrive(ChubModule):
                     search_only=1,
                 )
 
-            self.db.poster.delete_by_path_prefix(sync_location)
+            deleted = self.db.poster.delete_by_path_prefix(sync_location)
             # Batch the upserts: one transaction per chunk instead of a fresh
             # connection + commit(fsync) per row. On a spinning/FUSE array this
             # is the difference between ~25-37ms/row and a near-instant write.
@@ -542,7 +542,7 @@ class SyncGDrive(ChubModule):
             scope = "search-only" if not is_owned else f"priority={priority}"
             self.logger.info(
                 f"Refreshed poster_cache for {sync_location}: "
-                f"{len(assets)} rows ({scope})"
+                f"{deleted} old rows cleared, {len(assets)} rows written ({scope})"
             )
         except Exception as e:
             # Cache refresh is a best-effort follow-up to the sync; a
@@ -868,7 +868,7 @@ class SyncGDrive(ChubModule):
                     self.logger.error(msg)
                     raise RuntimeError(msg)
         except KeyboardInterrupt:
-            print("Keyboard Interrupt detected. Exiting...")
+            self.logger.info("Keyboard Interrupt detected. Exiting...")
             return
         except Exception as exc:
             self.logger.error(f"\n\nAn error occurred: {exc}\n", exc_info=True)

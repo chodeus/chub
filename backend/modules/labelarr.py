@@ -42,6 +42,9 @@ class Labelarr(ChubModule):
                 if isinstance(val, list):
                     return [t for t in val if isinstance(t, str)]
             except Exception:
+                logger = getattr(self, "logger", None)
+                if logger:
+                    logger.debug(f"Could not parse tags JSON: {raw!r}")
                 return []
         return []
 
@@ -187,7 +190,8 @@ class Labelarr(ChubModule):
                 return None
 
             self.logger.debug(
-                f"Sync '{plex_item.get('title')}' ({plex_item.get('year')}) [NO MAPPING]: {add_remove}"
+                f"{'[DRY RUN] ' if dry_run else ''}Sync '{plex_item.get('title')}' "
+                f"({plex_item.get('year')}) [NO MAPPING]: {add_remove}"
             )
 
             plex_client.batch_update_labels(plex_item, [], labels_to_remove, dry_run)
@@ -196,6 +200,9 @@ class Labelarr(ChubModule):
                 updated_item = dict(plex_item)
                 updated_item["labels"] = new_labels
                 db.plex.upsert(updated_item)
+                self.logger.debug(
+                    f"Updated plex_cache labels for row {plex_item.get('id')}"
+                )
 
             return {
                 "title": plex_item.get("title"),
@@ -252,7 +259,8 @@ class Labelarr(ChubModule):
             return None
 
         self.logger.debug(
-            f"Sync '{plex_item.get('title')}' ({plex_item.get('year')}) [MAPPED]: {add_remove}"
+            f"{'[DRY RUN] ' if dry_run else ''}Sync '{plex_item.get('title')}' "
+            f"({plex_item.get('year')}) [MAPPED]: {add_remove}"
         )
 
         # Apply all label changes in a single Plex search to avoid race conditions
@@ -264,6 +272,9 @@ class Labelarr(ChubModule):
             updated_item = dict(plex_item)
             updated_item["labels"] = new_labels
             db.plex.upsert(updated_item)
+            self.logger.debug(
+                f"Updated plex_cache labels for row {plex_item.get('id')}"
+            )
 
         return {
             "title": plex_item.get("title"),
@@ -470,7 +481,7 @@ class Labelarr(ChubModule):
                     self.logger.info("No labels to sync to Plex")
 
         except KeyboardInterrupt:
-            print("Keyboard Interrupt detected. Exiting...")
+            self.logger.info("Keyboard Interrupt detected. Exiting...")
             return
         except Exception:
             self.logger.error("\n\nAn error occurred:\n", exc_info=True)

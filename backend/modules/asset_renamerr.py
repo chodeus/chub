@@ -372,7 +372,10 @@ class AssetRenamerr(ChubModule):
                 self.logger.warning(f"Source dir not found: '{source_dir}'")
                 continue
             # Drop stale asset rows for this source_dir before re-inserting.
-            db.poster.delete_asset_rows_by_path_prefix(source_dir)
+            deleted = db.poster.delete_asset_rows_by_path_prefix(source_dir)
+            self.logger.debug(
+                f"Cleared {deleted} stale asset rows for '{source_dir}'"
+            )
             records = []
             for root, dirs, files in os.walk(source_dir):
                 dirs.sort(key=str.lower)
@@ -485,6 +488,10 @@ class AssetRenamerr(ChubModule):
             try:
                 recorded = set(json.loads(prev.get("applied_libraries") or "[]"))
             except (ValueError, TypeError):
+                self.logger.debug(
+                    "Could not parse applied_libraries "
+                    f"{prev.get('applied_libraries')!r}; treating as unapplied"
+                )
                 recorded = set()
             if not expected.issubset(recorded):
                 return False
@@ -625,7 +632,8 @@ class AssetRenamerr(ChubModule):
         apply_method = self.config.apply_method
         try:
             src_mtime: Optional[float] = os.stat(file).st_mtime
-        except OSError:
+        except OSError as exc:
+            self.logger.debug(f"Could not stat chosen asset '{file}': {exc}")
             src_mtime = None
 
         applied_libs: Optional[List[str]] = None
@@ -667,27 +675,32 @@ class AssetRenamerr(ChubModule):
     def _file_op(self, src: str, dest: str, action_type: str) -> None:
         if action_type == "move":
             shutil.move(src, dest)
-        elif action_type == "hardlink":
-            if os.path.lexists(dest):
-                os.remove(dest)
-            os.link(src, dest)
-        elif action_type == "symlink":
-            if os.path.lexists(dest):
-                os.remove(dest)
-            os.symlink(src, dest)
+        elif action_type in ("hardlink", "symlink"):
+            # Create the link under a temp name and os.replace() it over the
+            # destination — never remove dest first, so a failed link (source
+            # vanished, ENOSPC, cross-device) can't destroy the existing file.
+            tmp = f"{dest}.chub-tmp-{os.getpid()}"
+            try:
+                if action_type == "hardlink":
+                    os.link(src, tmp)
+                else:
+                    os.symlink(src, tmp)
+                os.replace(tmp, dest)
+            except OSError:
+                self._cleanup(tmp)
+                raise
         else:  # copy (default)
             shutil.copy(src, dest)
         self.logger.debug(f"[{action_type.upper()}] {dest} ← {src}")
 
-    @staticmethod
-    def _cleanup(path: Optional[str]) -> None:
+    def _cleanup(self, path: Optional[str]) -> None:
         if path and os.path.exists(path):
             try:
                 os.remove(path)
-            except OSError:
+            except OSError as exc:
                 # Best-effort cleanup of an internally-generated temp file;
-                # a missing or unremovable temp file is non-fatal.
-                pass
+                # non-fatal, but leave a trace so accumulation is explainable.
+                self.logger.debug(f"Temp file cleanup failed: {path} — {exc}")
 
     # ----- orchestration --------------------------------------------------
 

@@ -98,6 +98,13 @@ class SmartRedactionFilter(logging.Filter):
             ),
             # Passwords
             (r"password\s*[:=]\s*['\"]?[^\s'\"]{8,}['\"]?", "password: [redacted]"),
+            # Secrets in URL query parameters — requests exceptions embed the
+            # full URL, and the JSON/config patterns above only match quoted
+            # or key: value forms, not ?key=value.
+            (
+                r"([?&](?:x-plex-token|client_key|access_token|refresh_token|token|secret)=)[^&\s'\"]+",
+                r"\1[redacted]",
+            ),
         ]
 
         for pattern, replacement in patterns:

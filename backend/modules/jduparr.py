@@ -362,7 +362,7 @@ class Jduparr(ChubModule):
             self._send_output(output)
 
         except KeyboardInterrupt:
-            print("Keyboard Interrupt detected. Exiting...")
+            self.logger.info("Keyboard Interrupt detected. Exiting...")
             return
         except Exception:
             self.logger.error("An error occurred:", exc_info=True)
