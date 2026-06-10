@@ -395,7 +395,15 @@ class Labelarr(ChubModule):
                         instance_name = plex_instance.instance
                         library_names = plex_instance.library_names
 
-                        plex_conn = self.full_config.instances.plex[instance_name]
+                        plex_conn = self.full_config.instances.plex.get(
+                            instance_name
+                        )
+                        if plex_conn is None:
+                            self.logger.warning(
+                                f"Plex instance '{instance_name}' referenced by "
+                                f"mapping '{app_instance}' is not configured, skipping"
+                            )
+                            continue
                         plex_client = PlexClient(
                             plex_conn.url, plex_conn.api, self.logger
                         )
@@ -558,7 +566,13 @@ class Labelarr(ChubModule):
                     }
 
                 # Connect to Plex
-                plex_config = self.full_config.instances.plex[plex_instance]
+                plex_config = self.full_config.instances.plex.get(plex_instance)
+                if plex_config is None:
+                    return {
+                        "success": False,
+                        "message": f"Plex instance '{plex_instance}' not found",
+                        "error_code": "PLEX_INSTANCE_NOT_FOUND",
+                    }
                 plex_client = PlexClient(plex_config.url, plex_config.api, self.logger)
 
                 if not plex_client.is_connected():
@@ -647,14 +661,11 @@ class Labelarr(ChubModule):
                             f"Updated media_cache record {media_cache_id} with new tags: {updated_tags}"
                         )
 
-                # Create labels mapping for sync (use the tags we want to manage)
-                all_tags = list(
-                    set(
-                        tags_to_add
-                        + [tag for tag in current_tags if tag not in tags_to_remove]
-                    )
-                )
-                labels_lower = {tag.lower(): tag for tag in all_tags}
+                # Only the tags named in tag_actions are managed here; any
+                # other tag on the item must be left untouched in Plex, the
+                # same way run() only syncs the configured mapping.labels.
+                managed_tags = list(dict.fromkeys(tags_to_add + tags_to_remove))
+                labels_lower = {tag.lower(): tag for tag in managed_tags}
 
                 # Execute sync using labelarr's existing business logic (connector-based)
                 sync_result = self.sync_to_plex(

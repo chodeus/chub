@@ -91,7 +91,7 @@ RUN groupadd -g 99 dockeruser && \
 
 EXPOSE 8000
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=5s --start-period=45s --retries=5 \
   CMD curl -f http://localhost:8000/api/health || exit 1
 
 VOLUME /config

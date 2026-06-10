@@ -42,6 +42,14 @@ router = APIRouter(
     },
 )
 
+# Caps for restore uploads. A real chub backup is config.yml (KBs) plus a SQL
+# dump of chub.db (tens of MBs even for very large libraries), so these sit
+# far above any legitimate backup while still bounding a hostile upload or
+# zip bomb.
+MAX_RESTORE_UPLOAD_BYTES = 500 * 1024 * 1024
+MAX_RESTORE_CONFIG_BYTES = 10 * 1024 * 1024
+MAX_RESTORE_SQL_BYTES = 2 * 1024 * 1024 * 1024
+
 
 class TestEndpointRequest(BaseModel):
     """Request model for the test endpoint."""
@@ -656,7 +664,24 @@ async def restore_backup(
     restore if needed (full DB restore requires app restart).
     """
     try:
-        content = await file.read()
+        # Read in chunks so an oversized upload is rejected without ever
+        # holding more than the cap in memory.
+        chunks: List[bytes] = []
+        received = 0
+        while True:
+            chunk = await file.read(1024 * 1024)
+            if not chunk:
+                break
+            received += len(chunk)
+            if received > MAX_RESTORE_UPLOAD_BYTES:
+                return error(
+                    f"Backup upload exceeds the "
+                    f"{MAX_RESTORE_UPLOAD_BYTES // (1024 * 1024)} MB limit",
+                    code="BACKUP_TOO_LARGE",
+                    status_code=413,
+                )
+            chunks.append(chunk)
+        content = b"".join(chunks)
 
         # The zip parse + yaml validation + file writes are blocking; run them
         # off the event loop so a large upload doesn't stall the whole server.
@@ -680,6 +705,22 @@ async def restore_backup(
                         code="INVALID_BACKUP_CONTENTS",
                         status_code=400,
                     )
+
+                # Reject zip bombs before decompressing anything. zipfile caps
+                # each member read at its declared file_size, so the declared
+                # size is a trustworthy upper bound on what zf.read() returns.
+                member_caps = {
+                    "config.yml": MAX_RESTORE_CONFIG_BYTES,
+                    "chub.db.sql": MAX_RESTORE_SQL_BYTES,
+                }
+                for member, cap in member_caps.items():
+                    if member in names and zf.getinfo(member).file_size > cap:
+                        return error(
+                            f"{member} in backup exceeds the "
+                            f"{cap // (1024 * 1024)} MB limit",
+                            code="BACKUP_MEMBER_TOO_LARGE",
+                            status_code=413,
+                        )
 
                 # Validate the config.yml inside the zip
                 raw_config = zf.read("config.yml")
