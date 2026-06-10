@@ -15,16 +15,72 @@ import { apiCore } from './core.js';
  */
 export const postersAPI = {
     /**
-     * Download poster
+     * Download a poster file to the user's disk.
+     *
+     * The backend reads size/format/quality as query params and responds with
+     * the binary image. apiCore is JSON-oriented and would just buffer those
+     * bytes into memory, so we fetch directly here and trigger a real browser
+     * download via an object URL. The auth header is attached so the backend
+     * can't 401 (which would otherwise be saved as the file body).
+     *
      * @param {string} posterId - Poster identifier
      * @param {Object} options - Download options
-     * @param {string} options.size - Preferred size
-     * @param {string} options.format - Preferred format
-     * @param {string} options.quality - Quality preference
-     * @returns {Promise<Object>} Download job information
+     * @param {number} [options.size] - Max dimension in px (omit for original)
+     * @param {string} [options.format] - Target format: jpg, webp, png
+     * @param {number} [options.quality] - Compression quality 1-100
+     * @param {string} [options.filename] - Preferred download filename
+     * @returns {Promise<void>}
+     * @throws {Error} If the server returns a non-OK response
      */
-    downloadPoster: (posterId, options = {}) => {
-        return apiCore.post(`/posters/${posterId}/download`, options);
+    downloadPoster: async (posterId, options = {}) => {
+        const params = new URLSearchParams();
+        if (options.size) params.set('size', options.size);
+        if (options.format) params.set('format', options.format);
+        if (options.quality) params.set('quality', options.quality);
+        const qs = params.toString();
+        const url = `/api/posters/${posterId}/download${qs ? `?${qs}` : ''}`;
+
+        const headers = {};
+        try {
+            const token = localStorage.getItem('chub-auth-token');
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+        } catch {
+            /* localStorage unavailable */
+        }
+
+        const res = await fetch(url, { method: 'POST', headers });
+        if (!res.ok) {
+            throw new Error(`Download failed with status ${res.status}`);
+        }
+
+        // Prefer the server's Content-Disposition filename, then a caller
+        // hint, then a sensible default derived from id + chosen format.
+        let fileName = options.filename || `poster_${posterId}`;
+        const disposition = res.headers.get('content-disposition');
+        const match = disposition && /filename="?([^"]+)"?/.exec(disposition);
+        if (match) {
+            fileName = match[1];
+        } else if (!/\.[a-z0-9]+$/i.test(fileName)) {
+            const ext = String(options.format || 'jpg')
+                .toLowerCase()
+                .replace('jpeg', 'jpg');
+            fileName = `${fileName}.${ext}`;
+        }
+
+        const blob = await res.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        try {
+            const link = document.createElement('a');
+            link.href = objectUrl;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        } finally {
+            URL.revokeObjectURL(objectUrl);
+        }
     },
 
     /**
