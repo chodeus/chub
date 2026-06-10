@@ -28,6 +28,7 @@ import {
 
 import { FieldWrapper, FieldLabel, FieldError, FieldDescription } from '../primitives';
 import { DirectoryArray } from '../features/dir';
+import { BulkSourceDirPicker } from '../custom/BulkSourceDirPicker.jsx';
 
 /**
  * DirListDragDropField component for managing directories with drag-drop reordering
@@ -142,6 +143,16 @@ export const DirListDragDropField = React.memo(
         return (
             <FieldWrapper invalid={highlightInvalid}>
                 <FieldLabel label={label} required={field.required} />
+
+                {/* Optional bulk-add from configured Google Drives — appends
+                    locations to the list; drag-to-reorder + single-add stay below */}
+                {field.bulkSource === 'gdrive' && (
+                    <BulkSourceDirPicker
+                        directories={directoriesArray.filter(d => d && d.trim())}
+                        onChange={handleChange}
+                        disabled={disabled}
+                    />
+                )}
 
                 <DndContext
                     sensors={sensors}

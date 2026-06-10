@@ -131,6 +131,10 @@ export const SETTINGS_SCHEMA = [
                 displayType: 'gdrive',
                 required: false,
                 description: 'Each entry contains id, location, and name.',
+                bulkPreset: {
+                    presetUrl: '/api/gdrive-presets',
+                    locationTemplate: '{base}/{style}/{name}',
+                },
 
                 fields: [
                     {
@@ -208,8 +212,9 @@ export const SETTINGS_SCHEMA = [
                 type: 'dirlist_dragdrop',
                 section: 'Source',
                 required: true,
+                bulkSource: 'gdrive',
                 description:
-                    'Folders scanned for poster assets. Drag to set priority — later directories win when multiple sources have a poster for the same item (bottom of the list takes precedence).',
+                    'Folders scanned for poster assets. Bulk-add the Google Drives you configured in Sync GDrive, or add directories individually. Drag to set priority — later directories win when multiple sources have a poster for the same item (bottom of the list takes precedence).',
             },
             {
                 key: 'sync_posters',
