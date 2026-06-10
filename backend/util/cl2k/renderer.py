@@ -71,19 +71,20 @@ def _apply_crop(
 def _extend_fill(img: Image, width: int, fill_h: int, from_top: bool) -> bytes:
     """Build a ``width``×``fill_h`` edge-extend fill from ``img``'s top or bottom strip.
 
-    The strip is vertically stretched + blurred so it reads as a continuation of the
-    scene. A *bottom* fill samples a thick strip and is faded to black toward the
-    canvas edge so it merges into the CL2K gradient/black cleanly. A *top* fill (the
-    sky above the subjects) samples only a THIN edge strip so it captures the sky
-    sliver, not the subjects' heads — extending a thick strip would ghost a blurred
-    copy of them upward — and is NOT faded (the CL2K top has no gradient). Returns
-    PNG bytes.
+    BOTH fills sample only a THIN edge strip, so the first fill row matches the
+    photo's edge row and the seam is invisible (C0-continuous). A thick strip
+    would put content from well inside the photo right at the seam — a visible
+    brightness step where the fill meets the photo (the template gradient is only
+    ~70% black at typical seam heights, so it doesn't hide it). A *bottom* fill is
+    additionally faded to black toward the canvas edge so it merges into the CL2K
+    gradient/black; a *top* fill is NOT faded (the CL2K top has no gradient).
+    Returns PNG bytes.
     """
     if from_top:
         strip_h = max(2, min(img.height, 12))  # thin: the sky edge, not the heads
         src_top = 0
     else:
-        strip_h = max(1, min(img.height, img.height // 3, 240))
+        strip_h = max(2, min(img.height, 24))  # thin: the edge row, not the scene
         src_top = img.height - strip_h
     with img.clone() as s:
         s.crop(0, src_top, width=width, height=strip_h)
@@ -95,6 +96,21 @@ def _extend_fill(img: Image, width: int, fill_h: int, from_top: bool) -> bytes:
                 s.composite(ramp, left=0, top=0, operator="multiply")
         s.format = "png"
         return s.make_blob()
+
+
+def _blend_seam(img: Image, width: int, seam_y: int, half: int = 10) -> None:
+    """Soft-blur a thin horizontal band across ``seam_y`` so the photo→fill seam
+    is imperceptible. Even a thin-strip fill lands a few luminance units off the
+    photo's edge row (the blur shifts it), and in the near-black gradient zone a
+    ~3-unit row step still reads as a faint line on a good display."""
+    top = max(0, seam_y - half)
+    band_h = min(2 * half, img.height - top)
+    if band_h <= 2:
+        return
+    with img.clone() as band:
+        band.crop(0, top, width=width, height=band_h)
+        band.blur(radius=0, sigma=half / 2.0)
+        img.composite(band, left=0, top=top)
 
 
 def _fit_resize(
@@ -142,9 +158,11 @@ def _fit_resize(
     if top_blob:
         with Image(blob=top_blob) as t:
             img.composite(t, left=0, top=0)
+        _blend_seam(img, width, top_off)
     if bot_blob:
         with Image(blob=bot_blob) as b:
             img.composite(b, left=0, top=top_off + new_h)
+        _blend_seam(img, width, top_off + new_h)
 
 
 def fit_extend_canvas(
@@ -223,12 +241,26 @@ def _place_logo(
     baseline: int,
     max_width: int,
     whiten: bool,
+    logo_scale: float = 1.0,
+    logo_y_offset: int = 0,
 ) -> None:
     """Whiten, size and bottom-align the clear logo onto ``base``.
 
     Width targets ``max_width`` (the 600px guide by default), but height is
-    clamped so the logo top never rises above ``LOGO_ZONE_TOP``.
+    clamped so the logo top never rises above ``LOGO_ZONE_TOP``. ``logo_scale``
+    relaxes that height clamp (only): the template's LOGO group is a placeholder
+    sized by eye, and a hand-made poster lets a tall/boxy logo (< ~3:1 aspect,
+    e.g. a sticker design) break the y=1100 top guide rather than shrink to an
+    unreadable stamp. 1.0 = the strict guide box; the width caps always apply.
+
+    ``logo_y_offset`` shifts the placement (px; positive = down) without changing
+    the size — the template's own note ("only leave the Main-Logo area if the
+    logo text is too small or unreadable") treats the vertical as judgement, and
+    hand-made posters hang oversized logos below the bottom guide (measured
+    Deuce Bigalow: top on the y=1100 line, bottom at y≈1349).
     """
+    logo_scale = max(0.25, min(float(logo_scale or 1.0), 3.0))
+    logo_y_offset = max(-600, min(int(logo_y_offset or 0), 200))
     with Image(blob=logo_bytes) as logo:
         logo.background_color = Color("transparent")
         logo.trim(color=Color("transparent"))  # drop padding -> width == content
@@ -236,15 +268,18 @@ def _place_logo(
             _whiten(logo)
         target_w = min(max_width, geo.LOGO_WIDTH_MAX)  # never bust the max-width guide
         target_h = int(round(logo.height * target_w / logo.width))
-        max_h = baseline - geo.LOGO_ZONE_TOP
+        max_h = int(round((baseline - geo.LOGO_ZONE_TOP) * logo_scale))
         if target_h > max_h:
             target_h = max_h
             target_w = int(round(logo.width * target_h / logo.height))
         logo.resize(target_w, target_h, filter="lanczos")
+        # Offset moves placement only; keep the logo fully on the canvas.
+        top = baseline - target_h + logo_y_offset
+        top = max(0, min(top, base.height - target_h))
         base.composite(
             logo,
             left=geo.CENTER_X - target_w // 2,
-            top=baseline - target_h,
+            top=top,
         )
 
 
@@ -344,6 +379,8 @@ def render_cl2k(
     title: str = "",
     season_text: str = "",
     logo_max_width: int = geo.LOGO_WIDTH_STD,
+    logo_scale: float = 1.0,
+    logo_y_offset: int = 0,
     whiten: bool = True,
     font_path: Optional[str] = None,
     focus_x: float = 0.5,
@@ -394,7 +431,10 @@ def render_cl2k(
             # poster stays logo-shaped.
             logo_bytes = generate_text_logo(title, title_font)
         if logo_bytes:
-            _place_logo(base, logo_bytes, baseline, logo_max_width, whiten)
+            _place_logo(
+                base, logo_bytes, baseline, logo_max_width, whiten, logo_scale,
+                logo_y_offset,
+            )
 
         label_kerning = geo.tracking_to_kerning(geo.LABEL_TRACKING)
         if band_label:
@@ -466,6 +506,8 @@ def overlay_logo(
     *,
     kind: str = "movie",
     logo_max_width: int = geo.LOGO_WIDTH_STD,
+    logo_scale: float = 1.0,
+    logo_y_offset: int = 0,
     whiten: bool = True,
 ) -> bytes:
     """Composite a clear logo onto a finished poster at the locked CL2K baseline.
@@ -479,7 +521,10 @@ def overlay_logo(
     """
     baseline = geo.logo_baseline((kind or "movie").lower())
     with Image(blob=image_bytes) as base:
-        _place_logo(base, logo_bytes, baseline, logo_max_width, whiten)
+        _place_logo(
+            base, logo_bytes, baseline, logo_max_width, whiten, logo_scale,
+            logo_y_offset,
+        )
         return _encode_jpeg(base)
 
 
