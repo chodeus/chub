@@ -121,21 +121,32 @@ class Renameinatorr(ChubModule):
         count: int = self.get_count_for_instance_type(config, instance_type, logger)
         tag_id: Any = None
 
-        # Ignore-tag filtering: skip items with the ignore tag, if configured
+        # Ignore-tag filtering: skip items carrying any of the (comma-
+        # separated) ignore tags. Lookup-only — unlike get_tag_id_from_name
+        # this never creates the tag: an absent ignore tag just means there
+        # is nothing to skip.
         skipped_count = 0
         if getattr(config, "ignore_tags", None):
-            ignore_tag_id = app.get_tag_id_from_name(config.ignore_tags)
-            if ignore_tag_id:
+            ignore_names = {
+                t.strip().lower()
+                for t in str(config.ignore_tags).split(",")
+                if t.strip()
+            }
+            all_tags = app.get_all_tags() or []
+            ignore_tag_ids = {
+                tag["id"] for tag in all_tags if tag["label"] in ignore_names
+            }
+            if ignore_tag_ids:
                 before_count = len(media_dict)
                 media_dict = [
                     item
                     for item in media_dict
-                    if ignore_tag_id not in item.get("tags", [])
+                    if not ignore_tag_ids & set(item.get("tags", []))
                 ]
                 skipped_count = before_count - len(media_dict)
                 if skipped_count > 0:
                     logger.info(
-                        f"Skipped {skipped_count} items due to ignore tag '{config.ignore_tags}'."
+                        f"Skipped {skipped_count} items due to ignore tags '{config.ignore_tags}'."
                     )
 
         # Tagging logic: filter untagged, clear if all tagged, then chunk

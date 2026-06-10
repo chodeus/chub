@@ -71,6 +71,11 @@ class PlexMaintenance(ChubModule):
                 )
             )
 
+            if getattr(self.config, "dry_run", False):
+                self.logger.info(
+                    create_table([["Dry Run"], ["NO CHANGES WILL BE MADE"]])
+                )
+
             # PhotoTranscoder clears a filesystem cache and doesn't need a
             # Plex API connection — run it even if Plex is unreachable.
             transcoder_stats = {"count": 0, "total_size": 0}
@@ -187,7 +192,12 @@ class PlexMaintenance(ChubModule):
         if self.config.optimize_db:
             tasks.append(("Optimize DB", lambda: plex_server.library.optimize()))
 
+        dry_run = getattr(self.config, "dry_run", False)
         for i, (name, task_fn) in enumerate(tasks):
+            if dry_run:
+                self.logger.info(f"[DRY RUN] Would run Plex maintenance: {name}")
+                results[name] = "dry run"
+                continue
             try:
                 self.logger.info(f"Running Plex maintenance: {name}...")
                 task_fn()
@@ -219,6 +229,7 @@ class PlexMaintenance(ChubModule):
 
         count = 0
         total_size = 0
+        dry_run = getattr(self.config, "dry_run", False)
 
         self.logger.info("Cleaning PhotoTranscoder cache...")
 
@@ -228,15 +239,22 @@ class PlexMaintenance(ChubModule):
             for filename in files:
                 filepath = os.path.join(root, filename)
                 try:
-                    total_size += os.path.getsize(filepath)
-                    self.logger.debug(f"[PURGED_CACHE] {filepath}")
-                    os.remove(filepath)
+                    size = os.path.getsize(filepath)
+                    if dry_run:
+                        self.logger.debug(f"[DRY RUN] would purge {filepath}")
+                    else:
+                        self.logger.debug(f"[PURGED_CACHE] {filepath}")
+                        os.remove(filepath)
+                    # Only counted once the remove has succeeded, so the
+                    # summary never includes files that failed to delete.
                     count += 1
+                    total_size += size
                 except Exception as e:
                     self.logger.error(f"Failed to remove {filepath}: {e}")
 
+        verb = "would remove" if dry_run else "removed"
         self.logger.info(
-            f"PhotoTranscoder: removed {count} files ({format_bytes(total_size)})"
+            f"PhotoTranscoder: {verb} {count} files ({format_bytes(total_size)})"
         )
         return {"count": count, "total_size": total_size}
 

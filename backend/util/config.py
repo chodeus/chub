@@ -294,6 +294,10 @@ class BorderReplacerrConfig(BaseModel):
     ignore_folders: List[str] = Field(default_factory=list)
     border_colors: List[str] = Field(default_factory=list)
     holidays: List[BorderHoliday] = Field(default_factory=list)
+    # Thread pool size for the border re-encode pass; None = min(8, cpu count).
+    # Without this field pydantic drops the key from config.yml before the
+    # module's getattr ever sees it.
+    border_workers: Optional[int] = Field(default=None, ge=1)
 
 
 class UpgradinatorrInstance(BaseModel):
@@ -555,6 +559,7 @@ class PlexMaintenanceConfig(BaseModel):
     """Plex server-level maintenance tasks (moved out of poster_cleanarr)."""
 
     log_level: str = "info"
+    dry_run: bool = False
     plex_path: str = ""
     empty_trash: bool = False
     clean_bundles: bool = False
@@ -573,7 +578,10 @@ class UnmatchedAssetsConfig(BaseModel):
     ignore_tags: List[str] = Field(default_factory=list)
     ignore_collections: List[str] = Field(default_factory=list)
     ignore_unmonitored: bool = False
-    instances: List[str] = Field(default_factory=list)
+    # str = whole instance; dict form {name: {library_names: [...]}} narrows a
+    # Plex instance to specific libraries (compute_instance_filters reads the
+    # inner value with .get, so it stays a plain dict, not a nested model).
+    instances: List[Union[str, Dict[str, Any]]] = Field(default_factory=list)
 
 
 class TMDBConfig(BaseModel):
