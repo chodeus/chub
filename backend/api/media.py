@@ -5,9 +5,9 @@ Provides media cache operations including retrieval, deletion,
 and cache refresh functionality for media, collections, and Plex data.
 """
 
-from typing import Any
+from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse
 
 from backend.api.utils import error, get_database, get_logger, ok
@@ -21,6 +21,16 @@ router = APIRouter(
         404: {"description": "Cache item not found"},
     },
 )
+
+
+def _page(rows: list, limit: Optional[int], offset: int) -> list:
+    """Slice rows for the optional limit/offset query params.
+
+    No params means the full result set, which existing callers rely on."""
+    if limit is None and not offset:
+        return rows
+    end = offset + limit if limit is not None else None
+    return rows[offset:end]
 
 
 @router.get(
@@ -52,25 +62,30 @@ router = APIRouter(
     },
 )
 async def get_media_cache(
-    logger: Any = Depends(get_logger), db: ChubDB = Depends(get_database)
+    limit: Optional[int] = Query(None, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    logger: Any = Depends(get_logger),
+    db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
     """
-    Retrieve the complete media cache from the database.
+    Retrieve the media cache from the database.
 
-    Returns all cached media items including metadata, identifiers,
-    and poster information for display and management purposes.
+    Returns cached media items including metadata, identifiers, and poster
+    information. Optional limit (max 500) and offset paginate the result;
+    without them the full cache is returned.
 
     Returns:
-        Complete list of cached media items
+        List of cached media items plus the total row count
     """
     try:
         logger.debug("Serving GET /api/cache/media")
 
-        media_cache = db.media.get_all()
+        media_cache = db.media.get_all() or []
+        page = _page(media_cache, limit, offset)
 
         return ok(
-            f"Retrieved {len(media_cache) if media_cache else 0} media cache items",
-            {"media_cache": media_cache or []},
+            f"Retrieved {len(page)} of {len(media_cache)} media cache items",
+            {"media_cache": page, "total": len(media_cache)},
         )
 
     except Exception as e:
@@ -110,25 +125,30 @@ async def get_media_cache(
     },
 )
 async def get_collection_cache(
-    logger: Any = Depends(get_logger), db: ChubDB = Depends(get_database)
+    limit: Optional[int] = Query(None, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    logger: Any = Depends(get_logger),
+    db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
     """
-    Retrieve the complete collection cache from the database.
+    Retrieve the collection cache from the database.
 
-    Returns all cached collection items including metadata and
-    identifiers for display and management purposes.
+    Returns cached collection items including metadata and identifiers.
+    Optional limit (max 500) and offset paginate the result; without them
+    the full cache is returned.
 
     Returns:
-        Complete list of cached collection items
+        List of cached collection items plus the total row count
     """
     try:
         logger.debug("Serving GET /api/cache/collection")
 
-        collection_cache = db.collection.get_all()
+        collection_cache = db.collection.get_all() or []
+        page = _page(collection_cache, limit, offset)
 
         return ok(
-            f"Retrieved {len(collection_cache) if collection_cache else 0} collection cache items",
-            {"collection_cache": collection_cache or []},
+            f"Retrieved {len(page)} of {len(collection_cache)} collection cache items",
+            {"collection_cache": page, "total": len(collection_cache)},
         )
 
     except Exception as e:
@@ -169,25 +189,30 @@ async def get_collection_cache(
     },
 )
 async def get_plex_cache(
-    logger: Any = Depends(get_logger), db: ChubDB = Depends(get_database)
+    limit: Optional[int] = Query(None, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    logger: Any = Depends(get_logger),
+    db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
     """
-    Retrieve the complete Plex media cache from the database.
+    Retrieve the Plex media cache from the database.
 
-    Returns all cached Plex media items including Plex-specific
-    identifiers and library information.
+    Returns cached Plex media items including Plex-specific identifiers and
+    library information. Optional limit (max 500) and offset paginate the
+    result; without them the full cache is returned.
 
     Returns:
-        Complete list of cached Plex media items
+        List of cached Plex media items plus the total row count
     """
     try:
         logger.debug("Serving GET /api/cache/plex")
 
-        plex_cache = db.plex.get_all()
+        plex_cache = db.plex.get_all() or []
+        page = _page(plex_cache, limit, offset)
 
         return ok(
-            f"Retrieved {len(plex_cache) if plex_cache else 0} plex cache items",
-            {"plex_media_cache": plex_cache or []},
+            f"Retrieved {len(page)} of {len(plex_cache)} plex cache items",
+            {"plex_media_cache": page, "total": len(plex_cache)},
         )
 
     except Exception as e:
