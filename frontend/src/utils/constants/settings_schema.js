@@ -694,54 +694,6 @@ export const SETTINGS_SCHEMA = [
                 description:
                     'Destination Google Drive folder ID for uploads. The folder is written to as you (via the Sync GDrive OAuth token), so the posters are owned by you.',
             },
-            // ─── G-Drive .psd source ───────────────────────────────────
-            {
-                key: 'psd_source_drives',
-                label: 'PSD Source Drives',
-                type: 'object_array',
-                displayType: 'gdrive',
-                section: 'PSD Source',
-                required: false,
-                description:
-                    'A subset of your Sync Gdrive locations to browse for finished CL2K .psd files (mirrors Poster Renamerr’s source directories). Each entry has id, location, and name.',
-                fields: [
-                    {
-                        key: 'preset',
-                        label: 'Gdrive Presets',
-                        type: 'presets',
-                        presetType: 'gdrive',
-                        presetUrl: '/api/gdrive-presets',
-                        identifierField: 'name',
-                        moduleConfigKey: 'psd_source_drives',
-                        targetFields: ['name', 'id'],
-                        required: false,
-                        exclude_on_save: true,
-                        description: 'Select a preset configuration for Google Drive.',
-                        presetHandler: true,
-                    },
-                    {
-                        key: 'name',
-                        label: 'Name',
-                        type: 'text',
-                        required: true,
-                        description: 'Friendly name for this Google Drive entry.',
-                    },
-                    {
-                        key: 'id',
-                        label: 'GDrive ID',
-                        type: 'text',
-                        required: true,
-                        description: 'Unique ID of the Google Drive folder.',
-                    },
-                    {
-                        key: 'location',
-                        label: 'Location',
-                        type: 'dir',
-                        required: true,
-                        description: 'Local directory this Google Drive ID maps to.',
-                    },
-                ],
-            },
             // ─── AI text removal ───────────────────────────────────────
             {
                 key: 'ai_provider',

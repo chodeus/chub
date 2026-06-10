@@ -17,8 +17,6 @@
  *   POST /api/cl2k-maker/generate-seasons  generate posters for many seasons
  *   POST /api/cl2k-maker/upload-generate   render from a cleaned backdrop (file)
  *   POST /api/cl2k-maker/upload-poster     file a finished poster as-is (file)
- *   GET  /api/cl2k-maker/gdrive-list       source drives, or .psd files in one
- *   POST /api/cl2k-maker/gdrive-psd        flatten a Drive .psd (preview or save)
  *
  * /preview and /psd-export return raw bytes, so they bypass apiCore (which reads
  * the body as JSON/text) and use a small fetch helper that returns a Blob.
@@ -144,23 +142,6 @@ export const cl2kMakerAPI = {
         });
         return apiCore.post('/cl2k-maker/upload-poster', fd);
     },
-
-    /**
-     * List configured .psd source drives, or (with driveId) .psd files in one.
-     * Pass `q` to filter by case-insensitive title substring (server-side rclone).
-     */
-    gdriveList: (driveId, q) =>
-        apiCore.get(`/cl2k-maker/gdrive-list${driveId ? `?${qs({ drive_id: driveId, q })}` : ''}`, {
-            useCache: false,
-        }),
-
-    /**
-     * Flatten a Drive .psd: preview=true returns base64; else saves the poster.
-     * Uses a long client timeout — fetching + flattening a large PSD (and any AI
-     * step) can take well over the default 30s, and a client abort would hide the
-     * backend's real error.
-     */
-    gdrivePsd: req => apiCore.post('/cl2k-maker/gdrive-psd', req, { timeout: AI_TIMEOUT_MS }),
 
     /**
      * Re-text a finished poster: AI-erase the brushed old text + redraw a label

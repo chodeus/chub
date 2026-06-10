@@ -25,7 +25,6 @@ from pydantic import BaseModel
 from backend.api.utils import error, get_database, get_module_logger, ok
 from backend.modules.cl2k_maker import (
     fanart_images,
-    gdrive_psd_bytes,
     generate_for_item,
     generate_seasons,
     psd_for_item,
@@ -445,42 +444,6 @@ async def upload_poster(
     return error(result.get("reason", "save failed"), "CL2K_UPLOAD", data=result)
 
 
-@router.get("/gdrive-list", summary="Configured .psd source drives, or .psd files in one")
-def gdrive_list(
-    drive_id: Optional[str] = Query(None),
-    q: Optional[str] = Query(None, description="case-insensitive title substring"),
-    db: ChubDB = Depends(get_database),
-    logger: Any = Depends(get_cl2k_logger),
-) -> JSONResponse:
-    cfg = load_config()
-    if not drive_id:
-        drives = [d.model_dump() for d in cfg.cl2k_maker.psd_source_drives]
-        return ok("ok", {"drives": drives})
-    from backend.util.cl2k.gdrive_upload import list_psd
-
-    try:
-        files = list_psd(cfg.sync_gdrive, drive_id, query=q)
-    except Exception as exc:
-        return error(str(exc), "CL2K_GDRIVE_LIST")
-    return ok("ok", {"files": files})
-
-
-class GDrivePsdRequest(BaseModel):
-    drive_id: str
-    path: str
-    kind: str
-    title: str
-    tmdb_id: int
-    year: Optional[int] = None
-    tvdb_id: Optional[int] = None
-    imdb_id: Optional[str] = None
-    season_number: Optional[int] = None
-    border: bool = True  # composite the default 26px white CL2K border on save
-    preview: bool = False
-    save_local: bool = True
-    upload_gdrive: Optional[bool] = None
-
-
 class RetextRequest(BaseModel):
     image_b64: str  # uploaded poster (base64; data-URL prefix allowed)
     mask_b64: Optional[str] = None  # brushed mask over the old text (white=erase)
@@ -554,43 +517,3 @@ def retext(
     return error(reason, "CL2K_RETEXT", data=out if isinstance(out, dict) else None)
 
 
-@router.post("/gdrive-psd", summary="Flatten a Drive .psd to a poster (preview or save)")
-def gdrive_psd(
-    req: GDrivePsdRequest,
-    db: ChubDB = Depends(get_database),
-    logger: Any = Depends(get_cl2k_logger),
-) -> JSONResponse:
-    cfg = load_config()
-    try:
-        blob = gdrive_psd_bytes(cfg, req.drive_id, req.path)
-    except Exception as exc:
-        return error(str(exc), "CL2K_GDRIVE_PSD")
-    if req.preview:
-        # Mirror the saved result so the preview shows the border too.
-        if req.border:
-            from backend.util.cl2k.renderer import apply_border
-
-            from backend.modules.cl2k_maker import _normalize_poster
-
-            blob = apply_border(_normalize_poster(blob))
-        return ok("ok", {"preview_b64": base64.b64encode(blob).decode()})
-    result = save_finished_poster(
-        db=db,
-        full_config=cfg,
-        logger=logger,
-        kind=req.kind,
-        title=req.title,
-        tmdb_id=req.tmdb_id,
-        year=req.year,
-        tvdb_id=req.tvdb_id,
-        imdb_id=req.imdb_id,
-        season_number=req.season_number,
-        image_bytes=blob,
-        add_border=req.border,
-        logo_source="gdrive_psd",
-        save_local=req.save_local,
-        upload_gdrive=req.upload_gdrive,
-    )
-    if result.get("status") == "generated":
-        return ok("Poster saved", result)
-    return error(result.get("reason", "save failed"), "CL2K_GDRIVE_PSD", data=result)

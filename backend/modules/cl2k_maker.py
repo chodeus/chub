@@ -579,15 +579,6 @@ def fanart_images(
         return {"logo": None, "background": None}
 
 
-def gdrive_psd_bytes(full_config, drive_id: str, path: str) -> bytes:
-    """Fetch a .psd from a configured source drive and flatten it to a JPEG poster."""
-    from backend.util.cl2k.gdrive_upload import fetch_file
-    from backend.util.cl2k.psd_export import flatten_psd
-
-    psd_bytes = fetch_file(full_config.sync_gdrive, drive_id, path)
-    return flatten_psd(psd_bytes)
-
-
 def retext_poster(
     *,
     db: ChubDB,

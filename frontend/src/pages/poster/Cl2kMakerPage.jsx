@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 
 import { cl2kMakerAPI } from '../../utils/api/cl2k_maker.js';
 import { configAPI } from '../../utils/api/config.js';
+import { postersAPI } from '../../utils/api/posters.js';
 import { useToast } from '../../contexts/ToastContext.jsx';
 import { Button, LoadingButton, PageHeader } from '../../components/ui/index.js';
 import Spinner from '../../components/ui/Spinner.jsx';
@@ -36,7 +37,6 @@ const SOURCE_TABS = [
     { key: 'fanart', label: 'fanart.tv', icon: 'palette' },
     { key: 'upload-backdrop', label: 'Cleaned backdrop', icon: 'auto_fix_high' },
     { key: 'upload-poster', label: 'Finished poster', icon: 'image' },
-    { key: 'gdrive-psd', label: 'Drive .psd', icon: 'cloud' },
     { key: 'edit', label: 'Edit poster', icon: 'edit' },
 ];
 
@@ -944,14 +944,6 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                     toast={toast}
                 />
             )}
-            {tab === 'gdrive-psd' && (
-                <GdrivePsdPanel
-                    item={item}
-                    effectiveKind={effectiveKind}
-                    saveTargets={saveTargets}
-                    toast={toast}
-                />
-            )}
             {tab === 'edit' && (
                 <EditPosterPanel
                     item={item}
@@ -1844,265 +1836,146 @@ const UploadPosterPanel = ({ item, effectiveKind, logos, loadingArt, saveTargets
     );
 };
 
-// ─── G-Drive .psd tab ───────────────────────────────────────────────────────
+// ─── Synced-poster picker (browse the GDrive sync cache) ────────────────────
 
-const GdrivePsdPanel = ({ item, effectiveKind, saveTargets, toast }) => {
-    const [drives, setDrives] = useState(null);
-    const [driveId, setDriveId] = useState('');
-    const [query, setQuery] = useState(item.title || '');
-    const [files, setFiles] = useState(null);
-    const [loadingFiles, setLoadingFiles] = useState(false);
-    const [path, setPath] = useState('');
-    const [previewB64, setPreviewB64] = useState(null);
-    const [busy, setBusy] = useState(false);
-    const [addBorder, setAddBorder] = useState(true);
+// Browse the poster_cache (synced jpg/png/webp — the sync never pulls PSDs) and
+// pick a finished poster to re-text. Thumbnails are display-only; the parent
+// re-fetches the full-resolution original on pick so the edit stays lossless.
+const SyncImportPicker = ({ defaultQuery, importing, onPick, toast }) => {
+    const [owner, setOwner] = useState('');
+    const [query, setQuery] = useState(defaultQuery || '');
+    const [owners, setOwners] = useState([]);
+    const [items, setItems] = useState(null);
+    const [total, setTotal] = useState(0);
+    const [loading, setLoading] = useState(true); // fetches once on mount
 
+    // The browse itself — sets results only after the await, so it's safe to run
+    // straight from the mount effect (no synchronous setState in the effect body).
+    const fetchPosters = useCallback(async () => {
+        try {
+            const resp = await postersAPI.browsePosters({
+                query: query.trim() || undefined,
+                owner: owner || undefined,
+                image_type: 'poster',
+                limit: 60,
+            });
+            const data = resp?.data || {};
+            setItems(data.items || []);
+            setTotal(data.total || 0);
+            if (data.owners) setOwners(data.owners);
+        } catch (err) {
+            setItems([]);
+            toast.error(err.message || 'Browse failed');
+        }
+    }, [query, owner, toast]);
+
+    const run = useCallback(async () => {
+        setLoading(true);
+        try {
+            await fetchPosters();
+        } finally {
+            setLoading(false);
+        }
+    }, [fetchPosters]);
+
+    // Auto-search once for the current title so the right poster surfaces on open.
     useEffect(() => {
         let cancelled = false;
         (async () => {
             try {
-                const resp = await cl2kMakerAPI.gdriveList();
-                if (!cancelled) setDrives(resp?.data?.drives || []);
-            } catch (err) {
-                if (!cancelled) {
-                    setDrives([]);
-                    toast.error(err.message || 'Failed to load drives');
-                }
+                await fetchPosters();
+            } finally {
+                if (!cancelled) setLoading(false);
             }
         })();
         return () => {
             cancelled = true;
         };
-    }, [toast]);
-
-    // Search a drive for .psd files matching `q` (case-insensitive substring).
-    // The community drives hold hundreds–thousands of PSDs, so we search rather
-    // than list everything.
-    const search = useCallback(
-        async (id, q) => {
-            if (!id) return;
-            setLoadingFiles(true);
-            setPath('');
-            setPreviewB64(null);
-            try {
-                const resp = await cl2kMakerAPI.gdriveList(id, q);
-                setFiles(resp?.data?.files || []);
-            } catch (err) {
-                setFiles([]);
-                toast.error(err.message || 'Failed to list .psd files');
-            } finally {
-                setLoadingFiles(false);
-            }
-        },
-        [toast]
-    );
-
-    const onDriveChange = useCallback(
-        id => {
-            setDriveId(id);
-            setFiles(null);
-            setPath('');
-            setPreviewB64(null);
-            // Auto-search for the current title so the matching template surfaces
-            // immediately on drive select.
-            if (id) search(id, query);
-        },
-        [search, query]
-    );
-
-    const baseReq = useMemo(
-        () => ({
-            drive_id: driveId,
-            path,
-            kind: effectiveKind,
-            title: item.title,
-            tmdb_id: item.tmdb_id,
-            year: item.year,
-            tvdb_id: item.tvdb_id,
-            imdb_id: item.imdb_id,
-            border: addBorder,
-            // Honoured on save; ignored by the preview branch.
-            save_local: saveTargets.saveLocal,
-            upload_gdrive: saveTargets.uploadGdrive,
-        }),
-        [
-            driveId,
-            path,
-            effectiveKind,
-            item,
-            addBorder,
-            saveTargets.saveLocal,
-            saveTargets.uploadGdrive,
-        ]
-    );
-
-    const runPreview = useCallback(async () => {
-        if (!path) return;
-        setBusy(true);
-        try {
-            const resp = await cl2kMakerAPI.gdrivePsd({ ...baseReq, preview: true });
-            setPreviewB64(resp?.data?.preview_b64 || null);
-        } catch (err) {
-            toast.error(err.message || 'Preview failed');
-        } finally {
-            setBusy(false);
-        }
-    }, [baseReq, path, toast]);
-
-    const runSave = useCallback(async () => {
-        if (!path) return;
-        setBusy(true);
-        try {
-            const resp = await cl2kMakerAPI.gdrivePsd({ ...baseReq, preview: false });
-            savedToast(toast, resp?.data);
-        } catch (err) {
-            toast.error(err.message || 'Save failed');
-        } finally {
-            setBusy(false);
-        }
-    }, [baseReq, path, toast]);
-
-    const shown = files ? files.slice(0, 200) : [];
+        // Initial fetch only — fetchPosters captures the opening title/owner.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     return (
-        <section className="mt-4 bg-surface border border-border rounded-lg p-4 flex flex-col gap-3">
-            <h3 className="text-sm font-medium text-primary">Drive .psd → flatten</h3>
-            {drives === null ? (
-                <div className="text-xs text-tertiary">Loading drives…</div>
-            ) : drives.length === 0 ? (
+        <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+                <select
+                    value={owner}
+                    onChange={e => setOwner(e.target.value)}
+                    className="bg-surface border border-border rounded px-2 py-1 text-sm text-primary"
+                >
+                    <option value="">All owners</option>
+                    {owners.map(o => (
+                        <option key={o} value={o}>
+                            {o}
+                        </option>
+                    ))}
+                </select>
+                <form
+                    onSubmit={e => {
+                        e.preventDefault();
+                        run();
+                    }}
+                    className="flex items-center gap-2 flex-1 min-w-[12rem]"
+                >
+                    <input
+                        type="text"
+                        value={query}
+                        onChange={e => setQuery(e.target.value)}
+                        placeholder="Title substring (blank = list all)"
+                        className="flex-1 bg-surface border border-border rounded px-2 py-1 text-sm text-primary"
+                    />
+                    <LoadingButton type="submit" loading={loading} icon="search" size="small">
+                        Search
+                    </LoadingButton>
+                </form>
+            </div>
+
+            {loading && <div className="text-xs text-tertiary">Searching…</div>}
+            {items && items.length === 0 && !loading && (
                 <div className="text-xs text-tertiary">
-                    No .psd source drives configured. Add them under{' '}
-                    <Link to="/settings/modules" className="text-primary underline">
-                        Module Settings → CL2K Maker
-                    </Link>{' '}
-                    (a subset of your Sync GDrive locations).
+                    No matching synced posters — try a different title or owner. Only images already
+                    pulled by Sync GDrive appear here.
                 </div>
-            ) : (
+            )}
+            {items && items.length > 0 && (
                 <>
-                    <label className="flex items-center gap-2 text-sm text-secondary">
-                        <span className="w-20">Drive</span>
-                        <select
-                            value={driveId}
-                            onChange={e => onDriveChange(e.target.value)}
-                            className="flex-1 bg-surface border border-border rounded px-2 py-1 text-sm text-primary"
-                        >
-                            <option value="">Select a drive…</option>
-                            {drives.map(d => (
-                                <option key={d.id} value={d.id}>
-                                    {d.name || d.location || d.id}
-                                </option>
-                            ))}
-                        </select>
-                    </label>
-
-                    {driveId && (
-                        <form
-                            onSubmit={e => {
-                                e.preventDefault();
-                                search(driveId, query);
-                            }}
-                            className="flex items-center gap-2"
-                        >
-                            <span className="w-20 text-sm text-secondary">Search</span>
-                            <input
-                                type="text"
-                                value={query}
-                                onChange={e => setQuery(e.target.value)}
-                                placeholder="Title substring (blank = list all)"
-                                className="flex-1 bg-surface border border-border rounded px-2 py-1 text-sm text-primary"
-                            />
-                            <LoadingButton
-                                type="submit"
-                                loading={loadingFiles}
-                                icon="search"
-                                size="small"
+                    <div className="text-xs text-tertiary">
+                        {total} match{total === 1 ? '' : 'es'}
+                        {total > items.length ? ` — showing first ${items.length}, refine` : ''}
+                    </div>
+                    <div
+                        className="grid gap-2 max-h-80 overflow-auto"
+                        style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(96px, 1fr))' }}
+                    >
+                        {items.map(p => (
+                            <button
+                                key={p.id || `${p.folder}/${p.file}`}
+                                type="button"
+                                disabled={importing}
+                                onClick={() => onPick(p)}
+                                title={p.file}
+                                className="bg-surface-alt overflow-hidden rounded border border-border hover:border-primary disabled:opacity-50 p-0"
+                                style={{ aspectRatio: '2 / 3' }}
                             >
-                                Search
-                            </LoadingButton>
-                        </form>
-                    )}
-
-                    {loadingFiles && <div className="text-xs text-tertiary">Searching…</div>}
-                    {files && files.length === 0 && !loadingFiles && (
-                        <div className="text-xs text-tertiary">
-                            No matching .psd files — try a different title or clear the search.
-                        </div>
-                    )}
-                    {files && files.length > 0 && (
-                        <div>
-                            <div className="text-xs text-tertiary mb-1">
-                                {files.length} match{files.length === 1 ? '' : 'es'}
-                                {files.length > 200
-                                    ? ' — showing first 200, refine your search'
-                                    : ''}
-                            </div>
-                            <div className="max-h-72 overflow-auto border border-border rounded-md divide-y divide-border">
-                                {shown.map(f => (
-                                    <button
-                                        key={f.path}
-                                        type="button"
-                                        onClick={() => {
-                                            setPath(f.path);
-                                            setPreviewB64(null);
-                                        }}
-                                        className={`w-full text-left px-3 py-1.5 text-sm hover:bg-surface-alt ${
-                                            path === f.path
-                                                ? 'bg-surface-alt text-primary'
-                                                : 'text-secondary'
-                                        }`}
-                                    >
-                                        {f.name}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    {previewB64 && (
-                        <img
-                            src={`data:image/jpeg;base64,${previewB64}`}
-                            alt="PSD preview"
-                            className="max-h-80 w-auto rounded border border-border bg-black"
-                        />
-                    )}
-
-                    <label className="flex items-center gap-2 text-sm text-primary font-medium">
-                        <input
-                            type="checkbox"
-                            checked={addBorder}
-                            onChange={e => setAddBorder(e.target.checked)}
-                        />
-                        Add CL2K white border
-                    </label>
-                    <p className="text-xs text-tertiary">
-                        The DAPS default 26px white frame (per the CL2K PSD). Uncheck only if the
-                        .psd already has the required border.
-                    </p>
-
-                    <SaveTargets targets={saveTargets} />
-
-                    <div className="flex gap-2">
-                        <LoadingButton
-                            onClick={runPreview}
-                            loading={busy}
-                            disabled={!path}
-                            variant="secondary"
-                            icon="visibility"
-                        >
-                            Preview
-                        </LoadingButton>
-                        <LoadingButton
-                            onClick={runSave}
-                            loading={busy}
-                            disabled={!path || saveTargets.noTarget}
-                            icon="save"
-                        >
-                            Flatten &amp; save
-                        </LoadingButton>
+                                <img
+                                    src={
+                                        p.id
+                                            ? postersAPI.getThumbnailUrl(p.id, 200)
+                                            : postersAPI.getPreviewUrl(p.folder, p.file)
+                                    }
+                                    alt={p.file}
+                                    loading="lazy"
+                                    className="w-full h-full object-cover"
+                                />
+                            </button>
+                        ))}
                     </div>
                 </>
             )}
-        </section>
+            {importing && (
+                <div className="text-xs text-tertiary">Importing full-resolution poster…</div>
+            )}
+        </div>
     );
 };
 
@@ -2141,19 +2014,55 @@ const EditPosterPanel = ({ item, effectiveKind, config, saveTargets, toast }) =>
     const provider = config?.ai_provider || 'none';
     const isSeason = String(seasonNum).trim() !== '';
 
-    const onFile = useCallback(e => {
-        const f = e.target.files?.[0];
-        if (!f) return;
-        const reader = new FileReader();
-        reader.onload = () => {
-            setImageDataUrl(reader.result);
-            setWorkingB64(String(reader.result).split(',').pop());
-            setAiErased(false);
-            setMaskB64(null);
-            setLabeledB64(null);
-        };
-        reader.readAsDataURL(f);
+    // Where the source poster comes from: a disk upload or the GDrive sync cache.
+    const [sourceMode, setSourceMode] = useState('sync'); // 'sync' | 'upload'
+    const [importing, setImporting] = useState(false);
+
+    // Seed the editor from a base64 data URL — shared by the file upload and the
+    // synced-poster import so both reset the AI/mask/label state identically.
+    const loadSource = useCallback(dataUrl => {
+        setImageDataUrl(dataUrl);
+        setWorkingB64(String(dataUrl).split(',').pop());
+        setAiErased(false);
+        setMaskB64(null);
+        setLabeledB64(null);
     }, []);
+
+    const onFile = useCallback(
+        e => {
+            const f = e.target.files?.[0];
+            if (!f) return;
+            const reader = new FileReader();
+            reader.onload = () => loadSource(reader.result);
+            reader.readAsDataURL(f);
+        },
+        [loadSource]
+    );
+
+    // Pull a synced poster at FULL resolution — the raw cached file, never the
+    // thumbnail — so the edit starts from a pristine image (no recompression).
+    const importFromSync = useCallback(
+        async poster => {
+            setImporting(true);
+            try {
+                const resp = await fetch(postersAPI.getPreviewUrl(poster.folder, poster.file));
+                if (!resp.ok) throw new Error(`Import failed (${resp.status})`);
+                const blob = await resp.blob();
+                const dataUrl = await new Promise((resolve, reject) => {
+                    const r = new FileReader();
+                    r.onload = () => resolve(r.result);
+                    r.onerror = () => reject(new Error('Could not read image'));
+                    r.readAsDataURL(blob);
+                });
+                loadSource(dataUrl);
+            } catch (err) {
+                toast.error(err.message || 'Import failed');
+            } finally {
+                setImporting(false);
+            }
+        },
+        [loadSource, toast]
+    );
 
     // Id/kind fields shared by every /retext call (drive the save filename; inert
     // on previews).
@@ -2302,17 +2211,44 @@ const EditPosterPanel = ({ item, effectiveKind, config, saveTargets, toast }) =>
 
     return (
         <section className="mt-4 flex flex-col gap-4">
-            {/* Full-width upload bar — keeps the two posters below it top-aligned. */}
+            {/* Full-width source bar — keeps the two posters below it top-aligned. */}
             <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-2">
                 <h3 className="text-sm font-medium text-primary">Edit poster → re-text</h3>
                 <p className="text-xs text-tertiary">
-                    Upload a finished poster, brush over the old season text and{' '}
-                    <span className="text-secondary">Send to AI</span> once to erase it, then
-                    position the new label on the working copy — preview and adjust as much as you
-                    like for free. Only the erase step uses AI credits. Saved as-is — no CL2K
-                    logo/gradient/border added.
+                    Import a finished poster from your GDrive sync (or upload one), brush over the
+                    old season text and <span className="text-secondary">Send to AI</span> once to
+                    erase it, then position the new label on the working copy — preview and adjust
+                    as much as you like for free. Only the erase step uses AI credits. Saved as-is —
+                    no CL2K logo/gradient/border added.
                 </p>
-                <input type="file" accept="image/*" onChange={onFile} />
+                <div className="flex gap-2">
+                    <Button
+                        variant={sourceMode === 'sync' ? 'primary' : 'secondary'}
+                        size="small"
+                        icon="cloud_sync"
+                        onClick={() => setSourceMode('sync')}
+                    >
+                        Import from sync
+                    </Button>
+                    <Button
+                        variant={sourceMode === 'upload' ? 'primary' : 'secondary'}
+                        size="small"
+                        icon="upload"
+                        onClick={() => setSourceMode('upload')}
+                    >
+                        Upload file
+                    </Button>
+                </div>
+                {sourceMode === 'upload' ? (
+                    <input type="file" accept="image/*" onChange={onFile} />
+                ) : (
+                    <SyncImportPicker
+                        defaultQuery={item.title}
+                        importing={importing}
+                        onPick={importFromSync}
+                        toast={toast}
+                    />
+                )}
             </div>
 
             {imageDataUrl && (
@@ -2428,7 +2364,7 @@ const EditPosterPanel = ({ item, effectiveKind, config, saveTargets, toast }) =>
                                 </>
                             ) : (
                                 <span className="text-xs text-tertiary px-4 text-center">
-                                    Upload a poster to start.
+                                    Import a synced poster or upload one to start.
                                 </span>
                             )}
                         </div>
@@ -2507,7 +2443,7 @@ const EditPosterPanel = ({ item, effectiveKind, config, saveTargets, toast }) =>
                         </label>
                         <p className="text-xs text-tertiary">
                             The DAPS default 26px white frame (per the CL2K PSD). Uncheck only if
-                            your uploaded poster already has the required border.
+                            the source poster already has the required border.
                         </p>
                         <SaveTargets targets={saveTargets} />
                         <LoadingButton

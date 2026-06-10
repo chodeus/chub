@@ -315,10 +315,6 @@ class Cl2kMakerConfig(BaseModel):
     # per-module SA option here.
     upload_to_gdrive: bool = False
     gdrive_folder_id: str = ""
-    # G-Drive .psd source: this module's own subset of sync_gdrive.gdrive_list
-    # (each {id,location,name}), mirroring how poster_renamerr.source_dirs pick a
-    # subset of synced locations. Browsed via rclone for finished CL2K .psd files.
-    psd_source_drives: List[GDriveListEntry] = Field(default_factory=list)
     # AI text removal (provider-agnostic; off by default = textless-art strategy).
     # Requires a user-brushed mask. lama_sidecar = free/local; openai = paid;
     # huggingface = free tier (rate-limited). Firefly/ChatGPT-free have no usable
