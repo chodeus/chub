@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { FieldWrapper, FieldLabel, FieldError, FieldDescription } from '../primitives';
 import { RemoveButton, AddButton, ColorSwatches } from '../features/shared';
 import { FieldRegistry } from '../FieldRegistry';
+import { BulkPresetPicker } from './BulkPresetPicker';
 import { shouldShowField, generateInstanceOptions } from '../../../utils/forms/conditionalFields';
 import { useInstancesData } from '../../../hooks/useInstancesData';
 import { scheduleToHuman } from '../../../utils/schedule';
@@ -284,6 +285,17 @@ export const ArrayObjectField = ({
             <FieldLabel label={field.label} required={field.required} />
 
             <div className="flex flex-col gap-3 min-h-11" id={inputId}>
+                {/* Optional bulk-add panel (e.g. GDrive presets) — appends to the
+                    same array; manual single-add + editing stay on the list below */}
+                {field.bulkPreset && (
+                    <BulkPresetPicker
+                        field={field}
+                        value={value}
+                        onChange={onChange}
+                        disabled={disabled}
+                    />
+                )}
+
                 {/* Existing items */}
                 {value.length > 0 ? (
                     <div className="flex flex-col border border-border rounded-lg bg-surface overflow-hidden">
