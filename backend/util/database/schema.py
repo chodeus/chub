@@ -472,6 +472,13 @@ class SchemaManager:
                 # asset run skips ignored (media, type) pairs. Additive default
                 # 0 so it auto-migrates on existing databases.
                 ColumnDefinition("ignored", "INTEGER", default=0),
+                # Manual-pick lock: 1 when the user explicitly chose this
+                # artwork file in the picker. A locked (media, image_type) is
+                # reused verbatim on re-runs (the matcher won't re-resolve or
+                # overwrite it) until the user unlocks it — mirrors
+                # media_cache.user_confirmed for posters. Additive default 0 so
+                # it auto-migrates on existing databases.
+                ColumnDefinition("user_confirmed", "INTEGER", default=0),
             ],
             constraints=["UNIQUE(target_kind, target_id, image_type)"],
             indexes=[
