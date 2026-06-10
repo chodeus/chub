@@ -218,6 +218,77 @@ def test_throttle_noop_when_zero(monkeypatch):
     assert calls == []
 
 
+# --- _note_year_discrepancy ---
+
+
+def _discrepancy_uploader():
+    """Bare uploader with just the state _note_year_discrepancy touches."""
+    from types import SimpleNamespace
+
+    up = object.__new__(PosterUploader)
+    up._year_discrepancies = []
+    up.logger = SimpleNamespace(warning=lambda *a, **k: None)
+    return up
+
+
+def test_year_discrepancy_recorded_when_guid_match_year_differs():
+    up = _discrepancy_uploader()
+    up._note_year_discrepancy(
+        {"title": "Michael", "year": 2025},
+        [{"year": 2027, "library_name": "Movies"}],
+        "TMDB",
+    )
+    assert up._year_discrepancies == [
+        {"title": "Michael", "folder_year": 2025, "plex_year": 2027, "match_type": "TMDB"}
+    ]
+
+
+def test_year_discrepancy_ignored_within_tolerance():
+    """±1 year is normal *arr/Plex lag (production vs release) — not flagged."""
+    up = _discrepancy_uploader()
+    up._note_year_discrepancy(
+        {"title": "Wicked", "year": 2024},
+        [{"year": 2025, "library_name": "Movies"}],
+        "TMDB",
+    )
+    assert up._year_discrepancies == []
+
+
+def test_year_discrepancy_ignored_for_title_match():
+    """TITLE matches are already year-disambiguated upstream, so never flagged."""
+    up = _discrepancy_uploader()
+    up._note_year_discrepancy(
+        {"title": "Hairspray", "year": 1988},
+        [{"year": 2007, "library_name": "Movies"}],
+        "TITLE",
+    )
+    assert up._year_discrepancies == []
+
+
+def test_year_discrepancy_ignored_without_folder_year():
+    up = _discrepancy_uploader()
+    up._note_year_discrepancy(
+        {"title": "Unknown", "year": None},
+        [{"year": 2020, "library_name": "Movies"}],
+        "TVDB",
+    )
+    assert up._year_discrepancies == []
+
+
+def test_year_discrepancy_recorded_once_per_asset():
+    """Multiple library copies of the same mismatched item record one entry."""
+    up = _discrepancy_uploader()
+    up._note_year_discrepancy(
+        {"title": "Michael", "year": 2025},
+        [
+            {"year": 2027, "library_name": "Movies"},
+            {"year": 2027, "library_name": "Movies 4K"},
+        ],
+        "IMDB",
+    )
+    assert len(up._year_discrepancies) == 1
+
+
 # --- _sync_single_asset uploads to every matched library ---
 
 
