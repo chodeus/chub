@@ -345,14 +345,17 @@ class SyncGDrive(ChubModule):
             # transfer. For 1-5MB posters 512M is pure memory pressure with
             # no throughput benefit.
             "--drive-chunk-size=64M",
-            "--exclude=**.partial",
             # Pull only poster image types. A shared/community Drive folder can
             # hold arbitrary files (videos, archives, readmes) that have no
             # business in the poster cache. An --include implies "exclude
-            # everything else", so non-image files are skipped for both the copy
-            # and the --delete-after pass. Case-insensitive ({{...}} = regex);
-            # extensions match what the poster scanner recognises
-            # (poster_renamerr). PSDs are browsed on demand, never synced here.
+            # everything else", so non-image files — including rclone's own
+            # **.partial temp files — are skipped for both the copy and the
+            # --delete-after pass. (Don't add a bare --exclude alongside this:
+            # rclone warns that mixing --include/--exclude has indeterminate
+            # order, and the include already subsumes a **.partial exclude.)
+            # Case-insensitive ({{...}} = regex); extensions match what the
+            # poster scanner recognises (poster_renamerr). PSDs are browsed on
+            # demand, never synced here.
             "--include={{(?i).*\\.(jpg|jpeg|png|webp)$}}",
             # Disk-fill protection: skip pathologically large files. Posters are
             # ~1-5MB; 250M sits far above any real poster yet stops one stray
