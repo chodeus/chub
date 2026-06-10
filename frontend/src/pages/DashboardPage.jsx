@@ -8,6 +8,7 @@ import { systemAPI } from '../utils/api/system';
 import { scheduleAPI } from '../utils/api/schedule';
 import { instancesAPI } from '../utils/api/instances';
 import { postersAPI } from '../utils/api/posters';
+import { configAPI } from '../utils/api/config';
 import { Button, IconButton } from '../components/ui';
 import { Modal } from '../components/modals/Modal';
 import { Skeleton } from '../components/ui';
@@ -155,6 +156,12 @@ const DashboardPage = () => {
         options: { showErrorToast: false },
     });
 
+    // Drives which module cards the dashboard shows (general.dashboard_modules).
+    const { data: configData } = useApiData({
+        apiFunction: configAPI.fetchConfig,
+        options: { showErrorToast: false },
+    });
+
     // Most-recent errored job — drives the "Last failure" health card. A
     // single-row fetch so it stays cheap; surfaces a usable signal instead of
     // the all-time "failed count" which grows monotonically and tells you
@@ -281,6 +288,20 @@ const DashboardPage = () => {
     }, [subSchedules]);
     const moduleList = useMemo(() => modulesData?.data?.modules || [], [modulesData]);
     const moduleCount = moduleList.length;
+
+    // User-chosen subset (general.dashboard_modules) controls which module
+    // cards render and in what order. Empty = show all. Keys that no longer
+    // map to a live module are skipped. Scheduler counts below stay on the
+    // full moduleList — this only narrows the Modules grid.
+    const dashboardModuleKeys = useMemo(
+        () => configData?.data?.general?.dashboard_modules || [],
+        [configData]
+    );
+    const visibleModules = useMemo(() => {
+        if (!dashboardModuleKeys.length) return moduleList;
+        const byName = new Map(moduleList.map(m => [m.name, m]));
+        return dashboardModuleKeys.map(k => byName.get(k)).filter(Boolean);
+    }, [moduleList, dashboardModuleKeys]);
     const scheduledCount = useMemo(
         () =>
             Object.values(schedules).filter(v => v && v.trim()).length +
@@ -482,13 +503,162 @@ const DashboardPage = () => {
                 </div>
             </section>
 
-            {/* Modules — moved to top; each card deep-links to its log */}
+            {/* At-a-glance health — disk, instances, last error. Pinned to the
+                top so it's the first thing seen, above the module grid. */}
+            {(diskMounts.length > 0 || instanceHealth.total > 0 || jobStats.failed > 0) && (
+                <section>
+                    <div className="mb-4">
+                        <h2 className="text-xl font-bold text-primary m-0">Health</h2>
+                        <p className="text-secondary text-sm mt-1 mb-0">
+                            Quick look at disk, instances, and recent failures.
+                        </p>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                        {instanceHealth.total > 0 &&
+                            (() => {
+                                // Tile prioritizes the most actionable signal:
+                                // 1. If we have probe samples, show reachable-now + 7-day uptime%
+                                // 2. Otherwise fall back to configured/enabled counts
+                                const hasProbes = instanceHealth.probedCount > 0;
+                                const allReachable =
+                                    hasProbes &&
+                                    instanceHealth.reachable === instanceHealth.probedCount;
+                                const headlineTone = !hasProbes
+                                    ? instanceHealth.enabled === instanceHealth.total
+                                        ? 'text-success'
+                                        : 'text-warning'
+                                    : allReachable
+                                      ? 'text-success'
+                                      : instanceHealth.reachable === 0
+                                        ? 'text-error'
+                                        : 'text-warning';
+                                const borderTone =
+                                    hasProbes && !allReachable
+                                        ? instanceHealth.reachable === 0
+                                            ? 'border-error/30'
+                                            : 'border-warning/30'
+                                        : '';
+                                return (
+                                    <Link
+                                        to="/settings/instances"
+                                        className={`no-underline bg-surface border border-border-light rounded-lg p-4 flex flex-col gap-1 hover:border-border ${borderTone}`}
+                                    >
+                                        <div className="text-tertiary text-xs uppercase tracking-wider">
+                                            Instances
+                                        </div>
+                                        {hasProbes ? (
+                                            <>
+                                                <div className="text-2xl font-bold text-primary">
+                                                    {instanceHealth.reachable} /{' '}
+                                                    {instanceHealth.probedCount} up
+                                                </div>
+                                                <div className={`text-xs ${headlineTone}`}>
+                                                    {instanceHealth.uptimePct != null
+                                                        ? `${instanceHealth.uptimePct}% uptime over recent probes`
+                                                        : allReachable
+                                                          ? 'All reachable'
+                                                          : 'Some unreachable'}
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <div className="text-2xl font-bold text-primary">
+                                                    {instanceHealth.enabled} /{' '}
+                                                    {instanceHealth.total}
+                                                </div>
+                                                <div className={`text-xs ${headlineTone}`}>
+                                                    {instanceHealth.enabled === instanceHealth.total
+                                                        ? 'All enabled'
+                                                        : `${instanceHealth.total - instanceHealth.enabled} disabled`}
+                                                </div>
+                                            </>
+                                        )}
+                                    </Link>
+                                );
+                            })()}
+                        <Link
+                            to={
+                                lastFailure
+                                    ? `/logs?module=${encodeURIComponent(lastFailure.moduleName)}`
+                                    : '/settings/jobs'
+                            }
+                            className={`no-underline bg-surface border border-border-light rounded-lg p-4 flex flex-col gap-1 hover:border-border ${
+                                lastFailure ? 'border-error/30' : ''
+                            }`}
+                        >
+                            <div className="text-tertiary text-xs uppercase tracking-wider">
+                                Last failure
+                            </div>
+                            <div
+                                className={`text-lg font-bold truncate ${lastFailure ? 'text-error' : 'text-primary'}`}
+                                title={lastFailure?.ts ? formatDateTime(lastFailure.ts) : undefined}
+                            >
+                                {lastFailure
+                                    ? formatTimeAgo(lastFailure.ts, new Date(tick))
+                                    : 'None'}
+                            </div>
+                            <div className="text-xs text-tertiary truncate">
+                                {lastFailure ? humanize(lastFailure.moduleName) : 'No failed jobs'}
+                            </div>
+                        </Link>
+                        {posterStats.cached > 0 && (
+                            <Link
+                                to="/poster/search/assets"
+                                className="no-underline bg-surface border border-border-light rounded-lg p-4 flex flex-col gap-1 hover:border-border"
+                            >
+                                <div className="text-tertiary text-xs uppercase tracking-wider">
+                                    Cached posters
+                                </div>
+                                <div className="text-2xl font-bold text-primary">
+                                    {posterStats.cached.toLocaleString()}
+                                </div>
+                                <div className="text-xs text-tertiary">In local asset cache</div>
+                            </Link>
+                        )}
+                        {diskMounts.map(mount => {
+                            const freeGb = (mount.free_bytes / 1024 ** 3).toFixed(1);
+                            const totalGb = (mount.total_bytes / 1024 ** 3).toFixed(0);
+                            const pct = mount.percent_used ?? 0;
+                            const tone =
+                                pct >= 90
+                                    ? 'text-error'
+                                    : pct >= 75
+                                      ? 'text-warning'
+                                      : 'text-success';
+                            const paths = mount.paths || [mount.path];
+                            return (
+                                <div
+                                    key={paths.join('|')}
+                                    className="bg-surface border border-border-light rounded-lg p-4 flex flex-col gap-1"
+                                    title={
+                                        paths.length > 1
+                                            ? `Shared device: ${paths.join(', ')}`
+                                            : paths[0]
+                                    }
+                                >
+                                    <div className="text-tertiary text-xs uppercase tracking-wider truncate">
+                                        {paths.join(' · ')}
+                                    </div>
+                                    <div className="text-2xl font-bold text-primary">
+                                        {freeGb} GB
+                                    </div>
+                                    <div className={`text-xs ${tone}`}>
+                                        {pct}% used of {totalGb} GB
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </section>
+            )}
+
+            {/* Modules — each card deep-links to its log */}
             <section>
                 <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2 mb-4">
                     <div>
                         <h2 className="text-xl font-bold text-primary m-0">Modules</h2>
                         <p className="text-secondary text-sm mt-1 mb-0">
-                            Live status of every configured module. Click a card to open its log.
+                            Live status of your modules. Click a card to open its log.
                         </p>
                     </div>
                     <Link
@@ -502,7 +672,7 @@ const DashboardPage = () => {
                     </Link>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {moduleList.map(mod => {
+                    {visibleModules.map(mod => {
                         const state = runStates[mod.name];
                         const lastRun = mod.last_run || state?.last_run;
                         // Live run-state wins over the persisted last-run status so an
@@ -711,154 +881,6 @@ const DashboardPage = () => {
                     )}
                 </div>
             </section>
-
-            {/* At-a-glance health — disk, instances, last error */}
-            {(diskMounts.length > 0 || instanceHealth.total > 0 || jobStats.failed > 0) && (
-                <section>
-                    <div className="mb-4">
-                        <h2 className="text-xl font-bold text-primary m-0">Health</h2>
-                        <p className="text-secondary text-sm mt-1 mb-0">
-                            Quick look at disk, instances, and recent failures.
-                        </p>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                        {instanceHealth.total > 0 &&
-                            (() => {
-                                // Tile prioritizes the most actionable signal:
-                                // 1. If we have probe samples, show reachable-now + 7-day uptime%
-                                // 2. Otherwise fall back to configured/enabled counts
-                                const hasProbes = instanceHealth.probedCount > 0;
-                                const allReachable =
-                                    hasProbes &&
-                                    instanceHealth.reachable === instanceHealth.probedCount;
-                                const headlineTone = !hasProbes
-                                    ? instanceHealth.enabled === instanceHealth.total
-                                        ? 'text-success'
-                                        : 'text-warning'
-                                    : allReachable
-                                      ? 'text-success'
-                                      : instanceHealth.reachable === 0
-                                        ? 'text-error'
-                                        : 'text-warning';
-                                const borderTone =
-                                    hasProbes && !allReachable
-                                        ? instanceHealth.reachable === 0
-                                            ? 'border-error/30'
-                                            : 'border-warning/30'
-                                        : '';
-                                return (
-                                    <Link
-                                        to="/settings/instances"
-                                        className={`no-underline bg-surface border border-border-light rounded-lg p-4 flex flex-col gap-1 hover:border-border ${borderTone}`}
-                                    >
-                                        <div className="text-tertiary text-xs uppercase tracking-wider">
-                                            Instances
-                                        </div>
-                                        {hasProbes ? (
-                                            <>
-                                                <div className="text-2xl font-bold text-primary">
-                                                    {instanceHealth.reachable} /{' '}
-                                                    {instanceHealth.probedCount} up
-                                                </div>
-                                                <div className={`text-xs ${headlineTone}`}>
-                                                    {instanceHealth.uptimePct != null
-                                                        ? `${instanceHealth.uptimePct}% uptime over recent probes`
-                                                        : allReachable
-                                                          ? 'All reachable'
-                                                          : 'Some unreachable'}
-                                                </div>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <div className="text-2xl font-bold text-primary">
-                                                    {instanceHealth.enabled} /{' '}
-                                                    {instanceHealth.total}
-                                                </div>
-                                                <div className={`text-xs ${headlineTone}`}>
-                                                    {instanceHealth.enabled === instanceHealth.total
-                                                        ? 'All enabled'
-                                                        : `${instanceHealth.total - instanceHealth.enabled} disabled`}
-                                                </div>
-                                            </>
-                                        )}
-                                    </Link>
-                                );
-                            })()}
-                        <Link
-                            to={
-                                lastFailure
-                                    ? `/logs?module=${encodeURIComponent(lastFailure.moduleName)}`
-                                    : '/settings/jobs'
-                            }
-                            className={`no-underline bg-surface border border-border-light rounded-lg p-4 flex flex-col gap-1 hover:border-border ${
-                                lastFailure ? 'border-error/30' : ''
-                            }`}
-                        >
-                            <div className="text-tertiary text-xs uppercase tracking-wider">
-                                Last failure
-                            </div>
-                            <div
-                                className={`text-lg font-bold truncate ${lastFailure ? 'text-error' : 'text-primary'}`}
-                                title={lastFailure?.ts ? formatDateTime(lastFailure.ts) : undefined}
-                            >
-                                {lastFailure
-                                    ? formatTimeAgo(lastFailure.ts, new Date(tick))
-                                    : 'None'}
-                            </div>
-                            <div className="text-xs text-tertiary truncate">
-                                {lastFailure ? humanize(lastFailure.moduleName) : 'No failed jobs'}
-                            </div>
-                        </Link>
-                        {posterStats.cached > 0 && (
-                            <Link
-                                to="/poster/search/assets"
-                                className="no-underline bg-surface border border-border-light rounded-lg p-4 flex flex-col gap-1 hover:border-border"
-                            >
-                                <div className="text-tertiary text-xs uppercase tracking-wider">
-                                    Cached posters
-                                </div>
-                                <div className="text-2xl font-bold text-primary">
-                                    {posterStats.cached.toLocaleString()}
-                                </div>
-                                <div className="text-xs text-tertiary">In local asset cache</div>
-                            </Link>
-                        )}
-                        {diskMounts.map(mount => {
-                            const freeGb = (mount.free_bytes / 1024 ** 3).toFixed(1);
-                            const totalGb = (mount.total_bytes / 1024 ** 3).toFixed(0);
-                            const pct = mount.percent_used ?? 0;
-                            const tone =
-                                pct >= 90
-                                    ? 'text-error'
-                                    : pct >= 75
-                                      ? 'text-warning'
-                                      : 'text-success';
-                            const paths = mount.paths || [mount.path];
-                            return (
-                                <div
-                                    key={paths.join('|')}
-                                    className="bg-surface border border-border-light rounded-lg p-4 flex flex-col gap-1"
-                                    title={
-                                        paths.length > 1
-                                            ? `Shared device: ${paths.join(', ')}`
-                                            : paths[0]
-                                    }
-                                >
-                                    <div className="text-tertiary text-xs uppercase tracking-wider truncate">
-                                        {paths.join(' · ')}
-                                    </div>
-                                    <div className="text-2xl font-bold text-primary">
-                                        {freeGb} GB
-                                    </div>
-                                    <div className={`text-xs ${tone}`}>
-                                        {pct}% used of {totalGb} GB
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </section>
-            )}
 
             {/* Quick start — now below Recent jobs / Scheduler */}
             <section>

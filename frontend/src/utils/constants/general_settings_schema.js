@@ -5,6 +5,15 @@
 // dedicated page) because it's a single setting — splitting it out earned
 // its own page back when more UI knobs were planned, but in practice only
 // the theme stuck.
+import { SETTINGS_MODULES } from './settings_schema.js';
+
+// Dashboard-toggleable modules = the executable modules the dashboard lists
+// (backend MODULES / GET /api/modules). Derived from SETTINGS_MODULES so it
+// stays in sync; tmdb + fanart are config-only and never get a dashboard card.
+const DASHBOARD_MODULE_OPTIONS = SETTINGS_MODULES.filter(
+    m => m.key !== 'tmdb' && m.key !== 'fanart'
+).map(m => ({ value: m.key, label: m.name }));
+
 export const GENERAL_SETTINGS_SCHEMA = [
     {
         key: 'user_interface',
@@ -79,6 +88,15 @@ export const GENERAL_SETTINGS_SCHEMA = [
                 placeholder: 'e.g. shared HMAC secret',
                 description:
                     'Optional shared secret. When set, every inbound webhook must send `X-Webhook-Secret: <value>` (or `?secret=<value>`) or it is rejected with 401. Recommended if your webhook URL is reachable outside your LAN.',
+            },
+            {
+                key: 'dashboard_modules',
+                label: 'Dashboard Modules',
+                type: 'multiselect',
+                options: DASHBOARD_MODULE_OPTIONS,
+                placeholder: 'Add a module…',
+                description:
+                    'Choose which modules appear on the dashboard, in the order you add them. Leave empty to show all modules.',
             },
             {
                 key: 'duplicate_exclude_groups',
