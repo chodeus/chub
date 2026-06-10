@@ -930,8 +930,18 @@ const PosterAssetsSearchPage = () => {
                                 const opts = {};
                                 if (downloadOpts.size) opts.size = Number(downloadOpts.size);
                                 if (downloadOpts.format) opts.format = downloadOpts.format;
-                                if (downloadOpts.quality)
+                                // Quality only applies when re-encoding (a format
+                                // or resize is requested). For plain "Original"
+                                // we send nothing so the raw file is served.
+                                if (
+                                    downloadOpts.quality &&
+                                    (downloadOpts.format || downloadOpts.size)
+                                ) {
                                     opts.quality = Number(downloadOpts.quality);
+                                }
+                                if (downloadTarget.title) {
+                                    opts.filename = downloadTarget.title;
+                                }
                                 await postersAPI.downloadPoster(downloadTarget.id, opts);
                                 toast.success('Download started');
                                 setDownloadTarget(null);
