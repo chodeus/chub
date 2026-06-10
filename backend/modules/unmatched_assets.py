@@ -452,15 +452,22 @@ class UnmatchedAssets(ChubModule):
         # no-source-artwork gaps asset_renamerr records.
         per_type: Dict[str, Dict[str, Any]] = {}
         for image_type in active_types:
-            applied = missing = needs_review = ignored = 0
+            applied = missing = needs_review = ignored = locked = 0
             missing_items: List[Dict[str, Any]] = []
             review_items: List[Dict[str, Any]] = []
             ignored_items: List[Dict[str, Any]] = []
+            locked_items: List[Dict[str, Any]] = []
             for media in eligible:
                 row = index.get((media.get("id"), image_type))
                 if not row:
                     continue  # not evaluated → not counted
                 item = self._serialize_artwork_item(media, image_type, row)
+                # Locked is orthogonal to the status buckets — a manual pick is
+                # usually applied AND locked. Surface it separately so the user
+                # can unlock / re-pick it (it shows in no other tab once applied).
+                if row.get("user_confirmed"):
+                    locked += 1
+                    locked_items.append(item)
                 if row.get("ignored"):
                     ignored += 1
                     ignored_items.append(item)
@@ -486,15 +493,18 @@ class UnmatchedAssets(ChubModule):
                 "missing": missing,
                 "needs_review": needs_review,
                 "ignored": ignored,
+                "locked": locked,
                 "percent_complete": (applied / total * 100) if total else 0,
                 "missing_items": missing_items,
                 "needs_review_items": review_items,
                 "ignored_items": ignored_items,
+                "locked_items": locked_items,
             }
 
         grand_missing = sum(t["missing"] for t in per_type.values())
         grand_review = sum(t["needs_review"] for t in per_type.values())
         grand_ignored = sum(t["ignored"] for t in per_type.values())
+        grand_locked = sum(t["locked"] for t in per_type.values())
 
         # Per-MEDIA rows: one entry per item, with the artwork types it's missing
         # / failed / ignored as arrays. This is what the per-media table renders
@@ -520,12 +530,17 @@ class UnmatchedAssets(ChubModule):
                 "missing": [],
                 "failed": [],
                 "ignored_types": [],
+                "locked": [],
                 "reasons": {},
             }
             for image_type in active_types:
                 row = index.get((mid, image_type))
                 if not row:
                     continue  # not evaluated → contributes nothing
+                # Locked is orthogonal — record it alongside whatever status the
+                # row carries so the Locked tab can offer unlock / re-pick.
+                if row.get("user_confirmed"):
+                    entry["locked"].append(image_type)
                 if row.get("ignored"):
                     entry["ignored_types"].append(image_type)
                 elif row.get("match_status") == "applied":
@@ -545,6 +560,7 @@ class UnmatchedAssets(ChubModule):
         unmatched_media = [r for r in rows if r["missing"]]
         review_media = [r for r in rows if r["failed"]]
         ignored_media = [r for r in rows if r["ignored_types"]]
+        locked_media = [r for r in rows if r["locked"]]
 
         return {
             "types": per_type,
@@ -552,15 +568,18 @@ class UnmatchedAssets(ChubModule):
                 "unmatched": unmatched_media,
                 "needs_review": review_media,
                 "ignored": ignored_media,
+                "locked": locked_media,
             },
             "summary": {
                 "missing": len(unmatched_media),
                 "needs_review": len(review_media),
                 "ignored": len(ignored_media),
+                "locked": len(locked_media),
                 # keep the per-type grand totals too (cards still show them)
                 "missing_types": grand_missing,
                 "needs_review_types": grand_review,
                 "ignored_types": grand_ignored,
+                "locked_types": grand_locked,
             },
         }
 
