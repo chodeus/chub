@@ -20,7 +20,7 @@ from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
 from fastapi.responses import JSONResponse, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from backend.api.utils import error, get_database, get_module_logger, ok
 from backend.modules.cl2k_maker import (
@@ -62,6 +62,12 @@ class GenerateRequest(BaseModel):
     backdrop_path: Optional[str] = None
     logo_path: Optional[str] = None
     logo_b64: Optional[str] = None  # custom uploaded logo (PNG, base64); wins over logo_path
+    # Logo size: relaxes the height clamp (the y=1100 zone-top guide) so tall/boxy
+    # logos can render readable; 1.0 = the strict CL2K guide box. Width caps still apply.
+    logo_scale: float = Field(1.0, ge=0.25, le=3.0)
+    # Logo position: vertical shift in px from the locked baseline (positive = down).
+    # Size is unaffected; the placement is clamped onto the canvas.
+    logo_y_offset: int = Field(0, ge=-600, le=200)
     mask_b64: Optional[str] = None  # user-brushed mask (PNG, white=remove) for AI
     remove_text: bool = False  # run AI text removal (OpenAI can do it mask-less)
     focus_x: float = 0.5  # crop focal point (0..1); 0.5 = centre (cover mode)
@@ -240,6 +246,8 @@ def preview(
         crop=_crop_tuple(req),
         v_pos=req.v_pos,
         band_label=req.band_label,
+        logo_scale=req.logo_scale,
+        logo_y_offset=req.logo_y_offset,
     )
     if blob is None:
         return error("No textless backdrop available", "NO_BACKDROP")
@@ -276,6 +284,8 @@ def generate(
         crop=_crop_tuple(req),
         v_pos=req.v_pos,
         band_label=req.band_label,
+        logo_scale=req.logo_scale,
+        logo_y_offset=req.logo_y_offset,
         force=req.force,
         save_local=req.save_local,
         upload_gdrive=req.upload_gdrive,
@@ -337,6 +347,8 @@ class SeasonsRequest(BaseModel):
     crop_w: Optional[float] = None
     crop_h: Optional[float] = None
     v_pos: float = 0.0
+    logo_scale: float = Field(1.0, ge=0.25, le=3.0)
+    logo_y_offset: int = Field(0, ge=-600, le=200)
     force: bool = False
 
 
@@ -361,6 +373,8 @@ def generate_seasons_endpoint(
         focus_y=req.focus_y,
         crop=_crop_tuple(req),
         v_pos=req.v_pos,
+        logo_scale=req.logo_scale,
+        logo_y_offset=req.logo_y_offset,
         force=req.force,
     )
     return ok("Seasons generated", out)
@@ -378,29 +392,62 @@ async def upload_generate(
     season_number: Optional[int] = Form(None),
     logo_path: Optional[str] = Form(None),
     logo_b64: Optional[str] = Form(None),
+    logo_scale: float = Form(1.0, ge=0.25, le=3.0),
+    logo_y_offset: int = Form(0, ge=-600, le=200),
+    # Framing — same semantics as GenerateRequest: cover (focus point), fit
+    # (top-anchor + black-fill bottom; optional crop isolates a region first;
+    # v_pos slides the photo down), or extend.
+    fit_mode: str = Form("cover"),
+    focus_x: float = Form(0.5),
+    focus_y: float = Form(0.5),
+    crop_x: Optional[float] = Form(None),
+    crop_y: Optional[float] = Form(None),
+    crop_w: Optional[float] = Form(None),
+    crop_h: Optional[float] = Form(None),
+    v_pos: float = Form(0.0),
+    preview: bool = Form(False),
     save_local: bool = Form(True),
     upload_gdrive: Optional[bool] = Form(None),
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
     backdrop_bytes = await file.read()
-    result = generate_for_item(
-        db=db,
-        full_config=load_config(),
-        logger=logger,
+    crop_parts = (crop_x, crop_y, crop_w, crop_h)
+    crop = tuple(crop_parts) if all(p is not None for p in crop_parts) else None
+    common = dict(
         kind=kind,
         title=title,
         tmdb_id=tmdb_id,
-        year=year,
         tvdb_id=tvdb_id,
         imdb_id=imdb_id,
         season_number=season_number,
         backdrop_bytes=backdrop_bytes,
         logo_path=logo_path,
         custom_logo_bytes=_b64_to_bytes(logo_b64),
+        logo_scale=logo_scale,
+        logo_y_offset=logo_y_offset,
+        fit_mode=fit_mode,
+        focus_x=focus_x,
+        focus_y=focus_y,
+        crop=crop,
+        v_pos=v_pos,
+    )
+    if preview:
+        # Render-only (no save, no provenance) so the framing can be adjusted
+        # against a live preview before generating.
+        blob = render_preview(db, load_config(), logger, **common)
+        if blob is None:
+            return error("render failed", "CL2K_GENERATE")
+        return ok("ok", {"preview_b64": base64.b64encode(blob).decode()})
+    result = generate_for_item(
+        db=db,
+        full_config=load_config(),
+        logger=logger,
+        year=year,
         force=True,
         save_local=save_local,
         upload_gdrive=upload_gdrive,
+        **common,
     )
     if result.get("status") == "generated":
         return ok("Poster generated", result)
@@ -452,6 +499,8 @@ async def upload_poster(
     border: bool = Form(True),
     logo_path: Optional[str] = Form(None),
     logo_b64: Optional[str] = Form(None),
+    logo_scale: float = Form(1.0, ge=0.25, le=3.0),
+    logo_y_offset: int = Form(0, ge=-600, le=200),
     preview: bool = Form(False),
     save_local: bool = Form(True),
     upload_gdrive: Optional[bool] = Form(None),
@@ -475,6 +524,8 @@ async def upload_poster(
                 logo_bytes,
                 kind=(kind or "movie").lower(),
                 logo_max_width=cfg.logo_max_width,
+                logo_scale=logo_scale,
+                logo_y_offset=logo_y_offset,
                 whiten=cfg.whiten_logo,
             )
         if border:
@@ -495,6 +546,8 @@ async def upload_poster(
         logo_source=logo_source,
         add_border=border,
         logo_bytes=logo_bytes,
+        logo_scale=logo_scale,
+        logo_y_offset=logo_y_offset,
         save_local=save_local,
         upload_gdrive=upload_gdrive,
     )
@@ -519,6 +572,9 @@ class RetextRequest(BaseModel):
     season_number: Optional[int] = None
     border: bool = True  # composite the default 26px white CL2K border
     preview: bool = False
+    # Skip the 1000x1500 normalize on previews so the AI-erased image keeps its
+    # original dimensions (used when the result feeds the full CL2K render).
+    keep_size: bool = False
     save_local: bool = True
     upload_gdrive: Optional[bool] = None
 
@@ -560,6 +616,7 @@ def retext(
             imdb_id=req.imdb_id,
             season_number=req.season_number,
             add_border=req.border,
+            keep_size=req.keep_size,
             save_local=req.save_local,
             upload_gdrive=req.upload_gdrive,
         )

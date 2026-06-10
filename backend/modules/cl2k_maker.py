@@ -78,6 +78,8 @@ def _resolve_and_render(
     crop: Optional[Tuple[float, float, float, float]] = None,
     v_pos: float = 0.0,
     band_label: str = "",
+    logo_scale: float = 1.0,
+    logo_y_offset: int = 0,
     allow_ai_extend: bool = True,
 ) -> Tuple[Optional[bytes], Dict[str, Any]]:
     """Resolve art (textless backdrop + logo) and render.
@@ -199,6 +201,8 @@ def _resolve_and_render(
         title=title if (cfg.text_logo_fallback or logo_bytes) else "",
         season_text=season_text,
         logo_max_width=cfg.logo_max_width,
+        logo_scale=logo_scale,
+        logo_y_offset=logo_y_offset,
         whiten=cfg.whiten_logo,
         focus_x=focus_x,
         focus_y=focus_y,
@@ -247,6 +251,8 @@ def generate_for_item(
     crop: Optional[Tuple[float, float, float, float]] = None,
     v_pos: float = 0.0,
     band_label: str = "",
+    logo_scale: float = 1.0,
+    logo_y_offset: int = 0,
     force: bool = False,
     save_local: bool = True,
     upload_gdrive: Optional[bool] = None,
@@ -296,6 +302,8 @@ def generate_for_item(
         crop=crop,
         v_pos=v_pos,
         band_label=band_label,
+        logo_scale=logo_scale,
+        logo_y_offset=logo_y_offset,
     )
     if blob is None:
         return {"status": "skipped", "reason": info.get("reason", "render failed")}
@@ -570,6 +578,8 @@ def save_finished_poster(
     logo_source: str = "upload",
     add_border: bool = True,
     logo_bytes: Optional[bytes] = None,
+    logo_scale: float = 1.0,
+    logo_y_offset: int = 0,
     save_local: bool = True,
     upload_gdrive: Optional[bool] = None,
 ) -> Dict[str, Any]:
@@ -599,6 +609,8 @@ def save_finished_poster(
             logo_bytes,
             kind=kind,
             logo_max_width=cfg.logo_max_width,
+            logo_scale=logo_scale,
+            logo_y_offset=logo_y_offset,
             whiten=cfg.whiten_logo,
         )
     if add_border:
@@ -679,11 +691,17 @@ def retext_poster(
     imdb_id: Optional[str] = None,
     season_number: Optional[int] = None,
     add_border: bool = True,
+    keep_size: bool = False,
     save_local: bool = True,
     upload_gdrive: Optional[bool] = None,
 ):
     """Re-text a finished poster: AI-erase the brushed old text, then draw a new
     CL2K-style label (e.g. swap a season year).
+
+    ``keep_size`` skips the 1000×1500 normalize on the preview path so the
+    AI-erased image keeps its original dimensions — used when the result feeds
+    the full CL2K render (whose framing must see the uncropped image) instead of
+    being saved as-is. The save path always normalizes (save_finished_poster).
 
     AI handles only the *erase* (reliable); the new label is drawn deterministically
     in the CL2K font, so it's always crisp. Returns JPEG bytes when ``save`` is
@@ -696,7 +714,7 @@ def retext_poster(
     from backend.util.cl2k.renderer import apply_border, overlay_label
 
     cfg = full_config.cl2k_maker
-    img = _normalize_poster(image_bytes)
+    img = image_bytes if keep_size else _normalize_poster(image_bytes)
     if apply_ai and mask_bytes:
         img = text_removal.remove_text(
             img, config=cfg, mask_bytes=mask_bytes, prompt=prompt, logger=logger
@@ -746,14 +764,16 @@ def generate_seasons(
     focus_y: float = 0.5,
     crop: Optional[Tuple[float, float, float, float]] = None,
     v_pos: float = 0.0,
+    logo_scale: float = 1.0,
+    logo_y_offset: int = 0,
     force: bool = False,
 ) -> Dict[str, Any]:
     """Generate CL2K season posters for each number in ``seasons``.
 
     Each season reuses the show's existing backdrop (via generate_for_item's
     season-reuse path) and only changes the season number. The framing
-    (``fit_mode`` / ``focus`` / ``crop``) is carried from the show poster so every
-    season is composed identically.
+    (``fit_mode`` / ``focus`` / ``crop`` / ``logo_scale``) is carried from the
+    show poster so every season is composed identically.
     """
     results = []
     for n in seasons:
@@ -774,6 +794,8 @@ def generate_seasons(
                 focus_y=focus_y,
                 crop=crop,
                 v_pos=v_pos,
+                logo_scale=logo_scale,
+                logo_y_offset=logo_y_offset,
                 force=force,
             )
         )

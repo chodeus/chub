@@ -42,7 +42,6 @@ const BAND_LABEL_OPTIONS = [
 const SOURCE_TABS = [
     { key: 'tmdb', label: 'TMDB', icon: 'movie' },
     { key: 'fanart', label: 'fanart.tv', icon: 'palette' },
-    { key: 'upload-backdrop', label: 'Cleaned backdrop', icon: 'auto_fix_high' },
     { key: 'upload-poster', label: 'Finished poster', icon: 'image' },
     { key: 'edit', label: 'Edit poster', icon: 'edit' },
 ];
@@ -623,7 +622,10 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
     // navigation. Read once on mount.
     const saved = useMemo(() => ssRead(SS_BUILDER, {}), []);
 
-    const [tab, setTab] = useState(saved.tab ?? 'tmdb');
+    // 'upload-backdrop' was merged into the Edit-poster tab; migrate a saved tab.
+    const [tab, setTab] = useState(
+        saved.tab === 'upload-backdrop' ? 'edit' : (saved.tab ?? 'tmdb')
+    );
     const [editIds, setEditIds] = useState(false);
 
     // Save destinations (output dir / Drive) — shared by every save flow below.
@@ -657,6 +659,12 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
     const [focusX, setFocusX] = useState(saved.focusX ?? 0.5);
     const [focusY, setFocusY] = useState(saved.focusY ?? 0.5);
 
+    // Logo size override (1 = the strict CL2K guide box; >1 lets tall/boxy logos
+    // rise above the y=1100 zone-top guide instead of shrinking to fit).
+    const [logoScale, setLogoScale] = useState(saved.logoScale ?? 1);
+    // Logo vertical offset (px from the locked baseline; positive = down).
+    const [logoYOffset, setLogoYOffset] = useState(saved.logoYOffset ?? 0);
+
     // Season variant (shows only)
     const [seasonNumber, setSeasonNumber] = useState(saved.seasonNumber ?? '');
     const [bulkSeasons, setBulkSeasons] = useState(saved.bulkSeasons ?? '');
@@ -681,6 +689,8 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             vPos,
             focusX,
             focusY,
+            logoScale,
+            logoYOffset,
             seasonNumber,
             bulkSeasons,
             bandLabel,
@@ -695,6 +705,8 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
         vPos,
         focusX,
         focusY,
+        logoScale,
+        logoYOffset,
         seasonNumber,
         bulkSeasons,
         bandLabel,
@@ -773,6 +785,8 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             backdrop_path: backdrop,
             logo_path: logo,
             logo_b64: customLogo?.b64 || null,
+            logo_scale: logoScale,
+            logo_y_offset: logoYOffset,
             remove_text: removeText,
             mask_b64: removeText ? maskB64 : null,
             fit_mode: fitMode,
@@ -797,6 +811,8 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             backdrop,
             logo,
             customLogo,
+            logoScale,
+            logoYOffset,
             removeText,
             maskB64,
             fitMode,
@@ -877,6 +893,8 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                 crop_w: (fitMode === 'fit' || fitMode === 'extend') && crop ? crop.w : null,
                 crop_h: (fitMode === 'fit' || fitMode === 'extend') && crop ? crop.h : null,
                 v_pos: fitMode === 'fit' || fitMode === 'extend' ? vPos : 0,
+                logo_scale: logoScale,
+                logo_y_offset: logoYOffset,
                 force: false,
             });
             const results = resp?.data?.results || [];
@@ -887,7 +905,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
         } finally {
             setBusy(false);
         }
-    }, [bulkSeasons, item, fitMode, focusX, focusY, crop, vPos, toast]);
+    }, [bulkSeasons, item, fitMode, focusX, focusY, crop, vPos, logoScale, logoYOffset, toast]);
 
     const activeArt = tab === 'fanart' ? fanartArt : tmdbArt;
     const isRenderTab = tab === 'tmdb' || tab === 'fanart';
@@ -972,6 +990,10 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                     setLogo={setLogo}
                     customLogo={customLogo}
                     setCustomLogo={setCustomLogoExclusive}
+                    logoScale={logoScale}
+                    setLogoScale={setLogoScale}
+                    logoYOffset={logoYOffset}
+                    setLogoYOffset={setLogoYOffset}
                     fitMode={fitMode}
                     setFitMode={setFitMode}
                     crop={crop}
@@ -1009,16 +1031,6 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                 />
             )}
 
-            {tab === 'upload-backdrop' && (
-                <UploadBackdropPanel
-                    item={item}
-                    effectiveKind={effectiveKind}
-                    logos={allLogos}
-                    loadingArt={loadingArt}
-                    saveTargets={saveTargets}
-                    toast={toast}
-                />
-            )}
             {tab === 'upload-poster' && (
                 <UploadPosterPanel
                     item={item}
@@ -1034,6 +1046,8 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                     item={item}
                     effectiveKind={effectiveKind}
                     config={config}
+                    logos={allLogos}
+                    loadingArt={loadingArt}
                     saveTargets={saveTargets}
                     toast={toast}
                 />
@@ -1057,6 +1071,10 @@ const RenderPanel = ({
     setLogo,
     customLogo,
     setCustomLogo,
+    logoScale,
+    setLogoScale,
+    logoYOffset,
+    setLogoYOffset,
     fitMode,
     setFitMode,
     crop,
@@ -1093,6 +1111,8 @@ const RenderPanel = ({
     const logos = art?.logos || [];
     const seasonPosters = seasonArt?.posters || [];
     const backdropUrl = backdrop ? urlForPath(backdrop) : null;
+    // Template guide lines over the rendered preview (the PSD's cyan guides).
+    const [showGuides, setShowGuides] = useState(true);
 
     return (
         <section className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -1152,6 +1172,10 @@ const RenderPanel = ({
                     onSelect={setLogo}
                     customLogo={customLogo}
                     onCustomChange={setCustomLogo}
+                    scale={logoScale}
+                    onScale={setLogoScale}
+                    yOffset={logoYOffset}
+                    onYOffset={setLogoYOffset}
                     emptyText="No logos from this source — upload a custom one, or a text wordmark is used as fallback."
                 />
 
@@ -1204,23 +1228,29 @@ const RenderPanel = ({
                 <div className="bg-surface border border-border rounded-lg p-3">
                     <div className="flex items-center justify-between mb-2">
                         <h3 className="text-sm font-medium text-primary">Preview</h3>
-                        <LoadingButton
-                            onClick={onPreview}
-                            loading={previewing}
-                            disabled={!backdrop}
-                            icon="visibility"
-                            size="small"
-                        >
-                            Render preview
-                        </LoadingButton>
+                        <div className="flex items-center gap-3">
+                            <GuidesToggle show={showGuides} onChange={setShowGuides} />
+                            <LoadingButton
+                                onClick={onPreview}
+                                loading={previewing}
+                                disabled={!backdrop}
+                                icon="visibility"
+                                size="small"
+                            >
+                                Render preview
+                            </LoadingButton>
+                        </div>
                     </div>
-                    <div className="aspect-[2/3] bg-black rounded overflow-hidden flex items-center justify-center">
+                    <div className="relative aspect-[2/3] bg-black rounded overflow-hidden flex items-center justify-center">
                         {previewUrl ? (
-                            <img
-                                src={previewUrl}
-                                alt="CL2K preview"
-                                className="w-full h-full object-contain"
-                            />
+                            <>
+                                <img
+                                    src={previewUrl}
+                                    alt="CL2K preview"
+                                    className="w-full h-full object-contain"
+                                />
+                                {showGuides && <GuideOverlay />}
+                            </>
                         ) : (
                             <span className="text-xs text-tertiary px-4 text-center">
                                 {backdrop
@@ -1257,7 +1287,7 @@ const RenderPanel = ({
                                 href={backdropUrl}
                                 download
                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm border border-border text-secondary hover:border-border-strong"
-                                title="Download the backdrop to clean externally (Firefly/Photoshop), then re-import via the Cleaned backdrop tab"
+                                title="Download the backdrop to clean externally (Firefly/Photoshop), then re-import via the Edit poster tab"
                             >
                                 <span className="material-symbols-outlined text-base">
                                     download
@@ -1268,7 +1298,7 @@ const RenderPanel = ({
                     </div>
                     <p className="text-xs text-tertiary">
                         Handoff: download the backdrop, clean it in Firefly/Photoshop, then bring it
-                        back via the <span className="text-secondary">Cleaned backdrop</span> tab.
+                        back via the <span className="text-secondary">Edit poster</span> tab.
                     </p>
                 </div>
             </div>
@@ -1916,12 +1946,53 @@ const Picker = ({ label, items, loading, selected, onSelect, aspect, onBlack, em
     </div>
 );
 
+// ─── CL2K guide overlay ──────────────────────────────────────────────────────
+
+// The template's own guides (mined from CL2K_template.psd), drawn over a 2:3
+// poster preview as Photoshop-style cyan lines. Positions are fractions of the
+// 1000×1500 canvas, so the overlay lines up with any rendered preview. Inline
+// styles only — this must not depend on utility classes existing.
+const CL2K_GUIDES_V = [100, 200, 800, 900]; // max / main logo width
+const CL2K_GUIDES_H = [1100, 1319, 1352, 1375]; // zone top / logo bottom / label / darkest
+const GUIDE_STYLE = { position: 'absolute', background: 'rgba(0, 255, 255, 0.6)' };
+
+const GuideOverlay = () => (
+    <div aria-hidden="true" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+        {CL2K_GUIDES_V.map(x => (
+            <div
+                key={`v${x}`}
+                style={{ ...GUIDE_STYLE, top: 0, bottom: 0, left: `${x / 10}%`, width: 1 }}
+            />
+        ))}
+        {CL2K_GUIDES_H.map(y => (
+            <div
+                key={`h${y}`}
+                style={{ ...GUIDE_STYLE, left: 0, right: 0, top: `${y / 15}%`, height: 1 }}
+            />
+        ))}
+    </div>
+);
+
+// Small "Show CL2K guides" checkbox used next to every poster preview.
+const GuidesToggle = ({ show, onChange }) => (
+    <label className="flex items-center gap-1.5 text-xs text-secondary cursor-pointer">
+        <input type="checkbox" checked={show} onChange={e => onChange(e.target.checked)} />
+        CL2K guides
+    </label>
+);
+
 // ─── Logo selector (TMDB / fanart grid + custom upload) ─────────────────────
 
 // A logo source picker shared by the render + uploaded-canvas flows. Pick a
 // TMDB/fanart logo, or upload a custom PNG. A custom logo takes priority and
 // hides the grid until removed; the chosen logo is whitened + placed on the CL2K
 // guides by the backend (renderer._place_logo), so any source is CL2K-correct.
+// `scale`/`onScale` (optional) expose the logo-size override: 1.0 = the strict
+// CL2K guide box; raising it relaxes the height clamp so tall/boxy logos
+// (sticker-style, < ~3:1 aspect) render readable instead of stamp-sized.
+// `yOffset`/`onYOffset` (optional) shift the logo vertically (px from the locked
+// baseline; positive = down) — the template treats the vertical as judgement,
+// and hand-made posters hang oversized logos below the bottom guide.
 const LogoSelector = ({
     label = 'Logo',
     logos = [],
@@ -1930,6 +2001,10 @@ const LogoSelector = ({
     onSelect,
     customLogo,
     onCustomChange,
+    scale,
+    onScale,
+    yOffset,
+    onYOffset,
     emptyText = 'No logos from this source — a text wordmark is used as fallback.',
 }) => {
     const onFile = e => {
@@ -2014,82 +2089,70 @@ const LogoSelector = ({
                     })}
                 </div>
             )}
+            {onScale && (
+                <label className="mt-2 flex items-center gap-2 text-xs text-secondary">
+                    <span className="w-24">Logo size</span>
+                    <input
+                        type="range"
+                        min="50"
+                        max="250"
+                        step="5"
+                        value={Math.round((scale ?? 1) * 100)}
+                        onChange={e => onScale(Number(e.target.value) / 100)}
+                        className="flex-1"
+                    />
+                    <span className="w-10 text-right">{Math.round((scale ?? 1) * 100)}%</span>
+                </label>
+            )}
+            {onYOffset && (
+                <label className="mt-2 flex items-center gap-2 text-xs text-secondary">
+                    <span className="w-24">Logo position</span>
+                    <input
+                        type="range"
+                        min="-300"
+                        max="100"
+                        step="5"
+                        value={yOffset ?? 0}
+                        onChange={e => onYOffset(Number(e.target.value))}
+                        className="flex-1"
+                    />
+                    <span className="w-10 text-right">
+                        {(yOffset ?? 0) > 0 ? `+${yOffset}` : (yOffset ?? 0)}
+                    </span>
+                </label>
+            )}
             <p className="mt-2 text-xs text-tertiary">
                 Whitened, trimmed and placed on the CL2K guides automatically.
+                {onScale && (
+                    <>
+                        {' '}
+                        Size 100% = the CL2K guide box; raise it for a tall/boxy logo
+                        (sticker-style) that would otherwise render small — width is always capped
+                        by the guides.
+                    </>
+                )}
+                {onYOffset && (
+                    <>
+                        {' '}
+                        Position 0 = the locked baseline; negative moves the logo up, positive down
+                        (hand-made posters hang tall logos ~30–50 below).
+                    </>
+                )}{' '}
+                {((onScale && Math.round((scale ?? 1) * 100) !== 100) ||
+                    (onYOffset && (yOffset ?? 0) !== 0)) && (
+                    <button
+                        type="button"
+                        onClick={() => {
+                            if (onScale) onScale(1);
+                            if (onYOffset) onYOffset(0);
+                        }}
+                        className="text-primary underline hover:no-underline"
+                    >
+                        Reset to CL2K defaults
+                    </button>
+                )}
             </p>
         </div>
-    );
-};
-
-// ─── Upload-backdrop tab ────────────────────────────────────────────────────
-
-const UploadBackdropPanel = ({ item, effectiveKind, logos, loadingArt, saveTargets, toast }) => {
-    const [file, setFile] = useState(null);
-    const [busy, setBusy] = useState(false);
-    const [logo, setLogo] = useState(null); // chosen TMDB/fanart logo file_path
-    const [customLogo, setCustomLogo] = useState(null); // { b64, name, url }
-    const onCustomLogo = useCallback(c => {
-        setCustomLogo(c);
-        if (c) setLogo(null);
-    }, []);
-
-    const submit = useCallback(async () => {
-        if (!file) return;
-        setBusy(true);
-        try {
-            const resp = await cl2kMakerAPI.uploadGenerate(file, {
-                kind: effectiveKind,
-                title: item.title,
-                tmdb_id: item.tmdb_id,
-                year: item.year,
-                tvdb_id: item.tvdb_id,
-                imdb_id: item.imdb_id,
-                logo_path: customLogo ? null : logo,
-                logo_b64: customLogo?.b64 || null,
-                ...saveTargets.fields,
-            });
-            savedToast(toast, resp?.data, 'Generated');
-        } catch (err) {
-            toast.error(err.message || 'Generate failed');
-        } finally {
-            setBusy(false);
-        }
-    }, [file, item, effectiveKind, logo, customLogo, saveTargets.fields, toast]);
-
-    return (
-        <section className="mt-4 bg-surface border border-border rounded-lg p-4 flex flex-col gap-3">
-            <h3 className="text-sm font-medium text-primary">Cleaned backdrop → render CL2K</h3>
-            <p className="text-xs text-tertiary">
-                Upload a backdrop you cleaned externally (text removed). CL2K renders the logo,
-                gradient and border over it. Leave the logo unset to auto-pick from TMDB/fanart.
-            </p>
-            <input
-                type="file"
-                accept="image/*"
-                onChange={e => setFile(e.target.files?.[0] || null)}
-            />
-            <LogoSelector
-                label="Logo (TMDB / fanart / custom)"
-                logos={logos}
-                loading={loadingArt}
-                selected={logo}
-                onSelect={setLogo}
-                customLogo={customLogo}
-                onCustomChange={onCustomLogo}
-                emptyText="No TMDB/fanart logos — upload a custom one, or leave unset for the text-wordmark fallback."
-            />
-            <SaveTargets targets={saveTargets} />
-            <div>
-                <LoadingButton
-                    onClick={submit}
-                    loading={busy}
-                    disabled={!file || saveTargets.noTarget}
-                    icon="save"
-                >
-                    Generate from backdrop
-                </LoadingButton>
-            </div>
-        </section>
     );
 };
 
@@ -2103,6 +2166,9 @@ const UploadPosterPanel = ({ item, effectiveKind, logos, loadingArt, saveTargets
     const [customLogo, setCustomLogo] = useState(null); // { b64, name, url }
     const [previewB64, setPreviewB64] = useState(null); // server-rendered preview
     const [previewing, setPreviewing] = useState(false);
+    const [logoScale, setLogoScale] = useState(1);
+    const [logoYOffset, setLogoYOffset] = useState(0);
+    const [showGuides, setShowGuides] = useState(false);
     const localUrl = useMemo(() => (file ? URL.createObjectURL(file) : null), [file]);
     useEffect(() => () => localUrl && URL.revokeObjectURL(localUrl), [localUrl]);
 
@@ -2112,6 +2178,14 @@ const UploadPosterPanel = ({ item, effectiveKind, logos, loadingArt, saveTargets
         setCustomLogo(c);
         setPreviewB64(null);
         if (c) setLogo(null);
+    }, []);
+    const onLogoScale = useCallback(s => {
+        setLogoScale(s);
+        setPreviewB64(null);
+    }, []);
+    const onLogoYOffset = useCallback(y => {
+        setLogoYOffset(y);
+        setPreviewB64(null);
     }, []);
     const onPickLogo = useCallback(p => {
         setLogo(p);
@@ -2137,8 +2211,10 @@ const UploadPosterPanel = ({ item, effectiveKind, logos, loadingArt, saveTargets
             border: addBorder,
             logo_path: customLogo ? null : logo,
             logo_b64: customLogo?.b64 || null,
+            logo_scale: logoScale,
+            logo_y_offset: logoYOffset,
         }),
-        [effectiveKind, item, addBorder, logo, customLogo]
+        [effectiveKind, item, addBorder, logo, customLogo, logoScale, logoYOffset]
     );
 
     const runPreview = useCallback(async () => {
@@ -2186,11 +2262,17 @@ const UploadPosterPanel = ({ item, effectiveKind, logos, loadingArt, saveTargets
                 onChange={e => onPickFile(e.target.files?.[0] || null)}
             />
             {shownSrc && (
-                <img
-                    src={shownSrc}
-                    alt="Finished poster preview"
-                    className="max-h-80 w-auto rounded border border-border bg-black"
-                />
+                <div className="flex flex-col gap-1" style={{ alignItems: 'flex-start' }}>
+                    <div style={{ position: 'relative', display: 'inline-block' }}>
+                        <img
+                            src={shownSrc}
+                            alt="Finished poster preview"
+                            className="max-h-80 w-auto rounded border border-border bg-black"
+                        />
+                        {showGuides && previewB64 && <GuideOverlay />}
+                    </div>
+                    {previewB64 && <GuidesToggle show={showGuides} onChange={setShowGuides} />}
+                </div>
             )}
             {file && (
                 <LogoSelector
@@ -2201,6 +2283,10 @@ const UploadPosterPanel = ({ item, effectiveKind, logos, loadingArt, saveTargets
                     onSelect={onPickLogo}
                     customLogo={customLogo}
                     onCustomChange={onCustomLogo}
+                    scale={logoScale}
+                    onScale={onLogoScale}
+                    yOffset={logoYOffset}
+                    onYOffset={onLogoYOffset}
                     emptyText="No TMDB/fanart logos — upload a custom one, or leave unset to keep the poster as-is."
                 />
             )}
@@ -2393,7 +2479,15 @@ const SyncImportPicker = ({ defaultQuery, importing, onPick, toast }) => {
 
 // ─── Edit poster (AI-erase old text + redraw label in CL2K font) ────────────
 
-const EditPosterPanel = ({ item, effectiveKind, config, saveTargets, toast }) => {
+const EditPosterPanel = ({
+    item,
+    effectiveKind,
+    config,
+    logos,
+    loadingArt,
+    saveTargets,
+    toast,
+}) => {
     // The uploaded poster (data URL) is the immutable SOURCE. `workingB64` is the
     // base we draw labels onto — it starts as the upload and becomes the AI-erased
     // image after "Send to AI". That's the whole cost trick: the paid OpenAI erase
@@ -2423,6 +2517,25 @@ const EditPosterPanel = ({ item, effectiveKind, config, saveTargets, toast }) =>
     // poster that already has the required border.
     const [addBorder, setAddBorder] = useState(true);
 
+    // Output mode. 'retext' = the original flow (label/border, saved as-is).
+    // 'cl2k' = run the FULL CL2K render (framing + logo + gradient + border) on
+    // the working copy — this absorbs the old "Cleaned backdrop" tab, since the
+    // upload + optional AI erase steps are identical.
+    const [outputMode, setOutputMode] = useState('retext'); // 'retext' | 'cl2k'
+    const [fitMode, setFitMode] = useState('cover');
+    const [crop, setCrop] = useState(null);
+    const [vPos, setVPos] = useState(0);
+    const [focusX, setFocusX] = useState(0.5);
+    const [focusY, setFocusY] = useState(0.5);
+    const [cl2kLogo, setCl2kLogo] = useState(null); // chosen TMDB/fanart logo file_path
+    const [customLogo, setCustomLogo] = useState(null); // { b64, name, url }
+    const [logoScale, setLogoScale] = useState(1);
+    const [logoYOffset, setLogoYOffset] = useState(0);
+    const [cl2kPreviewB64, setCl2kPreviewB64] = useState(null);
+    const [cl2kPreviewing, setCl2kPreviewing] = useState(false);
+    const [showGuides, setShowGuides] = useState(true);
+    const [generating, setGenerating] = useState(false);
+
     const provider = config?.ai_provider || 'none';
     const isSeason = String(seasonNum).trim() !== '';
 
@@ -2438,6 +2551,7 @@ const EditPosterPanel = ({ item, effectiveKind, config, saveTargets, toast }) =>
         setAiErased(false);
         setMaskB64(null);
         setLabeledB64(null);
+        setCl2kPreviewB64(null);
     }, []);
 
     const onFile = useCallback(
@@ -2505,6 +2619,9 @@ const EditPosterPanel = ({ item, effectiveKind, config, saveTargets, toast }) =>
                 label_text: '',
                 border: false, // keep the working copy clean; border is applied later
                 preview: true,
+                // Keep the original dimensions: the CL2K output mode frames the
+                // working copy itself, and the re-text save normalizes anyway.
+                keep_size: true,
                 ...idFields,
             });
             const erased = resp?.data?.preview_b64;
@@ -2512,6 +2629,7 @@ const EditPosterPanel = ({ item, effectiveKind, config, saveTargets, toast }) =>
                 setWorkingB64(erased);
                 setAiErased(true);
                 setLabeledB64(null);
+                setCl2kPreviewB64(null);
                 toast.success(
                     'Old text erased — position the label, then save (no more AI calls).'
                 );
@@ -2619,6 +2737,84 @@ const EditPosterPanel = ({ item, effectiveKind, config, saveTargets, toast }) =>
         a.click();
     }, [label, addBorder, labeledB64, workingB64, item.title]);
 
+    // ── Full-CL2K output mode ──────────────────────────────────────────────
+    const onCustomLogo = useCallback(c => {
+        setCustomLogo(c);
+        setCl2kPreviewB64(null);
+        if (c) setCl2kLogo(null);
+    }, []);
+
+    // The working copy (original upload or AI-erased) as a multipart upload for
+    // the full-render endpoint — the bytes are already here as base64.
+    const workingFile = useCallback(() => {
+        if (!workingB64) return null;
+        const bin = atob(workingB64);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
+        return new File([bytes], 'working.jpg', { type: 'image/jpeg' });
+    }, [workingB64]);
+
+    const cl2kMeta = useMemo(
+        () => ({
+            ...idFields,
+            logo_path: customLogo ? null : cl2kLogo,
+            logo_b64: customLogo?.b64 || null,
+            logo_scale: logoScale,
+            logo_y_offset: logoYOffset,
+            fit_mode: fitMode,
+            focus_x: focusX,
+            focus_y: focusY,
+            crop_x: (fitMode === 'fit' || fitMode === 'extend') && crop ? crop.x : null,
+            crop_y: (fitMode === 'fit' || fitMode === 'extend') && crop ? crop.y : null,
+            crop_w: (fitMode === 'fit' || fitMode === 'extend') && crop ? crop.w : null,
+            crop_h: (fitMode === 'fit' || fitMode === 'extend') && crop ? crop.h : null,
+            v_pos: fitMode === 'fit' || fitMode === 'extend' ? vPos : 0,
+        }),
+        [
+            idFields,
+            cl2kLogo,
+            customLogo,
+            logoScale,
+            logoYOffset,
+            fitMode,
+            crop,
+            vPos,
+            focusX,
+            focusY,
+        ]
+    );
+
+    const runCl2kPreview = useCallback(async () => {
+        const f = workingFile();
+        if (!f) return;
+        setCl2kPreviewing(true);
+        try {
+            const resp = await cl2kMakerAPI.uploadGenerate(f, { ...cl2kMeta, preview: true });
+            setCl2kPreviewB64(resp?.data?.preview_b64 || null);
+        } catch (err) {
+            toast.error(err.message || 'Preview failed');
+        } finally {
+            setCl2kPreviewing(false);
+        }
+    }, [workingFile, cl2kMeta, toast]);
+
+    const runCl2kGenerate = useCallback(async () => {
+        const f = workingFile();
+        if (!f) return;
+        setGenerating(true);
+        try {
+            const resp = await cl2kMakerAPI.uploadGenerate(f, {
+                ...cl2kMeta,
+                ...saveTargets.fields,
+            });
+            savedToast(toast, resp?.data, 'Generated');
+        } catch (err) {
+            toast.error(err.message || 'Generate failed');
+        } finally {
+            setGenerating(false);
+        }
+    }, [workingFile, cl2kMeta, saveTargets.fields, toast]);
+
     // What the working-copy pane shows.
     // bareSrc = working copy with NO baked label; labeledSrc = the accurate server
     // render (label baked in). While dragging the position, or before the server
@@ -2638,13 +2834,13 @@ const EditPosterPanel = ({ item, effectiveKind, config, saveTargets, toast }) =>
         <section className="mt-4 flex flex-col gap-4">
             {/* Full-width source bar — keeps the two posters below it top-aligned. */}
             <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-2">
-                <h3 className="text-sm font-medium text-primary">Edit poster → re-text</h3>
+                <h3 className="text-sm font-medium text-primary">Edit poster</h3>
                 <p className="text-xs text-tertiary">
-                    Import a finished poster from your GDrive sync (or upload one), brush over the
-                    old season text and <span className="text-secondary">Send to AI</span> once to
-                    erase it, then position the new label on the working copy — preview and adjust
-                    as much as you like for free. Only the erase step uses AI credits. Saved as-is —
-                    no CL2K logo/gradient/border added.
+                    Import a poster or backdrop from your GDrive sync (or upload one). Optionally
+                    brush over old text and <span className="text-secondary">Send to AI</span> once
+                    to erase it — that&apos;s the only step that uses AI credits. Then either
+                    re-text it (label/border, saved as-is) or run the full CL2K render (framing,
+                    logo, gradient, border) on the result.
                 </p>
                 <div className="flex gap-2">
                     <Button
@@ -2675,6 +2871,35 @@ const EditPosterPanel = ({ item, effectiveKind, config, saveTargets, toast }) =>
                     />
                 )}
             </div>
+
+            {imageDataUrl && (
+                <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-2">
+                    <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-primary">Output</span>
+                        <Button
+                            variant={outputMode === 'retext' ? 'primary' : 'secondary'}
+                            size="small"
+                            icon="text_fields"
+                            onClick={() => setOutputMode('retext')}
+                        >
+                            Re-text &amp; save as-is
+                        </Button>
+                        <Button
+                            variant={outputMode === 'cl2k' ? 'primary' : 'secondary'}
+                            size="small"
+                            icon="auto_awesome"
+                            onClick={() => setOutputMode('cl2k')}
+                        >
+                            Full CL2K render
+                        </Button>
+                    </div>
+                    <p className="text-xs text-tertiary">
+                        {outputMode === 'retext'
+                            ? 'Draw a label and file the poster as-is — no CL2K logo or gradient added.'
+                            : 'Frame the working copy, pick a clear logo, and render the full CL2K treatment (gradient + logo + border).'}
+                    </p>
+                </div>
+            )}
 
             {imageDataUrl && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -2747,156 +2972,255 @@ const EditPosterPanel = ({ item, effectiveKind, config, saveTargets, toast }) =>
                         </p>
                     </div>
 
-                    {/* RIGHT — working copy: position the label, save (no AI) */}
-                    <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-3">
-                        <div className="flex items-center justify-between">
-                            <h3 className="text-sm font-medium text-primary">Working copy</h3>
-                            {labelBusy && <span className="text-xs text-tertiary">updating…</span>}
-                        </div>
-                        <div className="aspect-[2/3] bg-black rounded overflow-hidden flex items-center justify-center relative">
-                            {workingSrc ? (
-                                <>
-                                    <img
-                                        ref={workImgRef}
-                                        src={workingSrc}
-                                        alt="Working copy"
-                                        onLoad={e => setImgW(e.target.clientWidth)}
-                                        className="w-full h-full object-contain"
-                                    />
-                                    {liveLabel && overlayPx > 0 && (
-                                        <div
-                                            style={{
-                                                position: 'absolute',
-                                                left: 0,
-                                                right: 0,
-                                                top: `${textY * 100}%`,
-                                                transform: 'translateY(-50%)',
-                                                textAlign: 'center',
-                                                color: '#fff',
-                                                textTransform: 'uppercase',
-                                                fontFamily: 'Arial, Helvetica, sans-serif',
-                                                fontWeight: 400,
-                                                fontSize: `${overlayPx}px`,
-                                                letterSpacing: `${overlayPx * 0.8}px`,
-                                                lineHeight: 1,
-                                                whiteSpace: 'nowrap',
-                                                pointerEvents: 'none',
-                                            }}
+                    {/* RIGHT — output: re-text (label/save-as-is) or full CL2K render */}
+                    {outputMode === 'cl2k' ? (
+                        <div className="flex flex-col gap-3">
+                            <CropFramer
+                                imageUrl={bareSrc}
+                                fitMode={fitMode}
+                                setFitMode={setFitMode}
+                                crop={crop}
+                                setCrop={setCrop}
+                                vPos={vPos}
+                                setVPos={setVPos}
+                                focusX={focusX}
+                                focusY={focusY}
+                                onChange={(fx, fy) => {
+                                    setFocusX(fx);
+                                    setFocusY(fy);
+                                }}
+                            />
+                            <LogoSelector
+                                label="Logo (TMDB / fanart / custom)"
+                                logos={logos}
+                                loading={loadingArt}
+                                selected={cl2kLogo}
+                                onSelect={p => {
+                                    setCl2kLogo(p);
+                                    setCl2kPreviewB64(null);
+                                }}
+                                customLogo={customLogo}
+                                onCustomChange={onCustomLogo}
+                                scale={logoScale}
+                                onScale={s => {
+                                    setLogoScale(s);
+                                    setCl2kPreviewB64(null);
+                                }}
+                                yOffset={logoYOffset}
+                                onYOffset={y => {
+                                    setLogoYOffset(y);
+                                    setCl2kPreviewB64(null);
+                                }}
+                                emptyText="No TMDB/fanart logos — upload a custom one, or leave unset for the text-wordmark fallback."
+                            />
+                            <div className="bg-surface border border-border rounded-lg p-3">
+                                <div className="flex items-center justify-between mb-2">
+                                    <h3 className="text-sm font-medium text-primary">Preview</h3>
+                                    <div className="flex items-center gap-3">
+                                        <GuidesToggle show={showGuides} onChange={setShowGuides} />
+                                        <LoadingButton
+                                            onClick={runCl2kPreview}
+                                            loading={cl2kPreviewing}
+                                            disabled={!workingB64}
+                                            icon="visibility"
+                                            size="small"
                                         >
-                                            {label}
-                                        </div>
+                                            Render preview
+                                        </LoadingButton>
+                                    </div>
+                                </div>
+                                <div className="relative aspect-[2/3] bg-black rounded overflow-hidden flex items-center justify-center">
+                                    {cl2kPreviewB64 ? (
+                                        <>
+                                            <img
+                                                src={`data:image/jpeg;base64,${cl2kPreviewB64}`}
+                                                alt="CL2K preview"
+                                                className="w-full h-full object-contain"
+                                            />
+                                            {showGuides && <GuideOverlay />}
+                                        </>
+                                    ) : (
+                                        <span className="text-xs text-tertiary px-4 text-center">
+                                            Click “Render preview”.
+                                        </span>
                                     )}
-                                </>
-                            ) : (
-                                <span className="text-xs text-tertiary px-4 text-center">
-                                    Import a synced poster or upload one to start.
-                                </span>
-                            )}
-                        </div>
-                        <label className="flex flex-col gap-1 text-sm text-secondary">
-                            <span>Label text (drawn on the poster)</span>
-                            <input
-                                type="text"
-                                value={label}
-                                onChange={e => setLabel(e.target.value)}
-                                placeholder="e.g. SEASON 2026"
-                                className="bg-surface border border-border rounded px-2 py-1 text-sm text-primary"
-                            />
-                        </label>
-                        <label className="flex items-center gap-2 text-sm text-secondary">
-                            <span className="w-24">Position</span>
-                            <input
-                                type="range"
-                                min="0"
-                                max="100"
-                                value={Math.round(textY * 100)}
-                                onChange={e => setTextY(Number(e.target.value) / 100)}
-                                onMouseDown={() => setDragging(true)}
-                                onTouchStart={() => setDragging(true)}
-                                className="flex-1"
-                            />
-                            <span className="w-10 text-right">{Math.round(textY * 100)}%</span>
-                        </label>
-                        <p className="text-xs text-tertiary">
-                            <span className="text-secondary">96% is the locked CL2K default</span> —
-                            the season/specials band from the CL2K PSD (y=1440 on the 1500px
-                            canvas). Drag for a live preview; it snaps to the exact CL2K render on
-                            release.{' '}
-                            {Math.round(textY * 100) !== 96 && (
-                                <button
-                                    type="button"
-                                    onClick={() => setTextY(0.96)}
-                                    className="text-primary underline hover:no-underline"
+                                </div>
+                            </div>
+                            <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-2">
+                                <SaveTargets targets={saveTargets} />
+                                <LoadingButton
+                                    onClick={runCl2kGenerate}
+                                    loading={generating}
+                                    disabled={!workingB64 || saveTargets.noTarget}
+                                    icon="save"
                                 >
-                                    Reset to CL2K default
-                                </button>
-                            )}
-                        </p>
-                        <label className="flex flex-col gap-1 text-sm text-secondary">
-                            <span>Season number (filename + Plex match — not drawn)</span>
-                            <input
-                                type="number"
-                                value={seasonNum}
-                                onChange={e => setSeasonNum(e.target.value)}
-                                placeholder="blank = base poster; e.g. 2026"
-                                className="bg-surface border border-border rounded px-2 py-1 text-sm text-primary"
-                            />
-                        </label>
-                        <p className="text-xs text-tertiary">
-                            {String(seasonNum).trim() === '' ? (
-                                <>Blank = base show poster (no season suffix). </>
-                            ) : (
-                                <>
-                                    Sets the filename suffix{' '}
-                                    <code className="text-secondary">
-                                        {seasonSuffixPreview(seasonNum)}
-                                    </code>{' '}
-                                    so Poster Renamerr applies it to that season.{' '}
-                                </>
-                            )}
-                            Use <code className="text-secondary">0</code> for Specials. For
-                            year-based shows (F1) use the year (e.g. 2026). Metadata only — it isn’t
-                            printed on the poster.
-                        </p>
-                        <label className="flex items-center gap-2 text-sm text-primary font-medium">
-                            <input
-                                type="checkbox"
-                                checked={addBorder}
-                                onChange={e => setAddBorder(e.target.checked)}
-                            />
-                            Add CL2K white border
-                        </label>
-                        <p className="text-xs text-tertiary">
-                            The DAPS default 26px white frame (per the CL2K PSD). Uncheck only if
-                            the source poster already has the required border.
-                        </p>
-                        <SaveTargets targets={saveTargets} />
-                        <LoadingButton
-                            onClick={runSave}
-                            loading={saving}
-                            disabled={!workingB64 || saveTargets.noTarget}
-                            icon="save"
-                        >
-                            Save edited poster
-                        </LoadingButton>
-                        <p className="text-xs text-tertiary">
-                            Saving draws the label and files it (1000×1500, DAPS-named) — no extra
-                            AI call.
-                        </p>
-                        <Button
-                            onClick={downloadWorking}
-                            disabled={!workingB64}
-                            variant="secondary"
-                            icon="download"
-                        >
-                            Download working copy
-                        </Button>
-                        <p className="text-xs text-tertiary">
-                            Downloads what’s shown (label/border included if set) — e.g. to add a
-                            clear logo via the Finished poster tab. Uncheck the border first if
-                            you’ll add it there instead.
-                        </p>
-                    </div>
+                                    Generate &amp; save
+                                </LoadingButton>
+                                <Button
+                                    onClick={downloadWorking}
+                                    disabled={!workingB64}
+                                    variant="secondary"
+                                    icon="download"
+                                >
+                                    Download working copy
+                                </Button>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-3">
+                            <div className="flex items-center justify-between">
+                                <h3 className="text-sm font-medium text-primary">Working copy</h3>
+                                {labelBusy && (
+                                    <span className="text-xs text-tertiary">updating…</span>
+                                )}
+                            </div>
+                            <div className="aspect-[2/3] bg-black rounded overflow-hidden flex items-center justify-center relative">
+                                {workingSrc ? (
+                                    <>
+                                        <img
+                                            ref={workImgRef}
+                                            src={workingSrc}
+                                            alt="Working copy"
+                                            onLoad={e => setImgW(e.target.clientWidth)}
+                                            className="w-full h-full object-contain"
+                                        />
+                                        {liveLabel && overlayPx > 0 && (
+                                            <div
+                                                style={{
+                                                    position: 'absolute',
+                                                    left: 0,
+                                                    right: 0,
+                                                    top: `${textY * 100}%`,
+                                                    transform: 'translateY(-50%)',
+                                                    textAlign: 'center',
+                                                    color: '#fff',
+                                                    textTransform: 'uppercase',
+                                                    fontFamily: 'Arial, Helvetica, sans-serif',
+                                                    fontWeight: 400,
+                                                    fontSize: `${overlayPx}px`,
+                                                    letterSpacing: `${overlayPx * 0.8}px`,
+                                                    lineHeight: 1,
+                                                    whiteSpace: 'nowrap',
+                                                    pointerEvents: 'none',
+                                                }}
+                                            >
+                                                {label}
+                                            </div>
+                                        )}
+                                    </>
+                                ) : (
+                                    <span className="text-xs text-tertiary px-4 text-center">
+                                        Import a synced poster or upload one to start.
+                                    </span>
+                                )}
+                            </div>
+                            <label className="flex flex-col gap-1 text-sm text-secondary">
+                                <span>Label text (drawn on the poster)</span>
+                                <input
+                                    type="text"
+                                    value={label}
+                                    onChange={e => setLabel(e.target.value)}
+                                    placeholder="e.g. SEASON 2026"
+                                    className="bg-surface border border-border rounded px-2 py-1 text-sm text-primary"
+                                />
+                            </label>
+                            <label className="flex items-center gap-2 text-sm text-secondary">
+                                <span className="w-24">Position</span>
+                                <input
+                                    type="range"
+                                    min="0"
+                                    max="100"
+                                    value={Math.round(textY * 100)}
+                                    onChange={e => setTextY(Number(e.target.value) / 100)}
+                                    onMouseDown={() => setDragging(true)}
+                                    onTouchStart={() => setDragging(true)}
+                                    className="flex-1"
+                                />
+                                <span className="w-10 text-right">{Math.round(textY * 100)}%</span>
+                            </label>
+                            <p className="text-xs text-tertiary">
+                                <span className="text-secondary">
+                                    96% is the locked CL2K default
+                                </span>{' '}
+                                — the season/specials band from the CL2K PSD (y=1440 on the 1500px
+                                canvas). Drag for a live preview; it snaps to the exact CL2K render
+                                on release.{' '}
+                                {Math.round(textY * 100) !== 96 && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setTextY(0.96)}
+                                        className="text-primary underline hover:no-underline"
+                                    >
+                                        Reset to CL2K default
+                                    </button>
+                                )}
+                            </p>
+                            <label className="flex flex-col gap-1 text-sm text-secondary">
+                                <span>Season number (filename + Plex match — not drawn)</span>
+                                <input
+                                    type="number"
+                                    value={seasonNum}
+                                    onChange={e => setSeasonNum(e.target.value)}
+                                    placeholder="blank = base poster; e.g. 2026"
+                                    className="bg-surface border border-border rounded px-2 py-1 text-sm text-primary"
+                                />
+                            </label>
+                            <p className="text-xs text-tertiary">
+                                {String(seasonNum).trim() === '' ? (
+                                    <>Blank = base show poster (no season suffix). </>
+                                ) : (
+                                    <>
+                                        Sets the filename suffix{' '}
+                                        <code className="text-secondary">
+                                            {seasonSuffixPreview(seasonNum)}
+                                        </code>{' '}
+                                        so Poster Renamerr applies it to that season.{' '}
+                                    </>
+                                )}
+                                Use <code className="text-secondary">0</code> for Specials. For
+                                year-based shows (F1) use the year (e.g. 2026). Metadata only — it
+                                isn’t printed on the poster.
+                            </p>
+                            <label className="flex items-center gap-2 text-sm text-primary font-medium">
+                                <input
+                                    type="checkbox"
+                                    checked={addBorder}
+                                    onChange={e => setAddBorder(e.target.checked)}
+                                />
+                                Add CL2K white border
+                            </label>
+                            <p className="text-xs text-tertiary">
+                                The DAPS default 26px white frame (per the CL2K PSD). Uncheck only
+                                if the source poster already has the required border.
+                            </p>
+                            <SaveTargets targets={saveTargets} />
+                            <LoadingButton
+                                onClick={runSave}
+                                loading={saving}
+                                disabled={!workingB64 || saveTargets.noTarget}
+                                icon="save"
+                            >
+                                Save edited poster
+                            </LoadingButton>
+                            <p className="text-xs text-tertiary">
+                                Saving draws the label and files it (1000×1500, DAPS-named) — no
+                                extra AI call.
+                            </p>
+                            <Button
+                                onClick={downloadWorking}
+                                disabled={!workingB64}
+                                variant="secondary"
+                                icon="download"
+                            >
+                                Download working copy
+                            </Button>
+                            <p className="text-xs text-tertiary">
+                                Downloads what’s shown (label/border included if set) — e.g. to add
+                                a clear logo via the Finished poster tab. Uncheck the border first
+                                if you’ll add it there instead.
+                            </p>
+                        </div>
+                    )}
                 </div>
             )}
         </section>
