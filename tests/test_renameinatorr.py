@@ -119,3 +119,105 @@ def test_untagged_chunks_batches_when_size_set():
     )
     assert len(chunks) == 3
     assert sum(len(c) for c in chunks) == 25
+
+
+# --- ignore_tags filtering in process_instance ---
+
+
+class FakeApp:
+    instance_name = "radarr_main"
+
+    def __init__(self, media, tags):
+        self._media = media
+        self._tags = tags
+        self.created_tags = []
+        self.fetched_rename_ids = []
+
+    def get_all_media(self):
+        return self._media
+
+    def get_all_tags(self):
+        return self._tags
+
+    def create_tag(self, name):
+        self.created_tags.append(name)
+        return 99
+
+    def get_tag_id_from_name(self, name):
+        # The ignore path must never resolve tags through here (it creates
+        # missing tags as a side effect).
+        self.created_tags.append(name)
+        return 99
+
+    def get_rename_list(self, media_id, threadsafe=False):
+        self.fetched_rename_ids.append(media_id)
+        return []
+
+
+def _ignore_cfg(ignore_tags):
+    return SimpleNamespace(
+        count=0,
+        radarr_count=0,
+        sonarr_count=0,
+        tag_name="",
+        ignore_tags=ignore_tags,
+        enable_batching=False,
+        dry_run=True,
+        rename_folders=False,
+        refresh_before_rename=False,
+    )
+
+
+def _run_process_instance(app, cfg):
+    m = object.__new__(Renameinatorr)
+    m._cancel_event = None
+    m.process_instance(app, "radarr", cfg, StubLogger())
+
+
+def _item(media_id, tags):
+    return {
+        "media_id": media_id,
+        "tags": tags,
+        "title": f"Item {media_id}",
+        "year": 2020,
+        "path_name": f"Item {media_id}",
+    }
+
+
+def test_ignore_tags_comma_separated_skips_any_match():
+    media = [
+        _item(1, [1]),
+        _item(2, [2]),
+        _item(3, [3]),
+        _item(4, []),
+    ]
+    tags = [
+        {"id": 1, "label": "skip-me"},
+        {"id": 2, "label": "also-this"},
+        {"id": 3, "label": "keep"},
+    ]
+    app = FakeApp(media, tags)
+    _run_process_instance(app, _ignore_cfg("skip-me, also-this"))
+    # Items 1 and 2 carry an ignore tag; only 3 and 4 are processed.
+    assert sorted(app.fetched_rename_ids) == [3, 4]
+    assert app.created_tags == []
+
+
+def test_ignore_tags_single_tag_still_works():
+    media = [
+        _item(1, [1]),
+        _item(2, []),
+    ]
+    tags = [{"id": 1, "label": "skip-me"}]
+    app = FakeApp(media, tags)
+    _run_process_instance(app, _ignore_cfg("skip-me"))
+    assert app.fetched_rename_ids == [2]
+
+
+def test_ignore_tags_missing_tag_is_not_created():
+    media = [_item(1, [])]
+    app = FakeApp(media, tags=[])
+    _run_process_instance(app, _ignore_cfg("does-not-exist"))
+    # Nothing filtered, and crucially the tag was not created in the ARR.
+    assert app.fetched_rename_ids == [1]
+    assert app.created_tags == []

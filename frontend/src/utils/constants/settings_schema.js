@@ -1423,6 +1423,13 @@ export const SETTINGS_SCHEMA = [
                 description: 'Set the logging verbosity for Plex maintenance.',
             },
             {
+                key: 'dry_run',
+                label: 'Dry Run',
+                type: 'check_box',
+                description:
+                    'Log what each selected task would do (including which PhotoTranscoder cache files would be deleted) without making any changes.',
+            },
+            {
                 key: 'plex_path',
                 label: 'Plex Path',
                 type: 'text',
