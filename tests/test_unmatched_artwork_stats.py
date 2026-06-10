@@ -114,6 +114,36 @@ def test_artwork_stats_classifies_each_state(db):
     assert "banner" not in _module().get_artwork_stats(db)["types"]
 
 
+def test_artwork_stats_surfaces_locked_picks(db):
+    """A manual pick is applied AND locked — it must appear in the orthogonal
+    'locked' bucket/list (so it can be unlocked) without leaving the applied
+    count, and a plain applied item must NOT show as locked."""
+    locked_id = _seed_movie(db, "LockedPick", 201)
+    plain_id = _seed_movie(db, "PlainApplied", 202)
+
+    db.media_asset_matches.upsert(
+        target_kind="media", target_id=locked_id, image_type="logo",
+        source="local", matched_file="/posters/locked-logo.png",
+        match_status="applied",
+    )
+    db.media_asset_matches.set_user_confirmed("media", locked_id, "logo", True)
+    db.media_asset_matches.upsert(
+        target_kind="media", target_id=plain_id, image_type="logo",
+        source="tmdb", match_status="applied",
+    )
+
+    stats = _module().get_artwork_stats(db)
+    logo = stats["types"]["logo"]
+    assert logo["locked"] == 1
+    assert logo["applied"] == 2  # locked pick is still applied
+    assert {i["id"] for i in logo["locked_items"]} == {locked_id}
+
+    locked_media = stats["media"]["locked"]
+    assert {r["id"] for r in locked_media} == {locked_id}
+    assert "logo" in next(r for r in locked_media if r["id"] == locked_id)["locked"]
+    assert stats["summary"]["locked"] == 1
+
+
 def test_artwork_no_rows_means_zero(db):
     """The blank-slate state (empty table, e.g. just after a reset): items exist
     in the library but no artwork rows → every type reports 0, nothing missing."""

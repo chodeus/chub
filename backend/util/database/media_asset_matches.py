@@ -98,6 +98,33 @@ class MediaAssetMatches(DatabaseBase):
             ),
         )
 
+    def set_user_confirmed(
+        self, target_kind: str, target_id: int, image_type: str, confirmed: bool
+    ) -> None:
+        """Set the per-(target, image_type) manual-pick lock.
+
+        Mirrors ``set_ignored``: works even with no prior match row (inserts a
+        status-less row carrying just the flag), and an existing row keeps its
+        match provenance — only ``user_confirmed`` flips. A locked row is reused
+        verbatim by the asset run instead of being re-resolved.
+        """
+        self.execute_query(
+            """
+            INSERT INTO media_asset_matches
+                (target_kind, target_id, image_type, matched_at, user_confirmed)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(target_kind, target_id, image_type)
+            DO UPDATE SET user_confirmed=excluded.user_confirmed
+            """,
+            (
+                target_kind,
+                int(target_id),
+                image_type,
+                datetime.now(timezone.utc).isoformat(),
+                1 if confirmed else 0,
+            ),
+        )
+
     def get_one(
         self, target_kind: str, target_id: int, image_type: str
     ) -> Optional[dict]:
@@ -144,14 +171,18 @@ class MediaAssetMatches(DatabaseBase):
     def clear(self, keep_ignored: bool = False) -> None:
         """Delete artwork-match rows.
 
-        With ``keep_ignored`` the per-type "not needed" flags (ignored=1) are
-        preserved and only applied/failed provenance is dropped — used by the
-        Unmatched page's artwork reset, which honours the user's ignores.
+        With ``keep_ignored`` the user's intentional rows — the per-type "not
+        needed" flags (ignored=1) AND manual-pick locks (user_confirmed=1) — are
+        preserved and only auto-matched applied/failed provenance is dropped.
+        Used by the Unmatched page's artwork reset, which must honour both the
+        user's ignores and their locked picks (so a re-run reuses the chosen
+        file instead of re-resolving it).
         """
         if keep_ignored:
             self.execute_query(
                 "DELETE FROM media_asset_matches "
-                "WHERE ignored IS NULL OR ignored = 0"
+                "WHERE (ignored IS NULL OR ignored = 0) "
+                "AND (user_confirmed IS NULL OR user_confirmed = 0)"
             )
         else:
             self.execute_query("DELETE FROM media_asset_matches")

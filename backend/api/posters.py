@@ -1432,6 +1432,246 @@ async def ignore_artwork(
         )
 
 
+_ARTWORK_IMAGE_TYPES = {"logo", "background", "squareart"}
+
+
+@router.get(
+    "/match/{media_id}/artwork/{image_type}/candidates",
+    summary="Candidate artwork files for one (media, image_type)",
+    description="Return the title-similar logo/background/squareart files for a "
+    "media row, each annotated with whether it would match — powering the manual "
+    "artwork picker (the artwork counterpart of the poster candidates endpoint).",
+)
+async def get_artwork_candidates(
+    media_id: int,
+    image_type: str,
+    kind: str = Query("media", pattern="^(media|collection)$"),
+    limit: int = Query(24, ge=1, le=100),
+    logger: Any = Depends(get_logger),
+    db: ChubDB = Depends(get_database),
+) -> JSONResponse:
+    if image_type not in _ARTWORK_IMAGE_TYPES:
+        return error(
+            f"image_type must be one of {sorted(_ARTWORK_IMAGE_TYPES)}, got '{image_type}'",
+            code="INVALID_IMAGE_TYPE",
+            status_code=400,
+        )
+    try:
+        import difflib
+        import json as _json
+
+        from backend.util.helper import is_match
+        from backend.util.normalization import normalize_titles
+
+        row = (
+            db.collection.get_by_id(media_id)
+            if kind == "collection"
+            else db.media.get_by_id(media_id)
+        )
+        if not row:
+            return error("Media row not found", code="NOT_FOUND", status_code=404)
+
+        asset_type = "collection" if kind == "collection" else row.get("asset_type")
+        season_number = row.get("season_number")
+        try:
+            alts = _json.loads(row.get("alternate_titles") or "[]")
+        except (ValueError, TypeError):
+            alts = []
+        search_titles = [row.get("title")] + [a for a in alts if a]
+        row_norm = row.get("normalized_title") or normalize_titles(row.get("title") or "")
+
+        seen = set()
+        gathered = []
+        for st in search_titles:
+            for c in db.poster.get_candidates_by_prefix(
+                st or "", asset_type=asset_type, image_type=image_type
+            ):
+                f = c.get("file")
+                if f and f not in seen:
+                    seen.add(f)
+                    gathered.append(c)
+                if len(gathered) >= 800:  # bound the pool before scoring
+                    break
+
+        # Same scoring as the poster picker: rank real matches first, then by
+        # title similarity, and drop same-prefix-but-unrelated noise.
+        scored = []
+        for c in gathered:
+            cs = c.get("season_number")
+            if season_number is not None and cs != season_number:
+                continue
+            if season_number is None and cs is not None:
+                continue
+            matched, reason = is_match(c, row)
+            sim = difflib.SequenceMatcher(
+                None, row_norm, c.get("normalized_title") or ""
+            ).ratio()
+            scored.append((bool(matched), sim, c, reason))
+
+        scored.sort(key=lambda x: (x[0], x[1]), reverse=True)
+
+        candidates = []
+        for matched, sim, c, reason in scored:
+            if not matched and sim < 0.6:
+                continue
+            candidates.append(
+                {
+                    "poster_id": c.get("id"),
+                    "title": c.get("title"),
+                    "year": c.get("year"),
+                    "season_number": c.get("season_number"),
+                    "style": c.get("style"),
+                    "image_type": c.get("image_type"),
+                    "owner": os.path.basename(os.path.dirname(c.get("file") or "")),
+                    "would_match": matched,
+                    "similarity": round(sim, 2),
+                    "reason": reason or "title/year/season did not satisfy the matcher",
+                }
+            )
+            if len(candidates) >= limit:
+                break
+
+        return ok(
+            f"{len(candidates)} candidate {image_type} files",
+            {
+                "candidates": candidates,
+                "media": {
+                    "title": row.get("title"),
+                    "year": row.get("year"),
+                    "season_number": season_number,
+                    "type": asset_type,
+                    "image_type": image_type,
+                },
+            },
+        )
+    except Exception as e:
+        logger.error(
+            f"Error fetching artwork candidates for {media_id}/{image_type}: {e}"
+        )
+        return error(
+            f"Error fetching artwork candidates: {str(e)}",
+            code="ARTWORK_CANDIDATES_ERROR",
+            status_code=500,
+        )
+
+
+@router.post(
+    "/match/{media_id}/artwork/{image_type}/apply",
+    summary="Manually apply a chosen artwork file to a media row",
+    description="Link a specific logo/background/squareart file to one (media, "
+    "image_type), apply it (copy to Kometa / upload to Plex), and lock it so a "
+    "re-run reuses it. The artwork counterpart of the poster apply endpoint.",
+)
+def apply_artwork(
+    media_id: int,
+    image_type: str,
+    poster_id: int = Query(...),
+    kind: str = Query("media", pattern="^(media|collection)$"),
+    logger: Any = Depends(get_logger),
+    db: ChubDB = Depends(get_database),
+) -> JSONResponse:
+    if image_type not in _ARTWORK_IMAGE_TYPES:
+        return error(
+            f"image_type must be one of {sorted(_ARTWORK_IMAGE_TYPES)}, got '{image_type}'",
+            code="INVALID_IMAGE_TYPE",
+            status_code=400,
+        )
+    try:
+        logger.debug(
+            f"Serving POST /api/posters/match/{media_id}/artwork/{image_type}/apply "
+            f"(poster={poster_id}, kind={kind})"
+        )
+        row = (
+            db.collection.get_by_id(media_id)
+            if kind == "collection"
+            else db.media.get_by_id(media_id)
+        )
+        if not row:
+            return error("Media row not found", code="NOT_FOUND", status_code=404)
+        poster = db.poster.execute_query(
+            "SELECT * FROM poster_cache WHERE id=?", (poster_id,), fetch_one=True
+        )
+        if not poster:
+            return error("Artwork file not found", code="NOT_FOUND", status_code=404)
+        poster = dict(poster)
+        if (poster.get("image_type") or "poster") != image_type:
+            return error(
+                f"Chosen file is a '{poster.get('image_type')}', not a '{image_type}'",
+                code="IMAGE_TYPE_MISMATCH",
+                status_code=400,
+            )
+        pfile = poster.get("file")
+        if not pfile:
+            return error("Artwork file has no path", code="NOT_FOUND", status_code=404)
+
+        from backend.modules.asset_renamerr import AssetRenamerr
+
+        target_kind = "collection" if kind == "collection" else "media"
+        media = dict(row)
+        media["id"] = media_id
+        applied, detail = AssetRenamerr(logger=logger).apply_chosen_asset(
+            db, target_kind, media, image_type, pfile
+        )
+        return ok(
+            "Artwork applied" if applied else "Artwork saved (apply pending)",
+            {
+                "id": media_id,
+                "image_type": image_type,
+                "applied": bool(applied),
+                "detail": detail,
+            },
+        )
+    except Exception as e:
+        logger.error(f"Error applying artwork for {media_id}/{image_type}: {e}")
+        return error(
+            f"Error applying artwork: {str(e)}",
+            code="ARTWORK_APPLY_ERROR",
+            status_code=500,
+        )
+
+
+@router.post(
+    "/match/{media_id}/artwork/{image_type}/unlock",
+    summary="Unlock a manually-picked artwork so the matcher can re-resolve it",
+    description="Clear the manual-pick lock on one (media, image_type) so the "
+    "next asset run is free to auto-resolve it again. The artwork counterpart of "
+    "the poster unlock endpoint.",
+)
+async def unlock_artwork(
+    media_id: int,
+    image_type: str,
+    kind: str = Query("media", pattern="^(media|collection)$"),
+    logger: Any = Depends(get_logger),
+    db: ChubDB = Depends(get_database),
+) -> JSONResponse:
+    if image_type not in _ARTWORK_IMAGE_TYPES:
+        return error(
+            f"image_type must be one of {sorted(_ARTWORK_IMAGE_TYPES)}, got '{image_type}'",
+            code="INVALID_IMAGE_TYPE",
+            status_code=400,
+        )
+    try:
+        logger.debug(
+            f"Serving POST /api/posters/match/{media_id}/artwork/{image_type}/unlock "
+            f"(kind={kind})"
+        )
+        target_kind = "collection" if kind == "collection" else "media"
+        db.media_asset_matches.set_user_confirmed(
+            target_kind, media_id, image_type, False
+        )
+        return ok(
+            "Artwork unlocked",
+            {"id": media_id, "image_type": image_type, "locked": False},
+        )
+    except Exception as e:
+        logger.error(f"Error unlocking artwork for {media_id}/{image_type}: {e}")
+        return error(
+            f"Error unlocking artwork: {str(e)}",
+            code="ARTWORK_UNLOCK_ERROR",
+            status_code=500,
+        )
+
+
 @router.post(
     "/match/{media_id}/ignore",
     summary="Dismiss (ignore) a media row from unmatched/review",

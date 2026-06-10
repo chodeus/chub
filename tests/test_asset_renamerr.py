@@ -378,6 +378,46 @@ def test_kometa_flat_naming(tmp_path):
     assert os.path.exists(path)
 
 
+def test_apply_chosen_asset_copies_and_locks(tmp_path, db):
+    """The manual artwork picker's backend: apply_chosen_asset copies the chosen
+    file (kometa path), records an 'applied' provenance row, and sets the
+    user_confirmed lock so a re-run reuses it."""
+    dest = tmp_path / "assets"
+    dest.mkdir()
+    src = _make_src(tmp_path)
+    m = make_module(
+        apply_method="kometa",
+        action_type="copy",
+        asset_folders=False,
+        destination_dir=str(dest),
+    )
+    media = _media(id=42)
+    applied, detail = m.apply_chosen_asset(db, "media", media, "logo", src)
+    assert applied
+    assert os.path.exists(detail)  # file copied to the kometa destination
+
+    row = db.media_asset_matches.get_one("media", 42, "logo")
+    assert row["match_status"] == "applied"
+    assert row["matched_file"] == src
+    assert row["source"] == "local"
+    assert row["user_confirmed"] == 1  # locked against future auto-runs
+
+
+def test_apply_chosen_asset_locks_even_when_apply_fails(tmp_path, db):
+    """If the apply leg fails (here: no destination_dir), the chosen file is
+    still saved and locked so the next run reuses it rather than re-resolving."""
+    src = _make_src(tmp_path)
+    m = make_module(apply_method="kometa", destination_dir="")  # forces failure
+    media = _media(id=43)
+    applied, detail = m.apply_chosen_asset(db, "media", media, "background", src)
+    assert not applied
+
+    row = db.media_asset_matches.get_one("media", 43, "background")
+    assert row["match_status"] == "failed"
+    assert row["matched_file"] == src
+    assert row["user_confirmed"] == 1
+
+
 def test_kometa_asset_folders_naming(tmp_path):
     dest = tmp_path / "assets"
     dest.mkdir()
