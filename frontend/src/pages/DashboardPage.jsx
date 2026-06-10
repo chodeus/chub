@@ -23,8 +23,11 @@ import {
     formatTimeAgo,
 } from '../utils/schedule.js';
 
-const POLL_INTERVAL = 30000;
 const UPCOMING_LIMIT = 5;
+// Default render order for the configurable dashboard sections. Used when
+// general.dashboard_sections is empty. Greeting stays first and the footer
+// last regardless; only these four are user-orderable/hideable.
+const DEFAULT_SECTIONS = ['health', 'modules', 'scheduler', 'quick_start'];
 
 const QUICK_START = [
     {
@@ -100,11 +103,6 @@ const DashboardPage = () => {
     // misclicks on tiny inline "Run now" links from launching a module.
     const [runNowTarget, setRunNowTarget] = useState(null);
 
-    useEffect(() => {
-        const id = setInterval(() => setTick(Date.now()), 30000);
-        return () => clearInterval(id);
-    }, []);
-
     const { data: versionData } = useApiData({
         apiFunction: systemAPI.getVersion,
         options: { showErrorToast: false },
@@ -156,11 +154,34 @@ const DashboardPage = () => {
         options: { showErrorToast: false },
     });
 
-    // Drives which module cards the dashboard shows (general.dashboard_modules).
+    // Drives the user-customizable dashboard knobs (general.dashboard_*).
     const { data: configData } = useApiData({
         apiFunction: configAPI.fetchConfig,
         options: { showErrorToast: false },
     });
+
+    // General config drives the dashboard knobs. Derived here (before the
+    // refresh effects below) so the interval value is in scope for them.
+    const dashboardCfg = useMemo(() => configData?.data?.general || {}, [configData]);
+    const refreshSeconds = dashboardCfg.dashboard_refresh_seconds ?? 30;
+    const upcomingLimit = dashboardCfg.dashboard_upcoming_limit ?? UPCOMING_LIMIT;
+
+    // Section visibility + order. Empty = all sections in the default order.
+    // showSection() gates rendering; sectionStyle() drives flexbox order so the
+    // sections sort into the chosen sequence without moving them in the DOM.
+    const sectionOrder = useMemo(() => {
+        const arr = dashboardCfg.dashboard_sections;
+        return Array.isArray(arr) && arr.length ? arr : DEFAULT_SECTIONS;
+    }, [dashboardCfg]);
+    const showSection = useCallback(k => sectionOrder.includes(k), [sectionOrder]);
+    const sectionStyle = useCallback(k => ({ order: sectionOrder.indexOf(k) + 1 }), [sectionOrder]);
+
+    // Countdown / poll-fallback tick. refreshSeconds = 0 turns auto-refresh off.
+    useEffect(() => {
+        if (refreshSeconds <= 0) return undefined;
+        const id = setInterval(() => setTick(Date.now()), refreshSeconds * 1000);
+        return () => clearInterval(id);
+    }, [refreshSeconds]);
 
     // Most-recent errored job — drives the "Last failure" health card. A
     // single-row fetch so it stays cheap; surfaces a usable signal instead of
@@ -193,19 +214,20 @@ const DashboardPage = () => {
 
     const pollRef = useRef(null);
     useEffect(() => {
-        if (isConnected) {
+        // SSE-connected, or auto-refresh disabled → no polling fallback.
+        if (isConnected || refreshSeconds <= 0) {
             if (pollRef.current) clearInterval(pollRef.current);
-            return;
+            return undefined;
         }
         pollRef.current = setInterval(() => {
             refreshRunStates();
             refreshJobStats();
             refreshModules();
-        }, POLL_INTERVAL);
+        }, refreshSeconds * 1000);
         return () => {
             if (pollRef.current) clearInterval(pollRef.current);
         };
-    }, [isConnected, refreshRunStates, refreshJobStats, refreshModules]);
+    }, [isConnected, refreshSeconds, refreshRunStates, refreshJobStats, refreshModules]);
 
     const handleRefreshAll = useCallback(() => {
         refreshRunStates();
@@ -293,10 +315,7 @@ const DashboardPage = () => {
     // cards render and in what order. Empty = show all. Keys that no longer
     // map to a live module are skipped. Scheduler counts below stay on the
     // full moduleList — this only narrows the Modules grid.
-    const dashboardModuleKeys = useMemo(
-        () => configData?.data?.general?.dashboard_modules || [],
-        [configData]
-    );
+    const dashboardModuleKeys = useMemo(() => dashboardCfg.dashboard_modules || [], [dashboardCfg]);
     const visibleModules = useMemo(() => {
         if (!dashboardModuleKeys.length) return moduleList;
         const byName = new Map(moduleList.map(m => [m.name, m]));
@@ -442,8 +461,8 @@ const DashboardPage = () => {
             });
         }
         entries.sort((a, b) => a.next.getTime() - b.next.getTime());
-        return entries.slice(0, UPCOMING_LIMIT);
-    }, [schedules, nextRuns, subSchedules, tick]);
+        return entries.slice(0, upcomingLimit);
+    }, [schedules, nextRuns, subSchedules, tick, upcomingLimit]);
 
     if (isLoading && moduleList.length === 0) {
         // Skeleton placeholders for the module-card grid + health row so the
@@ -474,8 +493,12 @@ const DashboardPage = () => {
 
     return (
         <div className="flex flex-col gap-10">
-            {/* Greeting row */}
-            <section className="flex flex-wrap items-center justify-between gap-4">
+            {/* Greeting row — always first (order 0); configurable sections
+                sort after it via their flex order, footer stays last. */}
+            <section
+                className="flex flex-wrap items-center justify-between gap-4"
+                style={{ order: 0 }}
+            >
                 <div className="min-w-0">
                     <h1 className="text-3xl md:text-4xl font-bold text-primary m-0">
                         Hello{user ? `, ${user}` : ''}!
@@ -503,422 +526,446 @@ const DashboardPage = () => {
                 </div>
             </section>
 
-            {/* At-a-glance health — disk, instances, last error. Pinned to the
-                top so it's the first thing seen, above the module grid. */}
-            {(diskMounts.length > 0 || instanceHealth.total > 0 || jobStats.failed > 0) && (
-                <section>
-                    <div className="mb-4">
-                        <h2 className="text-xl font-bold text-primary m-0">Health</h2>
-                        <p className="text-secondary text-sm mt-1 mb-0">
-                            Quick look at disk, instances, and recent failures.
-                        </p>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                        {instanceHealth.total > 0 &&
-                            (() => {
-                                // Tile prioritizes the most actionable signal:
-                                // 1. If we have probe samples, show reachable-now + 7-day uptime%
-                                // 2. Otherwise fall back to configured/enabled counts
-                                const hasProbes = instanceHealth.probedCount > 0;
-                                const allReachable =
-                                    hasProbes &&
-                                    instanceHealth.reachable === instanceHealth.probedCount;
-                                const headlineTone = !hasProbes
-                                    ? instanceHealth.enabled === instanceHealth.total
-                                        ? 'text-success'
-                                        : 'text-warning'
-                                    : allReachable
-                                      ? 'text-success'
-                                      : instanceHealth.reachable === 0
-                                        ? 'text-error'
-                                        : 'text-warning';
-                                const borderTone =
-                                    hasProbes && !allReachable
-                                        ? instanceHealth.reachable === 0
-                                            ? 'border-error/30'
-                                            : 'border-warning/30'
-                                        : '';
-                                return (
-                                    <Link
-                                        to="/settings/instances"
-                                        className={`no-underline bg-surface border border-border-light rounded-lg p-4 flex flex-col gap-1 hover:border-border ${borderTone}`}
-                                    >
-                                        <div className="text-tertiary text-xs uppercase tracking-wider">
-                                            Instances
-                                        </div>
-                                        {hasProbes ? (
-                                            <>
-                                                <div className="text-2xl font-bold text-primary">
-                                                    {instanceHealth.reachable} /{' '}
-                                                    {instanceHealth.probedCount} up
-                                                </div>
-                                                <div className={`text-xs ${headlineTone}`}>
-                                                    {instanceHealth.uptimePct != null
-                                                        ? `${instanceHealth.uptimePct}% uptime over recent probes`
-                                                        : allReachable
-                                                          ? 'All reachable'
-                                                          : 'Some unreachable'}
-                                                </div>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <div className="text-2xl font-bold text-primary">
-                                                    {instanceHealth.enabled} /{' '}
-                                                    {instanceHealth.total}
-                                                </div>
-                                                <div className={`text-xs ${headlineTone}`}>
-                                                    {instanceHealth.enabled === instanceHealth.total
-                                                        ? 'All enabled'
-                                                        : `${instanceHealth.total - instanceHealth.enabled} disabled`}
-                                                </div>
-                                            </>
-                                        )}
-                                    </Link>
-                                );
-                            })()}
-                        <Link
-                            to={
-                                lastFailure
-                                    ? `/logs?module=${encodeURIComponent(lastFailure.moduleName)}`
-                                    : '/settings/jobs'
-                            }
-                            className={`no-underline bg-surface border border-border-light rounded-lg p-4 flex flex-col gap-1 hover:border-border ${
-                                lastFailure ? 'border-error/30' : ''
-                            }`}
-                        >
-                            <div className="text-tertiary text-xs uppercase tracking-wider">
-                                Last failure
-                            </div>
-                            <div
-                                className={`text-lg font-bold truncate ${lastFailure ? 'text-error' : 'text-primary'}`}
-                                title={lastFailure?.ts ? formatDateTime(lastFailure.ts) : undefined}
-                            >
-                                {lastFailure
-                                    ? formatTimeAgo(lastFailure.ts, new Date(tick))
-                                    : 'None'}
-                            </div>
-                            <div className="text-xs text-tertiary truncate">
-                                {lastFailure ? humanize(lastFailure.moduleName) : 'No failed jobs'}
-                            </div>
-                        </Link>
-                        {posterStats.cached > 0 && (
+            {/* At-a-glance health — disk, instances, last error. Order +
+                visibility are user-configurable; still hides when there's no
+                disk / instance / failure data to show. */}
+            {showSection('health') &&
+                (diskMounts.length > 0 || instanceHealth.total > 0 || jobStats.failed > 0) && (
+                    <section style={sectionStyle('health')}>
+                        <div className="mb-4">
+                            <h2 className="text-xl font-bold text-primary m-0">Health</h2>
+                            <p className="text-secondary text-sm mt-1 mb-0">
+                                Quick look at disk, instances, and recent failures.
+                            </p>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                            {instanceHealth.total > 0 &&
+                                (() => {
+                                    // Tile prioritizes the most actionable signal:
+                                    // 1. If we have probe samples, show reachable-now + 7-day uptime%
+                                    // 2. Otherwise fall back to configured/enabled counts
+                                    const hasProbes = instanceHealth.probedCount > 0;
+                                    const allReachable =
+                                        hasProbes &&
+                                        instanceHealth.reachable === instanceHealth.probedCount;
+                                    const headlineTone = !hasProbes
+                                        ? instanceHealth.enabled === instanceHealth.total
+                                            ? 'text-success'
+                                            : 'text-warning'
+                                        : allReachable
+                                          ? 'text-success'
+                                          : instanceHealth.reachable === 0
+                                            ? 'text-error'
+                                            : 'text-warning';
+                                    const borderTone =
+                                        hasProbes && !allReachable
+                                            ? instanceHealth.reachable === 0
+                                                ? 'border-error/30'
+                                                : 'border-warning/30'
+                                            : '';
+                                    return (
+                                        <Link
+                                            to="/settings/instances"
+                                            className={`no-underline bg-surface border border-border-light rounded-lg p-4 flex flex-col gap-1 hover:border-border ${borderTone}`}
+                                        >
+                                            <div className="text-tertiary text-xs uppercase tracking-wider">
+                                                Instances
+                                            </div>
+                                            {hasProbes ? (
+                                                <>
+                                                    <div className="text-2xl font-bold text-primary">
+                                                        {instanceHealth.reachable} /{' '}
+                                                        {instanceHealth.probedCount} up
+                                                    </div>
+                                                    <div className={`text-xs ${headlineTone}`}>
+                                                        {instanceHealth.uptimePct != null
+                                                            ? `${instanceHealth.uptimePct}% uptime over recent probes`
+                                                            : allReachable
+                                                              ? 'All reachable'
+                                                              : 'Some unreachable'}
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <div className="text-2xl font-bold text-primary">
+                                                        {instanceHealth.enabled} /{' '}
+                                                        {instanceHealth.total}
+                                                    </div>
+                                                    <div className={`text-xs ${headlineTone}`}>
+                                                        {instanceHealth.enabled ===
+                                                        instanceHealth.total
+                                                            ? 'All enabled'
+                                                            : `${instanceHealth.total - instanceHealth.enabled} disabled`}
+                                                    </div>
+                                                </>
+                                            )}
+                                        </Link>
+                                    );
+                                })()}
                             <Link
-                                to="/poster/search/assets"
-                                className="no-underline bg-surface border border-border-light rounded-lg p-4 flex flex-col gap-1 hover:border-border"
+                                to={
+                                    lastFailure
+                                        ? `/logs?module=${encodeURIComponent(lastFailure.moduleName)}`
+                                        : '/settings/jobs'
+                                }
+                                className={`no-underline bg-surface border border-border-light rounded-lg p-4 flex flex-col gap-1 hover:border-border ${
+                                    lastFailure ? 'border-error/30' : ''
+                                }`}
                             >
                                 <div className="text-tertiary text-xs uppercase tracking-wider">
-                                    Cached posters
+                                    Last failure
                                 </div>
-                                <div className="text-2xl font-bold text-primary">
-                                    {posterStats.cached.toLocaleString()}
-                                </div>
-                                <div className="text-xs text-tertiary">In local asset cache</div>
-                            </Link>
-                        )}
-                        {diskMounts.map(mount => {
-                            const freeGb = (mount.free_bytes / 1024 ** 3).toFixed(1);
-                            const totalGb = (mount.total_bytes / 1024 ** 3).toFixed(0);
-                            const pct = mount.percent_used ?? 0;
-                            const tone =
-                                pct >= 90
-                                    ? 'text-error'
-                                    : pct >= 75
-                                      ? 'text-warning'
-                                      : 'text-success';
-                            const paths = mount.paths || [mount.path];
-                            return (
                                 <div
-                                    key={paths.join('|')}
-                                    className="bg-surface border border-border-light rounded-lg p-4 flex flex-col gap-1"
+                                    className={`text-lg font-bold truncate ${lastFailure ? 'text-error' : 'text-primary'}`}
                                     title={
-                                        paths.length > 1
-                                            ? `Shared device: ${paths.join(', ')}`
-                                            : paths[0]
+                                        lastFailure?.ts ? formatDateTime(lastFailure.ts) : undefined
                                     }
                                 >
-                                    <div className="text-tertiary text-xs uppercase tracking-wider truncate">
-                                        {paths.join(' · ')}
+                                    {lastFailure
+                                        ? formatTimeAgo(lastFailure.ts, new Date(tick))
+                                        : 'None'}
+                                </div>
+                                <div className="text-xs text-tertiary truncate">
+                                    {lastFailure
+                                        ? humanize(lastFailure.moduleName)
+                                        : 'No failed jobs'}
+                                </div>
+                            </Link>
+                            {posterStats.cached > 0 && (
+                                <Link
+                                    to="/poster/search/assets"
+                                    className="no-underline bg-surface border border-border-light rounded-lg p-4 flex flex-col gap-1 hover:border-border"
+                                >
+                                    <div className="text-tertiary text-xs uppercase tracking-wider">
+                                        Cached posters
                                     </div>
                                     <div className="text-2xl font-bold text-primary">
-                                        {freeGb} GB
+                                        {posterStats.cached.toLocaleString()}
                                     </div>
-                                    <div className={`text-xs ${tone}`}>
-                                        {pct}% used of {totalGb} GB
+                                    <div className="text-xs text-tertiary">
+                                        In local asset cache
                                     </div>
-                                </div>
+                                </Link>
+                            )}
+                            {diskMounts.map(mount => {
+                                const freeGb = (mount.free_bytes / 1024 ** 3).toFixed(1);
+                                const totalGb = (mount.total_bytes / 1024 ** 3).toFixed(0);
+                                const pct = mount.percent_used ?? 0;
+                                const tone =
+                                    pct >= 90
+                                        ? 'text-error'
+                                        : pct >= 75
+                                          ? 'text-warning'
+                                          : 'text-success';
+                                const paths = mount.paths || [mount.path];
+                                return (
+                                    <div
+                                        key={paths.join('|')}
+                                        className="bg-surface border border-border-light rounded-lg p-4 flex flex-col gap-1"
+                                        title={
+                                            paths.length > 1
+                                                ? `Shared device: ${paths.join(', ')}`
+                                                : paths[0]
+                                        }
+                                    >
+                                        <div className="text-tertiary text-xs uppercase tracking-wider truncate">
+                                            {paths.join(' · ')}
+                                        </div>
+                                        <div className="text-2xl font-bold text-primary">
+                                            {freeGb} GB
+                                        </div>
+                                        <div className={`text-xs ${tone}`}>
+                                            {pct}% used of {totalGb} GB
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </section>
+                )}
+
+            {/* Modules — each card deep-links to its log */}
+            {showSection('modules') && (
+                <section style={sectionStyle('modules')}>
+                    <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2 mb-4">
+                        <div>
+                            <h2 className="text-xl font-bold text-primary m-0">Modules</h2>
+                            <p className="text-secondary text-sm mt-1 mb-0">
+                                Live status of your modules. Click a card to open its log.
+                            </p>
+                        </div>
+                        <Link
+                            to="/logs"
+                            className="self-start sm:self-auto inline-flex items-center gap-1 text-sm text-accent no-underline hover:underline whitespace-nowrap"
+                        >
+                            <span
+                                className="material-symbols-outlined text-base"
+                                aria-hidden="true"
+                            >
+                                description
+                            </span>
+                            All logs
+                        </Link>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {visibleModules.map(mod => {
+                            const state = runStates[mod.name];
+                            const lastRun = mod.last_run || state?.last_run;
+                            // Live run-state wins over the persisted last-run status so an
+                            // in-progress job (overlay sets state.status = 'running') isn't
+                            // hidden by a stale 'success' from the previous completed run.
+                            const lastStatus = state?.status || mod.last_run_status;
+                            const schedule = mod.schedule;
+                            const moduleSubSchedules = subSchedulesByModule[mod.name] || [];
+                            const jobId = state?.job_id;
+                            const isRunning = lastStatus === 'running';
+                            const stopProp = e => e.stopPropagation();
+                            // Use preventDefault on inner buttons so Link doesn't
+                            // navigate when the user clicks Run now / Cancel.
+                            const stopNav = e => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                            };
+
+                            return (
+                                <Link
+                                    key={mod.name}
+                                    to={`/logs?module=${encodeURIComponent(mod.name)}`}
+                                    className="no-underline bg-surface border border-border-light rounded-lg p-4 flex flex-col gap-2 min-w-0 transition-transform hover:-translate-y-0.5 hover:border-border"
+                                >
+                                    <div className="flex items-center justify-between gap-2 min-w-0">
+                                        <span className="font-semibold text-primary truncate min-w-0">
+                                            {humanize(mod.name)}
+                                        </span>
+                                        <div
+                                            className="flex items-center gap-1 shrink-0"
+                                            onClick={stopProp}
+                                        >
+                                            {lastStatus && (
+                                                <span
+                                                    className={`text-xs px-2 py-1 rounded-full ${statusPillClass(lastStatus)}`}
+                                                >
+                                                    {lastStatus}
+                                                </span>
+                                            )}
+                                            {isRunning && jobId && (
+                                                <IconButton
+                                                    icon="cancel"
+                                                    aria-label={`Cancel ${humanize(mod.name)}`}
+                                                    variant="ghost"
+                                                    onClick={e => {
+                                                        stopNav(e);
+                                                        handleCancel(mod.name, jobId);
+                                                    }}
+                                                />
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div className="text-sm text-secondary break-words">
+                                        {schedule ? (
+                                            <span>Schedule: {scheduleToHuman(schedule)}</span>
+                                        ) : (
+                                            <span className="inline-flex items-center gap-3 flex-wrap">
+                                                <span className="text-xs px-2 py-0.5 rounded-full bg-surface-alt text-tertiary">
+                                                    Manual only
+                                                </span>
+                                                {!isRunning && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={e => {
+                                                            stopNav(e);
+                                                            setRunNowTarget(mod.name);
+                                                        }}
+                                                        className="inline-flex items-center gap-1 min-h-11 px-3 py-1.5 text-xs font-medium rounded-lg bg-primary/10 text-primary border border-primary/25 hover:bg-primary/20 transition-colors cursor-pointer"
+                                                    >
+                                                        <span
+                                                            className="material-symbols-outlined text-base"
+                                                            aria-hidden="true"
+                                                        >
+                                                            play_arrow
+                                                        </span>
+                                                        Run now
+                                                    </button>
+                                                )}
+                                            </span>
+                                        )}
+                                    </div>
+                                    {moduleSubSchedules.length > 0 && (
+                                        <div className="text-xs text-tertiary">
+                                            <span className="font-semibold uppercase tracking-wider">
+                                                Per-instance
+                                            </span>
+                                            <ul className="flex flex-col gap-0.5 m-0 mt-0.5 p-0 list-none">
+                                                {moduleSubSchedules.map(sub => (
+                                                    <li
+                                                        key={sub.label}
+                                                        className={`flex justify-between gap-2 ${sub.enabled ? '' : 'opacity-60'}`}
+                                                    >
+                                                        <span className="truncate">
+                                                            {sub.label}
+                                                        </span>
+                                                        <span className="shrink-0 text-right">
+                                                            {sub.enabled
+                                                                ? scheduleToHuman(sub.schedule)
+                                                                : 'Disabled'}
+                                                        </span>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    )}
+                                    {lastRun && (
+                                        <div className="text-xs text-tertiary">
+                                            Last run: {formatTimeAgo(lastRun, new Date(tick))}
+                                        </div>
+                                    )}
+                                </Link>
                             );
                         })}
                     </div>
                 </section>
             )}
 
-            {/* Modules — each card deep-links to its log */}
-            <section>
-                <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2 mb-4">
-                    <div>
-                        <h2 className="text-xl font-bold text-primary m-0">Modules</h2>
-                        <p className="text-secondary text-sm mt-1 mb-0">
-                            Live status of your modules. Click a card to open its log.
-                        </p>
-                    </div>
-                    <Link
-                        to="/logs"
-                        className="self-start sm:self-auto inline-flex items-center gap-1 text-sm text-accent no-underline hover:underline whitespace-nowrap"
-                    >
-                        <span className="material-symbols-outlined text-base" aria-hidden="true">
-                            description
-                        </span>
-                        All logs
-                    </Link>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {visibleModules.map(mod => {
-                        const state = runStates[mod.name];
-                        const lastRun = mod.last_run || state?.last_run;
-                        // Live run-state wins over the persisted last-run status so an
-                        // in-progress job (overlay sets state.status = 'running') isn't
-                        // hidden by a stale 'success' from the previous completed run.
-                        const lastStatus = state?.status || mod.last_run_status;
-                        const schedule = mod.schedule;
-                        const moduleSubSchedules = subSchedulesByModule[mod.name] || [];
-                        const jobId = state?.job_id;
-                        const isRunning = lastStatus === 'running';
-                        const stopProp = e => e.stopPropagation();
-                        // Use preventDefault on inner buttons so Link doesn't
-                        // navigate when the user clicks Run now / Cancel.
-                        const stopNav = e => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                        };
-
-                        return (
-                            <Link
-                                key={mod.name}
-                                to={`/logs?module=${encodeURIComponent(mod.name)}`}
-                                className="no-underline bg-surface border border-border-light rounded-lg p-4 flex flex-col gap-2 min-w-0 transition-transform hover:-translate-y-0.5 hover:border-border"
-                            >
-                                <div className="flex items-center justify-between gap-2 min-w-0">
-                                    <span className="font-semibold text-primary truncate min-w-0">
-                                        {humanize(mod.name)}
-                                    </span>
-                                    <div
-                                        className="flex items-center gap-1 shrink-0"
-                                        onClick={stopProp}
-                                    >
-                                        {lastStatus && (
-                                            <span
-                                                className={`text-xs px-2 py-1 rounded-full ${statusPillClass(lastStatus)}`}
-                                            >
-                                                {lastStatus}
-                                            </span>
-                                        )}
-                                        {isRunning && jobId && (
-                                            <IconButton
-                                                icon="cancel"
-                                                aria-label={`Cancel ${humanize(mod.name)}`}
-                                                variant="ghost"
-                                                onClick={e => {
-                                                    stopNav(e);
-                                                    handleCancel(mod.name, jobId);
-                                                }}
-                                            />
-                                        )}
-                                    </div>
-                                </div>
-                                <div className="text-sm text-secondary break-words">
-                                    {schedule ? (
-                                        <span>Schedule: {scheduleToHuman(schedule)}</span>
-                                    ) : (
-                                        <span className="inline-flex items-center gap-3 flex-wrap">
-                                            <span className="text-xs px-2 py-0.5 rounded-full bg-surface-alt text-tertiary">
-                                                Manual only
-                                            </span>
-                                            {!isRunning && (
-                                                <button
-                                                    type="button"
-                                                    onClick={e => {
-                                                        stopNav(e);
-                                                        setRunNowTarget(mod.name);
-                                                    }}
-                                                    className="inline-flex items-center gap-1 min-h-11 px-3 py-1.5 text-xs font-medium rounded-lg bg-primary/10 text-primary border border-primary/25 hover:bg-primary/20 transition-colors cursor-pointer"
-                                                >
-                                                    <span
-                                                        className="material-symbols-outlined text-base"
-                                                        aria-hidden="true"
-                                                    >
-                                                        play_arrow
-                                                    </span>
-                                                    Run now
-                                                </button>
-                                            )}
-                                        </span>
-                                    )}
-                                </div>
-                                {moduleSubSchedules.length > 0 && (
-                                    <div className="text-xs text-tertiary">
-                                        <span className="font-semibold uppercase tracking-wider">
-                                            Per-instance
-                                        </span>
-                                        <ul className="flex flex-col gap-0.5 m-0 mt-0.5 p-0 list-none">
-                                            {moduleSubSchedules.map(sub => (
-                                                <li
-                                                    key={sub.label}
-                                                    className={`flex justify-between gap-2 ${sub.enabled ? '' : 'opacity-60'}`}
-                                                >
-                                                    <span className="truncate">{sub.label}</span>
-                                                    <span className="shrink-0 text-right">
-                                                        {sub.enabled
-                                                            ? scheduleToHuman(sub.schedule)
-                                                            : 'Disabled'}
-                                                    </span>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    </div>
-                                )}
-                                {lastRun && (
-                                    <div className="text-xs text-tertiary">
-                                        Last run: {formatTimeAgo(lastRun, new Date(tick))}
-                                    </div>
-                                )}
-                            </Link>
-                        );
-                    })}
-                </div>
-            </section>
-
             {/* Scheduler — full-width panel */}
-            <section className="bg-surface-alt border border-border-light rounded-lg p-6 flex flex-col gap-5">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="flex items-center gap-3 min-w-0">
-                        <span
-                            className="badge-bubble badge-bubble--3 w-11 h-11 rounded-full flex items-center justify-center shrink-0"
-                            aria-hidden="true"
-                        >
-                            <span className="material-symbols-outlined">schedule</span>
-                        </span>
-                        <div className="min-w-0">
-                            <div className="text-xs font-semibold uppercase tracking-wider text-tertiary">
-                                Scheduler
-                            </div>
-                            <div className="text-lg font-bold text-primary">
-                                {schedulerStateLabel}
-                            </div>
-                        </div>
-                    </div>
-                    <Link
-                        to="/settings/schedule"
-                        className="text-sm text-accent no-underline hover:underline"
-                    >
-                        Manage schedules
-                    </Link>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-sm">
-                    <div className="bg-surface rounded-lg px-3 py-2">
-                        <div className="text-tertiary text-xs">Modules</div>
-                        <div className="font-semibold text-primary">{moduleCount}</div>
-                    </div>
-                    <div className="bg-surface rounded-lg px-3 py-2">
-                        <div className="text-tertiary text-xs">Scheduled</div>
-                        <div className="font-semibold text-primary">{scheduledCount}</div>
-                    </div>
-                    <div className="bg-surface rounded-lg px-3 py-2">
-                        <div className="text-tertiary text-xs">Running</div>
-                        <div className="font-semibold text-primary">{runningCount}</div>
-                    </div>
-                    <div className="bg-surface rounded-lg px-3 py-2">
-                        <div className="text-tertiary text-xs">Pending</div>
-                        <div className="font-semibold text-primary">{jobStats.pending}</div>
-                    </div>
-                    <div className="bg-surface rounded-lg px-3 py-2">
-                        <div className="text-tertiary text-xs">Failed</div>
-                        <div
-                            className={`font-semibold ${jobStats.failed > 0 ? 'text-error' : 'text-primary'}`}
-                        >
-                            {jobStats.failed}
-                        </div>
-                    </div>
-                </div>
-
-                <div>
-                    <div className="text-xs font-semibold uppercase tracking-wider text-tertiary mb-2">
-                        Up next
-                    </div>
-                    {upcomingRuns.length === 0 ? (
-                        <div className="text-sm text-tertiary italic">
-                            No scheduled runs coming up.
-                        </div>
-                    ) : (
-                        <ul className="flex flex-col gap-2 m-0 p-0 list-none">
-                            {upcomingRuns.map(entry => (
-                                <li
-                                    key={entry.id}
-                                    className="flex items-center justify-between gap-3 bg-surface rounded-lg px-3 py-2 text-sm"
-                                >
-                                    <div className="min-w-0">
-                                        <div className="font-semibold text-primary truncate">
-                                            {entry.label}
-                                        </div>
-                                        <div className="text-xs text-tertiary truncate">
-                                            {scheduleToHuman(entry.schedule)}
-                                        </div>
-                                    </div>
-                                    <div className="text-right shrink-0">
-                                        <div className="text-xs text-tertiary">
-                                            {entry.next.toLocaleTimeString([], {
-                                                hour: '2-digit',
-                                                minute: '2-digit',
-                                            })}
-                                        </div>
-                                        <div className="text-xs font-semibold text-accent">
-                                            {formatTimeUntil(entry.next, new Date(tick))}
-                                        </div>
-                                    </div>
-                                </li>
-                            ))}
-                        </ul>
-                    )}
-                </div>
-            </section>
-
-            {/* Quick start — now below Recent jobs / Scheduler */}
-            <section>
-                <div className="mb-4">
-                    <h2 className="text-xl font-bold text-primary m-0">Quick start</h2>
-                    <p className="text-secondary text-sm mt-1 mb-0">
-                        Jump straight into the things you do most.
-                    </p>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {QUICK_START.map(card => (
-                        <Link
-                            key={card.id}
-                            to={card.to}
-                            className="no-underline bg-surface border border-border-light rounded-lg p-5 flex flex-col gap-3 transition-transform hover:-translate-y-0.5 hover:border-border"
-                        >
+            {showSection('scheduler') && (
+                <section
+                    className="bg-surface-alt border border-border-light rounded-lg p-6 flex flex-col gap-5"
+                    style={sectionStyle('scheduler')}
+                >
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
                             <span
-                                className={`badge-bubble badge-bubble--${card.badge} w-12 h-12 rounded-full flex items-center justify-center`}
+                                className="badge-bubble badge-bubble--3 w-11 h-11 rounded-full flex items-center justify-center shrink-0"
                                 aria-hidden="true"
                             >
-                                <span className="material-symbols-outlined">{card.icon}</span>
+                                <span className="material-symbols-outlined">schedule</span>
                             </span>
-                            <div>
-                                <div className="font-semibold text-primary">{card.title}</div>
-                                <div className="text-sm text-secondary mt-1">
-                                    {card.description}
+                            <div className="min-w-0">
+                                <div className="text-xs font-semibold uppercase tracking-wider text-tertiary">
+                                    Scheduler
+                                </div>
+                                <div className="text-lg font-bold text-primary">
+                                    {schedulerStateLabel}
                                 </div>
                             </div>
+                        </div>
+                        <Link
+                            to="/settings/schedule"
+                            className="text-sm text-accent no-underline hover:underline"
+                        >
+                            Manage schedules
                         </Link>
-                    ))}
-                </div>
-            </section>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-sm">
+                        <div className="bg-surface rounded-lg px-3 py-2">
+                            <div className="text-tertiary text-xs">Modules</div>
+                            <div className="font-semibold text-primary">{moduleCount}</div>
+                        </div>
+                        <div className="bg-surface rounded-lg px-3 py-2">
+                            <div className="text-tertiary text-xs">Scheduled</div>
+                            <div className="font-semibold text-primary">{scheduledCount}</div>
+                        </div>
+                        <div className="bg-surface rounded-lg px-3 py-2">
+                            <div className="text-tertiary text-xs">Running</div>
+                            <div className="font-semibold text-primary">{runningCount}</div>
+                        </div>
+                        <div className="bg-surface rounded-lg px-3 py-2">
+                            <div className="text-tertiary text-xs">Pending</div>
+                            <div className="font-semibold text-primary">{jobStats.pending}</div>
+                        </div>
+                        <div className="bg-surface rounded-lg px-3 py-2">
+                            <div className="text-tertiary text-xs">Failed</div>
+                            <div
+                                className={`font-semibold ${jobStats.failed > 0 ? 'text-error' : 'text-primary'}`}
+                            >
+                                {jobStats.failed}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div className="text-xs font-semibold uppercase tracking-wider text-tertiary mb-2">
+                            Up next
+                        </div>
+                        {upcomingRuns.length === 0 ? (
+                            <div className="text-sm text-tertiary italic">
+                                No scheduled runs coming up.
+                            </div>
+                        ) : (
+                            <ul className="flex flex-col gap-2 m-0 p-0 list-none">
+                                {upcomingRuns.map(entry => (
+                                    <li
+                                        key={entry.id}
+                                        className="flex items-center justify-between gap-3 bg-surface rounded-lg px-3 py-2 text-sm"
+                                    >
+                                        <div className="min-w-0">
+                                            <div className="font-semibold text-primary truncate">
+                                                {entry.label}
+                                            </div>
+                                            <div className="text-xs text-tertiary truncate">
+                                                {scheduleToHuman(entry.schedule)}
+                                            </div>
+                                        </div>
+                                        <div className="text-right shrink-0">
+                                            <div className="text-xs text-tertiary">
+                                                {entry.next.toLocaleTimeString([], {
+                                                    hour: '2-digit',
+                                                    minute: '2-digit',
+                                                })}
+                                            </div>
+                                            <div className="text-xs font-semibold text-accent">
+                                                {formatTimeUntil(entry.next, new Date(tick))}
+                                            </div>
+                                        </div>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </div>
+                </section>
+            )}
+
+            {/* Quick start */}
+            {showSection('quick_start') && (
+                <section style={sectionStyle('quick_start')}>
+                    <div className="mb-4">
+                        <h2 className="text-xl font-bold text-primary m-0">Quick start</h2>
+                        <p className="text-secondary text-sm mt-1 mb-0">
+                            Jump straight into the things you do most.
+                        </p>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {QUICK_START.map(card => (
+                            <Link
+                                key={card.id}
+                                to={card.to}
+                                className="no-underline bg-surface border border-border-light rounded-lg p-5 flex flex-col gap-3 transition-transform hover:-translate-y-0.5 hover:border-border"
+                            >
+                                <span
+                                    className={`badge-bubble badge-bubble--${card.badge} w-12 h-12 rounded-full flex items-center justify-center`}
+                                    aria-hidden="true"
+                                >
+                                    <span className="material-symbols-outlined">{card.icon}</span>
+                                </span>
+                                <div>
+                                    <div className="font-semibold text-primary">{card.title}</div>
+                                    <div className="text-sm text-secondary mt-1">
+                                        {card.description}
+                                    </div>
+                                </div>
+                            </Link>
+                        ))}
+                    </div>
+                </section>
+            )}
 
             {/* Footer */}
             {prettyVersion && (
                 <footer
                     className="text-xs text-tertiary text-center pt-4 border-t border-border-light"
                     title={prettyVersion.raw}
+                    style={{ order: 100 }}
                 >
                     CHUB {prettyVersion.display}
                 </footer>

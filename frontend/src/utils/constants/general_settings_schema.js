@@ -99,6 +99,40 @@ export const GENERAL_SETTINGS_SCHEMA = [
                     'Choose which modules appear on the dashboard, in the order you add them. Leave empty to show all modules.',
             },
             {
+                key: 'dashboard_sections',
+                label: 'Dashboard Sections',
+                type: 'multiselect',
+                options: [
+                    { value: 'health', label: 'Health' },
+                    { value: 'modules', label: 'Modules' },
+                    { value: 'scheduler', label: 'Scheduler' },
+                    { value: 'quick_start', label: 'Quick Start' },
+                ],
+                placeholder: 'Add a section…',
+                description:
+                    'Choose which dashboard sections appear, in the order you add them. Leave empty to show all in the default order.',
+            },
+            {
+                key: 'dashboard_refresh_seconds',
+                label: 'Dashboard auto-refresh (seconds)',
+                type: 'number',
+                placeholder: '30',
+                min: 0,
+                max: 3600,
+                description:
+                    'How often the dashboard re-polls for updates when live (SSE) updates are not connected, and how often its countdowns tick. 0 = off.',
+            },
+            {
+                key: 'dashboard_upcoming_limit',
+                label: 'Dashboard “Up next” count',
+                type: 'number',
+                placeholder: '5',
+                min: 1,
+                max: 50,
+                description:
+                    'How many upcoming scheduled runs to list in the Scheduler panel’s “Up next”.',
+            },
+            {
                 key: 'duplicate_exclude_groups',
                 label: 'Quality Instance Groups',
                 type: 'object_array',
