@@ -1954,7 +1954,7 @@ const SyncImportPicker = ({ defaultQuery, importing, onPick, toast }) => {
                                 disabled={importing}
                                 onClick={() => onPick(p)}
                                 title={p.file}
-                                className="bg-surface-alt overflow-hidden rounded border border-border hover:border-primary disabled:opacity-50 p-0"
+                                className="relative bg-surface-alt overflow-hidden rounded border border-border hover:border-primary disabled:opacity-50 p-0"
                                 style={{ aspectRatio: '2 / 3' }}
                             >
                                 <img
@@ -1967,6 +1967,14 @@ const SyncImportPicker = ({ defaultQuery, importing, onPick, toast }) => {
                                     loading="lazy"
                                     className="w-full h-full object-cover"
                                 />
+                                {p.style && (
+                                    <span
+                                        className="absolute top-1.5 left-1.5 z-10 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-black/65 text-white backdrop-blur-sm pointer-events-none"
+                                        title={`Style: ${p.style}`}
+                                    >
+                                        {p.style}
+                                    </span>
+                                )}
                             </button>
                         ))}
                     </div>
