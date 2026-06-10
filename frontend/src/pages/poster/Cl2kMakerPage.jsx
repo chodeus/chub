@@ -1131,6 +1131,16 @@ const RenderPanel = ({
                         focusX={focusX}
                         focusY={focusY}
                         onChange={onFocusChange}
+                        mockLabel={
+                            isSeasonPoster
+                                ? `Season ${seasonNumber}`
+                                : bandLabel || (item.kind === 'collection' ? 'COLLECTION' : '')
+                        }
+                        labelYFrac={
+                            !isSeasonPoster && !bandLabel && item.kind === 'collection'
+                                ? 1345 / 1500
+                                : 1440 / 1500
+                        }
                     />
                 )}
 
@@ -1503,8 +1513,136 @@ const FULL_CROP = { x: 0, y: 0, w: 1, h: 1 };
 
 const FRAMING_HELP = {
     cover: 'Drag to choose what stays in the 2:3 crop. The dimmed area is cut. Re-render the preview to see the result.',
-    fit: 'Drag a box around the subjects. That region is shrunk to fit the poster width; the empty bottom is filled by edge-extending the backdrop (the logo/gradient zone), so nothing on the sides is cut. Re-render the preview to see it.',
-    extend: 'Drag a box around the subjects. They stay full-size; the empty bottom is filled by AI (your configured CL2K AI provider). Preview shows the free edge-extend — the AI fill is applied only when you Generate (slower and, on OpenAI, paid).',
+    fit: 'Drag a box around the subjects. That region is shrunk to fit the poster width; the mock on the right shows where it lands — sky is extended above it, and the bottom fades to black into the logo/gradient zone.',
+    extend: 'Drag a box around the subjects. They stay full-size; the empty bottom is filled by AI (your configured CL2K AI provider). The mock shows the free edge-extend placement — the AI fill is applied only when you Generate.',
+};
+
+// Live miniature of the final 2:3 canvas for fit/extend framing. Updates instantly
+// as the crop box / vertical-position slider move (no server render): shows the
+// cropped region's placement, the stretched-sky fill above, the fade-to-black
+// below, the template gradient, the logo zone and the label band. Mirrors the
+// backend geometry (gradient 780→1375, logo bottom 1300, label 1440/1345 of 1500).
+const FitMock = ({ imageUrl, ratio, crop, vPos, label, labelYFrac }) => {
+    const c = crop || FULL_CROP;
+    if (!ratio || c.w < 0.02 || c.h < 0.02) return null;
+    const photoH = Math.min(1, (2 / 3) * ((c.h * ratio) / c.w)); // frac of canvas height
+    const top = clamp01(vPos) * Math.max(0, 1 - photoH);
+    const bottomFillH = Math.min(1 - top - photoH, 0.18);
+    // Shared horizontal mapping: scale the full image so the crop's x-range fills
+    // the mock width.
+    const imgW = `${100 / c.w}%`;
+    const imgLeft = `-${(c.x / c.w) * 100}%`;
+    const skySliver = 0.03 * c.h; // thin top-of-crop sliver, stretched (as backend does)
+    return (
+        <div className="shrink-0">
+            <div
+                className="relative overflow-hidden rounded border border-border bg-black"
+                style={{ width: 150, height: 225 }}
+            >
+                {top > 0.002 && (
+                    <div
+                        className="absolute left-0 w-full overflow-hidden"
+                        style={{ top: 0, height: `${top * 100}%` }}
+                    >
+                        <img
+                            src={imageUrl}
+                            alt=""
+                            className="absolute"
+                            style={{
+                                width: imgW,
+                                left: imgLeft,
+                                height: `${100 / Math.max(skySliver, 0.005)}%`,
+                                top: `-${(c.y / Math.max(skySliver, 0.005)) * 100}%`,
+                                filter: 'blur(6px)',
+                            }}
+                        />
+                    </div>
+                )}
+                <div
+                    className="absolute left-0 w-full overflow-hidden"
+                    style={{ top: `${top * 100}%`, height: `${photoH * 100}%` }}
+                >
+                    <img
+                        src={imageUrl}
+                        alt=""
+                        className="absolute max-w-none"
+                        style={{
+                            width: imgW,
+                            left: imgLeft,
+                            top: `-${(c.y / c.h) * 100}%`,
+                        }}
+                    />
+                </div>
+                {bottomFillH > 0.002 && (
+                    <div
+                        className="absolute left-0 w-full overflow-hidden"
+                        style={{ top: `${(top + photoH) * 100}%`, height: `${bottomFillH * 100}%` }}
+                    >
+                        <img
+                            src={imageUrl}
+                            alt=""
+                            className="absolute"
+                            style={{
+                                width: imgW,
+                                left: imgLeft,
+                                height: `${100 / Math.max(skySliver, 0.005)}%`,
+                                top: `-${((c.y + c.h - skySliver) / Math.max(skySliver, 0.005)) * 100}%`,
+                                filter: 'blur(6px)',
+                            }}
+                        />
+                        <div
+                            className="absolute inset-0"
+                            style={{
+                                background: 'linear-gradient(180deg, rgba(0,0,0,0.3), #000 90%)',
+                            }}
+                        />
+                    </div>
+                )}
+                {/* Template gradient (780→1375 of 1500) */}
+                <div
+                    className="absolute inset-0 pointer-events-none"
+                    style={{
+                        background:
+                            'linear-gradient(180deg, rgba(0,0,0,0) 52%, rgba(0,0,0,0.55) 76%, #000 91.7%)',
+                    }}
+                />
+                {/* Logo zone (bottom-aligned at y=1300) */}
+                <div
+                    className="absolute pointer-events-none flex items-end justify-center"
+                    style={{
+                        left: '20%',
+                        width: '60%',
+                        top: '73.3%',
+                        height: '13.4%',
+                        border: '1px dashed rgba(255,255,255,0.35)',
+                        borderRadius: 3,
+                    }}
+                >
+                    <span style={{ fontSize: 8, color: 'rgba(255,255,255,0.5)', lineHeight: 1.6 }}>
+                        LOGO
+                    </span>
+                </div>
+                {label ? (
+                    <div
+                        className="absolute w-full text-center pointer-events-none"
+                        style={{
+                            top: `${labelYFrac * 100}%`,
+                            transform: 'translateY(-50%)',
+                            color: '#fff',
+                            fontSize: 7,
+                            letterSpacing: 2,
+                            fontFamily: 'Arial, sans-serif',
+                        }}
+                    >
+                        {label.toUpperCase()}
+                    </div>
+                ) : null}
+            </div>
+            <p className="text-xs text-tertiary mt-1 text-center" style={{ width: 150 }}>
+                Live mock (approx.)
+            </p>
+        </div>
+    );
 };
 
 const CropFramer = ({
@@ -1518,50 +1656,53 @@ const CropFramer = ({
     focusX,
     focusY,
     onChange,
+    mockLabel = '',
+    labelYFrac = 1440 / 1500,
 }) => {
     const wrapRef = useRef(null);
-    const [dims, setDims] = useState(null);
+    // Natural aspect ratio (h/w) of the backdrop — display-size independent, so
+    // the overlay/drag math stays correct when layout (e.g. the live mock beside
+    // the image) resizes the displayed image without a reload.
+    const [ratio, setRatio] = useState(null);
     const dragging = useRef(false);
     const anchor = useRef(null); // box-draw anchor (normalized)
     // Both "fit" and "extend" use the free-form keep-region box; only "cover" uses
     // the focal-point 2:3 box.
     const isBox = fitMode === 'fit' || fitMode === 'extend';
 
-    // Cover-mode 2:3 box positioned by the focal point.
+    // Cover-mode 2:3 box positioned by the focal point (fractions of the image).
     const coverRect = useMemo(() => {
-        if (!dims) return null;
+        if (!ratio) return null;
         const target = 2 / 3; // CL2K canvas aspect (w:h)
-        let w, h;
-        if (dims.w / dims.h > target) {
-            h = dims.h;
-            w = h * target;
+        let wF, hF;
+        if (1 / ratio > target) {
+            hF = 1;
+            wF = target * ratio;
         } else {
-            w = dims.w;
-            h = w / target;
+            wF = 1;
+            hF = 1 / target / ratio;
         }
-        const left = Math.max(0, Math.min(focusX * dims.w - w / 2, dims.w - w));
-        const top = Math.max(0, Math.min(focusY * dims.h - h / 2, dims.h - h));
-        return { left, top, w, h };
-    }, [dims, focusX, focusY]);
+        const leftF = Math.max(0, Math.min(focusX - wF / 2, 1 - wF));
+        const topF = Math.max(0, Math.min(focusY - hF / 2, 1 - hF));
+        return { left: leftF, top: topF, w: wF, h: hF };
+    }, [ratio, focusX, focusY]);
 
-    // Box-mode kept-region from the normalized crop.
+    // Box-mode kept-region from the normalized crop (already fractions).
     const boxRect = useMemo(() => {
-        if (!dims || !isBox) return null;
+        if (!isBox) return null;
         const c = crop || FULL_CROP;
-        return { left: c.x * dims.w, top: c.y * dims.h, w: c.w * dims.w, h: c.h * dims.h };
-    }, [dims, isBox, crop]);
+        return { left: c.x, top: c.y, w: c.w, h: c.h };
+    }, [isBox, crop]);
 
-    const pointFromEvent = useCallback(
-        e => {
-            const el = wrapRef.current;
-            if (!el || !dims) return null;
-            const r = el.getBoundingClientRect();
-            const cx = (e.touches?.[0]?.clientX ?? e.clientX) - r.left;
-            const cy = (e.touches?.[0]?.clientY ?? e.clientY) - r.top;
-            return { nx: clamp01(cx / dims.w), ny: clamp01(cy / dims.h) };
-        },
-        [dims]
-    );
+    const pointFromEvent = useCallback(e => {
+        const el = wrapRef.current;
+        if (!el) return null;
+        const r = el.getBoundingClientRect();
+        if (!r.width || !r.height) return null;
+        const cx = (e.touches?.[0]?.clientX ?? e.clientX) - r.left;
+        const cy = (e.touches?.[0]?.clientY ?? e.clientY) - r.top;
+        return { nx: clamp01(cx / r.width), ny: clamp01(cy / r.height) };
+    }, []);
 
     const down = useCallback(
         e => {
@@ -1670,35 +1811,53 @@ const CropFramer = ({
                     </span>
                 </label>
             )}
-            <div
-                ref={wrapRef}
-                className="relative inline-block leading-none select-none overflow-hidden rounded cursor-crosshair"
-                onMouseDown={down}
-                onMouseMove={moveEvt}
-                onMouseUp={up}
-                onMouseLeave={up}
-                onTouchStart={down}
-                onTouchMove={moveEvt}
-                onTouchEnd={up}
-            >
-                <img
-                    src={imageUrl}
-                    alt="Crop framing"
-                    onLoad={e => setDims({ w: e.target.clientWidth, h: e.target.clientHeight })}
-                    className="block max-w-full"
-                    draggable={false}
-                />
-                {activeRect && (
-                    <div
-                        className="absolute border-2 border-primary"
-                        style={{
-                            left: activeRect.left,
-                            top: activeRect.top,
-                            width: activeRect.w,
-                            height: activeRect.h,
-                            boxShadow: '0 0 0 9999px rgba(0,0,0,0.5)',
-                            pointerEvents: 'none',
-                        }}
+            <div className="flex gap-3 items-start">
+                <div
+                    ref={wrapRef}
+                    className="relative inline-block leading-none select-none overflow-hidden rounded cursor-crosshair min-w-0"
+                    onMouseDown={down}
+                    onMouseMove={moveEvt}
+                    onMouseUp={up}
+                    onMouseLeave={up}
+                    onTouchStart={down}
+                    onTouchMove={moveEvt}
+                    onTouchEnd={up}
+                >
+                    <img
+                        src={imageUrl}
+                        alt="Crop framing"
+                        onLoad={e =>
+                            setRatio(
+                                e.target.naturalWidth
+                                    ? e.target.naturalHeight / e.target.naturalWidth
+                                    : null
+                            )
+                        }
+                        className="block max-w-full"
+                        draggable={false}
+                    />
+                    {activeRect && (
+                        <div
+                            className="absolute border-2 border-primary"
+                            style={{
+                                left: `${activeRect.left * 100}%`,
+                                top: `${activeRect.top * 100}%`,
+                                width: `${activeRect.w * 100}%`,
+                                height: `${activeRect.h * 100}%`,
+                                boxShadow: '0 0 0 9999px rgba(0,0,0,0.5)',
+                                pointerEvents: 'none',
+                            }}
+                        />
+                    )}
+                </div>
+                {isBox && (
+                    <FitMock
+                        imageUrl={imageUrl}
+                        ratio={ratio}
+                        crop={crop}
+                        vPos={vPos}
+                        label={mockLabel}
+                        labelYFrac={labelYFrac}
                     />
                 )}
             </div>
