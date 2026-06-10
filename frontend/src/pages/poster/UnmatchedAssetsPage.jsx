@@ -779,7 +779,21 @@ const ARTWORK_PAGE_SIZE = 50;
 const ARTWORK_STATUS = {
     unmatched: { listKey: 'unmatched', typesKey: 'missing' },
     review: { listKey: 'needs_review', typesKey: 'failed' },
+    locked: { listKey: 'locked', typesKey: 'locked' },
     ignored: { listKey: 'ignored', typesKey: 'ignored_types' },
+};
+
+// Subtle checkerboard so a transparent logo/squareart thumbnail reads as
+// transparent (not a flat dark block) in the picker — mirrors the Asset Search
+// page's artwork rendering.
+const ARTWORK_TRANSPARENCY_BG = {
+    backgroundImage:
+        'linear-gradient(45deg, var(--color-surface-alt) 25%, transparent 25%), ' +
+        'linear-gradient(-45deg, var(--color-surface-alt) 25%, transparent 25%), ' +
+        'linear-gradient(45deg, transparent 75%, var(--color-surface-alt) 75%), ' +
+        'linear-gradient(-45deg, transparent 75%, var(--color-surface-alt) 75%)',
+    backgroundSize: '16px 16px',
+    backgroundPosition: '0 0, 0 8px, 8px -8px, -8px 0px',
 };
 
 /** Chip listing the artwork type(s) a media row is missing/failed/ignored. */
@@ -805,7 +819,7 @@ const MissingChips = ({ typeKeys, reasons }) => {
     );
 };
 
-const ArtworkView = ({ data, status, isLoading, onRefresh }) => {
+const ArtworkView = ({ data, status, isLoading, onRefresh, onPick }) => {
     const toast = useToast();
     // Artwork-type card filter: null = all types; otherwise restrict rows to
     // ones whose relevant type-array includes this artwork type.
@@ -910,11 +924,41 @@ const ArtworkView = ({ data, status, isLoading, onRefresh }) => {
         }
     };
 
+    // Unlock every locked artwork type on this row so the matcher is free to
+    // re-resolve it on the next run (the per-type counterpart of poster unlock).
+    const unlockRow = async item => {
+        const targetTypes = item.locked || [];
+        if (!targetTypes.length) return;
+        setBusyKey(item.id);
+        try {
+            await Promise.all(
+                targetTypes.map(tk =>
+                    postersAPI.unlockArtwork(item.id, tk, {
+                        kind: item.asset_type === 'collection' ? 'collection' : 'media',
+                    })
+                )
+            );
+            toast.success('Unlocked — the matcher will re-resolve it on the next run');
+            onRefresh();
+        } catch {
+            toast.error('Failed to unlock');
+        } finally {
+            setBusyKey(null);
+        }
+    };
+
     if (isLoading) return <Spinner size="large" text="Loading artwork coverage..." center />;
 
     const isIgnoredTab = status === 'ignored';
     const isReviewTab = status === 'review';
-    const missingColLabel = isIgnoredTab ? 'Not needed' : isReviewTab ? 'Failed' : 'Missing';
+    const isLockedTab = status === 'locked';
+    const missingColLabel = isIgnoredTab
+        ? 'Not needed'
+        : isReviewTab
+          ? 'Failed'
+          : isLockedTab
+            ? 'Locked'
+            : 'Missing';
 
     return (
         <div className="flex flex-col gap-4">
@@ -1137,6 +1181,22 @@ const ArtworkView = ({ data, status, isLoading, onRefresh }) => {
                                             {formatId(item.tvdb_id) || '—'}
                                         </td>
                                         <td className="px-3 py-2 text-right whitespace-nowrap">
+                                            {!isIgnoredTab && (
+                                                <IconButton
+                                                    icon="wallpaper"
+                                                    size="small"
+                                                    variant="ghost"
+                                                    aria-label="Choose artwork"
+                                                    title={
+                                                        isLockedTab
+                                                            ? 'Re-pick — choose a different artwork file'
+                                                            : 'Choose an artwork file to apply'
+                                                    }
+                                                    onClick={() =>
+                                                        onPick?.(item, item[cfg.typesKey] || [])
+                                                    }
+                                                />
+                                            )}
                                             <IconButton
                                                 icon="content_copy"
                                                 size="small"
@@ -1154,6 +1214,16 @@ const ArtworkView = ({ data, status, isLoading, onRefresh }) => {
                                                     aria-label="Restore"
                                                     title="Restore — track this artwork again"
                                                     onClick={() => setIgnored(item, false)}
+                                                />
+                                            ) : isLockedTab ? (
+                                                <IconButton
+                                                    icon="lock_open"
+                                                    size="small"
+                                                    variant="ghost"
+                                                    disabled={busyKey === item.id}
+                                                    aria-label="Unlock"
+                                                    title="Unlock — let the matcher re-resolve this artwork on the next run"
+                                                    onClick={() => unlockRow(item)}
                                                 />
                                             ) : (
                                                 <IconButton
@@ -1328,6 +1398,158 @@ const PosterPickerModal = ({ item, onClose, onApplied }) => {
  * provenance) so the next module run repopulates it. Preserves user-curated
  * state (ignored / locked) and never deletes posters from disk or Plex.
  */
+/** Candidate thumbnail for the artwork picker — object-contain on a
+ *  transparency checkerboard so wide/transparent logos read correctly (the
+ *  artwork counterpart of PickerThumb). */
+const ArtworkPickerThumb = ({ cand, busy, onApply }) => {
+    const [failed, setFailed] = useState(false);
+    return (
+        <button
+            type="button"
+            disabled={busy}
+            onClick={() => onApply(cand.poster_id)}
+            title={cand.would_match ? 'Would match' : cand.reason}
+            className={`group relative rounded-lg overflow-hidden border text-left ${
+                cand.would_match ? 'border-success/60' : 'border-border'
+            } hover:border-brand-primary disabled:opacity-50`}
+        >
+            <div
+                className="flex items-center justify-center"
+                style={{ aspectRatio: '3 / 2', ...ARTWORK_TRANSPARENCY_BG }}
+            >
+                {failed ? (
+                    <span className="material-symbols-outlined text-tertiary text-3xl">
+                        broken_image
+                    </span>
+                ) : (
+                    <img
+                        src={postersAPI.getThumbnailUrl(cand.poster_id, 200)}
+                        alt={cand.title || `#${cand.poster_id}`}
+                        loading="lazy"
+                        className="object-contain w-full h-full p-2"
+                        onError={() => setFailed(true)}
+                    />
+                )}
+            </div>
+            <div className="px-2 py-1">
+                <p className="text-xs text-secondary truncate">{cand.style || cand.owner || '—'}</p>
+                {cand.season_number != null && (
+                    <p className="text-[10px] text-tertiary">Season {cand.season_number}</p>
+                )}
+            </div>
+            <span className="absolute inset-0 flex items-center justify-center bg-brand-primary/80 opacity-0 group-hover:opacity-100 transition-opacity">
+                <span className="material-symbols-outlined text-white">check</span>
+            </span>
+        </button>
+    );
+};
+
+const ARTWORK_TYPE_LABELS = { logo: 'Logo', background: 'Background', squareart: 'Square art' };
+
+/** Modal that fetches candidate artwork files for one (media, image_type) and
+ *  applies the chosen one. The artwork counterpart of PosterPickerModal. When a
+ *  row lacks more than one type, an inline selector switches between them. */
+const ArtworkPickerModal = ({ item, imageTypes, onClose, onApplied }) => {
+    const toast = useToast();
+    const kind = item.asset_type === 'collection' ? 'collection' : 'media';
+    // The types this row can pick (its missing/failed/locked set); fall back to
+    // all three so the modal is always usable.
+    const types = imageTypes?.length ? imageTypes : ['logo', 'background', 'squareart'];
+    const [imageType, setImageType] = useState(types[0]);
+    // Tag the fetched list with the type it was loaded for, so switching type
+    // shows the loading state (candidates === null) without a synchronous
+    // setState in the effect (react-hooks/set-state-in-effect).
+    const [result, setResult] = useState({ type: null, list: null });
+    const [busy, setBusy] = useState(null);
+
+    useEffect(() => {
+        let alive = true;
+        postersAPI
+            .fetchArtworkCandidates(item.id, imageType, { kind })
+            .then(r => alive && setResult({ type: imageType, list: r?.data?.candidates || [] }))
+            .catch(() => alive && setResult({ type: imageType, list: [] }));
+        return () => {
+            alive = false;
+        };
+    }, [item.id, imageType, kind]);
+
+    const candidates = result.type === imageType ? result.list : null;
+
+    const apply = async posterId => {
+        setBusy(posterId);
+        try {
+            const res = await postersAPI.applyArtwork(item.id, imageType, posterId, { kind });
+            toast.success(
+                res?.message ||
+                    (res?.data?.applied
+                        ? 'Artwork applied'
+                        : 'Artwork saved — applies on the next asset_renamerr run')
+            );
+            onApplied?.();
+            onClose();
+        } catch {
+            toast.error('Failed to apply artwork');
+            setBusy(null);
+        }
+    };
+
+    const typeLabel = ARTWORK_TYPE_LABELS[imageType]?.toLowerCase() || imageType;
+
+    return (
+        <Modal isOpen onClose={onClose} size="large">
+            <Modal.Header>
+                Choose artwork — {item.title}
+                {item.year ? ` (${item.year})` : ''}
+                {item.season_number != null ? ` · Season ${item.season_number}` : ''}
+            </Modal.Header>
+            <Modal.Body>
+                {types.length > 1 && (
+                    <div className="flex flex-wrap gap-1 mb-3">
+                        {types.map(t => (
+                            <button
+                                key={t}
+                                type="button"
+                                onClick={() => setImageType(t)}
+                                className={`px-3 py-1 text-sm rounded-lg border ${
+                                    imageType === t
+                                        ? 'border-brand-primary/50 bg-surface-alt text-primary'
+                                        : 'border-border text-secondary hover:text-primary'
+                                }`}
+                            >
+                                {ARTWORK_TYPE_LABELS[t] || t}
+                            </button>
+                        ))}
+                    </div>
+                )}
+                <p className="text-xs text-tertiary mb-3">
+                    Applying follows Asset Renamerr&apos;s <strong>Apply Method</strong>: with{' '}
+                    <strong>Plex</strong> the {typeLabel} is uploaded straight to Plex; with{' '}
+                    <strong>Kometa</strong> it&apos;s copied into your assets directory. The pick is
+                    saved &amp; locked either way.
+                </p>
+                {candidates === null ? (
+                    <p className="text-sm text-secondary">Searching for artwork…</p>
+                ) : candidates.length === 0 ? (
+                    <p className="text-sm text-secondary">
+                        No candidate {typeLabel} files found in your cache for this title.
+                    </p>
+                ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                        {candidates.map(c => (
+                            <ArtworkPickerThumb
+                                key={c.poster_id}
+                                cand={c}
+                                busy={busy != null}
+                                onApply={apply}
+                            />
+                        ))}
+                    </div>
+                )}
+            </Modal.Body>
+        </Modal>
+    );
+};
+
 const ResetControl = ({ assetClass, onComplete }) => {
     const toast = useToast();
     const [open, setOpen] = useState(false);
@@ -1420,6 +1642,9 @@ const UnmatchedAssetsPage = () => {
 
     const [viewMode, setViewMode] = useState('unmatched');
     const [pickerItem, setPickerItem] = useState(null);
+    // Artwork picker target: { item, types } — the row plus the artwork types it
+    // can pick (missing / failed / locked for the active tab).
+    const [artworkPicker, setArtworkPicker] = useState(null);
     // Primary segregation: posters (default) vs additional artwork.
     const [assetClass, setAssetClass] = useState('poster');
 
@@ -1440,7 +1665,7 @@ const UnmatchedAssetsPage = () => {
     const artworkCounts = {
         unmatched: artworkSummary.missing || 0,
         review: artworkSummary.needs_review || 0,
-        locked: 0,
+        locked: artworkSummary.locked || 0,
         ignored: artworkSummary.ignored || 0,
     };
 
@@ -1578,6 +1803,7 @@ const UnmatchedAssetsPage = () => {
                     status={viewMode}
                     isLoading={artworkLoading && !artworkLoaded}
                     onRefresh={refreshArtwork}
+                    onPick={(item, types) => setArtworkPicker({ item, types })}
                 />
             )}
 
@@ -1674,6 +1900,15 @@ const UnmatchedAssetsPage = () => {
                     item={pickerItem}
                     onClose={() => setPickerItem(null)}
                     onApplied={refresh}
+                />
+            )}
+
+            {artworkPicker && (
+                <ArtworkPickerModal
+                    item={artworkPicker.item}
+                    imageTypes={artworkPicker.types}
+                    onClose={() => setArtworkPicker(null)}
+                    onApplied={refreshArtwork}
                 />
             )}
         </div>

@@ -427,6 +427,56 @@ export const postersAPI = {
     },
 
     /**
+     * Candidate artwork files for one (media, image_type) — the artwork
+     * counterpart of fetchMatchCandidates, powering the manual artwork picker.
+     * @param {number} id - media_cache or collections_cache id
+     * @param {string} imageType - 'logo' | 'background' | 'squareart'
+     * @param {Object} options - { kind: 'media'|'collection' }
+     * @returns {Promise<Object>} { candidates: [...], media: {...} }
+     */
+    fetchArtworkCandidates: (id, imageType, { kind = 'media' } = {}) => {
+        const params = new URLSearchParams({ kind });
+        return apiCore.get(`/posters/match/${id}/artwork/${imageType}/candidates?${params}`, {
+            useCache: false,
+        });
+    },
+
+    /**
+     * Manually apply a chosen artwork file to one (media, image_type) and lock
+     * it so a re-run reuses it. The artwork counterpart of applyMatch.
+     * @param {number} id - row id
+     * @param {string} imageType - 'logo' | 'background' | 'squareart'
+     * @param {number} posterId - poster_cache id of the chosen file
+     * @param {Object} options - { kind: 'media'|'collection' }
+     */
+    applyArtwork: async (id, imageType, posterId, { kind = 'media' } = {}) => {
+        const params = new URLSearchParams({ kind, poster_id: String(posterId) });
+        const res = await apiCore.post(
+            `/posters/match/${id}/artwork/${imageType}/apply?${params}`,
+            {}
+        );
+        apiCore.clearCache('/posters/unmatched/artwork');
+        return res;
+    },
+
+    /**
+     * Unlock a manually-picked artwork so the matcher can re-resolve it.
+     * The artwork counterpart of unlockMatch.
+     * @param {number} id - row id
+     * @param {string} imageType - 'logo' | 'background' | 'squareart'
+     * @param {Object} options - { kind: 'media'|'collection' }
+     */
+    unlockArtwork: async (id, imageType, { kind = 'media' } = {}) => {
+        const params = new URLSearchParams({ kind });
+        const res = await apiCore.post(
+            `/posters/match/${id}/artwork/${imageType}/unlock?${params}`,
+            {}
+        );
+        apiCore.clearCache('/posters/unmatched/artwork');
+        return res;
+    },
+
+    /**
      * Ignore (dismiss) or restore a media/collection row from the
      * Unmatched / Needs-Review tabs.
      * @param {number} id - media_cache or collections_cache row id

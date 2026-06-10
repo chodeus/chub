@@ -605,6 +605,65 @@ class AssetRenamerr(ChubModule):
                 return False, f"file op failed: {exc}"
         return True, new_path
 
+    def apply_chosen_asset(
+        self,
+        db: ChubDB,
+        target_kind: str,
+        media: dict,
+        image_type: str,
+        file: str,
+    ) -> Tuple[bool, str]:
+        """Apply one user-chosen artwork file to a single (media, image_type)
+        immediately, the same way a full run would, and lock it.
+
+        Mirrors the poster picker's inline apply (api.posters.apply_match): copy
+        to the Kometa destination or upload straight to Plex per the module's
+        apply_method, record provenance in media_asset_matches, and set the
+        user_confirmed lock so future runs reuse this exact file instead of
+        re-resolving. Returns (applied, detail)."""
+        is_collection = target_kind == "collection"
+        apply_method = self.config.apply_method
+        try:
+            src_mtime: Optional[float] = os.stat(file).st_mtime
+        except OSError:
+            src_mtime = None
+
+        applied_libs: Optional[List[str]] = None
+        if apply_method == "plex":
+            applied, detail, applied_libs = self._apply_direct(
+                db, media, image_type, file, None, is_collection
+            )
+        else:
+            applied, detail = self._apply_kometa(
+                media, image_type, "local", file, None
+            )
+
+        target_id = media.get("id")
+        if target_id is not None:
+            db.media_asset_matches.upsert(
+                target_kind=target_kind,
+                target_id=target_id,
+                image_type=image_type,
+                source="local",
+                matched_file=file,
+                matched_url=None,
+                source_mtime=src_mtime,
+                applied_method=apply_method,
+                applied_path=detail if applied else None,
+                applied_libraries=(
+                    json.dumps(sorted(applied_libs)) if applied_libs else None
+                ),
+                match_status="applied" if applied else "failed",
+                detail=detail,
+            )
+            # Lock the manual pick regardless of apply outcome — even if this
+            # leg failed (e.g. Plex briefly unreachable), the chosen file is
+            # saved and the next run reuses it instead of re-resolving.
+            db.media_asset_matches.set_user_confirmed(
+                target_kind, target_id, image_type, True
+            )
+        return applied, detail
+
     def _file_op(self, src: str, dest: str, action_type: str) -> None:
         if action_type == "move":
             shutil.move(src, dest)
@@ -758,9 +817,36 @@ class AssetRenamerr(ChubModule):
                 continue
 
             for image_type in applicable:
-                resolved = self._resolve_source(
-                    media, db, image_type, is_collection, fanart_client, conn=poster_conn
+                # Manual-pick lock: when the user chose a specific file in the
+                # picker, reuse it verbatim instead of re-resolving — a re-run
+                # must never overwrite a locked pick (mirrors poster_renamerr's
+                # user_confirmed early-return). Falls back to auto-resolution if
+                # the locked file has since vanished from disk.
+                locked = (
+                    applied_map.get((target_kind, int(target_id), image_type))
+                    if target_id is not None
+                    else None
                 )
+                if (
+                    locked
+                    and locked.get("user_confirmed")
+                    and locked.get("matched_file")
+                    and os.path.exists(locked["matched_file"])
+                ):
+                    resolved: Optional[Tuple[str, Optional[str], Optional[str]]] = (
+                        "local",
+                        locked["matched_file"],
+                        None,
+                    )
+                else:
+                    resolved = self._resolve_source(
+                        media,
+                        db,
+                        image_type,
+                        is_collection,
+                        fanart_client,
+                        conn=poster_conn,
+                    )
                 if not resolved:
                     # No source artwork anywhere for this (item, type). Record a
                     # "missing" row so the Unmatched view can derive coverage
