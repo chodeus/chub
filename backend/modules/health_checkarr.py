@@ -226,7 +226,7 @@ class HealthCheckarr(ChubModule):
                                 # must not mask any in-flight exception.
                                 pass
         except KeyboardInterrupt:
-            print("Keyboard Interrupt detected. Exiting...")
+            self.logger.info("Keyboard Interrupt detected. Exiting...")
             return
         except Exception:
             self.logger.error("\n\nAn error occurred:\n", exc_info=True)

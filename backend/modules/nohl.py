@@ -1114,7 +1114,7 @@ class Nohl(ChubModule):
             manager = NotificationManager(self.full_config, self.logger, module_name="nohl")
             manager.send_notification(final_output)
         except KeyboardInterrupt:
-            print("Keyboard Interrupt detected. Exiting...")
+            self.logger.info("Keyboard Interrupt detected. Exiting...")
             raise
         except Exception:
             self.logger.error("\n\nAn error occurred:\n", exc_info=True)

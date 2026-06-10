@@ -389,6 +389,9 @@ def _persist_poster(
         out_path = os.path.join(cfg.output_dir, filename)
         with open(out_path, "wb") as fh:
             fh.write(blob)
+        # Logged before the DB writes below so a failure there still leaves a
+        # record that the file exists on disk.
+        logger.info(f"CL2K saved {filename} to {cfg.output_dir}")
 
         # poster_cache so CHUB's matching/upload picks it up
         db.poster.bulk_upsert(
@@ -874,7 +877,8 @@ class Cl2kMaker(ChubModule):
                 except Exception as exc:
                     failed += 1
                     self.logger.warning(
-                        f"CL2K generation failed for {media.get('title')}: {exc}"
+                        f"CL2K generation failed for {media.get('title')}: {exc}",
+                        exc_info=True,
                     )
                 if total:
                     self._report_progress(int(idx / total * 100))

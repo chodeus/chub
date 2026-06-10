@@ -119,7 +119,7 @@ class PlexMaintenance(ChubModule):
                     self.logger.error(f"Failed to send notification: {e}")
 
         except KeyboardInterrupt:
-            print("Keyboard Interrupt detected. Exiting...")
+            self.logger.info("Keyboard Interrupt detected. Exiting...")
             return
         except Exception:
             self.logger.error("\n\nAn error occurred:\n", exc_info=True)

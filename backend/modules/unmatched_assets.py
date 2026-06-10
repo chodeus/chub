@@ -813,7 +813,7 @@ class UnmatchedAssets(ChubModule):
                 self.send_notification(db)
 
         except KeyboardInterrupt:
-            print("Keyboard Interrupt detected. Exiting...")
+            self.logger.info("Keyboard Interrupt detected. Exiting...")
             return
         except Exception:
             self.logger.error("\n\nAn error occurred:\n", exc_info=True)

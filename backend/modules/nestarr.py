@@ -580,8 +580,10 @@ class _NestScanner:
             if self._cancelled():
                 return issues
 
-            plex_id = plex_item.get("id")
-            if plex_id in matched_plex_ids:
+            # Internal plex_media_cache row id — matched_plex_ids holds these
+            # (from media_cache.plex_mapping_id), NOT Plex ratingKeys.
+            row_id = plex_item.get("id")
+            if row_id in matched_plex_ids:
                 plex_matched += 1
                 continue  # An ARR item points to this Plex item
 
@@ -596,10 +598,11 @@ class _NestScanner:
                 f"  [Plex→ARR] UNMATCHED: {instance_name} "
                 f"[{plex_item.get('library_name', '?')}] "
                 f"'{plex_item.get('title', '?')}' ({plex_item.get('year', '?')}) "
-                f"plex_id={plex_id} — no media_cache entry references this ID"
+                f"plex_id={plex_item.get('plex_id', '?')} (cache row {row_id}) "
+                f"— no media_cache entry references this item"
             )
 
-            issue_id = f"plex_unmatched_{instance_name}_{plex_id}".replace(" ", "_")
+            issue_id = f"plex_unmatched_{instance_name}_{row_id}".replace(" ", "_")
 
             issues.append(
                 {
@@ -937,7 +940,10 @@ class _NestScanner:
                                 if os.path.isfile(os.path.join(local_path, f))
                                 and self._is_video_file(f)
                             ]
-                        except OSError:
+                        except OSError as e:
+                            self.logger.debug(
+                                f"Could not list video files in {local_path}: {e}"
+                            )
                             continue
                         if len(video_files) > 1:
                             stray_count += 1
@@ -1207,7 +1213,7 @@ class Nestarr(ChubModule):
                 self.logger.info("No unmatched or nesting issues found.")
 
         except KeyboardInterrupt:
-            print("Keyboard Interrupt detected. Exiting...")
+            self.logger.info("Keyboard Interrupt detected. Exiting...")
             return
         except Exception:
             self.logger.error("\n\nAn error occurred:\n", exc_info=True)

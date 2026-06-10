@@ -86,8 +86,23 @@ def _iter_monthly_entries(data: str):
             yield day.strip(), time_
 
 
+class _SilentLogger:
+    """Stand-in when no logger is supplied — check_schedule logs
+    opportunistically and must not crash on logger=None."""
+
+    def debug(self, *args, **kwargs):
+        pass
+
+    def error(self, *args, **kwargs):
+        pass
+
+
+_SILENT_LOGGER = _SilentLogger()
+
+
 def check_schedule(script_name: str, schedule: str, logger: Optional[Logger]) -> bool:
     """Check if the current time matches the given schedule for a script."""
+    logger = logger or _SILENT_LOGGER
     try:
         now: datetime = datetime.now()
         try:
