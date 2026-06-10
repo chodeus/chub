@@ -57,23 +57,33 @@ WORKDIR /app
 # outages, and libjodycode is pulled in automatically as a dep.
 #
 # CL2K maker adds: imagemagick (Wand's libMagickWand), librsvg2-2 (so IM can
-# read SVG clear logos), fonts-dejavu-core (guaranteed fallback font), and the
-# REAL Microsoft Arial via ttf-mscorefonts-installer (needs the `contrib`
-# component + EULA pre-accept + cabextract; it downloads from SourceForge at
-# build). fc-cache registers the fonts.
+# read SVG clear logos), fonts-dejavu-core (guaranteed fallback font), and
+# cabextract to unpack the vendored Arial below. No `contrib` component or
+# ttf-mscorefonts-installer here: that package downloads MS fonts from
+# SourceForge at build time, and a flaky mirror failed the whole image build.
 RUN set -eux; \
-    ( sed -i 's/^Components: main$/Components: main contrib/' \
-        /etc/apt/sources.list.d/debian.sources 2>/dev/null || true ); \
-    ( sed -i 's/ main$/ main contrib/' /etc/apt/sources.list 2>/dev/null || true ); \
-    echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true" \
-        | debconf-set-selections; \
     apt-get update; \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         curl git tzdata jdupes \
         imagemagick librsvg2-2 fonts-dejavu-core \
-        fontconfig cabextract ttf-mscorefonts-installer; \
-    fc-cache -f; \
+        fontconfig cabextract; \
     rm -rf /var/lib/apt/lists/*
+
+# Real Microsoft Arial (regular + bold) for CL2K text rendering, extracted at
+# build from the vendored, unmodified arial32.exe (deploy/docker/fonts/) — so
+# the build never touches the network for fonts. Renamed to the msttcorefonts
+# paths geometry.resolve_font() probes (Arial.ttf / Arial_Bold.ttf).
+# Redistributing the original .exe is permitted by its EULA (shipped alongside
+# as LICENSE-mscorefonts.txt); the extracted .ttf stays inside the image and is
+# never committed to the repo.
+COPY deploy/docker/fonts/arial32.exe /tmp/arial32.exe
+RUN set -eux; \
+    mkdir -p /usr/share/fonts/truetype/msttcorefonts /tmp/arialout; \
+    cabextract -L -d /tmp/arialout /tmp/arial32.exe; \
+    cp /tmp/arialout/arial.ttf   /usr/share/fonts/truetype/msttcorefonts/Arial.ttf; \
+    cp /tmp/arialout/arialbd.ttf /usr/share/fonts/truetype/msttcorefonts/Arial_Bold.ttf; \
+    fc-cache -f; \
+    rm -rf /tmp/arial32.exe /tmp/arialout
 
 # Copy only Python runtime and site-packages from builder
 COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
