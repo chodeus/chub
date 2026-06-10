@@ -481,6 +481,52 @@ class TMDBClient:
             self._memo[key] = result
         return result
 
+    def list_season_images(
+        self,
+        tmdb_id: int,
+        season_number: int,
+        languages: Union[str, List[str]] = "en",
+    ) -> Any:
+        """Return the TMDB season-level posters for a show season — for the CL2K
+        art picker (a season has its own portrait 2:3 key-art, distinct from the
+        show backdrops). GET /3/tv/{id}/season/{n}/images.
+
+        Returns ``{"posters": [...]}`` (textless art included via
+        ``include_image_language``), or None on a transient failure / disabled.
+        """
+        if not self.enabled or not tmdb_id or season_number is None:
+            return None
+        key = ("list_season_images", str(tmdb_id), str(season_number))
+        with self._memo_lock:
+            if key in self._memo:
+                return self._memo[key]
+        url = f"{self.BASE}/tv/{tmdb_id}/season/{season_number}/images"
+        langs = self._normalize_langs(languages)
+        params = {
+            "api_key": self.cfg.apikey,
+            "include_image_language": ",".join([*langs, "null"]),
+        }
+        resp = self._request_with_retry(
+            url, params, what=f"tv/{tmdb_id}/season/{season_number}/images"
+        )
+        if resp is None:
+            return None
+        if resp.status_code == 404:
+            result: Any = {"posters": []}
+        elif not resp.ok:
+            self.logger.warning(
+                f"TMDB returned {resp.status_code} for tv/{tmdb_id}/season/{season_number}/images"
+            )
+            return None
+        else:
+            try:
+                result = resp.json()
+            except ValueError:
+                return None
+        with self._memo_lock:
+            self._memo[key] = result
+        return result
+
     def search_titles(self, query: str, media_type: str) -> List[Dict[str, Any]]:
         """Search TMDB by title for the maker's entry point.
 

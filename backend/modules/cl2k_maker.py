@@ -10,7 +10,8 @@ from backend.util.cl2k import color
 from backend.util.cl2k import geometry as geo
 from backend.util.cl2k import image_fetch, text_removal
 from backend.util.cl2k.naming import build_poster_filename
-from backend.util.cl2k.renderer import render_cl2k
+from backend.util.cl2k import renderer
+from backend.util.cl2k.renderer import logo_is_usable, render_cl2k
 from backend.util.database import ChubDB
 from backend.util.fanart import FanartClient
 from backend.util.logger import Logger
@@ -19,6 +20,15 @@ from backend.util.tmdb import TMDBClient
 
 _VALID_KINDS = ("movie", "show", "collection", "season")
 _BATCH_KINDS = ("movie", "show")  # media_cache asset_types we batch over
+
+# Prompt for the "extend" framing's AI outpaint. The model must *continue the
+# existing scene downward* — never invent text, logos, or new subjects (those would
+# clash with the CL2K logo/label drawn on top).
+_EXTEND_PROMPT = (
+    "Naturally extend and continue this image downward to fill the empty lower area, "
+    "matching the existing background, colours, lighting and grain. Do not add any "
+    "text, logos, watermarks, borders, or new people or objects."
+)
 
 
 def _fanart_logo(
@@ -64,6 +74,11 @@ def _resolve_and_render(
     apply_ai: bool = False,
     focus_x: float = 0.5,
     focus_y: float = 0.5,
+    fit_mode: str = "cover",
+    crop: Optional[Tuple[float, float, float, float]] = None,
+    v_pos: float = 0.0,
+    band_label: str = "",
+    allow_ai_extend: bool = True,
 ) -> Tuple[Optional[bytes], Dict[str, Any]]:
     """Resolve art (textless backdrop + logo) and render.
 
@@ -99,6 +114,37 @@ def _resolve_and_render(
             return None, {"reason": "no textless backdrop available", "logo_source": "none"}
         backdrop_bytes = image_fetch.download(backdrop_path)
 
+    # EXTEND framing: keep the subjects full-size (fit to width, top-anchored) and
+    # AI-outpaint the empty bottom band — the artist's "extend the bottom, crop the
+    # wasted top" trick. Falls back to the free edge-extend fit when no AI provider
+    # is configured (or the photo already fills the canvas, so there's nothing to
+    # extend). The fill happens here, before the gradient/logo, so the AI only sees
+    # the backdrop; the resulting canvas is already 1000×1500, so it renders as a
+    # straight cover (identity).
+    if fit_mode == "extend":
+        canvas_bytes, extend_mask = renderer.fit_extend_canvas(backdrop_bytes, crop)
+        # AI runs only on a real generate (allow_ai_extend) AND when a provider is
+        # configured. Previews (allow_ai_extend=False) and provider-less renders fall
+        # back to the free edge-extend fit, so we never spend AI on every preview.
+        if extend_mask is not None and allow_ai_extend and text_removal.is_enabled(cfg):
+            backdrop_bytes = text_removal.remove_text(
+                canvas_bytes,
+                config=cfg,
+                mask_bytes=extend_mask,
+                prompt=_EXTEND_PROMPT,
+                logger=logger,
+            )
+            fit_mode, crop = "cover", None
+        else:
+            if extend_mask is not None and logger:
+                reason = (
+                    "preview" if not allow_ai_extend else "no AI provider configured"
+                )
+                logger.info(
+                    f"cl2k: extend — {reason}; using the free edge-extend fit instead"
+                )
+            fit_mode = "fit"
+
     # Only run AI removal when explicitly requested (a brushed mask, or the
     # apply_ai flag for OpenAI's maskless mode) — never on every auto-render.
     if apply_ai or mask_bytes:
@@ -130,6 +176,19 @@ def _resolve_and_render(
             logo_bytes = image_fetch.download(fa_url)
             logo_source = "fanart"
 
+    # CL2K rule: a clear logo too small to render crisply at the ~600px box is
+    # worse than drawn title text. Reject low-res auto-sourced (TMDB/fanart) logos
+    # so render_cl2k's title-text fallback takes over. A custom-uploaded logo is
+    # the user's explicit choice and is kept as-is.
+    if (
+        logo_bytes
+        and logo_source in ("tmdb", "fanart")
+        and not logo_is_usable(logo_bytes)
+    ):
+        logger.debug(f"cl2k: {logo_source} logo too small for the logo box — using title text")
+        logo_bytes = None
+        logo_source = "text" if cfg.text_logo_fallback else "none"
+
     if kind == "season" and not season_text and season_number is not None:
         season_text = f"Season {season_number}"
 
@@ -143,12 +202,22 @@ def _resolve_and_render(
         whiten=cfg.whiten_logo,
         focus_x=focus_x,
         focus_y=focus_y,
+        fit_mode=fit_mode,
+        crop=crop,
+        v_pos=v_pos,
+        band_label=band_label,
     )
     return blob, {"backdrop_path": backdrop_path, "logo_source": logo_source}
 
 
 def render_preview(db: ChubDB, full_config, logger, **kwargs) -> Optional[bytes]:
-    """Render a CL2K poster to JPEG bytes WITHOUT saving (live preview)."""
+    """Render a CL2K poster to JPEG bytes WITHOUT saving (live preview).
+
+    Previews never run the AI outpaint (``extend`` falls back to the free
+    edge-extend fit) so a live preview is fast and free; the AI fill is applied
+    only on a real generate.
+    """
+    kwargs.setdefault("allow_ai_extend", False)
     blob, _info = _resolve_and_render(db, full_config, logger, **kwargs)
     return blob
 
@@ -174,6 +243,10 @@ def generate_for_item(
     apply_ai: bool = False,
     focus_x: float = 0.5,
     focus_y: float = 0.5,
+    fit_mode: str = "cover",
+    crop: Optional[Tuple[float, float, float, float]] = None,
+    v_pos: float = 0.0,
+    band_label: str = "",
     force: bool = False,
     save_local: bool = True,
     upload_gdrive: Optional[bool] = None,
@@ -219,6 +292,10 @@ def generate_for_item(
         apply_ai=apply_ai,
         focus_x=focus_x,
         focus_y=focus_y,
+        fit_mode=fit_mode,
+        crop=crop,
+        v_pos=v_pos,
+        band_label=band_label,
     )
     if blob is None:
         return {"status": "skipped", "reason": info.get("reason", "render failed")}
@@ -661,12 +738,19 @@ def generate_seasons(
     year: Optional[int] = None,
     tvdb_id: Optional[int] = None,
     imdb_id: Optional[str] = None,
+    fit_mode: str = "cover",
+    focus_x: float = 0.5,
+    focus_y: float = 0.5,
+    crop: Optional[Tuple[float, float, float, float]] = None,
+    v_pos: float = 0.0,
     force: bool = False,
 ) -> Dict[str, Any]:
     """Generate CL2K season posters for each number in ``seasons``.
 
     Each season reuses the show's existing backdrop (via generate_for_item's
-    season-reuse path) and only changes the season number.
+    season-reuse path) and only changes the season number. The framing
+    (``fit_mode`` / ``focus`` / ``crop``) is carried from the show poster so every
+    season is composed identically.
     """
     results = []
     for n in seasons:
@@ -682,6 +766,11 @@ def generate_seasons(
                 tvdb_id=tvdb_id,
                 imdb_id=imdb_id,
                 season_number=int(n),
+                fit_mode=fit_mode,
+                focus_x=focus_x,
+                focus_y=focus_y,
+                crop=crop,
+                v_pos=v_pos,
                 force=force,
             )
         )

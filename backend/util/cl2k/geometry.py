@@ -26,6 +26,12 @@ ASPECT = (2, 3)
 CENTER_X = 500
 LOGO_WIDTH_STD = 600           # guide "Main Logo Width" (x200->800). Refs render ~666.
 LOGO_WIDTH_MAX = 800           # guide "Max Logo Width" (x100->900) — hard cap
+# CL2K rule: "only leave the Main-Logo *text* area if the logo is too small or
+# unreadable". A clear logo whose trimmed content is narrower than this would need
+# heavy upscaling to reach the ~600px box and render fuzzy, so we reject it and
+# draw the title wordmark instead. ~0.67x the standard box (so up to ~1.5x upscale
+# is allowed).
+LOGO_MIN_WIDTH = 400
 LOGO_ZONE_TOP = 1100           # logos must not extend above this y
 MAIN_LOGO_BOTTOM = 1300        # movie/show clear-logo bottom (refs measured ~1298)
 COLLECTION_LOGO_BOTTOM = 1300  # collection logo bottom (COLLECTION label below it)

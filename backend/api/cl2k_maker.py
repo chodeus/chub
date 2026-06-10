@@ -64,8 +64,23 @@ class GenerateRequest(BaseModel):
     logo_b64: Optional[str] = None  # custom uploaded logo (PNG, base64); wins over logo_path
     mask_b64: Optional[str] = None  # user-brushed mask (PNG, white=remove) for AI
     remove_text: bool = False  # run AI text removal (OpenAI can do it mask-less)
-    focus_x: float = 0.5  # crop focal point (0..1); 0.5 = centre
+    focus_x: float = 0.5  # crop focal point (0..1); 0.5 = centre (cover mode)
     focus_y: float = 0.5
+    # Framing: "cover" scales up + crops to fill (focus_x/y); "fit" scales the
+    # backdrop down to the canvas width and black-pads the bottom, keeping the full
+    # width so spread-out subjects all stay in frame. ``crop_*`` (0..1) optionally
+    # isolates the subject region of a wide backdrop before the fit.
+    fit_mode: str = "cover"
+    crop_x: Optional[float] = None
+    crop_y: Optional[float] = None
+    crop_w: Optional[float] = None
+    crop_h: Optional[float] = None
+    # Vertical position of the fitted photo (0..1; 0 = top, ~0.4 = headroom above
+    # the subjects). Only used in fit/extend framing.
+    v_pos: float = 0.0
+    # Explicit bottom banner (e.g. "COMPLETE LIMITED SERIES"); overrides the auto
+    # COLLECTION / season label when set.
+    band_label: str = ""
     force: bool = False
     # Save destinations (independent). upload_gdrive=None falls back to the module
     # config flag; at least one must be selected at save time.
@@ -80,6 +95,16 @@ def _mask_bytes(b64: Optional[str]) -> Optional[bytes]:
 def _b64_to_bytes(b64: Optional[str]) -> Optional[bytes]:
     """Decode a base64 image, tolerating a ``data:...;base64,`` URL prefix."""
     return base64.b64decode(b64.split(",")[-1]) if b64 else None
+
+
+def _crop_tuple(req: Any):
+    """Assemble the (x, y, w, h) fit crop from a request, or None if unset.
+
+    Works for any request carrying ``crop_x/y/w/h`` (GenerateRequest, SeasonsRequest).
+    Only used in ``fit`` mode; all four fields must be present for a crop to apply
+    (a partial crop is ignored so the whole backdrop is fitted)."""
+    parts = (req.crop_x, req.crop_y, req.crop_w, req.crop_h)
+    return tuple(parts) if all(p is not None for p in parts) else None
 
 
 def _resolve_logo_bytes(
@@ -147,6 +172,18 @@ def images(
     )
 
 
+@router.get("/season-images", summary="TMDB season posters (portrait) for the art picker")
+def season_images(
+    tmdb_id: int = Query(...),
+    season_number: int = Query(...),
+    db: ChubDB = Depends(get_database),
+    logger: Any = Depends(get_cl2k_logger),
+) -> JSONResponse:
+    tmdb = TMDBClient(load_config().tmdb, db, logger)
+    imgs = tmdb.list_season_images(tmdb_id, season_number) or {"posters": []}
+    return ok("ok", {"posters": _decorate(imgs.get("posters", []))})
+
+
 @router.get("/upload-status", summary="Whether CL2K Drive upload has a usable OAuth token")
 def upload_status(
     db: ChubDB = Depends(get_database),
@@ -199,6 +236,10 @@ def preview(
         apply_ai=req.remove_text,
         focus_x=req.focus_x,
         focus_y=req.focus_y,
+        fit_mode=req.fit_mode,
+        crop=_crop_tuple(req),
+        v_pos=req.v_pos,
+        band_label=req.band_label,
     )
     if blob is None:
         return error("No textless backdrop available", "NO_BACKDROP")
@@ -231,6 +272,10 @@ def generate(
         apply_ai=req.remove_text,
         focus_x=req.focus_x,
         focus_y=req.focus_y,
+        fit_mode=req.fit_mode,
+        crop=_crop_tuple(req),
+        v_pos=req.v_pos,
+        band_label=req.band_label,
         force=req.force,
         save_local=req.save_local,
         upload_gdrive=req.upload_gdrive,
@@ -283,6 +328,15 @@ class SeasonsRequest(BaseModel):
     year: Optional[int] = None
     tvdb_id: Optional[int] = None
     imdb_id: Optional[str] = None
+    # Framing carried over from the show poster so every season matches it.
+    fit_mode: str = "cover"
+    focus_x: float = 0.5
+    focus_y: float = 0.5
+    crop_x: Optional[float] = None
+    crop_y: Optional[float] = None
+    crop_w: Optional[float] = None
+    crop_h: Optional[float] = None
+    v_pos: float = 0.0
     force: bool = False
 
 
@@ -302,6 +356,11 @@ def generate_seasons_endpoint(
         year=req.year,
         tvdb_id=req.tvdb_id,
         imdb_id=req.imdb_id,
+        fit_mode=req.fit_mode,
+        focus_x=req.focus_x,
+        focus_y=req.focus_y,
+        crop=_crop_tuple(req),
+        v_pos=req.v_pos,
         force=req.force,
     )
     return ok("Seasons generated", out)
