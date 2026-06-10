@@ -2482,10 +2482,20 @@ const EditPosterPanel = ({ item, effectiveKind, config, saveTargets, toast }) =>
                             />
                         </label>
                         <p className="text-xs text-tertiary">
-                            Sets the filename suffix{' '}
-                            <code className="text-secondary">_Season{seasonNum || 'NN'}</code> so
-                            Poster Renamerr applies it to that season. For year-based shows (F1) use
-                            the year (e.g. 2026). Metadata only — it isn’t printed on the poster.
+                            {String(seasonNum).trim() === '' ? (
+                                <>Blank = base show poster (no season suffix). </>
+                            ) : (
+                                <>
+                                    Sets the filename suffix{' '}
+                                    <code className="text-secondary">
+                                        {seasonSuffixPreview(seasonNum)}
+                                    </code>{' '}
+                                    so Poster Renamerr applies it to that season.{' '}
+                                </>
+                            )}
+                            Use <code className="text-secondary">0</code> for Specials. For
+                            year-based shows (F1) use the year (e.g. 2026). Metadata only — it isn’t
+                            printed on the poster.
                         </p>
                         <label className="flex items-center gap-2 text-sm text-primary font-medium">
                             <input
@@ -2609,6 +2619,16 @@ const parseSeasonList = s =>
         .split(',')
         .map(x => parseInt(x.trim(), 10))
         .filter(n => Number.isInteger(n) && n >= 0);
+
+// Preview the filename suffix the backend (build_poster_filename) will write:
+// season 0 → "- Specials", others → "- Season NN" (zero-padded to 2 digits,
+// year-based F1 numbers pass through, e.g. "- Season 2026").
+const seasonSuffixPreview = season => {
+    const n = Number(String(season).trim());
+    if (!Number.isFinite(n)) return '';
+    if (n === 0) return '- Specials';
+    return `- Season ${String(n).padStart(2, '0')}`;
+};
 
 const downloadBlob = (blob, filename) => {
     const url = URL.createObjectURL(blob);
