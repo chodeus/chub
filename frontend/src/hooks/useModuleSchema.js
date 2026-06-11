@@ -15,7 +15,6 @@ const CORE_CONFIG_MODULE_KEYS = [
     'poster_renamerr',
     'asset_renamerr',
     'border_replacerr',
-    'cl2k_maker',
     'upgradinatorr',
     'renameinatorr',
     'nohl',

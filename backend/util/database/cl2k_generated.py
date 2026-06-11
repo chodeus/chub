@@ -95,3 +95,41 @@ class Cl2kGenerated(DatabaseBase):
         self.execute_query(
             "UPDATE cl2k_generated SET uploaded=1 WHERE file=?", (file,)
         )
+
+
+def cl2k_generated_table():
+    """TableDefinition for the cl2k_generated table.
+
+    Registered through backend/extensions/cl2k/manifest.py (tables), since
+    the CL2K maker is a develop-only extension and core schema.py must not
+    reference it. Imported lazily there — TableDefinition comes from
+    schema.py, which calls extension tables mid-init.
+    """
+    from .schema import ColumnDefinition, TableDefinition
+
+    # CL2K maker — provenance of generated posters (review / re-run / revert)
+    return TableDefinition(
+        name="cl2k_generated",
+        columns=[
+            ColumnDefinition("id", "INTEGER", primary_key=True, nullable=False),
+            ColumnDefinition("kind", "TEXT"),  # movie/show/collection/season
+            ColumnDefinition("tmdb_id", "INTEGER"),
+            ColumnDefinition("tvdb_id", "INTEGER"),
+            ColumnDefinition("imdb_id", "TEXT"),
+            ColumnDefinition("season_number", "INTEGER"),
+            ColumnDefinition("title", "TEXT"),
+            ColumnDefinition("year", "INTEGER"),
+            ColumnDefinition("file", "TEXT", nullable=False, unique=True),
+            ColumnDefinition("backdrop_path", "TEXT"),  # TMDB path used
+            ColumnDefinition("logo_source", "TEXT"),  # tmdb | fanart | text
+            ColumnDefinition("uploaded", "INTEGER", default=0),
+            ColumnDefinition("generated_at", "TEXT"),
+        ],
+    )
+
+
+def cl2k_generated_for(db) -> "Cl2kGenerated":
+    """The Cl2kGenerated interface on a ChubDB — extensions can't add
+    properties to ChubDB, so call sites use this instead of a
+    ``db.cl2k_generated`` property."""
+    return db.extension_interface("cl2k_generated", Cl2kGenerated)

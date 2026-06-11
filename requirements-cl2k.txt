@@ -1,0 +1,6 @@
+# Extra Python dependencies for the CL2K poster maker (develop-only
+# extension). Kept out of requirements.txt so that file stays identical to
+# main; installed by the CL2K block in deploy/docker/Dockerfile and needed
+# locally to run the cl2k tests.
+psd-tools[composite]==1.17.2
+Wand==0.6.13

@@ -10,9 +10,11 @@ from backend.util.cl2k import color
 from backend.util.cl2k import geometry as geo
 from backend.util.cl2k import image_fetch, text_removal
 from backend.util.cl2k.naming import build_poster_filename
+from backend.util.cl2k.tmdb_art import list_images
 from backend.util.cl2k import renderer
 from backend.util.cl2k.renderer import logo_is_usable, render_cl2k
 from backend.util.database import ChubDB
+from backend.util.database.cl2k_generated import cl2k_generated_for
 from backend.util.fanart import FanartClient
 from backend.util.logger import Logger
 from backend.util.normalization import normalize_titles
@@ -148,14 +150,14 @@ def _resolve_and_render(
     # Season reuse: a new season inherits the show's existing backdrop (DAPS:
     # same background across seasons, only the season number changes).
     if kind == "season" and backdrop_path is None and backdrop_bytes is None:
-        backdrop_path = db.cl2k_generated.get_backdrop_for(tmdb_id)
+        backdrop_path = cl2k_generated_for(db).get_backdrop_for(tmdb_id)
 
     # Resolve a logo path (unless a custom logo was uploaded or one was chosen)
     # and a backdrop path (unless bytes were uploaded for the manual-handoff flow).
     need_logo = custom_logo_bytes is None and logo_path is None
     need_backdrop = backdrop_bytes is None and backdrop_path is None
     if need_logo or need_backdrop:
-        images = tmdb.list_images(tmdb_id, kind, languages=lang) or {}
+        images = list_images(tmdb, tmdb_id, kind, languages=lang) or {}
         sel = image_fetch.select_cl2k_inputs(images, lang=lang)
         if backdrop_bytes is None:
             backdrop_path = backdrop_path or sel.get("backdrop")
@@ -336,7 +338,7 @@ def generate_for_item(
     if (
         cfg.skip_existing
         and not force
-        and db.cl2k_generated.exists_for(kind, tmdb_id, season_number)
+        and cl2k_generated_for(db).exists_for(kind, tmdb_id, season_number)
     ):
         return {"status": "skipped", "reason": "already generated"}
 
@@ -484,7 +486,7 @@ def _persist_poster(
             ]
         )
 
-        db.cl2k_generated.record(
+        cl2k_generated_for(db).record(
             {
                 "kind": kind,
                 "tmdb_id": tmdb_id,
@@ -531,11 +533,11 @@ def _persist_poster(
 
         if uploaded:
             if out_path:
-                db.cl2k_generated.mark_uploaded(out_path)
+                cl2k_generated_for(db).mark_uploaded(out_path)
             else:
                 # Drive-only: no persistent local file, so record provenance keyed
                 # on the basename (poster_cache is skipped — nothing local to match).
-                db.cl2k_generated.record(
+                cl2k_generated_for(db).record(
                     {
                         "kind": kind,
                         "tmdb_id": tmdb_id,
@@ -889,7 +891,7 @@ def psd_for_item(
     lang = cfg.language or "en"
     tmdb = TMDBClient(full_config.tmdb, db, logger)
     if backdrop_path is None or logo_path is None:
-        images = tmdb.list_images(tmdb_id, kind, languages=lang) or {}
+        images = list_images(tmdb, tmdb_id, kind, languages=lang) or {}
         sel = image_fetch.select_cl2k_inputs(images, lang=lang)
         backdrop_path = backdrop_path or sel.get("backdrop")
         logo_path = logo_path or sel.get("logo")
