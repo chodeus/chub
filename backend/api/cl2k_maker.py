@@ -25,6 +25,7 @@ from pydantic import BaseModel, Field
 from backend.api.utils import error, get_database, get_module_logger, ok
 from backend.modules.cl2k_maker import (
     fanart_images,
+    generate_background_art,
     generate_for_item,
     generate_logo_asset,
     generate_seasons,
@@ -36,7 +37,7 @@ from backend.modules.cl2k_maker import (
 )
 from backend.util.cl2k import tmdb_art
 from backend.util.cl2k.image_fetch import TMDB_IMAGE_CDN, download as download_image
-from backend.util.cl2k.renderer import process_logo, render_square_art
+from backend.util.cl2k.renderer import process_logo, render_framed_art, render_square_art
 from backend.util.config import load_config
 from backend.util.database import ChubDB
 from backend.util.database.cl2k_generated import cl2k_generated_for
@@ -174,7 +175,7 @@ def resolve(
     return ok("ok", {"tmdb_id": tmdb.find_tmdb_id(external_id, source, mt)})
 
 
-@router.get("/images", summary="All logos + backdrops for the art picker")
+@router.get("/images", summary="All logos + backdrops + posters for the art picker")
 def images(
     tmdb_id: int = Query(...),
     media_type: str = Query("movie", alias="type"),
@@ -188,6 +189,9 @@ def images(
         {
             "logos": _decorate(imgs.get("logos", [])),
             "backdrops": _decorate(imgs.get("backdrops", [])),
+            # Official posters too: often the only quality art for small titles
+            # (documentaries etc.) — pick one, brush the title text, AI-erase.
+            "posters": _decorate(imgs.get("posters", [])),
         },
     )
 
@@ -467,6 +471,84 @@ def square_generate(
     )
     if result.get("status") == "generated":
         return ok("Square art generated", result)
+    return error(result.get("reason", "generation failed"), "CL2K_GENERATE", data=result)
+
+
+class BackgroundArtRequest(BaseModel):
+    kind: str
+    title: str
+    tmdb_id: int
+    year: Optional[int] = None
+    tvdb_id: Optional[int] = None
+    imdb_id: Optional[str] = None
+    backdrop_path: Optional[str] = None
+    backdrop_b64: Optional[str] = None  # custom-uploaded source art (base64)
+    focus_x: float = 0.5
+    focus_y: float = 0.5
+    fit_mode: str = "cover"  # cover (focal crop) | fit (contain on black)
+    zoom: float = Field(1.0, ge=0.5, le=3.0)
+    resolution: str = "1080p"  # 1080p (1920x1080) | 4k (3840x2160), per Plex dims
+    save_local: bool = True
+    upload_gdrive: Optional[bool] = None
+
+
+@router.post("/background-preview", summary="Render background art (16:9) without saving")
+def background_preview(
+    req: BackgroundArtRequest,
+    db: ChubDB = Depends(get_database),
+    logger: Any = Depends(get_cl2k_logger),
+):
+    raw = None
+    if req.backdrop_b64:
+        raw = _b64_to_bytes(req.backdrop_b64)
+    elif req.backdrop_path:
+        raw = download_image(req.backdrop_path)
+    if not raw:
+        return error("No source art selected", "NO_BACKDROP")
+    # Preview at 1080p regardless of the save resolution — same 16:9 frame,
+    # quarter the bytes of a 4K render.
+    blob = render_framed_art(
+        backdrop_bytes=raw,
+        width=1920,
+        height=1080,
+        focus_x=req.focus_x,
+        focus_y=req.focus_y,
+        fit_mode=req.fit_mode,
+        zoom=req.zoom,
+    )
+    return Response(
+        content=blob, media_type="image/jpeg", headers={"Cache-Control": "no-store"}
+    )
+
+
+@router.post("/background-generate", summary="Generate + save background art")
+def background_generate(
+    req: BackgroundArtRequest,
+    db: ChubDB = Depends(get_database),
+    logger: Any = Depends(get_cl2k_logger),
+) -> JSONResponse:
+    result = generate_background_art(
+        db=db,
+        full_config=load_config(),
+        logger=logger,
+        kind=req.kind,
+        title=req.title,
+        tmdb_id=req.tmdb_id,
+        year=req.year,
+        tvdb_id=req.tvdb_id,
+        imdb_id=req.imdb_id,
+        backdrop_path=req.backdrop_path,
+        backdrop_bytes=_b64_to_bytes(req.backdrop_b64),
+        focus_x=req.focus_x,
+        focus_y=req.focus_y,
+        fit_mode=req.fit_mode,
+        zoom=req.zoom,
+        resolution=req.resolution,
+        save_local=req.save_local,
+        upload_gdrive=req.upload_gdrive,
+    )
+    if result.get("status") == "generated":
+        return ok("Background art generated", result)
     return error(result.get("reason", "generation failed"), "CL2K_GENERATE", data=result)
 
 

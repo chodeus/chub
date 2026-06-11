@@ -43,6 +43,7 @@ const SOURCE_TABS = [
     { key: 'tmdb', label: 'TMDB', icon: 'movie' },
     { key: 'fanart', label: 'fanart.tv', icon: 'palette' },
     { key: 'square', label: 'Square art', icon: 'crop_square' },
+    { key: 'background', label: 'Background', icon: 'wallpaper' },
     { key: 'logo', label: 'Logo', icon: 'sell' },
     { key: 'upload-poster', label: 'Finished poster', icon: 'image' },
     { key: 'edit', label: 'Edit poster', icon: 'edit' },
@@ -1312,6 +1313,15 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                     toast={toast}
                 />
             )}
+            {tab === 'background' && (
+                <BackgroundArtPanel
+                    item={item}
+                    backdrops={allBackdrops}
+                    loadingArt={loadingArt}
+                    saveTargets={saveTargets}
+                    toast={toast}
+                />
+            )}
             {tab === 'logo' && (
                 <LogoAssetPanel
                     item={item}
@@ -1432,6 +1442,20 @@ const RenderPanel = ({
                     aspect="aspect-video"
                     emptyText="No backdrops from this source."
                 />
+                {/* Official posters: often the only quality art for small titles
+                    (documentaries etc.) — pick one, brush the title text in the AI
+                    panel below, erase, and build as usual. */}
+                {(art?.posters || []).length > 0 && (
+                    <Picker
+                        label={`Poster (${source})`}
+                        items={art.posters}
+                        loading={loadingArt}
+                        selected={backdrop}
+                        onSelect={setBackdrop}
+                        aspect="aspect-poster"
+                        emptyText="No posters from this source."
+                    />
+                )}
 
                 {backdropUrl && (
                     <CropFramer
@@ -2572,29 +2596,32 @@ const SquareFramer = ({
     setFitMode,
     zoom,
     setZoom,
+    aspect = 1, // target frame h/w: 1 = square, 9/16 = background art
+    title = 'Crop to square',
+    frameName = '1:1 square',
 }) => {
     const wrapRef = useRef(null);
     const [ratio, setRatio] = useState(null); // natural h/w
     const dragging = useRef(false);
-    // The kept region (fraction of the source shown in the 1:1 square) under the
-    // current Fill/Fit + zoom — mirrors render_square_art's scale+pan maths.
+    // The kept region (fraction of the source shown in the target frame) under the
+    // current Fill/Fit + zoom — mirrors render_framed_art's scale+pan maths.
     const rect = useMemo(() => {
         if (!ratio) return null;
         const z = Math.max(0.5, Math.min(zoom || 1, 3));
-        // square side = 1; source width = 1, height = ratio (h/w).
-        const base = fitMode === 'fit' ? Math.min(1, 1 / ratio) : Math.max(1, 1 / ratio);
+        // frame width = 1, height = aspect; source width = 1, height = ratio (h/w).
+        const base = fitMode === 'fit' ? Math.min(1, aspect / ratio) : Math.max(1, aspect / ratio);
         const s = base * z;
-        const nw = s; // scaled source width (square side = 1)
+        const nw = s; // scaled source width (frame width = 1)
         const nh = ratio * s; // scaled source height
         const wF = Math.min(1, 1 / nw);
-        const hF = Math.min(1, 1 / nh);
+        const hF = Math.min(1, aspect / nh);
         return {
             left: Math.max(0, Math.min(focusX - wF / 2, 1 - wF)),
             top: Math.max(0, Math.min(focusY - hF / 2, 1 - hF)),
             w: wF,
             h: hF,
         };
-    }, [ratio, focusX, focusY, fitMode, zoom]);
+    }, [ratio, focusX, focusY, fitMode, zoom, aspect]);
     const segCls = on =>
         `px-2.5 py-1 text-sm rounded-md border ${
             on
@@ -2633,7 +2660,7 @@ const SquareFramer = ({
     return (
         <div className="bg-surface border border-border rounded-lg p-3">
             <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-medium text-primary">Crop to square</h3>
+                <h3 className="text-sm font-medium text-primary">{title}</h3>
                 <div className="flex items-center gap-1">
                     <button
                         type="button"
@@ -2665,7 +2692,7 @@ const SquareFramer = ({
             <p className="text-xs text-tertiary mb-2">
                 {fitMode === 'fit'
                     ? 'Fit shows the whole image on black. Zoom in to fill more; drag to pan when zoomed.'
-                    : 'Fill crops to the 1:1 square — drag to choose what stays. Zoom to punch in tighter.'}
+                    : `Fill crops to the ${frameName} — drag to choose what stays. Zoom to punch in tighter.`}
             </p>
             <label className="flex items-center gap-2 text-xs text-secondary mb-2">
                 <span className="w-12 shrink-0">Zoom</span>
@@ -2695,7 +2722,7 @@ const SquareFramer = ({
             >
                 <img
                     src={imageUrl}
-                    alt="Crop to square"
+                    alt={title}
                     onLoad={e =>
                         setRatio(
                             e.target.naturalWidth
@@ -2920,6 +2947,254 @@ const SquareArtPanel = ({ item, backdrops, loadingArt, saveTargets, toast }) => 
                             Title (Year) {'{ids}'} - SquareArt.jpg
                         </span>{' '}
                         and applied to Plex via Asset Renamerr (square art is Plex-direct only).
+                    </p>
+                    <SaveTargets targets={saveTargets} />
+                    <LoadingButton
+                        onClick={onGenerate}
+                        loading={busy || previewing}
+                        disabled={!hasSrc || saveTargets.noTarget}
+                        icon="save"
+                    >
+                        Generate &amp; save
+                    </LoadingButton>
+                </div>
+            </div>
+        </section>
+    );
+};
+
+// ─── Background art tab ─────────────────────────────────────────────────────
+
+const BackgroundArtPanel = ({ item, backdrops, loadingArt, saveTargets, toast }) => {
+    const [backdrop, setBackdrop] = useState(null); // file_path | url
+    const [customBg, setCustomBg] = useState(null); // { b64, url, name }
+    const [focusX, setFocusX] = useState(0.5);
+    const [focusY, setFocusY] = useState(0.5);
+    const [fitMode, setFitMode] = useState('cover'); // cover (fill) | fit (contain)
+    const [zoom, setZoom] = useState(1);
+    const [resolution, setResolution] = useState('1080p'); // 1080p | 4k (Plex dims)
+    const [previewUrl, setPreviewUrl] = useState(null);
+    const [previewing, setPreviewing] = useState(false);
+    const [busy, setBusy] = useState(false);
+
+    const srcUrl = customBg?.url || (backdrop ? urlForPath(backdrop) : null);
+    const hasSrc = !!(customBg || backdrop);
+
+    const req = useMemo(
+        () => ({
+            kind: item.kind,
+            title: item.title,
+            tmdb_id: item.tmdb_id,
+            year: item.year,
+            tvdb_id: item.tvdb_id,
+            imdb_id: item.imdb_id,
+            backdrop_path: customBg ? null : backdrop,
+            backdrop_b64: customBg?.b64 || null,
+            focus_x: focusX,
+            focus_y: focusY,
+            fit_mode: fitMode,
+            zoom,
+            resolution,
+            save_local: saveTargets.saveLocal,
+            upload_gdrive: saveTargets.uploadGdrive,
+        }),
+        [
+            item,
+            backdrop,
+            customBg,
+            focusX,
+            focusY,
+            fitMode,
+            zoom,
+            resolution,
+            saveTargets.saveLocal,
+            saveTargets.uploadGdrive,
+        ]
+    );
+    const reqRef = useRef(req);
+    useEffect(() => {
+        reqRef.current = req;
+    }, [req]);
+
+    // Preview renders at 1080p regardless of resolution — same 16:9 frame.
+    const sig = `${customBg?.b64?.slice(0, 32) || backdrop}|${focusX}|${focusY}|${fitMode}|${zoom}`;
+    useEffect(() => {
+        if (!hasSrc) return undefined;
+        let cancelled = false;
+        const t = setTimeout(async () => {
+            setPreviewing(true);
+            try {
+                const blob = await cl2kMakerAPI.backgroundPreview(reqRef.current);
+                if (!cancelled)
+                    setPreviewUrl(prev => {
+                        if (prev) URL.revokeObjectURL(prev);
+                        return URL.createObjectURL(blob);
+                    });
+            } catch {
+                /* quiet — the source may be unset mid-change */
+            } finally {
+                if (!cancelled) setPreviewing(false);
+            }
+        }, 450);
+        return () => {
+            cancelled = true;
+            clearTimeout(t);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [sig]);
+    useEffect(
+        () => () => {
+            if (previewUrl) URL.revokeObjectURL(previewUrl);
+        },
+        [previewUrl]
+    );
+
+    const onFile = e => {
+        const f = e.target.files?.[0];
+        e.target.value = '';
+        if (!f) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+            const url = String(reader.result);
+            setCustomBg({ b64: url.split(',').pop(), url, name: f.name });
+            setBackdrop(null);
+        };
+        reader.readAsDataURL(f);
+    };
+
+    const onGenerate = async () => {
+        setBusy(true);
+        try {
+            const resp = await cl2kMakerAPI.backgroundGenerate(req);
+            savedToast(toast, resp?.data, 'Background art generated');
+        } catch (err) {
+            toast.error(err.message || 'Generate failed');
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const resCls = on =>
+        `px-2.5 py-1 text-sm rounded-md border ${
+            on
+                ? 'bg-primary text-white border-primary'
+                : 'bg-surface text-secondary border-border hover:border-border-strong'
+        }`;
+
+    return (
+        <section className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="flex flex-col gap-4">
+                <div className="bg-surface border border-border rounded-lg p-3">
+                    <div className="flex items-center justify-between mb-2">
+                        <h3 className="text-sm font-medium text-primary">Source art (backdrop)</h3>
+                        <label className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs border border-border text-secondary hover:border-border-strong cursor-pointer">
+                            <span className="material-symbols-outlined text-sm">upload</span>
+                            Upload
+                            <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={onFile}
+                            />
+                        </label>
+                    </div>
+                    {customBg ? (
+                        <div className="flex items-center gap-3 rounded-md border-2 border-primary bg-surface-alt p-2">
+                            <img
+                                src={customBg.url}
+                                alt="Uploaded source"
+                                className="h-16 w-auto max-w-[60%] object-contain rounded"
+                            />
+                            <span className="flex-1 truncate text-xs text-secondary">
+                                {customBg.name}
+                            </span>
+                            <Button
+                                onClick={() => setCustomBg(null)}
+                                variant="secondary"
+                                icon="close"
+                                size="small"
+                            >
+                                Remove
+                            </Button>
+                        </div>
+                    ) : (
+                        <Picker
+                            label=""
+                            items={backdrops}
+                            loading={loadingArt}
+                            selected={backdrop}
+                            onSelect={p => setBackdrop(p)}
+                            aspect="aspect-video"
+                            emptyText="No backdrops from TMDB/fanart — upload one above."
+                        />
+                    )}
+                </div>
+
+                {srcUrl && (
+                    <SquareFramer
+                        imageUrl={srcUrl}
+                        focusX={focusX}
+                        focusY={focusY}
+                        onChange={(fx, fy) => {
+                            setFocusX(fx);
+                            setFocusY(fy);
+                        }}
+                        fitMode={fitMode}
+                        setFitMode={setFitMode}
+                        zoom={zoom}
+                        setZoom={setZoom}
+                        aspect={9 / 16}
+                        title="Crop to 16:9"
+                        frameName="16:9 frame"
+                    />
+                )}
+            </div>
+
+            <div className="flex flex-col gap-3">
+                <div className="bg-surface border border-border rounded-lg p-3">
+                    <div className="flex items-center justify-between mb-2">
+                        <h3 className="text-sm font-medium text-primary">
+                            Preview ({resolution === '4k' ? '3840×2160' : '1920×1080'})
+                        </h3>
+                        <div className="flex items-center gap-1">
+                            <button
+                                type="button"
+                                className={resCls(resolution !== '4k')}
+                                onClick={() => setResolution('1080p')}
+                            >
+                                1080p
+                            </button>
+                            <button
+                                type="button"
+                                className={resCls(resolution === '4k')}
+                                onClick={() => setResolution('4k')}
+                            >
+                                4K
+                            </button>
+                        </div>
+                    </div>
+                    <div className="relative aspect-video bg-black rounded overflow-hidden flex items-center justify-center">
+                        {hasSrc && previewUrl ? (
+                            <img
+                                src={previewUrl}
+                                alt="Background art preview"
+                                className="w-full h-full object-contain"
+                            />
+                        ) : (
+                            <span className="text-xs text-tertiary px-4 text-center">
+                                {hasSrc ? 'Rendering preview…' : 'Pick or upload source art.'}
+                            </span>
+                        )}
+                    </div>
+                </div>
+                <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-2">
+                    <h3 className="text-sm font-medium text-primary">Output</h3>
+                    <p className="text-xs text-tertiary">
+                        Saved as{' '}
+                        <span className="text-secondary">
+                            Title (Year) {'{ids}'} - Background.jpg
+                        </span>{' '}
+                        and applied to Plex/Kometa via Asset Renamerr.
                     </p>
                     <SaveTargets targets={saveTargets} />
                     <LoadingButton
