@@ -42,6 +42,8 @@ const BAND_LABEL_OPTIONS = [
 const SOURCE_TABS = [
     { key: 'tmdb', label: 'TMDB', icon: 'movie' },
     { key: 'fanart', label: 'fanart.tv', icon: 'palette' },
+    { key: 'square', label: 'Square art', icon: 'crop_square' },
+    { key: 'logo', label: 'Logo', icon: 'sell' },
     { key: 'upload-poster', label: 'Finished poster', icon: 'image' },
     { key: 'edit', label: 'Edit poster', icon: 'edit' },
 ];
@@ -1178,6 +1180,17 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
         });
     }, [tmdbArt, fanartArt]);
 
+    // TMDB + fanart backdrops merged, for the square-art tab. De-duplicated.
+    const allBackdrops = useMemo(() => {
+        const merged = [...(tmdbArt?.backdrops || []), ...(fanartArt?.backdrops || [])];
+        const seen = new Set();
+        return merged.filter(b => {
+            if (!b?.file_path || seen.has(b.file_path)) return false;
+            seen.add(b.file_path);
+            return true;
+        });
+    }, [tmdbArt, fanartArt]);
+
     return (
         <>
             {/* Selected title bar */}
@@ -1287,6 +1300,25 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                     onPsdExport={runPsdExport}
                     busy={busy}
                     saveTargets={saveTargets}
+                />
+            )}
+
+            {tab === 'square' && (
+                <SquareArtPanel
+                    item={item}
+                    backdrops={allBackdrops}
+                    loadingArt={loadingArt}
+                    saveTargets={saveTargets}
+                    toast={toast}
+                />
+            )}
+            {tab === 'logo' && (
+                <LogoAssetPanel
+                    item={item}
+                    logos={allLogos}
+                    loadingArt={loadingArt}
+                    saveTargets={saveTargets}
+                    toast={toast}
                 />
             )}
 
@@ -2525,6 +2557,486 @@ const LogoSelector = ({
                 )}
             </p>
         </div>
+    );
+};
+
+// ─── Square art tab ─────────────────────────────────────────────────────────
+
+// Drag a 1:1 cover-crop box over the source art to choose what fills the square.
+const SquareFramer = ({ imageUrl, focusX, focusY, onChange }) => {
+    const wrapRef = useRef(null);
+    const [ratio, setRatio] = useState(null); // natural h/w
+    const dragging = useRef(false);
+    const rect = useMemo(() => {
+        if (!ratio) return null;
+        // Largest square region of the source (cover crop to 1:1), in 0..1 frac.
+        let wF, hF;
+        if (1 / ratio > 1) {
+            hF = 1;
+            wF = ratio;
+        } else {
+            wF = 1;
+            hF = 1 / ratio;
+        }
+        return {
+            left: Math.max(0, Math.min(focusX - wF / 2, 1 - wF)),
+            top: Math.max(0, Math.min(focusY - hF / 2, 1 - hF)),
+            w: wF,
+            h: hF,
+        };
+    }, [ratio, focusX, focusY]);
+    const point = useCallback(e => {
+        const el = wrapRef.current;
+        if (!el) return null;
+        const r = el.getBoundingClientRect();
+        if (!r.width || !r.height) return null;
+        const cx = (e.touches?.[0]?.clientX ?? e.clientX) - r.left;
+        const cy = (e.touches?.[0]?.clientY ?? e.clientY) - r.top;
+        return { nx: clamp01(cx / r.width), ny: clamp01(cy / r.height) };
+    }, []);
+    const down = useCallback(
+        e => {
+            e.preventDefault();
+            dragging.current = true;
+            const p = point(e);
+            if (p) onChange(p.nx, p.ny);
+        },
+        [point, onChange]
+    );
+    const move = useCallback(
+        e => {
+            if (!dragging.current) return;
+            const p = point(e);
+            if (p) onChange(p.nx, p.ny);
+        },
+        [point, onChange]
+    );
+    const up = useCallback(() => {
+        dragging.current = false;
+    }, []);
+    return (
+        <div className="bg-surface border border-border rounded-lg p-3">
+            <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-medium text-primary">Crop to square</h3>
+                <Button
+                    onClick={() => onChange(0.5, 0.5)}
+                    variant="secondary"
+                    icon="filter_center_focus"
+                    size="small"
+                >
+                    Center
+                </Button>
+            </div>
+            <p className="text-xs text-tertiary mb-2">
+                Drag to choose what stays in the 1:1 crop — the dimmed area is cut. The preview
+                updates as you drag.
+            </p>
+            <div
+                ref={wrapRef}
+                className="relative inline-block leading-none select-none overflow-hidden rounded cursor-crosshair max-w-full"
+                onMouseDown={down}
+                onMouseMove={move}
+                onMouseUp={up}
+                onMouseLeave={up}
+                onTouchStart={down}
+                onTouchMove={move}
+                onTouchEnd={up}
+            >
+                <img
+                    src={imageUrl}
+                    alt="Crop to square"
+                    onLoad={e =>
+                        setRatio(
+                            e.target.naturalWidth
+                                ? e.target.naturalHeight / e.target.naturalWidth
+                                : null
+                        )
+                    }
+                    className="block max-w-full"
+                    draggable={false}
+                />
+                {rect && (
+                    <div
+                        className="absolute border-2 border-primary"
+                        style={{
+                            left: `${rect.left * 100}%`,
+                            top: `${rect.top * 100}%`,
+                            width: `${rect.w * 100}%`,
+                            height: `${rect.h * 100}%`,
+                            boxShadow: '0 0 0 9999px rgba(0,0,0,0.5)',
+                            pointerEvents: 'none',
+                        }}
+                    />
+                )}
+            </div>
+        </div>
+    );
+};
+
+const SquareArtPanel = ({ item, backdrops, loadingArt, saveTargets, toast }) => {
+    const [backdrop, setBackdrop] = useState(null); // file_path | url
+    const [customBg, setCustomBg] = useState(null); // { b64, url, name }
+    const [focusX, setFocusX] = useState(0.5);
+    const [focusY, setFocusY] = useState(0.5);
+    const [previewUrl, setPreviewUrl] = useState(null);
+    const [previewing, setPreviewing] = useState(false);
+    const [busy, setBusy] = useState(false);
+
+    const srcUrl = customBg?.url || (backdrop ? urlForPath(backdrop) : null);
+    const hasSrc = !!(customBg || backdrop);
+
+    const req = useMemo(
+        () => ({
+            kind: item.kind,
+            title: item.title,
+            tmdb_id: item.tmdb_id,
+            year: item.year,
+            tvdb_id: item.tvdb_id,
+            imdb_id: item.imdb_id,
+            backdrop_path: customBg ? null : backdrop,
+            backdrop_b64: customBg?.b64 || null,
+            focus_x: focusX,
+            focus_y: focusY,
+            fit_mode: 'cover',
+            save_local: saveTargets.saveLocal,
+            upload_gdrive: saveTargets.uploadGdrive,
+        }),
+        [item, backdrop, customBg, focusX, focusY, saveTargets.saveLocal, saveTargets.uploadGdrive]
+    );
+    const reqRef = useRef(req);
+    useEffect(() => {
+        reqRef.current = req;
+    }, [req]);
+
+    const sig = `${customBg?.b64?.slice(0, 32) || backdrop}|${focusX}|${focusY}`;
+    useEffect(() => {
+        if (!hasSrc) return undefined;
+        let cancelled = false;
+        const t = setTimeout(async () => {
+            setPreviewing(true);
+            try {
+                const blob = await cl2kMakerAPI.squarePreview(reqRef.current);
+                if (!cancelled)
+                    setPreviewUrl(prev => {
+                        if (prev) URL.revokeObjectURL(prev);
+                        return URL.createObjectURL(blob);
+                    });
+            } catch {
+                /* quiet — the source may be unset mid-change */
+            } finally {
+                if (!cancelled) setPreviewing(false);
+            }
+        }, 450);
+        return () => {
+            cancelled = true;
+            clearTimeout(t);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [sig]);
+    useEffect(
+        () => () => {
+            if (previewUrl) URL.revokeObjectURL(previewUrl);
+        },
+        [previewUrl]
+    );
+
+    const onFile = e => {
+        const f = e.target.files?.[0];
+        e.target.value = '';
+        if (!f) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+            const url = String(reader.result);
+            setCustomBg({ b64: url.split(',').pop(), url, name: f.name });
+            setBackdrop(null);
+        };
+        reader.readAsDataURL(f);
+    };
+
+    const onGenerate = async () => {
+        setBusy(true);
+        try {
+            const resp = await cl2kMakerAPI.squareGenerate(req);
+            savedToast(toast, resp?.data, 'Square art generated');
+        } catch (err) {
+            toast.error(err.message || 'Generate failed');
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    return (
+        <section className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="flex flex-col gap-4">
+                <div className="bg-surface border border-border rounded-lg p-3">
+                    <div className="flex items-center justify-between mb-2">
+                        <h3 className="text-sm font-medium text-primary">Source art (backdrop)</h3>
+                        <label className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs border border-border text-secondary hover:border-border-strong cursor-pointer">
+                            <span className="material-symbols-outlined text-sm">upload</span>
+                            Upload
+                            <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={onFile}
+                            />
+                        </label>
+                    </div>
+                    {customBg ? (
+                        <div className="flex items-center gap-3 rounded-md border-2 border-primary bg-surface-alt p-2">
+                            <img
+                                src={customBg.url}
+                                alt="Uploaded source"
+                                className="h-16 w-auto max-w-[60%] object-contain rounded"
+                            />
+                            <span className="flex-1 truncate text-xs text-secondary">
+                                {customBg.name}
+                            </span>
+                            <Button
+                                onClick={() => setCustomBg(null)}
+                                variant="secondary"
+                                icon="close"
+                                size="small"
+                            >
+                                Remove
+                            </Button>
+                        </div>
+                    ) : (
+                        <Picker
+                            label=""
+                            items={backdrops}
+                            loading={loadingArt}
+                            selected={backdrop}
+                            onSelect={p => setBackdrop(p)}
+                            aspect="aspect-video"
+                            emptyText="No backdrops from TMDB/fanart — upload one above."
+                        />
+                    )}
+                </div>
+
+                {srcUrl && (
+                    <SquareFramer
+                        imageUrl={srcUrl}
+                        focusX={focusX}
+                        focusY={focusY}
+                        onChange={(fx, fy) => {
+                            setFocusX(fx);
+                            setFocusY(fy);
+                        }}
+                    />
+                )}
+            </div>
+
+            <div className="flex flex-col gap-3">
+                <div className="bg-surface border border-border rounded-lg p-3">
+                    <h3 className="text-sm font-medium text-primary mb-2">Preview (1000×1000)</h3>
+                    <div className="relative aspect-square bg-black rounded overflow-hidden flex items-center justify-center">
+                        {hasSrc && previewUrl ? (
+                            <img
+                                src={previewUrl}
+                                alt="Square art preview"
+                                className="w-full h-full object-contain"
+                            />
+                        ) : (
+                            <span className="text-xs text-tertiary px-4 text-center">
+                                {hasSrc ? 'Rendering preview…' : 'Pick or upload source art.'}
+                            </span>
+                        )}
+                    </div>
+                </div>
+                <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-2">
+                    <h3 className="text-sm font-medium text-primary">Output</h3>
+                    <p className="text-xs text-tertiary">
+                        Saved as{' '}
+                        <span className="text-secondary">
+                            Title (Year) {'{ids}'} - SquareArt.jpg
+                        </span>{' '}
+                        and applied to Plex via Asset Renamerr (square art is Plex-direct only).
+                    </p>
+                    <SaveTargets targets={saveTargets} />
+                    <LoadingButton
+                        onClick={onGenerate}
+                        loading={busy || previewing}
+                        disabled={!hasSrc || saveTargets.noTarget}
+                        icon="save"
+                    >
+                        Generate &amp; save
+                    </LoadingButton>
+                </div>
+            </div>
+        </section>
+    );
+};
+
+// ─── Logo asset tab ─────────────────────────────────────────────────────────
+
+const LogoAssetPanel = ({ item, logos, loadingArt, saveTargets, toast }) => {
+    const [logo, setLogo] = useState(null); // file_path
+    const [customLogo, setCustomLogo] = useState(null); // { b64, url, name }
+    const [whiten, setWhiten] = useState(false);
+    const [previewUrl, setPreviewUrl] = useState(null);
+    const [previewing, setPreviewing] = useState(false);
+    const [busy, setBusy] = useState(false);
+    const hasLogo = !!(logo || customLogo);
+
+    const setCustomExclusive = useCallback(c => {
+        setCustomLogo(c);
+        if (c) setLogo(null);
+    }, []);
+
+    const req = useMemo(
+        () => ({
+            kind: item.kind,
+            title: item.title,
+            tmdb_id: item.tmdb_id,
+            year: item.year,
+            tvdb_id: item.tvdb_id,
+            imdb_id: item.imdb_id,
+            logo_path: customLogo ? null : logo,
+            logo_b64: customLogo?.b64 || null,
+            whiten,
+            save_local: saveTargets.saveLocal,
+            upload_gdrive: saveTargets.uploadGdrive,
+        }),
+        [item, logo, customLogo, whiten, saveTargets.saveLocal, saveTargets.uploadGdrive]
+    );
+    const reqRef = useRef(req);
+    useEffect(() => {
+        reqRef.current = req;
+    }, [req]);
+
+    const sig = `${customLogo?.b64?.slice(0, 32) || logo}|${whiten}`;
+    useEffect(() => {
+        if (!hasLogo) return undefined;
+        let cancelled = false;
+        const t = setTimeout(async () => {
+            setPreviewing(true);
+            try {
+                const blob = await cl2kMakerAPI.logoAssetPreview(reqRef.current);
+                if (!cancelled)
+                    setPreviewUrl(prev => {
+                        if (prev) URL.revokeObjectURL(prev);
+                        return URL.createObjectURL(blob);
+                    });
+            } catch {
+                /* quiet */
+            } finally {
+                if (!cancelled) setPreviewing(false);
+            }
+        }, 300);
+        return () => {
+            cancelled = true;
+            clearTimeout(t);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [sig]);
+    useEffect(
+        () => () => {
+            if (previewUrl) URL.revokeObjectURL(previewUrl);
+        },
+        [previewUrl]
+    );
+
+    const onExport = async () => {
+        setBusy(true);
+        try {
+            const resp = await cl2kMakerAPI.logoAssetGenerate(req);
+            savedToast(toast, resp?.data, 'Logo filed');
+        } catch (err) {
+            toast.error(err.message || 'Export failed');
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const seg = on =>
+        `px-3 py-1 text-sm rounded-md border ${
+            on
+                ? 'bg-primary text-white border-primary'
+                : 'bg-surface text-secondary border-border hover:border-border-strong'
+        }`;
+
+    return (
+        <section className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="flex flex-col gap-4">
+                <LogoSelector
+                    label="Logo (TMDB / fanart / custom)"
+                    logos={logos}
+                    loading={loadingArt}
+                    selected={logo}
+                    onSelect={setLogo}
+                    customLogo={customLogo}
+                    onCustomChange={setCustomExclusive}
+                    emptyText="No logos from TMDB/fanart — upload a custom PNG."
+                />
+                <div className="bg-surface border border-border rounded-lg p-3">
+                    <h3 className="text-sm font-medium text-primary mb-2">Colour</h3>
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            className={seg(!whiten)}
+                            onClick={() => setWhiten(false)}
+                        >
+                            Original
+                        </button>
+                        <button
+                            type="button"
+                            className={seg(whiten)}
+                            onClick={() => setWhiten(true)}
+                        >
+                            CL2K white
+                        </button>
+                    </div>
+                    <p className="text-xs text-tertiary mt-2">
+                        Original keeps the clear logo&apos;s colours (the usual Plex/Kometa logo
+                        asset). CL2K white recolours it to solid white, like a CL2K poster logo.
+                    </p>
+                </div>
+            </div>
+
+            <div className="flex flex-col gap-3">
+                <div className="bg-surface border border-border rounded-lg p-3">
+                    <h3 className="text-sm font-medium text-primary mb-2">Preview</h3>
+                    <div
+                        className="relative aspect-video rounded overflow-hidden flex items-center justify-center"
+                        style={{
+                            backgroundImage:
+                                'repeating-conic-gradient(#3a3a4a 0% 25%, #2a2a38 0% 50%)',
+                            backgroundSize: '22px 22px',
+                        }}
+                    >
+                        {hasLogo && previewUrl ? (
+                            <img
+                                src={previewUrl}
+                                alt="Logo preview"
+                                className="max-w-[90%] max-h-[90%] object-contain"
+                            />
+                        ) : (
+                            <span className="text-xs text-tertiary px-4 text-center bg-black/40 rounded px-2 py-1">
+                                {hasLogo ? 'Rendering preview…' : 'Pick or upload a logo.'}
+                            </span>
+                        )}
+                    </div>
+                </div>
+                <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-2">
+                    <h3 className="text-sm font-medium text-primary">Output</h3>
+                    <p className="text-xs text-tertiary">
+                        Filed as{' '}
+                        <span className="text-secondary">Title (Year) {'{ids}'} - Logo.png</span>{' '}
+                        and applied to Plex via Asset Renamerr — separate from any square art.
+                    </p>
+                    <SaveTargets targets={saveTargets} />
+                    <LoadingButton
+                        onClick={onExport}
+                        loading={busy || previewing}
+                        disabled={!hasLogo || saveTargets.noTarget}
+                        icon="save"
+                    >
+                        Export &amp; save logo
+                    </LoadingButton>
+                </div>
+            </div>
+        </section>
     );
 };
 

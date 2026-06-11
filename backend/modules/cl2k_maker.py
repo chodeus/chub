@@ -393,6 +393,141 @@ def generate_for_item(
     )
 
 
+def generate_square_art(
+    *,
+    db: ChubDB,
+    full_config,
+    logger,
+    kind: str,
+    title: str,
+    tmdb_id: int,
+    year: Optional[int] = None,
+    tvdb_id: Optional[int] = None,
+    imdb_id: Optional[str] = None,
+    backdrop_path: Optional[str] = None,
+    backdrop_bytes: Optional[bytes] = None,
+    focus_x: float = 0.5,
+    focus_y: float = 0.5,
+    fit_mode: str = "cover",
+    crop: Optional[Tuple[float, float, float, float]] = None,
+    v_pos: float = 0.0,
+    zoom: float = 1.0,
+    save_local: bool = True,
+    upload_gdrive: Optional[bool] = None,
+) -> Dict[str, Any]:
+    """Render + file 1:1 square art (``- SquareArt.jpg``) for a media item.
+
+    Plain cropped artwork (no logo/gradient), filed into poster_cache as
+    ``squareart`` so asset_renamerr applies it to Plex (uploadSquareArt). Always
+    overwrites — a deliberate manual action.
+    """
+    cfg = full_config.cl2k_maker
+    kind = (kind or "").lower()
+    if kind not in _VALID_KINDS:
+        return {"status": "error", "reason": f"invalid kind {kind!r}"}
+    title, year = _backfill_title_year(
+        full_config, db, logger, kind=kind, tmdb_id=tmdb_id, title=title, year=year,
+        tvdb_id=tvdb_id, imdb_id=imdb_id,
+    )
+    if save_local and not cfg.output_dir:
+        return {"status": "error", "reason": "cl2k_maker.output_dir is not configured"}
+    if backdrop_bytes is None:
+        if not backdrop_path:
+            return {"status": "error", "reason": "no source art selected"}
+        backdrop_bytes = image_fetch.download(backdrop_path)
+    blob = renderer.render_square_art(
+        backdrop_bytes=backdrop_bytes,
+        focus_x=focus_x,
+        focus_y=focus_y,
+        fit_mode=fit_mode,
+        crop=crop,
+        v_pos=v_pos,
+        zoom=zoom,
+    )
+    return _persist_poster(
+        db,
+        cfg,
+        logger,
+        sync_cfg=full_config.sync_gdrive,
+        blob=blob,
+        kind=kind,
+        title=title,
+        year=year,
+        tmdb_id=tmdb_id,
+        tvdb_id=tvdb_id,
+        imdb_id=imdb_id,
+        season_number=None,
+        backdrop_path=backdrop_path,
+        logo_source="squareart",
+        save_local=save_local,
+        upload_gdrive=upload_gdrive,
+        image_type="squareart",
+        asset_suffix=" - SquareArt",
+        ext=".jpg",
+    )
+
+
+def generate_logo_asset(
+    *,
+    db: ChubDB,
+    full_config,
+    logger,
+    kind: str,
+    title: str,
+    tmdb_id: int,
+    year: Optional[int] = None,
+    tvdb_id: Optional[int] = None,
+    imdb_id: Optional[str] = None,
+    logo_path: Optional[str] = None,
+    logo_bytes: Optional[bytes] = None,
+    whiten: bool = False,
+    save_local: bool = True,
+    upload_gdrive: Optional[bool] = None,
+) -> Dict[str, Any]:
+    """File a clear logo as its own ``- Logo.png`` asset (applied via uploadLogo).
+
+    ``whiten`` exports the CL2K-whitened logo; otherwise the original (colored)
+    clear logo, trimmed. Filed separately from any square art or poster.
+    """
+    cfg = full_config.cl2k_maker
+    kind = (kind or "").lower()
+    if kind not in _VALID_KINDS:
+        return {"status": "error", "reason": f"invalid kind {kind!r}"}
+    title, year = _backfill_title_year(
+        full_config, db, logger, kind=kind, tmdb_id=tmdb_id, title=title, year=year,
+        tvdb_id=tvdb_id, imdb_id=imdb_id,
+    )
+    if save_local and not cfg.output_dir:
+        return {"status": "error", "reason": "cl2k_maker.output_dir is not configured"}
+    raw = logo_bytes
+    if raw is None and logo_path:
+        raw = image_fetch.download(logo_path)
+    if not raw:
+        return {"status": "error", "reason": "no logo selected"}
+    png, _w, _h = renderer.process_logo(raw, whiten=whiten)
+    return _persist_poster(
+        db,
+        cfg,
+        logger,
+        sync_cfg=full_config.sync_gdrive,
+        blob=png,
+        kind=kind,
+        title=title,
+        year=year,
+        tmdb_id=tmdb_id,
+        tvdb_id=tvdb_id,
+        imdb_id=imdb_id,
+        season_number=None,
+        backdrop_path=None,
+        logo_source="logo-white" if whiten else "logo",
+        save_local=save_local,
+        upload_gdrive=upload_gdrive,
+        image_type="logo",
+        asset_suffix=" - Logo",
+        ext=".png",
+    )
+
+
 def _persist_poster(
     db: ChubDB,
     cfg,
@@ -411,8 +546,17 @@ def _persist_poster(
     logo_source: str,
     save_local: bool = True,
     upload_gdrive: Optional[bool] = None,
+    image_type: str = "poster",
+    asset_suffix: str = "",
+    ext: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Write a finished poster to the selected destinations + provenance.
+
+    ``image_type`` / ``asset_suffix`` / ``ext`` let this same sink file the
+    additional-asset types the maker produces — ``squareart`` (``- SquareArt.jpg``)
+    and ``logo`` (``- Logo.png``) — into poster_cache so asset_renamerr applies
+    them. Only true posters are written to the cl2k_generated provenance table (its
+    exists_for() gate is poster-only, so an asset row must not appear there).
 
     Shared sink for rendered (:func:`generate_for_item`), uploaded-finished
     (:func:`save_finished_poster`) and .psd-flattened posters. ``backdrop_path``
@@ -449,7 +593,8 @@ def _persist_poster(
         tvdb_id=tvdb_id,
         imdb_id=imdb_id,
         season_number=season_number,
-        ext=geo.OUTPUT_EXT,
+        ext=ext or geo.OUTPUT_EXT,
+        asset_suffix=asset_suffix,
     )
     # build_poster_filename already strips path-illegal chars, but basename makes it
     # provably impossible for a crafted title to escape output_dir (path-injection).
@@ -480,27 +625,31 @@ def _persist_poster(
                     "file": out_path,
                     "style": cfg.style,
                     "priority": cfg.priority,
-                    "image_type": "poster",
+                    "image_type": image_type,
                     "search_only": 0,
                 }
             ]
         )
 
-        cl2k_generated_for(db).record(
-            {
-                "kind": kind,
-                "tmdb_id": tmdb_id,
-                "tvdb_id": tvdb_id,
-                "imdb_id": imdb_id,
-                "season_number": season_number,
-                "title": title,
-                "year": year,
-                "file": out_path,
-                "backdrop_path": backdrop_path,
-                "logo_source": logo_source,
-                "uploaded": 0,
-            }
-        )
+        # Provenance / "already generated" tracking is poster-only — an asset
+        # (squareart / logo) shares the media's tmdb_id and must not make the batch
+        # poster run think a poster exists for it.
+        if image_type == "poster":
+            cl2k_generated_for(db).record(
+                {
+                    "kind": kind,
+                    "tmdb_id": tmdb_id,
+                    "tvdb_id": tvdb_id,
+                    "imdb_id": imdb_id,
+                    "season_number": season_number,
+                    "title": title,
+                    "year": year,
+                    "file": out_path,
+                    "backdrop_path": backdrop_path,
+                    "logo_source": logo_source,
+                    "uploaded": 0,
+                }
+            )
 
     upload_error = None
     uploaded = False
@@ -534,9 +683,10 @@ def _persist_poster(
         if uploaded:
             if out_path:
                 cl2k_generated_for(db).mark_uploaded(out_path)
-            else:
+            elif image_type == "poster":
                 # Drive-only: no persistent local file, so record provenance keyed
                 # on the basename (poster_cache is skipped — nothing local to match).
+                # Assets (squareart / logo) stay out of the poster provenance table.
                 cl2k_generated_for(db).record(
                     {
                         "kind": kind,

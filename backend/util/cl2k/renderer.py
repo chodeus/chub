@@ -510,6 +510,32 @@ def generate_text_logo(
         return img.make_blob()
 
 
+def render_square_art(
+    *,
+    backdrop_bytes: bytes,
+    size: int = 1000,
+    focus_x: float = 0.5,
+    focus_y: float = 0.5,
+    fit_mode: str = "cover",
+    crop: Optional[Tuple[float, float, float, float]] = None,
+    v_pos: float = 0.0,
+    zoom: float = 1.0,
+) -> bytes:
+    """Render square (1:1) art from a backdrop/poster — just the framed artwork.
+
+    Reuses the poster framing — ``cover`` (focal crop, the default) or ``fit``
+    (contain on black) — plus the same zoom + vertical-pan, into a ``size``×``size``
+    canvas. No gradient, logo, label or border: square art is plain cropped art,
+    applied to Plex via ``uploadSquareArt``. Encoded at the CL2K JPEG quality.
+    """
+    with Image(blob=backdrop_bytes) as base:
+        if fit_mode == "fit":
+            _fit_resize(base, size, size, crop, v_pos, zoom)
+        else:
+            _cover_resize(base, size, size, focus_x, focus_y, v_pos)
+        return _encode_jpeg(base)
+
+
 def render_cl2k(
     *,
     backdrop_bytes: bytes,
