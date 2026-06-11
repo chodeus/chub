@@ -1125,3 +1125,43 @@ def test_file_op_symlink_replaces_destination(tmp_path):
     dest.write_bytes(b"old")
     m._file_op(str(src), str(dest), "symlink")
     assert dest.is_symlink() and dest.read_bytes() == b"new"
+
+
+# --- season+logo coverage (clear logos are show-level only) ---
+
+
+def _insert_media(db, title, asset_type, season_number=None):
+    return db.media.execute_query(
+        "INSERT INTO media_cache (identity_key, title, asset_type, season_number) "
+        "VALUES (?, ?, ?, ?)",
+        (f"{asset_type}:{title}:{season_number}", title, asset_type, season_number),
+        last_row_id=True,
+    )
+
+
+def test_purge_season_logos_removes_only_season_logo_rows(db):
+    """purge_season_logos deletes logo rows targeting season rows — and nothing
+    else: show-level logos, movie logos and season background/squareart rows
+    all survive (seasons keep their other artwork expectations)."""
+    show_id = _insert_media(db, "Show X", "show")
+    season_id = _insert_media(db, "Show X", "show", season_number=1)
+    movie_id = _insert_media(db, "Movie Y", "movie")
+    m = db.media_asset_matches
+    m.upsert(target_kind="media", target_id=show_id, image_type="logo",
+             match_status="missing")
+    m.upsert(target_kind="media", target_id=season_id, image_type="logo",
+             match_status="missing")
+    m.upsert(target_kind="media", target_id=season_id, image_type="background",
+             match_status="missing")
+    m.upsert(target_kind="media", target_id=movie_id, image_type="logo",
+             match_status="applied")
+
+    assert m.purge_season_logos() == 1
+    kept = {(r["target_id"], r["image_type"]) for r in m.get_all()}
+    assert kept == {
+        (show_id, "logo"),
+        (season_id, "background"),
+        (movie_id, "logo"),
+    }
+    # Idempotent: nothing left to purge on a second pass.
+    assert m.purge_season_logos() == 0

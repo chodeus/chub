@@ -740,6 +740,18 @@ class AssetRenamerr(ChubModule):
             self.logger.warning("No media or collections found for asset matching.")
             return output
 
+        # Clear logos are show-level only (see the season skip in the media
+        # loop). Purge any season+logo rows recorded by older runs so existing
+        # Unmatched artwork counts self-heal without a manual reset. Dry runs
+        # don't write rows, so don't delete on them either.
+        if not self.config.dry_run:
+            purged = db.media_asset_matches.purge_season_logos()
+            if purged:
+                self.logger.info(
+                    f"Removed {purged} season+logo rows from artwork coverage "
+                    "(clear logos are show-level only)"
+                )
+
         # On the plex path, resolve upload targets from the plex_media_cache via
         # PlexMediaIndex (guid-first). Refresh that snapshot once up front (TTL-
         # guarded, so a chained poster_renamerr run that just walked Plex isn't
@@ -836,6 +848,17 @@ class AssetRenamerr(ChubModule):
                 continue
 
             for image_type in applicable:
+                # Clear logos don't exist at season level — providers publish
+                # only show-level logos (fanart explicitly; TMDB likewise), so a
+                # season+logo expectation can never be auto-satisfied and would
+                # sit in Unmatched as permanently "missing". Skip seasons for
+                # logo entirely; season background/squareart remain supported.
+                if (
+                    image_type == "logo"
+                    and media.get("asset_type") == "show"
+                    and media.get("season_number") is not None
+                ):
+                    continue
                 # Manual-pick lock: when the user chose a specific file in the
                 # picker, reuse it verbatim instead of re-resolving — a re-run
                 # must never overwrite a locked pick (mirrors poster_renamerr's
