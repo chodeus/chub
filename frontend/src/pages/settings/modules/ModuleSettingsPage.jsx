@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { configAPI } from '../../../utils/api/config.js';
 import { SETTINGS_MODULES } from '../../../utils/constants/settings_schema.js';
 import { useModuleSchema } from '../../../hooks/useModuleSchema.js';
+import { shouldShowField } from '../../../utils/forms/conditionalFields.js';
 import { FieldRegistry } from '../../../components/fields/FieldRegistry.jsx';
 import { Accordion } from '../../../components/ui/Accordion.jsx';
 import { AccordionItem } from '../../../components/ui/AccordionItem.jsx';
@@ -292,104 +293,114 @@ const ModuleSettingsContent = () => {
                                     noValidate
                                     autoComplete="off"
                                 >
-                                    {module.fields.map((field, fieldIndex) => {
-                                        try {
-                                            // Section divider: when a field's `section` differs from
-                                            // the previous field's, render a header so the form reads
-                                            // as a grouped layout (Source / Output / Pipeline / etc.)
-                                            // without changing the schema-driven render contract.
-                                            // Fields without `section` simply render inline.
-                                            const prevSection =
-                                                fieldIndex > 0
-                                                    ? module.fields[fieldIndex - 1].section
-                                                    : undefined;
-                                            const showSectionHeader =
-                                                field.section && field.section !== prevSection;
+                                    {module.fields
+                                        // Hide fields whose `conditional` isn't satisfied by the
+                                        // current values (e.g. AI Endpoint only shows for the
+                                        // providers that use it). Section-scoped data so the
+                                        // dependent field name (e.g. ai_provider) resolves.
+                                        .filter(f => shouldShowField(f, formData[module.key] || {}))
+                                        .map((field, fieldIndex, visibleFields) => {
+                                            try {
+                                                // Section divider: when a field's `section` differs from
+                                                // the previous field's, render a header so the form reads
+                                                // as a grouped layout (Source / Output / Pipeline / etc.)
+                                                // without changing the schema-driven render contract.
+                                                // Fields without `section` simply render inline.
+                                                const prevSection =
+                                                    fieldIndex > 0
+                                                        ? visibleFields[fieldIndex - 1].section
+                                                        : undefined;
+                                                const showSectionHeader =
+                                                    field.section && field.section !== prevSection;
 
-                                            // Generate unique IDs for this field instance
-                                            const uniqueId = `field-${module.key}-${field.key}-${fieldIndex}`;
-                                            const errorId = `${uniqueId}-error`;
-                                            const descId = `${uniqueId}-desc`;
+                                                // Generate unique IDs for this field instance
+                                                const uniqueId = `field-${module.key}-${field.key}-${fieldIndex}`;
+                                                const errorId = `${uniqueId}-error`;
+                                                const descId = `${uniqueId}-desc`;
 
-                                            // Get field value from current module data - CORRECTED VALUE MAPPING
-                                            // formData structure is flat: sync_gdrive, poster_renamerr, etc. are direct properties
-                                            const moduleData = formData[module.key] || {};
-                                            let fieldValue = moduleData[field.key];
+                                                // Get field value from current module data - CORRECTED VALUE MAPPING
+                                                // formData structure is flat: sync_gdrive, poster_renamerr, etc. are direct properties
+                                                const moduleData = formData[module.key] || {};
+                                                let fieldValue = moduleData[field.key];
 
-                                            // Handle special case for nested values (like token)
-                                            if (fieldValue === undefined) {
-                                                fieldValue = field.defaultValue;
-                                            }
+                                                // Handle special case for nested values (like token)
+                                                if (fieldValue === undefined) {
+                                                    fieldValue = field.defaultValue;
+                                                }
 
-                                            // Handle null values - convert to empty string for form fields
-                                            if (fieldValue === null) {
-                                                fieldValue = '';
-                                            }
+                                                // Handle null values - convert to empty string for form fields
+                                                if (fieldValue === null) {
+                                                    fieldValue = '';
+                                                }
 
-                                            // Handle object values - stringify for JSON fields
-                                            if (
-                                                fieldValue &&
-                                                typeof fieldValue === 'object' &&
-                                                field.type === 'json'
-                                            ) {
-                                                fieldValue = JSON.stringify(fieldValue, null, 2);
-                                            }
+                                                // Handle object values - stringify for JSON fields
+                                                if (
+                                                    fieldValue &&
+                                                    typeof fieldValue === 'object' &&
+                                                    field.type === 'json'
+                                                ) {
+                                                    fieldValue = JSON.stringify(
+                                                        fieldValue,
+                                                        null,
+                                                        2
+                                                    );
+                                                }
 
-                                            return (
-                                                <React.Fragment
-                                                    key={`field-${module.key}-${field.key}-${fieldIndex}`}
-                                                >
-                                                    {showSectionHeader && (
-                                                        <div
-                                                            className="settings-section-header pt-2 pb-1 mt-2 first:mt-0 border-b border-border-subtle"
-                                                            role="heading"
-                                                            aria-level={3}
-                                                        >
-                                                            <span className="text-xs font-semibold uppercase tracking-wider text-secondary">
-                                                                {field.section}
-                                                            </span>
+                                                return (
+                                                    <React.Fragment
+                                                        key={`field-${module.key}-${field.key}-${fieldIndex}`}
+                                                    >
+                                                        {showSectionHeader && (
+                                                            <div
+                                                                className="settings-section-header pt-2 pb-1 mt-2 first:mt-0 border-b border-border-subtle"
+                                                                role="heading"
+                                                                aria-level={3}
+                                                            >
+                                                                <span className="text-xs font-semibold uppercase tracking-wider text-secondary">
+                                                                    {field.section}
+                                                                </span>
+                                                            </div>
+                                                        )}
+                                                        <div className="settings-field-row">
+                                                            <MemoizedFieldComponent
+                                                                field={{
+                                                                    ...field,
+                                                                    id: uniqueId,
+                                                                    errorId,
+                                                                    descId,
+                                                                }}
+                                                                value={fieldValue}
+                                                                onChange={value =>
+                                                                    handleFieldChange(
+                                                                        module.key,
+                                                                        field.key,
+                                                                        value
+                                                                    )
+                                                                }
+                                                                disabled={isSaving}
+                                                                highlightInvalid={false}
+                                                                errorMessage={null}
+                                                                rootConfig={formData}
+                                                            />
                                                         </div>
-                                                    )}
-                                                    <div className="settings-field-row">
-                                                        <MemoizedFieldComponent
-                                                            field={{
-                                                                ...field,
-                                                                id: uniqueId,
-                                                                errorId,
-                                                                descId,
-                                                            }}
-                                                            value={fieldValue}
-                                                            onChange={value =>
-                                                                handleFieldChange(
-                                                                    module.key,
-                                                                    field.key,
-                                                                    value
-                                                                )
-                                                            }
-                                                            disabled={isSaving}
-                                                            highlightInvalid={false}
-                                                            errorMessage={null}
-                                                            rootConfig={formData}
-                                                        />
+                                                    </React.Fragment>
+                                                );
+                                            } catch (error) {
+                                                console.error(
+                                                    `Error rendering field ${field.key}:`,
+                                                    error
+                                                );
+                                                return (
+                                                    <div
+                                                        key={`error-${module.key}-${field.key}-${fieldIndex}`}
+                                                        className="p-2 bg-warning-bg text-warning rounded"
+                                                    >
+                                                        Field type &apos;{field.type}&apos; error:{' '}
+                                                        {error.message}
                                                     </div>
-                                                </React.Fragment>
-                                            );
-                                        } catch (error) {
-                                            console.error(
-                                                `Error rendering field ${field.key}:`,
-                                                error
-                                            );
-                                            return (
-                                                <div
-                                                    key={`error-${module.key}-${field.key}-${fieldIndex}`}
-                                                    className="p-2 bg-warning-bg text-warning rounded"
-                                                >
-                                                    Field type &apos;{field.type}&apos; error:{' '}
-                                                    {error.message}
-                                                </div>
-                                            );
-                                        }
-                                    })}
+                                                );
+                                            }
+                                        })}
                                 </form>
                             ) : (
                                 <div className="text-center py-8 text-tertiary">
