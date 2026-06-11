@@ -168,6 +168,24 @@ class MediaAssetMatches(DatabaseBase):
         )
         return [dict(r) for r in rows]
 
+    def purge_season_logos(self) -> int:
+        """Delete logo rows whose target is a season row of a show.
+
+        Clear logos are show-level only: providers (TMDB / fanart.tv) publish no
+        per-season logos, so a season+logo row — typically "missing" — can never
+        be satisfied automatically and only skews the Unmatched artwork coverage.
+        asset_renamerr calls this at the start of each run so databases written
+        by older versions (which recorded those rows) self-heal. Returns the
+        number of rows deleted.
+        """
+        deleted = self.execute_query(
+            "DELETE FROM media_asset_matches "
+            "WHERE image_type = 'logo' AND target_kind = 'media' "
+            "AND target_id IN (SELECT id FROM media_cache "
+            "WHERE asset_type = 'show' AND season_number IS NOT NULL)"
+        )
+        return int(deleted or 0)
+
     def clear(self, keep_ignored: bool = False) -> None:
         """Delete artwork-match rows.
 
