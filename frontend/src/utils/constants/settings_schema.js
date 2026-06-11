@@ -672,7 +672,16 @@ export const SETTINGS_SCHEMA = [
                 type: 'check_box',
                 section: 'Logo & Text',
                 description:
-                    'When no clear logo is found on TMDB or fanart.tv, synthesize an ALL-CAPS typeset wordmark from the title.',
+                    'When no clear logo is found on TMDB or fanart.tv, synthesize an ALL-CAPS typeset wordmark from the title. Long titles are balance-wrapped onto two/three lines to fill the logo box.',
+            },
+            {
+                key: 'text_logo_stroke',
+                label: 'Text Logo Outline (px)',
+                type: 'number',
+                section: 'Logo & Text',
+                placeholder: '0',
+                description:
+                    'Outline width for the synthesized text wordmark; 0 = none (clean white, the CL2K default). A small value (~4) adds legibility over busy artwork.',
             },
             {
                 key: 'language',

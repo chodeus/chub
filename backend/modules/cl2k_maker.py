@@ -265,6 +265,7 @@ def _resolve_and_render(
         zoom=zoom,
         band_label=band_label,
         place_logo=place_logo,
+        text_logo_stroke=cfg.text_logo_stroke,
     )
     return blob, {"backdrop_path": backdrop_path, "logo_source": logo_source}
 

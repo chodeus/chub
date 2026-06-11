@@ -18,7 +18,8 @@ Run standalone for a quick visual check::
 
 from __future__ import annotations
 
-from typing import Optional, Tuple
+import itertools
+from typing import List, Optional, Tuple
 
 from wand.color import Color
 from wand.drawing import Drawing
@@ -410,29 +411,99 @@ def _draw_border(base: Image) -> None:
 
 
 # ----- public ----------------------------------------------------------------
+def _balance_lines(words: List[str], n: int, measure) -> List[str]:
+    """Split ``words`` into ``n`` contiguous lines that minimise the widest line.
+
+    ``measure(text)`` returns the rendered width of a string in the chosen font.
+    Brute-forces the n-1 cut points (titles are short, so the count is tiny) and
+    keeps the most balanced break — so a wrapped wordmark reads as even lines, not
+    one long line + one orphan word.
+    """
+    if n <= 1 or len(words) <= 1:
+        return [" ".join(words)]
+    if n >= len(words):
+        return list(words)
+    best: Optional[List[str]] = None
+    best_max: Optional[float] = None
+    for cuts in itertools.combinations(range(1, len(words)), n - 1):
+        groups, prev = [], 0
+        for c in (*cuts, len(words)):
+            groups.append(" ".join(words[prev:c]))
+            prev = c
+        widest = max(measure(g) for g in groups)
+        if best_max is None or widest < best_max:
+            best_max, best = widest, groups
+    return best or [" ".join(words)]
+
+
 def generate_text_logo(
     title: str,
     font_path: Optional[str] = None,
     font_px: int = 200,
     color: str = "white",
+    stroke_width: int = 0,
+    stroke_color: str = "black",
 ) -> bytes:
     """Render ``title`` as an ALL-CAPS transparent wordmark (text-logo fallback).
 
-    Used only when no real clear logo is found (TMDB -> fanart -> here). The
-    result is fed through the normal logo path, so it is width-normalised to the
-    600px logo box like any clear logo — keeping every CL2K poster logo-shaped
-    rather than switching to baked-on MM2K title text.
+    Used only when no real clear logo is found (TMDB -> fanart -> here). The title
+    is balance-wrapped onto 1–3 lines so the block roughly matches the CL2K logo
+    box aspect (~3:1, the 600×200 guide) instead of a single tiny strip — a long
+    title fills the box on two/three lines like a hand-made wordmark. The result is
+    fed through the normal logo path (width-normalised to the 600px box), keeping
+    every poster logo-shaped. ``stroke_width`` (px at the internal render size; 0 =
+    none) adds a thin outline for legibility over busy art.
     """
-    text = (title or "").upper()
+    text = " ".join((title or "").upper().split())
+    if not text:
+        return b""
     font = font_path or geo.resolve_font(bold=True)
-    with Image(width=3000, height=600, background=Color("transparent")) as img:
+    words = text.split()
+    # The box the wordmark is normalised into: width 600, height (baseline-zone_top).
+    target_aspect = geo.LOGO_WIDTH_STD / max(1, geo.MAIN_LOGO_BOTTOM - geo.LOGO_ZONE_TOP)
+
+    # Pick the line count whose block aspect (widest line : total height) is closest
+    # to the box. Aspect is scale-independent, so measure at a fixed reference size.
+    with Image(width=8000, height=2000, background=Color("transparent")) as probe:
+        with Drawing() as md:
+            if font:
+                md.font = font
+            md.font_size = 100
+
+            def measure(s: str) -> float:
+                return md.get_font_metrics(probe, s, False).text_width or 1.0
+
+            best_lines = [text]
+            best_score = None
+            for n in range(1, min(3, len(words)) + 1):
+                lines = _balance_lines(words, n, measure)
+                block_w = max(measure(s) for s in lines)
+                block_h = 100 * 1.15 * len(lines)  # line height incl. ~15% spacing
+                score = abs(block_w / block_h - target_aspect)
+                if best_score is None or score < best_score:
+                    best_score, best_lines = score, lines
+
+    # Render the chosen layout, centred, ALL-CAPS, with the optional stroke.
+    line_h = int(round(font_px * 1.15))
+    n = len(best_lines)
+    with Image(
+        width=8000, height=line_h * n + 400, background=Color("transparent")
+    ) as img:
         with Drawing() as draw:
             if font:
                 draw.font = font
             draw.font_size = font_px
             draw.fill_color = Color(color)
             draw.text_alignment = "center"
-            draw.text(1500, int(300 + font_px * 0.35), text)
+            if stroke_width > 0:
+                draw.stroke_color = Color(stroke_color)
+                draw.stroke_width = stroke_width
+                draw.stroke_antialias = True
+            cx = 4000
+            y = 200 + int(font_px * 0.8)
+            for s in best_lines:
+                draw.text(cx, y, s)
+                y += line_h
             draw(img)
         img.trim()
         img.format = "png"
@@ -459,6 +530,7 @@ def render_cl2k(
     zoom: float = 1.0,
     band_label: str = "",
     place_logo: bool = True,
+    text_logo_stroke: int = 0,
 ) -> bytes:
     """Render a CL2K poster and return JPEG bytes.
 
@@ -505,7 +577,9 @@ def render_cl2k(
                 # No clear logo found (TMDB -> fanart exhausted): synthesise a
                 # typeset wordmark and place it through the same logo path so the
                 # poster stays logo-shaped.
-                logo_bytes = generate_text_logo(title, title_font)
+                logo_bytes = generate_text_logo(
+                    title, title_font, stroke_width=text_logo_stroke
+                )
             if logo_bytes:
                 _place_logo(
                     base, logo_bytes, baseline, logo_max_width, whiten, logo_scale,
