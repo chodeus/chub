@@ -54,6 +54,41 @@ def _fanart_logo(
         return None
 
 
+def _backfill_title_year(
+    full_config,
+    db,
+    logger,
+    *,
+    kind: str,
+    tmdb_id: int,
+    title: str,
+    year: Optional[int],
+) -> Tuple[str, Optional[int]]:
+    """Fill a blank title/year from TMDB before naming/rendering.
+
+    Items added by id paste or the Edit-IDs panel arrive with no title (the UI
+    only resolves the ids), which would reduce the DAPS filename to bare id tags
+    (``{tmdb-N}.jpg``) and draw an empty text-wordmark fallback. When the title is
+    blank we look it up via :meth:`TMDBClient.get_details` (cached). Best-effort: a
+    transient TMDB failure leaves the originals untouched. Only movie/show/season
+    map to a TMDB movie/tv id — collections carry their own title.
+    """
+    if kind not in ("movie", "show", "season"):
+        return title, year
+    if (title or "").strip():
+        return title, year
+    try:
+        mt = "movie" if kind == "movie" else "tv"
+        details = TMDBClient(full_config.tmdb, db, logger).get_details(tmdb_id, mt)
+        if details:
+            title = details.get("title") or title
+            if year is None:
+                year = details.get("year")
+    except Exception as exc:  # never block a save on a metadata lookup
+        logger.warning(f"cl2k: title backfill failed for tmdb {tmdb_id}: {exc}")
+    return title, year
+
+
 def _resolve_and_render(
     db: ChubDB,
     full_config,
@@ -81,6 +116,7 @@ def _resolve_and_render(
     logo_scale: float = 1.0,
     logo_y_offset: int = 0,
     allow_ai_extend: bool = True,
+    place_logo: bool = True,
 ) -> Tuple[Optional[bytes], Dict[str, Any]]:
     """Resolve art (textless backdrop + logo) and render.
 
@@ -210,6 +246,7 @@ def _resolve_and_render(
         crop=crop,
         v_pos=v_pos,
         band_label=band_label,
+        place_logo=place_logo,
     )
     return blob, {"backdrop_path": backdrop_path, "logo_source": logo_source}
 
@@ -267,6 +304,9 @@ def generate_for_item(
     kind = (kind or "").lower()
     if kind not in _VALID_KINDS:
         return {"status": "error", "reason": f"invalid kind {kind!r}"}
+    title, year = _backfill_title_year(
+        full_config, db, logger, kind=kind, tmdb_id=tmdb_id, title=title, year=year
+    )
     # output_dir is only required when actually saving locally; a Drive-only save
     # uploads from a temp copy and never touches output_dir.
     if save_local and not cfg.output_dir:
@@ -598,6 +638,9 @@ def save_finished_poster(
     kind = (kind or "").lower()
     if kind not in _VALID_KINDS:
         return {"status": "error", "reason": f"invalid kind {kind!r}"}
+    title, year = _backfill_title_year(
+        full_config, db, logger, kind=kind, tmdb_id=tmdb_id, title=title, year=year
+    )
     if save_local and not cfg.output_dir:
         return {"status": "error", "reason": "cl2k_maker.output_dir is not configured"}
     blob = _normalize_poster(image_bytes)
