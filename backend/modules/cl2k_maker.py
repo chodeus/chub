@@ -126,6 +126,7 @@ def _resolve_and_render(
     fit_mode: str = "cover",
     crop: Optional[Tuple[float, float, float, float]] = None,
     v_pos: float = 0.0,
+    zoom: float = 1.0,
     band_label: str = "",
     logo_scale: float = 1.0,
     logo_y_offset: int = 0,
@@ -174,7 +175,9 @@ def _resolve_and_render(
     # the backdrop; the resulting canvas is already 1000×1500, so it renders as a
     # straight cover (identity).
     if fit_mode == "extend":
-        canvas_bytes, extend_mask = renderer.fit_extend_canvas(backdrop_bytes, crop)
+        canvas_bytes, extend_mask = renderer.fit_extend_canvas(
+            backdrop_bytes, crop, zoom=zoom, v_pos=v_pos
+        )
         # AI runs only on a real generate (allow_ai_extend) AND when a provider is
         # configured. Previews (allow_ai_extend=False) and provider-less renders fall
         # back to the free edge-extend fit, so we never spend AI on every preview.
@@ -259,6 +262,7 @@ def _resolve_and_render(
         fit_mode=fit_mode,
         crop=crop,
         v_pos=v_pos,
+        zoom=zoom,
         band_label=band_label,
         place_logo=place_logo,
     )
@@ -301,6 +305,7 @@ def generate_for_item(
     fit_mode: str = "cover",
     crop: Optional[Tuple[float, float, float, float]] = None,
     v_pos: float = 0.0,
+    zoom: float = 1.0,
     band_label: str = "",
     logo_scale: float = 1.0,
     logo_y_offset: int = 0,
@@ -356,6 +361,7 @@ def generate_for_item(
         fit_mode=fit_mode,
         crop=crop,
         v_pos=v_pos,
+        zoom=zoom,
         band_label=band_label,
         logo_scale=logo_scale,
         logo_y_offset=logo_y_offset,
@@ -823,6 +829,7 @@ def generate_seasons(
     focus_y: float = 0.5,
     crop: Optional[Tuple[float, float, float, float]] = None,
     v_pos: float = 0.0,
+    zoom: float = 1.0,
     logo_scale: float = 1.0,
     logo_y_offset: int = 0,
     force: bool = False,
@@ -853,6 +860,7 @@ def generate_seasons(
                 focus_y=focus_y,
                 crop=crop,
                 v_pos=v_pos,
+                zoom=zoom,
                 logo_scale=logo_scale,
                 logo_y_offset=logo_y_offset,
                 force=force,

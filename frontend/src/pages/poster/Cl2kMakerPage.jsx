@@ -759,9 +759,12 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
     // technique). `crop` (0..1 {x,y,w,h}) isolates the subject region for fit mode.
     const [fitMode, setFitMode] = useState(saved.fitMode ?? 'cover');
     const [crop, setCrop] = useState(saved.crop ?? null);
-    // Vertical position of the fitted photo (0..1; ~0.4 adds headroom above the
-    // subjects). Only meaningful in fit/extend framing.
+    // Vertical position (0..1). In fit/extend it positions the fitted photo; in
+    // Fill it pans the framing up at the same size (real artwork into the gradient).
     const [vPos, setVPos] = useState(saved.vPos ?? 0);
+    // Zoom (>=1) for fit/extend: enlarge the subject above the full-width fit so a
+    // wide backdrop isn't shrunk to a tiny strip.
+    const [zoom, setZoom] = useState(saved.zoom ?? 1);
     const [focusX, setFocusX] = useState(saved.focusX ?? 0.5);
     const [focusY, setFocusY] = useState(saved.focusY ?? 0.5);
 
@@ -793,6 +796,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             fitMode,
             crop,
             vPos,
+            zoom,
             focusX,
             focusY,
             logoScale,
@@ -809,6 +813,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
         fitMode,
         crop,
         vPos,
+        zoom,
         focusX,
         focusY,
         logoScale,
@@ -940,7 +945,9 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             crop_y: (fitMode === 'fit' || fitMode === 'extend') && crop ? crop.y : null,
             crop_w: (fitMode === 'fit' || fitMode === 'extend') && crop ? crop.w : null,
             crop_h: (fitMode === 'fit' || fitMode === 'extend') && crop ? crop.h : null,
-            v_pos: fitMode === 'fit' || fitMode === 'extend' ? vPos : 0,
+            // v_pos applies to every mode now (Fill pans up; fit/extend position).
+            v_pos: vPos,
+            zoom: fitMode === 'fit' || fitMode === 'extend' ? zoom : 1,
             // Banner overrides the auto label, but a season poster keeps its SEASON N.
             band_label: isSeasonPoster ? '' : bandLabel,
             // Save destinations (ignored by /preview, honoured by /generate).
@@ -962,6 +969,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             fitMode,
             crop,
             vPos,
+            zoom,
             focusX,
             focusY,
             bandLabel,
@@ -1000,6 +1008,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                 fm: fitMode,
                 c: (fitMode === 'fit' || fitMode === 'extend') && crop ? crop : null,
                 vp: vPos,
+                zm: fitMode === 'fit' || fitMode === 'extend' ? zoom : 1,
                 fx: focusX,
                 fy: focusY,
                 bl: isSeasonPoster ? '' : bandLabel,
@@ -1019,6 +1028,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             fitMode,
             crop,
             vPos,
+            zoom,
             focusX,
             focusY,
             bandLabel,
@@ -1120,7 +1130,8 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                 crop_y: (fitMode === 'fit' || fitMode === 'extend') && crop ? crop.y : null,
                 crop_w: (fitMode === 'fit' || fitMode === 'extend') && crop ? crop.w : null,
                 crop_h: (fitMode === 'fit' || fitMode === 'extend') && crop ? crop.h : null,
-                v_pos: fitMode === 'fit' || fitMode === 'extend' ? vPos : 0,
+                v_pos: vPos,
+                zoom: fitMode === 'fit' || fitMode === 'extend' ? zoom : 1,
                 logo_scale: logoScale,
                 logo_y_offset: logoYOffset,
                 force: false,
@@ -1133,7 +1144,19 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
         } finally {
             setBusy(false);
         }
-    }, [bulkSeasons, item, fitMode, focusX, focusY, crop, vPos, logoScale, logoYOffset, toast]);
+    }, [
+        bulkSeasons,
+        item,
+        fitMode,
+        focusX,
+        focusY,
+        crop,
+        vPos,
+        zoom,
+        logoScale,
+        logoYOffset,
+        toast,
+    ]);
 
     const activeArt = tab === 'fanart' ? fanartArt : tmdbArt;
     const isRenderTab = tab === 'tmdb' || tab === 'fanart';
@@ -1229,6 +1252,8 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                     setCrop={setCrop}
                     vPos={vPos}
                     setVPos={setVPos}
+                    zoom={zoom}
+                    setZoom={setZoom}
                     focusX={focusX}
                     focusY={focusY}
                     onFocusChange={(fx, fy) => {
@@ -1311,6 +1336,8 @@ const RenderPanel = ({
     setCrop,
     vPos,
     setVPos,
+    zoom,
+    setZoom,
     focusX,
     focusY,
     onFocusChange,
@@ -1378,6 +1405,8 @@ const RenderPanel = ({
                         setCrop={setCrop}
                         vPos={vPos}
                         setVPos={setVPos}
+                        zoom={zoom}
+                        setZoom={setZoom}
                         focusX={focusX}
                         focusY={focusY}
                         onChange={onFocusChange}
@@ -1781,9 +1810,9 @@ const clamp01 = v => Math.max(0, Math.min(1, v));
 const FULL_CROP = { x: 0, y: 0, w: 1, h: 1 };
 
 const FRAMING_HELP = {
-    cover: 'Drag on the photo to choose what stays in the 2:3 crop — the dimmed area is cut. The preview and the mini mock update as you drag.',
-    fit: 'Drag a box around the subjects: that region shrinks to the poster width, sky is extended above it, and the bottom fades to black into the logo zone. The mock shows where it lands.',
-    extend: 'Drag a box around the subjects: they stay full-size and the empty bottom is filled by AI on Generate. The mock shows the free edge-extend placeholder until then.',
+    cover: 'Drag on the photo to choose what stays in the 2:3 crop — the dimmed area is cut. Use Vertical position to slide the framing up at the same size; real artwork flows down into the gradient (no AI).',
+    fit: 'Drag a box around the subjects: that region shrinks to the poster width (use Zoom to enlarge it), sky is extended above, and the bottom fades to black into the logo zone. The mock shows where it lands.',
+    extend: 'Drag a box around the subjects (use Zoom to enlarge them): the empty bottom is filled by AI on Generate. The mock shows the free edge-extend placeholder until then.',
 };
 
 // Live miniature of the final 2:3 canvas for fit/extend framing. Updates instantly
@@ -1922,6 +1951,8 @@ const CropFramer = ({
     setCrop,
     vPos,
     setVPos,
+    zoom,
+    setZoom,
     focusX,
     focusY,
     onChange,
@@ -2024,6 +2055,29 @@ const CropFramer = ({
 
     const activeRect = isBox ? boxRect : coverRect;
 
+    // The region the live mock should render, accounting for the new controls:
+    //  - fit/extend: shrink the box horizontally by 1/zoom (centred) so the mock
+    //    magnifies the subject like the backend's side-cropping zoom.
+    //  - cover (Fill): shift the cover crop down within its own height by ~30%·vPos
+    //    so the framing reads as panned UP, with the floor fading to black below.
+    const mockCrop = useMemo(() => {
+        if (isBox) {
+            const c = crop || FULL_CROP;
+            const z = Math.max(1, zoom || 1);
+            if (z <= 1) return c;
+            const w = c.w / z;
+            return { x: c.x + (c.w - w) / 2, y: c.y, w, h: c.h };
+        }
+        if (!coverRect) return null;
+        const shift = clamp01(vPos) * 0.3 * coverRect.h;
+        return {
+            x: coverRect.left,
+            y: Math.min(coverRect.top + shift, coverRect.top + coverRect.h - 0.05),
+            w: coverRect.w,
+            h: Math.max(0.05, coverRect.h - shift),
+        };
+    }, [isBox, crop, zoom, coverRect, vPos]);
+
     return (
         <div className="bg-surface border border-border rounded-lg p-3">
             <div className="flex items-center justify-between mb-2">
@@ -2063,21 +2117,40 @@ const CropFramer = ({
             <p className="text-xs text-tertiary mb-2">
                 {FRAMING_HELP[fitMode] || FRAMING_HELP.cover}
             </p>
+            <label className="flex items-center gap-2 text-xs text-secondary mb-2">
+                <span className="shrink-0 w-24">Vertical position</span>
+                <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value={vPos}
+                    onChange={e => setVPos(Number(e.target.value))}
+                    className="flex-1"
+                />
+                <span className="w-16 shrink-0 text-tertiary">
+                    {vPos < 0.02
+                        ? isBox
+                            ? 'top'
+                            : 'default'
+                        : isBox
+                          ? `${Math.round(vPos * 100)}% down`
+                          : `${Math.round(vPos * 100)}% up`}
+                </span>
+            </label>
             {isBox && (
                 <label className="flex items-center gap-2 text-xs text-secondary mb-2">
-                    <span className="shrink-0">Vertical position</span>
+                    <span className="shrink-0 w-24">Zoom</span>
                     <input
                         type="range"
-                        min="0"
-                        max="1"
-                        step="0.01"
-                        value={vPos}
-                        onChange={e => setVPos(Number(e.target.value))}
+                        min="1"
+                        max="3"
+                        step="0.05"
+                        value={zoom ?? 1}
+                        onChange={e => setZoom(Number(e.target.value))}
                         className="flex-1"
                     />
-                    <span className="w-16 shrink-0 text-tertiary">
-                        {vPos < 0.05 ? 'top' : `${Math.round(vPos * 100)}% down`}
-                    </span>
+                    <span className="w-16 shrink-0 text-tertiary">{(zoom ?? 1).toFixed(2)}×</span>
                 </label>
             )}
             <div className="flex gap-3 items-start">
@@ -2122,18 +2195,7 @@ const CropFramer = ({
                 <FitMock
                     imageUrl={imageUrl}
                     ratio={ratio}
-                    crop={
-                        isBox
-                            ? crop
-                            : coverRect
-                              ? {
-                                    x: coverRect.left,
-                                    y: coverRect.top,
-                                    w: coverRect.w,
-                                    h: coverRect.h,
-                                }
-                              : null
-                    }
+                    crop={mockCrop}
                     vPos={isBox ? vPos : 0}
                     label={mockLabel}
                     labelYFrac={labelYFrac}
@@ -2830,6 +2892,7 @@ const EditPosterPanel = ({
     const [fitMode, setFitMode] = useState('cover');
     const [crop, setCrop] = useState(null);
     const [vPos, setVPos] = useState(0);
+    const [zoom, setZoom] = useState(1);
     const [focusX, setFocusX] = useState(0.5);
     const [focusY, setFocusY] = useState(0.5);
     const [cl2kLogo, setCl2kLogo] = useState(null); // chosen TMDB/fanart logo file_path
@@ -3073,7 +3136,8 @@ const EditPosterPanel = ({
             crop_y: (fitMode === 'fit' || fitMode === 'extend') && crop ? crop.y : null,
             crop_w: (fitMode === 'fit' || fitMode === 'extend') && crop ? crop.w : null,
             crop_h: (fitMode === 'fit' || fitMode === 'extend') && crop ? crop.h : null,
-            v_pos: fitMode === 'fit' || fitMode === 'extend' ? vPos : 0,
+            v_pos: vPos,
+            zoom: fitMode === 'fit' || fitMode === 'extend' ? zoom : 1,
         }),
         [
             idFields,
@@ -3084,6 +3148,7 @@ const EditPosterPanel = ({
             fitMode,
             crop,
             vPos,
+            zoom,
             focusX,
             focusY,
         ]
@@ -3288,6 +3353,8 @@ const EditPosterPanel = ({
                                 setCrop={setCrop}
                                 vPos={vPos}
                                 setVPos={setVPos}
+                                zoom={zoom}
+                                setZoom={setZoom}
                                 focusX={focusX}
                                 focusY={focusY}
                                 onChange={(fx, fy) => {

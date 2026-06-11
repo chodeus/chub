@@ -34,20 +34,48 @@ def _cover_resize(
     height: int,
     focus_x: float = 0.5,
     focus_y: float = 0.5,
+    v_pos: float = 0.0,
 ) -> None:
     """Resize + crop ``img`` in place to exactly width×height (cover fill).
 
     ``focus_x``/``focus_y`` (0..1) choose what stays in frame: the focal point of
     the scaled image is centred in the crop, clamped to the edges. 0.5/0.5 is the
     centre crop (the default, unchanged behaviour).
+
+    ``v_pos`` (0..1) then pushes the framed image *up* without changing its size:
+    it pans down through any remaining source below the crop and, once the source
+    runs out, edge-extends the bottom row faded to black — a band that lands in the
+    CL2K gradient/black zone, so it stays hidden. This lets a tall subject sit
+    higher (real artwork flowing down into the gradient) with no AI. 0 = the
+    focal-point crop above, unchanged.
     """
     scale = max(width / img.width, height / img.height)
     img.resize(int(round(img.width * scale)), int(round(img.height * scale)))
     left = int(round(focus_x * img.width - width / 2))
-    top = int(round(focus_y * img.height - height / 2))
     left = max(0, min(left, img.width - width))
-    top = max(0, min(top, img.height - height))
-    img.crop(left, top, width=width, height=height)
+    base_top = int(round(focus_y * img.height - height / 2))
+    base_top = max(0, min(base_top, img.height - height))
+    v_pos = max(0.0, min(1.0, v_pos))
+    if v_pos <= 0:
+        img.crop(left, base_top, width=width, height=height)
+        return
+    # Pan down through the source still below the crop, then up to ~30% of the
+    # canvas past its bottom edge (that band sits in the black gradient zone).
+    remaining = img.height - height - base_top
+    black_allow = int(round(height * 0.30))
+    top = base_top + int(round(v_pos * (remaining + black_allow)))
+    avail = max(1, min(height, img.height - top))
+    img.crop(left, min(top, img.height - 1), width=width, height=avail)
+    if avail >= height:
+        return
+    # Source ran out: edge-extend the (now bottom) row faded to black and pad.
+    fill_h = height - avail
+    fill = _extend_fill(img, width, fill_h, from_top=False)
+    img.background_color = Color("black")
+    img.extent(width=width, height=height, x=0, y=0)
+    with Image(blob=fill) as b:
+        img.composite(b, left=0, top=avail)
+    _blend_seam(img, width, avail)
 
 
 def _apply_crop(
@@ -113,12 +141,28 @@ def _blend_seam(img: Image, width: int, seam_y: int, half: int = 10) -> None:
         img.composite(band, left=0, top=top)
 
 
+def _zoom_fit(img: Image, width: int, zoom: float) -> int:
+    """Scale ``img`` to ``width`` × ``zoom`` and crop the horizontal overflow back
+    to ``width`` (centred). ``zoom`` 1.0 = plain fit-to-width; >1 enlarges the
+    subject (the sides spill past the canvas and are trimmed). Returns the scaled
+    height. Shared by the fit + extend framings so a wide backdrop's subject isn't
+    forced down to the full-width (tiny) size."""
+    zoom = max(1.0, min(float(zoom or 1.0), 3.0))
+    target_w = int(round(width * zoom))
+    new_h = int(round(img.height * target_w / img.width))
+    img.resize(target_w, new_h, filter="lanczos")
+    if target_w > width:
+        img.crop(int(round((target_w - width) / 2)), 0, width=width, height=new_h)
+    return new_h
+
+
 def _fit_resize(
     img: Image,
     width: int,
     height: int,
     crop: Optional[Tuple[float, float, float, float]] = None,
     v_pos: float = 0.0,
+    zoom: float = 1.0,
 ) -> None:
     """Contain-fit ``img`` to ``width`` and place it on a black canvas — the CL2K
     "fit" framing, in place.
@@ -134,11 +178,12 @@ def _fit_resize(
     the subjects. The freed space is edge-extended — **sky upward** above the photo
     (no black fade; the CL2K top has no gradient) and **faded to black downward**
     below it (so it merges into the gradient/logo zone). ``crop`` (``x, y, w, h``
-    0..1) optionally isolates the subject region before fitting.
+    0..1) optionally isolates the subject region before fitting. ``zoom`` (>=1)
+    enlarges the subject above the full-width fit (sides crop), so a wide backdrop
+    doesn't shrink to a tiny strip.
     """
     _apply_crop(img, crop)
-    new_h = int(round(img.height * width / img.width))
-    img.resize(width, new_h, filter="lanczos")
+    new_h = _zoom_fit(img, width, zoom)
     v_pos = max(0.0, min(1.0, v_pos))
     if new_h >= height:
         # Taller than the canvas: keep the v_pos-chosen vertical slice.
@@ -171,26 +216,30 @@ def fit_extend_canvas(
     width: int = geo.CANVAS_W,
     height: int = geo.CANVAS_H,
     feather: int = 28,
+    zoom: float = 1.0,
+    v_pos: float = 0.0,
 ) -> Tuple[bytes, Optional[bytes]]:
     """Prepare the canvas + mask for AI outpaint ("extend" framing).
 
     Fits the (optionally cropped) backdrop to the canvas *width* and top-anchors it,
     leaving the empty bottom band for an AI inpainter to fill so the subjects stay
     full-size (no shrink, no side-crop) — the artist's "extend the bottom, crop the
-    wasted top" trick. Returns ``(canvas_png, mask_png)`` where the mask is white
-    (=generate) over the empty band and black (=keep) over the photo, feathered at
-    the seam. Returns ``(canvas_png, None)`` when the fitted photo already fills the
-    height — nothing to extend, the caller should just fit/cover it.
+    wasted top" trick. ``zoom`` (>=1) enlarges the subject above the full-width fit
+    (sides crop) so it isn't a tiny strip; the AI then fills only the smaller gap.
+    Returns ``(canvas_png, mask_png)`` where the mask is white (=generate) over the
+    empty band and black (=keep) over the photo, feathered at the seam. Returns
+    ``(canvas_png, None)`` when the fitted photo already fills the height — nothing
+    to extend, the caller should just fit/cover it (``v_pos`` picks the slice).
 
     The mask convention matches :mod:`text_removal` (white = fill), so the canvas +
     mask feed straight into ``text_removal.remove_text`` for any provider.
     """
     with Image(blob=backdrop_bytes) as img:
         _apply_crop(img, crop)
-        new_h = int(round(img.height * width / img.width))
-        img.resize(width, new_h, filter="lanczos")
+        new_h = _zoom_fit(img, width, zoom)
         if new_h >= height:
-            img.crop(0, 0, width=width, height=height)
+            top = int(round(max(0.0, min(1.0, v_pos)) * (new_h - height)))
+            img.crop(0, top, width=width, height=height)
             img.format = "png"
             return img.make_blob(), None
         img.background_color = Color("black")
@@ -407,6 +456,7 @@ def render_cl2k(
     fit_mode: str = "cover",
     crop: Optional[Tuple[float, float, float, float]] = None,
     v_pos: float = 0.0,
+    zoom: float = 1.0,
     band_label: str = "",
     place_logo: bool = True,
 ) -> bytes:
@@ -438,9 +488,9 @@ def render_cl2k(
 
     with Image(blob=backdrop_bytes) as base:
         if fit_mode == "fit":
-            _fit_resize(base, geo.CANVAS_W, geo.CANVAS_H, crop, v_pos)
+            _fit_resize(base, geo.CANVAS_W, geo.CANVAS_H, crop, v_pos, zoom)
         else:
-            _cover_resize(base, geo.CANVAS_W, geo.CANVAS_H, focus_x, focus_y)
+            _cover_resize(base, geo.CANVAS_W, geo.CANVAS_H, focus_x, focus_y, v_pos)
 
         with Image(filename=str(geo.GRADIENT_PNG)) as grad:
             base.composite(grad, left=0, top=0)
