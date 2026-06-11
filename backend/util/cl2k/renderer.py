@@ -263,8 +263,54 @@ def fit_extend_canvas(
 
 
 def _whiten(logo: Image) -> None:
-    """Recolour the logo to solid white while preserving its alpha (CL2K rule)."""
-    logo.colorize(color=Color("white"), alpha=Color("white"))
+    """Recolour the logo to the CL2K two-tone: white fills, black keylines.
+
+    Per-pixel key + a local-contrast pass (constants and rationale in
+    :mod:`geometry`, "logo whitening"). Alpha is preserved throughout; a logo
+    that would come out mostly black falls back to the flat white silhouette.
+    """
+    q = logo.quantum_range
+    with logo.clone() as alpha:
+        alpha.alpha_channel = "extract"
+        # 1. two-tone key: max(saturation, lightness), leveled near-binary.
+        with logo.clone() as hsl:
+            hsl.alpha_channel = "off"
+            hsl.transform_colorspace("hsl")
+            with hsl.channel_images["green"] as sat:
+                key = sat.clone()
+            try:
+                with hsl.channel_images["blue"] as light:
+                    key.composite(light, operator="lighten")
+            except Exception:
+                key.close()
+                raise
+        try:
+            # NB: Wand level() points are fractions of quantum range (0..1).
+            key.level(black=geo.WHITEN_KEY_BLACK, white=geo.WHITEN_KEY_WHITE)
+            # 2. flip pixels much darker (luma) than their neighborhood to black.
+            with logo.clone() as luma:
+                luma.alpha_channel = "off"
+                luma.transform_colorspace("gray")
+                with luma.clone() as detail:
+                    detail.blur(radius=0, sigma=max(2.0, logo.width * geo.WHITEN_DETAIL_SIGMA))
+                    detail.composite(luma, operator="minus_src")  # blurred - luma
+                    detail.level(black=geo.WHITEN_DETAIL_LO, white=geo.WHITEN_DETAIL_HI)
+                    detail.negate()
+                    key.composite(detail, operator="multiply")
+            # Mostly-black result? The flat silhouette is the only readable option.
+            a_mean = alpha.mean / q
+            with key.clone() as masked:
+                masked.composite(alpha, operator="multiply")
+                k_mean = masked.mean / q
+            if a_mean > 0.001 and k_mean / a_mean < geo.WHITEN_FALLBACK_MEAN:
+                logo.colorize(color=Color("white"), alpha=Color("white"))
+                return
+            key.transform_colorspace("srgb")
+            key.alpha_channel = "off"
+            key.composite(alpha, operator="copy_alpha")
+            logo.composite(key, left=0, top=0, operator="copy")
+        finally:
+            key.close()
 
 
 def process_logo(logo_bytes: bytes, *, whiten: bool = True) -> Tuple[bytes, int, int]:
