@@ -89,12 +89,14 @@ def export_psd(
         lg = lg.resize((tw, th), Image.Resampling.LANCZOS)
         logo_layer.alpha_composite(lg, (geo.CENTER_X - tw // 2, baseline - th))
 
-    text_layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    td = ImageDraw.Draw(text_layer)
+    # The bottom label, when there is one, becomes its own self-describing layer
+    # ("COLLECTION" / "SEASON 3") instead of a generic "TEXT" layer — and movies,
+    # which have no label, get no empty layer at all.
+    label_text, label_y = "", geo.SEASON_TEXT_Y
     if kind == "collection":
-        _centered(td, "COLLECTION", geo.COLLECTION_LABEL_Y, _font(False, geo.LABEL_FONT_PX))
+        label_text, label_y = "COLLECTION", geo.COLLECTION_LABEL_Y
     elif kind == "season" and season_text:
-        _centered(td, season_text.upper(), geo.SEASON_TEXT_Y, _font(False, geo.LABEL_FONT_PX))
+        label_text = season_text.upper()
 
     border = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     bd = ImageDraw.Draw(border)
@@ -104,6 +106,13 @@ def export_psd(
     bd.rectangle([0, 0, bw, h], fill="white")
     bd.rectangle([w - bw, 0, w, h], fill="white")
 
+    layers = [("POSTER", poster), ("GRADIENT", gradient), ("LOGO", logo_layer)]
+    if label_text:
+        text_layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        _centered(ImageDraw.Draw(text_layer), label_text, label_y, _font(False, geo.LABEL_FONT_PX))
+        layers.append((label_text, text_layer))
+    layers.append(("BORDER LAYER", border))
+
     # RGBA document so each layer's transparency lands on its own (native) alpha
     # channel — matching the official CL2K_template.psd (RGB, 4-channel composite),
     # whose layers all use native alpha rather than masks. An RGB document makes
@@ -111,13 +120,7 @@ def export_psd(
     # is messier to edit; RGBA keeps the layers clean (logo/gradient/border carry
     # their own transparency, no mask to detach).
     psd = PSDImage.new(mode="RGBA", size=(w, h))
-    for name, img in (
-        ("POSTER", poster),
-        ("GRADIENT", gradient),
-        ("LOGO", logo_layer),
-        ("TEXT", text_layer),
-        ("BORDER", border),
-    ):
+    for name, img in layers:
         psd.append(PixelLayer.frompil(img, psd, name))
 
     buf = io.BytesIO()
