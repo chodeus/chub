@@ -7,6 +7,7 @@ import { ErrorProvider } from './components/error/ErrorContext.jsx';
 import { UIStateProvider } from './contexts/UIStateContext.jsx';
 import { SearchCoordinatorProvider } from './contexts/SearchCoordinatorContext.jsx';
 import { PageErrorBoundary } from './components/error';
+import { extensionRoutes } from './extensions/index.js';
 import Layout from './components/Layout.jsx';
 import Spinner from './components/ui/Spinner.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
@@ -339,6 +340,31 @@ const App = () => {
                                                             </PageErrorBoundary>
                                                         }
                                                     />
+
+                                                    {/* Extension routes (src/extensions) — none on main */}
+                                                    {extensionRoutes().map(
+                                                        ({
+                                                            path,
+                                                            pageName,
+                                                            pageDescription,
+                                                            Component,
+                                                        }) => (
+                                                            <Route
+                                                                key={path}
+                                                                path={path}
+                                                                element={
+                                                                    <PageErrorBoundary
+                                                                        pageName={pageName}
+                                                                        pageDescription={
+                                                                            pageDescription
+                                                                        }
+                                                                    >
+                                                                        <Component />
+                                                                    </PageErrorBoundary>
+                                                                }
+                                                            />
+                                                        )
+                                                    )}
 
                                                     {/* Settings Section - Direct Routes */}
                                                     <Route
