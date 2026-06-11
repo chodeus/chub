@@ -28,12 +28,61 @@ def _cover(im: Image.Image, w: int, h: int) -> Image.Image:
     return im.crop((left, top, left + w, top + h))
 
 
-def _whiten(logo: Image.Image) -> Image.Image:
-    logo = logo.convert("RGBA")
-    alpha = logo.split()[3]
+def _flat_white(logo: Image.Image) -> Image.Image:
     white = Image.new("RGBA", logo.size, (255, 255, 255, 0))
-    white.putalpha(alpha)
+    white.putalpha(logo.split()[3])
     return white
+
+
+def _whiten(logo: Image.Image) -> Image.Image:
+    """CL2K two-tone whiten — Pillow mirror of ``renderer._whiten``.
+
+    Same recipe and constants (see :mod:`geometry`, "logo whitening") so the
+    PSD's LOGO layer matches the rendered poster: white fills, black keylines,
+    local-contrast pass for interior accents, flat-white fallback for logos
+    that would come out mostly black.
+    """
+    import numpy as np
+    from PIL import ImageFilter
+
+    logo = logo.convert("RGBA")
+    rgba = np.asarray(logo, dtype=np.float32) / 255.0
+    rgb, alpha = rgba[..., :3], rgba[..., 3]
+    mx, mn = rgb.max(axis=2), rgb.min(axis=2)
+    light = (mx + mn) / 2.0
+    denom = 1.0 - np.abs(2.0 * light - 1.0)
+    sat = np.where(denom > 1e-6, (mx - mn) / np.where(denom > 1e-6, denom, 1.0), 0.0)
+    key = np.clip(
+        (np.maximum(sat, light) - geo.WHITEN_KEY_BLACK)
+        / (geo.WHITEN_KEY_WHITE - geo.WHITEN_KEY_BLACK),
+        0.0,
+        1.0,
+    )
+    luma = rgb @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
+    sigma = max(2.0, logo.width * geo.WHITEN_DETAIL_SIGMA)
+    blurred = (
+        np.asarray(
+            Image.fromarray((luma * 255.0).round().astype("uint8")).filter(
+                ImageFilter.GaussianBlur(sigma)
+            ),
+            dtype=np.float32,
+        )
+        / 255.0
+    )
+    detail = np.clip(
+        (blurred - luma - geo.WHITEN_DETAIL_LO)
+        / (geo.WHITEN_DETAIL_HI - geo.WHITEN_DETAIL_LO),
+        0.0,
+        1.0,
+    )
+    key *= 1.0 - detail
+    a_sum = float(alpha.sum())
+    if a_sum > 1e-3 and float((key * alpha).sum()) / a_sum < geo.WHITEN_FALLBACK_MEAN:
+        return _flat_white(logo)
+    out = np.empty_like(rgba)
+    out[..., 0] = out[..., 1] = out[..., 2] = key
+    out[..., 3] = alpha
+    return Image.fromarray((out * 255.0).round().astype("uint8"), "RGBA")
 
 
 def _font(bold: bool, px: int) -> ImageFont.FreeTypeFont:

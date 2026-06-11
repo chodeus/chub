@@ -36,6 +36,26 @@ LOGO_ZONE_TOP = 1100           # logos must not extend above this y
 MAIN_LOGO_BOTTOM = 1300        # movie/show clear-logo bottom (refs measured ~1298)
 COLLECTION_LOGO_BOTTOM = 1300  # collection logo bottom (COLLECTION label below it)
 
+# ----- logo whitening (CL2K two-tone) -----------------------------------------
+# Real CL2K logos are black & white, not flat white silhouettes: coloured/bright
+# fills go pure white while the artwork's dark keylines and interior accents stay
+# black (verified against a creator poster: the colored TMDB DBS-Broly logo with
+# exactly this mapping reproduces their white logo, including the black SUPER
+# badge). Two passes over the colored clear logo:
+#  1. key = max(HSL saturation, lightness), leveled to near-binary — saturated or
+#     bright pixels white, dark unsaturated keylines black.
+#  2. local-contrast: pixels much darker in luma than their gaussian-blurred
+#     neighborhood flip back to black — recovers same-saturation interior details
+#     a per-pixel rule can't see (the star inside the Dragon Ball "O").
+# If the result would be mostly black (a dark unsaturated logo would vanish into
+# the gradient) fall back to the flat white silhouette.
+WHITEN_KEY_BLACK = 0.30        # level black point of the max(sat,light) key
+WHITEN_KEY_WHITE = 0.40        # level white point (steep ramp = two-tone)
+WHITEN_DETAIL_SIGMA = 0.025    # neighborhood blur sigma, fraction of logo width
+WHITEN_DETAIL_LO = 0.14        # darker-than-neighborhood ramp start (luma delta)
+WHITEN_DETAIL_HI = 0.22        # ...and full-black point
+WHITEN_FALLBACK_MEAN = 0.30    # opaque-area key mean below this -> flat white
+
 # ----- text bands ------------------------------------------------------------
 COLLECTION_LABEL_Y = 1345      # centre of "COLLECTION", just below the logo (measured)
 SEASON_TEXT_Y = 1440           # centre of season/specials band (PSD; unverified vs refs)
