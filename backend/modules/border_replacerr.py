@@ -170,7 +170,7 @@ class BorderReplacerr(ChubModule):
             color_code = tuple(int(hex_color[i : i + 2], 16) for i in (0, 2, 4))
         except ValueError:
             self.logger.error(
-                f"Error: {hex_color} is not a valid hexadecimal color code.\nDefaulting to white."
+                f"Invalid hex color '{hex_color}'; defaulting to white"
             )
             return (255, 255, 255)
         return color_code
@@ -763,4 +763,4 @@ class BorderReplacerr(ChubModule):
                         }
                     )
                 except Exception as e:
-                    self.logger.debug(f"border_replacerr notification failed: {e}")
+                    self.logger.warning(f"border_replacerr notification failed: {e}")

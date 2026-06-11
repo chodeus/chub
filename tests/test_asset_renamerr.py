@@ -1061,3 +1061,45 @@ def test_kometa_never_applies_fanart_no_download(tmp_path):
     assert "plex" in reason.lower()
     # Nothing was downloaded or written to disk.
     assert list(tmp_path.iterdir()) == []
+
+
+# --- _file_op link safety ---
+
+
+def test_file_op_hardlink_failure_preserves_destination(tmp_path):
+    """A failed link must never destroy the existing destination file
+    (the old implementation removed dest before linking)."""
+    m = make_module()
+    dest = tmp_path / "logo.png"
+    dest.write_bytes(b"existing")
+    missing_src = str(tmp_path / "vanished.png")
+    import pytest as _pytest
+
+    with _pytest.raises(OSError):
+        m._file_op(missing_src, str(dest), "hardlink")
+    assert dest.read_bytes() == b"existing"
+    # No temp debris left behind.
+    assert [p.name for p in tmp_path.iterdir()] == ["logo.png"]
+
+
+def test_file_op_hardlink_replaces_destination(tmp_path):
+    m = make_module()
+    src = tmp_path / "src.png"
+    src.write_bytes(b"new")
+    dest = tmp_path / "logo.png"
+    dest.write_bytes(b"old")
+    m._file_op(str(src), str(dest), "hardlink")
+    assert dest.read_bytes() == b"new"
+    import os as _os
+
+    assert _os.stat(dest).st_ino == _os.stat(src).st_ino
+
+
+def test_file_op_symlink_replaces_destination(tmp_path):
+    m = make_module()
+    src = tmp_path / "src.png"
+    src.write_bytes(b"new")
+    dest = tmp_path / "logo.png"
+    dest.write_bytes(b"old")
+    m._file_op(str(src), str(dest), "symlink")
+    assert dest.is_symlink() and dest.read_bytes() == b"new"

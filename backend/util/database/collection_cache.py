@@ -120,6 +120,21 @@ class CollectionCache(DatabaseBase):
             self.execute_query("SELECT * FROM collections_cache", fetch_all=True) or []
         )
 
+    def get_matched_with_files(self, limit: int) -> list:
+        """Return up to `limit` matched rows that have a poster file.
+
+        Bounded in SQL so preview-style callers never materialize the whole
+        table for a handful of sample rows."""
+        return (
+            self.execute_query(
+                "SELECT * FROM collections_cache WHERE matched=1 "
+                "AND original_file IS NOT NULL AND original_file != '' LIMIT ?",
+                (limit,),
+                fetch_all=True,
+            )
+            or []
+        )
+
     def get_unmatched(self) -> list:
         """Return all collections_cache records where matched=0."""
         return (

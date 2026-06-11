@@ -887,8 +887,12 @@ def _auto_migrate_and_persist(raw: dict, config_path: str) -> dict:
         backup_path = "(backup write failed)"
 
     try:
-        with open(config_path, "w") as f:
+        # Atomic write: a crash mid-write must never leave a truncated
+        # config.yml — the original stays intact until the replace.
+        tmp_path = f"{config_path}.migrating"
+        with open(tmp_path, "w") as f:
             yaml.safe_dump(migrated, f, sort_keys=False)
+        os.replace(tmp_path, config_path)
     except Exception as e:  # pragma: no cover - best-effort write
         _emit(
             f"⚠️  Failed to rewrite migrated config to {config_path}: {e}", "warning"

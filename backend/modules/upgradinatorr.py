@@ -331,7 +331,8 @@ class Upgradinatorr(ChubModule):
                 return None
         except Exception as e:
             self.logger.warning(
-                f"Failed to fetch grab history for media ID {media_id}: {e}"
+                f"Failed to fetch grab history for media ID {media_id}: {e}",
+                exc_info=True,
             )
             return None
 
@@ -475,10 +476,11 @@ class Upgradinatorr(ChubModule):
 
         for season in remaining:
             season_number = season["season_number"]
-            self.logger.info(
+            # Per-season detail stays at DEBUG — at INFO this is one line per
+            # season and floods the log on large libraries.
+            self.logger.debug(
                 f"  [SEASON] {item['title']} S{season_number}: Searching..."
             )
-            self.logger.debug(f"[SEARCH] {item['title']} S{season_number}")
             before_downloads = self._get_grabbed_downloads(
                 app, item["media_id"], "sonarr", season_number
             )
@@ -622,8 +624,9 @@ class Upgradinatorr(ChubModule):
             album_title = album.get(
                 "album_title", f"Album #{album.get('season_number', '?')}"
             )
-            self.logger.info(f"  [ALBUM] {item['title']} — {album_title}: Searching...")
-            self.logger.debug(f"[SEARCH] {item['title']} — {album_title}")
+            self.logger.debug(
+                f"  [ALBUM] {item['title']} — {album_title}: Searching..."
+            )
             before_downloads = self._get_grabbed_downloads(
                 app, item["media_id"], "lidarr", album_id=album_id
             )
@@ -985,7 +988,7 @@ class Upgradinatorr(ChubModule):
             media_ids = [item["media_id"] for item in media_dict]
             if self.config.dry_run:
                 self.logger.info(
-                    "Dry run: would remove checked tags for unattended operation."
+                    "[DRY RUN] Would remove checked tags for unattended operation."
                 )
             else:
                 self.logger.info("All media is tagged. Removing tags...")
@@ -1412,7 +1415,7 @@ class Upgradinatorr(ChubModule):
                 )
                 manager.send_notification(output)
         except KeyboardInterrupt:
-            print("Keyboard Interrupt detected. Exiting...")
+            self.logger.info("Keyboard Interrupt detected. Exiting...")
             return
         except Exception:
             self.logger.error("\n\nAn error occurred:\n", exc_info=True)

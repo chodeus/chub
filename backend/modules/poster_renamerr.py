@@ -1390,6 +1390,7 @@ class PosterRenamerr(ChubModule):
                 # _POSTER_CACHE_REBUILD_LOCK) so a clear can't wipe rows the
                 # other path just inserted.
                 with self._phase("merge cache"), _POSTER_CACHE_REBUILD_LOCK:
+                    self.logger.info("Clearing poster cache for rebuild")
                     db.poster.clear()
                     self.merge_assets(source_dirs=self.config.source_dirs, db=db)
                     # Index gdrive_list folders outside source_dirs as
@@ -1547,7 +1548,7 @@ class PosterRenamerr(ChubModule):
                 manager.send_notification(output)
 
         except KeyboardInterrupt:
-            print("Keyboard Interrupt detected. Exiting...")
+            self.logger.info("Keyboard Interrupt detected. Exiting...")
             return
         except Exception:
             self.logger.error("\n\nAn error occurred:\n", exc_info=True)

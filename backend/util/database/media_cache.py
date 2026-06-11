@@ -271,6 +271,32 @@ class MediaCache(DatabaseBase):
         """Return all records from media_cache as a list of dicts."""
         return self.execute_query("SELECT * FROM media_cache", fetch_all=True) or []
 
+    def get_matched_with_files(
+        self,
+        limit: int,
+        asset_type: Optional[str] = None,
+        invert_type: bool = False,
+    ) -> list:
+        """Return up to `limit` matched rows that have a poster file,
+        optionally filtered to (or excluding, with invert_type) an asset_type.
+
+        Bounded in SQL so preview-style callers never materialize the whole
+        table for a handful of sample rows."""
+        where = "matched=1 AND original_file IS NOT NULL AND original_file != ''"
+        params: list = []
+        if asset_type:
+            where += " AND asset_type " + ("!= ?" if invert_type else "= ?")
+            params.append(asset_type)
+        params.append(limit)
+        return (
+            self.execute_query(
+                f"SELECT * FROM media_cache WHERE {where} LIMIT ?",
+                tuple(params),
+                fetch_all=True,
+            )
+            or []
+        )
+
     def get_unmatched(self) -> list:
         """Return all media_cache records where matched=0."""
         return (

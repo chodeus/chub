@@ -239,7 +239,7 @@ class PosterCleanarr(ChubModule):
                     self.logger.error(f"Failed to send notification: {e}")
 
         except KeyboardInterrupt:
-            print("Keyboard Interrupt detected. Exiting...")
+            self.logger.info("Keyboard Interrupt detected. Exiting...")
             return
         except Exception:
             self.logger.error("\n\nAn error occurred:\n", exc_info=True)
@@ -596,6 +596,9 @@ class PosterCleanarr(ChubModule):
             elif mode == "move":
                 try:
                     self._move_file(filepath, metadata_dir, restore_dir)
+                    # Destructive ops stay at INFO deliberately — users must be
+                    # able to audit what was moved/deleted without debug mode
+                    # (pinned by test_execute_mode_remove_logs_per_file_at_info).
                     self.logger.info(f"  [MOVE] {os.path.basename(filepath)}")
                     count += 1
                     total_size += size
@@ -1000,6 +1003,8 @@ class PosterCleanarr(ChubModule):
                 try:
                     os.makedirs(os.path.dirname(dest), exist_ok=True)
                     shutil.move(path, dest)
+                    # Destructive ops stay at INFO deliberately — audit trail
+                    # without debug mode (mirrors the bloat-cleanup pass).
                     logger.info(f"  [MOVED] {path} -> {dest}")
                     count += 1
                     total_size += size
@@ -1019,10 +1024,12 @@ class PosterCleanarr(ChubModule):
                     logger.error(f"Failed to remove {path}: {e}")
 
         # Prune empty dirs left behind by move/remove.
-        for d in touched_dirs:
-            self._clean_empty_dirs(d)
+        empty_dirs = sum(self._clean_empty_dirs(d) for d in touched_dirs)
 
-        logger.info(f"   → orphan scan: {count} {mode}d")
+        logger.info(
+            f"   → orphan scan: {count} {mode}d"
+            + (f", {empty_dirs} empty dir(s) pruned" if empty_dirs else "")
+        )
         return {"count": count, "total_size": total_size, "mode": mode}
 
     # =========================================================================
@@ -1039,10 +1046,10 @@ class PosterCleanarr(ChubModule):
                     if not os.listdir(dir_path):
                         os.rmdir(dir_path)
                         count += 1
-                except (
-                    OSError
-                ):  # noqa: S110 -- skip dirs that vanished or are non-empty
-                    pass
+                except OSError as e:
+                    # Dir vanished, became non-empty, or permissions — skip,
+                    # but leave a trace so the count discrepancy is explainable.
+                    self.logger.debug(f"Could not remove empty dir {dir_path}: {e}")
         return count
 
     # =========================================================================
