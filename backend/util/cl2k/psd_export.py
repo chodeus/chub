@@ -104,7 +104,13 @@ def export_psd(
     bd.rectangle([0, 0, bw, h], fill="white")
     bd.rectangle([w - bw, 0, w, h], fill="white")
 
-    psd = PSDImage.new(mode="RGB", size=(w, h))
+    # RGBA document so each layer's transparency lands on its own (native) alpha
+    # channel — matching the official CL2K_template.psd (RGB, 4-channel composite),
+    # whose layers all use native alpha rather than masks. An RGB document makes
+    # some psd-tools versions push the alpha into a per-layer mask instead, which
+    # is messier to edit; RGBA keeps the layers clean (logo/gradient/border carry
+    # their own transparency, no mask to detach).
+    psd = PSDImage.new(mode="RGBA", size=(w, h))
     for name, img in (
         ("POSTER", poster),
         ("GRADIENT", gradient),
