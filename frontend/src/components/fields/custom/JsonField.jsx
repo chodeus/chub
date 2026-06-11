@@ -5,6 +5,8 @@ import { FieldDescription } from '../primitives/FieldDescription';
 import { FieldError } from '../primitives/FieldError';
 import { TextareaBase } from '../primitives/TextareaBase';
 
+// No rest/spread here: renderField hands every field component non-DOM
+// context (moduleConfig, rootConfig, ...), which must not reach the textarea.
 export const JsonField = ({
     field,
     value,
@@ -12,7 +14,6 @@ export const JsonField = ({
     disabled = false,
     highlightInvalid = false,
     errorMessage,
-    ...fieldProps
 }) => {
     const inputId = useId();
     const [jsonError, setJsonError] = useState(null);
@@ -153,7 +154,6 @@ export const JsonField = ({
                               : undefined
                     }
                     aria-invalid={hasError}
-                    {...fieldProps}
                 />
 
                 <div role="status" aria-live="polite">
