@@ -143,10 +143,22 @@ const logoBoxPct = ({ natW, natH, maxWidth, scale = 1, yOffset = 0 }) => {
     const off = Math.max(-600, Math.min(Math.round(yOffset || 0), 200));
     let targetW = Math.min(maxWidth || 600, CL2K_LOGO_WIDTH_MAX);
     let targetH = Math.round((natH * targetW) / natW);
-    const maxH = Math.round((CL2K_LOGO_BASELINE - CL2K_LOGO_ZONE_TOP) * s);
+    const maxH = CL2K_LOGO_BASELINE - CL2K_LOGO_ZONE_TOP;
     if (targetH > maxH) {
         targetH = maxH;
         targetW = Math.round((natW * targetH) / natH);
+    }
+    // Scale the guide-fit box as a whole; keep it on the canvas (aspect kept) —
+    // mirrors _place_logo so the overlay still lands pixel-exact.
+    targetW = Math.round(targetW * s);
+    targetH = Math.round(targetH * s);
+    if (targetW > CL2K_CANVAS_W) {
+        targetH = Math.round((targetH * CL2K_CANVAS_W) / targetW);
+        targetW = CL2K_CANVAS_W;
+    }
+    if (targetH > CL2K_CANVAS_H) {
+        targetW = Math.round((targetW * CL2K_CANVAS_H) / targetH);
+        targetH = CL2K_CANVAS_H;
     }
     let top = CL2K_LOGO_BASELINE - targetH + off;
     top = Math.max(0, Math.min(top, CL2K_CANVAS_H - targetH));
