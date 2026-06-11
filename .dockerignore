@@ -4,6 +4,7 @@
 # Allow these files/directories (for building the app)
 !/main.py
 !/requirements.txt
+!/requirements-*.txt
 !/backend/
 !/frontend/
 !/.release-please-manifest.json
