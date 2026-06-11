@@ -6,7 +6,15 @@ import tempfile
 from typing import Any, Dict, List, Literal, Optional, Union
 
 import yaml
-from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    create_model,
+    field_validator,
+    model_validator,
+)
 
 # Migrator + loader status messages go through this stdlib logger so callers
 # can attach a handler that routes them into their own logging system. The
@@ -626,7 +634,12 @@ class FanartConfig(BaseModel):
 
 
 # Notifications is a dict of module_name to dicts (arbitrary structure, so keep Any)
+# extra="allow" keeps notification sections owned by self-registering
+# extensions (backend/extensions) — unknown module keys round-trip instead of
+# being dropped on parse.
 class ConfigNotifications(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     poster_renamerr: Optional[Dict[str, Any]] = Field(default_factory=dict)
     asset_renamerr: Optional[Dict[str, Any]] = Field(default_factory=dict)
     unmatched_assets: Optional[Dict[str, Any]] = Field(default_factory=dict)
@@ -676,6 +689,23 @@ class ChubConfig(BaseModel):
     auth: AuthConfig = Field(default_factory=AuthConfig)
     tmdb: TMDBConfig = Field(default_factory=TMDBConfig)
     fanart: FanartConfig = Field(default_factory=FanartConfig)
+
+
+# Graft extension-owned config sections onto the root model (typed, with
+# defaults), so `load_config().<section>` works for extension modules exactly
+# as for core ones. create_model subclasses ChubConfig under the same name;
+# with no extensions installed (main) this block is a no-op.
+def _apply_extension_config_fields() -> None:
+    from backend.extensions import extension_config_fields
+
+    fields = extension_config_fields()
+    if fields:
+        globals()["ChubConfig"] = create_model(
+            "ChubConfig", __base__=ChubConfig, **fields
+        )
+
+
+_apply_extension_config_fields()
 
 
 # ==== SECRET REDACTION ====
