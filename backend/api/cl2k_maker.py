@@ -82,9 +82,13 @@ class GenerateRequest(BaseModel):
     crop_y: Optional[float] = None
     crop_w: Optional[float] = None
     crop_h: Optional[float] = None
-    # Vertical position of the fitted photo (0..1; 0 = top, ~0.4 = headroom above
-    # the subjects). Only used in fit/extend framing.
+    # Vertical position (0..1). In fit/extend it positions the fitted photo (0 =
+    # top, ~0.4 = headroom). In cover ("Fill") it pans the framing UP at the same
+    # size — real artwork flows down into the gradient, no AI (0 = unchanged).
     v_pos: float = 0.0
+    # Zoom (>=1) for fit/extend: enlarge the subject above the full-width fit (sides
+    # crop) so a wide backdrop isn't shrunk to a tiny strip. 1.0 = plain fit.
+    zoom: float = Field(1.0, ge=1.0, le=3.0)
     # Explicit bottom banner (e.g. "COMPLETE LIMITED SERIES"); overrides the auto
     # COLLECTION / season label when set.
     band_label: str = ""
@@ -310,6 +314,7 @@ def preview(
         fit_mode=req.fit_mode,
         crop=_crop_tuple(req),
         v_pos=req.v_pos,
+        zoom=req.zoom,
         band_label=req.band_label,
         logo_scale=req.logo_scale,
         logo_y_offset=req.logo_y_offset,
@@ -349,6 +354,7 @@ def generate(
         fit_mode=req.fit_mode,
         crop=_crop_tuple(req),
         v_pos=req.v_pos,
+        zoom=req.zoom,
         band_label=req.band_label,
         logo_scale=req.logo_scale,
         logo_y_offset=req.logo_y_offset,
@@ -413,6 +419,7 @@ class SeasonsRequest(BaseModel):
     crop_w: Optional[float] = None
     crop_h: Optional[float] = None
     v_pos: float = 0.0
+    zoom: float = Field(1.0, ge=1.0, le=3.0)
     logo_scale: float = Field(1.0, ge=0.25, le=3.0)
     logo_y_offset: int = Field(0, ge=-600, le=200)
     force: bool = False
@@ -439,6 +446,7 @@ def generate_seasons_endpoint(
         focus_y=req.focus_y,
         crop=_crop_tuple(req),
         v_pos=req.v_pos,
+        zoom=req.zoom,
         logo_scale=req.logo_scale,
         logo_y_offset=req.logo_y_offset,
         force=req.force,
@@ -471,6 +479,7 @@ async def upload_generate(
     crop_w: Optional[float] = Form(None),
     crop_h: Optional[float] = Form(None),
     v_pos: float = Form(0.0),
+    zoom: float = Form(1.0, ge=1.0, le=3.0),
     preview: bool = Form(False),
     save_local: bool = Form(True),
     upload_gdrive: Optional[bool] = Form(None),
@@ -497,6 +506,7 @@ async def upload_generate(
         focus_y=focus_y,
         crop=crop,
         v_pos=v_pos,
+        zoom=zoom,
     )
     if preview:
         # Render-only (no save, no provenance) so the framing can be adjusted
