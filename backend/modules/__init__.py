@@ -31,3 +31,10 @@ MODULES = {
     "plex_maintenance": PlexMaintenance,
     "unmatched_assets": UnmatchedAssets,
 }
+
+# Self-registering extension modules (none on main; see backend/extensions).
+# Imported last so an extension's own imports of backend.modules.* resolve
+# against the already-populated package.
+from backend.extensions import extension_modules  # noqa: E402
+
+MODULES.update(extension_modules())
