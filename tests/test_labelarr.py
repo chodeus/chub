@@ -3,7 +3,7 @@
 from types import SimpleNamespace
 
 
-from backend.modules.labelarr import Labelarr
+import backend.modules.labelarr as labelarr_mod
 from backend.util.config import (
     ChubConfig,
     InstanceDetail,
@@ -14,7 +14,7 @@ from backend.util.config import (
 
 
 def make_module(config=None, full_config=None):
-    m = object.__new__(Labelarr)
+    m = object.__new__(labelarr_mod.Labelarr)
     m._cancel_event = None
     m.config = config or SimpleNamespace(mappings=[], dry_run=False)
     m.full_config = full_config or ChubConfig()
@@ -238,7 +238,6 @@ class _FakeConnector:
 def test_run_skips_unconfigured_plex_instance(monkeypatch):
     """A mapping referencing a missing Plex instance is skipped with a warning,
     not a KeyError that aborts the whole run."""
-    import backend.modules.labelarr as labelarr_mod
     import backend.util.plex_refresh as plex_refresh_mod
 
     mappings = [
@@ -288,7 +287,6 @@ def _adhoc_module(plex_instances):
 
 
 def test_adhoc_sync_unknown_plex_instance_returns_error(monkeypatch):
-    import backend.modules.labelarr as labelarr_mod
 
     m, db = _adhoc_module(plex_instances={})
     monkeypatch.setattr(labelarr_mod, "ChubDB", db)
@@ -308,7 +306,6 @@ def test_adhoc_sync_unknown_plex_instance_returns_error(monkeypatch):
 def test_adhoc_sync_manages_only_tag_action_tags(monkeypatch):
     """labels_lower passed to sync_to_plex must contain only the tags named in
     tag_actions — never the item's other tags (which run() would not manage)."""
-    import backend.modules.labelarr as labelarr_mod
 
     m, db = _adhoc_module(
         plex_instances={"plex_main": InstanceDetail(url="http://p", api="k")}

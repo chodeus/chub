@@ -597,16 +597,22 @@ class AssetRenamerr(ChubModule):
             dest_dir = dest_root
             new_name = f"{folder}_{stem}{ext}"
 
-        # Path-traversal guard (folder may come from external metadata).
-        real_dest = os.path.realpath(dest_dir)
+        # Path-traversal guard. `folder` comes from external *arr/Plex metadata
+        # (folder basename / title) and feeds EITHER the destination subdir
+        # (asset_folders on) OR the filename via new_name (asset_folders off) —
+        # so guarding dest_dir alone leaves the off path open. Resolve the FINAL
+        # path and confirm it stays under destination_dir before any file op.
         real_base = os.path.realpath(dest_root)
-        if not (real_dest == real_base or real_dest.startswith(real_base + os.sep)):
+        new_path = os.path.realpath(os.path.join(dest_dir, new_name))
+        if not new_path.startswith(real_base + os.sep):
             return False, f"path traversal blocked for folder '{folder}'"
 
-        new_path = os.path.join(dest_dir, new_name)
+        # Normalise the source too; it is a scanned asset path, never raw HTTP
+        # input, but realpath keeps the file op operating on a canonical path.
+        src = os.path.realpath(src)
         if not self.config.dry_run:
             try:
-                os.makedirs(dest_dir, exist_ok=True)
+                os.makedirs(os.path.dirname(new_path), exist_ok=True)
                 self._file_op(src, new_path, self.config.action_type)
             except OSError as exc:
                 return False, f"file op failed: {exc}"
