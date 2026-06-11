@@ -110,12 +110,18 @@ export const cl2kMakerAPI = {
             { useCache: true, cacheTTL: 5 * 60 * 1000 }
         ),
 
-    /** Canonical TMDB title + year for an id (fills an id-only entry). */
-    details: (tmdbId, type = 'movie') =>
-        apiCore.get(`/cl2k-maker/details?${qs({ tmdb_id: tmdbId, type })}`, {
-            useCache: true,
-            cacheTTL: 5 * 60 * 1000,
-        }),
+    /** Canonical TMDB title + year for an id (fills an id-only entry). Resolves
+     *  via TMDB → TVDB → IMDB, so a TVDB/IMDB-only title still resolves. */
+    details: (tmdbId, type = 'movie', { tvdbId, imdbId } = {}) =>
+        apiCore.get(
+            `/cl2k-maker/details?${qs({
+                tmdb_id: tmdbId,
+                tvdb_id: tvdbId,
+                imdb_id: imdbId,
+                type,
+            })}`,
+            { useCache: true, cacheTTL: 5 * 60 * 1000 }
+        ),
 
     /** Trimmed + whitened logo (b64 PNG + natural size + max_width) for the live
      *  overlay. `req` = { logo_path } or { logo_b64 }. */

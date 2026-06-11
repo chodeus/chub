@@ -307,6 +307,45 @@ const Cl2kMakerPage = () => {
         setItem(null);
     }, []);
 
+    // Resolve a blank title from whatever id the item carries (TMDB → TVDB → IMDB)
+    // so an id-only entry (paste / Edit IDs / deep link) shows the real name in the
+    // header instead of "TMDB #…". Runs once per id-set and never overrides a title
+    // the user has typed; a miss is harmless (the backend still backfills the
+    // filename at save time).
+    const titleProbe = useRef(null);
+    // A newly picked title resets the probe so re-entering the same id resolves again.
+    useEffect(() => {
+        titleProbe.current = null;
+    }, [selectionKey]);
+    useEffect(() => {
+        if (!item || item.kind === 'collection' || (item.title || '').trim()) return undefined;
+        const sig = `${item.tmdb_id || ''}|${item.tvdb_id || ''}|${item.imdb_id || ''}`;
+        if (sig === '||' || titleProbe.current === sig) return undefined;
+        titleProbe.current = sig;
+        let cancelled = false;
+        (async () => {
+            try {
+                const resp = await cl2kMakerAPI.details(item.tmdb_id, item.kind, {
+                    tvdbId: item.tvdb_id,
+                    imdbId: item.imdb_id,
+                });
+                const title = resp?.data?.title;
+                if (!cancelled && title) {
+                    setItem(prev =>
+                        prev && !(prev.title || '').trim()
+                            ? { ...prev, title, year: prev.year ?? resp.data.year ?? null }
+                            : prev
+                    );
+                }
+            } catch {
+                /* leave blank — the backend still backfills the filename on save */
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [item]);
+
     useEffect(() => {
         let cancelled = false;
         (async () => {
@@ -582,20 +621,9 @@ const TitlePicker = ({ onPick, toast }) => {
                 tvdb_id: parsed.source === 'tvdb_id' ? Number(parsed.id) : null,
                 imdb_id: parsed.source === 'imdb_id' ? parsed.id : null,
             };
-            // Backfill the canonical title/year so the header reads the real name
-            // and the saved DAPS filename isn't reduced to bare id tags. Collections
-            // carry their own title; a lookup miss is non-fatal (the backend also
-            // backfills from the id at save time).
-            if (pasteKind !== 'collection') {
-                try {
-                    const d = await cl2kMakerAPI.details(Number(tmdbId), pasteKind);
-                    base.title = d?.data?.title || '';
-                    base.year = d?.data?.year ?? null;
-                } catch {
-                    /* leave blank — backend fills it from the id on save */
-                }
-            }
-            // Fill in whichever of tvdb/imdb the paste didn't already supply.
+            // Fill in whichever of tvdb/imdb the paste didn't already supply; the
+            // blank title is resolved by the title-backfill effect once the item is
+            // set (covers paste, Edit IDs and deep links uniformly).
             onPick(await withExternalIds(base));
         } catch (err) {
             toast.error(err.message || 'Resolve failed');
