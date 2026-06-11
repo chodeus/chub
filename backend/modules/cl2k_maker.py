@@ -409,8 +409,6 @@ def generate_square_art(
     focus_x: float = 0.5,
     focus_y: float = 0.5,
     fit_mode: str = "cover",
-    crop: Optional[Tuple[float, float, float, float]] = None,
-    v_pos: float = 0.0,
     zoom: float = 1.0,
     save_local: bool = True,
     upload_gdrive: Optional[bool] = None,
@@ -440,8 +438,6 @@ def generate_square_art(
         focus_x=focus_x,
         focus_y=focus_y,
         fit_mode=fit_mode,
-        crop=crop,
-        v_pos=v_pos,
         zoom=zoom,
     )
     return _persist_poster(
