@@ -392,12 +392,7 @@ class SquareArtRequest(BaseModel):
     focus_x: float = 0.5
     focus_y: float = 0.5
     fit_mode: str = "cover"  # cover (focal crop) | fit (contain on black)
-    crop_x: Optional[float] = None
-    crop_y: Optional[float] = None
-    crop_w: Optional[float] = None
-    crop_h: Optional[float] = None
-    v_pos: float = 0.0
-    zoom: float = Field(1.0, ge=1.0, le=3.0)
+    zoom: float = Field(1.0, ge=0.5, le=3.0)
     save_local: bool = True
     upload_gdrive: Optional[bool] = None
 
@@ -438,8 +433,6 @@ def square_preview(
         focus_x=req.focus_x,
         focus_y=req.focus_y,
         fit_mode=req.fit_mode,
-        crop=_crop_tuple(req),
-        v_pos=req.v_pos,
         zoom=req.zoom,
     )
     return Response(
@@ -468,8 +461,6 @@ def square_generate(
         focus_x=req.focus_x,
         focus_y=req.focus_y,
         fit_mode=req.fit_mode,
-        crop=_crop_tuple(req),
-        v_pos=req.v_pos,
         zoom=req.zoom,
         save_local=req.save_local,
         upload_gdrive=req.upload_gdrive,

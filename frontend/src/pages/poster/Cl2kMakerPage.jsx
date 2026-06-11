@@ -2563,28 +2563,44 @@ const LogoSelector = ({
 // ─── Square art tab ─────────────────────────────────────────────────────────
 
 // Drag a 1:1 cover-crop box over the source art to choose what fills the square.
-const SquareFramer = ({ imageUrl, focusX, focusY, onChange }) => {
+const SquareFramer = ({
+    imageUrl,
+    focusX,
+    focusY,
+    onChange,
+    fitMode,
+    setFitMode,
+    zoom,
+    setZoom,
+}) => {
     const wrapRef = useRef(null);
     const [ratio, setRatio] = useState(null); // natural h/w
     const dragging = useRef(false);
+    // The kept region (fraction of the source shown in the 1:1 square) under the
+    // current Fill/Fit + zoom — mirrors render_square_art's scale+pan maths.
     const rect = useMemo(() => {
         if (!ratio) return null;
-        // Largest square region of the source (cover crop to 1:1), in 0..1 frac.
-        let wF, hF;
-        if (1 / ratio > 1) {
-            hF = 1;
-            wF = ratio;
-        } else {
-            wF = 1;
-            hF = 1 / ratio;
-        }
+        const z = Math.max(0.5, Math.min(zoom || 1, 3));
+        // square side = 1; source width = 1, height = ratio (h/w).
+        const base = fitMode === 'fit' ? Math.min(1, 1 / ratio) : Math.max(1, 1 / ratio);
+        const s = base * z;
+        const nw = s; // scaled source width (square side = 1)
+        const nh = ratio * s; // scaled source height
+        const wF = Math.min(1, 1 / nw);
+        const hF = Math.min(1, 1 / nh);
         return {
             left: Math.max(0, Math.min(focusX - wF / 2, 1 - wF)),
             top: Math.max(0, Math.min(focusY - hF / 2, 1 - hF)),
             w: wF,
             h: hF,
         };
-    }, [ratio, focusX, focusY]);
+    }, [ratio, focusX, focusY, fitMode, zoom]);
+    const segCls = on =>
+        `px-2.5 py-1 text-sm rounded-md border ${
+            on
+                ? 'bg-primary text-white border-primary'
+                : 'bg-surface text-secondary border-border hover:border-border-strong'
+        }`;
     const point = useCallback(e => {
         const el = wrapRef.current;
         if (!el) return null;
@@ -2618,19 +2634,54 @@ const SquareFramer = ({ imageUrl, focusX, focusY, onChange }) => {
         <div className="bg-surface border border-border rounded-lg p-3">
             <div className="flex items-center justify-between mb-2">
                 <h3 className="text-sm font-medium text-primary">Crop to square</h3>
-                <Button
-                    onClick={() => onChange(0.5, 0.5)}
-                    variant="secondary"
-                    icon="filter_center_focus"
-                    size="small"
-                >
-                    Center
-                </Button>
+                <div className="flex items-center gap-1">
+                    <button
+                        type="button"
+                        className={segCls(fitMode !== 'fit')}
+                        onClick={() => setFitMode('cover')}
+                    >
+                        Fill
+                    </button>
+                    <button
+                        type="button"
+                        className={segCls(fitMode === 'fit')}
+                        onClick={() => setFitMode('fit')}
+                    >
+                        Fit
+                    </button>
+                    <Button
+                        onClick={() => {
+                            onChange(0.5, 0.5);
+                            setZoom(1);
+                        }}
+                        variant="secondary"
+                        icon="filter_center_focus"
+                        size="small"
+                    >
+                        Reset
+                    </Button>
+                </div>
             </div>
             <p className="text-xs text-tertiary mb-2">
-                Drag to choose what stays in the 1:1 crop — the dimmed area is cut. The preview
-                updates as you drag.
+                {fitMode === 'fit'
+                    ? 'Fit shows the whole image on black. Zoom in to fill more; drag to pan when zoomed.'
+                    : 'Fill crops to the 1:1 square — drag to choose what stays. Zoom to punch in tighter.'}
             </p>
+            <label className="flex items-center gap-2 text-xs text-secondary mb-2">
+                <span className="w-12 shrink-0">Zoom</span>
+                <input
+                    type="range"
+                    min="0.5"
+                    max="3"
+                    step="0.05"
+                    value={zoom ?? 1}
+                    onChange={e => setZoom(Number(e.target.value))}
+                    className="flex-1"
+                />
+                <span className="w-12 shrink-0 text-right text-tertiary">
+                    {(zoom ?? 1).toFixed(2)}×
+                </span>
+            </label>
             <div
                 ref={wrapRef}
                 className="relative inline-block leading-none select-none overflow-hidden rounded cursor-crosshair max-w-full"
@@ -2678,6 +2729,8 @@ const SquareArtPanel = ({ item, backdrops, loadingArt, saveTargets, toast }) => 
     const [customBg, setCustomBg] = useState(null); // { b64, url, name }
     const [focusX, setFocusX] = useState(0.5);
     const [focusY, setFocusY] = useState(0.5);
+    const [fitMode, setFitMode] = useState('cover'); // cover (fill) | fit (contain)
+    const [zoom, setZoom] = useState(1);
     const [previewUrl, setPreviewUrl] = useState(null);
     const [previewing, setPreviewing] = useState(false);
     const [busy, setBusy] = useState(false);
@@ -2697,18 +2750,29 @@ const SquareArtPanel = ({ item, backdrops, loadingArt, saveTargets, toast }) => 
             backdrop_b64: customBg?.b64 || null,
             focus_x: focusX,
             focus_y: focusY,
-            fit_mode: 'cover',
+            fit_mode: fitMode,
+            zoom,
             save_local: saveTargets.saveLocal,
             upload_gdrive: saveTargets.uploadGdrive,
         }),
-        [item, backdrop, customBg, focusX, focusY, saveTargets.saveLocal, saveTargets.uploadGdrive]
+        [
+            item,
+            backdrop,
+            customBg,
+            focusX,
+            focusY,
+            fitMode,
+            zoom,
+            saveTargets.saveLocal,
+            saveTargets.uploadGdrive,
+        ]
     );
     const reqRef = useRef(req);
     useEffect(() => {
         reqRef.current = req;
     }, [req]);
 
-    const sig = `${customBg?.b64?.slice(0, 32) || backdrop}|${focusX}|${focusY}`;
+    const sig = `${customBg?.b64?.slice(0, 32) || backdrop}|${focusX}|${focusY}|${fitMode}|${zoom}`;
     useEffect(() => {
         if (!hasSrc) return undefined;
         let cancelled = false;
@@ -2823,6 +2887,10 @@ const SquareArtPanel = ({ item, backdrops, loadingArt, saveTargets, toast }) => 
                             setFocusX(fx);
                             setFocusY(fy);
                         }}
+                        fitMode={fitMode}
+                        setFitMode={setFitMode}
+                        zoom={zoom}
+                        setZoom={setZoom}
                     />
                 )}
             </div>

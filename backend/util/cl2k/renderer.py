@@ -517,23 +517,37 @@ def render_square_art(
     focus_x: float = 0.5,
     focus_y: float = 0.5,
     fit_mode: str = "cover",
-    crop: Optional[Tuple[float, float, float, float]] = None,
-    v_pos: float = 0.0,
     zoom: float = 1.0,
 ) -> bytes:
     """Render square (1:1) art from a backdrop/poster — just the framed artwork.
 
-    Reuses the poster framing — ``cover`` (focal crop, the default) or ``fit``
-    (contain on black) — plus the same zoom + vertical-pan, into a ``size``×``size``
-    canvas. No gradient, logo, label or border: square art is plain cropped art,
-    applied to Plex via ``uploadSquareArt``. Encoded at the CL2K JPEG quality.
+    ``fit_mode`` ``"cover"`` fills the square (cropping the overflowing edges);
+    ``"fit"`` contains the whole image on black (letterbox). ``zoom`` (0.5–3.0)
+    scales from that baseline — raise it in ``fit`` to punch in from contain toward
+    a full crop, or in ``cover`` to crop tighter. ``focus_x``/``focus_y`` (0..1) pan
+    the window when the image overflows the square. No gradient/logo/label/border;
+    plain black letterbox where the image doesn't cover. Encoded at CL2K quality.
     """
-    with Image(blob=backdrop_bytes) as base:
-        if fit_mode == "fit":
-            _fit_resize(base, size, size, crop, v_pos, zoom)
-        else:
-            _cover_resize(base, size, size, focus_x, focus_y, v_pos)
-        return _encode_jpeg(base)
+    zoom = max(0.5, min(float(zoom or 1.0), 3.0))
+    with Image(blob=backdrop_bytes) as img:
+        base = (
+            min(size / img.width, size / img.height)
+            if fit_mode == "fit"
+            else max(size / img.width, size / img.height)
+        )
+        scale = base * zoom
+        nw = max(1, int(round(img.width * scale)))
+        nh = max(1, int(round(img.height * scale)))
+        img.resize(nw, nh, filter="lanczos")
+        # Place the focal point at the canvas centre; clamp so an axis the image
+        # covers shows no needless black, and centre an axis it doesn't (letterbox).
+        ox = int(round(size / 2 - focus_x * nw))
+        oy = int(round(size / 2 - focus_y * nh))
+        ox = max(min(ox, 0), size - nw) if nw >= size else (size - nw) // 2
+        oy = max(min(oy, 0), size - nh) if nh >= size else (size - nh) // 2
+        with Image(width=size, height=size, background=Color("black")) as canvas:
+            canvas.composite(img, left=ox, top=oy)
+            return _encode_jpeg(canvas)
 
 
 def render_cl2k(
