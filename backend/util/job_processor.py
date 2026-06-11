@@ -366,7 +366,10 @@ def _update_media_record(
             )
 
         except Exception as e:
-            logger.error(f"Failed to update media record for {item.get('title')}: {e}")
+            logger.error(
+                f"Failed to update media record for {item.get('title')}: {e}",
+                exc_info=True,
+            )
 
     logger.debug(
         f"[SYNC] Media cache for {instance_name} ({asset_type}) synchronized. {len(processed_media)} items present."

@@ -131,6 +131,12 @@ def test_check_schedule_bad_format_returns_false(stub_logger):
     assert check_schedule("x", "garbage", stub_logger) is False
 
 
+def test_check_schedule_bad_format_with_none_logger_does_not_raise():
+    """Error paths must tolerate logger=None (the signature allows it)."""
+    assert check_schedule("x", "garbage", None) is False
+    assert check_schedule("x", "daily(not-a-time)", None) is False
+
+
 def test_check_schedule_unknown_frequency_returns_false(stub_logger):
     assert check_schedule("x", "yearly(2024)", stub_logger) is False
 

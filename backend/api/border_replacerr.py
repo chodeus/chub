@@ -201,18 +201,15 @@ def _sample_assets(db: ChubDB, count: int) -> list[dict]:
     remaining slots are filled from the other kinds so we still hit the
     requested total when possible.
     """
-    media = [
-        row
-        for row in db.media.get_all()
-        if row.get("matched") == 1 and row.get("original_file")
-    ]
-    movies = [row for row in media if row.get("asset_type") == "movie"]
-    series = [row for row in media if row.get("asset_type") != "movie"]
-    collections = [
-        row
-        for row in db.collection.get_all()
-        if row.get("matched") == 1 and row.get("original_file")
-    ]
+    # Bounded in SQL — the preview needs at most `count` (≤24) rows per kind,
+    # never the whole table, which is 10k+ rows on large libraries. Each kind
+    # gets its own bounded pool so one dominant type can't starve the others.
+    pool_limit = max(count * 2, 24)
+    movies = db.media.get_matched_with_files(pool_limit, asset_type="movie")
+    series = db.media.get_matched_with_files(
+        pool_limit, asset_type="movie", invert_type=True
+    )
+    collections = db.collection.get_matched_with_files(pool_limit)
 
     target_each = max(1, count // 3)
     picks: list[dict] = []
