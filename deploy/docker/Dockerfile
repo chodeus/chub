@@ -27,6 +27,13 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip3 install --no-cache-dir -r requirements.txt
 
+# ---- CL2K maker (develop-only extension) ----
+# Extra Python deps for the maker: psd-tools (.psd export) and Wand
+# (ImageMagick bindings for rendering). Separate file + layer so
+# requirements.txt stays identical to main.
+COPY requirements-cl2k.txt .
+RUN pip3 install --no-cache-dir -r requirements-cl2k.txt
+
 # Install rclone (jdupes is installed via apt in the runtime stage).
 RUN curl https://rclone.org/install.sh | bash
 
@@ -55,16 +62,20 @@ WORKDIR /app
 # Install minimal runtime dependencies. jdupes comes from Debian instead
 # of being built from codeberg source — sidesteps recurring codeberg
 # outages, and libjodycode is pulled in automatically as a dep.
-#
-# CL2K maker adds: imagemagick (Wand's libMagickWand), librsvg2-2 (so IM can
-# read SVG clear logos), fonts-dejavu-core (guaranteed fallback font), and
-# cabextract to unpack the vendored Arial below. No `contrib` component or
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends curl git tzdata jdupes && \
+    rm -rf /var/lib/apt/lists/*
+
+# ---- CL2K maker (develop-only extension) ----
+# imagemagick (Wand's libMagickWand), librsvg2-2 (so IM can read SVG clear
+# logos), fonts-dejavu-core (guaranteed fallback font), and cabextract to
+# unpack the vendored Arial below. Kept as a separate appended layer so the
+# shared apt line above stays identical to main. No `contrib` component or
 # ttf-mscorefonts-installer here: that package downloads MS fonts from
 # SourceForge at build time, and a flaky mirror failed the whole image build.
 RUN set -eux; \
     apt-get update; \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-        curl git tzdata jdupes \
         imagemagick librsvg2-2 fonts-dejavu-core \
         fontconfig cabextract; \
     rm -rf /var/lib/apt/lists/*

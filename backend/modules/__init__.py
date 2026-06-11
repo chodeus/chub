@@ -2,7 +2,6 @@
 
 from .asset_renamerr import AssetRenamerr
 from .border_replacerr import BorderReplacerr
-from .cl2k_maker import Cl2kMaker
 from .health_checkarr import HealthCheckarr
 from .jduparr import Jduparr
 from .labelarr import Labelarr
@@ -21,7 +20,6 @@ MODULES = {
     "poster_renamerr": PosterRenamerr,
     "asset_renamerr": AssetRenamerr,
     "border_replacerr": BorderReplacerr,
-    "cl2k_maker": Cl2kMaker,
     "upgradinatorr": Upgradinatorr,
     "renameinatorr": Renameinatorr,
     "nohl": Nohl,

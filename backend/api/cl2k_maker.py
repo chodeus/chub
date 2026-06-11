@@ -32,10 +32,12 @@ from backend.modules.cl2k_maker import (
     retext_poster,
     save_finished_poster,
 )
+from backend.util.cl2k import tmdb_art
 from backend.util.cl2k.image_fetch import TMDB_IMAGE_CDN, download as download_image
 from backend.util.cl2k.renderer import process_logo
 from backend.util.config import load_config
 from backend.util.database import ChubDB
+from backend.util.database.cl2k_generated import cl2k_generated_for
 from backend.util.tmdb import TMDBClient
 
 router = APIRouter(
@@ -154,7 +156,7 @@ def search(
     logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
     tmdb = TMDBClient(load_config().tmdb, db, logger)
-    return ok("ok", {"results": tmdb.search_titles(q, media_type)})
+    return ok("ok", {"results": tmdb_art.search_titles(tmdb, q, media_type)})
 
 
 @router.get("/resolve", summary="Resolve an external id (tvdb/imdb) to a tmdb id")
@@ -178,7 +180,7 @@ def images(
     logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
     tmdb = TMDBClient(load_config().tmdb, db, logger)
-    imgs = tmdb.list_images(tmdb_id, media_type) or {"logos": [], "backdrops": []}
+    imgs = tmdb_art.list_images(tmdb, tmdb_id, media_type) or {"logos": [], "backdrops": []}
     return ok(
         "ok",
         {
@@ -196,7 +198,7 @@ def season_images(
     logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
     tmdb = TMDBClient(load_config().tmdb, db, logger)
-    imgs = tmdb.list_season_images(tmdb_id, season_number) or {"posters": []}
+    imgs = tmdb_art.list_season_images(tmdb, tmdb_id, season_number) or {"posters": []}
     return ok("ok", {"posters": _decorate(imgs.get("posters", []))})
 
 
@@ -226,7 +228,7 @@ def external_ids(
     logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
     tmdb = TMDBClient(load_config().tmdb, db, logger)
-    return ok("ok", tmdb.external_ids(tmdb_id, media_type))
+    return ok("ok", tmdb_art.external_ids(tmdb, tmdb_id, media_type))
 
 
 @router.get("/details", summary="Canonical TMDB title + year for an id")
@@ -375,7 +377,7 @@ def generated(
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
-    return ok("ok", {"items": db.cl2k_generated.list_recent(limit)})
+    return ok("ok", {"items": cl2k_generated_for(db).list_recent(limit)})
 
 
 @router.post("/psd-export", summary="Export the CL2K poster as a layered .psd")
