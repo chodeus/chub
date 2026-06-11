@@ -310,6 +310,10 @@ class Cl2kMakerConfig(BaseModel):
     logo_max_width: int = Field(default=600, ge=100, le=800)  # guide 600 std / 800 max
     whiten_logo: bool = True
     text_logo_fallback: bool = True  # synth a typeset wordmark when no real logo
+    # Outline width (px at the internal render scale) for the text-logo wordmark;
+    # 0 = none (clean white, the CL2K default). A small value (~4) adds legibility
+    # over busy art. The wordmark itself is balance-wrapped to fill the logo box.
+    text_logo_stroke: int = Field(default=0, ge=0, le=20)
     skip_existing: bool = True
     style: str = "CL2K"  # poster_cache style tag
     priority: int = 0
