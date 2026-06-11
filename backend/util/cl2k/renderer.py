@@ -361,12 +361,14 @@ def _place_logo(
 ) -> None:
     """Whiten, size and bottom-align the clear logo onto ``base``.
 
-    Width targets ``max_width`` (the 600px guide by default), but height is
-    clamped so the logo top never rises above ``LOGO_ZONE_TOP``. ``logo_scale``
-    relaxes that height clamp (only): the template's LOGO group is a placeholder
-    sized by eye, and a hand-made poster lets a tall/boxy logo (< ~3:1 aspect,
-    e.g. a sticker design) break the y=1100 top guide rather than shrink to an
-    unreadable stamp. 1.0 = the strict guide box; the width caps always apply.
+    The guide-fit box targets ``max_width`` (the 600px guide by default) with
+    height clamped so the logo top never rises above ``LOGO_ZONE_TOP``.
+    ``logo_scale`` then multiplies that whole box (1.0 = strict guides), clamped
+    to the canvas. Hand-made references bust the guides routinely — measured
+    logos run ~846-881px wide (~85% of canvas) and boxy/sticker designs break
+    the y=1100 top guide rather than shrink to an unreadable stamp — so the
+    slider must be able to take ANY logo past the guide box, not only tall ones
+    (it previously relaxed just the height clamp, a no-op for wide logos).
 
     ``logo_y_offset`` shifts the placement (px; positive = down) without changing
     the size — the template's own note ("only leave the Main-Logo area if the
@@ -381,12 +383,22 @@ def _place_logo(
         logo.trim(color=Color("transparent"))  # drop padding -> width == content
         if whiten:
             _whiten(logo)
-        target_w = min(max_width, geo.LOGO_WIDTH_MAX)  # never bust the max-width guide
+        target_w = min(max_width, geo.LOGO_WIDTH_MAX)  # the guide box width
         target_h = int(round(logo.height * target_w / logo.width))
-        max_h = int(round((baseline - geo.LOGO_ZONE_TOP) * logo_scale))
+        max_h = baseline - geo.LOGO_ZONE_TOP
         if target_h > max_h:
             target_h = max_h
             target_w = int(round(logo.width * target_h / logo.height))
+        # Scale the guide-fit box as a whole; keep it on the canvas (aspect kept).
+        target_w = int(round(target_w * logo_scale))
+        target_h = int(round(target_h * logo_scale))
+        if target_w > base.width:
+            target_h = int(round(target_h * base.width / target_w))
+            target_w = base.width
+        if target_h > base.height:
+            target_w = int(round(target_w * base.height / target_h))
+            target_h = base.height
+        target_w, target_h = max(1, target_w), max(1, target_h)
         logo.resize(target_w, target_h, filter="lanczos")
         # Offset moves placement only; keep the logo fully on the canvas.
         top = baseline - target_h + logo_y_offset

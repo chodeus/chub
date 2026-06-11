@@ -108,6 +108,7 @@ def export_psd(
     title: str = "",
     season_text: str = "",
     logo_max_width: int = geo.LOGO_WIDTH_STD,
+    logo_scale: float = 1.0,
     whiten: bool = True,
 ) -> bytes:
     """Build the CL2K poster as a layered PSD and return its bytes."""
@@ -135,8 +136,20 @@ def export_psd(
         if th > max_h:
             th = max_h
             tw = round(lg.width * th / lg.height)
+        # Scale the guide-fit box as a whole, canvas-clamped — mirrors
+        # renderer._place_logo so the LOGO layer matches the rendered poster.
+        scale = max(0.25, min(float(logo_scale or 1.0), 3.0))
+        tw = max(1, round(tw * scale))
+        th = max(1, round(th * scale))
+        if tw > w:
+            th = max(1, round(th * w / tw))
+            tw = w
+        if th > h:
+            tw = max(1, round(tw * h / th))
+            th = h
         lg = lg.resize((tw, th), Image.Resampling.LANCZOS)
-        logo_layer.alpha_composite(lg, (geo.CENTER_X - tw // 2, baseline - th))
+        top = max(0, min(baseline - th, h - th))
+        logo_layer.alpha_composite(lg, (geo.CENTER_X - tw // 2, top))
 
     # The bottom label, when there is one, becomes its own self-describing layer
     # ("COLLECTION" / "SEASON 3") instead of a generic "TEXT" layer — and movies,

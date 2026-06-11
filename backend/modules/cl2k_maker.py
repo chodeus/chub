@@ -1104,6 +1104,7 @@ def psd_for_item(
     backdrop_path: Optional[str] = None,
     logo_path: Optional[str] = None,
     season_text: str = "",
+    logo_scale: float = 1.0,
 ) -> Optional[bytes]:
     """Resolve art and return a layered CL2K poster as PSD bytes (for Photopea)."""
     from backend.util.cl2k.psd_export import export_psd
@@ -1127,6 +1128,7 @@ def psd_for_item(
         title=title,
         season_text=season_text,
         logo_max_width=cfg.logo_max_width,
+        logo_scale=logo_scale,
         whiten=cfg.whiten_logo,
     )
 

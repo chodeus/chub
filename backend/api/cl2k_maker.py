@@ -618,6 +618,7 @@ def psd_export(
         tmdb_id=req.tmdb_id,
         backdrop_path=req.backdrop_path,
         logo_path=req.logo_path,
+        logo_scale=req.logo_scale,
     )
     if blob is None:
         return error("No textless backdrop available", "NO_BACKDROP")
