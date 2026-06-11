@@ -318,7 +318,7 @@ export const ArrayObjectField = ({
                         <AddButton
                             onClick={handleAdd}
                             disabled={disabled}
-                            ariaLabel={`Add new ${displayTemplate.itemName.toLowerCase()}`}
+                            itemType={displayTemplate.itemName}
                         />
                     </div>
                 )}
