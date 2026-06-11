@@ -122,73 +122,6 @@ const withExternalIds = async base => {
     }
 };
 
-// ─── Hover tooltip ───────────────────────────────────────────────────────────
-// Lightweight hover/focus tooltip. Inline-styled (no utility classes — those are
-// hand-rolled in this app and an undefined one renders nothing), so it works
-// anywhere. `InfoDot` is the common case: a small help glyph beside a label.
-const Tooltip = ({ text, children }) => {
-    const [show, setShow] = useState(false);
-    if (!text) return children;
-    return (
-        <span
-            style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}
-            onMouseEnter={() => setShow(true)}
-            onMouseLeave={() => setShow(false)}
-            onFocus={() => setShow(true)}
-            onBlur={() => setShow(false)}
-        >
-            {children}
-            {show && (
-                <span
-                    role="tooltip"
-                    style={{
-                        position: 'absolute',
-                        bottom: 'calc(100% + 6px)',
-                        left: '50%',
-                        transform: 'translateX(-50%)',
-                        zIndex: 60,
-                        width: 'max-content',
-                        maxWidth: 260,
-                        padding: '6px 8px',
-                        borderRadius: 6,
-                        fontSize: 11,
-                        lineHeight: 1.45,
-                        fontWeight: 400,
-                        textAlign: 'left',
-                        color: '#fff',
-                        background: 'rgba(17, 18, 30, 0.98)',
-                        border: '1px solid rgba(255, 255, 255, 0.14)',
-                        boxShadow: '0 6px 18px rgba(0, 0, 0, 0.45)',
-                        pointerEvents: 'none',
-                        whiteSpace: 'normal',
-                    }}
-                >
-                    {text}
-                </span>
-            )}
-        </span>
-    );
-};
-
-const InfoDot = ({ text }) => (
-    <Tooltip text={text}>
-        <span
-            tabIndex={0}
-            aria-label={text}
-            className="material-symbols-outlined"
-            style={{
-                fontSize: 15,
-                marginLeft: 4,
-                color: 'var(--color-text-tertiary, #8b8fa3)',
-                cursor: 'help',
-                userSelect: 'none',
-            }}
-        >
-            help
-        </span>
-    </Tooltip>
-);
-
 // ─── Logo placement geometry (mirrors renderer._place_logo) ──────────────────
 // Same maths the backend uses to size + bottom-align the clear logo, so a CSS
 // overlay drawn with /logo-processed bytes lands exactly where a render would.
@@ -1490,10 +1423,7 @@ const RenderPanel = ({
                 {!isSeasonPoster && item.kind !== 'collection' && (
                     <div className="bg-surface border border-border rounded-lg p-3">
                         <label className="flex items-center gap-2 text-sm text-secondary">
-                            <span className="w-28 text-primary font-medium inline-flex items-center">
-                                Banner
-                                <InfoDot text="Optional text in the CL2K bottom label band (e.g. a limited series). Overrides the automatic COLLECTION / season label." />
-                            </span>
+                            <span className="w-28 text-primary font-medium">Banner</span>
                             <select
                                 value={bandLabel}
                                 onChange={e => setBandLabel(e.target.value)}
@@ -1506,6 +1436,9 @@ const RenderPanel = ({
                                 ))}
                             </select>
                         </label>
+                        <p className="text-xs text-tertiary mt-2">
+                            Optional bottom banner in the CL2K label band (e.g. a limited series).
+                        </p>
                     </div>
                 )}
 
@@ -1524,23 +1457,18 @@ const RenderPanel = ({
             <div className="flex flex-col gap-3">
                 <div className="bg-surface border border-border rounded-lg p-3">
                     <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center">
-                            <h3 className="text-sm font-medium text-primary">Preview</h3>
-                            <InfoDot text="Updates automatically as you change the backdrop, framing or label. The logo moves live as you drag its sliders. Refresh re-renders with AI text-removal applied." />
-                        </div>
+                        <h3 className="text-sm font-medium text-primary">Preview</h3>
                         <div className="flex items-center gap-3">
                             <GuidesToggle show={showGuides} onChange={setShowGuides} />
-                            <Tooltip text="Re-render now, including AI text-removal if enabled. Not needed for framing or logo changes — those update on their own.">
-                                <LoadingButton
-                                    onClick={onPreview}
-                                    loading={previewing}
-                                    disabled={!backdrop}
-                                    icon="refresh"
-                                    size="small"
-                                >
-                                    Refresh
-                                </LoadingButton>
-                            </Tooltip>
+                            <LoadingButton
+                                onClick={onPreview}
+                                loading={previewing}
+                                disabled={!backdrop}
+                                icon="refresh"
+                                size="small"
+                            >
+                                Refresh
+                            </LoadingButton>
                         </div>
                     </div>
                     <div className="relative aspect-[2/3] bg-black rounded overflow-hidden flex items-center justify-center">
@@ -1573,33 +1501,26 @@ const RenderPanel = ({
                 </div>
 
                 <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-2">
-                    <div className="flex items-center">
-                        <h3 className="text-sm font-medium text-primary">Output</h3>
-                        <InfoDot text="Generate renders the final high-quality JPEG (logo baked in, AI fill applied) and saves it to the destinations ticked above." />
-                    </div>
+                    <h3 className="text-sm font-medium text-primary">Output</h3>
                     <SaveTargets targets={saveTargets} />
-                    <Tooltip text="Render the final poster and save it to the ticked destinations, named per the DAPS convention.">
-                        <LoadingButton
-                            onClick={onGenerate}
-                            loading={busy}
-                            disabled={!backdrop || saveTargets.noTarget}
-                            icon="save"
-                        >
-                            Generate &amp; save
-                        </LoadingButton>
-                    </Tooltip>
+                    <LoadingButton
+                        onClick={onGenerate}
+                        loading={busy}
+                        disabled={!backdrop || saveTargets.noTarget}
+                        icon="save"
+                    >
+                        Generate &amp; save
+                    </LoadingButton>
                     <div className="flex gap-2">
-                        <Tooltip text="Export a layered Photoshop .psd (backdrop + logo on separate layers) to fine-tune by hand.">
-                            <LoadingButton
-                                onClick={onPsdExport}
-                                loading={busy}
-                                disabled={!backdrop}
-                                variant="secondary"
-                                icon="layers"
-                            >
-                                Export .psd
-                            </LoadingButton>
-                        </Tooltip>
+                        <LoadingButton
+                            onClick={onPsdExport}
+                            loading={busy}
+                            disabled={!backdrop}
+                            variant="secondary"
+                            icon="layers"
+                        >
+                            Export .psd
+                        </LoadingButton>
                         {backdropUrl && (
                             <a
                                 href={backdropUrl}
@@ -2106,10 +2027,7 @@ const CropFramer = ({
     return (
         <div className="bg-surface border border-border rounded-lg p-3">
             <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center">
-                    <h3 className="text-sm font-medium text-primary">Crop framing</h3>
-                    <InfoDot text="How the wide backdrop fills the tall 2:3 poster. Fill: crop to fill (pick the focal point). Fit: shrink the whole width onto black. Extend (AI): keep subjects full-size and let AI paint the empty bottom on Generate." />
-                </div>
+                <h3 className="text-sm font-medium text-primary">Crop framing</h3>
                 <div className="flex items-center gap-1">
                     <Button
                         onClick={() => setFitMode('cover')}
@@ -2147,10 +2065,7 @@ const CropFramer = ({
             </p>
             {isBox && (
                 <label className="flex items-center gap-2 text-xs text-secondary mb-2">
-                    <span className="shrink-0 inline-flex items-center">
-                        Vertical position
-                        <InfoDot text="Where the fitted photo sits in the frame. Low = pinned to the top; higher slides it down, adding sky/headroom above the subjects." />
-                    </span>
+                    <span className="shrink-0">Vertical position</span>
                     <input
                         type="range"
                         min="0"
@@ -2283,25 +2198,81 @@ const Picker = ({ label, items, loading, selected, onSelect, aspect, onBlack, em
 
 // The template's own guides (mined from CL2K_template.psd), drawn over a 2:3
 // poster preview as Photoshop-style cyan lines. Positions are fractions of the
-// 1000×1500 canvas, so the overlay lines up with any rendered preview. Inline
-// styles only — this must not depend on utility classes existing.
-const CL2K_GUIDES_V = [100, 200, 800, 900]; // max / main logo width
-const CL2K_GUIDES_H = [1100, 1319, 1352, 1375]; // zone top / logo bottom / label / darkest
-const GUIDE_STYLE = { position: 'absolute', background: 'rgba(0, 255, 255, 0.6)' };
+// 1000×1500 canvas, so the overlay lines up with any rendered preview. Each line
+// explains itself on hover (what the guide means) — that's the point of the
+// overlay, since the lines alone are cryptic. Inline styles only — this must not
+// depend on utility classes existing.
+const CL2K_GUIDES = [
+    { label: 'Max logo width', o: 'x', p: 100 },
+    { label: 'Main logo width (600px box)', o: 'x', p: 200 },
+    { label: 'Main logo width (600px box)', o: 'x', p: 800 },
+    { label: 'Max logo width', o: 'x', p: 900 },
+    { label: 'Logo zone top — logos shouldn’t rise above this line', o: 'y', p: 1100 },
+    { label: 'Logo bottom baseline', o: 'y', p: 1319 },
+    { label: 'Label band (COLLECTION / SEASON)', o: 'y', p: 1352 },
+    { label: 'Gradient darkest line', o: 'y', p: 1375 },
+];
+const GUIDE_CYAN = 'rgba(0, 255, 255, 0.6)';
+const GUIDE_CYAN_HOVER = 'rgba(0, 255, 255, 0.95)';
+
+// One guide line + its hover label. A wide transparent strip is the hover target
+// (a 1px line is near-impossible to hover); the visible line sits centred inside
+// it. The label chip is anchored to grow toward the canvas centre so it never
+// clips at the preview edge.
+const GuideLine = ({ label, o, p }) => {
+    const [hover, setHover] = useState(false);
+    const vertical = o === 'x';
+    const at = vertical ? `${p / 10}%` : `${p / 15}%`;
+    const strip = vertical
+        ? { top: 0, bottom: 0, left: at, width: 12, marginLeft: -6 }
+        : { left: 0, right: 0, top: at, height: 12, marginTop: -6 };
+    const line = vertical
+        ? { top: 0, bottom: 0, left: 6, width: 1 }
+        : { left: 0, right: 0, top: 6, height: 1 };
+    const chip = vertical
+        ? { top: 6, ...(p < 500 ? { left: 8 } : { right: 8 }) }
+        : { left: 8, top: 6, transform: 'translateY(-50%)' };
+    return (
+        <div
+            style={{ position: 'absolute', pointerEvents: 'auto', cursor: 'help', ...strip }}
+            onMouseEnter={() => setHover(true)}
+            onMouseLeave={() => setHover(false)}
+        >
+            <div
+                style={{
+                    position: 'absolute',
+                    background: hover ? GUIDE_CYAN_HOVER : GUIDE_CYAN,
+                    ...line,
+                }}
+            />
+            {hover && (
+                <span
+                    style={{
+                        position: 'absolute',
+                        whiteSpace: 'nowrap',
+                        fontSize: 10,
+                        lineHeight: 1.3,
+                        padding: '2px 6px',
+                        borderRadius: 4,
+                        color: '#04121a',
+                        background: 'rgba(0, 255, 255, 0.92)',
+                        boxShadow: '0 2px 6px rgba(0, 0, 0, 0.4)',
+                        pointerEvents: 'none',
+                        zIndex: 2,
+                        ...chip,
+                    }}
+                >
+                    {label}
+                </span>
+            )}
+        </div>
+    );
+};
 
 const GuideOverlay = () => (
-    <div aria-hidden="true" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
-        {CL2K_GUIDES_V.map(x => (
-            <div
-                key={`v${x}`}
-                style={{ ...GUIDE_STYLE, top: 0, bottom: 0, left: `${x / 10}%`, width: 1 }}
-            />
-        ))}
-        {CL2K_GUIDES_H.map(y => (
-            <div
-                key={`h${y}`}
-                style={{ ...GUIDE_STYLE, left: 0, right: 0, top: `${y / 15}%`, height: 1 }}
-            />
+    <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+        {CL2K_GUIDES.map((g, i) => (
+            <GuideLine key={`${g.o}${g.p}-${i}`} {...g} />
         ))}
     </div>
 );
@@ -2424,10 +2395,7 @@ const LogoSelector = ({
             )}
             {onScale && (
                 <label className="mt-2 flex items-center gap-2 text-xs text-secondary">
-                    <span className="w-28 inline-flex items-center">
-                        Logo size
-                        <InfoDot text="100% = the CL2K guide box. Raise it for a tall/boxy (sticker-style) logo that would otherwise render small — width is always capped by the guides." />
-                    </span>
+                    <span className="w-24">Logo size</span>
                     <input
                         type="range"
                         min="50"
@@ -2442,10 +2410,7 @@ const LogoSelector = ({
             )}
             {onYOffset && (
                 <label className="mt-2 flex items-center gap-2 text-xs text-secondary">
-                    <span className="w-28 inline-flex items-center">
-                        Logo position
-                        <InfoDot text="0 = the locked baseline. Negative moves the logo up, positive down — hand-made posters hang tall logos ~30–50 below." />
-                    </span>
+                    <span className="w-24">Logo position</span>
                     <input
                         type="range"
                         min="-300"
@@ -2462,7 +2427,22 @@ const LogoSelector = ({
             )}
             <p className="mt-2 text-xs text-tertiary">
                 Whitened, trimmed and placed on the CL2K guides automatically — it moves live in the
-                preview as you drag.{' '}
+                preview as you drag.
+                {onScale && (
+                    <>
+                        {' '}
+                        Size 100% = the CL2K guide box; raise it for a tall/boxy logo
+                        (sticker-style) that would otherwise render small — width is always capped
+                        by the guides.
+                    </>
+                )}
+                {onYOffset && (
+                    <>
+                        {' '}
+                        Position 0 = the locked baseline; negative moves the logo up, positive down
+                        (hand-made posters hang tall logos ~30–50 below).
+                    </>
+                )}{' '}
                 {((onScale && Math.round((scale ?? 1) * 100) !== 100) ||
                     (onYOffset && (yOffset ?? 0) !== 0)) && (
                     <button
