@@ -60,32 +60,46 @@ def _backfill_title_year(
     logger,
     *,
     kind: str,
-    tmdb_id: int,
+    tmdb_id: Optional[int],
     title: str,
     year: Optional[int],
+    tvdb_id: Optional[int] = None,
+    imdb_id: Optional[str] = None,
 ) -> Tuple[str, Optional[int]]:
     """Fill a blank title/year from TMDB before naming/rendering.
 
     Items added by id paste or the Edit-IDs panel arrive with no title (the UI
     only resolves the ids), which would reduce the DAPS filename to bare id tags
     (``{tmdb-N}.jpg``) and draw an empty text-wordmark fallback. When the title is
-    blank we look it up via :meth:`TMDBClient.get_details` (cached). Best-effort: a
-    transient TMDB failure leaves the originals untouched. Only movie/show/season
-    map to a TMDB movie/tv id — collections carry their own title.
+    blank we resolve a usable TMDB id in order — the supplied ``tmdb_id``, else the
+    ``tvdb_id``, else the ``imdb_id`` (TVDB/IMDB matched via
+    :meth:`find_tmdb_id`) — then read the canonical title/year from
+    :meth:`get_details`. A TVDB/IMDB-only title with no TMDB entry keeps whatever
+    the user typed in Edit IDs (worst case: bare id tags). Best-effort and cached;
+    a transient TMDB failure leaves the originals untouched. Collections carry
+    their own title and are skipped.
     """
     if kind not in ("movie", "show", "season"):
         return title, year
     if (title or "").strip():
         return title, year
+    mt = "movie" if kind == "movie" else "tv"
     try:
-        mt = "movie" if kind == "movie" else "tv"
-        details = TMDBClient(full_config.tmdb, db, logger).get_details(tmdb_id, mt)
-        if details:
-            title = details.get("title") or title
-            if year is None:
-                year = details.get("year")
+        tmdb = TMDBClient(full_config.tmdb, db, logger)
+        # Resolve a usable tmdb id, falling back TVDB → IMDB when none is given.
+        resolved = tmdb_id or None
+        if not resolved and tvdb_id:
+            resolved = tmdb.find_tmdb_id(str(tvdb_id), "tvdb_id", mt)
+        if not resolved and imdb_id:
+            resolved = tmdb.find_tmdb_id(str(imdb_id), "imdb_id", mt)
+        if resolved:
+            details = tmdb.get_details(resolved, mt)
+            if details:
+                title = details.get("title") or title
+                if year is None:
+                    year = details.get("year")
     except Exception as exc:  # never block a save on a metadata lookup
-        logger.warning(f"cl2k: title backfill failed for tmdb {tmdb_id}: {exc}")
+        logger.warning(f"cl2k: title backfill failed (tmdb={tmdb_id}): {exc}")
     return title, year
 
 
@@ -305,7 +319,8 @@ def generate_for_item(
     if kind not in _VALID_KINDS:
         return {"status": "error", "reason": f"invalid kind {kind!r}"}
     title, year = _backfill_title_year(
-        full_config, db, logger, kind=kind, tmdb_id=tmdb_id, title=title, year=year
+        full_config, db, logger, kind=kind, tmdb_id=tmdb_id, title=title, year=year,
+        tvdb_id=tvdb_id, imdb_id=imdb_id,
     )
     # output_dir is only required when actually saving locally; a Drive-only save
     # uploads from a temp copy and never touches output_dir.
@@ -639,7 +654,8 @@ def save_finished_poster(
     if kind not in _VALID_KINDS:
         return {"status": "error", "reason": f"invalid kind {kind!r}"}
     title, year = _backfill_title_year(
-        full_config, db, logger, kind=kind, tmdb_id=tmdb_id, title=title, year=year
+        full_config, db, logger, kind=kind, tmdb_id=tmdb_id, title=title, year=year,
+        tvdb_id=tvdb_id, imdb_id=imdb_id,
     )
     if save_local and not cfg.output_dir:
         return {"status": "error", "reason": "cl2k_maker.output_dir is not configured"}
