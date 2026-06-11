@@ -1,5 +1,10 @@
 // web/static/js/settings/settings_schema.js
-export const SETTINGS_SCHEMA = [
+import {
+    withExtensionSettingsSchema,
+    withExtensionSettingsModules,
+} from '../../extensions/index.js';
+
+const CORE_SETTINGS_SCHEMA = [
     {
         key: 'tmdb',
         label: 'TMDB',
@@ -1564,7 +1569,7 @@ export const SETTINGS_SCHEMA = [
     },
 ];
 
-export const SETTINGS_MODULES = [
+const CORE_SETTINGS_MODULES = [
     {
         name: 'TMDB',
         key: 'tmdb',
@@ -1654,3 +1659,7 @@ export const SETTINGS_MODULES = [
         description: 'Handle and review assets that couldn\u2019t be matched.',
     },
 ];
+
+// Extension module blocks spliced in (src/extensions) \u2014 identity on main.
+export const SETTINGS_SCHEMA = withExtensionSettingsSchema(CORE_SETTINGS_SCHEMA);
+export const SETTINGS_MODULES = withExtensionSettingsModules(CORE_SETTINGS_MODULES);

@@ -152,6 +152,33 @@ jobs:
       run_stylelint: true
       run_prettier_check: true
 
+  # ---- Branch isolation guard ----
+  # Develop-only extensions (e.g. the CL2K poster maker) must never reach main.
+  # On main (and PRs targeting main) fail if any extension code is present:
+  # the extensions/ folders may hold only the generic loaders, and no file
+  # named after a develop-only extension may exist anywhere in the tree.
+  branch-isolation-guard:
+    name: Branch Isolation Guard
+    if: github.ref == 'refs/heads/main' || github.base_ref == 'main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
+      - name: Fail if develop-only extension code is present
+        run: |
+          set -eu
+          leaks=$(git ls-files -- '*cl2k*' \
+            'backend/extensions/*' ':!backend/extensions/__init__.py' \
+            'frontend/src/extensions/*' ':!frontend/src/extensions/index.js')
+          if [ -n "$leaks" ]; then
+            echo "::error::Develop-only extension files found on a main-bound ref:"
+            echo "$leaks"
+            exit 1
+          fi
+          echo "OK: no develop-only extension code present."
+
   # ---- Docker Build (gated by all quality checks) ----
   docker-validate:
     name: Docker Validate (PR)

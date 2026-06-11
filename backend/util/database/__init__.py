@@ -144,6 +144,15 @@ class ChubDB:
 
         return self._interfaces[interface_name]
 
+    def extension_interface(self, interface_name: str, interface_class):
+        """Public accessor for extension-owned database interfaces.
+
+        Extensions (backend/extensions) can't add properties to ChubDB, so
+        they reach their interfaces through this instead — same lazy
+        caching as the core properties below.
+        """
+        return self._get_interface(interface_name, interface_class)
+
     def _cleanup_workers(self) -> None:
         """Clean up all created workers with proper error handling."""
         for worker in self.created_workers:

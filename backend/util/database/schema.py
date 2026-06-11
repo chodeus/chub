@@ -819,6 +819,14 @@ class SchemaManager:
         )
         self._add_table(schema_migrations)
 
+        # Tables owned by self-registering extensions (backend/extensions).
+        # Imported here, not at module level: manifests may import
+        # TableDefinition from this module while it is still initialising.
+        from backend.extensions import extension_tables
+
+        for extension_table in extension_tables():
+            self._add_table(extension_table)
+
         # Calculate schema hash for change detection
         self._calculate_schema_hash()
 

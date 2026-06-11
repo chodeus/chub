@@ -60,5 +60,5 @@ transformation/
 # at Docker build time. Don't commit; rebuild via scripts/rasterize_borders.py.
 backend/assets/borders/**/*.png
 
-# CL2K reference posters / PSDs (copyrighted — local only)
+# Local reference posters / PSDs (copyrighted — local only)
 refs/

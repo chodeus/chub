@@ -36,6 +36,7 @@ from backend.api import (
     webhooks as webhooks_router,
 )
 from backend.api.utils import error, get_logger
+from backend.extensions import extension_routers
 from backend.util.auth import decode_access_token
 from backend.util.config import ConfigError, load_config
 from backend.util.database import ChubDB
@@ -424,6 +425,8 @@ app.include_router(notifications_router.router)
 app.include_router(labelarr_router.router)
 app.include_router(border_replacerr_router.router)
 app.include_router(cl2k_maker_router.router)
+for _extension_router in extension_routers():
+    app.include_router(_extension_router)
 app.include_router(router)
 
 
