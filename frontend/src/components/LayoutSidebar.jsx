@@ -2,8 +2,9 @@ import React, { useCallback, useEffect, useRef } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useUIState } from '../contexts/UIStateContext.jsx';
 import { useAuth } from '../contexts/AuthContext.jsx';
+import { withExtensionNavChildren } from '../extensions/index.js';
 
-const NAV_SECTIONS = [
+const CORE_NAV_SECTIONS = [
     {
         id: 'home',
         heading: null,
@@ -100,6 +101,9 @@ const NAV_SECTIONS = [
         ],
     },
 ];
+
+// Extension nav children (src/extensions) spliced in — identity on main.
+const NAV_SECTIONS = withExtensionNavChildren(CORE_NAV_SECTIONS);
 
 const LayoutSidebar = React.memo(() => {
     const location = useLocation();
