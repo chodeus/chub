@@ -3,6 +3,10 @@
   "extends": [
     "github>chodeus/chodeus-ops"
   ],
+  "baseBranches": [
+    "main",
+    "develop"
+  ],
   "packageRules": [
     {
       "matchManagers": [
