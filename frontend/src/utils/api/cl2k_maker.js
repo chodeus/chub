@@ -133,6 +133,19 @@ export const cl2kMakerAPI = {
     /** Render + write + cache + record provenance. */
     generate: req => apiCore.post('/cl2k-maker/generate', req),
 
+    /** Render square art (1:1) without saving. Returns a JPEG Blob. */
+    squarePreview: req => postBlob('/cl2k-maker/square-preview', req),
+
+    /** Render + file square art (`- SquareArt.jpg`). */
+    squareGenerate: req => apiCore.post('/cl2k-maker/square-generate', req),
+
+    /** Processed logo asset (transparent PNG) without saving. Returns a PNG Blob.
+     *  `req` = { logo_path | logo_b64, whiten }. */
+    logoAssetPreview: req => postBlob('/cl2k-maker/logo-asset-preview', req),
+
+    /** File a clear logo as a `- Logo.png` asset (whiten toggles CL2K white). */
+    logoAssetGenerate: req => apiCore.post('/cl2k-maker/logo-asset-generate', req),
+
     /** Recently generated posters (provenance). */
     generated: (limit = 200) =>
         apiCore.get(`/cl2k-maker/generated?${qs({ limit })}`, { useCache: false }),

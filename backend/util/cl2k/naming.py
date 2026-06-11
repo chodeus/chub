@@ -54,6 +54,7 @@ def build_poster_filename(
     imdb_id: Optional[str] = None,
     season_number: Optional[int] = None,
     ext: str = ".jpg",
+    asset_suffix: str = "",
 ) -> str:
     """Return the ID-tagged poster filename for a media item.
 
@@ -62,6 +63,10 @@ def build_poster_filename(
     Drazzilb form that matches hand-made CL2K posters). Season 0 is the Specials
     season and is written as `` - Specials`` instead. Year-based "seasons" (e.g.
     Formula 1) just pass the year through as the number → `` - Season 2026``.
+
+    ``asset_suffix`` appends an additional-asset tag before the extension (e.g.
+    `` - SquareArt`` / `` - Logo``) so the file is parsed as that asset type by the
+    asset_renamerr naming regex, e.g. ``The Matrix (1999) {tmdb-603} - SquareArt.jpg``.
     """
     title = _safe(title)
     tags = _id_tags(tmdb_id, tvdb_id, imdb_id)
@@ -77,7 +82,5 @@ def build_poster_filename(
         # Season 0 is the Specials season — write the `- Specials` form that
         # community CL2K makers use (Kometa/Plex and CHUB's season_number_regex
         # both read it back as season 0). Numbered seasons keep ` - Season NN`.
-        if season_number == 0:
-            return f"{base} - Specials{ext}"
-        return f"{base} - Season {season_number:02d}{ext}"
-    return f"{base}{ext}"
+        base = f"{base} - Specials" if season_number == 0 else f"{base} - Season {season_number:02d}"
+    return f"{base}{asset_suffix}{ext}"

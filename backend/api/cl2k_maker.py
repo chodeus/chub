@@ -26,7 +26,9 @@ from backend.api.utils import error, get_database, get_module_logger, ok
 from backend.modules.cl2k_maker import (
     fanart_images,
     generate_for_item,
+    generate_logo_asset,
     generate_seasons,
+    generate_square_art,
     psd_for_item,
     render_preview,
     retext_poster,
@@ -34,7 +36,7 @@ from backend.modules.cl2k_maker import (
 )
 from backend.util.cl2k import tmdb_art
 from backend.util.cl2k.image_fetch import TMDB_IMAGE_CDN, download as download_image
-from backend.util.cl2k.renderer import process_logo
+from backend.util.cl2k.renderer import process_logo, render_square_art
 from backend.util.config import load_config
 from backend.util.database import ChubDB
 from backend.util.database.cl2k_generated import cl2k_generated_for
@@ -369,6 +371,154 @@ def generate(
     return error(
         result.get("reason", "generation failed"), "CL2K_GENERATE", data=result
     )
+
+
+# ─── Square art + logo asset makers ──────────────────────────────────────────
+# Two additional asset types the maker files separately from posters: square art
+# (1:1 cropped backdrop, `- SquareArt.jpg`) and a clear-logo asset (`- Logo.png`).
+# Both flow into poster_cache so asset_renamerr applies them to Plex
+# (uploadSquareArt / uploadLogo).
+
+
+class SquareArtRequest(BaseModel):
+    kind: str
+    title: str
+    tmdb_id: int
+    year: Optional[int] = None
+    tvdb_id: Optional[int] = None
+    imdb_id: Optional[str] = None
+    backdrop_path: Optional[str] = None
+    backdrop_b64: Optional[str] = None  # custom-uploaded source art (base64)
+    focus_x: float = 0.5
+    focus_y: float = 0.5
+    fit_mode: str = "cover"  # cover (focal crop) | fit (contain on black)
+    crop_x: Optional[float] = None
+    crop_y: Optional[float] = None
+    crop_w: Optional[float] = None
+    crop_h: Optional[float] = None
+    v_pos: float = 0.0
+    zoom: float = Field(1.0, ge=1.0, le=3.0)
+    save_local: bool = True
+    upload_gdrive: Optional[bool] = None
+
+
+class LogoAssetRequest(BaseModel):
+    kind: str
+    title: str
+    tmdb_id: int
+    year: Optional[int] = None
+    tvdb_id: Optional[int] = None
+    imdb_id: Optional[str] = None
+    logo_path: Optional[str] = None
+    logo_b64: Optional[str] = None
+    whiten: bool = False  # True = CL2K-whitened; False = original (colored) clear logo
+    save_local: bool = True
+    upload_gdrive: Optional[bool] = None
+
+
+def _square_backdrop_bytes(req: SquareArtRequest) -> Optional[bytes]:
+    if req.backdrop_b64:
+        return _b64_to_bytes(req.backdrop_b64)
+    if req.backdrop_path:
+        return download_image(req.backdrop_path)
+    return None
+
+
+@router.post("/square-preview", summary="Render square art (1:1) without saving")
+def square_preview(
+    req: SquareArtRequest,
+    db: ChubDB = Depends(get_database),
+    logger: Any = Depends(get_cl2k_logger),
+):
+    raw = _square_backdrop_bytes(req)
+    if not raw:
+        return error("No source art selected", "NO_BACKDROP")
+    blob = render_square_art(
+        backdrop_bytes=raw,
+        focus_x=req.focus_x,
+        focus_y=req.focus_y,
+        fit_mode=req.fit_mode,
+        crop=_crop_tuple(req),
+        v_pos=req.v_pos,
+        zoom=req.zoom,
+    )
+    return Response(
+        content=blob, media_type="image/jpeg", headers={"Cache-Control": "no-store"}
+    )
+
+
+@router.post("/square-generate", summary="Generate + save square art")
+def square_generate(
+    req: SquareArtRequest,
+    db: ChubDB = Depends(get_database),
+    logger: Any = Depends(get_cl2k_logger),
+) -> JSONResponse:
+    result = generate_square_art(
+        db=db,
+        full_config=load_config(),
+        logger=logger,
+        kind=req.kind,
+        title=req.title,
+        tmdb_id=req.tmdb_id,
+        year=req.year,
+        tvdb_id=req.tvdb_id,
+        imdb_id=req.imdb_id,
+        backdrop_path=req.backdrop_path,
+        backdrop_bytes=_b64_to_bytes(req.backdrop_b64),
+        focus_x=req.focus_x,
+        focus_y=req.focus_y,
+        fit_mode=req.fit_mode,
+        crop=_crop_tuple(req),
+        v_pos=req.v_pos,
+        zoom=req.zoom,
+        save_local=req.save_local,
+        upload_gdrive=req.upload_gdrive,
+    )
+    if result.get("status") == "generated":
+        return ok("Square art generated", result)
+    return error(result.get("reason", "generation failed"), "CL2K_GENERATE", data=result)
+
+
+@router.post("/logo-asset-preview", summary="Processed logo asset (transparent PNG), no save")
+def logo_asset_preview(
+    req: LogoAssetRequest,
+    db: ChubDB = Depends(get_database),
+    logger: Any = Depends(get_cl2k_logger),
+):
+    raw = _resolve_logo_bytes(req.logo_path, req.logo_b64)
+    if not raw:
+        return error("No logo selected", "NO_LOGO")
+    png, _w, _h = process_logo(raw, whiten=req.whiten)
+    return Response(
+        content=png, media_type="image/png", headers={"Cache-Control": "no-store"}
+    )
+
+
+@router.post("/logo-asset-generate", summary="File a clear logo as a - Logo asset")
+def logo_asset_generate(
+    req: LogoAssetRequest,
+    db: ChubDB = Depends(get_database),
+    logger: Any = Depends(get_cl2k_logger),
+) -> JSONResponse:
+    result = generate_logo_asset(
+        db=db,
+        full_config=load_config(),
+        logger=logger,
+        kind=req.kind,
+        title=req.title,
+        tmdb_id=req.tmdb_id,
+        year=req.year,
+        tvdb_id=req.tvdb_id,
+        imdb_id=req.imdb_id,
+        logo_path=req.logo_path,
+        logo_bytes=_b64_to_bytes(req.logo_b64),
+        whiten=req.whiten,
+        save_local=req.save_local,
+        upload_gdrive=req.upload_gdrive,
+    )
+    if result.get("status") == "generated":
+        return ok("Logo asset filed", result)
+    return error(result.get("reason", "generation failed"), "CL2K_GENERATE", data=result)
 
 
 @router.get("/generated", summary="Recently generated CL2K posters")
