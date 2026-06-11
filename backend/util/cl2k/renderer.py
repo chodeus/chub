@@ -556,6 +556,47 @@ def generate_text_logo(
         return img.make_blob()
 
 
+def render_framed_art(
+    *,
+    backdrop_bytes: bytes,
+    width: int,
+    height: int,
+    focus_x: float = 0.5,
+    focus_y: float = 0.5,
+    fit_mode: str = "cover",
+    zoom: float = 1.0,
+) -> bytes:
+    """Render plain framed artwork at ``width``×``height`` — no gradient/logo/label.
+
+    ``fit_mode`` ``"cover"`` fills the canvas (cropping the overflowing edges);
+    ``"fit"`` contains the whole image on black (letterbox). ``zoom`` (0.5–3.0)
+    scales from that baseline — raise it in ``fit`` to punch in from contain toward
+    a full crop, or in ``cover`` to crop tighter. ``focus_x``/``focus_y`` (0..1) pan
+    the window when the image overflows the canvas; plain black letterbox where the
+    image doesn't cover. Encoded at CL2K quality.
+    """
+    zoom = max(0.5, min(float(zoom or 1.0), 3.0))
+    with Image(blob=backdrop_bytes) as img:
+        base = (
+            min(width / img.width, height / img.height)
+            if fit_mode == "fit"
+            else max(width / img.width, height / img.height)
+        )
+        scale = base * zoom
+        nw = max(1, int(round(img.width * scale)))
+        nh = max(1, int(round(img.height * scale)))
+        img.resize(nw, nh, filter="lanczos")
+        # Place the focal point at the canvas centre; clamp so an axis the image
+        # covers shows no needless black, and centre an axis it doesn't (letterbox).
+        ox = int(round(width / 2 - focus_x * nw))
+        oy = int(round(height / 2 - focus_y * nh))
+        ox = max(min(ox, 0), width - nw) if nw >= width else (width - nw) // 2
+        oy = max(min(oy, 0), height - nh) if nh >= height else (height - nh) // 2
+        with Image(width=width, height=height, background=Color("black")) as canvas:
+            canvas.composite(img, left=ox, top=oy)
+            return _encode_jpeg(canvas)
+
+
 def render_square_art(
     *,
     backdrop_bytes: bytes,
@@ -565,35 +606,16 @@ def render_square_art(
     fit_mode: str = "cover",
     zoom: float = 1.0,
 ) -> bytes:
-    """Render square (1:1) art from a backdrop/poster — just the framed artwork.
-
-    ``fit_mode`` ``"cover"`` fills the square (cropping the overflowing edges);
-    ``"fit"`` contains the whole image on black (letterbox). ``zoom`` (0.5–3.0)
-    scales from that baseline — raise it in ``fit`` to punch in from contain toward
-    a full crop, or in ``cover`` to crop tighter. ``focus_x``/``focus_y`` (0..1) pan
-    the window when the image overflows the square. No gradient/logo/label/border;
-    plain black letterbox where the image doesn't cover. Encoded at CL2K quality.
-    """
-    zoom = max(0.5, min(float(zoom or 1.0), 3.0))
-    with Image(blob=backdrop_bytes) as img:
-        base = (
-            min(size / img.width, size / img.height)
-            if fit_mode == "fit"
-            else max(size / img.width, size / img.height)
-        )
-        scale = base * zoom
-        nw = max(1, int(round(img.width * scale)))
-        nh = max(1, int(round(img.height * scale)))
-        img.resize(nw, nh, filter="lanczos")
-        # Place the focal point at the canvas centre; clamp so an axis the image
-        # covers shows no needless black, and centre an axis it doesn't (letterbox).
-        ox = int(round(size / 2 - focus_x * nw))
-        oy = int(round(size / 2 - focus_y * nh))
-        ox = max(min(ox, 0), size - nw) if nw >= size else (size - nw) // 2
-        oy = max(min(oy, 0), size - nh) if nh >= size else (size - nh) // 2
-        with Image(width=size, height=size, background=Color("black")) as canvas:
-            canvas.composite(img, left=ox, top=oy)
-            return _encode_jpeg(canvas)
+    """Render square (1:1) art from a backdrop/poster — just the framed artwork."""
+    return render_framed_art(
+        backdrop_bytes=backdrop_bytes,
+        width=size,
+        height=size,
+        focus_x=focus_x,
+        focus_y=focus_y,
+        fit_mode=fit_mode,
+        zoom=zoom,
+    )
 
 
 def render_cl2k(

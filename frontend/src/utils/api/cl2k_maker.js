@@ -139,6 +139,12 @@ export const cl2kMakerAPI = {
     /** Render + file square art (`- SquareArt.jpg`). */
     squareGenerate: req => apiCore.post('/cl2k-maker/square-generate', req),
 
+    /** Render background art (16:9) without saving. Returns a JPEG Blob. */
+    backgroundPreview: req => postBlob('/cl2k-maker/background-preview', req),
+
+    /** Render + file background art (`- Background.jpg`, 1080p or 4K). */
+    backgroundGenerate: req => apiCore.post('/cl2k-maker/background-generate', req),
+
     /** Processed logo asset (transparent PNG) without saving. Returns a PNG Blob.
      *  `req` = { logo_path | logo_b64, whiten }. */
     logoAssetPreview: req => postBlob('/cl2k-maker/logo-asset-preview', req),

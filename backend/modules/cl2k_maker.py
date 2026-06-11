@@ -463,6 +463,81 @@ def generate_square_art(
     )
 
 
+def generate_background_art(
+    *,
+    db: ChubDB,
+    full_config,
+    logger,
+    kind: str,
+    title: str,
+    tmdb_id: int,
+    year: Optional[int] = None,
+    tvdb_id: Optional[int] = None,
+    imdb_id: Optional[str] = None,
+    backdrop_path: Optional[str] = None,
+    backdrop_bytes: Optional[bytes] = None,
+    focus_x: float = 0.5,
+    focus_y: float = 0.5,
+    fit_mode: str = "cover",
+    zoom: float = 1.0,
+    resolution: str = "1080p",
+    save_local: bool = True,
+    upload_gdrive: Optional[bool] = None,
+) -> Dict[str, Any]:
+    """Render + file 16:9 background art (``- Background.jpg``) for a media item.
+
+    Plex background art per its recommended dimensions: ``resolution`` ``"1080p"``
+    = 1920x1080, ``"4k"`` = 3840x2160. Plain framed artwork (no logo/gradient),
+    filed into poster_cache as ``background`` so asset_renamerr applies it to
+    Plex (uploadArt) / Kometa. Always overwrites — a deliberate manual action.
+    """
+    cfg = full_config.cl2k_maker
+    kind = (kind or "").lower()
+    if kind not in _VALID_KINDS:
+        return {"status": "error", "reason": f"invalid kind {kind!r}"}
+    title, year = _backfill_title_year(
+        full_config, db, logger, kind=kind, tmdb_id=tmdb_id, title=title, year=year,
+        tvdb_id=tvdb_id, imdb_id=imdb_id,
+    )
+    if save_local and not cfg.output_dir:
+        return {"status": "error", "reason": "cl2k_maker.output_dir is not configured"}
+    if backdrop_bytes is None:
+        if not backdrop_path:
+            return {"status": "error", "reason": "no source art selected"}
+        backdrop_bytes = image_fetch.download(backdrop_path)
+    width, height = (3840, 2160) if (resolution or "").lower() == "4k" else (1920, 1080)
+    blob = renderer.render_framed_art(
+        backdrop_bytes=backdrop_bytes,
+        width=width,
+        height=height,
+        focus_x=focus_x,
+        focus_y=focus_y,
+        fit_mode=fit_mode,
+        zoom=zoom,
+    )
+    return _persist_poster(
+        db,
+        cfg,
+        logger,
+        sync_cfg=full_config.sync_gdrive,
+        blob=blob,
+        kind=kind,
+        title=title,
+        year=year,
+        tmdb_id=tmdb_id,
+        tvdb_id=tvdb_id,
+        imdb_id=imdb_id,
+        season_number=None,
+        backdrop_path=backdrop_path,
+        logo_source="background",
+        save_local=save_local,
+        upload_gdrive=upload_gdrive,
+        image_type="background",
+        asset_suffix=" - Background",
+        ext=".jpg",
+    )
+
+
 def generate_logo_asset(
     *,
     db: ChubDB,
