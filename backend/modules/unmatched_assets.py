@@ -458,6 +458,15 @@ class UnmatchedAssets(ChubModule):
             ignored_items: List[Dict[str, Any]] = []
             locked_items: List[Dict[str, Any]] = []
             for media in eligible:
+                # Seasons have no clear logos (providers are show-level only);
+                # asset_renamerr neither evaluates nor records season+logo, so
+                # never count one here either (guards against stale rows).
+                if (
+                    image_type == "logo"
+                    and media.get("asset_type") == "show"
+                    and media.get("season_number") is not None
+                ):
+                    continue
                 row = index.get((media.get("id"), image_type))
                 if not row:
                     continue  # not evaluated → not counted
@@ -534,6 +543,13 @@ class UnmatchedAssets(ChubModule):
                 "reasons": {},
             }
             for image_type in active_types:
+                # Same season+logo guard as the per-type counts above.
+                if (
+                    image_type == "logo"
+                    and media.get("asset_type") == "show"
+                    and media.get("season_number") is not None
+                ):
+                    continue
                 row = index.get((mid, image_type))
                 if not row:
                     continue  # not evaluated → contributes nothing
