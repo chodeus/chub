@@ -227,16 +227,25 @@ def external_ids(
 
 @router.get("/details", summary="Canonical TMDB title + year for an id")
 def details(
-    tmdb_id: int = Query(...),
+    tmdb_id: Optional[int] = Query(None),
+    tvdb_id: Optional[int] = Query(None),
+    imdb_id: Optional[str] = Query(None),
     media_type: str = Query("movie", alias="type"),
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
-    """Title + release year for a tmdb id, so an id-only entry (paste / Edit IDs)
-    fills the header and the DAPS filename instead of saving as bare id tags."""
+    """Title + release year for an id, so an id-only entry (paste / Edit IDs / deep
+    link) shows the real name in the header instead of bare id tags. Resolves a
+    usable TMDB id in order: ``tmdb_id`` → TVDB → IMDB (matching the save-time
+    backfill), then reads the canonical title/year."""
     tmdb = TMDBClient(load_config().tmdb, db, logger)
     mt = "movie" if media_type == "movie" else "tv"
-    d = tmdb.get_details(tmdb_id, mt) or {}
+    resolved = tmdb_id or None
+    if not resolved and tvdb_id:
+        resolved = tmdb.find_tmdb_id(str(tvdb_id), "tvdb_id", mt)
+    if not resolved and imdb_id:
+        resolved = tmdb.find_tmdb_id(str(imdb_id), "imdb_id", mt)
+    d = (tmdb.get_details(resolved, mt) if resolved else None) or {}
     return ok("ok", {"title": d.get("title"), "year": d.get("year")})
 
 
