@@ -1087,7 +1087,11 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
     const runGenerate = useCallback(async () => {
         setBusy(true);
         try {
-            const resp = await cl2kMakerAPI.generate({ ...baseRequest, force: false });
+            // Building a poster here is a deliberate, one-off action, so always
+            // overwrite — "already generated" (a stale provenance row, even after
+            // the file was deleted) shouldn't block a manual Generate. The skip is
+            // only meant for the unattended scheduled batch run.
+            const resp = await cl2kMakerAPI.generate({ ...baseRequest, force: true });
             savedToast(toast, resp?.data, 'Generated');
         } catch (err) {
             toast.error(err.message || 'Generate failed');
@@ -1134,7 +1138,8 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                 zoom: fitMode === 'fit' || fitMode === 'extend' ? zoom : 1,
                 logo_scale: logoScale,
                 logo_y_offset: logoYOffset,
-                force: false,
+                // Deliberate manual action — overwrite existing season posters too.
+                force: true,
             });
             const results = resp?.data?.results || [];
             const gen = results.filter(r => r.status === 'generated').length;
