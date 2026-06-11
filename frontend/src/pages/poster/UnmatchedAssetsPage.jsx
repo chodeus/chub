@@ -6,8 +6,14 @@ import { postersAPI } from '../../utils/api/posters.js';
 import { systemAPI } from '../../utils/api/system.js';
 import { copyText } from '../../utils/clipboard.js';
 import { buildPosterRequestText, formatId } from '../../utils/posterRequest.js';
+import { extensionCapability } from '../../extensions/index.js';
 import { Button, IconButton, Modal, PageHeader } from '../../components/ui/index.js';
 import Spinner from '../../components/ui/Spinner.jsx';
+
+// Optional extension hook: (item) => { to, title, ariaLabel, icon } | null.
+// Renders an extra per-row action link (e.g. a poster-maker shortcut) when an
+// extension registers it; null on main.
+const rowActionFor = extensionCapability('unmatchedAssets.rowAction');
 
 const SUMMARY_TYPES = [
     { key: 'movies', label: 'Movies', icon: '🎬' },
@@ -443,6 +449,21 @@ const UnmatchedList = ({ items, onRefresh, typeKey: typeKeyProp, onTypeChange })
                                         {formatId(item.tvdb_id) || '—'}
                                     </td>
                                     <td className="px-3 py-2 text-right whitespace-nowrap">
+                                        {(() => {
+                                            const action = rowActionFor?.(item);
+                                            return action ? (
+                                                <Link
+                                                    to={action.to}
+                                                    className="inline-flex items-center justify-center w-8 h-8 rounded text-tertiary hover:text-accent hover:bg-surface-alt align-middle"
+                                                    aria-label={action.ariaLabel}
+                                                    title={action.title}
+                                                >
+                                                    <span className="material-symbols-outlined text-base">
+                                                        {action.icon}
+                                                    </span>
+                                                </Link>
+                                            ) : null;
+                                        })()}
                                         {item._type !== 'collection' && (
                                             <IconButton
                                                 icon="content_copy"

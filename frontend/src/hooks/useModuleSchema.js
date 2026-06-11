@@ -2,12 +2,13 @@ import { useState, useEffect, useCallback } from 'react';
 import { modulesAPI } from '../utils/api/modules.js';
 import { adaptModuleSchema, mergeSchemas } from '../utils/schemaAdapter.js';
 import { SETTINGS_SCHEMA } from '../utils/constants/settings_schema.js';
+import { withExtensionConfigModuleKeys } from '../extensions/index.js';
 
 /**
  * Known config module keys that have Pydantic models on the backend.
  * Matches the fields in ChubConfig (backend/util/config.py).
  */
-const CONFIG_MODULE_KEYS = [
+const CORE_CONFIG_MODULE_KEYS = [
     'tmdb',
     'fanart',
     'sync_gdrive',
@@ -25,6 +26,9 @@ const CONFIG_MODULE_KEYS = [
     'plex_maintenance',
     'unmatched_assets',
 ];
+
+// Extension config keys spliced in (src/extensions) — identity on main.
+const CONFIG_MODULE_KEYS = withExtensionConfigModuleKeys(CORE_CONFIG_MODULE_KEYS);
 
 const MODULE_SETTINGS_SCHEMA = SETTINGS_SCHEMA.filter(schema =>
     CONFIG_MODULE_KEYS.includes(schema.key)

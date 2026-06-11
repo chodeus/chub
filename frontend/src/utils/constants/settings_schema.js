@@ -1,5 +1,10 @@
 // web/static/js/settings/settings_schema.js
-export const SETTINGS_SCHEMA = [
+import {
+    withExtensionSettingsSchema,
+    withExtensionSettingsModules,
+} from '../../extensions/index.js';
+
+const CORE_SETTINGS_SCHEMA = [
     {
         key: 'tmdb',
         label: 'TMDB',
@@ -112,12 +117,17 @@ export const SETTINGS_SCHEMA = [
                 required: false,
                 placeholder:
                     '{\n  "access_token": "ya29.a0AfH6SMBEXAMPLEEXAMPLETOKEN",\n  "refresh_token": "1",\n  "scope": "https://www.googleapis.com/auth/drive",\n  "token_type": "Bearer",\n  "expiry_date": 1712345678901\n}',
-                conditional: {
-                    field: 'gdrive_sa_location',
-                    condition: 'is_empty',
-                },
+                // Intentionally NOT hidden when a service account is set: you can
+                // sync via the SA (reads need no quota) yet still upload via OAuth
+                // (as you), since an SA can't own files in a personal Drive.
                 description:
-                    'OAuth2 token JSON. Only used when no service-account file is set above.',
+                    'OAuth2 token JSON — authenticates as YOU, so uploaded posters are owned by ' +
+                    'you and can be shared (unlike a service account, which has no storage quota ' +
+                    'and cannot own files in a personal Drive). Used when no service-account file ' +
+                    'is set. To get it: install rclone (rclone.org/install), run ' +
+                    'rclone authorize "drive" (or rclone authorize "drive" "CLIENT_ID" ' +
+                    '"CLIENT_SECRET" with your own OAuth app), sign in + authorize in the browser, ' +
+                    'then paste the entire token JSON (from { to }) here.',
             },
             {
                 key: 'gdrive_list',
@@ -1369,7 +1379,7 @@ export const SETTINGS_SCHEMA = [
     },
 ];
 
-export const SETTINGS_MODULES = [
+const CORE_SETTINGS_MODULES = [
     {
         name: 'TMDB',
         key: 'tmdb',
@@ -1453,3 +1463,7 @@ export const SETTINGS_MODULES = [
         description: 'Handle and review assets that couldn\u2019t be matched.',
     },
 ];
+
+// Extension module blocks spliced in (src/extensions) \u2014 identity on main.
+export const SETTINGS_SCHEMA = withExtensionSettingsSchema(CORE_SETTINGS_SCHEMA);
+export const SETTINGS_MODULES = withExtensionSettingsModules(CORE_SETTINGS_MODULES);
