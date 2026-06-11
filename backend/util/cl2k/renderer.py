@@ -217,6 +217,25 @@ def _whiten(logo: Image) -> None:
     logo.colorize(color=Color("white"), alpha=Color("white"))
 
 
+def process_logo(logo_bytes: bytes, *, whiten: bool = True) -> Tuple[bytes, int, int]:
+    """Trim transparent padding and (optionally) whiten a clear logo.
+
+    Returns ``(png_bytes, width, height)`` for the *trimmed* result — the exact
+    bytes and dimensions :func:`_place_logo` would size and place. The frontend
+    uses this for the live logo overlay: drawing these bytes at the box derived
+    from ``width``/``height`` + the logo geometry matches the rendered placement
+    pixel-for-pixel, so the size/position sliders preview instantly without a
+    server render per drag.
+    """
+    with Image(blob=logo_bytes) as logo:
+        logo.background_color = Color("transparent")
+        logo.trim(color=Color("transparent"))
+        if whiten:
+            _whiten(logo)
+        logo.format = "png"
+        return logo.make_blob(), logo.width, logo.height
+
+
 def logo_is_usable(logo_bytes: bytes, min_width: int = geo.LOGO_MIN_WIDTH) -> bool:
     """True if the clear logo is sharp enough to place at the CL2K logo box.
 
@@ -389,6 +408,7 @@ def render_cl2k(
     crop: Optional[Tuple[float, float, float, float]] = None,
     v_pos: float = 0.0,
     band_label: str = "",
+    place_logo: bool = True,
 ) -> bytes:
     """Render a CL2K poster and return JPEG bytes.
 
@@ -425,16 +445,22 @@ def render_cl2k(
         with Image(filename=str(geo.GRADIENT_PNG)) as grad:
             base.composite(grad, left=0, top=0)
 
-        if not logo_bytes and title:
-            # No clear logo found (TMDB -> fanart exhausted): synthesise a
-            # typeset wordmark and place it through the same logo path so the
-            # poster stays logo-shaped.
-            logo_bytes = generate_text_logo(title, title_font)
-        if logo_bytes:
-            _place_logo(
-                base, logo_bytes, baseline, logo_max_width, whiten, logo_scale,
-                logo_y_offset,
-            )
+        # ``place_logo=False`` renders the logo-less base (backdrop + gradient +
+        # label + border) the frontend overlays a live logo on top of, so the
+        # size/position sliders move the logo instantly without re-rendering. The
+        # logo is baked in only on a real generate (or when a text-wordmark
+        # fallback is needed, which the overlay can't reproduce client-side).
+        if place_logo:
+            if not logo_bytes and title:
+                # No clear logo found (TMDB -> fanart exhausted): synthesise a
+                # typeset wordmark and place it through the same logo path so the
+                # poster stays logo-shaped.
+                logo_bytes = generate_text_logo(title, title_font)
+            if logo_bytes:
+                _place_logo(
+                    base, logo_bytes, baseline, logo_max_width, whiten, logo_scale,
+                    logo_y_offset,
+                )
 
         label_kerning = geo.tracking_to_kerning(geo.LABEL_TRACKING)
         if band_label:

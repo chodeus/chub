@@ -110,6 +110,17 @@ export const cl2kMakerAPI = {
             { useCache: true, cacheTTL: 5 * 60 * 1000 }
         ),
 
+    /** Canonical TMDB title + year for an id (fills an id-only entry). */
+    details: (tmdbId, type = 'movie') =>
+        apiCore.get(`/cl2k-maker/details?${qs({ tmdb_id: tmdbId, type })}`, {
+            useCache: true,
+            cacheTTL: 5 * 60 * 1000,
+        }),
+
+    /** Trimmed + whitened logo (b64 PNG + natural size + max_width) for the live
+     *  overlay. `req` = { logo_path } or { logo_b64 }. */
+    logoProcessed: req => apiCore.post('/cl2k-maker/logo-processed', req),
+
     /** Render a preview JPEG without saving. Returns a Blob. */
     preview: req => postBlob('/cl2k-maker/preview', req),
 

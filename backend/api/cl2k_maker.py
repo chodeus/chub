@@ -33,6 +33,7 @@ from backend.modules.cl2k_maker import (
     save_finished_poster,
 )
 from backend.util.cl2k.image_fetch import TMDB_IMAGE_CDN, download as download_image
+from backend.util.cl2k.renderer import process_logo
 from backend.util.config import load_config
 from backend.util.database import ChubDB
 from backend.util.tmdb import TMDBClient
@@ -88,6 +89,11 @@ class GenerateRequest(BaseModel):
     # COLLECTION / season label when set.
     band_label: str = ""
     force: bool = False
+    # Preview-only: render the logo-less base (backdrop + gradient + label + border)
+    # so the frontend can overlay a live logo on top — the size/position sliders
+    # then move the logo without a server render per drag. Always True on generate
+    # (the logo is baked into the saved poster).
+    place_logo: bool = True
     # Save destinations (independent). upload_gdrive=None falls back to the module
     # config flag; at least one must be selected at save time.
     save_local: bool = True
@@ -219,6 +225,56 @@ def external_ids(
     return ok("ok", tmdb.external_ids(tmdb_id, media_type))
 
 
+@router.get("/details", summary="Canonical TMDB title + year for an id")
+def details(
+    tmdb_id: int = Query(...),
+    media_type: str = Query("movie", alias="type"),
+    db: ChubDB = Depends(get_database),
+    logger: Any = Depends(get_cl2k_logger),
+) -> JSONResponse:
+    """Title + release year for a tmdb id, so an id-only entry (paste / Edit IDs)
+    fills the header and the DAPS filename instead of saving as bare id tags."""
+    tmdb = TMDBClient(load_config().tmdb, db, logger)
+    mt = "movie" if media_type == "movie" else "tv"
+    d = tmdb.get_details(tmdb_id, mt) or {}
+    return ok("ok", {"title": d.get("title"), "year": d.get("year")})
+
+
+class LogoProcessRequest(BaseModel):
+    logo_path: Optional[str] = None
+    logo_b64: Optional[str] = None  # custom uploaded logo (PNG, base64)
+
+
+@router.post("/logo-processed", summary="Trimmed + whitened logo for the live overlay")
+def logo_processed(
+    req: LogoProcessRequest,
+    db: ChubDB = Depends(get_database),
+    logger: Any = Depends(get_cl2k_logger),
+) -> JSONResponse:
+    """Return the trimmed + whitened logo (PNG, base64) and its natural size, plus
+    the configured ``logo_max_width``. The frontend draws these bytes at the box
+    derived from the logo geometry so the size/position sliders preview live —
+    matching :func:`render_cl2k`'s placement without a render per drag."""
+    raw = _resolve_logo_bytes(req.logo_path, req.logo_b64)
+    if not raw:
+        return error("No logo provided", "NO_LOGO")
+    cfg = load_config().cl2k_maker
+    try:
+        png, width, height = process_logo(raw, whiten=cfg.whiten_logo)
+    except Exception as exc:
+        logger.warning(f"cl2k: logo processing failed: {exc}")
+        return error("Could not process that logo", "LOGO_PROCESS")
+    return ok(
+        "ok",
+        {
+            "b64": base64.b64encode(png).decode(),
+            "width": width,
+            "height": height,
+            "max_width": cfg.logo_max_width,
+        },
+    )
+
+
 @router.post("/preview", summary="Render a CL2K poster without saving")
 def preview(
     req: GenerateRequest,
@@ -248,6 +304,7 @@ def preview(
         band_label=req.band_label,
         logo_scale=req.logo_scale,
         logo_y_offset=req.logo_y_offset,
+        place_logo=req.place_logo,
     )
     if blob is None:
         return error("No textless backdrop available", "NO_BACKDROP")

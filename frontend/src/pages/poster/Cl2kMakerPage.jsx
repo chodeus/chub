@@ -122,6 +122,138 @@ const withExternalIds = async base => {
     }
 };
 
+// ─── Hover tooltip ───────────────────────────────────────────────────────────
+// Lightweight hover/focus tooltip. Inline-styled (no utility classes — those are
+// hand-rolled in this app and an undefined one renders nothing), so it works
+// anywhere. `InfoDot` is the common case: a small help glyph beside a label.
+const Tooltip = ({ text, children }) => {
+    const [show, setShow] = useState(false);
+    if (!text) return children;
+    return (
+        <span
+            style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}
+            onMouseEnter={() => setShow(true)}
+            onMouseLeave={() => setShow(false)}
+            onFocus={() => setShow(true)}
+            onBlur={() => setShow(false)}
+        >
+            {children}
+            {show && (
+                <span
+                    role="tooltip"
+                    style={{
+                        position: 'absolute',
+                        bottom: 'calc(100% + 6px)',
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        zIndex: 60,
+                        width: 'max-content',
+                        maxWidth: 260,
+                        padding: '6px 8px',
+                        borderRadius: 6,
+                        fontSize: 11,
+                        lineHeight: 1.45,
+                        fontWeight: 400,
+                        textAlign: 'left',
+                        color: '#fff',
+                        background: 'rgba(17, 18, 30, 0.98)',
+                        border: '1px solid rgba(255, 255, 255, 0.14)',
+                        boxShadow: '0 6px 18px rgba(0, 0, 0, 0.45)',
+                        pointerEvents: 'none',
+                        whiteSpace: 'normal',
+                    }}
+                >
+                    {text}
+                </span>
+            )}
+        </span>
+    );
+};
+
+const InfoDot = ({ text }) => (
+    <Tooltip text={text}>
+        <span
+            tabIndex={0}
+            aria-label={text}
+            className="material-symbols-outlined"
+            style={{
+                fontSize: 15,
+                marginLeft: 4,
+                color: 'var(--color-text-tertiary, #8b8fa3)',
+                cursor: 'help',
+                userSelect: 'none',
+            }}
+        >
+            help
+        </span>
+    </Tooltip>
+);
+
+// ─── Logo placement geometry (mirrors renderer._place_logo) ──────────────────
+// Same maths the backend uses to size + bottom-align the clear logo, so a CSS
+// overlay drawn with /logo-processed bytes lands exactly where a render would.
+// All px are on the locked 1000×1500 CL2K canvas.
+const CL2K_CANVAS_W = 1000;
+const CL2K_CANVAS_H = 1500;
+const CL2K_LOGO_BASELINE = 1300; // geo.MAIN_LOGO_BOTTOM / COLLECTION_LOGO_BOTTOM
+const CL2K_LOGO_WIDTH_MAX = 800; // geo.LOGO_WIDTH_MAX (hard cap)
+const CL2K_LOGO_ZONE_TOP = 1100; // geo.LOGO_ZONE_TOP
+
+// natW/natH = trimmed logo dims (from /logo-processed); maxWidth = cfg.logo_max_width.
+// Returns the overlay box as percentages of the 2:3 preview, or null.
+const logoBoxPct = ({ natW, natH, maxWidth, scale = 1, yOffset = 0 }) => {
+    if (!natW || !natH) return null;
+    const s = Math.max(0.25, Math.min(scale || 1, 3));
+    const off = Math.max(-600, Math.min(Math.round(yOffset || 0), 200));
+    let targetW = Math.min(maxWidth || 600, CL2K_LOGO_WIDTH_MAX);
+    let targetH = Math.round((natH * targetW) / natW);
+    const maxH = Math.round((CL2K_LOGO_BASELINE - CL2K_LOGO_ZONE_TOP) * s);
+    if (targetH > maxH) {
+        targetH = maxH;
+        targetW = Math.round((natW * targetH) / natH);
+    }
+    let top = CL2K_LOGO_BASELINE - targetH + off;
+    top = Math.max(0, Math.min(top, CL2K_CANVAS_H - targetH));
+    const left = CL2K_CANVAS_W / 2 - targetW / 2;
+    return {
+        left: (left / CL2K_CANVAS_W) * 100,
+        top: (top / CL2K_CANVAS_H) * 100,
+        width: (targetW / CL2K_CANVAS_W) * 100,
+        height: (targetH / CL2K_CANVAS_H) * 100,
+    };
+};
+
+// Live logo drawn over the logo-less preview base. Moves instantly with the
+// size/position sliders — no server render per drag. `logo` = { dataUrl, width,
+// height, maxWidth } from /logo-processed.
+const LogoOverlay = ({ logo, scale, yOffset }) => {
+    if (!logo?.dataUrl) return null;
+    const box = logoBoxPct({
+        natW: logo.width,
+        natH: logo.height,
+        maxWidth: logo.maxWidth,
+        scale,
+        yOffset,
+    });
+    if (!box) return null;
+    return (
+        <img
+            src={logo.dataUrl}
+            alt=""
+            aria-hidden="true"
+            style={{
+                position: 'absolute',
+                left: `${box.left}%`,
+                top: `${box.top}%`,
+                width: `${box.width}%`,
+                height: `${box.height}%`,
+                objectFit: 'fill',
+                pointerEvents: 'none',
+            }}
+        />
+    );
+};
+
 const Cl2kMakerPage = () => {
     const toast = useToast();
     const [searchParams] = useSearchParams();
@@ -450,6 +582,19 @@ const TitlePicker = ({ onPick, toast }) => {
                 tvdb_id: parsed.source === 'tvdb_id' ? Number(parsed.id) : null,
                 imdb_id: parsed.source === 'imdb_id' ? parsed.id : null,
             };
+            // Backfill the canonical title/year so the header reads the real name
+            // and the saved DAPS filename isn't reduced to bare id tags. Collections
+            // carry their own title; a lookup miss is non-fatal (the backend also
+            // backfills from the id at save time).
+            if (pasteKind !== 'collection') {
+                try {
+                    const d = await cl2kMakerAPI.details(Number(tmdbId), pasteKind);
+                    base.title = d?.data?.title || '';
+                    base.year = d?.data?.year ?? null;
+                } catch {
+                    /* leave blank — backend fills it from the id on save */
+                }
+            }
             // Fill in whichever of tvdb/imdb the paste didn't already supply.
             onPick(await withExternalIds(base));
         } catch (err) {
@@ -718,6 +863,44 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
     const [previewing, setPreviewing] = useState(false);
     const [busy, setBusy] = useState(false);
 
+    // A real (chosen/custom) logo is drawn as a live overlay on the logo-less base
+    // so the size/position sliders move it without a server render. No logo = a
+    // text wordmark, which is baked into the base instead (can't overlay it).
+    const hasLogo = !!(logo || customLogo);
+    const [processedLogo, setProcessedLogo] = useState(null);
+    useEffect(() => {
+        if (!hasLogo) return undefined; // no fetch; `overlayLogo` below hides it
+        let cancelled = false;
+        (async () => {
+            try {
+                const resp = await cl2kMakerAPI.logoProcessed(
+                    customLogo?.b64 ? { logo_b64: customLogo.b64 } : { logo_path: logo }
+                );
+                const d = resp?.data;
+                if (!cancelled) {
+                    setProcessedLogo(
+                        d?.b64
+                            ? {
+                                  dataUrl: `data:image/png;base64,${d.b64}`,
+                                  width: d.width,
+                                  height: d.height,
+                                  maxWidth: d.max_width,
+                              }
+                            : null
+                    );
+                }
+            } catch {
+                if (!cancelled) setProcessedLogo(null);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [hasLogo, logo, customLogo]);
+    // Only show the overlay while a logo is selected (the fetched bytes may lag a
+    // deselect by a tick). Derived, so no reset-setState in the effect above.
+    const overlayLogo = hasLogo ? processedLogo : null;
+
     const isSeasonPoster = item.kind === 'show' && String(seasonNumber).trim() !== '';
     const effectiveKind = isSeasonPoster ? 'season' : item.kind;
 
@@ -834,17 +1017,101 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
         });
     }, []);
 
+    // Read the latest request inside the debounced effect without making its
+    // identity a trigger (the effect fires off baseSig, below). The 550ms debounce
+    // means the ref is always current by the time the timeout reads it.
+    const baseRequestRef = useRef(baseRequest);
+    useEffect(() => {
+        baseRequestRef.current = baseRequest;
+    }, [baseRequest]);
+
+    // Signature of the fields that change the logo-less base. Logo size/position
+    // (and title) are excluded when a real logo is chosen — the overlay handles
+    // those live — and included only for the baked text-wordmark fallback.
+    const baseSig = useMemo(
+        () =>
+            JSON.stringify({
+                tab,
+                k: effectiveKind,
+                id: item.tmdb_id,
+                sn: isSeasonPoster ? seasonNumber : null,
+                bd: backdrop,
+                fm: fitMode,
+                c: (fitMode === 'fit' || fitMode === 'extend') && crop ? crop : null,
+                vp: vPos,
+                fx: focusX,
+                fy: focusY,
+                bl: isSeasonPoster ? '' : bandLabel,
+                pl: !hasLogo,
+                ti: hasLogo ? null : item.title,
+                ls: hasLogo ? null : logoScale,
+                ly: hasLogo ? null : logoYOffset,
+            }),
+        [
+            tab,
+            effectiveKind,
+            item.tmdb_id,
+            item.title,
+            isSeasonPoster,
+            seasonNumber,
+            backdrop,
+            fitMode,
+            crop,
+            vPos,
+            focusX,
+            focusY,
+            bandLabel,
+            hasLogo,
+            logoScale,
+            logoYOffset,
+        ]
+    );
+
+    // Auto-render the cheap logo-less base shortly after a base-affecting change
+    // settles — no more manual "Render preview" click for framing/backdrop/label.
+    // AI text-removal is skipped here (slow); the Refresh button runs the full
+    // render with AI when the user wants to see it.
+    useEffect(() => {
+        if (tab !== 'tmdb' && tab !== 'fanart') return undefined;
+        if (!backdrop) return undefined; // RenderPanel hides a stale preview when backdrop is null
+        let cancelled = false;
+        const handle = setTimeout(async () => {
+            setPreviewing(true);
+            try {
+                const blob = await cl2kMakerAPI.preview({
+                    ...baseRequestRef.current,
+                    place_logo: !hasLogo,
+                    remove_text: false,
+                    mask_b64: null,
+                });
+                if (!cancelled) setPreview(blob);
+            } catch {
+                /* auto-render stays quiet; the Refresh button surfaces errors */
+            } finally {
+                if (!cancelled) setPreviewing(false);
+            }
+        }, 550);
+        return () => {
+            cancelled = true;
+            clearTimeout(handle);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [baseSig]);
+
+    // Manual full refresh: re-render including AI text-removal (when enabled), and
+    // bake the logo only for the text-wordmark fallback (a chosen logo stays a
+    // live overlay so the sliders keep moving it).
     const runPreview = useCallback(async () => {
         setPreviewing(true);
         try {
-            const blob = await cl2kMakerAPI.preview(baseRequest);
+            const blob = await cl2kMakerAPI.preview({ ...baseRequest, place_logo: !hasLogo });
             setPreview(blob);
         } catch (err) {
             toast.error(err.message || 'Preview failed');
         } finally {
             setPreviewing(false);
         }
-    }, [baseRequest, setPreview, toast]);
+    }, [baseRequest, hasLogo, setPreview, toast]);
 
     const runGenerate = useCallback(async () => {
         setBusy(true);
@@ -994,6 +1261,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                     setLogoScale={setLogoScale}
                     logoYOffset={logoYOffset}
                     setLogoYOffset={setLogoYOffset}
+                    processedLogo={overlayLogo}
                     fitMode={fitMode}
                     setFitMode={setFitMode}
                     crop={crop}
@@ -1075,6 +1343,7 @@ const RenderPanel = ({
     setLogoScale,
     logoYOffset,
     setLogoYOffset,
+    processedLogo,
     fitMode,
     setFitMode,
     crop,
@@ -1193,7 +1462,10 @@ const RenderPanel = ({
                 {!isSeasonPoster && item.kind !== 'collection' && (
                     <div className="bg-surface border border-border rounded-lg p-3">
                         <label className="flex items-center gap-2 text-sm text-secondary">
-                            <span className="w-28 text-primary font-medium">Banner</span>
+                            <span className="w-28 text-primary font-medium inline-flex items-center">
+                                Banner
+                                <InfoDot text="Optional text in the CL2K bottom label band (e.g. a limited series). Overrides the automatic COLLECTION / season label." />
+                            </span>
                             <select
                                 value={bandLabel}
                                 onChange={e => setBandLabel(e.target.value)}
@@ -1206,9 +1478,6 @@ const RenderPanel = ({
                                 ))}
                             </select>
                         </label>
-                        <p className="text-xs text-tertiary mt-2">
-                            Optional bottom banner in the CL2K label band (e.g. a limited series).
-                        </p>
                     </div>
                 )}
 
@@ -1227,61 +1496,82 @@ const RenderPanel = ({
             <div className="flex flex-col gap-3">
                 <div className="bg-surface border border-border rounded-lg p-3">
                     <div className="flex items-center justify-between mb-2">
-                        <h3 className="text-sm font-medium text-primary">Preview</h3>
+                        <div className="flex items-center">
+                            <h3 className="text-sm font-medium text-primary">Preview</h3>
+                            <InfoDot text="Updates automatically as you change the backdrop, framing or label. The logo moves live as you drag its sliders. Refresh re-renders with AI text-removal applied." />
+                        </div>
                         <div className="flex items-center gap-3">
                             <GuidesToggle show={showGuides} onChange={setShowGuides} />
-                            <LoadingButton
-                                onClick={onPreview}
-                                loading={previewing}
-                                disabled={!backdrop}
-                                icon="visibility"
-                                size="small"
-                            >
-                                Render preview
-                            </LoadingButton>
+                            <Tooltip text="Re-render now, including AI text-removal if enabled. Not needed for framing or logo changes — those update on their own.">
+                                <LoadingButton
+                                    onClick={onPreview}
+                                    loading={previewing}
+                                    disabled={!backdrop}
+                                    icon="refresh"
+                                    size="small"
+                                >
+                                    Refresh
+                                </LoadingButton>
+                            </Tooltip>
                         </div>
                     </div>
                     <div className="relative aspect-[2/3] bg-black rounded overflow-hidden flex items-center justify-center">
-                        {previewUrl ? (
+                        {backdrop && previewUrl ? (
                             <>
                                 <img
                                     src={previewUrl}
                                     alt="CL2K preview"
                                     className="w-full h-full object-contain"
                                 />
+                                {processedLogo && (
+                                    <LogoOverlay
+                                        logo={processedLogo}
+                                        scale={logoScale}
+                                        yOffset={logoYOffset}
+                                    />
+                                )}
                                 {showGuides && <GuideOverlay />}
                             </>
                         ) : (
                             <span className="text-xs text-tertiary px-4 text-center">
-                                {backdrop
-                                    ? 'Click “Render preview”.'
-                                    : 'Select a backdrop to preview.'}
+                                {!backdrop
+                                    ? 'Select a backdrop to start.'
+                                    : previewing
+                                      ? 'Rendering preview…'
+                                      : 'Preview unavailable — tap Refresh.'}
                             </span>
                         )}
                     </div>
                 </div>
 
                 <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-2">
-                    <h3 className="text-sm font-medium text-primary">Output</h3>
+                    <div className="flex items-center">
+                        <h3 className="text-sm font-medium text-primary">Output</h3>
+                        <InfoDot text="Generate renders the final high-quality JPEG (logo baked in, AI fill applied) and saves it to the destinations ticked above." />
+                    </div>
                     <SaveTargets targets={saveTargets} />
-                    <LoadingButton
-                        onClick={onGenerate}
-                        loading={busy}
-                        disabled={!backdrop || saveTargets.noTarget}
-                        icon="save"
-                    >
-                        Generate &amp; save
-                    </LoadingButton>
-                    <div className="flex gap-2">
+                    <Tooltip text="Render the final poster and save it to the ticked destinations, named per the DAPS convention.">
                         <LoadingButton
-                            onClick={onPsdExport}
+                            onClick={onGenerate}
                             loading={busy}
-                            disabled={!backdrop}
-                            variant="secondary"
-                            icon="layers"
+                            disabled={!backdrop || saveTargets.noTarget}
+                            icon="save"
                         >
-                            Export .psd
+                            Generate &amp; save
                         </LoadingButton>
+                    </Tooltip>
+                    <div className="flex gap-2">
+                        <Tooltip text="Export a layered Photoshop .psd (backdrop + logo on separate layers) to fine-tune by hand.">
+                            <LoadingButton
+                                onClick={onPsdExport}
+                                loading={busy}
+                                disabled={!backdrop}
+                                variant="secondary"
+                                icon="layers"
+                            >
+                                Export .psd
+                            </LoadingButton>
+                        </Tooltip>
                         {backdropUrl && (
                             <a
                                 href={backdropUrl}
@@ -1542,9 +1832,9 @@ const clamp01 = v => Math.max(0, Math.min(1, v));
 const FULL_CROP = { x: 0, y: 0, w: 1, h: 1 };
 
 const FRAMING_HELP = {
-    cover: 'Drag to choose what stays in the 2:3 crop. The dimmed area is cut. Re-render the preview to see the result.',
-    fit: 'Drag a box around the subjects. That region is shrunk to fit the poster width; the mock on the right shows where it lands — sky is extended above it, and the bottom fades to black into the logo/gradient zone.',
-    extend: 'Drag a box around the subjects. They stay full-size; the empty bottom is filled by AI (your configured CL2K AI provider). The mock shows the free edge-extend placement — the AI fill is applied only when you Generate.',
+    cover: 'Drag on the photo to choose what stays in the 2:3 crop — the dimmed area is cut. The preview and the mini mock update as you drag.',
+    fit: 'Drag a box around the subjects: that region shrinks to the poster width, sky is extended above it, and the bottom fades to black into the logo zone. The mock shows where it lands.',
+    extend: 'Drag a box around the subjects: they stay full-size and the empty bottom is filled by AI on Generate. The mock shows the free edge-extend placeholder until then.',
 };
 
 // Live miniature of the final 2:3 canvas for fit/extend framing. Updates instantly
@@ -1788,7 +2078,10 @@ const CropFramer = ({
     return (
         <div className="bg-surface border border-border rounded-lg p-3">
             <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-medium text-primary">Crop framing</h3>
+                <div className="flex items-center">
+                    <h3 className="text-sm font-medium text-primary">Crop framing</h3>
+                    <InfoDot text="How the wide backdrop fills the tall 2:3 poster. Fill: crop to fill (pick the focal point). Fit: shrink the whole width onto black. Extend (AI): keep subjects full-size and let AI paint the empty bottom on Generate." />
+                </div>
                 <div className="flex items-center gap-1">
                     <Button
                         onClick={() => setFitMode('cover')}
@@ -1826,7 +2119,10 @@ const CropFramer = ({
             </p>
             {isBox && (
                 <label className="flex items-center gap-2 text-xs text-secondary mb-2">
-                    <span className="shrink-0">Vertical position</span>
+                    <span className="shrink-0 inline-flex items-center">
+                        Vertical position
+                        <InfoDot text="Where the fitted photo sits in the frame. Low = pinned to the top; higher slides it down, adding sky/headroom above the subjects." />
+                    </span>
                     <input
                         type="range"
                         min="0"
@@ -1880,16 +2176,25 @@ const CropFramer = ({
                         />
                     )}
                 </div>
-                {isBox && (
-                    <FitMock
-                        imageUrl={imageUrl}
-                        ratio={ratio}
-                        crop={crop}
-                        vPos={vPos}
-                        label={mockLabel}
-                        labelYFrac={labelYFrac}
-                    />
-                )}
+                <FitMock
+                    imageUrl={imageUrl}
+                    ratio={ratio}
+                    crop={
+                        isBox
+                            ? crop
+                            : coverRect
+                              ? {
+                                    x: coverRect.left,
+                                    y: coverRect.top,
+                                    w: coverRect.w,
+                                    h: coverRect.h,
+                                }
+                              : null
+                    }
+                    vPos={isBox ? vPos : 0}
+                    label={mockLabel}
+                    labelYFrac={labelYFrac}
+                />
             </div>
         </div>
     );
@@ -2091,7 +2396,10 @@ const LogoSelector = ({
             )}
             {onScale && (
                 <label className="mt-2 flex items-center gap-2 text-xs text-secondary">
-                    <span className="w-24">Logo size</span>
+                    <span className="w-28 inline-flex items-center">
+                        Logo size
+                        <InfoDot text="100% = the CL2K guide box. Raise it for a tall/boxy (sticker-style) logo that would otherwise render small — width is always capped by the guides." />
+                    </span>
                     <input
                         type="range"
                         min="50"
@@ -2106,7 +2414,10 @@ const LogoSelector = ({
             )}
             {onYOffset && (
                 <label className="mt-2 flex items-center gap-2 text-xs text-secondary">
-                    <span className="w-24">Logo position</span>
+                    <span className="w-28 inline-flex items-center">
+                        Logo position
+                        <InfoDot text="0 = the locked baseline. Negative moves the logo up, positive down — hand-made posters hang tall logos ~30–50 below." />
+                    </span>
                     <input
                         type="range"
                         min="-300"
@@ -2122,22 +2433,8 @@ const LogoSelector = ({
                 </label>
             )}
             <p className="mt-2 text-xs text-tertiary">
-                Whitened, trimmed and placed on the CL2K guides automatically.
-                {onScale && (
-                    <>
-                        {' '}
-                        Size 100% = the CL2K guide box; raise it for a tall/boxy logo
-                        (sticker-style) that would otherwise render small — width is always capped
-                        by the guides.
-                    </>
-                )}
-                {onYOffset && (
-                    <>
-                        {' '}
-                        Position 0 = the locked baseline; negative moves the logo up, positive down
-                        (hand-made posters hang tall logos ~30–50 below).
-                    </>
-                )}{' '}
+                Whitened, trimmed and placed on the CL2K guides automatically — it moves live in the
+                preview as you drag.{' '}
                 {((onScale && Math.round((scale ?? 1) * 100) !== 100) ||
                     (onYOffset && (yOffset ?? 0) !== 0)) && (
                     <button
