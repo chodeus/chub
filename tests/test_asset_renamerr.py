@@ -378,6 +378,28 @@ def test_kometa_flat_naming(tmp_path):
     assert os.path.exists(path)
 
 
+def test_kometa_flat_naming_blocks_path_traversal(tmp_path):
+    """When a media row has no folder, _kometa_folder falls back to the title;
+    with asset_folders off that string is spliced straight into the filename
+    under dest_root. A title carrying path separators must be caught by the
+    final-path containment guard, not silently written outside destination_dir."""
+    dest = tmp_path / "assets"
+    dest.mkdir()
+    src = _make_src(tmp_path)
+    m = make_module(
+        apply_method="kometa",
+        action_type="copy",
+        asset_folders=False,
+        destination_dir=str(dest),
+    )
+    evil = _media(folder=None, title="../evil")
+    applied, reason = m._apply_kometa(evil, "logo", "local", src, None)
+    assert applied is False
+    assert "traversal" in reason.lower()
+    # Nothing escaped into the parent of destination_dir.
+    assert not (tmp_path / "evil (2023)_logo.png").exists()
+
+
 def test_apply_chosen_asset_copies_and_locks(tmp_path, db):
     """The manual artwork picker's backend: apply_chosen_asset copies the chosen
     file (kometa path), records an 'applied' provenance row, and sets the
