@@ -80,6 +80,11 @@ const ART_SOURCES = [
     { key: 'upload', label: 'Upload', icon: 'upload' },
 ];
 
+// Stable identity for an uploaded image ({ b64, name }) in change-detection
+// signatures. A b64-prefix slice can collide: the first ~24 bytes of a JPEG are
+// a format header that different files from the same exporter share.
+const customSig = c => (c ? `${c.name}:${c.b64?.length || 0}` : null);
+
 const SourceSelector = ({ value, onChange, sources = ART_SOURCES }) => (
     <div className="flex items-center gap-1 flex-wrap">
         {sources.map(s => (
@@ -816,6 +821,10 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
     const [loadingArt, setLoadingArt] = useState(true);
     const [backdrop, setBackdrop] = useState(saved.backdrop ?? null); // file_path | absolute url
     const [logo, setLogo] = useState(saved.logo ?? null);
+    // Per-picker sources on the Poster page (persisted so a restored fanart/plex
+    // selection comes back with its own grid showing, not an unhighlighted TMDB).
+    const [backdropSource, setBackdropSource] = useState(saved.backdropSource ?? 'tmdb');
+    const [logoSource, setLogoSource] = useState(saved.logoSource ?? 'tmdb');
     // Custom uploaded logo (one-off, not persisted): { b64, name, url }. When set
     // it overrides the chosen TMDB/fanart `logo` path.
     const [customLogo, setCustomLogo] = useState(null);
@@ -878,6 +887,8 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             tab,
             backdrop,
             logo,
+            backdropSource,
+            logoSource,
             fitMode,
             crop,
             vPos,
@@ -896,6 +907,8 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
         tab,
         backdrop,
         logo,
+        backdropSource,
+        logoSource,
         fitMode,
         crop,
         vPos,
@@ -927,7 +940,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
     const hasLogo = !!(logo || customLogo);
     // Strokes are keyed to the (logo, whiten) they were drawn over: a stale key
     // makes the mask a derived no-op instead of needing a reset-in-effect.
-    const flipKey = `${customLogo?.b64?.slice(0, 32) || logo}|${effectiveWhiten}`;
+    const flipKey = `${customSig(customLogo) || logo}|${effectiveWhiten}`;
     const [logoFlip, setLogoFlip] = useState(null); // { key, b64 }
     const logoFlipB64 = logoFlip && logoFlip.key === flipKey ? logoFlip.b64 : null;
     const setLogoFlipB64 = useCallback(
@@ -1149,7 +1162,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                 id: item.tmdb_id,
                 sn: isSeasonPoster ? seasonNumber : null,
                 bd: backdrop,
-                cbd: customBackdrop?.b64?.slice(0, 32) || null,
+                cbd: customSig(customBackdrop),
                 fm: fitMode,
                 c: (fitMode === 'fit' || fitMode === 'extend') && crop ? crop : null,
                 vp: vPos,
@@ -1189,8 +1202,9 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
     // AI text-removal is skipped here (slow); the Refresh button runs the full
     // render with AI when the user wants to see it.
     useEffect(() => {
-        if (tab !== 'tmdb' && tab !== 'fanart') return undefined;
-        if (!backdrop) return undefined; // RenderPanel hides a stale preview when backdrop is null
+        if (tab !== 'poster') return undefined;
+        // No art chosen yet (picker path or custom upload) — nothing to render.
+        if (!backdrop && !customBackdrop) return undefined;
         let cancelled = false;
         const handle = setTimeout(async () => {
             setPreviewing(true);
@@ -1311,7 +1325,10 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
 
     // Per-source art map for the per-picker SourceSelector (Poster page picks
     // backdrop + logo sources independently from this).
-    const artBySource = { tmdb: tmdbArt, fanart: fanartArt, plex: plexArt };
+    const artBySource = useMemo(
+        () => ({ tmdb: tmdbArt, fanart: fanartArt, plex: plexArt }),
+        [tmdbArt, fanartArt, plexArt]
+    );
     const isRenderTab = tab === 'poster';
 
     // TMDB + fanart + Plex logos merged, for the uploaded-canvas tabs (which have
@@ -1390,12 +1407,18 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                         </button>
                     );
                 })}
-                {/* More ▾ dropdown */}
-                <div className="relative">
+                {/* More ▾ dropdown. Closes when focus leaves the button + menu
+                    (relatedTarget containment) so keyboard users can Tab into the
+                    items without the menu vanishing under them. */}
+                <div
+                    className="relative"
+                    onBlur={e => {
+                        if (!e.currentTarget.contains(e.relatedTarget)) setMoreOpen(false);
+                    }}
+                >
                     <button
                         type="button"
                         onClick={() => setMoreOpen(o => !o)}
-                        onBlur={() => setTimeout(() => setMoreOpen(false), 150)}
                         className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm border transition-colors ${
                             MORE_TABS.some(t => t.key === tab)
                                 ? 'bg-primary text-white border-primary'
@@ -1408,26 +1431,34 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                     </button>
                     {moreOpen && (
                         <div className="absolute left-0 mt-1 z-10 min-w-44 bg-surface border border-border rounded-md shadow-lg p-1 flex flex-col">
-                            {MORE_TABS.map(t => (
-                                <button
-                                    key={t.key}
-                                    type="button"
-                                    onMouseDown={() => {
-                                        setTab(t.key);
-                                        setMoreOpen(false);
-                                    }}
-                                    className={`inline-flex items-center gap-2 px-2.5 py-1.5 rounded text-sm text-left ${
-                                        tab === t.key
-                                            ? 'bg-primary/15 text-primary'
-                                            : 'text-secondary hover:bg-surface-alt'
-                                    }`}
-                                >
-                                    <span className="material-symbols-outlined text-base">
-                                        {t.icon}
-                                    </span>
-                                    {t.label}
-                                </button>
-                            ))}
+                            {MORE_TABS.map(t => {
+                                const pick = () => {
+                                    setTab(t.key);
+                                    setMoreOpen(false);
+                                };
+                                return (
+                                    <button
+                                        key={t.key}
+                                        type="button"
+                                        // mousedown beats the blur-close in browsers that
+                                        // don't focus clicked buttons (Safari); click
+                                        // covers keyboard Enter/Space. pick() is
+                                        // idempotent so firing both is harmless.
+                                        onMouseDown={pick}
+                                        onClick={pick}
+                                        className={`inline-flex items-center gap-2 px-2.5 py-1.5 rounded text-sm text-left ${
+                                            tab === t.key
+                                                ? 'bg-primary/15 text-primary'
+                                                : 'text-secondary hover:bg-surface-alt'
+                                        }`}
+                                    >
+                                        <span className="material-symbols-outlined text-base">
+                                            {t.icon}
+                                        </span>
+                                        {t.label}
+                                    </button>
+                                );
+                            })}
                         </div>
                     )}
                 </div>
@@ -1443,6 +1474,10 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                     setBackdrop={setBackdropExclusive}
                     customBackdrop={customBackdrop}
                     setCustomBackdrop={setCustomBackdropExclusive}
+                    backdropSource={backdropSource}
+                    setBackdropSource={setBackdropSource}
+                    logoSource={logoSource}
+                    setLogoSource={setLogoSource}
                     logo={logo}
                     setLogo={setLogo}
                     customLogo={customLogo}
@@ -1561,6 +1596,10 @@ const RenderPanel = ({
     setBackdrop,
     customBackdrop,
     setCustomBackdrop,
+    backdropSource,
+    setBackdropSource,
+    logoSource,
+    setLogoSource,
     logo,
     setLogo,
     customLogo,
@@ -1610,8 +1649,17 @@ const RenderPanel = ({
 }) => {
     // Independent per-picker sources (Option A): the backdrop and the logo each
     // choose their own source, so e.g. a Plex backdrop + a fanart.tv logo works.
-    const [backdropSource, setBackdropSource] = useState('tmdb');
-    const [logoSource, setLogoSource] = useState('tmdb');
+    // State lives in the Builder (persisted with the session); switching a picker
+    // OFF Upload clears its custom image — one consistent rule everywhere, no
+    // invisible "the upload is still what renders" state.
+    const onBdSource = s => {
+        setBackdropSource(s);
+        if (s !== 'upload') setCustomBackdrop(null);
+    };
+    const onLogoSource = s => {
+        setLogoSource(s);
+        if (s !== 'upload') setCustomLogo(null);
+    };
     const bdArt = artBySource[backdropSource] || null;
     const lgArt = artBySource[logoSource] || null;
     const backdrops = bdArt?.backdrops || [];
@@ -1620,6 +1668,10 @@ const RenderPanel = ({
     const logos = useMemo(() => sortWordmarkFirst(lgArt?.logos || []), [lgArt]);
     const seasonPosters = seasonArt?.posters || [];
     const backdropUrl = customBackdrop?.url || (backdrop ? urlForPath(backdrop) : null);
+    // A render input exists — either a picker path or a custom upload. Gates the
+    // preview/Generate actions (PSD stays path-only: the backend PSD route can't
+    // take uploaded bytes and would silently swap in an auto-picked backdrop).
+    const hasBackdrop = !!(backdrop || customBackdrop);
     // Template guide lines over the rendered preview (the PSD's cyan guides).
     const [showGuides, setShowGuides] = useState(true);
 
@@ -1634,7 +1686,7 @@ const RenderPanel = ({
         };
         reader.readAsDataURL(f);
     };
-    const bdSel = <SourceSelector value={backdropSource} onChange={setBackdropSource} />;
+    const bdSel = <SourceSelector value={backdropSource} onChange={onBdSource} />;
     const plexBackdropEmpty =
         backdropSource === 'plex' && bdArt?.reason && !backdrops.length && !posters.length;
 
@@ -1736,8 +1788,12 @@ const RenderPanel = ({
                     touchUpUrl={logoTouchUpUrl}
                     onFlipMask={onLogoFlip}
                     source={logoSource}
-                    onSource={setLogoSource}
-                    emptyText="No logos from this source — switch source or Upload, or a text wordmark is used as fallback."
+                    onSource={onLogoSource}
+                    emptyText={
+                        logoSource === 'plex' && lgArt?.reason && !logos.length
+                            ? lgArt.reason
+                            : 'No logos from this source — switch source or Upload, or a text wordmark is used as fallback.'
+                    }
                 />
 
                 {item.kind === 'show' && (
@@ -1795,7 +1851,7 @@ const RenderPanel = ({
                             <LoadingButton
                                 onClick={onPreview}
                                 loading={previewing}
-                                disabled={!backdrop}
+                                disabled={!hasBackdrop}
                                 icon="refresh"
                                 size="small"
                             >
@@ -1804,7 +1860,7 @@ const RenderPanel = ({
                         </div>
                     </div>
                     <div className="relative aspect-[2/3] bg-black rounded overflow-hidden flex items-center justify-center">
-                        {backdrop && previewUrl ? (
+                        {hasBackdrop && previewUrl ? (
                             <>
                                 <img
                                     src={previewUrl}
@@ -1822,7 +1878,7 @@ const RenderPanel = ({
                             </>
                         ) : (
                             <span className="text-xs text-tertiary px-4 text-center">
-                                {!backdrop
+                                {!hasBackdrop
                                     ? 'Select a backdrop to start.'
                                     : previewing
                                       ? 'Rendering preview…'
@@ -1838,7 +1894,7 @@ const RenderPanel = ({
                     <LoadingButton
                         onClick={onGenerate}
                         loading={busy}
-                        disabled={!backdrop || saveTargets.noTarget}
+                        disabled={!hasBackdrop || saveTargets.noTarget}
                         icon="save"
                     >
                         Generate &amp; save
@@ -3247,7 +3303,7 @@ const SquareArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
         reqRef.current = req;
     }, [req]);
 
-    const sig = `${customBg?.b64?.slice(0, 32) || backdrop}|${focusX}|${focusY}|${fitMode}|${zoom}`;
+    const sig = `${customSig(customBg) || backdrop}|${focusX}|${focusY}|${fitMode}|${zoom}`;
     useEffect(() => {
         if (!hasSrc) return undefined;
         let cancelled = false;
@@ -3324,7 +3380,14 @@ const SquareArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                         selected={backdrop}
                         onSelect={pickBackdrop}
                         aspect="aspect-video"
-                        emptyText="No backdrops from this source."
+                        emptyText={
+                            bgSource === 'plex' &&
+                            artBySource.plex?.reason &&
+                            !backdrops.length &&
+                            !posters.length
+                                ? artBySource.plex.reason
+                                : 'No backdrops from this source.'
+                        }
                     />
                 )}
                 {/* Posters as a source too: pick a 2:3 poster and the framer below
@@ -3476,7 +3539,7 @@ const BackgroundArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast 
     }, [req]);
 
     // Preview renders at 1080p regardless of resolution — same 16:9 frame.
-    const sig = `${customBg?.b64?.slice(0, 32) || backdrop}|${focusX}|${focusY}|${fitMode}|${zoom}`;
+    const sig = `${customSig(customBg) || backdrop}|${focusX}|${focusY}|${fitMode}|${zoom}`;
     useEffect(() => {
         if (!hasSrc) return undefined;
         let cancelled = false;
@@ -3560,7 +3623,14 @@ const BackgroundArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast 
                         selected={backdrop}
                         onSelect={pickBackdrop}
                         aspect="aspect-video"
-                        emptyText="No backdrops from this source."
+                        emptyText={
+                            bgSource === 'plex' &&
+                            artBySource.plex?.reason &&
+                            !backdrops.length &&
+                            !posters.length
+                                ? artBySource.plex.reason
+                                : 'No backdrops from this source.'
+                        }
                     />
                 )}
                 {/* Posters as a source too: pick a 2:3 poster and the framer below
@@ -3672,6 +3742,11 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
     const [logo, setLogo] = useState(null); // file_path
     const [customLogo, setCustomLogo] = useState(null); // { b64, url, name }
     const [logoSource, setLogoSource] = useState('tmdb');
+    // Switching OFF Upload clears the custom logo (same rule as every picker).
+    const onLogoSource = s => {
+        setLogoSource(s);
+        if (s !== 'upload') setCustomLogo(null);
+    };
     const logos = useMemo(
         () => sortWordmarkFirst(artBySource[logoSource]?.logos || []),
         [artBySource, logoSource]
@@ -3684,7 +3759,7 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
 
     // B/W touch-up strokes are keyed to the (logo, whiten) they were drawn over
     // so a stale mask becomes a derived no-op (same pattern as the Builder).
-    const flipKey = `${customLogo?.b64?.slice(0, 32) || logo}|${whiten}`;
+    const flipKey = `${customSig(customLogo) || logo}|${whiten}`;
     const [flip, setFlip] = useState(null); // { key, b64 }
     const flipB64 = flip && flip.key === flipKey ? flip.b64 : null;
     const setFlipB64 = useCallback(b64 => setFlip(b64 ? { key: flipKey, b64 } : null), [flipKey]);
@@ -3720,7 +3795,7 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
 
     // Brush base: the processed logo WITHOUT the flip — it must stay stable as
     // strokes land, or the accumulated mask would be drawn over a moving target.
-    const sig = `${customLogo?.b64?.slice(0, 32) || logo}|${whiten}`;
+    const sig = `${customSig(customLogo) || logo}|${whiten}`;
     useEffect(() => {
         if (!hasLogo) return undefined;
         let cancelled = false;
@@ -3813,8 +3888,12 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                     customLogo={customLogo}
                     onCustomChange={setCustomExclusive}
                     source={logoSource}
-                    onSource={setLogoSource}
-                    emptyText="No logos from this source — switch source or Upload a custom PNG."
+                    onSource={onLogoSource}
+                    emptyText={
+                        logoSource === 'plex' && artBySource.plex?.reason && !logos.length
+                            ? artBySource.plex.reason
+                            : 'No logos from this source — switch source or Upload a custom PNG.'
+                    }
                 />
                 <div className="bg-surface border border-border rounded-lg p-3">
                     <h3 className="text-sm font-medium text-primary mb-2">Colour</h3>
