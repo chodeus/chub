@@ -106,6 +106,37 @@ class Renameinatorr(ChubModule):
             all_items_without_tags, chunk_size, logger
         )
 
+    @staticmethod
+    def resolve_ignore_tag_ids(app: BaseARRClient, config: Any) -> set:
+        """Resolve the configured (comma-separated) ignore tag names to the set
+        of existing tag ids.
+
+        Lookup-only — unlike get_tag_id_from_name this never creates a missing
+        tag; an absent ignore tag simply means there is nothing to skip.
+        """
+        if not getattr(config, "ignore_tags", None):
+            return set()
+        ignore_names = {
+            t.strip().lower() for t in str(config.ignore_tags).split(",") if t.strip()
+        }
+        if not ignore_names:
+            return set()
+        all_tags = app.get_all_tags() or []
+        return {tag["id"] for tag in all_tags if tag["label"] in ignore_names}
+
+    @staticmethod
+    def filter_ignored(
+        media_dict: List[Dict[str, Any]], ignore_tag_ids: set
+    ) -> List[Dict[str, Any]]:
+        """Drop items carrying any of the ignore tag ids."""
+        if not ignore_tag_ids:
+            return media_dict
+        return [
+            item
+            for item in media_dict
+            if not ignore_tag_ids & set(item.get("tags", []))
+        ]
+
     def process_instance(
         self,
         app: BaseARRClient,
@@ -122,32 +153,18 @@ class Renameinatorr(ChubModule):
         tag_id: Any = None
 
         # Ignore-tag filtering: skip items carrying any of the (comma-
-        # separated) ignore tags. Lookup-only — unlike get_tag_id_from_name
-        # this never creates the tag: an absent ignore tag just means there
-        # is nothing to skip.
-        skipped_count = 0
-        if getattr(config, "ignore_tags", None):
-            ignore_names = {
-                t.strip().lower()
-                for t in str(config.ignore_tags).split(",")
-                if t.strip()
-            }
-            all_tags = app.get_all_tags() or []
-            ignore_tag_ids = {
-                tag["id"] for tag in all_tags if tag["label"] in ignore_names
-            }
-            if ignore_tag_ids:
-                before_count = len(media_dict)
-                media_dict = [
-                    item
-                    for item in media_dict
-                    if not ignore_tag_ids & set(item.get("tags", []))
-                ]
-                skipped_count = before_count - len(media_dict)
-                if skipped_count > 0:
-                    logger.info(
-                        f"Skipped {skipped_count} items due to ignore tags '{config.ignore_tags}'."
-                    )
+        # separated) ignore tags. Resolve the tag ids once and re-apply the
+        # filter after every re-fetch below (e.g. the tag-cycle reset) so an
+        # ignored item can never be swept back into processing.
+        ignore_tag_ids = self.resolve_ignore_tag_ids(app, config)
+        if ignore_tag_ids:
+            before_count = len(media_dict)
+            media_dict = self.filter_ignored(media_dict, ignore_tag_ids)
+            skipped_count = before_count - len(media_dict)
+            if skipped_count > 0:
+                logger.info(
+                    f"Skipped {skipped_count} items due to ignore tags '{config.ignore_tags}'."
+                )
 
         # Tagging logic: filter untagged, clear if all tagged, then chunk
         enable_batching = getattr(config, "enable_batching", False)
@@ -168,7 +185,9 @@ class Renameinatorr(ChubModule):
                     media_ids = [item["media_id"] for item in media_dict]
                     logger.info("All media is tagged. Removing tags...")
                     app.remove_tags(media_ids, tag_id)
-                    media_dict = app.get_all_media()
+                    media_dict = self.filter_ignored(
+                        app.get_all_media(), ignore_tag_ids
+                    )
                     chunks_to_process_this_run = self.get_untagged_chunks_for_run(
                         media_dict, tag_id, chunk_size, all_in_single_run, logger
                     )
