@@ -2,6 +2,52 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.30.0](https://github.com/chodeus/chub/compare/v2.29.0...v2.30.0) (2026-06-11)
+
+
+### Features
+
+* **border:** full-library re-border on poster_renamerr run ([#231](https://github.com/chodeus/chub/issues/231)) ([635bf5f](https://github.com/chodeus/chub/commit/635bf5f44faec399f26646df9984cad2a9b6671d))
+* **dashboard:** configurable module list and Health section on top ([50efb77](https://github.com/chodeus/chub/commit/50efb77dfafda2131d35613628250ff7c1146476))
+* **dashboard:** configurable sections, refresh interval, and Up-next count ([860707e](https://github.com/chodeus/chub/commit/860707e2d5523da5faee16c483910ac532371308))
+* **extensions:** backend self-registration framework ([6b4ee12](https://github.com/chodeus/chub/commit/6b4ee12de831dd185b061a8599b3ddeb16784b73))
+* **extensions:** frontend self-registration framework ([0e1387c](https://github.com/chodeus/chub/commit/0e1387c84bce9a10120a3fc4609ca6ba960a3c30))
+* **gdrive:** bulk-add preset drives and configured sources ([9e77a48](https://github.com/chodeus/chub/commit/9e77a482f590401ed00fd53611fb3b5c88a4baed))
+* **posters:** manual artwork picker for logo/background/squareart ([2498919](https://github.com/chodeus/chub/commit/24989199320c25134084d36b53b9124556028174))
+* **posters:** warn on year mismatch for ID-matched uploads ([88c8788](https://github.com/chodeus/chub/commit/88c8788c5e4e3c81c10693f7bf55226004b22e3c))
+* **renameinatorr:** add refresh-before-rename; fix inert ignore tag ([ffd4d4d](https://github.com/chodeus/chub/commit/ffd4d4dbf204e9b4a3a8f89bcb63d2b771a9b7fb))
+* **sync:** restrict gdrive sync to image types and cap file size ([2d45fab](https://github.com/chodeus/chub/commit/2d45fab58efae38b8786e97e9191ae224bd96f18))
+
+
+### Bug Fixes
+
+* **asset,border:** clear CodeQL alerts (dead code + empty-except comment) ([212124d](https://github.com/chodeus/chub/commit/212124dfdc971bd52ef6a83ec9ae153e64612085))
+* **assets:** stop expecting clear logos on seasons ([f91674b](https://github.com/chodeus/chub/commit/f91674b78fa8eda6f8e57789ded2f5b5a1112b0f))
+* **auth:** log request path on unauthorized 401s ([37051e9](https://github.com/chodeus/chub/commit/37051e9a1120bc278ea6e0e4a50312f0aa427c1c))
+* close audit backlog — redaction gaps, atomic ops, SSRF guard, logging polish ([15c7f33](https://github.com/chodeus/chub/commit/15c7f33c530059a9448bbbd8bdffd196a5a270ae))
+* **deps:** update all non-major dependencies ([#225](https://github.com/chodeus/chub/issues/225)) ([71865f0](https://github.com/chodeus/chub/commit/71865f07d3a8d1a7b3be03b3a19ae1bc5549521e))
+* **deps:** update all non-major dependencies ([#227](https://github.com/chodeus/chub/issues/227)) ([c9e707b](https://github.com/chodeus/chub/commit/c9e707b918f0400fd9e3cb3743b91b22ff272e7c))
+* **fields:** stop leaking non-DOM props onto field elements ([04d19db](https://github.com/chodeus/chub/commit/04d19dbdc9ec303f006ae9648ed387c77959116b))
+* harden restore/lookups/tags, add plex-maintenance dry-run + paging ([e409b87](https://github.com/chodeus/chub/commit/e409b87f28716bfb6cb003b503a7ec2b374e1702))
+* **plex:** year-disambiguate title matches to prevent wrong-year uploads ([5a97d85](https://github.com/chodeus/chub/commit/5a97d851c109fc0c321175bc31df0250cf72dc1a))
+* **plex:** year-disambiguate title matches; log 401 request path ([6946ebd](https://github.com/chodeus/chub/commit/6946ebdafa0c8e3404963cfe7fcac2a129639aff))
+* **posters:** make Asset Search poster download actually save a file ([eea5ea4](https://github.com/chodeus/chub/commit/eea5ea4a688c68f4d73e0d1be15d7415b204199b))
+* **regex:** factor season delimiter prefix — clears CodeQL unmatchable-caret ([#183](https://github.com/chodeus/chub/issues/183)) ([0fa4aa5](https://github.com/chodeus/chub/commit/0fa4aa546c4eff13a43ff67a9ae4f235122f57dc))
+* **security:** close asset-apply path traversal + clear CodeQL test findings ([84eb068](https://github.com/chodeus/chub/commit/84eb06867c6d73d7a335a5526fab0fdf37430fe7))
+* **security:** stop world-chmod 777 of CONFIG_DIR; lock down secrets ([58ab510](https://github.com/chodeus/chub/commit/58ab510fe59499532eacc1a090da55e3f21bf498))
+* **sync:** drop redundant rclone --exclude that triggered an ERROR log ([f83e38d](https://github.com/chodeus/chub/commit/f83e38d3e3579a7fc265e2bf6d88319f9a2544e1))
+* **ui:** honor conditional field visibility in Module Settings ([ee90229](https://github.com/chodeus/chub/commit/ee902291b4151df4a30e445109d8aad49b2f9f86))
+
+
+### Refactoring
+
+* **border:** remove redundant Holiday-only mode (skip) option ([9dbdeac](https://github.com/chodeus/chub/commit/9dbdeac76e1d6ad5b116a2c50742d1ba00c4468f))
+
+
+### Documentation
+
+* **settings:** shorten Clean orphan assets tooltip ([f091165](https://github.com/chodeus/chub/commit/f091165e786ce426e136b18b2f8897074d169619))
+
 ## [2.29.0](https://github.com/chodeus/chub/compare/v2.28.0...v2.29.0) (2026-06-04)
 
 
