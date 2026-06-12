@@ -3188,6 +3188,7 @@ const SquareArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
     const [customBg, setCustomBg] = useState(null); // { b64, url, name }
     const [bgSource, setBgSource] = useState('tmdb');
     const backdrops = artBySource[bgSource]?.backdrops || [];
+    const posters = artBySource[bgSource]?.posters || [];
     // Leaving the Upload source clears the custom image so a provider pick wins.
     const onBgSource = s => {
         setBgSource(s);
@@ -3326,6 +3327,20 @@ const SquareArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                         emptyText="No backdrops from this source."
                     />
                 )}
+                {/* Posters as a source too: pick a 2:3 poster and the framer below
+                    crops it to fit (fill/fit + zoom/drag). Lets a larger poster
+                    become square art or a 16:9 background. */}
+                {bgSource !== 'upload' && posters.length > 0 && (
+                    <Picker
+                        label="Poster (crop to fit)"
+                        items={posters}
+                        loading={loadingArt}
+                        selected={backdrop}
+                        onSelect={pickBackdrop}
+                        aspect="aspect-poster"
+                        emptyText="No posters from this source."
+                    />
+                )}
 
                 {srcUrl && (
                     <SquareFramer
@@ -3399,6 +3414,7 @@ const BackgroundArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast 
     const [customBg, setCustomBg] = useState(null); // { b64, url, name }
     const [bgSource, setBgSource] = useState('tmdb');
     const backdrops = artBySource[bgSource]?.backdrops || [];
+    const posters = artBySource[bgSource]?.posters || [];
     const onBgSource = s => {
         setBgSource(s);
         if (s !== 'upload') setCustomBg(null);
@@ -3545,6 +3561,20 @@ const BackgroundArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast 
                         onSelect={pickBackdrop}
                         aspect="aspect-video"
                         emptyText="No backdrops from this source."
+                    />
+                )}
+                {/* Posters as a source too: pick a 2:3 poster and the framer below
+                    crops it to fit (fill/fit + zoom/drag). Lets a larger poster
+                    become square art or a 16:9 background. */}
+                {bgSource !== 'upload' && posters.length > 0 && (
+                    <Picker
+                        label="Poster (crop to fit)"
+                        items={posters}
+                        loading={loadingArt}
+                        selected={backdrop}
+                        onSelect={pickBackdrop}
+                        aspect="aspect-poster"
+                        emptyText="No posters from this source."
                     />
                 )}
 
