@@ -2440,8 +2440,11 @@ const Picker = ({ label, items, loading, selected, onSelect, aspect, onBlack, em
                                     <span className="material-symbols-outlined text-sm">check</span>
                                 </span>
                             )}
+                            {/* Resolution in the TOP-LEFT corner — kept off the
+                                bottom so it can't run into the language badge, and
+                                off the top-right so it clears the selected check. */}
                             {it.width ? (
-                                <span className="absolute bottom-0 right-0 text-[11px] font-mono text-white bg-black/60 px-1">
+                                <span className="absolute top-0 left-0 text-[11px] font-mono text-white bg-black/60 px-1">
                                     {it.width}×{it.height}
                                 </span>
                             ) : null}
