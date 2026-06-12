@@ -17,6 +17,10 @@ from backend.util.cl2k import geometry as geo
 
 
 def _cover(im: Image.Image, w: int, h: int) -> Image.Image:
+    if (im.width, im.height) == (w, h):
+        # Already framed (renderer.frame_backdrop output) — pass through
+        # untouched so the POSTER layer stays pixel-identical to the render.
+        return im
     scale = max(w / im.width, h / im.height)
     # LANCZOS — sharpest downscale to canvas; PIL's default BICUBIC is softer.
     im = im.resize(
@@ -93,11 +97,29 @@ def _font(bold: bool, px: int) -> ImageFont.FreeTypeFont:
         return ImageFont.load_default()
 
 
-def _centered(draw: ImageDraw.ImageDraw, text: str, center_y: int, font) -> None:
+def _centered(
+    draw: ImageDraw.ImageDraw, text: str, center_y: int, font, kerning: float = 0.0
+) -> None:
+    """Draw centred white text, with optional CL2K letter tracking.
+
+    PIL has no kerning parameter (Wand's ``text_kerning`` adds ``kerning`` px
+    between every character pair), so tracked text is drawn char-by-char with
+    the same inter-character gaps — keeping the PSD label the same width as the
+    rendered poster's.
+    """
     box = draw.textbbox((0, 0), text, font=font)
-    w = box[2] - box[0]
     h = box[3] - box[1]
-    draw.text((geo.CENTER_X - w / 2, center_y - h / 2), text, font=font, fill="white")
+    if kerning <= 0:
+        w = box[2] - box[0]
+        draw.text((geo.CENTER_X - w / 2, center_y - h / 2), text, font=font, fill="white")
+        return
+    widths = [draw.textlength(ch, font=font) for ch in text]
+    total = sum(widths) + kerning * max(0, len(text) - 1)
+    x = geo.CENTER_X - total / 2
+    y = center_y - h / 2
+    for ch, cw in zip(text, widths):
+        draw.text((x, y), ch, font=font, fill="white")
+        x += cw + kerning
 
 
 def export_psd(
@@ -109,6 +131,7 @@ def export_psd(
     season_text: str = "",
     logo_max_width: int = geo.LOGO_WIDTH_STD,
     logo_scale: float = 1.0,
+    logo_y_offset: int = 0,
     whiten: bool = True,
 ) -> bytes:
     """Build the CL2K poster as a layered PSD and return its bytes."""
@@ -148,7 +171,8 @@ def export_psd(
             tw = max(1, round(tw * h / th))
             th = h
         lg = lg.resize((tw, th), Image.Resampling.LANCZOS)
-        top = max(0, min(baseline - th, h - th))
+        off = max(-600, min(int(logo_y_offset or 0), 200))
+        top = max(0, min(baseline - th + off, h - th))
         logo_layer.alpha_composite(lg, (geo.CENTER_X - tw // 2, top))
 
     # The bottom label, when there is one, becomes its own self-describing layer
@@ -171,7 +195,13 @@ def export_psd(
     layers = [("POSTER", poster), ("GRADIENT", gradient), ("LOGO", logo_layer)]
     if label_text:
         text_layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-        _centered(ImageDraw.Draw(text_layer), label_text, label_y, _font(False, geo.LABEL_FONT_PX))
+        _centered(
+            ImageDraw.Draw(text_layer),
+            label_text,
+            label_y,
+            _font(False, geo.LABEL_FONT_PX),
+            kerning=geo.tracking_to_kerning(geo.LABEL_TRACKING),
+        )
         layers.append((label_text, text_layer))
     layers.append(("BORDER LAYER", border))
 

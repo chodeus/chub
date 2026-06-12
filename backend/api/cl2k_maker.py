@@ -74,6 +74,12 @@ class GenerateRequest(BaseModel):
     # Logo position: vertical shift in px from the locked baseline (positive = down).
     # Size is unaffected; the placement is clamped onto the canvas.
     logo_y_offset: int = Field(0, ge=-600, le=200)
+    # Per-render CL2K-whiten override; None falls back to the module config
+    # (whiten_logo). True = two-tone white, False = the original colored logo.
+    whiten: Optional[bool] = None
+    # B/W touch-up: regions brushed over the PROCESSED logo whose black/white is
+    # inverted (for interior accents the two-tone keymap can't decide).
+    logo_flip_b64: Optional[str] = None
     mask_b64: Optional[str] = None  # user-brushed mask (PNG, white=remove) for AI
     remove_text: bool = False  # run AI text removal (OpenAI can do it mask-less)
     focus_x: float = 0.5  # crop focal point (0..1); 0.5 = centre (cover mode)
@@ -184,6 +190,11 @@ def images(
 ) -> JSONResponse:
     tmdb = TMDBClient(load_config().tmdb, db, logger)
     imgs = tmdb_art.list_images(tmdb, tmdb_id, media_type) or {"logos": [], "backdrops": []}
+    # Textless (null-language) posters first — pure art that needs no AI text
+    # pass at all. Stable sort keeps TMDB's vote order within each group.
+    posters = sorted(
+        imgs.get("posters", []), key=lambda p: p.get("iso_639_1") is not None
+    )
     return ok(
         "ok",
         {
@@ -191,7 +202,7 @@ def images(
             "backdrops": _decorate(imgs.get("backdrops", [])),
             # Official posters too: often the only quality art for small titles
             # (documentaries etc.) — pick one, brush the title text, AI-erase.
-            "posters": _decorate(imgs.get("posters", [])),
+            "posters": _decorate(posters),
         },
     )
 
@@ -264,6 +275,10 @@ def details(
 class LogoProcessRequest(BaseModel):
     logo_path: Optional[str] = None
     logo_b64: Optional[str] = None  # custom uploaded logo (PNG, base64)
+    # Per-render whiten override so the live overlay matches the Builder toggle;
+    # None falls back to the module config (whiten_logo).
+    whiten: Optional[bool] = None
+    flip_b64: Optional[str] = None  # B/W touch-up regions (mask PNG, white=flip)
 
 
 @router.post("/logo-processed", summary="Trimmed + whitened logo for the live overlay")
@@ -281,7 +296,11 @@ def logo_processed(
         return error("No logo provided", "NO_LOGO")
     cfg = load_config().cl2k_maker
     try:
-        png, width, height = process_logo(raw, whiten=cfg.whiten_logo)
+        png, width, height = process_logo(
+            raw,
+            whiten=cfg.whiten_logo if req.whiten is None else req.whiten,
+            flip_mask_bytes=_b64_to_bytes(req.flip_b64),
+        )
     except Exception as exc:
         logger.warning(f"cl2k: logo processing failed: {exc}")
         return error("Could not process that logo", "LOGO_PROCESS")
@@ -326,6 +345,8 @@ def preview(
         band_label=req.band_label,
         logo_scale=req.logo_scale,
         logo_y_offset=req.logo_y_offset,
+        logo_flip_bytes=_b64_to_bytes(req.logo_flip_b64),
+        whiten=req.whiten,
         place_logo=req.place_logo,
     )
     if blob is None:
@@ -366,6 +387,8 @@ def generate(
         band_label=req.band_label,
         logo_scale=req.logo_scale,
         logo_y_offset=req.logo_y_offset,
+        logo_flip_bytes=_b64_to_bytes(req.logo_flip_b64),
+        whiten=req.whiten,
         force=req.force,
         save_local=req.save_local,
         upload_gdrive=req.upload_gdrive,
@@ -391,6 +414,9 @@ class SquareArtRequest(BaseModel):
     year: Optional[int] = None
     tvdb_id: Optional[int] = None
     imdb_id: Optional[str] = None
+    # File the art for ONE season of a show (` - Season NN` name; plexapi seasons
+    # accept square art) instead of the show itself. None = show/movie-level.
+    season_number: Optional[int] = None
     backdrop_path: Optional[str] = None
     backdrop_b64: Optional[str] = None  # custom-uploaded source art (base64)
     focus_x: float = 0.5
@@ -411,6 +437,7 @@ class LogoAssetRequest(BaseModel):
     logo_path: Optional[str] = None
     logo_b64: Optional[str] = None
     whiten: bool = False  # True = CL2K-whitened; False = original (colored) clear logo
+    flip_b64: Optional[str] = None  # B/W touch-up regions (mask PNG, white=flip)
     save_local: bool = True
     upload_gdrive: Optional[bool] = None
 
@@ -466,6 +493,7 @@ def square_generate(
         focus_y=req.focus_y,
         fit_mode=req.fit_mode,
         zoom=req.zoom,
+        season_number=req.season_number,
         save_local=req.save_local,
         upload_gdrive=req.upload_gdrive,
     )
@@ -481,6 +509,9 @@ class BackgroundArtRequest(BaseModel):
     year: Optional[int] = None
     tvdb_id: Optional[int] = None
     imdb_id: Optional[str] = None
+    # File the art for ONE season of a show (` - Season NN` name; Plex seasons take
+    # background art, Kometa reads Season##_background). None = show/movie-level.
+    season_number: Optional[int] = None
     backdrop_path: Optional[str] = None
     backdrop_b64: Optional[str] = None  # custom-uploaded source art (base64)
     focus_x: float = 0.5
@@ -544,6 +575,7 @@ def background_generate(
         fit_mode=req.fit_mode,
         zoom=req.zoom,
         resolution=req.resolution,
+        season_number=req.season_number,
         save_local=req.save_local,
         upload_gdrive=req.upload_gdrive,
     )
@@ -561,7 +593,9 @@ def logo_asset_preview(
     raw = _resolve_logo_bytes(req.logo_path, req.logo_b64)
     if not raw:
         return error("No logo selected", "NO_LOGO")
-    png, _w, _h = process_logo(raw, whiten=req.whiten)
+    png, _w, _h = process_logo(
+        raw, whiten=req.whiten, flip_mask_bytes=_b64_to_bytes(req.flip_b64)
+    )
     return Response(
         content=png, media_type="image/png", headers={"Cache-Control": "no-store"}
     )
@@ -586,6 +620,7 @@ def logo_asset_generate(
         logo_path=req.logo_path,
         logo_bytes=_b64_to_bytes(req.logo_b64),
         whiten=req.whiten,
+        flip_mask_bytes=_b64_to_bytes(req.flip_b64),
         save_local=req.save_local,
         upload_gdrive=req.upload_gdrive,
     )
@@ -619,6 +654,14 @@ def psd_export(
         backdrop_path=req.backdrop_path,
         logo_path=req.logo_path,
         logo_scale=req.logo_scale,
+        logo_y_offset=req.logo_y_offset,
+        focus_x=req.focus_x,
+        focus_y=req.focus_y,
+        fit_mode=req.fit_mode,
+        crop=_crop_tuple(req),
+        v_pos=req.v_pos,
+        zoom=req.zoom,
+        whiten=req.whiten,
     )
     if blob is None:
         return error("No textless backdrop available", "NO_BACKDROP")
@@ -648,6 +691,7 @@ class SeasonsRequest(BaseModel):
     zoom: float = Field(1.0, ge=1.0, le=3.0)
     logo_scale: float = Field(1.0, ge=0.25, le=3.0)
     logo_y_offset: int = Field(0, ge=-600, le=200)
+    whiten: Optional[bool] = None  # None = module config (whiten_logo)
     force: bool = False
 
 
@@ -675,6 +719,7 @@ def generate_seasons_endpoint(
         zoom=req.zoom,
         logo_scale=req.logo_scale,
         logo_y_offset=req.logo_y_offset,
+        whiten=req.whiten,
         force=req.force,
     )
     return ok("Seasons generated", out)
@@ -694,6 +739,7 @@ async def upload_generate(
     logo_b64: Optional[str] = Form(None),
     logo_scale: float = Form(1.0, ge=0.25, le=3.0),
     logo_y_offset: int = Form(0, ge=-600, le=200),
+    whiten: Optional[bool] = Form(None),  # None = module config (whiten_logo)
     # Framing — same semantics as GenerateRequest: cover (focus point), fit
     # (top-anchor + black-fill bottom; optional crop isolates a region first;
     # v_pos slides the photo down), or extend.
@@ -727,6 +773,7 @@ async def upload_generate(
         custom_logo_bytes=_b64_to_bytes(logo_b64),
         logo_scale=logo_scale,
         logo_y_offset=logo_y_offset,
+        whiten=whiten,
         fit_mode=fit_mode,
         focus_x=focus_x,
         focus_y=focus_y,
@@ -803,6 +850,7 @@ async def upload_poster(
     logo_b64: Optional[str] = Form(None),
     logo_scale: float = Form(1.0, ge=0.25, le=3.0),
     logo_y_offset: int = Form(0, ge=-600, le=200),
+    whiten: Optional[bool] = Form(None),  # None = module config (whiten_logo)
     preview: bool = Form(False),
     save_local: bool = Form(True),
     upload_gdrive: Optional[bool] = Form(None),
@@ -828,7 +876,7 @@ async def upload_poster(
                 logo_max_width=cfg.logo_max_width,
                 logo_scale=logo_scale,
                 logo_y_offset=logo_y_offset,
-                whiten=cfg.whiten_logo,
+                whiten=cfg.whiten_logo if whiten is None else whiten,
             )
         if border:
             blob = apply_border(blob)
@@ -850,6 +898,7 @@ async def upload_poster(
         logo_bytes=logo_bytes,
         logo_scale=logo_scale,
         logo_y_offset=logo_y_offset,
+        whiten=whiten,
         save_local=save_local,
         upload_gdrive=upload_gdrive,
     )

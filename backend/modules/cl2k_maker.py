@@ -132,6 +132,8 @@ def _resolve_and_render(
     band_label: str = "",
     logo_scale: float = 1.0,
     logo_y_offset: int = 0,
+    logo_flip_bytes: Optional[bytes] = None,  # B/W touch-up regions (mask PNG)
+    whiten: Optional[bool] = None,  # None = module config (whiten_logo)
     allow_ai_extend: bool = True,
     place_logo: bool = True,
 ) -> Tuple[Optional[bytes], Dict[str, Any]]:
@@ -258,7 +260,8 @@ def _resolve_and_render(
         logo_max_width=cfg.logo_max_width,
         logo_scale=logo_scale,
         logo_y_offset=logo_y_offset,
-        whiten=cfg.whiten_logo,
+        logo_flip_bytes=logo_flip_bytes,
+        whiten=cfg.whiten_logo if whiten is None else whiten,
         focus_x=focus_x,
         focus_y=focus_y,
         fit_mode=fit_mode,
@@ -312,6 +315,8 @@ def generate_for_item(
     band_label: str = "",
     logo_scale: float = 1.0,
     logo_y_offset: int = 0,
+    logo_flip_bytes: Optional[bytes] = None,  # B/W touch-up regions (mask PNG)
+    whiten: Optional[bool] = None,  # None = module config (whiten_logo)
     force: bool = False,
     save_local: bool = True,
     upload_gdrive: Optional[bool] = None,
@@ -368,6 +373,8 @@ def generate_for_item(
         band_label=band_label,
         logo_scale=logo_scale,
         logo_y_offset=logo_y_offset,
+        logo_flip_bytes=logo_flip_bytes,
+        whiten=whiten,
     )
     if blob is None:
         return {"status": "skipped", "reason": info.get("reason", "render failed")}
@@ -410,6 +417,7 @@ def generate_square_art(
     focus_y: float = 0.5,
     fit_mode: str = "cover",
     zoom: float = 1.0,
+    season_number: Optional[int] = None,
     save_local: bool = True,
     upload_gdrive: Optional[bool] = None,
 ) -> Dict[str, Any]:
@@ -417,12 +425,16 @@ def generate_square_art(
 
     Plain cropped artwork (no logo/gradient), filed into poster_cache as
     ``squareart`` so asset_renamerr applies it to Plex (uploadSquareArt). Always
-    overwrites — a deliberate manual action.
+    overwrites — a deliberate manual action. ``season_number`` files the art for
+    one season of a show (``… - Season NN - SquareArt.jpg``; plexapi seasons
+    accept square art) instead of the show itself.
     """
     cfg = full_config.cl2k_maker
     kind = (kind or "").lower()
     if kind not in _VALID_KINDS:
         return {"status": "error", "reason": f"invalid kind {kind!r}"}
+    if season_number is not None and kind == "show":
+        kind = "season"  # season-suffixed naming; backfill/lookup stays TV-side
     title, year = _backfill_title_year(
         full_config, db, logger, kind=kind, tmdb_id=tmdb_id, title=title, year=year,
         tvdb_id=tvdb_id, imdb_id=imdb_id,
@@ -452,7 +464,7 @@ def generate_square_art(
         tmdb_id=tmdb_id,
         tvdb_id=tvdb_id,
         imdb_id=imdb_id,
-        season_number=None,
+        season_number=season_number,
         backdrop_path=backdrop_path,
         logo_source="squareart",
         save_local=save_local,
@@ -481,6 +493,7 @@ def generate_background_art(
     fit_mode: str = "cover",
     zoom: float = 1.0,
     resolution: str = "1080p",
+    season_number: Optional[int] = None,
     save_local: bool = True,
     upload_gdrive: Optional[bool] = None,
 ) -> Dict[str, Any]:
@@ -490,11 +503,16 @@ def generate_background_art(
     = 1920x1080, ``"4k"`` = 3840x2160. Plain framed artwork (no logo/gradient),
     filed into poster_cache as ``background`` so asset_renamerr applies it to
     Plex (uploadArt) / Kometa. Always overwrites — a deliberate manual action.
+    ``season_number`` files the art for one season of a show
+    (``… - Season NN - Background.jpg``; Plex seasons take background art and
+    Kometa reads ``Season##_background``) instead of the show itself.
     """
     cfg = full_config.cl2k_maker
     kind = (kind or "").lower()
     if kind not in _VALID_KINDS:
         return {"status": "error", "reason": f"invalid kind {kind!r}"}
+    if season_number is not None and kind == "show":
+        kind = "season"  # season-suffixed naming; backfill/lookup stays TV-side
     title, year = _backfill_title_year(
         full_config, db, logger, kind=kind, tmdb_id=tmdb_id, title=title, year=year,
         tvdb_id=tvdb_id, imdb_id=imdb_id,
@@ -527,7 +545,7 @@ def generate_background_art(
         tmdb_id=tmdb_id,
         tvdb_id=tvdb_id,
         imdb_id=imdb_id,
-        season_number=None,
+        season_number=season_number,
         backdrop_path=backdrop_path,
         logo_source="background",
         save_local=save_local,
@@ -552,6 +570,7 @@ def generate_logo_asset(
     logo_path: Optional[str] = None,
     logo_bytes: Optional[bytes] = None,
     whiten: bool = False,
+    flip_mask_bytes: Optional[bytes] = None,  # B/W touch-up regions (mask PNG)
     save_local: bool = True,
     upload_gdrive: Optional[bool] = None,
 ) -> Dict[str, Any]:
@@ -575,7 +594,7 @@ def generate_logo_asset(
         raw = image_fetch.download(logo_path)
     if not raw:
         return {"status": "error", "reason": "no logo selected"}
-    png, _w, _h = renderer.process_logo(raw, whiten=whiten)
+    png, _w, _h = renderer.process_logo(raw, whiten=whiten, flip_mask_bytes=flip_mask_bytes)
     return _persist_poster(
         db,
         cfg,
@@ -865,6 +884,7 @@ def save_finished_poster(
     logo_bytes: Optional[bytes] = None,
     logo_scale: float = 1.0,
     logo_y_offset: int = 0,
+    whiten: Optional[bool] = None,  # None = module config (whiten_logo)
     save_local: bool = True,
     upload_gdrive: Optional[bool] = None,
 ) -> Dict[str, Any]:
@@ -900,7 +920,7 @@ def save_finished_poster(
             logo_max_width=cfg.logo_max_width,
             logo_scale=logo_scale,
             logo_y_offset=logo_y_offset,
-            whiten=cfg.whiten_logo,
+            whiten=cfg.whiten_logo if whiten is None else whiten,
         )
     if add_border:
         from backend.util.cl2k.renderer import apply_border
@@ -1056,6 +1076,7 @@ def generate_seasons(
     zoom: float = 1.0,
     logo_scale: float = 1.0,
     logo_y_offset: int = 0,
+    whiten: Optional[bool] = None,  # None = module config (whiten_logo)
     force: bool = False,
 ) -> Dict[str, Any]:
     """Generate CL2K season posters for each number in ``seasons``.
@@ -1087,6 +1108,7 @@ def generate_seasons(
                 zoom=zoom,
                 logo_scale=logo_scale,
                 logo_y_offset=logo_y_offset,
+                whiten=whiten,
                 force=force,
             )
         )
@@ -1105,8 +1127,21 @@ def psd_for_item(
     logo_path: Optional[str] = None,
     season_text: str = "",
     logo_scale: float = 1.0,
+    logo_y_offset: int = 0,
+    focus_x: float = 0.5,
+    focus_y: float = 0.5,
+    fit_mode: str = "cover",
+    crop: Optional[Tuple[float, float, float, float]] = None,
+    v_pos: float = 0.0,
+    zoom: float = 1.0,
+    whiten: Optional[bool] = None,  # None = module config (whiten_logo)
 ) -> Optional[bytes]:
-    """Resolve art and return a layered CL2K poster as PSD bytes (for Photopea)."""
+    """Resolve art and return a layered CL2K poster as PSD bytes (for Photopea).
+
+    The backdrop is framed via the renderer's own fit/cover/v_pos machinery so
+    the PSD's POSTER layer is pixel-identical to what /preview and /generate
+    show for the same framing knobs.
+    """
     from backend.util.cl2k.psd_export import export_psd
 
     cfg = full_config.cl2k_maker
@@ -1119,7 +1154,15 @@ def psd_for_item(
         logo_path = logo_path or sel.get("logo")
     if not backdrop_path:
         return None
-    backdrop_bytes = image_fetch.download(backdrop_path)
+    backdrop_bytes = renderer.frame_backdrop(
+        backdrop_bytes=image_fetch.download(backdrop_path),
+        focus_x=focus_x,
+        focus_y=focus_y,
+        fit_mode=fit_mode,
+        crop=crop,
+        v_pos=v_pos,
+        zoom=zoom,
+    )
     logo_bytes = image_fetch.download(logo_path) if logo_path else None
     return export_psd(
         backdrop_bytes=backdrop_bytes,
@@ -1129,7 +1172,8 @@ def psd_for_item(
         season_text=season_text,
         logo_max_width=cfg.logo_max_width,
         logo_scale=logo_scale,
-        whiten=cfg.whiten_logo,
+        logo_y_offset=logo_y_offset,
+        whiten=cfg.whiten_logo if whiten is None else whiten,
     )
 
 

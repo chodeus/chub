@@ -23,9 +23,15 @@ from typing import List, Optional, Tuple
 
 from wand.color import Color
 from wand.drawing import Drawing
-from wand.image import Image
+from wand.image import COMPOSITE_OPERATORS, Image
 
 from backend.util.cl2k import color, geometry as geo
+
+# ImageMagick 7 renamed CopyOpacity to CopyAlpha; wand exposes whichever the
+# linked library supports (IM6 = Debian/CI runners, IM7 = homebrew dev). Both
+# take the source's intensity as the new alpha when the source has no alpha
+# channel — which is how _whiten/_flip_regions use it.
+_COPY_ALPHA = "copy_alpha" if "copy_alpha" in COMPOSITE_OPERATORS else "copy_opacity"
 
 
 # ----- helpers ---------------------------------------------------------------
@@ -307,13 +313,80 @@ def _whiten(logo: Image) -> None:
                 return
             key.transform_colorspace("srgb")
             key.alpha_channel = "off"
-            key.composite(alpha, operator="copy_alpha")
+            key.composite(alpha, operator=_COPY_ALPHA)
             logo.composite(key, left=0, top=0, operator="copy")
         finally:
             key.close()
 
 
-def process_logo(logo_bytes: bytes, *, whiten: bool = True) -> Tuple[bytes, int, int]:
+def _flip_regions(logo: Image, mask_bytes: bytes) -> None:
+    """Invert black↔white inside the brushed regions (logo touch-up), in place.
+
+    The mask is brushed over the PROCESSED (trimmed + whitened) logo — white
+    strokes on transparency, at display resolution — and is resized to the
+    logo here. A global two-tone map fundamentally cannot decide interior
+    accents that share saturation AND luma with their surroundings (the same
+    red is fill in one place and accent in another on real logos), so the user
+    paints the few regions the keymap gets wrong. Alpha is untouched — the
+    flip only swaps fill colours, never reshapes the logo. Decode failures are
+    a no-op (the un-flipped logo renders).
+    """
+    try:
+        mask = Image(blob=mask_bytes)
+    except Exception:
+        return
+    try:
+        # Brush strokes are white-on-transparent: flatten onto black so the
+        # mask reads white=flip / black=keep, then match the logo's size.
+        mask.background_color = Color("black")
+        mask.alpha_channel = "remove"
+        mask.transform_colorspace("gray")
+        mask.resize(logo.width, logo.height)
+        with logo.clone() as flipped:
+            flipped.negate()  # RGB only; alpha untouched
+            # Confine the flip: flipped's alpha := original alpha × mask.
+            with logo.clone() as alpha:
+                alpha.alpha_channel = "extract"
+                alpha.composite(mask, operator="multiply")
+                flipped.composite(alpha, operator=_COPY_ALPHA)
+            logo.composite(flipped, left=0, top=0)
+    except Exception:
+        pass  # fail open: an unreadable mask must not break the render
+    finally:
+        mask.close()
+
+
+def _read_logo_image(logo_bytes: bytes) -> Image:
+    """Decode logo bytes, rasterizing SVG sources at high density.
+
+    Wand renders an SVG at its intrinsic size (72dpi) — TMDB's SVG logos are
+    typically ~1000px wide, which leaves no headroom once the logo box can
+    reach the full 1000px canvas. Vectors are resolution-free, so small SVGs
+    are re-read with the density scaled to ~2000px content width; raster
+    formats pass through untouched.
+    """
+    head = logo_bytes[:512].lstrip().lower()
+    is_svg = head.startswith(b"<svg") or (
+        head.startswith(b"<?xml") and b"<svg" in logo_bytes[:2048].lower()
+    )
+    if not is_svg:
+        return Image(blob=logo_bytes)
+    img = Image(blob=logo_bytes)
+    if img.width >= 2000:
+        return img
+    # SVG user units are 96/inch (CSS px), so 96dpi reproduces the intrinsic
+    # size — scale from there to reach the target content width.
+    density = 96.0 * 2000.0 / max(1, img.width)
+    img.close()
+    return Image(blob=logo_bytes, resolution=density)
+
+
+def process_logo(
+    logo_bytes: bytes,
+    *,
+    whiten: bool = True,
+    flip_mask_bytes: Optional[bytes] = None,
+) -> Tuple[bytes, int, int]:
     """Trim transparent padding and (optionally) whiten a clear logo.
 
     Returns ``(png_bytes, width, height)`` for the *trimmed* result — the exact
@@ -321,13 +394,16 @@ def process_logo(logo_bytes: bytes, *, whiten: bool = True) -> Tuple[bytes, int,
     uses this for the live logo overlay: drawing these bytes at the box derived
     from ``width``/``height`` + the logo geometry matches the rendered placement
     pixel-for-pixel, so the size/position sliders preview instantly without a
-    server render per drag.
+    server render per drag. ``flip_mask_bytes`` applies the user's black↔white
+    touch-up regions (see :func:`_flip_regions`).
     """
-    with Image(blob=logo_bytes) as logo:
+    with _read_logo_image(logo_bytes) as logo:
         logo.background_color = Color("transparent")
         logo.trim(color=Color("transparent"))
         if whiten:
             _whiten(logo)
+        if flip_mask_bytes:
+            _flip_regions(logo, flip_mask_bytes)
         logo.format = "png"
         return logo.make_blob(), logo.width, logo.height
 
@@ -342,7 +418,7 @@ def logo_is_usable(logo_bytes: bytes, min_width: int = geo.LOGO_MIN_WIDTH) -> bo
     text instead. Returns True on any decode error (fail open — don't drop a logo
     we simply couldn't measure)."""
     try:
-        with Image(blob=logo_bytes) as logo:
+        with _read_logo_image(logo_bytes) as logo:
             logo.background_color = Color("transparent")
             logo.trim(color=Color("transparent"))
             return logo.width >= min_width
@@ -358,6 +434,7 @@ def _place_logo(
     whiten: bool,
     logo_scale: float = 1.0,
     logo_y_offset: int = 0,
+    flip_mask_bytes: Optional[bytes] = None,
 ) -> None:
     """Whiten, size and bottom-align the clear logo onto ``base``.
 
@@ -378,11 +455,15 @@ def _place_logo(
     """
     logo_scale = max(0.25, min(float(logo_scale or 1.0), 3.0))
     logo_y_offset = max(-600, min(int(logo_y_offset or 0), 200))
-    with Image(blob=logo_bytes) as logo:
+    with _read_logo_image(logo_bytes) as logo:
         logo.background_color = Color("transparent")
         logo.trim(color=Color("transparent"))  # drop padding -> width == content
         if whiten:
             _whiten(logo)
+        if flip_mask_bytes:
+            # Same trimmed/whitened space the touch-up brush was drawn over
+            # (process_logo's output) — applied before the resize below.
+            _flip_regions(logo, flip_mask_bytes)
         target_w = min(max_width, geo.LOGO_WIDTH_MAX)  # the guide box width
         target_h = int(round(logo.height * target_w / logo.width))
         max_h = baseline - geo.LOGO_ZONE_TOP
@@ -630,6 +711,33 @@ def render_square_art(
     )
 
 
+def frame_backdrop(
+    *,
+    backdrop_bytes: bytes,
+    focus_x: float = 0.5,
+    focus_y: float = 0.5,
+    fit_mode: str = "cover",
+    crop: Optional[Tuple[float, float, float, float]] = None,
+    v_pos: float = 0.0,
+    zoom: float = 1.0,
+) -> bytes:
+    """Frame a backdrop to the 2:3 canvas exactly as :func:`render_cl2k` would
+    and return PNG bytes.
+
+    The PSD exporter uses this for its POSTER layer so the exported document
+    matches the rendered poster pixel-for-pixel — the fit/cover/v_pos framings
+    (edge-extend fills, seam blending) live only in this module and must not be
+    re-implemented elsewhere.
+    """
+    with Image(blob=backdrop_bytes) as base:
+        if fit_mode == "fit":
+            _fit_resize(base, geo.CANVAS_W, geo.CANVAS_H, crop, v_pos, zoom)
+        else:
+            _cover_resize(base, geo.CANVAS_W, geo.CANVAS_H, focus_x, focus_y, v_pos)
+        base.format = "png"
+        return base.make_blob()
+
+
 def render_cl2k(
     *,
     backdrop_bytes: bytes,
@@ -640,6 +748,7 @@ def render_cl2k(
     logo_max_width: int = geo.LOGO_WIDTH_STD,
     logo_scale: float = 1.0,
     logo_y_offset: int = 0,
+    logo_flip_bytes: Optional[bytes] = None,  # B/W touch-up regions (mask PNG)
     whiten: bool = True,
     font_path: Optional[str] = None,
     focus_x: float = 0.5,
@@ -703,7 +812,7 @@ def render_cl2k(
             if logo_bytes:
                 _place_logo(
                     base, logo_bytes, baseline, logo_max_width, whiten, logo_scale,
-                    logo_y_offset,
+                    logo_y_offset, flip_mask_bytes=logo_flip_bytes,
                 )
 
         label_kerning = geo.tracking_to_kerning(geo.LABEL_TRACKING)

@@ -47,3 +47,27 @@ def test_movie_has_no_season_suffix():
         imdb_id="tt0133093",
     )
     assert name == "The Matrix (1999) {tmdb-603} {imdb-tt0133093}.jpg"
+
+
+def test_season_asset_suffix_composes_with_season_name():
+    """A per-season additional asset carries BOTH the season suffix and the
+    asset-type suffix — the form Kometa's Season##_background expects after
+    asset_renamerr renames it."""
+    from backend.util.cl2k.naming import build_poster_filename
+
+    assert build_poster_filename(
+        kind="season",
+        title="Breaking Bad",
+        year=2008,
+        tvdb_id=81189,
+        season_number=1,
+        asset_suffix=" - Background",
+    ) == "Breaking Bad (2008) {tvdb-81189} - Season 01 - Background.jpg"
+    assert build_poster_filename(
+        kind="season",
+        title="Breaking Bad",
+        year=2008,
+        tvdb_id=81189,
+        season_number=0,
+        asset_suffix=" - SquareArt",
+    ) == "Breaking Bad (2008) {tvdb-81189} - Specials - SquareArt.jpg"

@@ -52,6 +52,13 @@ def remove_text(
     if not is_enabled(config):
         return image_bytes
     provider = getattr(config, "ai_provider", "none")
+    # The brush canvas is sized to the *displayed* image (same aspect ratio,
+    # fewer pixels), so the mask arrives at display resolution. LaMa / HF expect
+    # mask dimensions == image dimensions and don't reliably resize server-side
+    # — normalize once here for every provider (OpenAI re-resizes internally;
+    # _composite_masked likewise — both harmless after this).
+    if mask_bytes:
+        mask_bytes = _mask_to_image_dims(image_bytes, mask_bytes)
     # LaMa / HF are blind — they only fill what is masked, so without a mask
     # there is nothing to do. OpenAI is a vision model and can remove text from
     # the prompt alone, so a mask is optional there.
@@ -76,6 +83,27 @@ def remove_text(
     if mask_bytes and result is not image_bytes:
         result = _composite_masked(image_bytes, result, mask_bytes)
     return result
+
+
+def _mask_to_image_dims(image_bytes: bytes, mask_bytes: bytes) -> bytes:
+    """Resize the brushed mask to the image's pixel dimensions (PNG bytes).
+
+    Pass-through when the sizes already match or either decode fails (the
+    provider call then behaves exactly as before this normalization existed).
+    """
+    from PIL import Image
+
+    try:
+        with Image.open(io.BytesIO(image_bytes)) as im:
+            size = im.size
+        mask = Image.open(io.BytesIO(mask_bytes)).convert("L")
+        if mask.size == size:
+            return mask_bytes
+        buf = io.BytesIO()
+        mask.resize(size).save(buf, "PNG")
+        return buf.getvalue()
+    except Exception:
+        return mask_bytes
 
 
 def _composite_masked(original_bytes: bytes, result_bytes: bytes, mask_bytes: bytes) -> bytes:
