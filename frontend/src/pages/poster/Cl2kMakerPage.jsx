@@ -1235,11 +1235,24 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
     const allLogos = useMemo(() => {
         const merged = [...(tmdbArt?.logos || []), ...(fanartArt?.logos || [])];
         const seen = new Set();
-        return merged.filter(l => {
+        const deduped = merged.filter(l => {
             if (!l?.file_path || seen.has(l.file_path)) return false;
             seen.add(l.file_path);
             return true;
         });
+        // Wordmark logos first. TMDB's "logos" array is polluted with portrait
+        // character art (full-body renders of Goku/Vegeta/etc.) that whiten into
+        // line-art garbage and render tiny in the landscape CL2K logo zone. Real
+        // title wordmarks are wide (aspect ≳ 1.4); push tall/portrait images to the
+        // end. Stable within each group; unknown dims (fanart clearlogos, already
+        // proper wordmarks) rank with the wordmarks. Hides nothing — just orders.
+        return deduped
+            .map((l, i) => [l, i])
+            .sort(([a, ai], [b, bi]) => {
+                const score = x => (x.width && x.height && x.width / x.height < 1.4 ? 1 : 0);
+                return score(a) - score(b) || ai - bi;
+            })
+            .map(([l]) => l);
     }, [tmdbArt, fanartArt]);
 
     // TMDB + fanart backdrops merged, for the square-art tab. De-duplicated.
