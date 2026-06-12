@@ -783,11 +783,14 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
     const [focusX, setFocusX] = useState(saved.focusX ?? 0.5);
     const [focusY, setFocusY] = useState(saved.focusY ?? 0.5);
 
-    // Logo size override (1 = the strict CL2K guide box; >1 lets tall/boxy logos
-    // rise above the y=1100 zone-top guide instead of shrinking to fit).
+    // Logo size override (1 = the strict CL2K guide box; >1 enlarges the whole
+    // guide-fit box past the width guides, capped only by the canvas).
     const [logoScale, setLogoScale] = useState(saved.logoScale ?? 1);
     // Logo vertical offset (px from the locked baseline; positive = down).
     const [logoYOffset, setLogoYOffset] = useState(saved.logoYOffset ?? 0);
+    // Per-render whiten override; null = the module config (whiten_logo).
+    const [whitenLogo, setWhitenLogo] = useState(saved.whitenLogo ?? null);
+    const effectiveWhiten = whitenLogo === null ? (config?.whiten_logo ?? true) : whitenLogo;
 
     // Season variant (shows only)
     const [seasonNumber, setSeasonNumber] = useState(saved.seasonNumber ?? '');
@@ -816,6 +819,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             focusY,
             logoScale,
             logoYOffset,
+            whitenLogo,
             seasonNumber,
             bulkSeasons,
             bandLabel,
@@ -833,6 +837,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
         focusY,
         logoScale,
         logoYOffset,
+        whitenLogo,
         seasonNumber,
         bulkSeasons,
         bandLabel,
@@ -847,39 +852,79 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
     // A real (chosen/custom) logo is drawn as a live overlay on the logo-less base
     // so the size/position sliders move it without a server render. No logo = a
     // text wordmark, which is baked into the base instead (can't overlay it).
+    //
+    // Two processed variants: `processedBase` (no touch-up) is the STABLE image
+    // the B/W touch-up brush draws over — it must not change as strokes land, or
+    // the accumulated mask would be lost; `processedLogo` (touch-up applied) is
+    // what the live overlay shows and the render bakes in.
     const hasLogo = !!(logo || customLogo);
-    const [processedLogo, setProcessedLogo] = useState(null);
+    // Strokes are keyed to the (logo, whiten) they were drawn over: a stale key
+    // makes the mask a derived no-op instead of needing a reset-in-effect.
+    const flipKey = `${customLogo?.b64?.slice(0, 32) || logo}|${effectiveWhiten}`;
+    const [logoFlip, setLogoFlip] = useState(null); // { key, b64 }
+    const logoFlipB64 = logoFlip && logoFlip.key === flipKey ? logoFlip.b64 : null;
+    const setLogoFlipB64 = useCallback(
+        b64 => setLogoFlip(b64 ? { key: flipKey, b64 } : null),
+        [flipKey]
+    );
+    const [processedBase, setProcessedBase] = useState(null);
+    const [processedFlipped, setProcessedFlipped] = useState(null); // { forB64, data }
+    const logoReq = useCallback(
+        extra =>
+            cl2kMakerAPI
+                .logoProcessed({
+                    ...(customLogo?.b64 ? { logo_b64: customLogo.b64 } : { logo_path: logo }),
+                    whiten: effectiveWhiten,
+                    ...extra,
+                })
+                .then(resp => {
+                    const d = resp?.data;
+                    return d?.b64
+                        ? {
+                              dataUrl: `data:image/png;base64,${d.b64}`,
+                              width: d.width,
+                              height: d.height,
+                              maxWidth: d.max_width,
+                          }
+                        : null;
+                }),
+        [customLogo, logo, effectiveWhiten]
+    );
     useEffect(() => {
         if (!hasLogo) return undefined; // no fetch; `overlayLogo` below hides it
         let cancelled = false;
-        (async () => {
-            try {
-                const resp = await cl2kMakerAPI.logoProcessed(
-                    customLogo?.b64 ? { logo_b64: customLogo.b64 } : { logo_path: logo }
-                );
-                const d = resp?.data;
-                if (!cancelled) {
-                    setProcessedLogo(
-                        d?.b64
-                            ? {
-                                  dataUrl: `data:image/png;base64,${d.b64}`,
-                                  width: d.width,
-                                  height: d.height,
-                                  maxWidth: d.max_width,
-                              }
-                            : null
-                    );
-                }
-            } catch {
-                if (!cancelled) setProcessedLogo(null);
-            }
-        })();
+        logoReq({})
+            .then(d => {
+                if (!cancelled) setProcessedBase(d);
+            })
+            .catch(() => {
+                if (!cancelled) setProcessedBase(null);
+            });
         return () => {
             cancelled = true;
         };
-    }, [hasLogo, logo, customLogo]);
+    }, [hasLogo, logoReq]);
+    useEffect(() => {
+        if (!logoFlipB64) return undefined; // overlay derives to the base below
+        let cancelled = false;
+        logoReq({ flip_b64: logoFlipB64 })
+            .then(d => {
+                if (!cancelled) setProcessedFlipped({ forB64: logoFlipB64, data: d });
+            })
+            .catch(() => {
+                if (!cancelled) setProcessedFlipped(null);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [logoFlipB64, logoReq]);
     // Only show the overlay while a logo is selected (the fetched bytes may lag a
-    // deselect by a tick). Derived, so no reset-setState in the effect above.
+    // deselect by a tick). Derived, so no reset-setState in the effects above; the
+    // flipped variant is used only while it matches the current mask.
+    const processedLogo =
+        logoFlipB64 && processedFlipped?.forB64 === logoFlipB64
+            ? processedFlipped.data
+            : processedBase;
     const overlayLogo = hasLogo ? processedLogo : null;
 
     const isSeasonPoster = item.kind === 'show' && String(seasonNumber).trim() !== '';
@@ -951,6 +996,8 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             logo_b64: customLogo?.b64 || null,
             logo_scale: logoScale,
             logo_y_offset: logoYOffset,
+            whiten: whitenLogo,
+            logo_flip_b64: logoFlipB64,
             remove_text: removeText,
             mask_b64: removeText ? maskB64 : null,
             fit_mode: fitMode,
@@ -979,6 +1026,8 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             customLogo,
             logoScale,
             logoYOffset,
+            whitenLogo,
+            logoFlipB64,
             removeText,
             maskB64,
             fitMode,
@@ -1276,6 +1325,10 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                     setLogoScale={setLogoScale}
                     logoYOffset={logoYOffset}
                     setLogoYOffset={setLogoYOffset}
+                    whitenLogo={effectiveWhiten}
+                    setWhitenLogo={setWhitenLogo}
+                    logoTouchUpUrl={processedBase?.dataUrl || null}
+                    onLogoFlip={setLogoFlipB64}
                     processedLogo={overlayLogo}
                     fitMode={fitMode}
                     setFitMode={setFitMode}
@@ -1388,6 +1441,10 @@ const RenderPanel = ({
     setLogoScale,
     logoYOffset,
     setLogoYOffset,
+    whitenLogo,
+    setWhitenLogo,
+    logoTouchUpUrl,
+    onLogoFlip,
     processedLogo,
     fitMode,
     setFitMode,
@@ -1508,6 +1565,10 @@ const RenderPanel = ({
                     onScale={setLogoScale}
                     yOffset={logoYOffset}
                     onYOffset={setLogoYOffset}
+                    whiten={whitenLogo}
+                    onWhiten={setWhitenLogo}
+                    touchUpUrl={logoTouchUpUrl}
+                    onFlipMask={onLogoFlip}
                     emptyText="No logos from this source — upload a custom one, or a text wordmark is used as fallback."
                 />
 
@@ -2303,7 +2364,15 @@ const Picker = ({ label, items, loading, selected, onSelect, aspect, onBlack, em
                                     ? 'border-primary ring-2 ring-primary/40'
                                     : 'border-border hover:border-border-strong'
                             } ${onBlack ? 'bg-black' : 'bg-surface-alt'}`}
-                            title={it.width ? `${it.width}×${it.height}` : path}
+                            title={
+                                it.width
+                                    ? `${it.width}×${it.height}${
+                                          'iso_639_1' in it
+                                              ? ` (${it.iso_639_1 || 'textless'})`
+                                              : ''
+                                      }`
+                                    : path
+                            }
                         >
                             <img
                                 src={it.url || urlForPath(path)}
@@ -2319,6 +2388,13 @@ const Picker = ({ label, items, loading, selected, onSelect, aspect, onBlack, em
                             {it.width ? (
                                 <span className="absolute bottom-0 right-0 text-[11px] font-mono text-white bg-black/60 px-1">
                                     {it.width}×{it.height}
+                                </span>
+                            ) : null}
+                            {/* Language badge: 'textless' (null language) art is pure
+                                artwork — no AI text pass needed at all. */}
+                            {'iso_639_1' in it ? (
+                                <span className="absolute bottom-0 left-0 text-[11px] font-mono text-white bg-black/60 px-1">
+                                    {it.iso_639_1 || 'textless'}
                                 </span>
                             ) : null}
                         </button>
@@ -2444,8 +2520,13 @@ const LogoSelector = ({
     onScale,
     yOffset,
     onYOffset,
+    whiten, // effective CL2K-whiten state (config default until overridden)
+    onWhiten,
+    touchUpUrl, // processed (un-flipped) logo for the B/W touch-up brush
+    onFlipMask,
     emptyText = 'No logos from this source — a text wordmark is used as fallback.',
 }) => {
+    const [showTouchUp, setShowTouchUp] = useState(false);
     const onFile = e => {
         const f = e.target.files?.[0];
         e.target.value = ''; // allow re-selecting the same file
@@ -2463,11 +2544,41 @@ const LogoSelector = ({
         <div className="bg-surface border border-border rounded-lg p-3">
             <div className="flex items-center justify-between mb-2">
                 <h3 className="text-sm font-medium text-primary">{label}</h3>
-                <label className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs border border-border text-secondary hover:border-border-strong cursor-pointer">
-                    <span className="material-symbols-outlined text-sm">upload</span>
-                    Upload custom
-                    <input type="file" accept="image/*" className="hidden" onChange={onFile} />
-                </label>
+                <div className="flex items-center gap-1.5">
+                    {onWhiten && (
+                        <>
+                            <button
+                                type="button"
+                                className={`px-2.5 py-1 text-xs rounded-md border ${
+                                    whiten
+                                        ? 'bg-primary text-white border-primary'
+                                        : 'bg-surface text-secondary border-border hover:border-border-strong'
+                                }`}
+                                onClick={() => onWhiten(true)}
+                                title="CL2K two-tone: white fills, black keylines"
+                            >
+                                CL2K white
+                            </button>
+                            <button
+                                type="button"
+                                className={`px-2.5 py-1 text-xs rounded-md border ${
+                                    !whiten
+                                        ? 'bg-primary text-white border-primary'
+                                        : 'bg-surface text-secondary border-border hover:border-border-strong'
+                                }`}
+                                onClick={() => onWhiten(false)}
+                                title="Keep the logo's original colors"
+                            >
+                                Original
+                            </button>
+                        </>
+                    )}
+                    <label className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs border border-border text-secondary hover:border-border-strong cursor-pointer">
+                        <span className="material-symbols-outlined text-sm">upload</span>
+                        Upload custom
+                        <input type="file" accept="image/*" className="hidden" onChange={onFile} />
+                    </label>
+                </div>
             </div>
             {customLogo ? (
                 <div className="flex items-center gap-3 rounded-md border-2 border-primary bg-black p-2">
@@ -2560,15 +2671,46 @@ const LogoSelector = ({
                     </span>
                 </label>
             )}
+            {/* B/W touch-up: a global two-tone map can't decide interior accents
+                that share saturation + luma with their surroundings — brush those
+                regions to flip black↔white. Drawn over the UN-flipped processed
+                logo so the accumulated strokes stay valid; the live overlay and
+                the render apply the flip. */}
+            {onFlipMask && touchUpUrl && whiten && (
+                <div className="mt-2">
+                    <button
+                        type="button"
+                        onClick={() => setShowTouchUp(s => !s)}
+                        className="px-2.5 py-1 text-xs rounded-md border bg-surface text-secondary border-border hover:border-border-strong"
+                    >
+                        {showTouchUp ? 'Hide touch-up' : 'Touch up black/white'}
+                    </button>
+                    {showTouchUp && (
+                        <div className="mt-2">
+                            <p className="text-xs text-tertiary mb-1">
+                                Brush regions to flip black↔white (e.g. an interior badge or star
+                                the automatic two-tone got wrong). Applies to the live preview and
+                                the render.
+                            </p>
+                            <div className="bg-black rounded p-1 inline-block max-w-full">
+                                <BrushMask
+                                    imageUrl={touchUpUrl}
+                                    brushSize={10}
+                                    onMaskChange={onFlipMask}
+                                />
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
             <p className="mt-2 text-xs text-tertiary">
                 Whitened, trimmed and placed on the CL2K guides automatically — it moves live in the
                 preview as you drag.
                 {onScale && (
                     <>
                         {' '}
-                        Size 100% = the CL2K guide box; raise it for a tall/boxy logo
-                        (sticker-style) that would otherwise render small — width is always capped
-                        by the guides.
+                        Size 100% = the CL2K guide box; raise it to enlarge past the 600px guide
+                        (hand-made posters run up to ~880px wide) — capped only by the canvas.
                     </>
                 )}
                 {onYOffset && (
@@ -2763,6 +2905,45 @@ const SquareFramer = ({
     );
 };
 
+// Season selector for the asset makers: file the art for ONE season of a show
+// (` - Season NN` naming; Plex seasons take background/square art and Kometa
+// reads Season##_background). Blank = the show itself. Hidden for movies and
+// collections (no seasons to target).
+const AssetSeasonField = ({ show, value, onChange }) => {
+    if (!show) return null;
+    return (
+        <label className="flex items-center gap-2 text-sm text-secondary">
+            <span className="w-28">Season</span>
+            <input
+                type="number"
+                min="0"
+                max="99"
+                value={value}
+                onChange={e => onChange(e.target.value)}
+                placeholder="blank = the show itself"
+                className="flex-1 bg-surface border border-border rounded px-2 py-1 text-sm text-primary"
+            />
+        </label>
+    );
+};
+
+const seasonSuffix = seasonNum =>
+    seasonNum === null
+        ? ''
+        : seasonNum === 0
+          ? ' - Specials'
+          : ` - Season ${String(seasonNum).padStart(2, '0')}`;
+
+// One-line workflow reminder shared by the asset-maker Output cards: a generated
+// file only reaches Plex/Kometa once Asset Renamerr runs over it, and it can only
+// see the file if the maker's output_dir is one of Poster Renamerr's source_dirs.
+const AssetWorkflowHint = () => (
+    <p className="text-xs text-tertiary">
+        Applies on the next Asset Renamerr run — the CL2K output directory must be one of Poster
+        Renamerr&apos;s source dirs for the file to be scanned.
+    </p>
+);
+
 const SquareArtPanel = ({ item, backdrops, loadingArt, saveTargets, toast }) => {
     const [backdrop, setBackdrop] = useState(null); // file_path | url
     const [customBg, setCustomBg] = useState(null); // { b64, url, name }
@@ -2770,12 +2951,14 @@ const SquareArtPanel = ({ item, backdrops, loadingArt, saveTargets, toast }) => 
     const [focusY, setFocusY] = useState(0.5);
     const [fitMode, setFitMode] = useState('cover'); // cover (fill) | fit (contain)
     const [zoom, setZoom] = useState(1);
+    const [seasonNumber, setSeasonNumber] = useState(''); // '' = show-level asset
     const [previewUrl, setPreviewUrl] = useState(null);
     const [previewing, setPreviewing] = useState(false);
     const [busy, setBusy] = useState(false);
 
     const srcUrl = customBg?.url || (backdrop ? urlForPath(backdrop) : null);
     const hasSrc = !!(customBg || backdrop);
+    const seasonNum = item.kind === 'show' && seasonNumber !== '' ? Number(seasonNumber) : null;
 
     const req = useMemo(
         () => ({
@@ -2785,6 +2968,7 @@ const SquareArtPanel = ({ item, backdrops, loadingArt, saveTargets, toast }) => 
             year: item.year,
             tvdb_id: item.tvdb_id,
             imdb_id: item.imdb_id,
+            season_number: seasonNum,
             backdrop_path: customBg ? null : backdrop,
             backdrop_b64: customBg?.b64 || null,
             focus_x: focusX,
@@ -2802,6 +2986,7 @@ const SquareArtPanel = ({ item, backdrops, loadingArt, saveTargets, toast }) => 
             focusY,
             fitMode,
             zoom,
+            seasonNum,
             saveTargets.saveLocal,
             saveTargets.uploadGdrive,
         ]
@@ -2953,13 +3138,20 @@ const SquareArtPanel = ({ item, backdrops, loadingArt, saveTargets, toast }) => 
                 </div>
                 <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-2">
                     <h3 className="text-sm font-medium text-primary">Output</h3>
+                    <AssetSeasonField
+                        show={item.kind === 'show'}
+                        value={seasonNumber}
+                        onChange={setSeasonNumber}
+                    />
                     <p className="text-xs text-tertiary">
                         Saved as{' '}
                         <span className="text-secondary">
-                            Title (Year) {'{ids}'} - SquareArt.jpg
+                            Title (Year) {'{ids}'}
+                            {seasonSuffix(seasonNum)} - SquareArt.jpg
                         </span>{' '}
                         and applied to Plex via Asset Renamerr (square art is Plex-direct only).
                     </p>
+                    <AssetWorkflowHint />
                     <SaveTargets targets={saveTargets} />
                     <LoadingButton
                         onClick={onGenerate}
@@ -2985,12 +3177,14 @@ const BackgroundArtPanel = ({ item, backdrops, loadingArt, saveTargets, toast })
     const [fitMode, setFitMode] = useState('cover'); // cover (fill) | fit (contain)
     const [zoom, setZoom] = useState(1);
     const [resolution, setResolution] = useState('1080p'); // 1080p | 4k (Plex dims)
+    const [seasonNumber, setSeasonNumber] = useState(''); // '' = show-level asset
     const [previewUrl, setPreviewUrl] = useState(null);
     const [previewing, setPreviewing] = useState(false);
     const [busy, setBusy] = useState(false);
 
     const srcUrl = customBg?.url || (backdrop ? urlForPath(backdrop) : null);
     const hasSrc = !!(customBg || backdrop);
+    const seasonNum = item.kind === 'show' && seasonNumber !== '' ? Number(seasonNumber) : null;
 
     const req = useMemo(
         () => ({
@@ -3000,6 +3194,7 @@ const BackgroundArtPanel = ({ item, backdrops, loadingArt, saveTargets, toast })
             year: item.year,
             tvdb_id: item.tvdb_id,
             imdb_id: item.imdb_id,
+            season_number: seasonNum,
             backdrop_path: customBg ? null : backdrop,
             backdrop_b64: customBg?.b64 || null,
             focus_x: focusX,
@@ -3019,6 +3214,7 @@ const BackgroundArtPanel = ({ item, backdrops, loadingArt, saveTargets, toast })
             fitMode,
             zoom,
             resolution,
+            seasonNum,
             saveTargets.saveLocal,
             saveTargets.uploadGdrive,
         ]
@@ -3201,13 +3397,20 @@ const BackgroundArtPanel = ({ item, backdrops, loadingArt, saveTargets, toast })
                 </div>
                 <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-2">
                     <h3 className="text-sm font-medium text-primary">Output</h3>
+                    <AssetSeasonField
+                        show={item.kind === 'show'}
+                        value={seasonNumber}
+                        onChange={setSeasonNumber}
+                    />
                     <p className="text-xs text-tertiary">
                         Saved as{' '}
                         <span className="text-secondary">
-                            Title (Year) {'{ids}'} - Background.jpg
+                            Title (Year) {'{ids}'}
+                            {seasonSuffix(seasonNum)} - Background.jpg
                         </span>{' '}
                         and applied to Plex/Kometa via Asset Renamerr.
                     </p>
+                    <AssetWorkflowHint />
                     <SaveTargets targets={saveTargets} />
                     <LoadingButton
                         onClick={onGenerate}
@@ -3378,8 +3581,10 @@ const LogoAssetPanel = ({ item, logos, loadingArt, saveTargets, toast }) => {
                     <p className="text-xs text-tertiary">
                         Filed as{' '}
                         <span className="text-secondary">Title (Year) {'{ids}'} - Logo.png</span>{' '}
-                        and applied to Plex via Asset Renamerr — separate from any square art.
+                        and applied to Plex/Kometa via Asset Renamerr — separate from any square
+                        art.
                     </p>
+                    <AssetWorkflowHint />
                     <SaveTargets targets={saveTargets} />
                     <LoadingButton
                         onClick={onExport}
