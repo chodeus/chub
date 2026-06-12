@@ -37,7 +37,11 @@ from backend.modules.cl2k_maker import (
 )
 from backend.util.cl2k import tmdb_art
 from backend.util.cl2k.image_fetch import TMDB_IMAGE_CDN, download as download_image
-from backend.util.cl2k.renderer import process_logo, render_framed_art, render_square_art
+from backend.util.cl2k.renderer import (
+    process_logo,
+    render_framed_art,
+    render_square_art,
+)
 from backend.util.config import load_config
 from backend.util.database import ChubDB
 from backend.util.database.cl2k_generated import cl2k_generated_for
@@ -67,7 +71,9 @@ class GenerateRequest(BaseModel):
     season_number: Optional[int] = None
     backdrop_path: Optional[str] = None
     logo_path: Optional[str] = None
-    logo_b64: Optional[str] = None  # custom uploaded logo (PNG, base64); wins over logo_path
+    logo_b64: Optional[str] = (
+        None  # custom uploaded logo (PNG, base64); wins over logo_path
+    )
     # Logo size: relaxes the height clamp (the y=1100 zone-top guide) so tall/boxy
     # logos can render readable; 1.0 = the strict CL2K guide box. Width caps still apply.
     logo_scale: float = Field(1.0, ge=0.25, le=3.0)
@@ -189,7 +195,10 @@ def images(
     logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
     tmdb = TMDBClient(load_config().tmdb, db, logger)
-    imgs = tmdb_art.list_images(tmdb, tmdb_id, media_type) or {"logos": [], "backdrops": []}
+    imgs = tmdb_art.list_images(tmdb, tmdb_id, media_type) or {
+        "logos": [],
+        "backdrops": [],
+    }
     # Textless (null-language) posters first — pure art that needs no AI text
     # pass at all. Stable sort keeps TMDB's vote order within each group.
     posters = sorted(
@@ -207,7 +216,9 @@ def images(
     )
 
 
-@router.get("/season-images", summary="TMDB season posters (portrait) for the art picker")
+@router.get(
+    "/season-images", summary="TMDB season posters (portrait) for the art picker"
+)
 def season_images(
     tmdb_id: int = Query(...),
     season_number: int = Query(...),
@@ -219,7 +230,9 @@ def season_images(
     return ok("ok", {"posters": _decorate(imgs.get("posters", []))})
 
 
-@router.get("/upload-status", summary="Whether CL2K Drive upload has a usable OAuth token")
+@router.get(
+    "/upload-status", summary="Whether CL2K Drive upload has a usable OAuth token"
+)
 def upload_status(
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_cl2k_logger),
@@ -237,7 +250,9 @@ def upload_status(
     )
 
 
-@router.get("/external-ids", summary="TMDB external ids (tvdb_id + imdb_id) for a title")
+@router.get(
+    "/external-ids", summary="TMDB external ids (tvdb_id + imdb_id) for a title"
+)
 def external_ids(
     tmdb_id: int = Query(...),
     media_type: str = Query("movie", alias="type"),
@@ -499,7 +514,9 @@ def square_generate(
     )
     if result.get("status") == "generated":
         return ok("Square art generated", result)
-    return error(result.get("reason", "generation failed"), "CL2K_GENERATE", data=result)
+    return error(
+        result.get("reason", "generation failed"), "CL2K_GENERATE", data=result
+    )
 
 
 class BackgroundArtRequest(BaseModel):
@@ -523,7 +540,9 @@ class BackgroundArtRequest(BaseModel):
     upload_gdrive: Optional[bool] = None
 
 
-@router.post("/background-preview", summary="Render background art (16:9) without saving")
+@router.post(
+    "/background-preview", summary="Render background art (16:9) without saving"
+)
 def background_preview(
     req: BackgroundArtRequest,
     db: ChubDB = Depends(get_database),
@@ -581,10 +600,14 @@ def background_generate(
     )
     if result.get("status") == "generated":
         return ok("Background art generated", result)
-    return error(result.get("reason", "generation failed"), "CL2K_GENERATE", data=result)
+    return error(
+        result.get("reason", "generation failed"), "CL2K_GENERATE", data=result
+    )
 
 
-@router.post("/logo-asset-preview", summary="Processed logo asset (transparent PNG), no save")
+@router.post(
+    "/logo-asset-preview", summary="Processed logo asset (transparent PNG), no save"
+)
 def logo_asset_preview(
     req: LogoAssetRequest,
     db: ChubDB = Depends(get_database),
@@ -626,7 +649,9 @@ def logo_asset_generate(
     )
     if result.get("status") == "generated":
         return ok("Logo asset filed", result)
-    return error(result.get("reason", "generation failed"), "CL2K_GENERATE", data=result)
+    return error(
+        result.get("reason", "generation failed"), "CL2K_GENERATE", data=result
+    )
 
 
 @router.get("/generated", summary="Recently generated CL2K posters")
@@ -725,7 +750,9 @@ def generate_seasons_endpoint(
     return ok("Seasons generated", out)
 
 
-@router.post("/upload-generate", summary="Generate from a manually-cleaned backdrop (handoff)")
+@router.post(
+    "/upload-generate", summary="Generate from a manually-cleaned backdrop (handoff)"
+)
 async def upload_generate(
     file: UploadFile = File(...),
     kind: str = Form(...),
@@ -800,7 +827,9 @@ async def upload_generate(
     )
     if result.get("status") == "generated":
         return ok("Poster generated", result)
-    return error(result.get("reason", "generation failed"), "CL2K_GENERATE", data=result)
+    return error(
+        result.get("reason", "generation failed"), "CL2K_GENERATE", data=result
+    )
 
 
 @router.get("/fanart-images", summary="fanart.tv logo + background for the art picker")
@@ -833,6 +862,35 @@ def fanart_images_endpoint(
         else []
     )
     return ok("ok", {"logos": logos, "backdrops": backdrops})
+
+
+@router.get("/plex-images", summary="Plex artwork (logos + backgrounds + posters)")
+def plex_images_endpoint(
+    tmdb_id: Optional[int] = Query(None),
+    media_type: str = Query("movie", alias="type"),
+    tvdb_id: Optional[int] = Query(None),
+    imdb_id: Optional[str] = Query(None),
+    db: ChubDB = Depends(get_database),
+    logger: Any = Depends(get_cl2k_logger),
+) -> JSONResponse:
+    """Read-only Plex artwork for the picker: resolves the item to a ratingKey
+    via the synced plex_media_cache and returns its clearLogos / backgrounds /
+    posters. Returned URLs carry the user's own X-Plex-Token (the standard Plex
+    image mechanism — their own server on their own network); ``file_path`` ==
+    ``url`` since both image_fetch.download and the browser load them directly.
+    Never writes to Plex, so it can't affect Poster Cleanarr's in-use set."""
+    from backend.util.cl2k.plex_art import plex_images
+
+    res = plex_images(
+        load_config(),
+        db,
+        logger,
+        kind=media_type,
+        tmdb_id=tmdb_id,
+        tvdb_id=tvdb_id,
+        imdb_id=imdb_id,
+    )
+    return ok("ok", res)
 
 
 @router.post("/upload-poster", summary="File a finished poster (optionally add a logo)")
@@ -930,7 +988,9 @@ class RetextRequest(BaseModel):
     upload_gdrive: Optional[bool] = None
 
 
-@router.post("/retext", summary="Re-text a finished poster (AI-erase old text + redraw label)")
+@router.post(
+    "/retext", summary="Re-text a finished poster (AI-erase old text + redraw label)"
+)
 def retext(
     req: RetextRequest,
     db: ChubDB = Depends(get_database),
@@ -980,7 +1040,7 @@ def retext(
         return ok("ok", {"preview_b64": base64.b64encode(out).decode()})
     if isinstance(out, dict) and out.get("status") == "generated":
         return ok("Poster saved", out)
-    reason = out.get("reason", "retext failed") if isinstance(out, dict) else "retext failed"
+    reason = (
+        out.get("reason", "retext failed") if isinstance(out, dict) else "retext failed"
+    )
     return error(reason, "CL2K_RETEXT", data=out if isinstance(out, dict) else None)
-
-

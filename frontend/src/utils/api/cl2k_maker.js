@@ -103,6 +103,20 @@ export const cl2kMakerAPI = {
             { useCache: true, cacheTTL: 5 * 60 * 1000 }
         ),
 
+    /** Plex artwork (clearLogos + backgrounds + posters) for the art picker —
+     *  read-only; resolves the item to a ratingKey via the synced plex cache.
+     *  Not cached: URLs carry a token that can rotate. */
+    plexImages: ({ tmdbId, type = 'movie', tvdbId, imdbId } = {}) =>
+        apiCore.get(
+            `/cl2k-maker/plex-images?${qs({
+                tmdb_id: tmdbId,
+                type,
+                tvdb_id: tvdbId,
+                imdb_id: imdbId,
+            })}`,
+            { useCache: false }
+        ),
+
     /** TMDB season-level posters (portrait 2:3) for the art picker. */
     seasonImages: (tmdbId, seasonNumber) =>
         apiCore.get(

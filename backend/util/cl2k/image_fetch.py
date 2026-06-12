@@ -59,7 +59,11 @@ def select_backdrop(
         # largest available (vote only as a tiebreaker between equal sizes).
         ranked = sorted(
             pool,
-            key=lambda b: (b.get("height", 0), b.get("width", 0), b.get("vote_average", 0)),
+            key=lambda b: (
+                b.get("height", 0),
+                b.get("width", 0),
+                b.get("vote_average", 0),
+            ),
             reverse=True,
         )
     return ranked[0].get("file_path")
@@ -88,22 +92,52 @@ def select_logo(
     return pool[0].get("file_path")
 
 
+def _plex_netlocs() -> set:
+    """host:port of every configured Plex instance.
+
+    The Plex artwork source returns image URLs on the user's own Plex server, so
+    those endpoints must pass the SSRF allowlist below. Matching the exact
+    ``host:port`` (not just the hostname) keeps the opening as tight as possible
+    — only the Plex server the user configured, not other services on that host.
+    Read from config each call (cheap; config is cached) so a newly-added
+    instance is honoured without a restart."""
+    from urllib.parse import urlparse
+
+    try:
+        from backend.util.config import load_config
+
+        plex = getattr(load_config().instances, "plex", {}) or {}
+        out = set()
+        for cfg in plex.values():
+            nl = (urlparse(getattr(cfg, "url", "") or "").netloc or "").lower()
+            if nl:
+                out.add(nl)
+        return out
+    except Exception:
+        return set()
+
+
 def _is_allowed_image_host(url: str) -> bool:
-    """Allow only the known image CDNs (TMDB + fanart.tv).
+    """Allow only the known image CDNs (TMDB + fanart.tv) and the user's own
+    configured Plex server(s).
 
     ``download`` accepts absolute URLs that originate from request data
     (``backdrop_path`` / ``logo_path``), so without a host allowlist the server
     could be coerced into fetching arbitrary internal URLs (SSRF — e.g. cloud
-    metadata). Restricting to the hosts the maker legitimately uses closes that.
+    metadata). Restricting to the hosts the maker legitimately uses closes that;
+    Plex is matched by exact host:port from config.
     """
     from urllib.parse import urlparse
 
-    host = (urlparse(url).hostname or "").lower()
-    return (
+    parsed = urlparse(url)
+    host = (parsed.hostname or "").lower()
+    if (
         host == "image.tmdb.org"
         or host == "assets.fanart.tv"
         or host.endswith(".fanart.tv")
-    )
+    ):
+        return True
+    return (parsed.netloc or "").lower() in _plex_netlocs()
 
 
 def download(file_path: str, session=None) -> bytes:

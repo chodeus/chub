@@ -39,9 +39,26 @@ const BAND_LABEL_OPTIONS = [
     { value: 'SPECIALS', label: 'Specials' },
 ];
 
+// Wordmark logos first. TMDB's "logos" array is polluted with portrait
+// character art (full-body Goku/Vegeta/etc. renders) that whiten into line-art
+// garbage and render tiny in the landscape CL2K logo zone. Real title wordmarks
+// are wide (aspect ≳ 1.4); push tall/portrait images to the end. Stable within
+// each group; unknown-dimension logos (fanart/Plex clearlogos — already proper
+// wordmarks) rank with the wordmarks. Hides nothing — just orders. Shared by the
+// Builder source pickers and the merged asset-tab lists.
+const sortWordmarkFirst = logos =>
+    logos
+        .map((l, i) => [l, i])
+        .sort(([a, ai], [b, bi]) => {
+            const score = x => (x.width && x.height && x.width / x.height < 1.4 ? 1 : 0);
+            return score(a) - score(b) || ai - bi;
+        })
+        .map(([l]) => l);
+
 const SOURCE_TABS = [
     { key: 'tmdb', label: 'TMDB', icon: 'movie' },
     { key: 'fanart', label: 'fanart.tv', icon: 'palette' },
+    { key: 'plex', label: 'Plex', icon: 'live_tv' },
     { key: 'square', label: 'Square art', icon: 'crop_square' },
     { key: 'background', label: 'Background', icon: 'wallpaper' },
     { key: 'logo', label: 'Logo', icon: 'sell' },
@@ -752,9 +769,10 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
     // Save destinations (output dir / Drive) — shared by every save flow below.
     const saveTargets = useSaveTargets(uploadStatus);
 
-    // Art (shared across the TMDB / fanart tabs)
+    // Art (shared across the TMDB / fanart / Plex tabs)
     const [tmdbArt, setTmdbArt] = useState(null);
     const [fanartArt, setFanartArt] = useState(null);
+    const [plexArt, setPlexArt] = useState(null);
     // TMDB season-level posters (portrait 2:3) — only for season posters.
     const [seasonArt, setSeasonArt] = useState(null);
     const [loadingArt, setLoadingArt] = useState(true);
@@ -936,9 +954,19 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
         let cancelled = false;
         (async () => {
             try {
-                const [tm, fa] = await Promise.allSettled([
+                const [tm, fa, px] = await Promise.allSettled([
                     cl2kMakerAPI.images(item.tmdb_id, item.kind),
                     cl2kMakerAPI.fanartImages({
+                        tmdbId: item.tmdb_id,
+                        type: item.kind,
+                        tvdbId: item.tvdb_id,
+                        imdbId: item.imdb_id,
+                    }),
+                    // Read-only: resolves via the synced plex cache, returns empty
+                    // (with a reason) when Plex isn't configured or the item isn't
+                    // in a library. Fetched eagerly so it's also in the merged
+                    // asset-tab lists, not just the Plex source tab.
+                    cl2kMakerAPI.plexImages({
                         tmdbId: item.tmdb_id,
                         type: item.kind,
                         tvdbId: item.tvdb_id,
@@ -948,6 +976,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                 if (cancelled) return;
                 if (tm.status === 'fulfilled') setTmdbArt(tm.value?.data || null);
                 if (fa.status === 'fulfilled') setFanartArt(fa.value?.data || null);
+                if (px.status === 'fulfilled') setPlexArt(px.value?.data || null);
             } finally {
                 if (!cancelled) setLoadingArt(false);
             }
@@ -1227,44 +1256,40 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
         toast,
     ]);
 
-    const activeArt = tab === 'fanart' ? fanartArt : tmdbArt;
-    const isRenderTab = tab === 'tmdb' || tab === 'fanart';
+    const activeArt = tab === 'plex' ? plexArt : tab === 'fanart' ? fanartArt : tmdbArt;
+    const isRenderTab = tab === 'tmdb' || tab === 'fanart' || tab === 'plex';
 
-    // TMDB + fanart logos merged, for the uploaded-canvas tabs (which have no
-    // source sub-tab of their own). De-duplicated by file_path.
+    // TMDB + fanart + Plex logos merged, for the uploaded-canvas tabs (which have
+    // no source sub-tab of their own). De-duplicated by file_path, wordmark-first.
     const allLogos = useMemo(() => {
-        const merged = [...(tmdbArt?.logos || []), ...(fanartArt?.logos || [])];
+        const merged = [
+            ...(tmdbArt?.logos || []),
+            ...(fanartArt?.logos || []),
+            ...(plexArt?.logos || []),
+        ];
         const seen = new Set();
         const deduped = merged.filter(l => {
             if (!l?.file_path || seen.has(l.file_path)) return false;
             seen.add(l.file_path);
             return true;
         });
-        // Wordmark logos first. TMDB's "logos" array is polluted with portrait
-        // character art (full-body renders of Goku/Vegeta/etc.) that whiten into
-        // line-art garbage and render tiny in the landscape CL2K logo zone. Real
-        // title wordmarks are wide (aspect ≳ 1.4); push tall/portrait images to the
-        // end. Stable within each group; unknown dims (fanart clearlogos, already
-        // proper wordmarks) rank with the wordmarks. Hides nothing — just orders.
-        return deduped
-            .map((l, i) => [l, i])
-            .sort(([a, ai], [b, bi]) => {
-                const score = x => (x.width && x.height && x.width / x.height < 1.4 ? 1 : 0);
-                return score(a) - score(b) || ai - bi;
-            })
-            .map(([l]) => l);
-    }, [tmdbArt, fanartArt]);
+        return sortWordmarkFirst(deduped);
+    }, [tmdbArt, fanartArt, plexArt]);
 
-    // TMDB + fanart backdrops merged, for the square-art tab. De-duplicated.
+    // TMDB + fanart + Plex backdrops merged, for the square/background tabs. Deduped.
     const allBackdrops = useMemo(() => {
-        const merged = [...(tmdbArt?.backdrops || []), ...(fanartArt?.backdrops || [])];
+        const merged = [
+            ...(tmdbArt?.backdrops || []),
+            ...(fanartArt?.backdrops || []),
+            ...(plexArt?.backdrops || []),
+        ];
         const seen = new Set();
         return merged.filter(b => {
             if (!b?.file_path || seen.has(b.file_path)) return false;
             seen.add(b.file_path);
             return true;
         });
-    }, [tmdbArt, fanartArt]);
+    }, [tmdbArt, fanartArt, plexArt]);
 
     return (
         <>
@@ -1495,7 +1520,9 @@ const RenderPanel = ({
     saveTargets,
 }) => {
     const backdrops = art?.backdrops || [];
-    const logos = art?.logos || [];
+    // Wordmark-first, same as the merged asset-tab lists — so the Builder's own
+    // logo picker surfaces real title logos ahead of TMDB's character-art junk.
+    const logos = useMemo(() => sortWordmarkFirst(art?.logos || []), [art]);
     const seasonPosters = seasonArt?.posters || [];
     const backdropUrl = backdrop ? urlForPath(backdrop) : null;
     // Template guide lines over the rendered preview (the PSD's cyan guides).
@@ -1505,6 +1532,19 @@ const RenderPanel = ({
         <section className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Left: pickers + AI */}
             <div className="flex flex-col gap-4">
+                {/* Plex source: explain an empty result (not configured / not in a
+                    synced library / unreachable) so it isn't silently blank. */}
+                {source === 'plex' &&
+                    art?.reason &&
+                    !backdrops.length &&
+                    !logos.length &&
+                    !(art?.posters || []).length && (
+                        <div className="bg-surface border border-border rounded-lg p-3 text-xs text-tertiary">
+                            <span className="text-secondary">Plex: </span>
+                            {art.reason} Plex artwork is read-only here — selecting it never changes
+                            or deletes anything in Plex.
+                        </div>
+                    )}
                 {seasonPosters.length > 0 && (
                     <Picker
                         label="Season poster (tmdb)"
