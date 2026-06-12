@@ -55,16 +55,51 @@ const sortWordmarkFirst = logos =>
         })
         .map(([l]) => l);
 
-const SOURCE_TABS = [
-    { key: 'tmdb', label: 'TMDB', icon: 'movie' },
-    { key: 'fanart', label: 'fanart.tv', icon: 'palette' },
-    { key: 'plex', label: 'Plex', icon: 'live_tv' },
-    { key: 'square', label: 'Square art', icon: 'crop_square' },
+// Top-level tabs = WHAT you're building. Sources (TMDB/fanart/Plex/Upload) are
+// chosen per-picker inside each page (see SourceSelector).
+const BUILD_TABS = [
+    { key: 'poster', label: 'Poster', icon: 'image' },
     { key: 'background', label: 'Background', icon: 'wallpaper' },
+    { key: 'square', label: 'Square art', icon: 'crop_square' },
     { key: 'logo', label: 'Logo', icon: 'sell' },
+];
+// Occasional "I already have art" workflows — tucked under the More ▾ menu.
+const MORE_TABS = [
     { key: 'upload-poster', label: 'Finished poster', icon: 'image' },
     { key: 'edit', label: 'Edit poster', icon: 'edit' },
 ];
+// Old tab keys (source-as-tab) → the new build tab, so a saved session migrates.
+const TAB_MIGRATE = { tmdb: 'poster', fanart: 'poster', plex: 'poster' };
+
+// Per-picker artwork sources (Option A: a segmented row in each picker header).
+// 'upload' swaps the grid for that picker's custom-upload control.
+const ART_SOURCES = [
+    { key: 'tmdb', label: 'TMDB', icon: 'movie' },
+    { key: 'fanart', label: 'fanart', icon: 'palette' },
+    { key: 'plex', label: 'Plex', icon: 'live_tv' },
+    { key: 'upload', label: 'Upload', icon: 'upload' },
+];
+
+const SourceSelector = ({ value, onChange, sources = ART_SOURCES }) => (
+    <div className="flex items-center gap-1 flex-wrap">
+        {sources.map(s => (
+            <button
+                key={s.key}
+                type="button"
+                onClick={() => onChange(s.key)}
+                className={`inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md border ${
+                    value === s.key
+                        ? 'bg-primary text-white border-primary'
+                        : 'bg-surface text-secondary border-border hover:border-border-strong'
+                }`}
+                title={s.label}
+            >
+                <span className="material-symbols-outlined text-sm">{s.icon}</span>
+                {s.label}
+            </button>
+        ))}
+    </div>
+);
 
 // Map a deep-link / paste media type onto the kind strings the maker uses.
 const normalizeKind = t => {
@@ -760,10 +795,13 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
     // navigation. Read once on mount.
     const saved = useMemo(() => ssRead(SS_BUILDER, {}), []);
 
-    // 'upload-backdrop' was merged into the Edit-poster tab; migrate a saved tab.
-    const [tab, setTab] = useState(
-        saved.tab === 'upload-backdrop' ? 'edit' : (saved.tab ?? 'tmdb')
-    );
+    // Migrate saved tab keys: 'upload-backdrop' → 'edit' (old merge); the old
+    // source-as-tab keys (tmdb/fanart/plex) → the unified 'poster' build tab.
+    const [tab, setTab] = useState(() => {
+        const t = saved.tab === 'upload-backdrop' ? 'edit' : (saved.tab ?? 'poster');
+        return TAB_MIGRATE[t] || t;
+    });
+    const [moreOpen, setMoreOpen] = useState(false);
     const [editIds, setEditIds] = useState(false);
 
     // Save destinations (output dir / Drive) — shared by every save flow below.
@@ -784,6 +822,17 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
     const setCustomLogoExclusive = useCallback(c => {
         setCustomLogo(c);
         if (c) setLogo(null); // custom logo replaces a chosen TMDB/fanart logo
+    }, []);
+    // Custom uploaded backdrop (the 'Upload' backdrop source): { b64, name, url }.
+    // Mutually exclusive with a picker-chosen `backdrop` path.
+    const [customBackdrop, setCustomBackdrop] = useState(null);
+    const setBackdropExclusive = useCallback(p => {
+        setBackdrop(p);
+        if (p) setCustomBackdrop(null);
+    }, []);
+    const setCustomBackdropExclusive = useCallback(c => {
+        setCustomBackdrop(c);
+        if (c) setBackdrop(null);
     }, []);
 
     // Crop framing. "cover" scales up + crops to fill (focal point below); "fit"
@@ -1020,7 +1069,8 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             tvdb_id: item.tvdb_id,
             imdb_id: item.imdb_id,
             season_number: isSeasonPoster ? Number(seasonNumber) : null,
-            backdrop_path: backdrop,
+            backdrop_path: customBackdrop ? null : backdrop,
+            backdrop_b64: customBackdrop?.b64 || null,
             logo_path: logo,
             logo_b64: customLogo?.b64 || null,
             logo_scale: logoScale,
@@ -1051,6 +1101,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             isSeasonPoster,
             seasonNumber,
             backdrop,
+            customBackdrop,
             logo,
             customLogo,
             logoScale,
@@ -1098,6 +1149,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                 id: item.tmdb_id,
                 sn: isSeasonPoster ? seasonNumber : null,
                 bd: backdrop,
+                cbd: customBackdrop?.b64?.slice(0, 32) || null,
                 fm: fitMode,
                 c: (fitMode === 'fit' || fitMode === 'extend') && crop ? crop : null,
                 vp: vPos,
@@ -1118,6 +1170,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             isSeasonPoster,
             seasonNumber,
             backdrop,
+            customBackdrop,
             fitMode,
             crop,
             vPos,
@@ -1256,8 +1309,10 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
         toast,
     ]);
 
-    const activeArt = tab === 'plex' ? plexArt : tab === 'fanart' ? fanartArt : tmdbArt;
-    const isRenderTab = tab === 'tmdb' || tab === 'fanart' || tab === 'plex';
+    // Per-source art map for the per-picker SourceSelector (Poster page picks
+    // backdrop + logo sources independently from this).
+    const artBySource = { tmdb: tmdbArt, fanart: fanartArt, plex: plexArt };
+    const isRenderTab = tab === 'poster';
 
     // TMDB + fanart + Plex logos merged, for the uploaded-canvas tabs (which have
     // no source sub-tab of their own). De-duplicated by file_path, wordmark-first.
@@ -1327,34 +1382,82 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                 {editIds && <IdEditor item={item} onItemChange={onItemChange} />}
             </section>
 
-            {/* Stage 2: source tabs */}
-            <div className="mt-6 flex flex-wrap gap-2">
-                {SOURCE_TABS.map(t => (
+            {/* Stage 2: build-type tabs (what you're making) + a More ▾ menu for
+                the occasional finished-poster / edit workflows. Sources are picked
+                per-picker inside each page. */}
+            <div className="mt-6 flex flex-wrap items-center gap-2">
+                {BUILD_TABS.map(t => {
+                    const tabCls = on =>
+                        `inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm border transition-colors ${
+                            on
+                                ? 'bg-primary text-white border-primary'
+                                : 'bg-surface text-secondary border-border hover:border-border-strong'
+                        }`;
+                    return (
+                        <button
+                            key={t.key}
+                            type="button"
+                            onClick={() => setTab(t.key)}
+                            className={tabCls(tab === t.key)}
+                        >
+                            <span className="material-symbols-outlined text-base">{t.icon}</span>
+                            {t.label}
+                        </button>
+                    );
+                })}
+                {/* More ▾ dropdown */}
+                <div className="relative">
                     <button
-                        key={t.key}
                         type="button"
-                        onClick={() => setTab(t.key)}
+                        onClick={() => setMoreOpen(o => !o)}
+                        onBlur={() => setTimeout(() => setMoreOpen(false), 150)}
                         className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm border transition-colors ${
-                            tab === t.key
+                            MORE_TABS.some(t => t.key === tab)
                                 ? 'bg-primary text-white border-primary'
                                 : 'bg-surface text-secondary border-border hover:border-border-strong'
                         }`}
                     >
-                        <span className="material-symbols-outlined text-base">{t.icon}</span>
-                        {t.label}
+                        <span className="material-symbols-outlined text-base">more_horiz</span>
+                        More
+                        <span className="material-symbols-outlined text-sm">expand_more</span>
                     </button>
-                ))}
+                    {moreOpen && (
+                        <div className="absolute left-0 mt-1 z-10 min-w-44 bg-surface border border-border rounded-md shadow-lg p-1 flex flex-col">
+                            {MORE_TABS.map(t => (
+                                <button
+                                    key={t.key}
+                                    type="button"
+                                    onMouseDown={() => {
+                                        setTab(t.key);
+                                        setMoreOpen(false);
+                                    }}
+                                    className={`inline-flex items-center gap-2 px-2.5 py-1.5 rounded text-sm text-left ${
+                                        tab === t.key
+                                            ? 'bg-primary/15 text-primary'
+                                            : 'text-secondary hover:bg-surface-alt'
+                                    }`}
+                                >
+                                    <span className="material-symbols-outlined text-base">
+                                        {t.icon}
+                                    </span>
+                                    {t.label}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
             </div>
 
             {/* Stage 3 + 4 panels */}
             {isRenderTab && (
                 <RenderPanel
-                    art={activeArt}
-                    seasonArt={tab === 'tmdb' && isSeasonPoster ? seasonArt : null}
+                    artBySource={artBySource}
+                    seasonArt={isSeasonPoster ? seasonArt : null}
                     loadingArt={loadingArt}
-                    source={tab}
                     backdrop={backdrop}
-                    setBackdrop={setBackdrop}
+                    setBackdrop={setBackdropExclusive}
+                    customBackdrop={customBackdrop}
+                    setCustomBackdrop={setCustomBackdropExclusive}
                     logo={logo}
                     setLogo={setLogo}
                     customLogo={customLogo}
@@ -1466,12 +1569,13 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
 // ─── Render panel (TMDB / fanart) ──────────────────────────────────────────
 
 const RenderPanel = ({
-    art,
+    artBySource,
     seasonArt,
     loadingArt,
-    source,
     backdrop,
     setBackdrop,
+    customBackdrop,
+    setCustomBackdrop,
     logo,
     setLogo,
     customLogo,
@@ -1519,32 +1623,40 @@ const RenderPanel = ({
     busy,
     saveTargets,
 }) => {
-    const backdrops = art?.backdrops || [];
-    // Wordmark-first, same as the merged asset-tab lists — so the Builder's own
-    // logo picker surfaces real title logos ahead of TMDB's character-art junk.
-    const logos = useMemo(() => sortWordmarkFirst(art?.logos || []), [art]);
+    // Independent per-picker sources (Option A): the backdrop and the logo each
+    // choose their own source, so e.g. a Plex backdrop + a fanart.tv logo works.
+    const [backdropSource, setBackdropSource] = useState('tmdb');
+    const [logoSource, setLogoSource] = useState('tmdb');
+    const bdArt = artBySource[backdropSource] || null;
+    const lgArt = artBySource[logoSource] || null;
+    const backdrops = bdArt?.backdrops || [];
+    const posters = bdArt?.posters || [];
+    // Wordmark-first so real title logos beat TMDB's character-art junk.
+    const logos = useMemo(() => sortWordmarkFirst(lgArt?.logos || []), [lgArt]);
     const seasonPosters = seasonArt?.posters || [];
-    const backdropUrl = backdrop ? urlForPath(backdrop) : null;
+    const backdropUrl = customBackdrop?.url || (backdrop ? urlForPath(backdrop) : null);
     // Template guide lines over the rendered preview (the PSD's cyan guides).
     const [showGuides, setShowGuides] = useState(true);
+
+    const onBackdropFile = e => {
+        const f = e.target.files?.[0];
+        e.target.value = '';
+        if (!f) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+            const url = String(reader.result);
+            setCustomBackdrop({ b64: url.split(',').pop(), url, name: f.name });
+        };
+        reader.readAsDataURL(f);
+    };
+    const bdSel = <SourceSelector value={backdropSource} onChange={setBackdropSource} />;
+    const plexBackdropEmpty =
+        backdropSource === 'plex' && bdArt?.reason && !backdrops.length && !posters.length;
 
     return (
         <section className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Left: pickers + AI */}
             <div className="flex flex-col gap-4">
-                {/* Plex source: explain an empty result (not configured / not in a
-                    synced library / unreachable) so it isn't silently blank. */}
-                {source === 'plex' &&
-                    art?.reason &&
-                    !backdrops.length &&
-                    !logos.length &&
-                    !(art?.posters || []).length && (
-                        <div className="bg-surface border border-border rounded-lg p-3 text-xs text-tertiary">
-                            <span className="text-secondary">Plex: </span>
-                            {art.reason} Plex artwork is read-only here — selecting it never changes
-                            or deletes anything in Plex.
-                        </div>
-                    )}
                 {seasonPosters.length > 0 && (
                     <Picker
                         label="Season poster (tmdb)"
@@ -1556,28 +1668,43 @@ const RenderPanel = ({
                         emptyText="No TMDB season posters."
                     />
                 )}
-                <Picker
-                    label={`Backdrop (${source})`}
-                    items={backdrops}
-                    loading={loadingArt}
-                    selected={backdrop}
-                    onSelect={setBackdrop}
-                    aspect="aspect-video"
-                    emptyText="No backdrops from this source."
-                />
-                {/* Official posters: often the only quality art for small titles
-                    (documentaries etc.) — pick one, brush the title text in the AI
-                    panel below, erase, and build as usual. */}
-                {(art?.posters || []).length > 0 && (
-                    <Picker
-                        label={`Poster (${source})`}
-                        items={art.posters}
-                        loading={loadingArt}
-                        selected={backdrop}
-                        onSelect={setBackdrop}
-                        aspect="aspect-poster"
-                        emptyText="No posters from this source."
+                {/* Backdrop — source-selectable. 'Upload' swaps the grid for a
+                    custom-image dropzone. Official posters from the same source
+                    appear below (pick one, brush its title in the AI panel, erase). */}
+                {backdropSource === 'upload' ? (
+                    <UploadArtCard
+                        label="Backdrop"
+                        headerRight={bdSel}
+                        custom={customBackdrop}
+                        onFile={onBackdropFile}
+                        onClear={() => setCustomBackdrop(null)}
                     />
+                ) : (
+                    <>
+                        <Picker
+                            label="Backdrop"
+                            headerRight={bdSel}
+                            items={backdrops}
+                            loading={loadingArt}
+                            selected={backdrop}
+                            onSelect={setBackdrop}
+                            aspect="aspect-video"
+                            emptyText={
+                                plexBackdropEmpty ? bdArt.reason : 'No backdrops from this source.'
+                            }
+                        />
+                        {posters.length > 0 && (
+                            <Picker
+                                label="Poster"
+                                items={posters}
+                                loading={loadingArt}
+                                selected={backdrop}
+                                onSelect={setBackdrop}
+                                aspect="aspect-poster"
+                                emptyText="No posters from this source."
+                            />
+                        )}
+                    </>
                 )}
 
                 {backdropUrl && (
@@ -1608,7 +1735,7 @@ const RenderPanel = ({
                 )}
 
                 <LogoSelector
-                    label={`Logo (${source})`}
+                    label="Logo"
                     logos={logos}
                     loading={loadingArt}
                     selected={logo}
@@ -1623,7 +1750,9 @@ const RenderPanel = ({
                     onWhiten={setWhitenLogo}
                     touchUpUrl={logoTouchUpUrl}
                     onFlipMask={onLogoFlip}
-                    emptyText="No logos from this source — upload a custom one, or a text wordmark is used as fallback."
+                    source={logoSource}
+                    onSource={setLogoSource}
+                    emptyText="No logos from this source — switch source or Upload, or a text wordmark is used as fallback."
                 />
 
                 {item.kind === 'show' && (
@@ -2396,9 +2525,53 @@ const CropFramer = ({
 
 // ─── Picker grid ───────────────────────────────────────────────────────────
 
-const Picker = ({ label, items, loading, selected, onSelect, aspect, onBlack, emptyText }) => (
+// Custom-upload body shown when a picker's source is 'Upload' — the chosen file
+// (with Remove) or an upload prompt. Header mirrors Picker so the SourceSelector
+// sits in the same place.
+const UploadArtCard = ({ label, headerRight, custom, onFile, onClear }) => (
     <div className="bg-surface border border-border rounded-lg p-3">
-        <h3 className="text-sm font-medium text-primary mb-2">{label}</h3>
+        <div className="flex items-center justify-between gap-2 mb-2">
+            <h3 className="text-sm font-medium text-primary">{label}</h3>
+            {headerRight}
+        </div>
+        {custom ? (
+            <div className="flex items-center gap-3 rounded-md border-2 border-primary bg-surface-alt p-2">
+                <img
+                    src={custom.url}
+                    alt="Uploaded"
+                    className="h-16 w-auto max-w-[60%] object-contain rounded"
+                />
+                <span className="flex-1 truncate text-xs text-secondary">{custom.name}</span>
+                <Button onClick={onClear} variant="secondary" icon="close" size="small">
+                    Remove
+                </Button>
+            </div>
+        ) : (
+            <label className="flex flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed border-border text-tertiary text-xs py-6 cursor-pointer hover:border-border-strong">
+                <span className="material-symbols-outlined">upload</span>
+                Upload an image
+                <input type="file" accept="image/*" className="hidden" onChange={onFile} />
+            </label>
+        )}
+    </div>
+);
+
+const Picker = ({
+    label,
+    items,
+    loading,
+    selected,
+    onSelect,
+    aspect,
+    onBlack,
+    emptyText,
+    headerRight,
+}) => (
+    <div className="bg-surface border border-border rounded-lg p-3">
+        <div className="flex items-center justify-between gap-2 mb-2">
+            <h3 className="text-sm font-medium text-primary">{label}</h3>
+            {headerRight}
+        </div>
         {loading ? (
             <div className="text-xs text-tertiary py-4">Loading…</div>
         ) : items.length === 0 ? (
@@ -2582,6 +2755,8 @@ const LogoSelector = ({
     onWhiten,
     touchUpUrl, // processed (un-flipped) logo for the B/W touch-up brush
     onFlipMask,
+    source, // optional per-picker source ('tmdb'|'fanart'|'plex'|'upload')
+    onSource,
     emptyText = 'No logos from this source — a text wordmark is used as fallback.',
 }) => {
     const [showTouchUp, setShowTouchUp] = useState(false);
@@ -2631,14 +2806,31 @@ const LogoSelector = ({
                             </button>
                         </>
                     )}
-                    <label className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs border border-border text-secondary hover:border-border-strong cursor-pointer">
-                        <span className="material-symbols-outlined text-sm">upload</span>
-                        Upload custom
-                        <input type="file" accept="image/*" className="hidden" onChange={onFile} />
-                    </label>
+                    {onSource ? (
+                        <SourceSelector value={source} onChange={onSource} />
+                    ) : (
+                        <label className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs border border-border text-secondary hover:border-border-strong cursor-pointer">
+                            <span className="material-symbols-outlined text-sm">upload</span>
+                            Upload custom
+                            <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={onFile}
+                            />
+                        </label>
+                    )}
                 </div>
             </div>
-            {customLogo ? (
+            {/* 'Upload' source with nothing uploaded yet → a dropzone (the chosen
+                file then shows in the customLogo card below). */}
+            {onSource && source === 'upload' && !customLogo ? (
+                <label className="flex flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed border-border text-tertiary text-xs py-6 cursor-pointer hover:border-border-strong">
+                    <span className="material-symbols-outlined">upload</span>
+                    Upload a logo (PNG, transparent)
+                    <input type="file" accept="image/*" className="hidden" onChange={onFile} />
+                </label>
+            ) : customLogo ? (
                 <div className="flex items-center gap-3 rounded-md border-2 border-primary bg-black p-2">
                     <img
                         src={customLogo.url}
