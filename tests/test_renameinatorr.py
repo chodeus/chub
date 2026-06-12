@@ -1,5 +1,6 @@
 """Tests for backend/modules/renameinatorr.py — static chunking and config helpers."""
 
+from copy import deepcopy
 from types import SimpleNamespace
 
 
@@ -85,7 +86,9 @@ def test_untagged_chunks_filters_tagged_items():
         {"id": 2, "tags": [99]},
         {"id": 3, "tags": [1, 2]},
     ]
-    chunks = Renameinatorr.get_untagged_chunks_for_run(items, 99, 10, False, StubLogger())
+    chunks = Renameinatorr.get_untagged_chunks_for_run(
+        items, 99, 10, False, StubLogger()
+    )
     # Only items 1 and 3 are untagged
     assert len(chunks) == 1
     untagged_ids = [item["id"] for item in chunks[0]]
@@ -98,7 +101,9 @@ def test_untagged_chunks_returns_empty_when_all_tagged():
         {"id": 1, "tags": [99]},
         {"id": 2, "tags": [99]},
     ]
-    chunks = Renameinatorr.get_untagged_chunks_for_run(items, 99, 10, False, StubLogger())
+    chunks = Renameinatorr.get_untagged_chunks_for_run(
+        items, 99, 10, False, StubLogger()
+    )
     assert chunks == []
 
 
@@ -221,3 +226,86 @@ def test_ignore_tags_missing_tag_is_not_created():
     # Nothing filtered, and crucially the tag was not created in the ARR.
     assert app.fetched_rename_ids == [1]
     assert app.created_tags == []
+
+
+# --- ignore tags survive the tag-cycle reset ---
+
+
+class ResetFakeApp:
+    """Stub that models the 'all tagged -> clear and re-fetch' reset path:
+    remove_tags actually strips the tag from the backing store so the
+    subsequent get_all_media() re-fetch reflects the cleared state.
+    """
+
+    instance_name = "radarr_main"
+
+    def __init__(self, media, tags):
+        self._media = media
+        self._tags = tags
+        self.fetched_rename_ids = []
+        self.tagged_ids = []
+        self.removed_ids = []
+
+    def get_all_media(self):
+        # Fresh copies so the module can't mutate our backing fixtures.
+        return deepcopy(self._media)
+
+    def get_all_tags(self):
+        return self._tags
+
+    def get_tag_id_from_name(self, name):
+        for t in self._tags:
+            if t["label"] == name:
+                return t["id"]
+        return None
+
+    def remove_tags(self, ids, tag_id):
+        self.removed_ids.extend(ids)
+        for item in self._media:
+            if item["media_id"] in ids and tag_id in item["tags"]:
+                item["tags"].remove(tag_id)
+
+    def add_tags(self, ids, tag_id):
+        self.tagged_ids.extend(ids)
+
+    def rename_media(self, ids):
+        pass
+
+    def refresh_items(self, ids):
+        return {"id": 1}
+
+    def wait_for_command(self, command_id):
+        return True
+
+    def get_rename_list(self, media_id, threadsafe=False):
+        self.fetched_rename_ids.append(media_id)
+        return []
+
+
+def _reset_cfg():
+    return SimpleNamespace(
+        count=0,
+        radarr_count=0,
+        sonarr_count=0,
+        tag_name="renamed",
+        ignore_tags="norename",
+        enable_batching=False,
+        dry_run=True,
+        rename_folders=False,
+        refresh_before_rename=False,
+    )
+
+
+def test_ignore_tags_survive_tag_cycle_reset():
+    # Non-ignored item already tagged 'renamed' (id 50); an ignored item
+    # carries 'norename' (id 1) and never the 'renamed' tag. With every
+    # non-ignored item tagged, process_instance hits the reset path: it
+    # clears tags and re-fetches the whole library. The ignored item must
+    # NOT be swept back into processing on that re-fetch.
+    tags = [{"id": 50, "label": "renamed"}, {"id": 1, "label": "norename"}]
+    media = [_item(1, [50]), _item(2, [1])]
+    app = ResetFakeApp(media, tags)
+    _run_process_instance(app, _reset_cfg())
+    # The 'norename' item (id 2) is never processed; the cleared item is.
+    assert 2 not in app.fetched_rename_ids
+    assert app.fetched_rename_ids == [1]
