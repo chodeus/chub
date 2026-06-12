@@ -1331,21 +1331,6 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
         return sortWordmarkFirst(deduped);
     }, [tmdbArt, fanartArt, plexArt]);
 
-    // TMDB + fanart + Plex backdrops merged, for the square/background tabs. Deduped.
-    const allBackdrops = useMemo(() => {
-        const merged = [
-            ...(tmdbArt?.backdrops || []),
-            ...(fanartArt?.backdrops || []),
-            ...(plexArt?.backdrops || []),
-        ];
-        const seen = new Set();
-        return merged.filter(b => {
-            if (!b?.file_path || seen.has(b.file_path)) return false;
-            seen.add(b.file_path);
-            return true;
-        });
-    }, [tmdbArt, fanartArt, plexArt]);
-
     return (
         <>
             {/* Selected title bar */}
@@ -1513,7 +1498,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             {tab === 'square' && (
                 <SquareArtPanel
                     item={item}
-                    backdrops={allBackdrops}
+                    artBySource={artBySource}
                     loadingArt={loadingArt}
                     saveTargets={saveTargets}
                     toast={toast}
@@ -1522,7 +1507,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             {tab === 'background' && (
                 <BackgroundArtPanel
                     item={item}
-                    backdrops={allBackdrops}
+                    artBySource={artBySource}
                     loadingArt={loadingArt}
                     saveTargets={saveTargets}
                     toast={toast}
@@ -1531,7 +1516,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             {tab === 'logo' && (
                 <LogoAssetPanel
                     item={item}
-                    logos={allLogos}
+                    artBySource={artBySource}
                     loadingArt={loadingArt}
                     saveTargets={saveTargets}
                     toast={toast}
@@ -3198,9 +3183,20 @@ const AssetWorkflowHint = () => (
     </p>
 );
 
-const SquareArtPanel = ({ item, backdrops, loadingArt, saveTargets, toast }) => {
+const SquareArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) => {
     const [backdrop, setBackdrop] = useState(null); // file_path | url
     const [customBg, setCustomBg] = useState(null); // { b64, url, name }
+    const [bgSource, setBgSource] = useState('tmdb');
+    const backdrops = artBySource[bgSource]?.backdrops || [];
+    // Leaving the Upload source clears the custom image so a provider pick wins.
+    const onBgSource = s => {
+        setBgSource(s);
+        if (s !== 'upload') setCustomBg(null);
+    };
+    const pickBackdrop = p => {
+        setBackdrop(p);
+        setCustomBg(null);
+    };
     const [focusX, setFocusX] = useState(0.5);
     const [focusY, setFocusY] = useState(0.5);
     const [fitMode, setFitMode] = useState('cover'); // cover (fill) | fit (contain)
@@ -3310,51 +3306,26 @@ const SquareArtPanel = ({ item, backdrops, loadingArt, saveTargets, toast }) => 
     return (
         <section className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
             <div className="flex flex-col gap-4">
-                <div className="bg-surface border border-border rounded-lg p-3">
-                    <div className="flex items-center justify-between mb-2">
-                        <h3 className="text-sm font-medium text-primary">Source art (backdrop)</h3>
-                        <label className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs border border-border text-secondary hover:border-border-strong cursor-pointer">
-                            <span className="material-symbols-outlined text-sm">upload</span>
-                            Upload
-                            <input
-                                type="file"
-                                accept="image/*"
-                                className="hidden"
-                                onChange={onFile}
-                            />
-                        </label>
-                    </div>
-                    {customBg ? (
-                        <div className="flex items-center gap-3 rounded-md border-2 border-primary bg-surface-alt p-2">
-                            <img
-                                src={customBg.url}
-                                alt="Uploaded source"
-                                className="h-16 w-auto max-w-[60%] object-contain rounded"
-                            />
-                            <span className="flex-1 truncate text-xs text-secondary">
-                                {customBg.name}
-                            </span>
-                            <Button
-                                onClick={() => setCustomBg(null)}
-                                variant="secondary"
-                                icon="close"
-                                size="small"
-                            >
-                                Remove
-                            </Button>
-                        </div>
-                    ) : (
-                        <Picker
-                            label=""
-                            items={backdrops}
-                            loading={loadingArt}
-                            selected={backdrop}
-                            onSelect={p => setBackdrop(p)}
-                            aspect="aspect-video"
-                            emptyText="No backdrops from TMDB/fanart — upload one above."
-                        />
-                    )}
-                </div>
+                {bgSource === 'upload' ? (
+                    <UploadArtCard
+                        label="Source art (backdrop)"
+                        headerRight={<SourceSelector value={bgSource} onChange={onBgSource} />}
+                        custom={customBg}
+                        onFile={onFile}
+                        onClear={() => setCustomBg(null)}
+                    />
+                ) : (
+                    <Picker
+                        label="Source art (backdrop)"
+                        headerRight={<SourceSelector value={bgSource} onChange={onBgSource} />}
+                        items={backdrops}
+                        loading={loadingArt}
+                        selected={backdrop}
+                        onSelect={pickBackdrop}
+                        aspect="aspect-video"
+                        emptyText="No backdrops from this source."
+                    />
+                )}
 
                 {srcUrl && (
                     <SquareFramer
@@ -3423,9 +3394,19 @@ const SquareArtPanel = ({ item, backdrops, loadingArt, saveTargets, toast }) => 
 
 // ─── Background art tab ─────────────────────────────────────────────────────
 
-const BackgroundArtPanel = ({ item, backdrops, loadingArt, saveTargets, toast }) => {
+const BackgroundArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) => {
     const [backdrop, setBackdrop] = useState(null); // file_path | url
     const [customBg, setCustomBg] = useState(null); // { b64, url, name }
+    const [bgSource, setBgSource] = useState('tmdb');
+    const backdrops = artBySource[bgSource]?.backdrops || [];
+    const onBgSource = s => {
+        setBgSource(s);
+        if (s !== 'upload') setCustomBg(null);
+    };
+    const pickBackdrop = p => {
+        setBackdrop(p);
+        setCustomBg(null);
+    };
     const [focusX, setFocusX] = useState(0.5);
     const [focusY, setFocusY] = useState(0.5);
     const [fitMode, setFitMode] = useState('cover'); // cover (fill) | fit (contain)
@@ -3546,51 +3527,26 @@ const BackgroundArtPanel = ({ item, backdrops, loadingArt, saveTargets, toast })
     return (
         <section className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
             <div className="flex flex-col gap-4">
-                <div className="bg-surface border border-border rounded-lg p-3">
-                    <div className="flex items-center justify-between mb-2">
-                        <h3 className="text-sm font-medium text-primary">Source art (backdrop)</h3>
-                        <label className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs border border-border text-secondary hover:border-border-strong cursor-pointer">
-                            <span className="material-symbols-outlined text-sm">upload</span>
-                            Upload
-                            <input
-                                type="file"
-                                accept="image/*"
-                                className="hidden"
-                                onChange={onFile}
-                            />
-                        </label>
-                    </div>
-                    {customBg ? (
-                        <div className="flex items-center gap-3 rounded-md border-2 border-primary bg-surface-alt p-2">
-                            <img
-                                src={customBg.url}
-                                alt="Uploaded source"
-                                className="h-16 w-auto max-w-[60%] object-contain rounded"
-                            />
-                            <span className="flex-1 truncate text-xs text-secondary">
-                                {customBg.name}
-                            </span>
-                            <Button
-                                onClick={() => setCustomBg(null)}
-                                variant="secondary"
-                                icon="close"
-                                size="small"
-                            >
-                                Remove
-                            </Button>
-                        </div>
-                    ) : (
-                        <Picker
-                            label=""
-                            items={backdrops}
-                            loading={loadingArt}
-                            selected={backdrop}
-                            onSelect={p => setBackdrop(p)}
-                            aspect="aspect-video"
-                            emptyText="No backdrops from TMDB/fanart — upload one above."
-                        />
-                    )}
-                </div>
+                {bgSource === 'upload' ? (
+                    <UploadArtCard
+                        label="Source art (backdrop)"
+                        headerRight={<SourceSelector value={bgSource} onChange={onBgSource} />}
+                        custom={customBg}
+                        onFile={onFile}
+                        onClear={() => setCustomBg(null)}
+                    />
+                ) : (
+                    <Picker
+                        label="Source art (backdrop)"
+                        headerRight={<SourceSelector value={bgSource} onChange={onBgSource} />}
+                        items={backdrops}
+                        loading={loadingArt}
+                        selected={backdrop}
+                        onSelect={pickBackdrop}
+                        aspect="aspect-video"
+                        emptyText="No backdrops from this source."
+                    />
+                )}
 
                 {srcUrl && (
                     <SquareFramer
@@ -3682,9 +3638,14 @@ const BackgroundArtPanel = ({ item, backdrops, loadingArt, saveTargets, toast })
 
 // ─── Logo asset tab ─────────────────────────────────────────────────────────
 
-const LogoAssetPanel = ({ item, logos, loadingArt, saveTargets, toast }) => {
+const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) => {
     const [logo, setLogo] = useState(null); // file_path
     const [customLogo, setCustomLogo] = useState(null); // { b64, url, name }
+    const [logoSource, setLogoSource] = useState('tmdb');
+    const logos = useMemo(
+        () => sortWordmarkFirst(artBySource[logoSource]?.logos || []),
+        [artBySource, logoSource]
+    );
     const [whiten, setWhiten] = useState(false);
     const [previewUrl, setPreviewUrl] = useState(null); // UN-flipped (brush base)
     const [previewing, setPreviewing] = useState(false);
@@ -3814,14 +3775,16 @@ const LogoAssetPanel = ({ item, logos, loadingArt, saveTargets, toast }) => {
         <section className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
             <div className="flex flex-col gap-4">
                 <LogoSelector
-                    label="Logo (TMDB / fanart / custom)"
+                    label="Logo"
                     logos={logos}
                     loading={loadingArt}
                     selected={logo}
                     onSelect={setLogo}
                     customLogo={customLogo}
                     onCustomChange={setCustomExclusive}
-                    emptyText="No logos from TMDB/fanart — upload a custom PNG."
+                    source={logoSource}
+                    onSource={setLogoSource}
+                    emptyText="No logos from this source — switch source or Upload a custom PNG."
                 />
                 <div className="bg-surface border border-border rounded-lg p-3">
                     <h3 className="text-sm font-medium text-primary mb-2">Colour</h3>
