@@ -1617,8 +1617,9 @@ const RenderPanel = ({
                 />
             </div>
 
-            {/* Right: preview + output */}
-            <div className="flex flex-col gap-3">
+            {/* Right: preview + output — sticky so it stays in view while the long
+                left control column scrolls (seeing the preview is the whole point). */}
+            <div className="flex flex-col gap-3 self-start sticky top-4 max-h-screen overflow-y-auto">
                 <div className="bg-surface border border-border rounded-lg p-3">
                     <div className="flex items-center justify-between mb-2">
                         <h3 className="text-sm font-medium text-primary">Preview</h3>
@@ -2684,14 +2685,18 @@ const LogoSelector = ({
                         onClick={() => setShowTouchUp(s => !s)}
                         className="px-2.5 py-1 text-xs rounded-md border bg-surface text-secondary border-border hover:border-border-strong"
                     >
-                        {showTouchUp ? 'Hide touch-up' : 'Touch up black/white'}
+                        {showTouchUp ? 'Hide colour fix' : 'Fix a mis-coloured area (optional)'}
                     </button>
                     {showTouchUp && (
                         <div className="mt-2">
                             <p className="text-xs text-tertiary mb-1">
-                                Brush regions to flip black↔white (e.g. an interior badge or star
-                                the automatic two-tone got wrong). Applies to the live preview and
-                                the render.
+                                <span className="text-secondary">
+                                    Most logos whiten correctly — you can skip this.
+                                </span>{' '}
+                                Only if a part came out the wrong shade (a black area that should be
+                                white, or vice-versa), brush over just those spots to flip them.
+                                Everything you don&apos;t paint is left exactly as shown. Applies to
+                                the preview and the saved poster.
                             </p>
                             <div className="bg-black rounded p-1 inline-block max-w-full">
                                 <BrushMask
@@ -3120,7 +3125,7 @@ const SquareArtPanel = ({ item, backdrops, loadingArt, saveTargets, toast }) => 
                 )}
             </div>
 
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-3 self-start sticky top-4 max-h-screen overflow-y-auto">
                 <div className="bg-surface border border-border rounded-lg p-3">
                     <h3 className="text-sm font-medium text-primary mb-2">Preview (1000×1000)</h3>
                     <div className="relative aspect-square bg-black rounded overflow-hidden flex items-center justify-center">
@@ -3359,7 +3364,7 @@ const BackgroundArtPanel = ({ item, backdrops, loadingArt, saveTargets, toast })
                 )}
             </div>
 
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-3 self-start sticky top-4 max-h-screen overflow-y-auto">
                 <div className="bg-surface border border-border rounded-lg p-3">
                     <div className="flex items-center justify-between mb-2">
                         <h3 className="text-sm font-medium text-primary">
@@ -3602,14 +3607,19 @@ const LogoAssetPanel = ({ item, logos, loadingArt, saveTargets, toast }) => {
                                 onClick={() => setShowTouchUp(s => !s)}
                                 className="px-2.5 py-1 text-xs rounded-md border bg-surface text-secondary border-border hover:border-border-strong"
                             >
-                                {showTouchUp ? 'Hide touch-up' : 'Touch up black/white'}
+                                {showTouchUp
+                                    ? 'Hide colour fix'
+                                    : 'Fix a mis-coloured area (optional)'}
                             </button>
                             {showTouchUp && (
                                 <div className="mt-2">
                                     <p className="text-xs text-tertiary mb-1">
-                                        Brush regions to flip black↔white (e.g. an interior badge
-                                        the automatic two-tone got wrong). The preview and the
-                                        exported asset apply the flip.
+                                        <span className="text-secondary">
+                                            Most logos whiten correctly — you can skip this.
+                                        </span>{' '}
+                                        Only if a part came out the wrong shade, brush over just
+                                        those spots to flip them black↔white. Everything you
+                                        don&apos;t paint is left exactly as shown.
                                     </p>
                                     <div className="bg-black rounded p-1 inline-block max-w-full">
                                         <BrushMask
@@ -3625,7 +3635,7 @@ const LogoAssetPanel = ({ item, logos, loadingArt, saveTargets, toast }) => {
                 </div>
             </div>
 
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-3 self-start sticky top-4 max-h-screen overflow-y-auto">
                 <div className="bg-surface border border-border rounded-lg p-3">
                     <h3 className="text-sm font-medium text-primary mb-2">Preview</h3>
                     <div
@@ -4518,7 +4528,7 @@ const EditPosterPanel = ({
 
                     {/* RIGHT — output: re-text (label/save-as-is) or full CL2K render */}
                     {outputMode === 'cl2k' ? (
-                        <div className="flex flex-col gap-3">
+                        <div className="flex flex-col gap-3 self-start sticky top-4 max-h-screen overflow-y-auto">
                             <CropFramer
                                 imageUrl={bareSrc}
                                 fitMode={fitMode}
@@ -4618,7 +4628,7 @@ const EditPosterPanel = ({
                             </div>
                         </div>
                     ) : (
-                        <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-3">
+                        <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-3 self-start sticky top-4 max-h-screen overflow-y-auto">
                             <div className="flex items-center justify-between">
                                 <h3 className="text-sm font-medium text-primary">Working copy</h3>
                                 {labelBusy && (
