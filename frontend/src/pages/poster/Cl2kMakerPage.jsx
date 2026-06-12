@@ -1403,6 +1403,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                     effectiveKind={effectiveKind}
                     logos={allLogos}
                     loadingArt={loadingArt}
+                    config={config}
                     saveTargets={saveTargets}
                     toast={toast}
                 />
@@ -3432,10 +3433,19 @@ const LogoAssetPanel = ({ item, logos, loadingArt, saveTargets, toast }) => {
     const [logo, setLogo] = useState(null); // file_path
     const [customLogo, setCustomLogo] = useState(null); // { b64, url, name }
     const [whiten, setWhiten] = useState(false);
-    const [previewUrl, setPreviewUrl] = useState(null);
+    const [previewUrl, setPreviewUrl] = useState(null); // UN-flipped (brush base)
     const [previewing, setPreviewing] = useState(false);
     const [busy, setBusy] = useState(false);
     const hasLogo = !!(logo || customLogo);
+
+    // B/W touch-up strokes are keyed to the (logo, whiten) they were drawn over
+    // so a stale mask becomes a derived no-op (same pattern as the Builder).
+    const flipKey = `${customLogo?.b64?.slice(0, 32) || logo}|${whiten}`;
+    const [flip, setFlip] = useState(null); // { key, b64 }
+    const flipB64 = flip && flip.key === flipKey ? flip.b64 : null;
+    const setFlipB64 = useCallback(b64 => setFlip(b64 ? { key: flipKey, b64 } : null), [flipKey]);
+    const [showTouchUp, setShowTouchUp] = useState(false);
+    const [flipped, setFlipped] = useState(null); // { forB64, url } — flipped preview
 
     const setCustomExclusive = useCallback(c => {
         setCustomLogo(c);
@@ -3453,16 +3463,19 @@ const LogoAssetPanel = ({ item, logos, loadingArt, saveTargets, toast }) => {
             logo_path: customLogo ? null : logo,
             logo_b64: customLogo?.b64 || null,
             whiten,
+            flip_b64: flipB64,
             save_local: saveTargets.saveLocal,
             upload_gdrive: saveTargets.uploadGdrive,
         }),
-        [item, logo, customLogo, whiten, saveTargets.saveLocal, saveTargets.uploadGdrive]
+        [item, logo, customLogo, whiten, flipB64, saveTargets.saveLocal, saveTargets.uploadGdrive]
     );
     const reqRef = useRef(req);
     useEffect(() => {
         reqRef.current = req;
     }, [req]);
 
+    // Brush base: the processed logo WITHOUT the flip — it must stay stable as
+    // strokes land, or the accumulated mask would be drawn over a moving target.
     const sig = `${customLogo?.b64?.slice(0, 32) || logo}|${whiten}`;
     useEffect(() => {
         if (!hasLogo) return undefined;
@@ -3470,7 +3483,10 @@ const LogoAssetPanel = ({ item, logos, loadingArt, saveTargets, toast }) => {
         const t = setTimeout(async () => {
             setPreviewing(true);
             try {
-                const blob = await cl2kMakerAPI.logoAssetPreview(reqRef.current);
+                const blob = await cl2kMakerAPI.logoAssetPreview({
+                    ...reqRef.current,
+                    flip_b64: null,
+                });
                 if (!cancelled)
                     setPreviewUrl(prev => {
                         if (prev) URL.revokeObjectURL(prev);
@@ -3494,6 +3510,33 @@ const LogoAssetPanel = ({ item, logos, loadingArt, saveTargets, toast }) => {
         },
         [previewUrl]
     );
+    // Flipped variant for the preview box (and what Export files).
+    useEffect(() => {
+        if (!flipB64) return undefined;
+        let cancelled = false;
+        (async () => {
+            try {
+                const blob = await cl2kMakerAPI.logoAssetPreview(reqRef.current);
+                if (!cancelled)
+                    setFlipped(prev => {
+                        if (prev?.url) URL.revokeObjectURL(prev.url);
+                        return { forB64: flipB64, url: URL.createObjectURL(blob) };
+                    });
+            } catch {
+                /* quiet — the base preview still shows */
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [flipB64]);
+    useEffect(
+        () => () => {
+            if (flipped?.url) URL.revokeObjectURL(flipped.url);
+        },
+        [flipped]
+    );
+    const displayUrl = flipB64 && flipped?.forB64 === flipB64 ? flipped.url : previewUrl;
 
     const onExport = async () => {
         setBusy(true);
@@ -3547,8 +3590,38 @@ const LogoAssetPanel = ({ item, logos, loadingArt, saveTargets, toast }) => {
                     </div>
                     <p className="text-xs text-tertiary mt-2">
                         Original keeps the clear logo&apos;s colours (the usual Plex/Kometa logo
-                        asset). CL2K white recolours it to solid white, like a CL2K poster logo.
+                        asset). CL2K white recolours it to the CL2K two-tone — white fills, black
+                        keylines — like a CL2K poster logo.
                     </p>
+                    {/* B/W touch-up: flip the regions the automatic two-tone got wrong.
+                        Drawn over the UN-flipped preview so strokes stay valid. */}
+                    {whiten && hasLogo && previewUrl && (
+                        <div className="mt-2">
+                            <button
+                                type="button"
+                                onClick={() => setShowTouchUp(s => !s)}
+                                className="px-2.5 py-1 text-xs rounded-md border bg-surface text-secondary border-border hover:border-border-strong"
+                            >
+                                {showTouchUp ? 'Hide touch-up' : 'Touch up black/white'}
+                            </button>
+                            {showTouchUp && (
+                                <div className="mt-2">
+                                    <p className="text-xs text-tertiary mb-1">
+                                        Brush regions to flip black↔white (e.g. an interior badge
+                                        the automatic two-tone got wrong). The preview and the
+                                        exported asset apply the flip.
+                                    </p>
+                                    <div className="bg-black rounded p-1 inline-block max-w-full">
+                                        <BrushMask
+                                            imageUrl={previewUrl}
+                                            brushSize={10}
+                                            onMaskChange={setFlipB64}
+                                        />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -3563,9 +3636,9 @@ const LogoAssetPanel = ({ item, logos, loadingArt, saveTargets, toast }) => {
                             backgroundSize: '22px 22px',
                         }}
                     >
-                        {hasLogo && previewUrl ? (
+                        {hasLogo && displayUrl ? (
                             <img
-                                src={previewUrl}
+                                src={displayUrl}
                                 alt="Logo preview"
                                 className="max-w-[90%] max-h-[90%] object-contain"
                             />
@@ -3602,10 +3675,22 @@ const LogoAssetPanel = ({ item, logos, loadingArt, saveTargets, toast }) => {
 
 // ─── Upload finished-poster tab ─────────────────────────────────────────────
 
-const UploadPosterPanel = ({ item, effectiveKind, logos, loadingArt, saveTargets, toast }) => {
+const UploadPosterPanel = ({
+    item,
+    effectiveKind,
+    logos,
+    loadingArt,
+    config,
+    saveTargets,
+    toast,
+}) => {
     const [file, setFile] = useState(null);
     const [busy, setBusy] = useState(false);
     const [addBorder, setAddBorder] = useState(true);
+    // Per-render whiten override; null = the module config (whiten_logo) — the
+    // FormData builder skips nulls so the backend falls back to the config.
+    const [whitenLogo, setWhitenLogo] = useState(null);
+    const effectiveWhiten = whitenLogo === null ? (config?.whiten_logo ?? true) : whitenLogo;
     const [logo, setLogo] = useState(null); // chosen TMDB/fanart logo file_path
     const [customLogo, setCustomLogo] = useState(null); // { b64, name, url }
     const [previewB64, setPreviewB64] = useState(null); // server-rendered preview
@@ -3657,8 +3742,9 @@ const UploadPosterPanel = ({ item, effectiveKind, logos, loadingArt, saveTargets
             logo_b64: customLogo?.b64 || null,
             logo_scale: logoScale,
             logo_y_offset: logoYOffset,
+            whiten: whitenLogo,
         }),
-        [effectiveKind, item, addBorder, logo, customLogo, logoScale, logoYOffset]
+        [effectiveKind, item, addBorder, logo, customLogo, logoScale, logoYOffset, whitenLogo]
     );
 
     const runPreview = useCallback(async () => {
@@ -3731,6 +3817,11 @@ const UploadPosterPanel = ({ item, effectiveKind, logos, loadingArt, saveTargets
                     onScale={onLogoScale}
                     yOffset={logoYOffset}
                     onYOffset={onLogoYOffset}
+                    whiten={effectiveWhiten}
+                    onWhiten={v => {
+                        setWhitenLogo(v);
+                        setPreviewB64(null);
+                    }}
                     emptyText="No TMDB/fanart logos — upload a custom one, or leave unset to keep the poster as-is."
                 />
             )}
@@ -3976,6 +4067,10 @@ const EditPosterPanel = ({
     const [customLogo, setCustomLogo] = useState(null); // { b64, name, url }
     const [logoScale, setLogoScale] = useState(1);
     const [logoYOffset, setLogoYOffset] = useState(0);
+    // Per-render whiten override; null = the module config (whiten_logo) — the
+    // FormData builder skips nulls so the backend falls back to the config.
+    const [whitenLogo, setWhitenLogo] = useState(null);
+    const effectiveWhiten = whitenLogo === null ? (config?.whiten_logo ?? true) : whitenLogo;
     const [cl2kPreviewB64, setCl2kPreviewB64] = useState(null);
     const [cl2kPreviewing, setCl2kPreviewing] = useState(false);
     const [showGuides, setShowGuides] = useState(true);
@@ -4206,6 +4301,7 @@ const EditPosterPanel = ({
             logo_b64: customLogo?.b64 || null,
             logo_scale: logoScale,
             logo_y_offset: logoYOffset,
+            whiten: whitenLogo,
             fit_mode: fitMode,
             focus_x: focusX,
             focus_y: focusY,
@@ -4222,6 +4318,7 @@ const EditPosterPanel = ({
             customLogo,
             logoScale,
             logoYOffset,
+            whitenLogo,
             fitMode,
             crop,
             vPos,
@@ -4453,6 +4550,11 @@ const EditPosterPanel = ({
                                 scale={logoScale}
                                 onScale={s => {
                                     setLogoScale(s);
+                                    setCl2kPreviewB64(null);
+                                }}
+                                whiten={effectiveWhiten}
+                                onWhiten={v => {
+                                    setWhitenLogo(v);
                                     setCl2kPreviewB64(null);
                                 }}
                                 yOffset={logoYOffset}
