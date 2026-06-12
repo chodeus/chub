@@ -70,6 +70,7 @@ class GenerateRequest(BaseModel):
     imdb_id: Optional[str] = None
     season_number: Optional[int] = None
     backdrop_path: Optional[str] = None
+    backdrop_b64: Optional[str] = None  # custom-uploaded backdrop (wins over path)
     logo_path: Optional[str] = None
     logo_b64: Optional[str] = (
         None  # custom uploaded logo (PNG, base64); wins over logo_path
@@ -345,6 +346,7 @@ def preview(
         tmdb_id=req.tmdb_id,
         season_number=req.season_number,
         backdrop_path=req.backdrop_path,
+        backdrop_bytes=_b64_to_bytes(req.backdrop_b64),
         logo_path=req.logo_path,
         custom_logo_bytes=_b64_to_bytes(req.logo_b64),
         tvdb_id=req.tvdb_id,
@@ -389,6 +391,7 @@ def generate(
         imdb_id=req.imdb_id,
         season_number=req.season_number,
         backdrop_path=req.backdrop_path,
+        backdrop_bytes=_b64_to_bytes(req.backdrop_b64),
         logo_path=req.logo_path,
         custom_logo_bytes=_b64_to_bytes(req.logo_b64),
         mask_bytes=_mask_bytes(req.mask_b64),
