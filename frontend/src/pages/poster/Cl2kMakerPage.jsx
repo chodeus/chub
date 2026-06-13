@@ -63,17 +63,18 @@ const BUILD_TABS = [
     { key: 'square', label: 'Square art', icon: 'crop_square' },
     { key: 'logo', label: 'Logo', icon: 'sell' },
 ];
-// Occasional "I already have art" workflows — tucked under the More ▾ menu.
-// (Filing a finished poster as-is lives in the Poster tab's "File as-is" output
-// mode now, so it isn't a separate tab.)
-const MORE_TABS = [{ key: 'edit', label: 'Edit poster', icon: 'edit' }];
-// Old tab keys (source-as-tab, and the retired Finished-poster tab) → the new
-// build tab, so a saved session migrates.
+// Retired tab keys (source-as-tab, the Finished-poster tab, and the removed
+// Edit-poster / upload-backdrop tabs) → the unified 'poster' build tab, so a
+// saved session migrates instead of landing on a tab that no longer exists.
+// Editing a finished poster — G-Drive pick or manual upload — all lives in the
+// Poster tab now, so there's no separate Edit-poster tab.
 const TAB_MIGRATE = {
     tmdb: 'poster',
     fanart: 'poster',
     plex: 'poster',
     'upload-poster': 'poster',
+    'upload-backdrop': 'poster',
+    edit: 'poster',
 };
 
 // Per-picker artwork sources (Option A: a segmented row in each picker header).
@@ -844,13 +845,12 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
     // navigation. Read once on mount.
     const saved = useMemo(() => ssRead(SS_BUILDER, {}), []);
 
-    // Migrate saved tab keys: 'upload-backdrop' → 'edit' (old merge); the old
-    // source-as-tab keys (tmdb/fanart/plex) → the unified 'poster' build tab.
+    // Migrate retired tab keys to the unified 'poster' build tab (see TAB_MIGRATE)
+    // so a saved session never lands on a tab that no longer exists.
     const [tab, setTab] = useState(() => {
-        const t = saved.tab === 'upload-backdrop' ? 'edit' : (saved.tab ?? 'poster');
+        const t = saved.tab ?? 'poster';
         return TAB_MIGRATE[t] || t;
     });
-    const [moreOpen, setMoreOpen] = useState(false);
     const [editIds, setEditIds] = useState(false);
 
     // Save destinations (output dir / Drive) — shared by every save flow below.
@@ -1390,23 +1390,6 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
     );
     const isRenderTab = tab === 'poster';
 
-    // TMDB + fanart + Plex logos merged, for the uploaded-canvas tabs (which have
-    // no source sub-tab of their own). De-duplicated by file_path, wordmark-first.
-    const allLogos = useMemo(() => {
-        const merged = [
-            ...(tmdbArt?.logos || []),
-            ...(fanartArt?.logos || []),
-            ...(plexArt?.logos || []),
-        ];
-        const seen = new Set();
-        const deduped = merged.filter(l => {
-            if (!l?.file_path || seen.has(l.file_path)) return false;
-            seen.add(l.file_path);
-            return true;
-        });
-        return sortWordmarkFirst(deduped);
-    }, [tmdbArt, fanartArt, plexArt]);
-
     return (
         <>
             {/* Selected title bar */}
@@ -1466,61 +1449,6 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                         </button>
                     );
                 })}
-                {/* More ▾ dropdown. Closes when focus leaves the button + menu
-                    (relatedTarget containment) so keyboard users can Tab into the
-                    items without the menu vanishing under them. */}
-                <div
-                    className="relative"
-                    onBlur={e => {
-                        if (!e.currentTarget.contains(e.relatedTarget)) setMoreOpen(false);
-                    }}
-                >
-                    <button
-                        type="button"
-                        onClick={() => setMoreOpen(o => !o)}
-                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm border transition-colors ${
-                            MORE_TABS.some(t => t.key === tab)
-                                ? 'bg-primary text-white border-primary'
-                                : 'bg-surface text-secondary border-border hover:border-border-strong'
-                        }`}
-                    >
-                        <span className="material-symbols-outlined text-base">more_horiz</span>
-                        More
-                        <span className="material-symbols-outlined text-sm">expand_more</span>
-                    </button>
-                    {moreOpen && (
-                        <div className="absolute left-0 mt-1 z-10 min-w-44 bg-surface border border-border rounded-md shadow-lg p-1 flex flex-col">
-                            {MORE_TABS.map(t => {
-                                const pick = () => {
-                                    setTab(t.key);
-                                    setMoreOpen(false);
-                                };
-                                return (
-                                    <button
-                                        key={t.key}
-                                        type="button"
-                                        // mousedown beats the blur-close in browsers that
-                                        // don't focus clicked buttons (Safari); click
-                                        // covers keyboard Enter/Space. pick() is
-                                        // idempotent so firing both is harmless.
-                                        onMouseDown={pick}
-                                        onClick={pick}
-                                        className={`inline-flex items-center gap-2 px-2.5 py-1.5 rounded text-sm text-left ${
-                                            tab === t.key
-                                                ? 'bg-primary/15 text-primary'
-                                                : 'text-secondary hover:bg-surface-alt'
-                                        }`}
-                                    >
-                                        <span className="material-symbols-outlined text-base">
-                                            {t.icon}
-                                        </span>
-                                        {t.label}
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    )}
-                </div>
             </div>
 
             {/* Stage 3 + 4 panels */}
@@ -1616,18 +1544,6 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                 <LogoAssetPanel
                     item={item}
                     artBySource={artBySource}
-                    loadingArt={loadingArt}
-                    saveTargets={saveTargets}
-                    toast={toast}
-                />
-            )}
-
-            {tab === 'edit' && (
-                <EditPosterPanel
-                    item={item}
-                    effectiveKind={effectiveKind}
-                    config={config}
-                    logos={allLogos}
                     loadingArt={loadingArt}
                     saveTargets={saveTargets}
                     toast={toast}
@@ -1850,6 +1766,11 @@ const RenderPanel = ({
     // does NOT re-run AI. This is the only paid step in the Full CL2K flow.
     const aiProvider = config?.ai_provider || 'none';
     const [aiErasing, setAiErasing] = useState(false);
+    // Prompt defaults to the module-settings ai_prompt, editable per-erase.
+    // Derived (not seeded via an effect) so it tracks config until the user types
+    // — null means "untouched, show the default"; '' means they cleared it.
+    const [aiPromptEdit, setAiPrompt] = useState(null);
+    const aiPrompt = aiPromptEdit ?? (config?.ai_prompt || '');
     const runBackdropErase = useCallback(async () => {
         if (!backdropUrl || !maskB64 || aiProvider === 'none') return;
         setAiErasing(true);
@@ -1865,7 +1786,7 @@ const RenderPanel = ({
                 image_b64: imageDataUrl,
                 mask_b64: maskB64,
                 apply_ai: true,
-                prompt: config?.ai_prompt || '',
+                prompt: aiPrompt || config?.ai_prompt || '',
                 label_text: '',
                 border: false,
                 preview: true,
@@ -1899,6 +1820,7 @@ const RenderPanel = ({
         backdropUrl,
         maskB64,
         aiProvider,
+        aiPrompt,
         config,
         isSeasonPoster,
         seasonNumber,
@@ -2240,6 +2162,8 @@ const RenderPanel = ({
                             hasMask={!!maskB64}
                             aiBusy={aiErasing}
                             onSendToAi={runBackdropErase}
+                            aiPrompt={aiPrompt}
+                            setAiPrompt={setAiPrompt}
                         />
                     )}
                 </div>
@@ -2376,7 +2300,7 @@ const RenderPanel = ({
                                         href={backdropUrl}
                                         download
                                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm border border-border text-secondary hover:border-border-strong"
-                                        title="Download the backdrop to clean externally (Firefly/Photoshop), then re-import via the Edit poster tab"
+                                        title="Download the backdrop to clean externally (Firefly/Photoshop), then re-import via the backdrop Upload source"
                                     >
                                         <span className="material-symbols-outlined text-base">
                                             download
@@ -2387,8 +2311,8 @@ const RenderPanel = ({
                             </div>
                             <p className="text-xs text-tertiary">
                                 Handoff: download the backdrop, clean it in Firefly/Photoshop, then
-                                bring it back via the{' '}
-                                <span className="text-secondary">Edit poster</span> tab.
+                                bring it back via the backdrop{' '}
+                                <span className="text-secondary">Upload</span> source.
                             </p>
                         </div>
                     )}
@@ -2456,6 +2380,8 @@ const AiPanel = ({
     hasMask,
     aiBusy,
     onSendToAi,
+    aiPrompt,
+    setAiPrompt,
 }) => {
     const provider = config?.ai_provider || 'none';
     // Why AI can't run (mirrors the backend's unavailable_reason) — gates the
@@ -2516,6 +2442,15 @@ const AiPanel = ({
                     )}
                     {backdropUrl && (
                         <>
+                            <label className="flex flex-col gap-1 text-sm text-secondary">
+                                <span>AI prompt (defaults to module settings)</span>
+                                <textarea
+                                    value={aiPrompt}
+                                    onChange={e => setAiPrompt(e.target.value)}
+                                    rows={2}
+                                    className="bg-surface border border-border rounded px-2 py-1 text-sm text-primary"
+                                />
+                            </label>
                             <LoadingButton
                                 onClick={onSendToAi}
                                 loading={aiBusy}
@@ -4603,930 +4538,6 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
 
 // ─── Synced-poster picker (browse the GDrive sync cache) ────────────────────
 
-// Browse the poster_cache (synced jpg/png/webp — the sync never pulls PSDs) and
-// pick a finished poster to re-text. Thumbnails are display-only; the parent
-// re-fetches the full-resolution original on pick so the edit stays lossless.
-const SyncImportPicker = ({ defaultQuery, importing, onPick, toast }) => {
-    const [owner, setOwner] = useState('');
-    const [query, setQuery] = useState(defaultQuery || '');
-    const [owners, setOwners] = useState([]);
-    const [items, setItems] = useState(null);
-    const [total, setTotal] = useState(0);
-    const [loading, setLoading] = useState(true); // fetches once on mount
-
-    // The browse itself — sets results only after the await, so it's safe to run
-    // straight from the mount effect (no synchronous setState in the effect body).
-    const fetchPosters = useCallback(async () => {
-        try {
-            const resp = await postersAPI.browsePosters({
-                query: query.trim() || undefined,
-                owner: owner || undefined,
-                image_type: 'poster',
-                limit: 60,
-            });
-            const data = resp?.data || {};
-            setItems(data.items || []);
-            setTotal(data.total || 0);
-            if (data.owners) setOwners(data.owners);
-        } catch (err) {
-            setItems([]);
-            toast.error(err.message || 'Browse failed');
-        }
-    }, [query, owner, toast]);
-
-    const run = useCallback(async () => {
-        setLoading(true);
-        try {
-            await fetchPosters();
-        } finally {
-            setLoading(false);
-        }
-    }, [fetchPosters]);
-
-    // Auto-search once for the current title so the right poster surfaces on open.
-    useEffect(() => {
-        let cancelled = false;
-        (async () => {
-            try {
-                await fetchPosters();
-            } finally {
-                if (!cancelled) setLoading(false);
-            }
-        })();
-        return () => {
-            cancelled = true;
-        };
-        // Initial fetch only — fetchPosters captures the opening title/owner.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
-    return (
-        <div className="flex flex-col gap-2">
-            <div className="flex flex-wrap items-center gap-2">
-                <select
-                    value={owner}
-                    onChange={e => setOwner(e.target.value)}
-                    className="bg-surface border border-border rounded px-2 py-1 text-sm text-primary"
-                >
-                    <option value="">All owners</option>
-                    {owners.map(o => (
-                        <option key={o} value={o}>
-                            {o}
-                        </option>
-                    ))}
-                </select>
-                <form
-                    onSubmit={e => {
-                        e.preventDefault();
-                        run();
-                    }}
-                    className="flex items-center gap-2 flex-1 min-w-[12rem]"
-                >
-                    <input
-                        type="text"
-                        value={query}
-                        onChange={e => setQuery(e.target.value)}
-                        placeholder="Title substring (blank = list all)"
-                        className="flex-1 bg-surface border border-border rounded px-2 py-1 text-sm text-primary"
-                    />
-                    <LoadingButton type="submit" loading={loading} icon="search" size="small">
-                        Search
-                    </LoadingButton>
-                </form>
-            </div>
-
-            {loading && <div className="text-xs text-tertiary">Searching…</div>}
-            {items && items.length === 0 && !loading && (
-                <div className="text-xs text-tertiary">
-                    No matching synced posters — try a different title or owner. Only images already
-                    pulled by Sync GDrive appear here.
-                </div>
-            )}
-            {items && items.length > 0 && (
-                <>
-                    <div className="text-xs text-tertiary">
-                        {total} match{total === 1 ? '' : 'es'}
-                        {total > items.length ? ` — showing first ${items.length}, refine` : ''}
-                    </div>
-                    <div
-                        className="grid gap-2 max-h-80 overflow-auto"
-                        style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(96px, 1fr))' }}
-                    >
-                        {items.map(p => (
-                            <button
-                                key={p.id || `${p.folder}/${p.file}`}
-                                type="button"
-                                disabled={importing}
-                                onClick={() => onPick(p)}
-                                title={p.file}
-                                className="relative bg-surface-alt overflow-hidden rounded border border-border hover:border-primary disabled:opacity-50 p-0"
-                                style={{ aspectRatio: '2 / 3' }}
-                            >
-                                <img
-                                    src={
-                                        p.id
-                                            ? postersAPI.getThumbnailUrl(p.id, 200)
-                                            : postersAPI.getPreviewUrl(p.folder, p.file)
-                                    }
-                                    alt={p.file}
-                                    loading="lazy"
-                                    className="w-full h-full object-cover"
-                                />
-                                {p.style && (
-                                    <span
-                                        className="absolute top-1.5 left-1.5 z-10 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-black/65 text-white backdrop-blur-sm pointer-events-none"
-                                        title={`Style: ${p.style}`}
-                                    >
-                                        {p.style}
-                                    </span>
-                                )}
-                            </button>
-                        ))}
-                    </div>
-                </>
-            )}
-            {importing && (
-                <div className="text-xs text-tertiary">Importing full-resolution poster…</div>
-            )}
-        </div>
-    );
-};
-
-// ─── Edit poster (AI-erase old text + redraw label in CL2K font) ────────────
-
-const EditPosterPanel = ({
-    item,
-    effectiveKind,
-    config,
-    logos,
-    loadingArt,
-    saveTargets,
-    toast,
-}) => {
-    // The uploaded poster (data URL) is the immutable SOURCE. `workingB64` is the
-    // base we draw labels onto — it starts as the upload and becomes the AI-erased
-    // image after "Send to AI". That's the whole cost trick: the paid OpenAI erase
-    // runs ONCE; every label tweak after is a free, deterministic server overlay
-    // (apply_ai=false) onto the working copy — no more AI calls.
-    const [imageDataUrl, setImageDataUrl] = useState(null);
-    const [workingB64, setWorkingB64] = useState(null); // raw base64 (no data prefix)
-    const [aiErased, setAiErased] = useState(false);
-    const [maskB64, setMaskB64] = useState(null);
-    const [brushSize, setBrushSize] = useState(18);
-    // Prompt defaults to the module-settings ai_prompt, editable per-edit.
-    const [prompt, setPrompt] = useState(() => config?.ai_prompt || '');
-    const [label, setLabel] = useState('');
-    const [textY, setTextY] = useState(0.96);
-    const [seasonNum, setSeasonNum] = useState('');
-    const [labeledB64, setLabeledB64] = useState(null); // working copy + label drawn
-    const [aiBusy, setAiBusy] = useState(false);
-    const [labelBusy, setLabelBusy] = useState(false);
-    const [saving, setSaving] = useState(false);
-    // Live label positioning: a CSS text overlay tracks the slider instantly while
-    // dragging, then snaps to the accurate server render on release. `imgW` scales
-    // the overlay font to the rendered poster so it closely matches the CL2K render.
-    const [dragging, setDragging] = useState(false);
-    const [imgW, setImgW] = useState(0);
-    const workImgRef = useRef(null);
-    // Add the default 26px white CL2K border on save (DAPS rule); uncheck for a
-    // poster that already has the required border.
-    const [addBorder, setAddBorder] = useState(true);
-
-    // Output mode. 'retext' = the original flow (label/border, saved as-is).
-    // 'cl2k' = run the FULL CL2K render (framing + logo + gradient + border) on
-    // the working copy — this absorbs the old "Cleaned backdrop" tab, since the
-    // upload + optional AI erase steps are identical.
-    const [outputMode, setOutputMode] = useState('retext'); // 'retext' | 'cl2k'
-    const [fitMode, setFitMode] = useState('cover');
-    const [crop, setCrop] = useState(null);
-    const [vPos, setVPos] = useState(0);
-    const [zoom, setZoom] = useState(1);
-    const [focusX, setFocusX] = useState(0.5);
-    const [focusY, setFocusY] = useState(0.5);
-    const [cl2kLogo, setCl2kLogo] = useState(null); // chosen TMDB/fanart logo file_path
-    const [customLogo, setCustomLogo] = useState(null); // { b64, name, url }
-    const [logoScale, setLogoScale] = useState(1);
-    const [logoYOffset, setLogoYOffset] = useState(0);
-    // Per-render whiten override; null = the module config (whiten_logo) — the
-    // FormData builder skips nulls so the backend falls back to the config.
-    const [whitenLogo, setWhitenLogo] = useState(null);
-    const effectiveWhiten = whitenLogo === null ? (config?.whiten_logo ?? true) : whitenLogo;
-    // Invert logo: white -> transparent, black -> white (plate/sticker art).
-    const [invertLogo, setInvertLogo] = useState(false);
-    const [cl2kPreviewB64, setCl2kPreviewB64] = useState(null);
-    const [cl2kPreviewing, setCl2kPreviewing] = useState(false);
-    const [showGuides, setShowGuides] = useState(true);
-    const [generating, setGenerating] = useState(false);
-
-    const provider = config?.ai_provider || 'none';
-    const isSeason = String(seasonNum).trim() !== '';
-
-    // Where the source poster comes from: a disk upload or the GDrive sync cache.
-    const [sourceMode, setSourceMode] = useState('sync'); // 'sync' | 'upload'
-    const [importing, setImporting] = useState(false);
-
-    // Seed the editor from a base64 data URL — shared by the file upload and the
-    // synced-poster import so both reset the AI/mask/label state identically.
-    const loadSource = useCallback(dataUrl => {
-        setImageDataUrl(dataUrl);
-        setWorkingB64(String(dataUrl).split(',').pop());
-        setAiErased(false);
-        setMaskB64(null);
-        setLabeledB64(null);
-        setCl2kPreviewB64(null);
-    }, []);
-
-    const onFile = useCallback(
-        e => {
-            const f = e.target.files?.[0];
-            if (!f) return;
-            const reader = new FileReader();
-            reader.onload = () => loadSource(reader.result);
-            reader.readAsDataURL(f);
-        },
-        [loadSource]
-    );
-
-    // Pull a synced poster at FULL resolution — the raw cached file, never the
-    // thumbnail — so the edit starts from a pristine image (no recompression).
-    const importFromSync = useCallback(
-        async poster => {
-            setImporting(true);
-            try {
-                const resp = await fetch(postersAPI.getPreviewUrl(poster.folder, poster.file));
-                if (!resp.ok) throw new Error(`Import failed (${resp.status})`);
-                const blob = await resp.blob();
-                const dataUrl = await new Promise((resolve, reject) => {
-                    const r = new FileReader();
-                    r.onload = () => resolve(r.result);
-                    r.onerror = () => reject(new Error('Could not read image'));
-                    r.readAsDataURL(blob);
-                });
-                loadSource(dataUrl);
-            } catch (err) {
-                toast.error(err.message || 'Import failed');
-            } finally {
-                setImporting(false);
-            }
-        },
-        [loadSource, toast]
-    );
-
-    // Id/kind fields shared by every /retext call (drive the save filename; inert
-    // on previews).
-    const idFields = useMemo(
-        () => ({
-            kind: isSeason ? 'season' : effectiveKind,
-            season_number: isSeason ? Number(seasonNum) : null,
-            title: item.title,
-            tmdb_id: item.tmdb_id,
-            year: item.year,
-            tvdb_id: item.tvdb_id,
-            imdb_id: item.imdb_id,
-        }),
-        [isSeason, seasonNum, effectiveKind, item]
-    );
-
-    // Send to AI — the ONLY paid step. Erase the masked region of the ORIGINAL
-    // upload and keep the result as the working copy. No label drawn here.
-    const runErase = useCallback(async () => {
-        if (!imageDataUrl || !maskB64) return;
-        setAiBusy(true);
-        try {
-            const resp = await cl2kMakerAPI.retext({
-                image_b64: imageDataUrl,
-                mask_b64: maskB64,
-                apply_ai: true,
-                prompt,
-                label_text: '',
-                border: false, // keep the working copy clean; border is applied later
-                preview: true,
-                // Keep the original dimensions: the CL2K output mode frames the
-                // working copy itself, and the re-text save normalizes anyway.
-                keep_size: true,
-                ...idFields,
-            });
-            const erased = resp?.data?.preview_b64;
-            if (erased) {
-                setWorkingB64(erased);
-                setAiErased(true);
-                setLabeledB64(null);
-                setCl2kPreviewB64(null);
-                toast.success(
-                    'Old text erased — position the label, then save (no more AI calls).'
-                );
-            } else {
-                toast.error('AI returned no image');
-            }
-        } catch (err) {
-            toast.error(err.message || 'AI erase failed');
-        } finally {
-            setAiBusy(false);
-        }
-    }, [imageDataUrl, maskB64, prompt, idFields, toast]);
-
-    // Free, deterministic label overlay onto the working copy (apply_ai=false), so
-    // the label can be positioned without spending AI credits. Debounced auto-render
-    // whenever the label text / position / working copy changes.
-    useEffect(() => {
-        // Nothing to bake (no label and no border) — the display falls back to the
-        // bare working copy (workingSrc ignores a stale render in that case).
-        if (!workingB64 || (!label.trim() && !addBorder)) return undefined;
-        let cancelled = false;
-        const timer = setTimeout(async () => {
-            setLabelBusy(true);
-            try {
-                const resp = await cl2kMakerAPI.retext({
-                    image_b64: workingB64,
-                    mask_b64: null,
-                    apply_ai: false,
-                    label_text: label,
-                    text_y: textY,
-                    border: addBorder,
-                    preview: true,
-                    ...idFields,
-                });
-                if (!cancelled) setLabeledB64(resp?.data?.preview_b64 || null);
-            } catch (err) {
-                if (!cancelled) toast.error(err.message || 'Preview failed');
-            } finally {
-                if (!cancelled) setLabelBusy(false);
-            }
-        }, 500);
-        return () => {
-            cancelled = true;
-            clearTimeout(timer);
-        };
-    }, [workingB64, label, textY, addBorder, idFields, toast]);
-
-    // Re-measure the rendered poster width on resize so the live overlay font scales
-    // with it (initial measure happens on the image's onLoad).
-    useEffect(() => {
-        const measure = () => {
-            if (workImgRef.current) setImgW(workImgRef.current.clientWidth);
-        };
-        window.addEventListener('resize', measure);
-        return () => window.removeEventListener('resize', measure);
-    }, []);
-
-    // Clear the drag state on any pointer release (even outside the slider), so the
-    // view reliably snaps back to the accurate server render.
-    useEffect(() => {
-        if (!dragging) return undefined;
-        const stop = () => setDragging(false);
-        window.addEventListener('mouseup', stop);
-        window.addEventListener('touchend', stop);
-        return () => {
-            window.removeEventListener('mouseup', stop);
-            window.removeEventListener('touchend', stop);
-        };
-    }, [dragging]);
-
-    // Save the working copy + label. apply_ai=false → NO second OpenAI call.
-    const runSave = useCallback(async () => {
-        if (!workingB64) return;
-        setSaving(true);
-        try {
-            const resp = await cl2kMakerAPI.retext({
-                image_b64: workingB64,
-                mask_b64: null,
-                apply_ai: false,
-                label_text: label,
-                text_y: textY,
-                border: addBorder,
-                preview: false,
-                ...idFields,
-                ...saveTargets.fields,
-            });
-            savedToast(toast, resp?.data);
-        } catch (err) {
-            toast.error(err.message || 'Save failed');
-        } finally {
-            setSaving(false);
-        }
-    }, [workingB64, label, textY, addBorder, idFields, saveTargets.fields, toast]);
-
-    // Download the working copy as shown (label/border baked when rendered) so the
-    // cleaned poster can be filed elsewhere (to add a logo, use this tab's "Full
-    // CL2K render" output instead). Pure client-side: the bytes are already here.
-    const downloadWorking = useCallback(() => {
-        const baked = (label.trim() || addBorder) && labeledB64;
-        const b64 = baked ? labeledB64 : workingB64;
-        if (!b64) return;
-        const a = document.createElement('a');
-        a.href = `data:image/jpeg;base64,${b64}`;
-        a.download = `${item.title || 'poster'} (cleaned).jpg`;
-        a.click();
-    }, [label, addBorder, labeledB64, workingB64, item.title]);
-
-    // ── Full-CL2K output mode ──────────────────────────────────────────────
-    const onCustomLogo = useCallback(c => {
-        setCustomLogo(c);
-        setCl2kPreviewB64(null);
-        if (c) setCl2kLogo(null);
-    }, []);
-
-    // The working copy (original upload or AI-erased) as a multipart upload for
-    // the full-render endpoint — the bytes are already here as base64.
-    const workingFile = useCallback(() => {
-        if (!workingB64) return null;
-        const bin = atob(workingB64);
-        const bytes = new Uint8Array(bin.length);
-        for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
-        return new File([bytes], 'working.jpg', { type: 'image/jpeg' });
-    }, [workingB64]);
-
-    const cl2kMeta = useMemo(
-        () => ({
-            ...idFields,
-            logo_path: customLogo ? null : cl2kLogo,
-            logo_b64: customLogo?.b64 || null,
-            logo_scale: logoScale,
-            logo_y_offset: logoYOffset,
-            whiten: whitenLogo,
-            invert: invertLogo,
-            fit_mode: fitMode,
-            focus_x: focusX,
-            focus_y: focusY,
-            crop_x: (fitMode === 'fit' || fitMode === 'extend') && crop ? crop.x : null,
-            crop_y: (fitMode === 'fit' || fitMode === 'extend') && crop ? crop.y : null,
-            crop_w: (fitMode === 'fit' || fitMode === 'extend') && crop ? crop.w : null,
-            crop_h: (fitMode === 'fit' || fitMode === 'extend') && crop ? crop.h : null,
-            v_pos: vPos,
-            zoom: fitMode === 'fit' || fitMode === 'extend' ? zoom : 1,
-        }),
-        [
-            idFields,
-            cl2kLogo,
-            customLogo,
-            logoScale,
-            logoYOffset,
-            whitenLogo,
-            invertLogo,
-            fitMode,
-            crop,
-            vPos,
-            zoom,
-            focusX,
-            focusY,
-        ]
-    );
-
-    const runCl2kPreview = useCallback(async () => {
-        const f = workingFile();
-        if (!f) return;
-        setCl2kPreviewing(true);
-        try {
-            const resp = await cl2kMakerAPI.uploadGenerate(f, { ...cl2kMeta, preview: true });
-            setCl2kPreviewB64(resp?.data?.preview_b64 || null);
-        } catch (err) {
-            toast.error(err.message || 'Preview failed');
-        } finally {
-            setCl2kPreviewing(false);
-        }
-    }, [workingFile, cl2kMeta, toast]);
-
-    const runCl2kGenerate = useCallback(async () => {
-        const f = workingFile();
-        if (!f) return;
-        setGenerating(true);
-        try {
-            const resp = await cl2kMakerAPI.uploadGenerate(f, {
-                ...cl2kMeta,
-                ...saveTargets.fields,
-            });
-            savedToast(toast, resp?.data, 'Generated');
-        } catch (err) {
-            toast.error(err.message || 'Generate failed');
-        } finally {
-            setGenerating(false);
-        }
-    }, [workingFile, cl2kMeta, saveTargets.fields, toast]);
-
-    // What the working-copy pane shows.
-    // bareSrc = working copy with NO baked label; labeledSrc = the accurate server
-    // render (label baked in). While dragging the position, or before the server
-    // render catches up, show bareSrc + a live CSS label; otherwise show the
-    // pixel-accurate render.
-    const bareSrc = aiErased ? `data:image/jpeg;base64,${workingB64}` : imageDataUrl;
-    const labeledSrc = labeledB64 ? `data:image/jpeg;base64,${labeledB64}` : null;
-    // Something to bake server-side (a label and/or the border)?
-    const hasRender = !!label.trim() || addBorder;
-    const liveLabel = !!label.trim() && (dragging || labelBusy || !labeledSrc);
-    const workingSrc = liveLabel ? bareSrc : hasRender && labeledSrc ? labeledSrc : bareSrc;
-    // CL2K label metrics scaled to the rendered poster: 32px per 1000px canvas width,
-    // tracking 0.8em — an approximation of overlay_label, replaced by the real render.
-    const overlayPx = imgW ? (32 * imgW) / 1000 : 0;
-
-    return (
-        <section className="mt-4 flex flex-col gap-4">
-            {/* Full-width source bar — keeps the two posters below it top-aligned. */}
-            <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-2">
-                <h3 className="text-sm font-medium text-primary">Edit poster</h3>
-                <p className="text-xs text-tertiary">
-                    Import a poster or backdrop from your GDrive sync (or upload one). Optionally
-                    brush over old text and <span className="text-secondary">Send to AI</span> once
-                    to erase it — that&apos;s the only step that uses AI credits. Then either
-                    re-text it (label/border, saved as-is) or run the full CL2K render (framing,
-                    logo, gradient, border) on the result.
-                </p>
-                <div className="flex gap-2">
-                    <Button
-                        variant={sourceMode === 'sync' ? 'primary' : 'secondary'}
-                        size="small"
-                        icon="cloud_sync"
-                        onClick={() => setSourceMode('sync')}
-                    >
-                        Import from sync
-                    </Button>
-                    <Button
-                        variant={sourceMode === 'upload' ? 'primary' : 'secondary'}
-                        size="small"
-                        icon="upload"
-                        onClick={() => setSourceMode('upload')}
-                    >
-                        Upload file
-                    </Button>
-                </div>
-                {sourceMode === 'upload' ? (
-                    <input type="file" accept="image/*" onChange={onFile} />
-                ) : (
-                    <SyncImportPicker
-                        defaultQuery={item.title}
-                        importing={importing}
-                        onPick={importFromSync}
-                        toast={toast}
-                    />
-                )}
-            </div>
-
-            {imageDataUrl && (
-                <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-2">
-                    <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-primary">Output</span>
-                        <Button
-                            variant={outputMode === 'retext' ? 'primary' : 'secondary'}
-                            size="small"
-                            icon="text_fields"
-                            onClick={() => setOutputMode('retext')}
-                        >
-                            Re-text &amp; save as-is
-                        </Button>
-                        <Button
-                            variant={outputMode === 'cl2k' ? 'primary' : 'secondary'}
-                            size="small"
-                            icon="auto_awesome"
-                            onClick={() => setOutputMode('cl2k')}
-                        >
-                            Full CL2K render
-                        </Button>
-                    </div>
-                    <p className="text-xs text-tertiary">
-                        {outputMode === 'retext'
-                            ? 'Draw a label and file the poster as-is — no CL2K logo or gradient added.'
-                            : 'Frame the working copy, pick a clear logo, and render the full CL2K treatment (gradient + logo + border).'}
-                    </p>
-                </div>
-            )}
-
-            {imageDataUrl && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    {/* LEFT — source: brush the old text, send to AI once */}
-                    <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-3">
-                        <div className="flex items-center justify-between">
-                            <h3 className="text-sm font-medium text-primary">
-                                Source — brush the old text
-                            </h3>
-                            {aiErased && (
-                                <span className="inline-flex items-center gap-1 text-xs text-success">
-                                    <span className="material-symbols-outlined text-sm">
-                                        check_circle
-                                    </span>
-                                    erased
-                                </span>
-                            )}
-                        </div>
-                        <BrushMask
-                            imageUrl={imageDataUrl}
-                            brushSize={brushSize}
-                            onMaskChange={setMaskB64}
-                        />
-                        <label className="flex items-center gap-2 text-sm text-secondary">
-                            <span className="w-20">Brush</span>
-                            <input
-                                type="range"
-                                min="4"
-                                max="60"
-                                value={brushSize}
-                                onChange={e => setBrushSize(Number(e.target.value))}
-                                className="flex-1"
-                            />
-                            <span className="w-10 text-right">{brushSize}px</span>
-                        </label>
-                        <label className="flex flex-col gap-1 text-sm text-secondary">
-                            <span>AI prompt (defaults to module settings)</span>
-                            <textarea
-                                value={prompt}
-                                onChange={e => setPrompt(e.target.value)}
-                                rows={2}
-                                className="bg-surface border border-border rounded px-2 py-1 text-sm text-primary"
-                            />
-                        </label>
-                        {provider === 'none' && (
-                            <div className="text-xs text-warning">
-                                AI provider is “none” — enable OpenAI in{' '}
-                                <Link
-                                    to="/settings/modules"
-                                    className="text-primary underline hover:no-underline"
-                                >
-                                    Module Settings
-                                </Link>{' '}
-                                to erase text.
-                            </div>
-                        )}
-                        <LoadingButton
-                            onClick={runErase}
-                            loading={aiBusy}
-                            disabled={!maskB64 || provider === 'none'}
-                            icon="auto_fix_high"
-                        >
-                            {aiErased
-                                ? 'Re-send to AI (erase again)'
-                                : 'Send to AI — erase masked text'}
-                        </LoadingButton>
-                        <p className="text-xs text-tertiary">
-                            Provider: <span className="text-secondary">{provider}</span>. This is
-                            the only step that uses AI credits — brush the old text, then send once.
-                        </p>
-                    </div>
-
-                    {/* RIGHT — output: re-text (label/save-as-is) or full CL2K render */}
-                    {outputMode === 'cl2k' ? (
-                        <div className="flex flex-col gap-3 self-start sticky top-4 max-h-screen overflow-y-auto">
-                            <CropFramer
-                                imageUrl={bareSrc}
-                                fitMode={fitMode}
-                                setFitMode={setFitMode}
-                                crop={crop}
-                                setCrop={setCrop}
-                                vPos={vPos}
-                                setVPos={setVPos}
-                                zoom={zoom}
-                                setZoom={setZoom}
-                                focusX={focusX}
-                                focusY={focusY}
-                                onChange={(fx, fy) => {
-                                    setFocusX(fx);
-                                    setFocusY(fy);
-                                }}
-                            />
-                            <LogoSelector
-                                label="Logo (TMDB / fanart / custom)"
-                                logos={logos}
-                                loading={loadingArt}
-                                selected={cl2kLogo}
-                                onSelect={p => {
-                                    setCl2kLogo(p);
-                                    setCl2kPreviewB64(null);
-                                }}
-                                customLogo={customLogo}
-                                onCustomChange={onCustomLogo}
-                                scale={logoScale}
-                                onScale={s => {
-                                    setLogoScale(s);
-                                    setCl2kPreviewB64(null);
-                                }}
-                                whiten={effectiveWhiten}
-                                onWhiten={v => {
-                                    setWhitenLogo(v);
-                                    setCl2kPreviewB64(null);
-                                }}
-                                invert={invertLogo}
-                                onInvert={v => {
-                                    setInvertLogo(v);
-                                    setCl2kPreviewB64(null);
-                                }}
-                                yOffset={logoYOffset}
-                                onYOffset={y => {
-                                    setLogoYOffset(y);
-                                    setCl2kPreviewB64(null);
-                                }}
-                                emptyText="No TMDB/fanart logos — upload a custom one, or leave unset for the text-wordmark fallback."
-                            />
-                            <div className="bg-surface border border-border rounded-lg p-3">
-                                <div className="flex items-center justify-between mb-2">
-                                    <h3 className="text-sm font-medium text-primary">Preview</h3>
-                                    <div className="flex items-center gap-3">
-                                        <GuidesToggle show={showGuides} onChange={setShowGuides} />
-                                        <LoadingButton
-                                            onClick={runCl2kPreview}
-                                            loading={cl2kPreviewing}
-                                            disabled={!workingB64}
-                                            icon="visibility"
-                                            size="small"
-                                        >
-                                            Render preview
-                                        </LoadingButton>
-                                    </div>
-                                </div>
-                                <div className="relative aspect-[2/3] bg-black rounded overflow-hidden flex items-center justify-center">
-                                    {cl2kPreviewB64 ? (
-                                        <>
-                                            <img
-                                                src={`data:image/jpeg;base64,${cl2kPreviewB64}`}
-                                                alt="CL2K preview"
-                                                className="w-full h-full object-contain"
-                                            />
-                                            {showGuides && <GuideOverlay />}
-                                        </>
-                                    ) : (
-                                        <span className="text-xs text-tertiary px-4 text-center">
-                                            Click “Render preview”.
-                                        </span>
-                                    )}
-                                </div>
-                            </div>
-                            <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-2">
-                                <SaveTargets targets={saveTargets} />
-                                <LoadingButton
-                                    onClick={runCl2kGenerate}
-                                    loading={generating}
-                                    disabled={!workingB64 || saveTargets.noTarget}
-                                    icon="save"
-                                >
-                                    Generate &amp; save
-                                </LoadingButton>
-                                <Button
-                                    onClick={downloadWorking}
-                                    disabled={!workingB64}
-                                    variant="secondary"
-                                    icon="download"
-                                >
-                                    Download working copy
-                                </Button>
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-3 self-start sticky top-4 max-h-screen overflow-y-auto">
-                            <div className="flex items-center justify-between">
-                                <h3 className="text-sm font-medium text-primary">Working copy</h3>
-                                {labelBusy && (
-                                    <span className="text-xs text-tertiary">updating…</span>
-                                )}
-                            </div>
-                            <div className="aspect-[2/3] bg-black rounded overflow-hidden flex items-center justify-center relative">
-                                {workingSrc ? (
-                                    <>
-                                        <img
-                                            ref={workImgRef}
-                                            src={workingSrc}
-                                            alt="Working copy"
-                                            onLoad={e => setImgW(e.target.clientWidth)}
-                                            className="w-full h-full object-contain"
-                                        />
-                                        {liveLabel && overlayPx > 0 && (
-                                            <div
-                                                style={{
-                                                    position: 'absolute',
-                                                    left: 0,
-                                                    right: 0,
-                                                    top: `${textY * 100}%`,
-                                                    transform: 'translateY(-50%)',
-                                                    textAlign: 'center',
-                                                    color: '#fff',
-                                                    textTransform: 'uppercase',
-                                                    fontFamily: 'Arial, Helvetica, sans-serif',
-                                                    fontWeight: 400,
-                                                    fontSize: `${overlayPx}px`,
-                                                    letterSpacing: `${overlayPx * 0.8}px`,
-                                                    lineHeight: 1,
-                                                    whiteSpace: 'nowrap',
-                                                    pointerEvents: 'none',
-                                                }}
-                                            >
-                                                {label}
-                                            </div>
-                                        )}
-                                    </>
-                                ) : (
-                                    <span className="text-xs text-tertiary px-4 text-center">
-                                        Import a synced poster or upload one to start.
-                                    </span>
-                                )}
-                            </div>
-                            <label className="flex flex-col gap-1 text-sm text-secondary">
-                                <span>Label text (drawn on the poster)</span>
-                                <input
-                                    type="text"
-                                    value={label}
-                                    onChange={e => setLabel(e.target.value)}
-                                    placeholder="e.g. SEASON 2026"
-                                    className="bg-surface border border-border rounded px-2 py-1 text-sm text-primary"
-                                />
-                            </label>
-                            <label className="flex items-center gap-2 text-sm text-secondary">
-                                <span className="w-24">Position</span>
-                                <input
-                                    type="range"
-                                    min="0"
-                                    max="100"
-                                    value={Math.round(textY * 100)}
-                                    onChange={e => setTextY(Number(e.target.value) / 100)}
-                                    onMouseDown={() => setDragging(true)}
-                                    onTouchStart={() => setDragging(true)}
-                                    className="flex-1"
-                                />
-                                <span className="w-10 text-right">{Math.round(textY * 100)}%</span>
-                            </label>
-                            <p className="text-xs text-tertiary">
-                                <span className="text-secondary">
-                                    96% is the locked CL2K default
-                                </span>{' '}
-                                — the season/specials band from the CL2K PSD (y=1440 on the 1500px
-                                canvas). Drag for a live preview; it snaps to the exact CL2K render
-                                on release.{' '}
-                                {Math.round(textY * 100) !== 96 && (
-                                    <button
-                                        type="button"
-                                        onClick={() => setTextY(0.96)}
-                                        className="text-primary underline hover:no-underline"
-                                    >
-                                        Reset to CL2K default
-                                    </button>
-                                )}
-                            </p>
-                            <label className="flex flex-col gap-1 text-sm text-secondary">
-                                <span>Season number (filename + Plex match — not drawn)</span>
-                                <input
-                                    type="number"
-                                    value={seasonNum}
-                                    onChange={e => setSeasonNum(e.target.value)}
-                                    placeholder="blank = base poster; e.g. 2026"
-                                    className="bg-surface border border-border rounded px-2 py-1 text-sm text-primary"
-                                />
-                            </label>
-                            <p className="text-xs text-tertiary">
-                                {String(seasonNum).trim() === '' ? (
-                                    <>Blank = base show poster (no season suffix). </>
-                                ) : (
-                                    <>
-                                        Sets the filename suffix{' '}
-                                        <code className="text-secondary">
-                                            {seasonSuffixPreview(seasonNum)}
-                                        </code>{' '}
-                                        so Poster Renamerr applies it to that season.{' '}
-                                    </>
-                                )}
-                                Use <code className="text-secondary">0</code> for Specials. For
-                                year-based shows (F1) use the year (e.g. 2026). Metadata only — it
-                                isn’t printed on the poster.
-                            </p>
-                            <label className="flex items-center gap-2 text-sm text-primary font-medium">
-                                <input
-                                    type="checkbox"
-                                    checked={addBorder}
-                                    onChange={e => setAddBorder(e.target.checked)}
-                                />
-                                Add CL2K white border
-                            </label>
-                            <p className="text-xs text-tertiary">
-                                The DAPS default 26px white frame (per the CL2K PSD). Uncheck only
-                                if the source poster already has the required border.
-                            </p>
-                            <SaveTargets targets={saveTargets} />
-                            <LoadingButton
-                                onClick={runSave}
-                                loading={saving}
-                                disabled={!workingB64 || saveTargets.noTarget}
-                                icon="save"
-                            >
-                                Save edited poster
-                            </LoadingButton>
-                            <p className="text-xs text-tertiary">
-                                Saving draws the label and files it (1000×1500, DAPS-named) — no
-                                extra AI call.
-                            </p>
-                            <Button
-                                onClick={downloadWorking}
-                                disabled={!workingB64}
-                                variant="secondary"
-                                icon="download"
-                            >
-                                Download working copy
-                            </Button>
-                            <p className="text-xs text-tertiary">
-                                Downloads what’s shown (label/border included if set) — handy for
-                                filing the cleaned poster elsewhere. To add a clear logo, switch the
-                                Output above to “Full CL2K render”.
-                            </p>
-                        </div>
-                    )}
-                </div>
-            )}
-        </section>
-    );
-};
-
 // ─── History ────────────────────────────────────────────────────────────────
 
 const HistorySection = ({ toast }) => {
@@ -5617,16 +4628,6 @@ const parseSeasonList = s =>
         .split(',')
         .map(x => parseInt(x.trim(), 10))
         .filter(n => Number.isInteger(n) && n >= 0);
-
-// Preview the filename suffix the backend (build_poster_filename) will write:
-// season 0 → "- Specials", others → "- Season NN" (zero-padded to 2 digits,
-// year-based F1 numbers pass through, e.g. "- Season 2026").
-const seasonSuffixPreview = season => {
-    const n = Number(String(season).trim());
-    if (!Number.isFinite(n)) return '';
-    if (n === 0) return '- Specials';
-    return `- Season ${String(n).padStart(2, '0')}`;
-};
 
 const downloadBlob = (blob, filename) => {
     const url = URL.createObjectURL(blob);
