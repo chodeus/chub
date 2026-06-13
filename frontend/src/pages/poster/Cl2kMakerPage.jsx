@@ -64,12 +64,17 @@ const BUILD_TABS = [
     { key: 'logo', label: 'Logo', icon: 'sell' },
 ];
 // Occasional "I already have art" workflows — tucked under the More ▾ menu.
-const MORE_TABS = [
-    { key: 'upload-poster', label: 'Finished poster', icon: 'image' },
-    { key: 'edit', label: 'Edit poster', icon: 'edit' },
-];
-// Old tab keys (source-as-tab) → the new build tab, so a saved session migrates.
-const TAB_MIGRATE = { tmdb: 'poster', fanart: 'poster', plex: 'poster' };
+// (Filing a finished poster as-is lives in the Poster tab's "File as-is" output
+// mode now, so it isn't a separate tab.)
+const MORE_TABS = [{ key: 'edit', label: 'Edit poster', icon: 'edit' }];
+// Old tab keys (source-as-tab, and the retired Finished-poster tab) → the new
+// build tab, so a saved session migrates.
+const TAB_MIGRATE = {
+    tmdb: 'poster',
+    fanart: 'poster',
+    plex: 'poster',
+    'upload-poster': 'poster',
+};
 
 // Per-picker artwork sources (Option A: a segmented row in each picker header).
 // 'upload' swaps the grid for that picker's custom-upload control.
@@ -79,6 +84,11 @@ const ART_SOURCES = [
     { key: 'plex', label: 'Plex', icon: 'live_tv' },
     { key: 'upload', label: 'Upload', icon: 'upload' },
 ];
+
+// The Poster tab's backdrop picker adds a 'gdrive' source (browse the GDrive sync
+// cache) on top of ART_SOURCES — kept Poster-only so the logo / background /
+// square pickers don't grow a meaningless "grab a finished poster" option.
+const BACKDROP_SOURCES = [...ART_SOURCES, { key: 'gdrive', label: 'GDrive', icon: 'cloud_sync' }];
 
 // Stable identity for an uploaded image ({ b64, name }) in change-detection
 // signatures. A b64-prefix slice can collide: the first ~24 bytes of a JPEG are
@@ -1575,6 +1585,8 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                     onPsdExport={runPsdExport}
                     busy={busy}
                     saveTargets={saveTargets}
+                    effectiveKind={effectiveKind}
+                    toast={toast}
                 />
             )}
 
@@ -1606,17 +1618,6 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                 />
             )}
 
-            {tab === 'upload-poster' && (
-                <UploadPosterPanel
-                    item={item}
-                    effectiveKind={effectiveKind}
-                    logos={allLogos}
-                    loadingArt={loadingArt}
-                    config={config}
-                    saveTargets={saveTargets}
-                    toast={toast}
-                />
-            )}
             {tab === 'edit' && (
                 <EditPosterPanel
                     item={item}
@@ -1696,20 +1697,31 @@ const RenderPanel = ({
     onPsdExport,
     busy,
     saveTargets,
+    effectiveKind,
+    toast,
 }) => {
     // Independent per-picker sources (Option A): the backdrop and the logo each
     // choose their own source, so e.g. a Plex backdrop + a fanart.tv logo works.
     // State lives in the Builder (persisted with the session); switching a picker
     // OFF Upload clears its custom image — one consistent rule everywhere, no
     // invisible "the upload is still what renders" state.
+    // 'upload' AND 'gdrive' both seed customBackdrop, so only clear it when
+    // switching to a picker-grid source (tmdb/fanart/plex).
     const onBdSource = s => {
         setBackdropSource(s);
-        if (s !== 'upload') setCustomBackdrop(null);
+        if (s !== 'upload' && s !== 'gdrive') setCustomBackdrop(null);
     };
     const onLogoSource = s => {
         setLogoSource(s);
         if (s !== 'upload') setCustomLogo(null);
     };
+
+    // Output mode: 'cl2k' = the full CL2K render (gradient + logo + framing +
+    // season + border). 'asis' = file a finished poster unchanged (optional logo
+    // + border, no gradient/reframe) — the old "Finished poster" tab, folded in so
+    // the upload/GDrive sources feed both flows.
+    const [outputMode, setOutputMode] = useState('cl2k'); // 'cl2k' | 'asis'
+    const isAsis = outputMode === 'asis';
     const bdArt = artBySource[backdropSource] || null;
     const lgArt = artBySource[logoSource] || null;
     const backdrops = bdArt?.backdrops || [];
@@ -1736,251 +1748,585 @@ const RenderPanel = ({
         };
         reader.readAsDataURL(f);
     };
-    const bdSel = <SourceSelector value={backdropSource} onChange={onBdSource} />;
+
+    // GDrive grab: pull a synced poster at FULL resolution (the raw cached file,
+    // never the thumbnail) and seed it as the custom backdrop — same shape the
+    // Upload source produces, so the render path downstream is identical.
+    const [importing, setImporting] = useState(false);
+    const importFromSync = useCallback(
+        async poster => {
+            setImporting(true);
+            try {
+                const resp = await fetch(postersAPI.getPreviewUrl(poster.folder, poster.file));
+                if (!resp.ok) throw new Error(`Import failed (${resp.status})`);
+                const blob = await resp.blob();
+                const dataUrl = await new Promise((resolve, reject) => {
+                    const r = new FileReader();
+                    r.onload = () => resolve(r.result);
+                    r.onerror = () => reject(new Error('Could not read image'));
+                    r.readAsDataURL(blob);
+                });
+                const url = String(dataUrl);
+                setCustomBackdrop({ b64: url.split(',').pop(), url, name: poster.file });
+            } catch (err) {
+                toast.error(err.message || 'Import failed');
+            } finally {
+                setImporting(false);
+            }
+        },
+        [setCustomBackdrop, toast]
+    );
+
+    // Synced posters that match the current title — auto-populated like the
+    // TMDB/fanart/Plex grids (no manual search). Fetched lazily the first time the
+    // GDrive source is shown, and again whenever the title changes.
+    const [gdrivePosters, setGdrivePosters] = useState(null);
+    const [gdriveLoading, setGdriveLoading] = useState(false);
+    const [gdriveFor, setGdriveFor] = useState(null);
+    useEffect(() => {
+        if (backdropSource !== 'gdrive' || gdriveFor === item.title) return undefined;
+        let cancelled = false;
+        (async () => {
+            setGdriveLoading(true);
+            try {
+                const resp = await postersAPI.browsePosters({
+                    query: item.title || undefined,
+                    image_type: 'poster',
+                    limit: 60,
+                });
+                if (!cancelled) {
+                    setGdrivePosters(resp?.data?.items || []);
+                    setGdriveFor(item.title);
+                }
+            } catch (err) {
+                if (!cancelled) {
+                    setGdrivePosters([]);
+                    setGdriveFor(item.title);
+                    toast.error(err.message || 'GDrive browse failed');
+                }
+            } finally {
+                if (!cancelled) setGdriveLoading(false);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [backdropSource, gdriveFor, item.title, toast]);
+
+    const bdSel = (
+        <SourceSelector value={backdropSource} onChange={onBdSource} sources={BACKDROP_SOURCES} />
+    );
     const plexBackdropEmpty =
         backdropSource === 'plex' && bdArt?.reason && !backdrops.length && !posters.length;
+    const bdLabel = isAsis ? 'Poster image' : 'Backdrop';
+
+    // ── File-as-is (finished poster) output ────────────────────────────────────
+    // Files the currently-selected image unchanged via /upload-poster (optional
+    // logo + border, no gradient). The image — whether an Upload, a GDrive grab,
+    // or a picker path — is fetched back to a File from its URL.
+    const [asisBorder, setAsisBorder] = useState(true);
+    const [asisPreview, setAsisPreview] = useState(null); // { b64, sig }
+    const [asisPreviewing, setAsisPreviewing] = useState(false);
+    const [asisSaving, setAsisSaving] = useState(false);
+
+    const asisFileFromSource = useCallback(async () => {
+        if (!backdropUrl) return null;
+        const resp = await fetch(backdropUrl);
+        const blob = await resp.blob();
+        return new File([blob], customBackdrop?.name || 'poster.jpg', {
+            type: blob.type || 'image/jpeg',
+        });
+    }, [backdropUrl, customBackdrop]);
+
+    const asisMeta = useMemo(
+        () => ({
+            kind: effectiveKind,
+            title: item.title,
+            tmdb_id: item.tmdb_id,
+            year: item.year,
+            tvdb_id: item.tvdb_id,
+            imdb_id: item.imdb_id,
+            border: asisBorder,
+            logo_path: customLogo ? null : logo,
+            logo_b64: customLogo?.b64 || null,
+            logo_scale: logoScale,
+            logo_y_offset: logoYOffset,
+            whiten: whitenLogo,
+            invert: invertLogo,
+        }),
+        [
+            effectiveKind,
+            item,
+            asisBorder,
+            logo,
+            customLogo,
+            logoScale,
+            logoYOffset,
+            whitenLogo,
+            invertLogo,
+        ]
+    );
+
+    // Signature of every input that affects the as-is render. A rendered preview
+    // is shown only while it still matches the current inputs, so changing the
+    // logo / border / source drops the stale preview — no setState-in-effect.
+    const asisSig = useMemo(
+        () =>
+            JSON.stringify([
+                backdropUrl,
+                asisBorder,
+                customLogo ? customSig(customLogo) : logo,
+                logoScale,
+                logoYOffset,
+                whitenLogo,
+                invertLogo,
+            ]),
+        [backdropUrl, asisBorder, logo, customLogo, logoScale, logoYOffset, whitenLogo, invertLogo]
+    );
+
+    const runAsisPreview = useCallback(async () => {
+        const f = await asisFileFromSource();
+        if (!f) return;
+        setAsisPreviewing(true);
+        try {
+            const resp = await cl2kMakerAPI.uploadPoster(f, { ...asisMeta, preview: true });
+            setAsisPreview({ b64: resp?.data?.preview_b64 || null, sig: asisSig });
+        } catch (err) {
+            toast.error(err.message || 'Preview failed');
+        } finally {
+            setAsisPreviewing(false);
+        }
+    }, [asisFileFromSource, asisMeta, asisSig, toast]);
+
+    const runAsisSave = useCallback(async () => {
+        const f = await asisFileFromSource();
+        if (!f) return;
+        setAsisSaving(true);
+        try {
+            const resp = await cl2kMakerAPI.uploadPoster(f, { ...asisMeta, ...saveTargets.fields });
+            savedToast(toast, resp?.data);
+        } catch (err) {
+            toast.error(err.message || 'Save failed');
+        } finally {
+            setAsisSaving(false);
+        }
+    }, [asisFileFromSource, asisMeta, saveTargets.fields, toast]);
+
+    const asisFresh = !!(asisPreview?.b64 && asisPreview.sig === asisSig);
+    const asisShownSrc = asisFresh ? `data:image/jpeg;base64,${asisPreview.b64}` : backdropUrl;
 
     return (
-        <section className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* Left: pickers + AI */}
-            <div className="flex flex-col gap-4">
-                {seasonPosters.length > 0 && (
-                    <Picker
-                        label="Season poster (tmdb)"
-                        items={seasonPosters}
-                        loading={false}
-                        selected={backdrop}
-                        onSelect={setBackdrop}
-                        aspect="aspect-poster"
-                        emptyText="No TMDB season posters."
-                    />
-                )}
-                {/* Backdrop — source-selectable. 'Upload' swaps the grid for a
-                    custom-image dropzone. Official posters from the same source
-                    appear below (pick one, brush its title in the AI panel, erase). */}
-                {backdropSource === 'upload' ? (
-                    <UploadArtCard
-                        label="Backdrop"
-                        headerRight={bdSel}
-                        custom={customBackdrop}
-                        onFile={onBackdropFile}
-                        onClear={() => setCustomBackdrop(null)}
-                    />
-                ) : (
-                    <>
+        <section className="mt-4 flex flex-col gap-4">
+            {/* Output mode — full CL2K render vs. file the image as-is. */}
+            <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-primary">Output</span>
+                    <Button
+                        variant={outputMode === 'cl2k' ? 'primary' : 'secondary'}
+                        size="small"
+                        icon="auto_awesome"
+                        onClick={() => setOutputMode('cl2k')}
+                    >
+                        Full CL2K render
+                    </Button>
+                    <Button
+                        variant={outputMode === 'asis' ? 'primary' : 'secondary'}
+                        size="small"
+                        icon="image"
+                        onClick={() => setOutputMode('asis')}
+                    >
+                        File as-is
+                    </Button>
+                </div>
+                <p className="text-xs text-tertiary">
+                    {isAsis
+                        ? 'File a finished poster unchanged — optional logo + border, no gradient or reframe. Source it from Upload or GDrive, then save.'
+                        : 'The full CL2K treatment: framing + clear logo + gradient + season band + border.'}
+                </p>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/* Left: pickers + AI */}
+                <div className="flex flex-col gap-4">
+                    {!isAsis && seasonPosters.length > 0 && (
                         <Picker
-                            label="Backdrop"
-                            headerRight={bdSel}
-                            items={backdrops}
-                            loading={loadingArt}
+                            label="Season poster (tmdb)"
+                            items={seasonPosters}
+                            loading={false}
                             selected={backdrop}
                             onSelect={setBackdrop}
-                            aspect="aspect-video"
-                            emptyText={
-                                plexBackdropEmpty ? bdArt.reason : 'No backdrops from this source.'
-                            }
+                            aspect="aspect-poster"
+                            emptyText="No TMDB season posters."
                         />
-                        {posters.length > 0 && (
+                    )}
+                    {/* Backdrop / poster image — source-selectable. 'Upload' swaps the
+                        grid for a custom-image dropzone; 'GDrive' for the sync-cache
+                        picker. Official posters from the same source appear below. */}
+                    {backdropSource === 'upload' ? (
+                        <UploadArtCard
+                            label={bdLabel}
+                            headerRight={bdSel}
+                            custom={customBackdrop}
+                            onFile={onBackdropFile}
+                            onClear={() => setCustomBackdrop(null)}
+                        />
+                    ) : backdropSource === 'gdrive' ? (
+                        <div className="bg-surface border border-border rounded-lg p-3">
+                            <div className="flex items-center justify-between gap-2 mb-2">
+                                <h3 className="text-sm font-medium text-primary">{bdLabel}</h3>
+                                {bdSel}
+                            </div>
+                            {customBackdrop ? (
+                                <div className="flex items-center gap-3 rounded-md border-2 border-primary bg-surface-alt p-2">
+                                    <img
+                                        src={customBackdrop.url}
+                                        alt="Grabbed"
+                                        className="h-16 w-auto max-w-[60%] object-contain rounded"
+                                    />
+                                    <span className="flex-1 truncate text-xs text-secondary">
+                                        {customBackdrop.name}
+                                    </span>
+                                    <Button
+                                        onClick={() => setCustomBackdrop(null)}
+                                        variant="secondary"
+                                        icon="close"
+                                        size="small"
+                                    >
+                                        Remove
+                                    </Button>
+                                </div>
+                            ) : gdriveLoading || gdrivePosters === null ? (
+                                <div className="text-xs text-tertiary py-4">Searching…</div>
+                            ) : gdrivePosters.length === 0 ? (
+                                <div className="text-xs text-tertiary py-2">
+                                    No synced posters match this title. Only images already pulled
+                                    by Sync GDrive appear here.
+                                </div>
+                            ) : (
+                                <div
+                                    className="grid gap-2 max-h-72 overflow-auto"
+                                    style={{
+                                        gridTemplateColumns: 'repeat(auto-fill, minmax(96px, 1fr))',
+                                    }}
+                                >
+                                    {gdrivePosters.map(p => (
+                                        <button
+                                            key={p.id || `${p.folder}/${p.file}`}
+                                            type="button"
+                                            disabled={importing}
+                                            onClick={() => importFromSync(p)}
+                                            title={p.file}
+                                            className="relative bg-surface-alt overflow-hidden rounded border border-border hover:border-primary disabled:opacity-50 p-0"
+                                            style={{ aspectRatio: '2 / 3' }}
+                                        >
+                                            <img
+                                                src={
+                                                    p.id
+                                                        ? postersAPI.getThumbnailUrl(p.id, 200)
+                                                        : postersAPI.getPreviewUrl(p.folder, p.file)
+                                                }
+                                                alt={p.file}
+                                                loading="lazy"
+                                                className="w-full h-full object-cover"
+                                            />
+                                            {p.style && (
+                                                <span
+                                                    className="absolute top-1.5 left-1.5 z-10 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-black/65 text-white backdrop-blur-sm pointer-events-none"
+                                                    title={`Style: ${p.style}`}
+                                                >
+                                                    {p.style}
+                                                </span>
+                                            )}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                            {importing && (
+                                <div className="text-xs text-tertiary mt-2">
+                                    Importing full-resolution poster…
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        <>
                             <Picker
-                                label="Poster"
-                                items={posters}
+                                label={bdLabel}
+                                headerRight={bdSel}
+                                items={backdrops}
                                 loading={loadingArt}
                                 selected={backdrop}
                                 onSelect={setBackdrop}
-                                aspect="aspect-poster"
-                                emptyText="No posters from this source."
+                                aspect="aspect-video"
+                                emptyText={
+                                    plexBackdropEmpty
+                                        ? bdArt.reason
+                                        : 'No backdrops from this source.'
+                                }
                             />
-                        )}
-                    </>
-                )}
-
-                {backdropUrl && (
-                    <CropFramer
-                        imageUrl={backdropUrl}
-                        fitMode={fitMode}
-                        setFitMode={setFitMode}
-                        crop={crop}
-                        setCrop={setCrop}
-                        vPos={vPos}
-                        setVPos={setVPos}
-                        zoom={zoom}
-                        setZoom={setZoom}
-                        focusX={focusX}
-                        focusY={focusY}
-                        onChange={onFocusChange}
-                        mockLabel={
-                            isSeasonPoster
-                                ? `Season ${seasonNumber}`
-                                : bandLabel || (item.kind === 'collection' ? 'COLLECTION' : '')
-                        }
-                        labelYFrac={
-                            !isSeasonPoster && !bandLabel && item.kind === 'collection'
-                                ? 1350 / 1500
-                                : 1440 / 1500
-                        }
-                    />
-                )}
-
-                <LogoSelector
-                    label="Logo"
-                    logos={logos}
-                    loading={loadingArt}
-                    selected={logo}
-                    onSelect={setLogo}
-                    customLogo={customLogo}
-                    onCustomChange={setCustomLogo}
-                    scale={logoScale}
-                    onScale={setLogoScale}
-                    yOffset={logoYOffset}
-                    onYOffset={setLogoYOffset}
-                    whiten={whitenLogo}
-                    onWhiten={setWhitenLogo}
-                    invert={invertLogo}
-                    onInvert={setInvertLogo}
-                    touchUpUrl={logoTouchUpUrl}
-                    onFlipMask={onLogoFlip}
-                    source={logoSource}
-                    onSource={onLogoSource}
-                    emptyText={
-                        logoSource === 'plex' && lgArt?.reason && !logos.length
-                            ? lgArt.reason
-                            : 'No logos from this source — switch source or Upload, or a text wordmark is used as fallback.'
-                    }
-                />
-
-                {item.kind === 'show' && (
-                    <SeasonControls
-                        seasonNumber={seasonNumber}
-                        setSeasonNumber={setSeasonNumber}
-                        bulkSeasons={bulkSeasons}
-                        setBulkSeasons={setBulkSeasons}
-                        onBulkSeasons={onBulkSeasons}
-                        busy={busy}
-                    />
-                )}
-
-                {!isSeasonPoster && item.kind !== 'collection' && (
-                    <div className="bg-surface border border-border rounded-lg p-3">
-                        <label className="flex items-center gap-2 text-sm text-secondary">
-                            <span className="w-28 text-primary font-medium">Banner</span>
-                            <select
-                                value={bandLabel}
-                                onChange={e => setBandLabel(e.target.value)}
-                                className="flex-1 bg-surface border border-border rounded px-2 py-1 text-sm text-primary"
-                            >
-                                {BAND_LABEL_OPTIONS.map(o => (
-                                    <option key={o.value} value={o.value}>
-                                        {o.label}
-                                    </option>
-                                ))}
-                            </select>
-                        </label>
-                        <p className="text-xs text-tertiary mt-2">
-                            Optional bottom banner in the CL2K label band (e.g. a limited series).
-                        </p>
-                    </div>
-                )}
-
-                <AiPanel
-                    config={config}
-                    removeText={removeText}
-                    setRemoveText={setRemoveText}
-                    brushSize={brushSize}
-                    setBrushSize={setBrushSize}
-                    backdropUrl={backdropUrl}
-                    onMaskChange={onMaskChange}
-                />
-            </div>
-
-            {/* Right: preview + output — sticky so it stays in view while the long
-                left control column scrolls (seeing the preview is the whole point). */}
-            <div className="flex flex-col gap-3 self-start sticky top-4 max-h-screen overflow-y-auto">
-                <div className="bg-surface border border-border rounded-lg p-3">
-                    <div className="flex items-center justify-between mb-2">
-                        <h3 className="text-sm font-medium text-primary">Preview</h3>
-                        <div className="flex items-center gap-3">
-                            <GuidesToggle show={showGuides} onChange={setShowGuides} />
-                            <LoadingButton
-                                onClick={onPreview}
-                                loading={previewing}
-                                disabled={!hasBackdrop}
-                                icon="refresh"
-                                size="small"
-                            >
-                                Refresh
-                            </LoadingButton>
-                        </div>
-                    </div>
-                    <div className="relative aspect-[2/3] bg-black rounded overflow-hidden flex items-center justify-center">
-                        {hasBackdrop && previewUrl ? (
-                            <>
-                                <img
-                                    src={previewUrl}
-                                    alt="CL2K preview"
-                                    className="w-full h-full object-contain"
+                            {posters.length > 0 && (
+                                <Picker
+                                    label="Poster"
+                                    items={posters}
+                                    loading={loadingArt}
+                                    selected={backdrop}
+                                    onSelect={setBackdrop}
+                                    aspect="aspect-poster"
+                                    emptyText="No posters from this source."
                                 />
-                                {processedLogo && (
-                                    <LogoOverlay
-                                        logo={processedLogo}
-                                        scale={logoScale}
-                                        yOffset={logoYOffset}
-                                        kind={item.kind}
-                                    />
-                                )}
-                                {showGuides && <GuideOverlay />}
-                                <PreviewRefreshing active={previewing} />
-                            </>
-                        ) : (
-                            <span className="text-xs text-tertiary px-4 text-center">
-                                {!hasBackdrop
-                                    ? 'Select a backdrop to start.'
-                                    : previewing
-                                      ? 'Rendering preview…'
-                                      : 'Preview unavailable — tap Refresh.'}
-                            </span>
-                        )}
-                    </div>
+                            )}
+                        </>
+                    )}
+
+                    {!isAsis && backdropUrl && (
+                        <CropFramer
+                            imageUrl={backdropUrl}
+                            fitMode={fitMode}
+                            setFitMode={setFitMode}
+                            crop={crop}
+                            setCrop={setCrop}
+                            vPos={vPos}
+                            setVPos={setVPos}
+                            zoom={zoom}
+                            setZoom={setZoom}
+                            focusX={focusX}
+                            focusY={focusY}
+                            onChange={onFocusChange}
+                            mockLabel={
+                                isSeasonPoster
+                                    ? `Season ${seasonNumber}`
+                                    : bandLabel || (item.kind === 'collection' ? 'COLLECTION' : '')
+                            }
+                            labelYFrac={
+                                !isSeasonPoster && !bandLabel && item.kind === 'collection'
+                                    ? 1350 / 1500
+                                    : 1440 / 1500
+                            }
+                        />
+                    )}
+
+                    <LogoSelector
+                        label="Logo"
+                        logos={logos}
+                        loading={loadingArt}
+                        selected={logo}
+                        onSelect={setLogo}
+                        customLogo={customLogo}
+                        onCustomChange={setCustomLogo}
+                        scale={logoScale}
+                        onScale={setLogoScale}
+                        yOffset={logoYOffset}
+                        onYOffset={setLogoYOffset}
+                        whiten={whitenLogo}
+                        onWhiten={setWhitenLogo}
+                        invert={invertLogo}
+                        onInvert={setInvertLogo}
+                        touchUpUrl={logoTouchUpUrl}
+                        onFlipMask={onLogoFlip}
+                        source={logoSource}
+                        onSource={onLogoSource}
+                        emptyText={
+                            logoSource === 'plex' && lgArt?.reason && !logos.length
+                                ? lgArt.reason
+                                : 'No logos from this source — switch source or Upload, or a text wordmark is used as fallback.'
+                        }
+                    />
+
+                    {!isAsis && item.kind === 'show' && (
+                        <SeasonControls
+                            seasonNumber={seasonNumber}
+                            setSeasonNumber={setSeasonNumber}
+                            bulkSeasons={bulkSeasons}
+                            setBulkSeasons={setBulkSeasons}
+                            onBulkSeasons={onBulkSeasons}
+                            busy={busy}
+                        />
+                    )}
+
+                    {!isAsis && !isSeasonPoster && item.kind !== 'collection' && (
+                        <div className="bg-surface border border-border rounded-lg p-3">
+                            <label className="flex items-center gap-2 text-sm text-secondary">
+                                <span className="w-28 text-primary font-medium">Banner</span>
+                                <select
+                                    value={bandLabel}
+                                    onChange={e => setBandLabel(e.target.value)}
+                                    className="flex-1 bg-surface border border-border rounded px-2 py-1 text-sm text-primary"
+                                >
+                                    {BAND_LABEL_OPTIONS.map(o => (
+                                        <option key={o.value} value={o.value}>
+                                            {o.label}
+                                        </option>
+                                    ))}
+                                </select>
+                            </label>
+                            <p className="text-xs text-tertiary mt-2">
+                                Optional bottom banner in the CL2K label band (e.g. a limited
+                                series).
+                            </p>
+                        </div>
+                    )}
+
+                    {!isAsis && (
+                        <AiPanel
+                            config={config}
+                            removeText={removeText}
+                            setRemoveText={setRemoveText}
+                            brushSize={brushSize}
+                            setBrushSize={setBrushSize}
+                            backdropUrl={backdropUrl}
+                            onMaskChange={onMaskChange}
+                        />
+                    )}
                 </div>
 
-                <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-2">
-                    <h3 className="text-sm font-medium text-primary">Output</h3>
-                    <SaveTargets targets={saveTargets} />
-                    <LoadingButton
-                        onClick={onGenerate}
-                        loading={busy}
-                        disabled={!hasBackdrop || saveTargets.noTarget}
-                        icon="save"
-                    >
-                        Generate &amp; save
-                    </LoadingButton>
-                    <div className="flex gap-2">
-                        <LoadingButton
-                            onClick={onPsdExport}
-                            loading={busy}
-                            disabled={!backdrop}
-                            variant="secondary"
-                            icon="layers"
-                        >
-                            Export .psd
-                        </LoadingButton>
-                        {backdropUrl && (
-                            <a
-                                href={backdropUrl}
-                                download
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm border border-border text-secondary hover:border-border-strong"
-                                title="Download the backdrop to clean externally (Firefly/Photoshop), then re-import via the Edit poster tab"
-                            >
-                                <span className="material-symbols-outlined text-base">
-                                    download
+                {/* Right: preview + output — sticky so it stays in view while the long
+                    left control column scrolls (seeing the preview is the whole point). */}
+                <div className="flex flex-col gap-3 self-start sticky top-4 max-h-screen overflow-y-auto">
+                    <div className="bg-surface border border-border rounded-lg p-3">
+                        <div className="flex items-center justify-between mb-2">
+                            <h3 className="text-sm font-medium text-primary">Preview</h3>
+                            <div className="flex items-center gap-3">
+                                <GuidesToggle show={showGuides} onChange={setShowGuides} />
+                                {isAsis ? (
+                                    <LoadingButton
+                                        onClick={runAsisPreview}
+                                        loading={asisPreviewing}
+                                        disabled={!hasBackdrop}
+                                        icon="visibility"
+                                        size="small"
+                                    >
+                                        Preview
+                                    </LoadingButton>
+                                ) : (
+                                    <LoadingButton
+                                        onClick={onPreview}
+                                        loading={previewing}
+                                        disabled={!hasBackdrop}
+                                        icon="refresh"
+                                        size="small"
+                                    >
+                                        Refresh
+                                    </LoadingButton>
+                                )}
+                            </div>
+                        </div>
+                        <div className="relative aspect-[2/3] bg-black rounded overflow-hidden flex items-center justify-center">
+                            {isAsis ? (
+                                hasBackdrop && asisShownSrc ? (
+                                    <>
+                                        <img
+                                            src={asisShownSrc}
+                                            alt="Finished poster preview"
+                                            className="w-full h-full object-contain"
+                                        />
+                                        {showGuides && asisFresh && <GuideOverlay />}
+                                    </>
+                                ) : (
+                                    <span className="text-xs text-tertiary px-4 text-center">
+                                        Upload or grab a finished poster to start.
+                                    </span>
+                                )
+                            ) : hasBackdrop && previewUrl ? (
+                                <>
+                                    <img
+                                        src={previewUrl}
+                                        alt="CL2K preview"
+                                        className="w-full h-full object-contain"
+                                    />
+                                    {processedLogo && (
+                                        <LogoOverlay
+                                            logo={processedLogo}
+                                            scale={logoScale}
+                                            yOffset={logoYOffset}
+                                            kind={item.kind}
+                                        />
+                                    )}
+                                    {showGuides && <GuideOverlay />}
+                                    <PreviewRefreshing active={previewing} />
+                                </>
+                            ) : (
+                                <span className="text-xs text-tertiary px-4 text-center">
+                                    {!hasBackdrop
+                                        ? 'Select a backdrop to start.'
+                                        : previewing
+                                          ? 'Rendering preview…'
+                                          : 'Preview unavailable — tap Refresh.'}
                                 </span>
-                                Backdrop
-                            </a>
-                        )}
+                            )}
+                        </div>
                     </div>
-                    <p className="text-xs text-tertiary">
-                        Handoff: download the backdrop, clean it in Firefly/Photoshop, then bring it
-                        back via the <span className="text-secondary">Edit poster</span> tab.
-                    </p>
+
+                    {isAsis ? (
+                        <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-2">
+                            <h3 className="text-sm font-medium text-primary">Output</h3>
+                            <label className="flex items-center gap-2 text-sm text-primary font-medium">
+                                <input
+                                    type="checkbox"
+                                    checked={asisBorder}
+                                    onChange={e => setAsisBorder(e.target.checked)}
+                                />
+                                Add CL2K white border
+                            </label>
+                            <p className="text-xs text-tertiary">
+                                The DAPS default 26px white frame (per the CL2K PSD). Uncheck only
+                                if this poster already has the required border.
+                            </p>
+                            <SaveTargets targets={saveTargets} />
+                            <LoadingButton
+                                onClick={runAsisSave}
+                                loading={asisSaving}
+                                disabled={!hasBackdrop || saveTargets.noTarget}
+                                icon="save"
+                            >
+                                Save poster
+                            </LoadingButton>
+                            <p className="text-xs text-tertiary">
+                                Files the image unchanged (optional logo + border baked in),
+                                DAPS-named — no gradient or reframe.
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-2">
+                            <h3 className="text-sm font-medium text-primary">Output</h3>
+                            <SaveTargets targets={saveTargets} />
+                            <LoadingButton
+                                onClick={onGenerate}
+                                loading={busy}
+                                disabled={!hasBackdrop || saveTargets.noTarget}
+                                icon="save"
+                            >
+                                Generate &amp; save
+                            </LoadingButton>
+                            <div className="flex gap-2">
+                                <LoadingButton
+                                    onClick={onPsdExport}
+                                    loading={busy}
+                                    disabled={!backdrop}
+                                    variant="secondary"
+                                    icon="layers"
+                                >
+                                    Export .psd
+                                </LoadingButton>
+                                {backdropUrl && (
+                                    <a
+                                        href={backdropUrl}
+                                        download
+                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm border border-border text-secondary hover:border-border-strong"
+                                        title="Download the backdrop to clean externally (Firefly/Photoshop), then re-import via the Edit poster tab"
+                                    >
+                                        <span className="material-symbols-outlined text-base">
+                                            download
+                                        </span>
+                                        Backdrop
+                                    </a>
+                                )}
+                            </div>
+                            <p className="text-xs text-tertiary">
+                                Handoff: download the backdrop, clean it in Firefly/Photoshop, then
+                                bring it back via the{' '}
+                                <span className="text-secondary">Edit poster</span> tab.
+                            </p>
+                        </div>
+                    )}
                 </div>
             </div>
         </section>
@@ -4163,212 +4509,6 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
     );
 };
 
-// ─── Upload finished-poster tab ─────────────────────────────────────────────
-
-const UploadPosterPanel = ({
-    item,
-    effectiveKind,
-    logos,
-    loadingArt,
-    config,
-    saveTargets,
-    toast,
-}) => {
-    const [file, setFile] = useState(null);
-    const [busy, setBusy] = useState(false);
-    const [addBorder, setAddBorder] = useState(true);
-    // Per-render whiten override; null = the module config (whiten_logo) — the
-    // FormData builder skips nulls so the backend falls back to the config.
-    const [whitenLogo, setWhitenLogo] = useState(null);
-    const effectiveWhiten = whitenLogo === null ? (config?.whiten_logo ?? true) : whitenLogo;
-    // Invert logo: white -> transparent, black -> white (plate/sticker art).
-    const [invertLogo, setInvertLogo] = useState(false);
-    const [logo, setLogo] = useState(null); // chosen TMDB/fanart logo file_path
-    const [customLogo, setCustomLogo] = useState(null); // { b64, name, url }
-    const [previewB64, setPreviewB64] = useState(null); // server-rendered preview
-    const [previewing, setPreviewing] = useState(false);
-    const [logoScale, setLogoScale] = useState(1);
-    const [logoYOffset, setLogoYOffset] = useState(0);
-    const [showGuides, setShowGuides] = useState(false);
-    const localUrl = useMemo(() => (file ? URL.createObjectURL(file) : null), [file]);
-    useEffect(() => () => localUrl && URL.revokeObjectURL(localUrl), [localUrl]);
-
-    // Any input that affects the render also drops a stale server preview, so the
-    // shown image never misrepresents the current logo/border.
-    const onCustomLogo = useCallback(c => {
-        setCustomLogo(c);
-        setPreviewB64(null);
-        if (c) setLogo(null);
-    }, []);
-    const onLogoScale = useCallback(s => {
-        setLogoScale(s);
-        setPreviewB64(null);
-    }, []);
-    const onLogoYOffset = useCallback(y => {
-        setLogoYOffset(y);
-        setPreviewB64(null);
-    }, []);
-    const onPickLogo = useCallback(p => {
-        setLogo(p);
-        setPreviewB64(null);
-    }, []);
-    const onPickFile = useCallback(f => {
-        setFile(f);
-        setPreviewB64(null);
-    }, []);
-    const onToggleBorder = useCallback(v => {
-        setAddBorder(v);
-        setPreviewB64(null);
-    }, []);
-
-    const meta = useMemo(
-        () => ({
-            kind: effectiveKind,
-            title: item.title,
-            tmdb_id: item.tmdb_id,
-            year: item.year,
-            tvdb_id: item.tvdb_id,
-            imdb_id: item.imdb_id,
-            border: addBorder,
-            logo_path: customLogo ? null : logo,
-            logo_b64: customLogo?.b64 || null,
-            logo_scale: logoScale,
-            logo_y_offset: logoYOffset,
-            whiten: whitenLogo,
-            invert: invertLogo,
-        }),
-        [
-            effectiveKind,
-            item,
-            addBorder,
-            logo,
-            customLogo,
-            logoScale,
-            logoYOffset,
-            whitenLogo,
-            invertLogo,
-        ]
-    );
-
-    const runPreview = useCallback(async () => {
-        if (!file) return;
-        setPreviewing(true);
-        try {
-            const resp = await cl2kMakerAPI.uploadPoster(file, { ...meta, preview: true });
-            setPreviewB64(resp?.data?.preview_b64 || null);
-        } catch (err) {
-            toast.error(err.message || 'Preview failed');
-        } finally {
-            setPreviewing(false);
-        }
-    }, [file, meta, toast]);
-
-    const submit = useCallback(async () => {
-        if (!file) return;
-        setBusy(true);
-        try {
-            const resp = await cl2kMakerAPI.uploadPoster(file, {
-                ...meta,
-                ...saveTargets.fields,
-            });
-            savedToast(toast, resp?.data);
-        } catch (err) {
-            toast.error(err.message || 'Save failed');
-        } finally {
-            setBusy(false);
-        }
-    }, [file, meta, saveTargets.fields, toast]);
-
-    const shownSrc = previewB64 ? `data:image/jpeg;base64,${previewB64}` : localUrl;
-
-    return (
-        <section className="mt-4 bg-surface border border-border rounded-lg p-4 flex flex-col gap-3">
-            <h3 className="text-sm font-medium text-primary">Finished poster → file</h3>
-            <p className="text-xs text-tertiary">
-                Upload a complete poster. It&apos;s DAPS-named and registered so the rest of CHUB
-                picks it up. Optionally drop a logo onto it — leave the logo unset to store the
-                poster unchanged.
-            </p>
-            <input
-                type="file"
-                accept="image/*"
-                onChange={e => onPickFile(e.target.files?.[0] || null)}
-            />
-            {shownSrc && (
-                <div className="flex flex-col gap-1" style={{ alignItems: 'flex-start' }}>
-                    <div style={{ position: 'relative', display: 'inline-block' }}>
-                        <img
-                            src={shownSrc}
-                            alt="Finished poster preview"
-                            className="max-h-80 w-auto rounded border border-border bg-black"
-                        />
-                        {showGuides && previewB64 && <GuideOverlay />}
-                    </div>
-                    {previewB64 && <GuidesToggle show={showGuides} onChange={setShowGuides} />}
-                </div>
-            )}
-            {file && (
-                <LogoSelector
-                    label="Add a logo (optional)"
-                    logos={logos}
-                    loading={loadingArt}
-                    selected={logo}
-                    onSelect={onPickLogo}
-                    customLogo={customLogo}
-                    onCustomChange={onCustomLogo}
-                    scale={logoScale}
-                    onScale={onLogoScale}
-                    yOffset={logoYOffset}
-                    onYOffset={onLogoYOffset}
-                    whiten={effectiveWhiten}
-                    onWhiten={v => {
-                        setWhitenLogo(v);
-                        setPreviewB64(null);
-                    }}
-                    invert={invertLogo}
-                    onInvert={v => {
-                        setInvertLogo(v);
-                        setPreviewB64(null);
-                    }}
-                    emptyText="No TMDB/fanart logos — upload a custom one, or leave unset to keep the poster as-is."
-                />
-            )}
-            <label className="flex items-center gap-2 text-sm text-primary font-medium">
-                <input
-                    type="checkbox"
-                    checked={addBorder}
-                    onChange={e => onToggleBorder(e.target.checked)}
-                />
-                Add CL2K white border
-            </label>
-            <p className="text-xs text-tertiary">
-                The DAPS default 26px white frame (per the CL2K PSD). Uncheck only if this poster
-                already has the required border.
-            </p>
-            <SaveTargets targets={saveTargets} />
-            <div className="flex gap-2">
-                <LoadingButton
-                    onClick={runPreview}
-                    loading={previewing}
-                    disabled={!file}
-                    variant="secondary"
-                    icon="visibility"
-                >
-                    Preview
-                </LoadingButton>
-                <LoadingButton
-                    onClick={submit}
-                    loading={busy}
-                    disabled={!file || saveTargets.noTarget}
-                    icon="save"
-                >
-                    Save poster
-                </LoadingButton>
-            </div>
-        </section>
-    );
-};
-
 // ─── Synced-poster picker (browse the GDrive sync cache) ────────────────────
 
 // Browse the poster_cache (synced jpg/png/webp — the sync never pulls PSDs) and
@@ -4775,8 +4915,8 @@ const EditPosterPanel = ({
     }, [workingB64, label, textY, addBorder, idFields, saveTargets.fields, toast]);
 
     // Download the working copy as shown (label/border baked when rendered) so the
-    // cleaned poster can be taken elsewhere — e.g. the Finished-poster tab to add a
-    // clear logo. Pure client-side: the bytes are already here as base64.
+    // cleaned poster can be taken elsewhere — e.g. the Poster tab's "File as-is"
+    // output to add a clear logo. Pure client-side: the bytes are already here.
     const downloadWorking = useCallback(() => {
         const baked = (label.trim() || addBorder) && labeledB64;
         const b64 = baked ? labeledB64 : workingB64;
@@ -5284,8 +5424,8 @@ const EditPosterPanel = ({
                             </Button>
                             <p className="text-xs text-tertiary">
                                 Downloads what’s shown (label/border included if set) — e.g. to add
-                                a clear logo via the Finished poster tab. Uncheck the border first
-                                if you’ll add it there instead.
+                                a clear logo via the Poster tab’s “File as-is” output. Uncheck the
+                                border first if you’ll add it there instead.
                             </p>
                         </div>
                     )}
