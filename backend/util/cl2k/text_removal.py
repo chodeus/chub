@@ -8,9 +8,9 @@ the chosen backend:
   private, the recommended default. ``ai_endpoint`` = the inpaint URL. (LaMa is
   what we benchmarked; excellent over texture, weaker over faces.)
 - ``openai`` — OpenAI ``images.edit`` (gpt-image-1). PAID; better over faces, can
-  hallucinate. ``ai_api_key`` (+ optional ``ai_model``).
+  hallucinate. ``api_key`` (+ optional ``ai_model``).
 - ``huggingface`` — HF inference API inpainting. Free tier, rate-limited.
-  ``ai_endpoint`` = model URL, ``ai_api_key`` = HF token.
+  ``ai_endpoint`` = model URL, ``api_key`` = HF token.
 
 Mask convention here is **white (255) = remove**, black = keep (what the brush UI
 and LaMa/IOPaint use). Each backend takes the original image + mask and returns
@@ -106,7 +106,9 @@ def _mask_to_image_dims(image_bytes: bytes, mask_bytes: bytes) -> bytes:
         return mask_bytes
 
 
-def _composite_masked(original_bytes: bytes, result_bytes: bytes, mask_bytes: bytes) -> bytes:
+def _composite_masked(
+    original_bytes: bytes, result_bytes: bytes, mask_bytes: bytes
+) -> bytes:
     """Keep ``result`` only where the mask is white; original pixels elsewhere."""
     from PIL import Image, ImageFilter
 
@@ -132,18 +134,37 @@ def _timeout(config) -> int:
     return int(getattr(config, "ai_timeout", _TIMEOUT_DEFAULT) or _TIMEOUT_DEFAULT)
 
 
+def _lama_url(endpoint: str) -> str:
+    """Resolve the IOPaint inpaint URL from whatever the user typed.
+
+    Users set ``ai_endpoint`` to their container's address — ``host:8080`` or
+    ``http://host:8080`` — and we fill in IOPaint's ``/api/v1/inpaint`` path so
+    they don't have to know it. A scheme is added when missing; an endpoint that
+    already carries a path (custom sidecar) is left as-is.
+    """
+    from urllib.parse import urlparse, urlunparse
+
+    raw = (endpoint or "").strip().rstrip("/")
+    if not raw:
+        return raw
+    parsed = urlparse(raw if "://" in raw else f"http://{raw}")
+    if parsed.path in ("", "/"):
+        parsed = parsed._replace(path="/api/v1/inpaint")
+    return urlunparse(parsed)
+
+
 def _lama_sidecar(image_bytes: bytes, mask_bytes: bytes, config) -> bytes:
     """IOPaint/LaMa server: {image, mask} (base64, white=remove) -> cleaned image."""
     import requests
 
-    endpoint = getattr(config, "ai_endpoint", "")
-    if not endpoint:
+    url = _lama_url(getattr(config, "ai_endpoint", ""))
+    if not url:
         return image_bytes
     payload = {
         "image": base64.b64encode(image_bytes).decode(),
         "mask": base64.b64encode(mask_bytes).decode(),
     }
-    resp = requests.post(endpoint, json=payload, timeout=_timeout(config))
+    resp = requests.post(url, json=payload, timeout=_timeout(config))
     resp.raise_for_status()
     return resp.content
 
@@ -169,14 +190,16 @@ def _openai(
     import requests
     from PIL import Image
 
-    key = getattr(config, "ai_api_key", "")
+    key = getattr(config, "api_key", "")
     if not key:
         if logger:
-            logger.warning("CL2K AI (openai): no ai_api_key set — skipping text removal")
+            logger.warning("CL2K AI (openai): no api_key set — skipping text removal")
         return image_bytes
     model = getattr(config, "ai_model", "") or "gpt-image-1"
-    prompt = (prompt or "").strip() or getattr(config, "ai_prompt", "") or (
-        "Remove all text from this image and reconstruct the background."
+    prompt = (
+        (prompt or "").strip()
+        or getattr(config, "ai_prompt", "")
+        or ("Remove all text from this image and reconstruct the background.")
     )
 
     src = Image.open(io.BytesIO(image_bytes)).convert("RGB")
@@ -249,13 +272,15 @@ def _huggingface(image_bytes: bytes, mask_bytes: bytes, config) -> bytes:
     endpoint = getattr(config, "ai_endpoint", "")
     if not endpoint:
         return image_bytes
-    key = getattr(config, "ai_api_key", "")
+    key = getattr(config, "api_key", "")
     headers = {"Authorization": f"Bearer {key}"} if key else {}
     payload = {
         "inputs": base64.b64encode(image_bytes).decode(),
         "mask": base64.b64encode(mask_bytes).decode(),
         "parameters": {"prompt": "clean background, no text"},
     }
-    resp = requests.post(endpoint, headers=headers, json=payload, timeout=_timeout(config))
+    resp = requests.post(
+        endpoint, headers=headers, json=payload, timeout=_timeout(config)
+    )
     resp.raise_for_status()
     return resp.content
