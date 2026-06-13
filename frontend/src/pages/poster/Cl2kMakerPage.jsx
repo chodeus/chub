@@ -1717,9 +1717,9 @@ const RenderPanel = ({
     };
 
     // Output mode: 'cl2k' = the full CL2K render (gradient + logo + framing +
-    // season + border). 'asis' = file a finished poster unchanged (optional logo
-    // + border, no gradient/reframe) — the old "Finished poster" tab, folded in so
-    // the upload/GDrive sources feed both flows.
+    // season + border). 'asis' = file a poster built outside CHUB unchanged (just
+    // the optional border, no logo/gradient/reframe) — the old "Finished poster"
+    // tab, folded in so the Upload/GDrive sources feed it.
     const [outputMode, setOutputMode] = useState('cl2k'); // 'cl2k' | 'asis'
     const isAsis = outputMode === 'asis';
     const bdArt = artBySource[backdropSource] || null;
@@ -1821,9 +1821,9 @@ const RenderPanel = ({
     const bdLabel = isAsis ? 'Poster image' : 'Backdrop';
 
     // ── File-as-is (finished poster) output ────────────────────────────────────
-    // Files the currently-selected image unchanged via /upload-poster (optional
-    // logo + border, no gradient). The image — whether an Upload, a GDrive grab,
-    // or a picker path — is fetched back to a File from its URL.
+    // Files a poster built OUTSIDE CHUB unchanged via /upload-poster — no logo, no
+    // gradient, no reframe; just the optional CL2K border. The image (an Upload or
+    // a GDrive grab) is fetched back to a File from its URL.
     const [asisBorder, setAsisBorder] = useState(true);
     const [asisPreview, setAsisPreview] = useState(null); // { b64, sig }
     const [asisPreviewing, setAsisPreviewing] = useState(false);
@@ -1847,41 +1847,16 @@ const RenderPanel = ({
             tvdb_id: item.tvdb_id,
             imdb_id: item.imdb_id,
             border: asisBorder,
-            logo_path: customLogo ? null : logo,
-            logo_b64: customLogo?.b64 || null,
-            logo_scale: logoScale,
-            logo_y_offset: logoYOffset,
-            whiten: whitenLogo,
-            invert: invertLogo,
         }),
-        [
-            effectiveKind,
-            item,
-            asisBorder,
-            logo,
-            customLogo,
-            logoScale,
-            logoYOffset,
-            whitenLogo,
-            invertLogo,
-        ]
+        [effectiveKind, item, asisBorder]
     );
 
-    // Signature of every input that affects the as-is render. A rendered preview
-    // is shown only while it still matches the current inputs, so changing the
-    // logo / border / source drops the stale preview — no setState-in-effect.
+    // Signature of the inputs that affect the as-is render (the image + border). A
+    // rendered preview is shown only while it still matches, so changing either
+    // drops the stale preview — no setState-in-effect.
     const asisSig = useMemo(
-        () =>
-            JSON.stringify([
-                backdropUrl,
-                asisBorder,
-                customLogo ? customSig(customLogo) : logo,
-                logoScale,
-                logoYOffset,
-                whitenLogo,
-                invertLogo,
-            ]),
-        [backdropUrl, asisBorder, logo, customLogo, logoScale, logoYOffset, whitenLogo, invertLogo]
+        () => JSON.stringify([backdropUrl, asisBorder]),
+        [backdropUrl, asisBorder]
     );
 
     const runAsisPreview = useCallback(async () => {
@@ -1933,14 +1908,20 @@ const RenderPanel = ({
                         variant={outputMode === 'asis' ? 'primary' : 'secondary'}
                         size="small"
                         icon="image"
-                        onClick={() => setOutputMode('asis')}
+                        onClick={() => {
+                            setOutputMode('asis');
+                            // As-is files a manually-uploaded image only — drop any
+                            // picker-path backdrop so a stale selection can't leak in.
+                            setBackdropSource('upload');
+                            setBackdrop(null);
+                        }}
                     >
                         File as-is
                     </Button>
                 </div>
                 <p className="text-xs text-tertiary">
                     {isAsis
-                        ? 'File a finished poster unchanged — optional logo + border, no gradient or reframe. Source it from Upload or GDrive, then save.'
+                        ? 'Upload a finished poster built outside CHUB and file it unchanged (the optional CL2K border is the only edit). Saves to your output dir and/or GDrive.'
                         : 'The full CL2K treatment: framing + clear logo + gradient + season band + border.'}
                 </p>
             </div>
@@ -1959,10 +1940,18 @@ const RenderPanel = ({
                             emptyText="No TMDB season posters."
                         />
                     )}
-                    {/* Backdrop / poster image — source-selectable. 'Upload' swaps the
-                        grid for a custom-image dropzone; 'GDrive' for the sync-cache
-                        picker. Official posters from the same source appear below. */}
-                    {backdropSource === 'upload' ? (
+                    {/* Source. As-is = a plain manual upload (no source selector).
+                        Otherwise source-selectable: 'Upload' swaps the grid for a
+                        custom-image dropzone; 'GDrive' for the sync-cache picker;
+                        official posters from the same source appear below. */}
+                    {isAsis ? (
+                        <UploadArtCard
+                            label="Poster image"
+                            custom={customBackdrop}
+                            onFile={onBackdropFile}
+                            onClear={() => setCustomBackdrop(null)}
+                        />
+                    ) : backdropSource === 'upload' ? (
                         <UploadArtCard
                             label={bdLabel}
                             headerRight={bdSel}
@@ -2104,32 +2093,34 @@ const RenderPanel = ({
                         />
                     )}
 
-                    <LogoSelector
-                        label="Logo"
-                        logos={logos}
-                        loading={loadingArt}
-                        selected={logo}
-                        onSelect={setLogo}
-                        customLogo={customLogo}
-                        onCustomChange={setCustomLogo}
-                        scale={logoScale}
-                        onScale={setLogoScale}
-                        yOffset={logoYOffset}
-                        onYOffset={setLogoYOffset}
-                        whiten={whitenLogo}
-                        onWhiten={setWhitenLogo}
-                        invert={invertLogo}
-                        onInvert={setInvertLogo}
-                        touchUpUrl={logoTouchUpUrl}
-                        onFlipMask={onLogoFlip}
-                        source={logoSource}
-                        onSource={onLogoSource}
-                        emptyText={
-                            logoSource === 'plex' && lgArt?.reason && !logos.length
-                                ? lgArt.reason
-                                : 'No logos from this source — switch source or Upload, or a text wordmark is used as fallback.'
-                        }
-                    />
+                    {!isAsis && (
+                        <LogoSelector
+                            label="Logo"
+                            logos={logos}
+                            loading={loadingArt}
+                            selected={logo}
+                            onSelect={setLogo}
+                            customLogo={customLogo}
+                            onCustomChange={setCustomLogo}
+                            scale={logoScale}
+                            onScale={setLogoScale}
+                            yOffset={logoYOffset}
+                            onYOffset={setLogoYOffset}
+                            whiten={whitenLogo}
+                            onWhiten={setWhitenLogo}
+                            invert={invertLogo}
+                            onInvert={setInvertLogo}
+                            touchUpUrl={logoTouchUpUrl}
+                            onFlipMask={onLogoFlip}
+                            source={logoSource}
+                            onSource={onLogoSource}
+                            emptyText={
+                                logoSource === 'plex' && lgArt?.reason && !logos.length
+                                    ? lgArt.reason
+                                    : 'No logos from this source — switch source or Upload, or a text wordmark is used as fallback.'
+                            }
+                        />
+                    )}
 
                     {!isAsis && item.kind === 'show' && (
                         <SeasonControls
@@ -2185,7 +2176,9 @@ const RenderPanel = ({
                         <div className="flex items-center justify-between mb-2">
                             <h3 className="text-sm font-medium text-primary">Preview</h3>
                             <div className="flex items-center gap-3">
-                                <GuidesToggle show={showGuides} onChange={setShowGuides} />
+                                {!isAsis && (
+                                    <GuidesToggle show={showGuides} onChange={setShowGuides} />
+                                )}
                                 {isAsis ? (
                                     <LoadingButton
                                         onClick={runAsisPreview}
@@ -2212,17 +2205,14 @@ const RenderPanel = ({
                         <div className="relative aspect-[2/3] bg-black rounded overflow-hidden flex items-center justify-center">
                             {isAsis ? (
                                 hasBackdrop && asisShownSrc ? (
-                                    <>
-                                        <img
-                                            src={asisShownSrc}
-                                            alt="Finished poster preview"
-                                            className="w-full h-full object-contain"
-                                        />
-                                        {showGuides && asisFresh && <GuideOverlay />}
-                                    </>
+                                    <img
+                                        src={asisShownSrc}
+                                        alt="Finished poster preview"
+                                        className="w-full h-full object-contain"
+                                    />
                                 ) : (
                                     <span className="text-xs text-tertiary px-4 text-center">
-                                        Upload or grab a finished poster to start.
+                                        Upload a finished poster to start.
                                     </span>
                                 )
                             ) : hasBackdrop && previewUrl ? (
@@ -2280,8 +2270,8 @@ const RenderPanel = ({
                                 Save poster
                             </LoadingButton>
                             <p className="text-xs text-tertiary">
-                                Files the image unchanged (optional logo + border baked in),
-                                DAPS-named — no gradient or reframe.
+                                Files the image unchanged (just the optional border), DAPS-named —
+                                no logo, gradient, or reframe.
                             </p>
                         </div>
                     ) : (
@@ -4915,8 +4905,8 @@ const EditPosterPanel = ({
     }, [workingB64, label, textY, addBorder, idFields, saveTargets.fields, toast]);
 
     // Download the working copy as shown (label/border baked when rendered) so the
-    // cleaned poster can be taken elsewhere — e.g. the Poster tab's "File as-is"
-    // output to add a clear logo. Pure client-side: the bytes are already here.
+    // cleaned poster can be filed elsewhere (to add a logo, use this tab's "Full
+    // CL2K render" output instead). Pure client-side: the bytes are already here.
     const downloadWorking = useCallback(() => {
         const baked = (label.trim() || addBorder) && labeledB64;
         const b64 = baked ? labeledB64 : workingB64;
@@ -5423,9 +5413,9 @@ const EditPosterPanel = ({
                                 Download working copy
                             </Button>
                             <p className="text-xs text-tertiary">
-                                Downloads what’s shown (label/border included if set) — e.g. to add
-                                a clear logo via the Poster tab’s “File as-is” output. Uncheck the
-                                border first if you’ll add it there instead.
+                                Downloads what’s shown (label/border included if set) — handy for
+                                filing the cleaned poster elsewhere. To add a clear logo, switch the
+                                Output above to “Full CL2K render”.
                             </p>
                         </div>
                     )}
