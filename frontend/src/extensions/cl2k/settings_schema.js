@@ -129,7 +129,9 @@ export const CL2K_MAKER_SCHEMA = {
                 condition: 'in',
                 value: ['lama_sidecar', 'huggingface'],
             },
-            description: 'LaMa sidecar inpaint URL, or the Hugging Face model inference URL.',
+            placeholder: 'http://<host>:8080/api/v1/inpaint',
+            description:
+                'The full URL CHUB sends the image to. LaMa (IOPaint): your sidecar container’s address including the path — http://<host>:<port>/api/v1/inpaint — where <port> is the IOPaint container’s mapped port (not CHUB’s). Hugging Face: the model inference URL.',
         },
         {
             key: 'ai_api_key',
