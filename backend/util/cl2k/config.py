@@ -38,7 +38,10 @@ class Cl2kMakerConfig(BaseModel):
     # API — use the manual export/import handoff for those.
     ai_provider: str = "none"  # none | lama_sidecar | openai | huggingface
     ai_endpoint: str = ""  # lama sidecar URL, or HF model inference URL
-    ai_api_key: str = ""  # openai / huggingface token
+    # openai / huggingface token. Named ``api_key`` (not ``ai_api_key``) so the
+    # core secret-redaction list — which matches on exact leaf key names — masks
+    # it on GET /api/config like every other secret. Don't re-prefix it.
+    api_key: str = ""
     ai_model: str = ""  # openai model id (default gpt-image-1) / HF model id
     ai_timeout: int = 120
     # OpenAI/HF prompt. OpenAI can remove text from this prompt ALONE (no mask);
