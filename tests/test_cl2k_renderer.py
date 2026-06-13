@@ -106,6 +106,30 @@ def test_whiten_off_keeps_original_colors():
         assert center.red > 0.9 and center.green < 0.1  # still red
 
 
+def _plate_logo():
+    """A white sticker plate with black 'text' — the invert-logo fixture."""
+
+    def draw(d):
+        d.fill_color = Color("white")
+        d.rectangle(left=0, top=0, width=599, height=199)
+        d.fill_color = Color("black")
+        d.rectangle(left=100, top=60, width=400, height=80)
+
+    return _png(600, 200, draw)
+
+
+def test_invert_turns_plate_into_clearlogo():
+    # White plate + black text, whitened then inverted: the text region comes
+    # out opaque white, the plate fully transparent (darkness = opacity).
+    png, w, h = process_logo(_plate_logo(), whiten=True, invert=True)
+    with Image(blob=png) as img:
+        text = img[w // 2, h // 2]  # inside the black rectangle
+        plate = img[20, 20]  # plate corner, far from the text
+        assert text.alpha > 0.95
+        assert (text.red, text.green, text.blue) == (1.0, 1.0, 1.0)
+        assert plate.alpha < 0.05
+
+
 # --------------------------------------------------------------------------
 # logo_scale — the guide-fit box multiplies past the width guides (the
 # 600/700/800 lines are guidelines, not limits; only the canvas clamps)

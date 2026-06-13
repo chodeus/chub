@@ -84,6 +84,8 @@ class GenerateRequest(BaseModel):
     # Per-render CL2K-whiten override; None falls back to the module config
     # (whiten_logo). True = two-tone white, False = the original colored logo.
     whiten: Optional[bool] = None
+    # Invert logo: plate-style art -> clearlogo (white->transparent, black->white).
+    invert: bool = False
     # B/W touch-up: regions brushed over the PROCESSED logo whose black/white is
     # inverted (for interior accents the two-tone keymap can't decide).
     logo_flip_b64: Optional[str] = None
@@ -304,6 +306,7 @@ class LogoProcessRequest(BaseModel):
     # Per-render whiten override so the live overlay matches the Builder toggle;
     # None falls back to the module config (whiten_logo).
     whiten: Optional[bool] = None
+    invert: bool = False  # plate logo -> clearlogo
     flip_b64: Optional[str] = None  # B/W touch-up regions (mask PNG, white=flip)
 
 
@@ -330,6 +333,7 @@ def logo_processed(
             raw,
             whiten=cfg.whiten_logo if req.whiten is None else req.whiten,
             flip_mask_bytes=_b64_to_bytes(req.flip_b64),
+            invert=req.invert,
         )
     except Exception as exc:
         logger.warning(f"cl2k: logo processing failed: {exc}")
@@ -378,6 +382,7 @@ def preview(
         logo_y_offset=req.logo_y_offset,
         logo_flip_bytes=_b64_to_bytes(req.logo_flip_b64),
         whiten=req.whiten,
+        invert=req.invert,
         place_logo=req.place_logo,
     )
     if blob is None:
@@ -421,6 +426,7 @@ def generate(
         logo_y_offset=req.logo_y_offset,
         logo_flip_bytes=_b64_to_bytes(req.logo_flip_b64),
         whiten=req.whiten,
+        invert=req.invert,
         force=req.force,
         save_local=req.save_local,
         upload_gdrive=req.upload_gdrive,
@@ -469,6 +475,7 @@ class LogoAssetRequest(BaseModel):
     logo_path: Optional[str] = None
     logo_b64: Optional[str] = None
     whiten: bool = False  # True = CL2K-whitened; False = original (colored) clear logo
+    invert: bool = False  # plate logo -> clearlogo (white->transparent, black->white)
     flip_b64: Optional[str] = None  # B/W touch-up regions (mask PNG, white=flip)
     save_local: bool = True
     upload_gdrive: Optional[bool] = None
@@ -638,7 +645,10 @@ def logo_asset_preview(
     if not raw:
         return error("No logo selected", "NO_LOGO")
     png, _w, _h = process_logo(
-        raw, whiten=req.whiten, flip_mask_bytes=_b64_to_bytes(req.flip_b64)
+        raw,
+        whiten=req.whiten,
+        flip_mask_bytes=_b64_to_bytes(req.flip_b64),
+        invert=req.invert,
     )
     return Response(
         content=png, media_type="image/png", headers={"Cache-Control": "no-store"}
@@ -664,6 +674,7 @@ def logo_asset_generate(
         logo_path=req.logo_path,
         logo_bytes=_b64_to_bytes(req.logo_b64),
         whiten=req.whiten,
+        invert=req.invert,
         flip_mask_bytes=_b64_to_bytes(req.flip_b64),
         save_local=req.save_local,
         upload_gdrive=req.upload_gdrive,
@@ -708,6 +719,7 @@ def psd_export(
         v_pos=req.v_pos,
         zoom=req.zoom,
         whiten=req.whiten,
+        invert=req.invert,
     )
     if blob is None:
         return error("No textless backdrop available", "NO_BACKDROP")
@@ -738,6 +750,7 @@ class SeasonsRequest(BaseModel):
     logo_scale: float = Field(1.0, ge=0.25, le=3.0)
     logo_y_offset: int = Field(0, ge=-600, le=200)
     whiten: Optional[bool] = None  # None = module config (whiten_logo)
+    invert: bool = False  # plate logo -> clearlogo
     force: bool = False
 
 
@@ -766,6 +779,7 @@ def generate_seasons_endpoint(
         logo_scale=req.logo_scale,
         logo_y_offset=req.logo_y_offset,
         whiten=req.whiten,
+        invert=req.invert,
         force=req.force,
     )
     return ok("Seasons generated", out)
@@ -788,6 +802,7 @@ async def upload_generate(
     logo_scale: float = Form(1.0, ge=0.25, le=3.0),
     logo_y_offset: int = Form(0, ge=-600, le=200),
     whiten: Optional[bool] = Form(None),  # None = module config (whiten_logo)
+    invert: bool = Form(False),  # plate logo -> clearlogo
     # Framing — same semantics as GenerateRequest: cover (focus point), fit
     # (top-anchor + black-fill bottom; optional crop isolates a region first;
     # v_pos slides the photo down), or extend.
@@ -822,6 +837,7 @@ async def upload_generate(
         logo_scale=logo_scale,
         logo_y_offset=logo_y_offset,
         whiten=whiten,
+        invert=invert,
         fit_mode=fit_mode,
         focus_x=focus_x,
         focus_y=focus_y,
@@ -930,6 +946,7 @@ async def upload_poster(
     logo_scale: float = Form(1.0, ge=0.25, le=3.0),
     logo_y_offset: int = Form(0, ge=-600, le=200),
     whiten: Optional[bool] = Form(None),  # None = module config (whiten_logo)
+    invert: bool = Form(False),  # plate logo -> clearlogo
     preview: bool = Form(False),
     save_local: bool = Form(True),
     upload_gdrive: Optional[bool] = Form(None),
@@ -959,6 +976,7 @@ async def upload_poster(
                 logo_scale=logo_scale,
                 logo_y_offset=logo_y_offset,
                 whiten=cfg.whiten_logo if whiten is None else whiten,
+                invert=invert,
             )
         if border:
             blob = apply_border(blob)
@@ -981,6 +999,7 @@ async def upload_poster(
         logo_scale=logo_scale,
         logo_y_offset=logo_y_offset,
         whiten=whiten,
+        invert=invert,
         save_local=save_local,
         upload_gdrive=upload_gdrive,
     )

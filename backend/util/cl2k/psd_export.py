@@ -38,13 +38,14 @@ def _flat_white(logo: Image.Image) -> Image.Image:
     return white
 
 
-def _whiten(logo: Image.Image) -> Image.Image:
+def _whiten(logo: Image.Image, flat_fallback: bool = True) -> Image.Image:
     """CL2K two-tone whiten — Pillow mirror of ``renderer._whiten``.
 
     Same recipe and constants (see :mod:`geometry`, "logo whitening") so the
     PSD's LOGO layer matches the rendered poster: white fills, black keylines,
     local-contrast pass for interior accents, flat-white fallback for logos
-    that would come out mostly black.
+    that would come out mostly black (suppressed when the invert pass follows,
+    mirroring the renderer).
     """
     import numpy as np
     from PIL import ImageFilter
@@ -81,11 +82,31 @@ def _whiten(logo: Image.Image) -> Image.Image:
     )
     key *= 1.0 - detail
     a_sum = float(alpha.sum())
-    if a_sum > 1e-3 and float((key * alpha).sum()) / a_sum < geo.WHITEN_FALLBACK_MEAN:
+    if (
+        flat_fallback
+        and a_sum > 1e-3
+        and float((key * alpha).sum()) / a_sum < geo.WHITEN_FALLBACK_MEAN
+    ):
         return _flat_white(logo)
     out = np.empty_like(rgba)
     out[..., 0] = out[..., 1] = out[..., 2] = key
     out[..., 3] = alpha
+    return Image.fromarray((out * 255.0).round().astype("uint8"), "RGBA")
+
+
+def _invert_to_clear(logo: Image.Image) -> Image.Image:
+    """Invert logo — Pillow mirror of ``renderer._invert_to_clear``.
+
+    White → transparent, black → white: darkness becomes opacity, so a
+    plate-style logo's LOGO layer matches the rendered poster's clearlogo.
+    """
+    import numpy as np
+
+    rgba = np.asarray(logo.convert("RGBA"), dtype=np.float32) / 255.0
+    luma = rgba[..., :3] @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
+    out = np.empty_like(rgba)
+    out[..., 0] = out[..., 1] = out[..., 2] = 1.0
+    out[..., 3] = (1.0 - luma) * rgba[..., 3]
     return Image.fromarray((out * 255.0).round().astype("uint8"), "RGBA")
 
 
@@ -135,6 +156,7 @@ def export_psd(
     logo_scale: float = 1.0,
     logo_y_offset: int = 0,
     whiten: bool = True,
+    invert: bool = False,
 ) -> bytes:
     """Build the CL2K poster as a layered PSD and return its bytes."""
     from psd_tools import PSDImage
@@ -156,7 +178,9 @@ def export_psd(
         if bbox:
             lg = lg.crop(bbox)
         if whiten:
-            lg = _whiten(lg)
+            lg = _whiten(lg, flat_fallback=not invert)
+        if invert:
+            lg = _invert_to_clear(lg)
         tw = min(logo_max_width, geo.LOGO_WIDTH_MAX)
         th = round(lg.height * tw / lg.width)
         max_h = baseline - geo.LOGO_ZONE_TOP
