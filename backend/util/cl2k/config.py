@@ -17,7 +17,6 @@ class Cl2kMakerConfig(BaseModel):
     # poster_renamerr). Should be one of poster_renamerr.source_dirs.
     output_dir: str = ""
     language: str = "en"
-    logo_max_width: int = Field(default=600, ge=100, le=800)  # guide 600 std / 800 max
     whiten_logo: bool = True
     text_logo_fallback: bool = True  # synth a typeset wordmark when no real logo
     # Outline width (px at the internal render scale) for the text-logo wordmark;

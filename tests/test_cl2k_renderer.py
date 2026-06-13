@@ -73,7 +73,7 @@ def _backdrop(color="#27408b", w=1920, h=1080):
 def _placed_size(logo_bytes, scale, max_width=600):
     """Place on a black canvas and measure the placed logo's trimmed bounds."""
     with Image(width=1000, height=1500, background=Color("black")) as canvas:
-        _place_logo(canvas, logo_bytes, 1300, max_width, True, scale, 0)
+        _place_logo(canvas, logo_bytes, 1352, max_width, True, scale, 0)
         canvas.trim(color=Color("black"))
         return canvas.width, canvas.height
 
@@ -107,7 +107,8 @@ def test_whiten_off_keeps_original_colors():
 
 
 # --------------------------------------------------------------------------
-# logo_scale — the guide-fit box multiplies past the width guides
+# logo_scale — the guide-fit box multiplies past the width guides (the
+# 600/700/800 lines are guidelines, not limits; only the canvas clamps)
 # --------------------------------------------------------------------------
 
 
@@ -213,7 +214,7 @@ def test_psd_logo_layer_honours_logo_scale():
 
     framed = frame_backdrop(backdrop_bytes=_backdrop())
     sizes = {}
-    for scale in (1.0, 1.5):
+    for scale in (1.0, 1.25):
         blob = export_psd(
             backdrop_bytes=framed,
             kind="movie",
@@ -224,10 +225,12 @@ def test_psd_logo_layer_honours_logo_scale():
         layer = next(la for la in psd if la.name == "LOGO").topil()
         bb = layer.getbbox()
         sizes[scale] = (bb[2] - bb[0], bb[3] - bb[1], bb[3])
-    assert sizes[1.0][:2] == (600, 90)
-    assert sizes[1.5][:2] == (900, 135)
-    # bottom stays pinned to the y=1300 baseline at both scales
-    assert sizes[1.0][2] == sizes[1.5][2] == 1300
+    # default box is the 700px recommended guide width; the slider may take it
+    # past the 800px guide line (guidelines, not limits)
+    assert sizes[1.0][:2] == (700, 105)
+    assert sizes[1.25][:2] == (875, 131)
+    # bottom stays pinned to the template's y=1352 "Main Logo Bottom" guide
+    assert sizes[1.0][2] == sizes[1.25][2] == 1352
 
 
 # --------------------------------------------------------------------------

@@ -111,7 +111,9 @@ def _centered(
     h = box[3] - box[1]
     if kerning <= 0:
         w = box[2] - box[0]
-        draw.text((geo.CENTER_X - w / 2, center_y - h / 2), text, font=font, fill="white")
+        draw.text(
+            (geo.CENTER_X - w / 2, center_y - h / 2), text, font=font, fill="white"
+        )
         return
     widths = [draw.textlength(ch, font=font) for ch in text]
     total = sum(widths) + kerning * max(0, len(text) - 1)
@@ -129,7 +131,7 @@ def export_psd(
     logo_bytes: Optional[bytes] = None,
     title: str = "",
     season_text: str = "",
-    logo_max_width: int = geo.LOGO_WIDTH_STD,
+    logo_max_width: int = geo.LOGO_WIDTH_RECOMMENDED,
     logo_scale: float = 1.0,
     logo_y_offset: int = 0,
     whiten: bool = True,
@@ -142,7 +144,9 @@ def export_psd(
     kind = kind.lower()
     baseline = geo.logo_baseline(kind)
 
-    poster = _cover(Image.open(io.BytesIO(backdrop_bytes)).convert("RGB"), w, h).convert("RGBA")
+    poster = _cover(
+        Image.open(io.BytesIO(backdrop_bytes)).convert("RGB"), w, h
+    ).convert("RGBA")
     gradient = Image.open(geo.GRADIENT_PNG).convert("RGBA")
 
     logo_layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
@@ -218,5 +222,3 @@ def export_psd(
     buf = io.BytesIO()
     psd.save(buf)
     return buf.getvalue()
-
-

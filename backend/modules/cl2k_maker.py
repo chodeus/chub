@@ -168,7 +168,10 @@ def _resolve_and_render(
 
     if backdrop_bytes is None:
         if not backdrop_path:
-            return None, {"reason": "no textless backdrop available", "logo_source": "none"}
+            return None, {
+                "reason": "no textless backdrop available",
+                "logo_source": "none",
+            }
         backdrop_bytes = image_fetch.download(backdrop_path)
 
     # EXTEND framing: keep the subjects full-size (fit to width, top-anchored) and
@@ -244,7 +247,9 @@ def _resolve_and_render(
         and logo_source in ("tmdb", "fanart")
         and not logo_is_usable(logo_bytes)
     ):
-        logger.debug(f"cl2k: {logo_source} logo too small for the logo box — using title text")
+        logger.debug(
+            f"cl2k: {logo_source} logo too small for the logo box — using title text"
+        )
         logo_bytes = None
         logo_source = "text" if cfg.text_logo_fallback else "none"
 
@@ -257,7 +262,6 @@ def _resolve_and_render(
         logo_bytes=logo_bytes,
         title=title if (cfg.text_logo_fallback or logo_bytes) else "",
         season_text=season_text,
-        logo_max_width=cfg.logo_max_width,
         logo_scale=logo_scale,
         logo_y_offset=logo_y_offset,
         logo_flip_bytes=logo_flip_bytes,
@@ -332,8 +336,15 @@ def generate_for_item(
     if kind not in _VALID_KINDS:
         return {"status": "error", "reason": f"invalid kind {kind!r}"}
     title, year = _backfill_title_year(
-        full_config, db, logger, kind=kind, tmdb_id=tmdb_id, title=title, year=year,
-        tvdb_id=tvdb_id, imdb_id=imdb_id,
+        full_config,
+        db,
+        logger,
+        kind=kind,
+        tmdb_id=tmdb_id,
+        title=title,
+        year=year,
+        tvdb_id=tvdb_id,
+        imdb_id=imdb_id,
     )
     # output_dir is only required when actually saving locally; a Drive-only save
     # uploads from a temp copy and never touches output_dir.
@@ -436,8 +447,15 @@ def generate_square_art(
     if season_number is not None and kind == "show":
         kind = "season"  # season-suffixed naming; backfill/lookup stays TV-side
     title, year = _backfill_title_year(
-        full_config, db, logger, kind=kind, tmdb_id=tmdb_id, title=title, year=year,
-        tvdb_id=tvdb_id, imdb_id=imdb_id,
+        full_config,
+        db,
+        logger,
+        kind=kind,
+        tmdb_id=tmdb_id,
+        title=title,
+        year=year,
+        tvdb_id=tvdb_id,
+        imdb_id=imdb_id,
     )
     if save_local and not cfg.output_dir:
         return {"status": "error", "reason": "cl2k_maker.output_dir is not configured"}
@@ -514,8 +532,15 @@ def generate_background_art(
     if season_number is not None and kind == "show":
         kind = "season"  # season-suffixed naming; backfill/lookup stays TV-side
     title, year = _backfill_title_year(
-        full_config, db, logger, kind=kind, tmdb_id=tmdb_id, title=title, year=year,
-        tvdb_id=tvdb_id, imdb_id=imdb_id,
+        full_config,
+        db,
+        logger,
+        kind=kind,
+        tmdb_id=tmdb_id,
+        title=title,
+        year=year,
+        tvdb_id=tvdb_id,
+        imdb_id=imdb_id,
     )
     if save_local and not cfg.output_dir:
         return {"status": "error", "reason": "cl2k_maker.output_dir is not configured"}
@@ -584,8 +609,15 @@ def generate_logo_asset(
     if kind not in _VALID_KINDS:
         return {"status": "error", "reason": f"invalid kind {kind!r}"}
     title, year = _backfill_title_year(
-        full_config, db, logger, kind=kind, tmdb_id=tmdb_id, title=title, year=year,
-        tvdb_id=tvdb_id, imdb_id=imdb_id,
+        full_config,
+        db,
+        logger,
+        kind=kind,
+        tmdb_id=tmdb_id,
+        title=title,
+        year=year,
+        tvdb_id=tvdb_id,
+        imdb_id=imdb_id,
     )
     if save_local and not cfg.output_dir:
         return {"status": "error", "reason": "cl2k_maker.output_dir is not configured"}
@@ -594,7 +626,9 @@ def generate_logo_asset(
         raw = image_fetch.download(logo_path)
     if not raw:
         return {"status": "error", "reason": "no logo selected"}
-    png, _w, _h = renderer.process_logo(raw, whiten=whiten, flip_mask_bytes=flip_mask_bytes)
+    png, _w, _h = renderer.process_logo(
+        raw, whiten=whiten, flip_mask_bytes=flip_mask_bytes
+    )
     return _persist_poster(
         db,
         cfg,
@@ -904,8 +938,15 @@ def save_finished_poster(
     if kind not in _VALID_KINDS:
         return {"status": "error", "reason": f"invalid kind {kind!r}"}
     title, year = _backfill_title_year(
-        full_config, db, logger, kind=kind, tmdb_id=tmdb_id, title=title, year=year,
-        tvdb_id=tvdb_id, imdb_id=imdb_id,
+        full_config,
+        db,
+        logger,
+        kind=kind,
+        tmdb_id=tmdb_id,
+        title=title,
+        year=year,
+        tvdb_id=tvdb_id,
+        imdb_id=imdb_id,
     )
     if save_local and not cfg.output_dir:
         return {"status": "error", "reason": "cl2k_maker.output_dir is not configured"}
@@ -917,7 +958,6 @@ def save_finished_poster(
             blob,
             logo_bytes,
             kind=kind,
-            logo_max_width=cfg.logo_max_width,
             logo_scale=logo_scale,
             logo_y_offset=logo_y_offset,
             whiten=cfg.whiten_logo if whiten is None else whiten,
@@ -1170,7 +1210,6 @@ def psd_for_item(
         logo_bytes=logo_bytes,
         title=title,
         season_text=season_text,
-        logo_max_width=cfg.logo_max_width,
         logo_scale=logo_scale,
         logo_y_offset=logo_y_offset,
         whiten=cfg.whiten_logo if whiten is None else whiten,

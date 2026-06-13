@@ -17,6 +17,8 @@ thin fetch of the original-resolution CDN asset (no key needed for images).
 
 from __future__ import annotations
 
+import threading
+from collections import OrderedDict
 from typing import Any, Dict, List, Optional
 
 from backend.util.cl2k import geometry as geo
@@ -140,6 +142,35 @@ def _is_allowed_image_host(url: str) -> bool:
     return (parsed.netloc or "").lower() in _plex_netlocs()
 
 
+# Recently downloaded originals, keyed by final URL. Live-preview slider tweaks
+# re-render the same backdrop/logo over and over; without this every /preview
+# request re-pulled the multi-MB original from the CDN, dominating preview
+# latency. Bounded by total bytes (originals are big), LRU eviction.
+_DL_CACHE: OrderedDict[str, bytes] = OrderedDict()
+_DL_CACHE_LOCK = threading.Lock()
+_DL_CACHE_MAX_BYTES = 64 * 1024 * 1024
+
+
+def _dl_cache_get(url: str) -> Optional[bytes]:
+    with _DL_CACHE_LOCK:
+        data = _DL_CACHE.get(url)
+        if data is not None:
+            _DL_CACHE.move_to_end(url)
+        return data
+
+
+def _dl_cache_put(url: str, data: bytes) -> None:
+    if len(data) > _DL_CACHE_MAX_BYTES:
+        return
+    with _DL_CACHE_LOCK:
+        _DL_CACHE[url] = data
+        _DL_CACHE.move_to_end(url)
+        total = sum(len(v) for v in _DL_CACHE.values())
+        while total > _DL_CACHE_MAX_BYTES and _DL_CACHE:
+            _, evicted = _DL_CACHE.popitem(last=False)
+            total -= len(evicted)
+
+
 def download(file_path: str, session=None) -> bytes:
     """Download an image by TMDB path or absolute URL.
 
@@ -147,6 +178,10 @@ def download(file_path: str, session=None) -> bytes:
     API key needed); an absolute ``http(s)`` URL (e.g. a fanart.tv logo) is
     fetched as-is — but only from the allowed image hosts (TMDB / fanart.tv), so a
     crafted ``logo_path`` / ``backdrop_path`` can't turn this into an SSRF.
+
+    Successful fetches are kept in a small in-memory LRU so consecutive previews
+    of the same art don't re-download it. Calls with an explicit ``session``
+    bypass the cache (they control their own transport/fixtures).
     """
     import requests
 
@@ -157,8 +192,14 @@ def download(file_path: str, session=None) -> bytes:
         raise ValueError(
             f"refusing to fetch image from disallowed host: {urlparse(url).hostname!r}"
         )
+    if session is None:
+        cached = _dl_cache_get(url)
+        if cached is not None:
+            return cached
     resp = (session or requests).get(url, timeout=15)
     resp.raise_for_status()
+    if session is None:
+        _dl_cache_put(url, resp.content)
     return resp.content
 
 
