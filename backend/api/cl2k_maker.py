@@ -35,7 +35,7 @@ from backend.modules.cl2k_maker import (
     retext_poster,
     save_finished_poster,
 )
-from backend.util.cl2k import geometry as geo, tmdb_art
+from backend.util.cl2k import geometry as geo, text_removal, tmdb_art
 from backend.util.cl2k.image_fetch import TMDB_IMAGE_CDN, download as download_image
 from backend.util.cl2k.renderer import (
     process_logo,
@@ -1050,10 +1050,19 @@ def retext(
         f"(apply_ai={req.apply_ai}, mask={'yes' if req.mask_b64 else 'no'}, "
         f"label={req.label_text!r})"
     )
+    cfg = load_config()
+    # Fail an explicit AI erase loudly rather than returning the image unchanged
+    # (which the frontend would report as a successful erase). Only guards the
+    # user-triggered apply_ai path; the lenient skip stays in remove_text.
+    if req.apply_ai:
+        reason = text_removal.unavailable_reason(cfg.cl2k_maker)
+        if reason:
+            logger.warning(f"CL2K retext: AI unavailable — {reason}")
+            return error(reason, "CL2K_AI_UNAVAILABLE")
     try:
         out = retext_poster(
             db=db,
-            full_config=load_config(),
+            full_config=cfg,
             logger=logger,
             image_bytes=image_bytes,
             mask_bytes=_mask_bytes(req.mask_b64),

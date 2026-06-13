@@ -33,6 +33,30 @@ def is_enabled(config) -> bool:
     return bool(config and getattr(config, "ai_provider", "none") not in ("", "none"))
 
 
+def unavailable_reason(config) -> Optional[str]:
+    """Why an explicit AI erase can't run, or None if it can.
+
+    The /retext endpoint calls this so a user-triggered "Send to AI" fails
+    loudly when the provider is misconfigured, instead of silently returning the
+    image unchanged. (The generate path stays lenient and just skips — it must
+    not fail a whole render over a missing key.)
+    """
+    provider = getattr(config, "ai_provider", "none") if config else "none"
+    if provider in ("", "none"):
+        return "AI provider is 'none' — set one in Module Settings → CL2K Maker."
+    if provider in ("openai", "huggingface") and not getattr(config, "api_key", ""):
+        return (
+            f"No API key set for the '{provider}' provider — "
+            "add one in Module Settings → CL2K Maker."
+        )
+    if provider == "lama_sidecar" and not getattr(config, "ai_endpoint", ""):
+        return (
+            "No AI Endpoint set for the LaMa sidecar — "
+            "add your container URL in Module Settings → CL2K Maker."
+        )
+    return None
+
+
 def remove_text(
     image_bytes: bytes,
     *,
