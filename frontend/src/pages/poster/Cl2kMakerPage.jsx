@@ -1577,6 +1577,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                     setRemoveText={setRemoveText}
                     brushSize={brushSize}
                     setBrushSize={setBrushSize}
+                    maskB64={maskB64}
                     onMaskChange={setMaskB64}
                     previewUrl={previewUrl}
                     previewing={previewing}
@@ -1689,6 +1690,7 @@ const RenderPanel = ({
     setRemoveText,
     brushSize,
     setBrushSize,
+    maskB64,
     onMaskChange,
     previewUrl,
     previewing,
@@ -1837,6 +1839,73 @@ const RenderPanel = ({
             type: blob.type || 'image/jpeg',
         });
     }, [backdropUrl, customBackdrop]);
+
+    // Send to AI — erase the masked text from the backdrop via the configured
+    // inpainter, then adopt the cleaned image as the (custom) backdrop so the
+    // preview re-renders with the text gone. The brush mask is dropped (the text
+    // is erased, and swapping the image clears the canvas), so a later Generate
+    // does NOT re-run AI. This is the only paid step in the Full CL2K flow.
+    const aiProvider = config?.ai_provider || 'none';
+    const [aiErasing, setAiErasing] = useState(false);
+    const runBackdropErase = useCallback(async () => {
+        if (!backdropUrl || !maskB64 || aiProvider === 'none') return;
+        setAiErasing(true);
+        try {
+            const blob = await (await fetch(backdropUrl)).blob();
+            const imageDataUrl = await new Promise((resolve, reject) => {
+                const fr = new FileReader();
+                fr.onload = () => resolve(fr.result);
+                fr.onerror = reject;
+                fr.readAsDataURL(blob);
+            });
+            const resp = await cl2kMakerAPI.retext({
+                image_b64: imageDataUrl,
+                mask_b64: maskB64,
+                apply_ai: true,
+                prompt: config?.ai_prompt || '',
+                label_text: '',
+                border: false,
+                preview: true,
+                keep_size: true,
+                kind: isSeasonPoster ? 'season' : effectiveKind,
+                season_number: isSeasonPoster ? Number(seasonNumber) : null,
+                title: item.title,
+                tmdb_id: item.tmdb_id,
+                year: item.year,
+                tvdb_id: item.tvdb_id,
+                imdb_id: item.imdb_id,
+            });
+            const erased = resp?.data?.preview_b64;
+            if (erased) {
+                setCustomBackdrop({
+                    b64: erased,
+                    url: `data:image/jpeg;base64,${erased}`,
+                    name: customBackdrop?.name || 'erased.jpg',
+                });
+                onMaskChange(null);
+                toast.success('Text erased — check the preview, then Generate & save.');
+            } else {
+                toast.error('AI returned no image');
+            }
+        } catch (err) {
+            toast.error(err.message || 'AI erase failed');
+        } finally {
+            setAiErasing(false);
+        }
+    }, [
+        backdropUrl,
+        maskB64,
+        aiProvider,
+        config,
+        isSeasonPoster,
+        seasonNumber,
+        effectiveKind,
+        item,
+        customBackdrop,
+        setCustomBackdrop,
+        onMaskChange,
+        toast,
+    ]);
 
     const asisMeta = useMemo(
         () => ({
@@ -2165,6 +2234,9 @@ const RenderPanel = ({
                             setBrushSize={setBrushSize}
                             backdropUrl={backdropUrl}
                             onMaskChange={onMaskChange}
+                            hasMask={!!maskB64}
+                            aiBusy={aiErasing}
+                            onSendToAi={runBackdropErase}
                         />
                     )}
                 </div>
@@ -2378,6 +2450,9 @@ const AiPanel = ({
     setBrushSize,
     backdropUrl,
     onMaskChange,
+    hasMask,
+    aiBusy,
+    onSendToAi,
 }) => {
     const provider = config?.ai_provider || 'none';
     return (
@@ -2428,6 +2503,23 @@ const AiPanel = ({
                         <div className="text-xs text-tertiary">
                             Select a backdrop to brush a mask over.
                         </div>
+                    )}
+                    {backdropUrl && (
+                        <>
+                            <LoadingButton
+                                onClick={onSendToAi}
+                                loading={aiBusy}
+                                disabled={!hasMask || provider === 'none'}
+                                icon="auto_fix_high"
+                            >
+                                Send to AI — erase masked text
+                            </LoadingButton>
+                            <p className="text-xs text-tertiary">
+                                Erases the brushed text and updates the preview, so you see the
+                                result before you Generate &amp; save. This is the only step that
+                                uses AI credits.
+                            </p>
+                        </>
                     )}
                 </>
             )}
