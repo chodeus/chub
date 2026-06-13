@@ -2491,6 +2491,20 @@ const CropFramer = ({
         };
     }, [isBox, crop, zoom, coverRect, vPos]);
 
+    // The reset button ("Whole image" / "Center") is a no-op when the framing is
+    // already at its default — disable it then and explain what to do instead via
+    // a tooltip, so it reads as state rather than a dead control.
+    const cropIsWhole = !crop || (crop.x === 0 && crop.y === 0 && crop.w === 1 && crop.h === 1);
+    const focusIsCentered = focusX === 0.5 && focusY === 0.5;
+    const resetAtDefault = isBox ? cropIsWhole : focusIsCentered;
+    const resetTip = resetAtDefault
+        ? isBox
+            ? 'Drag on the photo to crop a region'
+            : 'Drag on the photo to set the focal point'
+        : isBox
+          ? 'Reset the crop to the whole image'
+          : 'Re-centre the focal point';
+
     return (
         <div className="bg-surface border border-border rounded-lg p-3">
             <div className="flex items-center justify-between mb-2">
@@ -2517,14 +2531,19 @@ const CropFramer = ({
                     >
                         Extend (AI)
                     </Button>
-                    <Button
-                        onClick={() => (isBox ? setCrop(FULL_CROP) : onChange(0.5, 0.5))}
-                        variant="secondary"
-                        icon={isBox ? 'crop_free' : 'filter_center_focus'}
-                        size="small"
-                    >
-                        {isBox ? 'Whole image' : 'Center'}
-                    </Button>
+                    {/* Span wrapper carries the tooltip: a disabled <button>
+                        doesn't reliably fire native title tooltips cross-browser. */}
+                    <span title={resetTip} className="inline-flex">
+                        <Button
+                            onClick={() => (isBox ? setCrop(FULL_CROP) : onChange(0.5, 0.5))}
+                            variant="secondary"
+                            icon={isBox ? 'crop_free' : 'filter_center_focus'}
+                            size="small"
+                            disabled={resetAtDefault}
+                        >
+                            {isBox ? 'Whole image' : 'Center'}
+                        </Button>
+                    </span>
                 </div>
             </div>
             <p className="text-xs text-tertiary mb-2">
@@ -2661,75 +2680,86 @@ const Picker = ({
     onBlack,
     emptyText,
     headerRight,
-}) => (
-    <div className="bg-surface border border-border rounded-lg p-3">
-        <div className="flex items-center justify-between gap-2 mb-2">
-            <h3 className="text-sm font-medium text-primary">{label}</h3>
-            {headerRight}
-        </div>
-        {loading ? (
-            <div className="text-xs text-tertiary py-4">Loading…</div>
-        ) : items.length === 0 ? (
-            <div className="text-xs text-tertiary py-2">{emptyText}</div>
-        ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-72 overflow-auto">
-                {items.map((it, idx) => {
-                    const path = it.file_path;
-                    const isSel = selected === path;
-                    return (
-                        <button
-                            key={`${path}-${idx}`}
-                            type="button"
-                            onClick={() => onSelect(isSel ? null : path)}
-                            aria-pressed={isSel}
-                            className={`relative ${aspect} rounded-md overflow-hidden border-2 transition-all ${
-                                isSel
-                                    ? 'border-primary ring-2 ring-primary/40'
-                                    : 'border-border hover:border-border-strong'
-                            } ${onBlack ? 'bg-black' : 'bg-surface-alt'}`}
-                            title={
-                                it.width
-                                    ? `${it.width}×${it.height}${
-                                          'iso_639_1' in it
-                                              ? ` (${it.iso_639_1 || 'textless'})`
-                                              : ''
-                                      }`
-                                    : path
-                            }
-                        >
-                            <img
-                                src={it.url || urlForPath(path)}
-                                alt=""
-                                loading="lazy"
-                                className="absolute inset-0 w-full h-full object-contain"
-                            />
-                            {isSel && (
-                                <span className="absolute top-1 right-1 inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary text-white">
-                                    <span className="material-symbols-outlined text-sm">check</span>
-                                </span>
-                            )}
-                            {/* Resolution in the TOP-LEFT corner — kept off the
+}) => {
+    // Wide 16:9 backdrops are too small to judge at 3 columns, so give them 2
+    // (and a taller scroll area to keep a comfortable number in view). Portrait
+    // posters/season art stay at 3 — they're tall enough to read already.
+    const wide = aspect === 'aspect-video';
+    const gridCls = wide
+        ? 'grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-96 overflow-auto'
+        : 'grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-72 overflow-auto';
+    return (
+        <div className="bg-surface border border-border rounded-lg p-3">
+            <div className="flex items-center justify-between gap-2 mb-2">
+                <h3 className="text-sm font-medium text-primary">{label}</h3>
+                {headerRight}
+            </div>
+            {loading ? (
+                <div className="text-xs text-tertiary py-4">Loading…</div>
+            ) : items.length === 0 ? (
+                <div className="text-xs text-tertiary py-2">{emptyText}</div>
+            ) : (
+                <div className={gridCls}>
+                    {items.map((it, idx) => {
+                        const path = it.file_path;
+                        const isSel = selected === path;
+                        return (
+                            <button
+                                key={`${path}-${idx}`}
+                                type="button"
+                                onClick={() => onSelect(isSel ? null : path)}
+                                aria-pressed={isSel}
+                                className={`relative ${aspect} rounded-md overflow-hidden border-2 transition-all ${
+                                    isSel
+                                        ? 'border-primary ring-2 ring-primary/40'
+                                        : 'border-border hover:border-border-strong'
+                                } ${onBlack ? 'bg-black' : 'bg-surface-alt'}`}
+                                title={
+                                    it.width
+                                        ? `${it.width}×${it.height}${
+                                              'iso_639_1' in it
+                                                  ? ` (${it.iso_639_1 || 'textless'})`
+                                                  : ''
+                                          }`
+                                        : path
+                                }
+                            >
+                                <img
+                                    src={it.url || urlForPath(path)}
+                                    alt=""
+                                    loading="lazy"
+                                    className="absolute inset-0 w-full h-full object-contain"
+                                />
+                                {isSel && (
+                                    <span className="absolute top-1 right-1 inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary text-white">
+                                        <span className="material-symbols-outlined text-sm">
+                                            check
+                                        </span>
+                                    </span>
+                                )}
+                                {/* Resolution in the TOP-LEFT corner — kept off the
                                 bottom so it can't run into the language badge, and
                                 off the top-right so it clears the selected check. */}
-                            {it.width ? (
-                                <span className="absolute top-0 left-0 text-[11px] font-mono text-white bg-black/60 px-1">
-                                    {it.width}×{it.height}
-                                </span>
-                            ) : null}
-                            {/* Language badge: 'textless' (null language) art is pure
+                                {it.width ? (
+                                    <span className="absolute top-0 left-0 text-[11px] font-mono text-white bg-black/60 px-1">
+                                        {it.width}×{it.height}
+                                    </span>
+                                ) : null}
+                                {/* Language badge: 'textless' (null language) art is pure
                                 artwork — no AI text pass needed at all. */}
-                            {'iso_639_1' in it ? (
-                                <span className="absolute bottom-0 left-0 text-[11px] font-mono text-white bg-black/60 px-1">
-                                    {it.iso_639_1 || 'textless'}
-                                </span>
-                            ) : null}
-                        </button>
-                    );
-                })}
-            </div>
-        )}
-    </div>
-);
+                                {'iso_639_1' in it ? (
+                                    <span className="absolute bottom-0 left-0 text-[11px] font-mono text-white bg-black/60 px-1">
+                                        {it.iso_639_1 || 'textless'}
+                                    </span>
+                                ) : null}
+                            </button>
+                        );
+                    })}
+                </div>
+            )}
+        </div>
+    );
+};
 
 // ─── CL2K guide overlay ──────────────────────────────────────────────────────
 
