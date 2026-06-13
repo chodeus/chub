@@ -188,3 +188,16 @@ def test_ssrf_allows_configured_plex_netloc(monkeypatch):
     assert image_fetch._is_allowed_image_host(
         "https://image.tmdb.org/t/p/original/x.jpg"
     )
+
+
+def test_ssrf_allows_plex_tv_cdn():
+    # Plex's artwork picker returns remote-provider art (tmdb/fanarttv/gracenote)
+    # as absolute metadata-static.plex.tv URLs — selecting one must be fetchable
+    # (it 500'd before *.plex.tv was allowlisted).
+    assert image_fetch._is_allowed_image_host(
+        "https://metadata-static.plex.tv/2/gracenote/2af07f7e.jpg"
+    )
+    assert image_fetch._is_allowed_image_host("https://images.plex.tv/photo?u=x")
+    # lookalike domains stay blocked
+    assert not image_fetch._is_allowed_image_host("https://evilplex.tv/x.png")
+    assert not image_fetch._is_allowed_image_host("https://plex.tv.attacker.io/x.png")
