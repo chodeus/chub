@@ -1140,8 +1140,12 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             whiten: whitenLogo,
             invert: invertLogo,
             logo_flip_b64: logoFlipB64,
-            remove_text: removeText,
-            mask_b64: removeText ? maskB64 : null,
+            // AI text-removal is an explicit step now — the "Send to AI" button
+            // erases the masked text and bakes the cleaned art into the backdrop.
+            // Render/generate must NEVER run AI themselves, or a checked box with
+            // no mask triggers a destructive maskless whole-poster regeneration.
+            remove_text: false,
+            mask_b64: null,
             fit_mode: fitMode,
             focus_x: focusX,
             focus_y: focusY,
@@ -1172,8 +1176,6 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             whitenLogo,
             invertLogo,
             logoFlipB64,
-            removeText,
-            maskB64,
             fitMode,
             crop,
             vPos,
@@ -1285,9 +1287,10 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [baseSig]);
 
-    // Manual full refresh: re-render including AI text-removal (when enabled), and
-    // bake the logo only for the text-wordmark fallback (a chosen logo stays a
-    // live overlay so the sliders keep moving it).
+    // Manual full refresh: re-render from current inputs (no AI — text-removal is
+    // the separate "Send to AI" step, baked into the backdrop). Bake the logo only
+    // for the text-wordmark fallback (a chosen logo stays a live overlay so the
+    // sliders keep moving it).
     const runPreview = useCallback(async () => {
         setPreviewing(true);
         try {
@@ -2455,6 +2458,17 @@ const AiPanel = ({
     onSendToAi,
 }) => {
     const provider = config?.ai_provider || 'none';
+    // Why AI can't run (mirrors the backend's unavailable_reason) — gates the
+    // Send to AI button so it doesn't silently no-op. api_key reads back as
+    // '********' when set (redacted) and '' when unset.
+    const aiBlock =
+        provider === 'none'
+            ? 'AI provider is “none” — enable one in Module Settings or this has no effect.'
+            : (provider === 'openai' || provider === 'huggingface') && !config?.api_key
+              ? 'No API key set for this provider — add one in Module Settings.'
+              : provider === 'lama_sidecar' && !config?.ai_endpoint
+                ? 'No AI Endpoint set — add your LaMa container URL in Module Settings.'
+                : null;
     return (
         <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-3">
             <label className="flex items-center gap-2 text-sm text-primary font-medium">
@@ -2474,11 +2488,7 @@ const AiPanel = ({
                 </Link>
                 .
             </p>
-            {removeText && provider === 'none' && (
-                <div className="text-xs text-warning">
-                    AI provider is “none” — enable one in settings or this has no effect.
-                </div>
-            )}
+            {removeText && aiBlock && <div className="text-xs text-warning">{aiBlock}</div>}
             {removeText && (
                 <>
                     <label className="flex items-center gap-2 text-sm text-secondary">
@@ -2509,7 +2519,7 @@ const AiPanel = ({
                             <LoadingButton
                                 onClick={onSendToAi}
                                 loading={aiBusy}
-                                disabled={!hasMask || provider === 'none'}
+                                disabled={!hasMask || !!aiBlock}
                                 icon="auto_fix_high"
                             >
                                 Send to AI — erase masked text
