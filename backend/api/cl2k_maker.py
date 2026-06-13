@@ -141,16 +141,26 @@ def _crop_tuple(req: Any):
     return tuple(parts) if all(p is not None for p in parts) else None
 
 
+class LogoFetchError(Exception):
+    """A chosen logo URL could not be downloaded (disallowed host, dead URL,
+    rotated Plex token, …). Endpoints turn this into a clean 4xx instead of an
+    opaque 500."""
+
+
 def _resolve_logo_bytes(
     logo_path: Optional[str], logo_b64: Optional[str]
 ) -> Optional[bytes]:
-    """Bytes for a chosen logo (or None). An uploaded PNG (``logo_b64``) wins over
-    a chosen TMDB/fanart ``logo_path``, which is fetched via the host-allowlisted
-    image downloader (so a crafted path can't trigger an SSRF)."""
+    """Bytes for a chosen logo (or None). An uploaded PNG (``logo_b64``) wins
+    over a chosen TMDB/fanart/Plex ``logo_path``, which is fetched via the
+    host-allowlisted image downloader (so a crafted path can't trigger an
+    SSRF). Download failures raise :class:`LogoFetchError`."""
     if logo_b64:
         return _b64_to_bytes(logo_b64)
     if logo_path:
-        return download_image(logo_path)
+        try:
+            return download_image(logo_path)
+        except Exception as exc:
+            raise LogoFetchError(str(exc)) from exc
     return None
 
 
@@ -307,7 +317,11 @@ def logo_processed(
     the recommended guide-box width. The frontend draws these bytes at the box
     derived from the logo geometry so the size/position sliders preview live —
     matching :func:`render_cl2k`'s placement without a render per drag."""
-    raw = _resolve_logo_bytes(req.logo_path, req.logo_b64)
+    try:
+        raw = _resolve_logo_bytes(req.logo_path, req.logo_b64)
+    except LogoFetchError as exc:
+        logger.warning(f"cl2k: logo fetch failed: {exc}")
+        return error(f"Could not fetch that logo from its source: {exc}", "LOGO_FETCH")
     if not raw:
         return error("No logo provided", "NO_LOGO")
     cfg = load_config().cl2k_maker
@@ -616,7 +630,11 @@ def logo_asset_preview(
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_cl2k_logger),
 ):
-    raw = _resolve_logo_bytes(req.logo_path, req.logo_b64)
+    try:
+        raw = _resolve_logo_bytes(req.logo_path, req.logo_b64)
+    except LogoFetchError as exc:
+        logger.warning(f"cl2k: logo fetch failed: {exc}")
+        return error(f"Could not fetch that logo from its source: {exc}", "LOGO_FETCH")
     if not raw:
         return error("No logo selected", "NO_LOGO")
     png, _w, _h = process_logo(
@@ -919,7 +937,11 @@ async def upload_poster(
     logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
     image_bytes = await file.read()
-    logo_bytes = _resolve_logo_bytes(logo_path, logo_b64)
+    try:
+        logo_bytes = _resolve_logo_bytes(logo_path, logo_b64)
+    except LogoFetchError as exc:
+        logger.warning(f"cl2k: logo fetch failed: {exc}")
+        return error(f"Could not fetch that logo from its source: {exc}", "LOGO_FETCH")
     logo_source = "custom" if logo_b64 else "tmdb" if logo_path else "upload"
     if preview:
         # Mirror the save pipeline (normalize -> overlay logo -> border) so the

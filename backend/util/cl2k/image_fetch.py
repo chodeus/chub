@@ -120,14 +120,19 @@ def _plex_netlocs() -> set:
 
 
 def _is_allowed_image_host(url: str) -> bool:
-    """Allow only the known image CDNs (TMDB + fanart.tv) and the user's own
-    configured Plex server(s).
+    """Allow only the known image CDNs (TMDB + fanart.tv + Plex's own CDN) and
+    the user's own configured Plex server(s).
 
     ``download`` accepts absolute URLs that originate from request data
     (``backdrop_path`` / ``logo_path``), so without a host allowlist the server
     could be coerced into fetching arbitrary internal URLs (SSRF — e.g. cloud
     metadata). Restricting to the hosts the maker legitimately uses closes that;
-    Plex is matched by exact host:port from config.
+    the user's Plex server is matched by exact host:port from config.
+
+    ``*.plex.tv`` is Plex's own infrastructure: the Plex artwork picker returns
+    remote-provider art (tmdb/fanarttv/gracenote) as absolute
+    ``metadata-static.plex.tv`` URLs, which must be fetchable or selecting any
+    non-uploaded Plex logo 500s.
     """
     from urllib.parse import urlparse
 
@@ -137,6 +142,8 @@ def _is_allowed_image_host(url: str) -> bool:
         host == "image.tmdb.org"
         or host == "assets.fanart.tv"
         or host.endswith(".fanart.tv")
+        or host == "plex.tv"
+        or host.endswith(".plex.tv")
     ):
         return True
     return (parsed.netloc or "").lower() in _plex_netlocs()
