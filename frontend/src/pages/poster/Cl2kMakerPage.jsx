@@ -901,6 +901,8 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
     // Per-render whiten override; null = the module config (whiten_logo).
     const [whitenLogo, setWhitenLogo] = useState(saved.whitenLogo ?? null);
     const effectiveWhiten = whitenLogo === null ? (config?.whiten_logo ?? true) : whitenLogo;
+    // Invert logo: white -> transparent, black -> white (plate/sticker art).
+    const [invertLogo, setInvertLogo] = useState(saved.invertLogo ?? false);
 
     // Season variant (shows only)
     const [seasonNumber, setSeasonNumber] = useState(saved.seasonNumber ?? '');
@@ -932,6 +934,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             logoScale,
             logoYOffset,
             whitenLogo,
+            invertLogo,
             seasonNumber,
             bulkSeasons,
             bandLabel,
@@ -952,6 +955,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
         logoScale,
         logoYOffset,
         whitenLogo,
+        invertLogo,
         seasonNumber,
         bulkSeasons,
         bandLabel,
@@ -972,9 +976,9 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
     // the accumulated mask would be lost; `processedLogo` (touch-up applied) is
     // what the live overlay shows and the render bakes in.
     const hasLogo = !!(logo || customLogo);
-    // Strokes are keyed to the (logo, whiten) they were drawn over: a stale key
-    // makes the mask a derived no-op instead of needing a reset-in-effect.
-    const flipKey = `${customSig(customLogo) || logo}|${effectiveWhiten}`;
+    // Strokes are keyed to the (logo, whiten, invert) they were drawn over: a
+    // stale key makes the mask a derived no-op instead of needing a reset-in-effect.
+    const flipKey = `${customSig(customLogo) || logo}|${effectiveWhiten}|${invertLogo}`;
     const [logoFlip, setLogoFlip] = useState(null); // { key, b64 }
     const logoFlipB64 = logoFlip && logoFlip.key === flipKey ? logoFlip.b64 : null;
     const setLogoFlipB64 = useCallback(
@@ -989,6 +993,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                 .logoProcessed({
                     ...(customLogo?.b64 ? { logo_b64: customLogo.b64 } : { logo_path: logo }),
                     whiten: effectiveWhiten,
+                    invert: invertLogo,
                     ...extra,
                 })
                 .then(resp => {
@@ -1002,7 +1007,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                           }
                         : null;
                 }),
-        [customLogo, logo, effectiveWhiten]
+        [customLogo, logo, effectiveWhiten, invertLogo]
     );
     useEffect(() => {
         if (!hasLogo) return undefined; // no fetch; `overlayLogo` below hides it
@@ -1123,6 +1128,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             logo_scale: logoScale,
             logo_y_offset: logoYOffset,
             whiten: whitenLogo,
+            invert: invertLogo,
             logo_flip_b64: logoFlipB64,
             remove_text: removeText,
             mask_b64: removeText ? maskB64 : null,
@@ -1154,6 +1160,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             logoScale,
             logoYOffset,
             whitenLogo,
+            invertLogo,
             logoFlipB64,
             removeText,
             maskB64,
@@ -1527,6 +1534,8 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                     setLogoYOffset={setLogoYOffset}
                     whitenLogo={effectiveWhiten}
                     setWhitenLogo={setWhitenLogo}
+                    invertLogo={invertLogo}
+                    setInvertLogo={setInvertLogo}
                     logoTouchUpUrl={processedBase?.dataUrl || null}
                     onLogoFlip={setLogoFlipB64}
                     processedLogo={overlayLogo}
@@ -1649,6 +1658,8 @@ const RenderPanel = ({
     setLogoYOffset,
     whitenLogo,
     setWhitenLogo,
+    invertLogo,
+    setInvertLogo,
     logoTouchUpUrl,
     onLogoFlip,
     processedLogo,
@@ -1824,6 +1835,8 @@ const RenderPanel = ({
                     onYOffset={setLogoYOffset}
                     whiten={whitenLogo}
                     onWhiten={setWhitenLogo}
+                    invert={invertLogo}
+                    onInvert={setInvertLogo}
                     touchUpUrl={logoTouchUpUrl}
                     onFlipMask={onLogoFlip}
                     source={logoSource}
@@ -2852,6 +2865,8 @@ const LogoSelector = ({
     onYOffset,
     whiten, // effective CL2K-whiten state (config default until overridden)
     onWhiten,
+    invert, // invert logo: white -> transparent, black -> white (plate/sticker art)
+    onInvert,
     touchUpUrl, // processed (un-flipped) logo for the B/W touch-up brush
     onFlipMask,
     source, // optional per-picker source ('tmdb'|'fanart'|'plex'|'upload')
@@ -3017,6 +3032,23 @@ const LogoSelector = ({
                     />
                     <span className="w-10 text-right">
                         {(yOffset ?? 0) > 0 ? `+${yOffset}` : (yOffset ?? 0)}
+                    </span>
+                </label>
+            )}
+            {/* Invert logo: plate/sticker art (a solid light plate with dark text)
+                whitens into a white box — the OPPOSITE of a clearlogo. Inverting
+                makes darkness the opacity: black text -> solid white, the plate ->
+                transparent. Only meaningful on the CL2K-white two-tone. */}
+            {onInvert && whiten && (
+                <label className="mt-2 flex items-center gap-2 text-xs text-secondary cursor-pointer">
+                    <input
+                        type="checkbox"
+                        checked={!!invert}
+                        onChange={e => onInvert(e.target.checked)}
+                    />
+                    Invert logo
+                    <span className="text-tertiary">
+                        — white becomes transparent, black becomes white (for plate/sticker logos)
                     </span>
                 </label>
             )}
@@ -3824,14 +3856,16 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
         [artBySource, logoSource]
     );
     const [whiten, setWhiten] = useState(false);
+    // Invert logo: white -> transparent, black -> white (plate/sticker art).
+    const [invert, setInvert] = useState(false);
     const [previewUrl, setPreviewUrl] = useState(null); // UN-flipped (brush base)
     const [previewing, setPreviewing] = useState(false);
     const [busy, setBusy] = useState(false);
     const hasLogo = !!(logo || customLogo);
 
-    // B/W touch-up strokes are keyed to the (logo, whiten) they were drawn over
-    // so a stale mask becomes a derived no-op (same pattern as the Builder).
-    const flipKey = `${customSig(customLogo) || logo}|${whiten}`;
+    // B/W touch-up strokes are keyed to the (logo, whiten, invert) they were
+    // drawn over so a stale mask becomes a derived no-op (same as the Builder).
+    const flipKey = `${customSig(customLogo) || logo}|${whiten}|${invert}`;
     const [flip, setFlip] = useState(null); // { key, b64 }
     const flipB64 = flip && flip.key === flipKey ? flip.b64 : null;
     const setFlipB64 = useCallback(b64 => setFlip(b64 ? { key: flipKey, b64 } : null), [flipKey]);
@@ -3854,11 +3888,21 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
             logo_path: customLogo ? null : logo,
             logo_b64: customLogo?.b64 || null,
             whiten,
+            invert,
             flip_b64: flipB64,
             save_local: saveTargets.saveLocal,
             upload_gdrive: saveTargets.uploadGdrive,
         }),
-        [item, logo, customLogo, whiten, flipB64, saveTargets.saveLocal, saveTargets.uploadGdrive]
+        [
+            item,
+            logo,
+            customLogo,
+            whiten,
+            invert,
+            flipB64,
+            saveTargets.saveLocal,
+            saveTargets.uploadGdrive,
+        ]
     );
     const reqRef = useRef(req);
     useEffect(() => {
@@ -3867,7 +3911,7 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
 
     // Brush base: the processed logo WITHOUT the flip — it must stay stable as
     // strokes land, or the accumulated mask would be drawn over a moving target.
-    const sig = `${customSig(customLogo) || logo}|${whiten}`;
+    const sig = `${customSig(customLogo) || logo}|${whiten}|${invert}`;
     useEffect(() => {
         if (!hasLogo) return undefined;
         let cancelled = false;
@@ -3990,6 +4034,20 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                         asset). CL2K white recolours it to the CL2K two-tone — white fills, black
                         keylines — like a CL2K poster logo.
                     </p>
+                    {whiten && (
+                        <label className="mt-2 flex items-center gap-2 text-xs text-secondary cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={invert}
+                                onChange={e => setInvert(e.target.checked)}
+                            />
+                            Invert logo
+                            <span className="text-tertiary">
+                                — white becomes transparent, black becomes white (for plate/sticker
+                                logos)
+                            </span>
+                        </label>
+                    )}
                     {/* B/W touch-up: flip the regions the automatic two-tone got wrong.
                         Drawn over the UN-flipped preview so strokes stay valid. */}
                     {whiten && hasLogo && previewUrl && (
@@ -4093,6 +4151,8 @@ const UploadPosterPanel = ({
     // FormData builder skips nulls so the backend falls back to the config.
     const [whitenLogo, setWhitenLogo] = useState(null);
     const effectiveWhiten = whitenLogo === null ? (config?.whiten_logo ?? true) : whitenLogo;
+    // Invert logo: white -> transparent, black -> white (plate/sticker art).
+    const [invertLogo, setInvertLogo] = useState(false);
     const [logo, setLogo] = useState(null); // chosen TMDB/fanart logo file_path
     const [customLogo, setCustomLogo] = useState(null); // { b64, name, url }
     const [previewB64, setPreviewB64] = useState(null); // server-rendered preview
@@ -4145,8 +4205,19 @@ const UploadPosterPanel = ({
             logo_scale: logoScale,
             logo_y_offset: logoYOffset,
             whiten: whitenLogo,
+            invert: invertLogo,
         }),
-        [effectiveKind, item, addBorder, logo, customLogo, logoScale, logoYOffset, whitenLogo]
+        [
+            effectiveKind,
+            item,
+            addBorder,
+            logo,
+            customLogo,
+            logoScale,
+            logoYOffset,
+            whitenLogo,
+            invertLogo,
+        ]
     );
 
     const runPreview = useCallback(async () => {
@@ -4222,6 +4293,11 @@ const UploadPosterPanel = ({
                     whiten={effectiveWhiten}
                     onWhiten={v => {
                         setWhitenLogo(v);
+                        setPreviewB64(null);
+                    }}
+                    invert={invertLogo}
+                    onInvert={v => {
+                        setInvertLogo(v);
                         setPreviewB64(null);
                     }}
                     emptyText="No TMDB/fanart logos — upload a custom one, or leave unset to keep the poster as-is."
@@ -4473,6 +4549,8 @@ const EditPosterPanel = ({
     // FormData builder skips nulls so the backend falls back to the config.
     const [whitenLogo, setWhitenLogo] = useState(null);
     const effectiveWhiten = whitenLogo === null ? (config?.whiten_logo ?? true) : whitenLogo;
+    // Invert logo: white -> transparent, black -> white (plate/sticker art).
+    const [invertLogo, setInvertLogo] = useState(false);
     const [cl2kPreviewB64, setCl2kPreviewB64] = useState(null);
     const [cl2kPreviewing, setCl2kPreviewing] = useState(false);
     const [showGuides, setShowGuides] = useState(true);
@@ -4704,6 +4782,7 @@ const EditPosterPanel = ({
             logo_scale: logoScale,
             logo_y_offset: logoYOffset,
             whiten: whitenLogo,
+            invert: invertLogo,
             fit_mode: fitMode,
             focus_x: focusX,
             focus_y: focusY,
@@ -4721,6 +4800,7 @@ const EditPosterPanel = ({
             logoScale,
             logoYOffset,
             whitenLogo,
+            invertLogo,
             fitMode,
             crop,
             vPos,
@@ -4957,6 +5037,11 @@ const EditPosterPanel = ({
                                 whiten={effectiveWhiten}
                                 onWhiten={v => {
                                     setWhitenLogo(v);
+                                    setCl2kPreviewB64(null);
+                                }}
+                                invert={invertLogo}
+                                onInvert={v => {
+                                    setInvertLogo(v);
                                     setCl2kPreviewB64(null);
                                 }}
                                 yOffset={logoYOffset}
