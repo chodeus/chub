@@ -188,25 +188,37 @@ const withExternalIds = async base => {
 // All px are on the locked 1000×1500 CL2K canvas.
 const CL2K_CANVAS_W = 1000;
 const CL2K_CANVAS_H = 1500;
-const CL2K_LOGO_BASELINE = 1300; // geo.MAIN_LOGO_BOTTOM / COLLECTION_LOGO_BOTTOM
-const CL2K_LOGO_WIDTH_MAX = 800; // geo.LOGO_WIDTH_MAX (hard cap)
-const CL2K_LOGO_ZONE_TOP = 1100; // geo.LOGO_ZONE_TOP
+// Bottom baselines verified against the PSDs in refs/ (template + finished
+// posters all bottom-align their LOGO layer at exactly these guides).
+const CL2K_LOGO_BASELINE_MAIN = 1352; // geo.MAIN_LOGO_BOTTOM ("Main Logo Bottom")
+const CL2K_LOGO_BASELINE_COLLECTION = 1319; // geo.COLLECTION_LOGO_BOTTOM
+const CL2K_LOGO_WIDTH_MAX = 800; // geo.LOGO_WIDTH_MAX (guide line, not a clamp)
+const CL2K_LOGO_ZONE_TOP = 1100; // geo.LOGO_ZONE_TOP ("Main Logo Height")
 
-// natW/natH = trimmed logo dims (from /logo-processed); maxWidth = cfg.logo_max_width.
+const cl2kLogoBaseline = kind =>
+    (kind || '').toLowerCase() === 'collection'
+        ? CL2K_LOGO_BASELINE_COLLECTION
+        : CL2K_LOGO_BASELINE_MAIN;
+
+// natW/natH = trimmed logo dims (from /logo-processed); maxWidth = the
+// recommended guide-box width the backend reports (700px); baseline = the
+// kind's bottom guide (geo.logo_baseline mirror).
 // Returns the overlay box as percentages of the 2:3 preview, or null.
-const logoBoxPct = ({ natW, natH, maxWidth, scale = 1, yOffset = 0 }) => {
+const logoBoxPct = ({ natW, natH, maxWidth, scale = 1, yOffset = 0, baseline }) => {
     if (!natW || !natH) return null;
+    const base = baseline || CL2K_LOGO_BASELINE_MAIN;
     const s = Math.max(0.25, Math.min(scale || 1, 3));
     const off = Math.max(-600, Math.min(Math.round(yOffset || 0), 200));
-    let targetW = Math.min(maxWidth || 600, CL2K_LOGO_WIDTH_MAX);
+    let targetW = Math.min(maxWidth || 700, CL2K_LOGO_WIDTH_MAX);
     let targetH = Math.round((natH * targetW) / natW);
-    const maxH = CL2K_LOGO_BASELINE - CL2K_LOGO_ZONE_TOP;
+    const maxH = base - CL2K_LOGO_ZONE_TOP;
     if (targetH > maxH) {
         targetH = maxH;
         targetW = Math.round((natW * targetH) / natH);
     }
     // Scale the guide-fit box as a whole; keep it on the canvas (aspect kept) —
-    // mirrors _place_logo so the overlay still lands pixel-exact.
+    // mirrors _place_logo so the overlay still lands pixel-exact. The width
+    // guides are guidelines only, not a clamp.
     targetW = Math.round(targetW * s);
     targetH = Math.round(targetH * s);
     if (targetW > CL2K_CANVAS_W) {
@@ -217,7 +229,7 @@ const logoBoxPct = ({ natW, natH, maxWidth, scale = 1, yOffset = 0 }) => {
         targetW = Math.round((targetW * CL2K_CANVAS_H) / targetH);
         targetH = CL2K_CANVAS_H;
     }
-    let top = CL2K_LOGO_BASELINE - targetH + off;
+    let top = base - targetH + off;
     top = Math.max(0, Math.min(top, CL2K_CANVAS_H - targetH));
     const left = CL2K_CANVAS_W / 2 - targetW / 2;
     return {
@@ -230,8 +242,9 @@ const logoBoxPct = ({ natW, natH, maxWidth, scale = 1, yOffset = 0 }) => {
 
 // Live logo drawn over the logo-less preview base. Moves instantly with the
 // size/position sliders — no server render per drag. `logo` = { dataUrl, width,
-// height, maxWidth } from /logo-processed.
-const LogoOverlay = ({ logo, scale, yOffset }) => {
+// height, maxWidth } from /logo-processed; `kind` picks the bottom baseline
+// (collection logos sit on the higher 1319 guide).
+const LogoOverlay = ({ logo, scale, yOffset, kind }) => {
     if (!logo?.dataUrl) return null;
     const box = logoBoxPct({
         natW: logo.width,
@@ -239,6 +252,7 @@ const LogoOverlay = ({ logo, scale, yOffset }) => {
         maxWidth: logo.maxWidth,
         scale,
         yOffset,
+        baseline: cl2kLogoBaseline(kind),
     });
     if (!box) return null;
     return (
@@ -256,6 +270,30 @@ const LogoOverlay = ({ logo, scale, yOffset }) => {
                 pointerEvents: 'none',
             }}
         />
+    );
+};
+
+// Dim + spinner over a stale preview while its replacement renders server-side.
+// Without this the old image just sits there until the new one pops in, which
+// reads as "the slider did nothing". Inline styles — must not depend on utility
+// classes existing.
+const PreviewRefreshing = ({ active }) => {
+    if (!active) return null;
+    return (
+        <div
+            style={{
+                position: 'absolute',
+                inset: 0,
+                background: 'rgba(0, 0, 0, 0.35)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                pointerEvents: 'none',
+            }}
+            aria-hidden="true"
+        >
+            <Spinner size="small" />
+        </div>
     );
 };
 
@@ -420,10 +458,6 @@ const ConfigBanner = ({ config, uploadStatus }) => {
                     ) : (
                         <span className="text-error">not configured</span>
                     )}
-                </span>
-                <span>
-                    <span className="text-tertiary">Logo width: </span>
-                    <span className="text-primary">{config.logo_max_width ?? 600}px</span>
                 </span>
                 <span>
                     <span className="text-tertiary">Whiten logo: </span>
@@ -1144,7 +1178,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
     }, []);
 
     // Read the latest request inside the debounced effect without making its
-    // identity a trigger (the effect fires off baseSig, below). The 550ms debounce
+    // identity a trigger (the effect fires off baseSig, below). The debounce
     // means the ref is always current by the time the timeout reads it.
     const baseRequestRef = useRef(baseRequest);
     useEffect(() => {
@@ -1206,24 +1240,29 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
         // No art chosen yet (picker path or custom upload) — nothing to render.
         if (!backdrop && !customBackdrop) return undefined;
         let cancelled = false;
+        const aborter = new AbortController();
         const handle = setTimeout(async () => {
             setPreviewing(true);
             try {
-                const blob = await cl2kMakerAPI.preview({
-                    ...baseRequestRef.current,
-                    place_logo: !hasLogo,
-                    remove_text: false,
-                    mask_b64: null,
-                });
+                const blob = await cl2kMakerAPI.preview(
+                    {
+                        ...baseRequestRef.current,
+                        place_logo: !hasLogo,
+                        remove_text: false,
+                        mask_b64: null,
+                    },
+                    { signal: aborter.signal }
+                );
                 if (!cancelled) setPreview(blob);
             } catch {
                 /* auto-render stays quiet; the Refresh button surfaces errors */
             } finally {
                 if (!cancelled) setPreviewing(false);
             }
-        }, 550);
+        }, 300);
         return () => {
             cancelled = true;
+            aborter.abort();
             clearTimeout(handle);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1765,7 +1804,7 @@ const RenderPanel = ({
                         }
                         labelYFrac={
                             !isSeasonPoster && !bandLabel && item.kind === 'collection'
-                                ? 1345 / 1500
+                                ? 1350 / 1500
                                 : 1440 / 1500
                         }
                     />
@@ -1872,9 +1911,11 @@ const RenderPanel = ({
                                         logo={processedLogo}
                                         scale={logoScale}
                                         yOffset={logoYOffset}
+                                        kind={item.kind}
                                     />
                                 )}
                                 {showGuides && <GuideOverlay />}
+                                <PreviewRefreshing active={previewing} />
                             </>
                         ) : (
                             <span className="text-xs text-tertiary px-4 text-center">
@@ -2178,7 +2219,7 @@ const FRAMING_HELP = {
 // as the crop box / vertical-position slider move (no server render): shows the
 // cropped region's placement, the stretched-sky fill above, the fade-to-black
 // below, the template gradient, the logo zone and the label band. Mirrors the
-// backend geometry (gradient 780→1375, logo bottom 1300, label 1440/1345 of 1500).
+// backend geometry (gradient 780→1375, logo bottom 1352, label 1440/1350 of 1500).
 const FitMock = ({ imageUrl, ratio, crop, vPos, label, labelYFrac }) => {
     const c = crop || FULL_CROP;
     if (!ratio || c.w < 0.02 || c.h < 0.02) return null;
@@ -2263,14 +2304,14 @@ const FitMock = ({ imageUrl, ratio, crop, vPos, label, labelYFrac }) => {
                             'linear-gradient(180deg, rgba(0,0,0,0) 52%, rgba(0,0,0,0.55) 76%, #000 91.7%)',
                     }}
                 />
-                {/* Logo zone (bottom-aligned at y=1300) */}
+                {/* Logo zone (y=1100 → bottom-aligned at the y=1352 guide) */}
                 <div
                     className="absolute pointer-events-none flex items-end justify-center"
                     style={{
                         left: '20%',
                         width: '60%',
                         top: '73.3%',
-                        height: '13.4%',
+                        height: '16.8%',
                         border: '1px dashed rgba(255,255,255,0.35)',
                         borderRadius: 3,
                     }}
@@ -2679,20 +2720,37 @@ const Picker = ({
 
 // ─── CL2K guide overlay ──────────────────────────────────────────────────────
 
-// The template's own guides (mined from CL2K_template.psd), drawn over a 2:3
-// poster preview as Photoshop-style cyan lines. Positions are fractions of the
-// 1000×1500 canvas, so the overlay lines up with any rendered preview. Each line
-// explains itself on hover (what the guide means) — that's the point of the
-// overlay, since the lines alone are cryptic. Inline styles only — this must not
-// depend on utility classes existing.
+// The template's own guides, drawn over a 2:3 poster preview as Photoshop-style
+// cyan lines. Verified 2026-06-13 against the embedded guide resources of the
+// PSDs in refs/ (template + finished creator posters — all carry the identical
+// set: x 100/200/500/800/900, y 1100/1319/1352/1375; the 150/850 pair is the
+// creator's own 700px addition). Positions are fractions of the 1000×1500
+// canvas, so the overlay lines up with any rendered preview. Each line explains
+// itself on hover (what the guide means) — that's the point of the overlay,
+// since the lines alone are cryptic. Inline styles only — this must not depend
+// on utility classes existing.
 const CL2K_GUIDES = [
     { label: 'Max logo width', o: 'x', p: 100 },
+    { label: 'Recommended logo width (700px box) — the creator’s usual width', o: 'x', p: 150 },
     { label: 'Main logo width (600px box)', o: 'x', p: 200 },
     { label: 'Main logo width (600px box)', o: 'x', p: 800 },
+    { label: 'Recommended logo width (700px box) — the creator’s usual width', o: 'x', p: 850 },
     { label: 'Max logo width', o: 'x', p: 900 },
-    { label: 'Logo zone top — logos shouldn’t rise above this line', o: 'y', p: 1100 },
-    { label: 'Logo bottom baseline', o: 'y', p: 1319 },
-    { label: 'Label band (COLLECTION / SEASON)', o: 'y', p: 1352 },
+    {
+        label: 'Main logo height — logos shouldn’t rise above this line',
+        o: 'y',
+        p: CL2K_LOGO_ZONE_TOP,
+    },
+    {
+        label: 'Collection logo bottom — collection logos sit on this line',
+        o: 'y',
+        p: CL2K_LOGO_BASELINE_COLLECTION,
+    },
+    {
+        label: 'Main logo bottom — movie/show logos sit on this line',
+        o: 'y',
+        p: CL2K_LOGO_BASELINE_MAIN,
+    },
     { label: 'Gradient darkest line', o: 'y', p: 1375 },
 ];
 const GUIDE_CYAN = 'rgba(0, 255, 255, 0.6)';
@@ -3004,15 +3062,15 @@ const LogoSelector = ({
                 {onScale && (
                     <>
                         {' '}
-                        Size 100% = the CL2K guide box; raise it to enlarge past the 600px guide
-                        (hand-made posters run up to ~880px wide) — capped only by the canvas.
+                        Size 100% = the 700px recommended guide box; the 800px line is the
+                        template’s suggested max (a guideline, not enforced).
                     </>
                 )}
                 {onYOffset && (
                     <>
                         {' '}
-                        Position 0 = the locked baseline; negative moves the logo up, positive down
-                        (hand-made posters hang tall logos ~30–50 below).
+                        Position 0 = the template’s logo-bottom guide (where finished CL2K posters
+                        sit); negative moves the logo up, positive down.
                     </>
                 )}{' '}
                 {((onScale && Math.round((scale ?? 1) * 100) !== 100) ||
@@ -3307,10 +3365,13 @@ const SquareArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
     useEffect(() => {
         if (!hasSrc) return undefined;
         let cancelled = false;
+        const aborter = new AbortController();
         const t = setTimeout(async () => {
             setPreviewing(true);
             try {
-                const blob = await cl2kMakerAPI.squarePreview(reqRef.current);
+                const blob = await cl2kMakerAPI.squarePreview(reqRef.current, {
+                    signal: aborter.signal,
+                });
                 if (!cancelled)
                     setPreviewUrl(prev => {
                         if (prev) URL.revokeObjectURL(prev);
@@ -3321,9 +3382,10 @@ const SquareArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
             } finally {
                 if (!cancelled) setPreviewing(false);
             }
-        }, 450);
+        }, 300);
         return () => {
             cancelled = true;
+            aborter.abort();
             clearTimeout(t);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -3427,11 +3489,14 @@ const SquareArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                     <h3 className="text-sm font-medium text-primary mb-2">Preview (1000×1000)</h3>
                     <div className="relative aspect-square bg-black rounded overflow-hidden flex items-center justify-center">
                         {hasSrc && previewUrl ? (
-                            <img
-                                src={previewUrl}
-                                alt="Square art preview"
-                                className="w-full h-full object-contain"
-                            />
+                            <>
+                                <img
+                                    src={previewUrl}
+                                    alt="Square art preview"
+                                    className="w-full h-full object-contain"
+                                />
+                                <PreviewRefreshing active={previewing} />
+                            </>
                         ) : (
                             <span className="text-xs text-tertiary px-4 text-center">
                                 {hasSrc ? 'Rendering preview…' : 'Pick or upload source art.'}
@@ -3543,10 +3608,13 @@ const BackgroundArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast 
     useEffect(() => {
         if (!hasSrc) return undefined;
         let cancelled = false;
+        const aborter = new AbortController();
         const t = setTimeout(async () => {
             setPreviewing(true);
             try {
-                const blob = await cl2kMakerAPI.backgroundPreview(reqRef.current);
+                const blob = await cl2kMakerAPI.backgroundPreview(reqRef.current, {
+                    signal: aborter.signal,
+                });
                 if (!cancelled)
                     setPreviewUrl(prev => {
                         if (prev) URL.revokeObjectURL(prev);
@@ -3557,9 +3625,10 @@ const BackgroundArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast 
             } finally {
                 if (!cancelled) setPreviewing(false);
             }
-        }, 450);
+        }, 300);
         return () => {
             cancelled = true;
+            aborter.abort();
             clearTimeout(t);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -3693,11 +3762,14 @@ const BackgroundArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast 
                     </div>
                     <div className="relative aspect-video bg-black rounded overflow-hidden flex items-center justify-center">
                         {hasSrc && previewUrl ? (
-                            <img
-                                src={previewUrl}
-                                alt="Background art preview"
-                                className="w-full h-full object-contain"
-                            />
+                            <>
+                                <img
+                                    src={previewUrl}
+                                    alt="Background art preview"
+                                    className="w-full h-full object-contain"
+                                />
+                                <PreviewRefreshing active={previewing} />
+                            </>
                         ) : (
                             <span className="text-xs text-tertiary px-4 text-center">
                                 {hasSrc ? 'Rendering preview…' : 'Pick or upload source art.'}

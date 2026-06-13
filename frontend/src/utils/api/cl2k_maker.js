@@ -43,9 +43,11 @@ const qs = params => {
 /**
  * POST JSON and return the raw response body as a Blob. Used for the binary
  * preview / .psd endpoints, which apiCore would corrupt by reading as text.
- * Mirrors apiCore's Bearer-token injection.
+ * Mirrors apiCore's Bearer-token injection. `signal` (optional AbortSignal)
+ * cancels the request — live previews abort a stale render when the sliders
+ * move again instead of letting requests pile up on the backend.
  */
-const postBlob = async (path, body) => {
+const postBlob = async (path, body, { signal } = {}) => {
     const headers = { 'Content-Type': 'application/json' };
     try {
         const token = localStorage.getItem(TOKEN_STORAGE_KEY);
@@ -57,6 +59,7 @@ const postBlob = async (path, body) => {
         method: 'POST',
         headers,
         body: JSON.stringify(body),
+        signal,
     });
     if (!resp.ok) {
         // Error bodies are JSON ({message, error_code}); surface the message.
@@ -142,19 +145,19 @@ export const cl2kMakerAPI = {
     logoProcessed: req => apiCore.post('/cl2k-maker/logo-processed', req),
 
     /** Render a preview JPEG without saving. Returns a Blob. */
-    preview: req => postBlob('/cl2k-maker/preview', req),
+    preview: (req, opts) => postBlob('/cl2k-maker/preview', req, opts),
 
     /** Render + write + cache + record provenance. */
     generate: req => apiCore.post('/cl2k-maker/generate', req),
 
     /** Render square art (1:1) without saving. Returns a JPEG Blob. */
-    squarePreview: req => postBlob('/cl2k-maker/square-preview', req),
+    squarePreview: (req, opts) => postBlob('/cl2k-maker/square-preview', req, opts),
 
     /** Render + file square art (`- SquareArt.jpg`). */
     squareGenerate: req => apiCore.post('/cl2k-maker/square-generate', req),
 
     /** Render background art (16:9) without saving. Returns a JPEG Blob. */
-    backgroundPreview: req => postBlob('/cl2k-maker/background-preview', req),
+    backgroundPreview: (req, opts) => postBlob('/cl2k-maker/background-preview', req, opts),
 
     /** Render + file background art (`- Background.jpg`, 1080p or 4K). */
     backgroundGenerate: req => apiCore.post('/cl2k-maker/background-generate', req),

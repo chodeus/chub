@@ -35,7 +35,7 @@ from backend.modules.cl2k_maker import (
     retext_poster,
     save_finished_poster,
 )
-from backend.util.cl2k import tmdb_art
+from backend.util.cl2k import geometry as geo, tmdb_art
 from backend.util.cl2k.image_fetch import TMDB_IMAGE_CDN, download as download_image
 from backend.util.cl2k.renderer import (
     process_logo,
@@ -304,7 +304,7 @@ def logo_processed(
     logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
     """Return the trimmed + whitened logo (PNG, base64) and its natural size, plus
-    the configured ``logo_max_width``. The frontend draws these bytes at the box
+    the recommended guide-box width. The frontend draws these bytes at the box
     derived from the logo geometry so the size/position sliders preview live —
     matching :func:`render_cl2k`'s placement without a render per drag."""
     raw = _resolve_logo_bytes(req.logo_path, req.logo_b64)
@@ -326,7 +326,7 @@ def logo_processed(
             "b64": base64.b64encode(png).decode(),
             "width": width,
             "height": height,
-            "max_width": cfg.logo_max_width,
+            "max_width": geo.LOGO_WIDTH_RECOMMENDED,
         },
     )
 
@@ -934,7 +934,6 @@ async def upload_poster(
                 blob,
                 logo_bytes,
                 kind=(kind or "movie").lower(),
-                logo_max_width=cfg.logo_max_width,
                 logo_scale=logo_scale,
                 logo_y_offset=logo_y_offset,
                 whiten=cfg.whiten_logo if whiten is None else whiten,

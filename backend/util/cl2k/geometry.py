@@ -24,17 +24,25 @@ ASPECT = (2, 3)
 
 # ----- logo placement (px on the 1000x1500 canvas) ---------------------------
 CENTER_X = 500
-LOGO_WIDTH_STD = 600           # guide "Main Logo Width" (x200->800). Refs render ~666.
-LOGO_WIDTH_MAX = 800           # guide "Max Logo Width" (x100->900) — hard cap
+LOGO_WIDTH_STD = 600  # guide "Main Logo Width" (x200->800). Refs render ~666.
+LOGO_WIDTH_RECOMMENDED = 700  # creator's own extra guide (x150->850) — "the one I
+#                                use the most for logo width"; the maker's default.
+LOGO_WIDTH_MAX = 800  # guide "Max Logo Width" (x100->900) — hard cap
 # CL2K rule: "only leave the Main-Logo *text* area if the logo is too small or
 # unreadable". A clear logo whose trimmed content is narrower than this would need
 # heavy upscaling to reach the ~600px box and render fuzzy, so we reject it and
 # draw the title wordmark instead. ~0.67x the standard box (so up to ~1.5x upscale
 # is allowed).
 LOGO_MIN_WIDTH = 400
-LOGO_ZONE_TOP = 1100           # logos must not extend above this y
-MAIN_LOGO_BOTTOM = 1300        # movie/show clear-logo bottom (refs measured ~1298)
-COLLECTION_LOGO_BOTTOM = 1300  # collection logo bottom (COLLECTION label below it)
+# Verified against the PSDs in refs/ (template + 3 finished posters, 2026-06-13):
+# all four embed identical guides — y = 1100 ("Main Logo Height"), 1319
+# ("Collection Logo Bottom"), 1352 ("Main Logo Bottom"), 1375 ("Gradient
+# Darkest") — and every finished poster's LOGO layer bottoms out at EXACTLY
+# 1352 (Wonka's boxy logo fills the full 1100→1352 zone). The old 1300 came
+# from measuring two off-template JPG refs; don't regress to it.
+LOGO_ZONE_TOP = 1100  # "Main Logo Height" — logos must not extend above this y
+MAIN_LOGO_BOTTOM = 1352  # "Main Logo Bottom" — movie/show/season clear-logo bottom
+COLLECTION_LOGO_BOTTOM = 1319  # "Collection Logo Bottom" (COLLECTION label below it)
 
 # ----- logo whitening (CL2K two-tone) -----------------------------------------
 # Real CL2K logos are black & white, not flat white silhouettes: coloured/bright
@@ -49,16 +57,18 @@ COLLECTION_LOGO_BOTTOM = 1300  # collection logo bottom (COLLECTION label below 
 #     a per-pixel rule can't see (the star inside the Dragon Ball "O").
 # If the result would be mostly black (a dark unsaturated logo would vanish into
 # the gradient) fall back to the flat white silhouette.
-WHITEN_KEY_BLACK = 0.30        # level black point of the max(sat,light) key
-WHITEN_KEY_WHITE = 0.40        # level white point (steep ramp = two-tone)
-WHITEN_DETAIL_SIGMA = 0.025    # neighborhood blur sigma, fraction of logo width
-WHITEN_DETAIL_LO = 0.14        # darker-than-neighborhood ramp start (luma delta)
-WHITEN_DETAIL_HI = 0.22        # ...and full-black point
-WHITEN_FALLBACK_MEAN = 0.30    # opaque-area key mean below this -> flat white
+WHITEN_KEY_BLACK = 0.30  # level black point of the max(sat,light) key
+WHITEN_KEY_WHITE = 0.40  # level white point (steep ramp = two-tone)
+WHITEN_DETAIL_SIGMA = 0.025  # neighborhood blur sigma, fraction of logo width
+WHITEN_DETAIL_LO = 0.14  # darker-than-neighborhood ramp start (luma delta)
+WHITEN_DETAIL_HI = 0.22  # ...and full-black point
+WHITEN_FALLBACK_MEAN = 0.30  # opaque-area key mean below this -> flat white
 
 # ----- text bands ------------------------------------------------------------
-COLLECTION_LABEL_Y = 1345      # centre of "COLLECTION", just below the logo (measured)
-SEASON_TEXT_Y = 1440           # centre of season/specials band (PSD; unverified vs refs)
+# Template type layers (refs/ PSDs): COLLECTION bbox y=1338-1362 → centre 1350;
+# SEASON/SPECIALS/LIMITED bbox y=1428-1452 → centre 1440.
+COLLECTION_LABEL_Y = 1350  # centre of "COLLECTION", just below the collection logo
+SEASON_TEXT_Y = 1440  # centre of the season/specials band
 
 # ----- gradient --------------------------------------------------------------
 # Vertical transparent->black ramp. The PSD's raster gradient blacks out from
@@ -80,11 +90,11 @@ GRADIENT_FULL_BLACK_Y = 1375
 # Real Arial is provided in-container by ttf-mscorefonts-installer and is
 # already present on macOS dev. Arial is proprietary — never commit it.
 LABEL_FONT_PX = 32
-LABEL_TRACKING = 800            # COLLECTION / SEASON / SPECIALS
-LABEL_TRACKING_LONG = 600       # "COMPLETE LIMITED SERIES" (longer string)
-TITLE_FONT_PX = 97              # main title line (logo-less fallback)
-TITLE_FONT_PX_SMALL = 48        # secondary title line
-TITLE_CENTER_Y = 1319           # centre of the MM2K "MIDDLE BOTTOM" band (1284-1354)
+LABEL_TRACKING = 800  # COLLECTION / SEASON / SPECIALS
+LABEL_TRACKING_LONG = 600  # "COMPLETE LIMITED SERIES" (longer string)
+TITLE_FONT_PX = 97  # main title line (logo-less fallback)
+TITLE_FONT_PX_SMALL = 48  # secondary title line
+TITLE_CENTER_Y = 1319  # centre of the MM2K "MIDDLE BOTTOM" band (1284-1354)
 TEXT_COLOR = "white"
 
 # Real-Arial candidates, first existing wins (mscorefonts in-container, macOS dev).
@@ -103,7 +113,7 @@ def resolve_font(bold: bool = False) -> Optional[str]:
 
     None lets ImageMagick fall back to its default font.
     """
-    for path in (_ARIAL_BOLD_CANDIDATES if bold else _ARIAL_REGULAR_CANDIDATES):
+    for path in _ARIAL_BOLD_CANDIDATES if bold else _ARIAL_REGULAR_CANDIDATES:
         if Path(path).exists():
             return path
     return None
@@ -115,21 +125,21 @@ def tracking_to_kerning(tracking: int, font_px: int = LABEL_FONT_PX) -> float:
 
 
 # ----- border ----------------------------------------------------------------
-BORDER_WIDTH = 26              # default white frame (matches border_replacerr)
+BORDER_WIDTH = 26  # default white frame (matches border_replacerr)
 BORDER_COLOR = "white"
 
 # ----- output (DAPS rules) ---------------------------------------------------
-OUTPUT_EXT = ".jpg"            # lowercase, per DAPS
+OUTPUT_EXT = ".jpg"  # lowercase, per DAPS
 # Real CL2K community posters encode at ~q99 with NO chroma subsampling (4:4:4).
 # The old q88 (+ libjpeg's default 4:2:0) made our output visibly softer and ~3x
 # smaller than a hand-made poster. q99 + 4:4:4 matches the hand-made reference
 # encode exactly.
-OUTPUT_QUALITY = 99            # was 88→95; match hand-made CL2K reference exactly
+OUTPUT_QUALITY = 99  # was 88→95; match hand-made CL2K reference exactly
 JPEG_SAMPLING_FACTOR = "1x1,1x1,1x1"  # 4:4:4 — no chroma subsampling (full colour)
-JPEG_PROGRESSIVE = True        # progressive scan (SOF2), as hand-made refs encode.
+JPEG_PROGRESSIVE = True  # progressive scan (SOF2), as hand-made refs encode.
 # Purely the storage byte-order, NOT a quality change (same pixels); matches the
 # reference convention and is often marginally smaller.
-TEXT_UPPERCASE = True          # text is ALWAYS all-caps
+TEXT_UPPERCASE = True  # text is ALWAYS all-caps
 
 # ----- bundled assets --------------------------------------------------------
 ASSET_DIR = Path(__file__).resolve().parents[2] / "assets" / "cl2k"
@@ -139,9 +149,11 @@ GRADIENT_PNG = ASSET_DIR / "gradient.png"
 # Each entry: (label, orientation, position). "x" = vertical line, "y" = horizontal.
 GUIDES = (
     ("Max logo width", "x", 100),
+    ("Recommended logo width 700", "x", 150),
     ("Logo width 600", "x", 200),
     ("Centre", "x", CENTER_X),
     ("Logo width 600", "x", 800),
+    ("Recommended logo width 700", "x", 850),
     ("Max logo width", "x", 900),
     ("Logo zone top", "y", LOGO_ZONE_TOP),
     ("Main logo bottom", "y", MAIN_LOGO_BOTTOM),

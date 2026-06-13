@@ -58,15 +58,6 @@ export const CL2K_MAKER_SCHEMA = {
         },
         // ─── Logo & text ───────────────────────────────────────────
         {
-            key: 'logo_max_width',
-            label: 'Logo Max Width (px)',
-            type: 'number',
-            section: 'Logo & Text',
-            placeholder: '600',
-            description:
-                'Target logo width on the 1000×1500 canvas (guide: 600 standard, 800 max).',
-        },
-        {
             key: 'whiten_logo',
             label: 'Whiten Logo',
             type: 'check_box',

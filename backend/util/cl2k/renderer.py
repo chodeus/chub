@@ -85,9 +85,7 @@ def _cover_resize(
     _blend_seam(img, width, avail)
 
 
-def _apply_crop(
-    img: Image, crop: Optional[Tuple[float, float, float, float]]
-) -> None:
+def _apply_crop(img: Image, crop: Optional[Tuple[float, float, float, float]]) -> None:
     """Crop ``img`` in place to a normalized ``(x, y, w, h)`` region (0..1), or no-op.
 
     Clamped to the image bounds. Shared by the fit + extend framings to isolate the
@@ -127,7 +125,9 @@ def _extend_fill(img: Image, width: int, fill_h: int, from_top: bool) -> bytes:
         s.blur(radius=0, sigma=max(8.0, fill_h / 24.0))
         if not from_top:
             # Fade DOWN to black (white at the seam -> black at the canvas edge).
-            with Image(width=width, height=fill_h, pseudo="gradient:white-black") as ramp:
+            with Image(
+                width=width, height=fill_h, pseudo="gradient:white-black"
+            ) as ramp:
                 s.composite(ramp, left=0, top=0, operator="multiply")
         s.format = "png"
         return s.make_blob()
@@ -298,7 +298,9 @@ def _whiten(logo: Image) -> None:
                 luma.alpha_channel = "off"
                 luma.transform_colorspace("gray")
                 with luma.clone() as detail:
-                    detail.blur(radius=0, sigma=max(2.0, logo.width * geo.WHITEN_DETAIL_SIGMA))
+                    detail.blur(
+                        radius=0, sigma=max(2.0, logo.width * geo.WHITEN_DETAIL_SIGMA)
+                    )
                     detail.composite(luma, operator="minus_src")  # blurred - luma
                     detail.level(black=geo.WHITEN_DETAIL_LO, white=geo.WHITEN_DETAIL_HI)
                     detail.negate()
@@ -438,20 +440,20 @@ def _place_logo(
 ) -> None:
     """Whiten, size and bottom-align the clear logo onto ``base``.
 
-    The guide-fit box targets ``max_width`` (the 600px guide by default) with
-    height clamped so the logo top never rises above ``LOGO_ZONE_TOP``.
-    ``logo_scale`` then multiplies that whole box (1.0 = strict guides), clamped
-    to the canvas. Hand-made references bust the guides routinely — measured
-    logos run ~846-881px wide (~85% of canvas) and boxy/sticker designs break
-    the y=1100 top guide rather than shrink to an unreadable stamp — so the
-    slider must be able to take ANY logo past the guide box, not only tall ones
-    (it previously relaxed just the height clamp, a no-op for wide logos).
+    The guide-fit box targets ``max_width`` (the 700px recommended guide by
+    default) with height clamped so the logo top never rises above
+    ``LOGO_ZONE_TOP``. ``logo_scale`` then multiplies that whole box (1.0 =
+    strict guides), clamped only to the canvas. The width guides (600/700/800)
+    are guidelines, not limits — hand-made references run ~846-881px wide, and
+    boxy/sticker designs break the y=1100 top guide rather than shrink to an
+    unreadable stamp — so the slider can take ANY logo past the guide box.
 
     ``logo_y_offset`` shifts the placement (px; positive = down) without changing
-    the size — the template's own note ("only leave the Main-Logo area if the
-    logo text is too small or unreadable") treats the vertical as judgement, and
-    hand-made posters hang oversized logos below the bottom guide (measured
-    Deuce Bigalow: top on the y=1100 line, bottom at y≈1349).
+    the size. At offset 0 the logo bottom sits exactly on the template's
+    "Main Logo Bottom" guide (y=1352; collections use 1319) — finished creator
+    PSDs in refs/ all bottom-align there pixel-exact (Deuce Bigalow measured
+    y≈1349 too), so the offset is an escape hatch for odd logo artwork, not a
+    routine adjustment.
     """
     logo_scale = max(0.25, min(float(logo_scale or 1.0), 3.0))
     logo_y_offset = max(-600, min(int(logo_y_offset or 0), 200))
@@ -599,7 +601,9 @@ def generate_text_logo(
     font = font_path or geo.resolve_font(bold=True)
     words = text.split()
     # The box the wordmark is normalised into: width 600, height (baseline-zone_top).
-    target_aspect = geo.LOGO_WIDTH_STD / max(1, geo.MAIN_LOGO_BOTTOM - geo.LOGO_ZONE_TOP)
+    target_aspect = geo.LOGO_WIDTH_STD / max(
+        1, geo.MAIN_LOGO_BOTTOM - geo.LOGO_ZONE_TOP
+    )
 
     # Pick the line count whose block aspect (widest line : total height) is closest
     # to the box. Aspect is scale-independent, so measure at a fixed reference size.
@@ -745,7 +749,7 @@ def render_cl2k(
     logo_bytes: Optional[bytes] = None,
     title: str = "",
     season_text: str = "",
-    logo_max_width: int = geo.LOGO_WIDTH_STD,
+    logo_max_width: int = geo.LOGO_WIDTH_RECOMMENDED,
     logo_scale: float = 1.0,
     logo_y_offset: int = 0,
     logo_flip_bytes: Optional[bytes] = None,  # B/W touch-up regions (mask PNG)
@@ -811,8 +815,14 @@ def render_cl2k(
                 )
             if logo_bytes:
                 _place_logo(
-                    base, logo_bytes, baseline, logo_max_width, whiten, logo_scale,
-                    logo_y_offset, flip_mask_bytes=logo_flip_bytes,
+                    base,
+                    logo_bytes,
+                    baseline,
+                    logo_max_width,
+                    whiten,
+                    logo_scale,
+                    logo_y_offset,
+                    flip_mask_bytes=logo_flip_bytes,
                 )
 
         label_kerning = geo.tracking_to_kerning(geo.LABEL_TRACKING)
@@ -821,14 +831,32 @@ def render_cl2k(
             # tighter tracking the PSD specifies so they fit the width.
             txt = band_label.upper()
             tracking = geo.LABEL_TRACKING_LONG if len(txt) > 16 else geo.LABEL_TRACKING
-            _draw_text(base, txt, geo.SEASON_TEXT_Y, label_font, geo.LABEL_FONT_PX,
-                       kerning=geo.tracking_to_kerning(tracking))
+            _draw_text(
+                base,
+                txt,
+                geo.SEASON_TEXT_Y,
+                label_font,
+                geo.LABEL_FONT_PX,
+                kerning=geo.tracking_to_kerning(tracking),
+            )
         elif kind == "collection":
-            _draw_text(base, "COLLECTION", geo.COLLECTION_LABEL_Y, label_font,
-                       geo.LABEL_FONT_PX, kerning=label_kerning)
+            _draw_text(
+                base,
+                "COLLECTION",
+                geo.COLLECTION_LABEL_Y,
+                label_font,
+                geo.LABEL_FONT_PX,
+                kerning=label_kerning,
+            )
         elif kind == "season" and season_text:
-            _draw_text(base, season_text.upper(), geo.SEASON_TEXT_Y, label_font,
-                       geo.LABEL_FONT_PX, kerning=label_kerning)
+            _draw_text(
+                base,
+                season_text.upper(),
+                geo.SEASON_TEXT_Y,
+                label_font,
+                geo.LABEL_FONT_PX,
+                kerning=label_kerning,
+            )
 
         _draw_border(base)
 
@@ -884,7 +912,7 @@ def overlay_logo(
     logo_bytes: bytes,
     *,
     kind: str = "movie",
-    logo_max_width: int = geo.LOGO_WIDTH_STD,
+    logo_max_width: int = geo.LOGO_WIDTH_RECOMMENDED,
     logo_scale: float = 1.0,
     logo_y_offset: int = 0,
     whiten: bool = True,
@@ -901,7 +929,12 @@ def overlay_logo(
     baseline = geo.logo_baseline((kind or "movie").lower())
     with Image(blob=image_bytes) as base:
         _place_logo(
-            base, logo_bytes, baseline, logo_max_width, whiten, logo_scale,
+            base,
+            logo_bytes,
+            baseline,
+            logo_max_width,
+            whiten,
+            logo_scale,
             logo_y_offset,
         )
         return _encode_jpeg(base)
@@ -914,11 +947,20 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="Render a CL2K poster (visual check).")
     ap.add_argument("--backdrop", required=True, help="source backdrop image")
     ap.add_argument("--logo", help="clear logo (PNG with alpha)")
-    ap.add_argument("--kind", default="movie", choices=["movie", "show", "collection", "season"])
+    ap.add_argument(
+        "--kind", default="movie", choices=["movie", "show", "collection", "season"]
+    )
     ap.add_argument("--title", default="", help="title for the text fallback")
     ap.add_argument("--season-text", default="", help="e.g. 'Season 1'")
-    ap.add_argument("--width", type=int, default=geo.LOGO_WIDTH_STD, help="logo width (600 or 800)")
-    ap.add_argument("--no-whiten", action="store_true", help="keep the logo's original colours")
+    ap.add_argument(
+        "--width",
+        type=int,
+        default=geo.LOGO_WIDTH_RECOMMENDED,
+        help="logo width (600 std / 700 recommended / 800 max)",
+    )
+    ap.add_argument(
+        "--no-whiten", action="store_true", help="keep the logo's original colours"
+    )
     ap.add_argument("--font", help="font file for text")
     ap.add_argument("--out", required=True, help="output .jpg path")
     args = ap.parse_args()
