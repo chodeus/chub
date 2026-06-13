@@ -1742,22 +1742,29 @@ const RenderPanel = ({
     const bdLabel = isAsis ? 'Poster image' : 'Backdrop';
 
     // ── File-as-is (finished poster) output ────────────────────────────────────
-    // Files a poster built OUTSIDE CHUB unchanged via /upload-poster — no logo, no
-    // gradient, no reframe; just the optional CL2K border. The image (an Upload or
-    // a GDrive grab) is fetched back to a File from its URL.
+    // File-as-is: take a finished poster (Upload or GDrive grab) and file it with
+    // minimal changes — optionally erase the old title (the Send to AI button bakes
+    // the cleaned art into the backdrop) and draw a new title — via /retext. At save
+    // apply_ai=false, so drawing the label costs no AI. No logo, gradient, or
+    // reframe; just the new label + optional CL2K border.
     const [asisBorder, setAsisBorder] = useState(true);
+    const [asisLabel, setAsisLabel] = useState(''); // new title drawn on the poster
+    const [asisTextY, setAsisTextY] = useState(0.96); // vertical position (CL2K band = 96%)
     const [asisPreview, setAsisPreview] = useState(null); // { b64, sig }
     const [asisPreviewing, setAsisPreviewing] = useState(false);
     const [asisSaving, setAsisSaving] = useState(false);
 
-    const asisFileFromSource = useCallback(async () => {
+    // The source poster as a data URL — /retext decodes it and draws the new label.
+    const asisDataUrlFromSource = useCallback(async () => {
         if (!backdropUrl) return null;
-        const resp = await fetch(backdropUrl);
-        const blob = await resp.blob();
-        return new File([blob], customBackdrop?.name || 'poster.jpg', {
-            type: blob.type || 'image/jpeg',
+        const blob = await (await fetch(backdropUrl)).blob();
+        return new Promise((resolve, reject) => {
+            const fr = new FileReader();
+            fr.onload = () => resolve(fr.result);
+            fr.onerror = reject;
+            fr.readAsDataURL(blob);
         });
-    }, [backdropUrl, customBackdrop]);
+    }, [backdropUrl]);
 
     // Send to AI — erase the masked text from the backdrop via the configured
     // inpainter, then adopt the cleaned image as the (custom) backdrop so the
@@ -1832,54 +1839,86 @@ const RenderPanel = ({
         toast,
     ]);
 
-    const asisMeta = useMemo(
+    // Identity passed to /retext (filename + Plex match). Season info comes from
+    // the Poster tab's own season controls, so there's no separate field here.
+    const asisIds = useMemo(
         () => ({
-            kind: effectiveKind,
+            kind: isSeasonPoster ? 'season' : effectiveKind,
+            season_number: isSeasonPoster ? Number(seasonNumber) : null,
             title: item.title,
             tmdb_id: item.tmdb_id,
             year: item.year,
             tvdb_id: item.tvdb_id,
             imdb_id: item.imdb_id,
-            border: asisBorder,
         }),
-        [effectiveKind, item, asisBorder]
+        [isSeasonPoster, seasonNumber, effectiveKind, item]
     );
 
-    // Signature of the inputs that affect the as-is render (the image + border). A
-    // rendered preview is shown only while it still matches, so changing either
-    // drops the stale preview — no setState-in-effect.
+    // Signature of the inputs that affect the as-is render (image + label + border).
+    // A rendered preview is shown only while it still matches, so changing any of
+    // them drops the stale preview — no setState-in-effect.
     const asisSig = useMemo(
-        () => JSON.stringify([backdropUrl, asisBorder]),
-        [backdropUrl, asisBorder]
+        () => JSON.stringify([backdropUrl, asisLabel, asisTextY, asisBorder]),
+        [backdropUrl, asisLabel, asisTextY, asisBorder]
     );
 
+    // apply_ai=false: draws the (optional) new label + border on whatever the
+    // backdrop currently is (the Send to AI button has already baked any erase in),
+    // so this never spends AI credits.
     const runAsisPreview = useCallback(async () => {
-        const f = await asisFileFromSource();
-        if (!f) return;
+        const image_b64 = await asisDataUrlFromSource();
+        if (!image_b64) return;
         setAsisPreviewing(true);
         try {
-            const resp = await cl2kMakerAPI.uploadPoster(f, { ...asisMeta, preview: true });
+            const resp = await cl2kMakerAPI.retext({
+                image_b64,
+                mask_b64: null,
+                apply_ai: false,
+                label_text: asisLabel,
+                text_y: asisTextY,
+                border: asisBorder,
+                preview: true,
+                ...asisIds,
+            });
             setAsisPreview({ b64: resp?.data?.preview_b64 || null, sig: asisSig });
         } catch (err) {
             toast.error(err.message || 'Preview failed');
         } finally {
             setAsisPreviewing(false);
         }
-    }, [asisFileFromSource, asisMeta, asisSig, toast]);
+    }, [asisDataUrlFromSource, asisLabel, asisTextY, asisBorder, asisIds, asisSig, toast]);
 
     const runAsisSave = useCallback(async () => {
-        const f = await asisFileFromSource();
-        if (!f) return;
+        const image_b64 = await asisDataUrlFromSource();
+        if (!image_b64) return;
         setAsisSaving(true);
         try {
-            const resp = await cl2kMakerAPI.uploadPoster(f, { ...asisMeta, ...saveTargets.fields });
+            const resp = await cl2kMakerAPI.retext({
+                image_b64,
+                mask_b64: null,
+                apply_ai: false,
+                label_text: asisLabel,
+                text_y: asisTextY,
+                border: asisBorder,
+                preview: false,
+                ...asisIds,
+                ...saveTargets.fields,
+            });
             savedToast(toast, resp?.data);
         } catch (err) {
             toast.error(err.message || 'Save failed');
         } finally {
             setAsisSaving(false);
         }
-    }, [asisFileFromSource, asisMeta, saveTargets.fields, toast]);
+    }, [
+        asisDataUrlFromSource,
+        asisLabel,
+        asisTextY,
+        asisBorder,
+        asisIds,
+        saveTargets.fields,
+        toast,
+    ]);
 
     const asisFresh = !!(asisPreview?.b64 && asisPreview.sig === asisSig);
     const asisShownSrc = asisFresh ? `data:image/jpeg;base64,${asisPreview.b64}` : backdropUrl;
@@ -2150,22 +2189,20 @@ const RenderPanel = ({
                         </div>
                     )}
 
-                    {!isAsis && (
-                        <AiPanel
-                            config={config}
-                            removeText={removeText}
-                            setRemoveText={setRemoveText}
-                            brushSize={brushSize}
-                            setBrushSize={setBrushSize}
-                            backdropUrl={backdropUrl}
-                            onMaskChange={onMaskChange}
-                            hasMask={!!maskB64}
-                            aiBusy={aiErasing}
-                            onSendToAi={runBackdropErase}
-                            aiPrompt={aiPrompt}
-                            setAiPrompt={setAiPrompt}
-                        />
-                    )}
+                    <AiPanel
+                        config={config}
+                        removeText={removeText}
+                        setRemoveText={setRemoveText}
+                        brushSize={brushSize}
+                        setBrushSize={setBrushSize}
+                        backdropUrl={backdropUrl}
+                        onMaskChange={onMaskChange}
+                        hasMask={!!maskB64}
+                        aiBusy={aiErasing}
+                        onSendToAi={runBackdropErase}
+                        aiPrompt={aiPrompt}
+                        setAiPrompt={setAiPrompt}
+                    />
                 </div>
 
                 {/* Right: preview + output — sticky so it stays in view while the long
@@ -2247,6 +2284,36 @@ const RenderPanel = ({
                     {isAsis ? (
                         <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-2">
                             <h3 className="text-sm font-medium text-primary">Output</h3>
+                            <label className="flex flex-col gap-1 text-sm text-secondary">
+                                <span>New title (drawn on the poster — optional)</span>
+                                <input
+                                    type="text"
+                                    value={asisLabel}
+                                    onChange={e => setAsisLabel(e.target.value)}
+                                    placeholder="leave blank to keep the poster as-is"
+                                    className="bg-surface border border-border rounded px-2 py-1 text-sm text-primary"
+                                />
+                            </label>
+                            <label className="flex items-center gap-2 text-sm text-secondary">
+                                <span className="w-20">Position</span>
+                                <input
+                                    type="range"
+                                    min="0"
+                                    max="100"
+                                    value={Math.round(asisTextY * 100)}
+                                    onChange={e => setAsisTextY(Number(e.target.value) / 100)}
+                                    className="flex-1"
+                                />
+                                <span className="w-10 text-right">
+                                    {Math.round(asisTextY * 100)}%
+                                </span>
+                            </label>
+                            <p className="text-xs text-tertiary">
+                                Drawn in the CL2K font. 96% is the locked CL2K band position (the
+                                season/specials line). Brush over the old title and{' '}
+                                <span className="text-secondary">Send to AI</span> first to remove
+                                it, then type the new one here.
+                            </p>
                             <label className="flex items-center gap-2 text-sm text-primary font-medium">
                                 <input
                                     type="checkbox"
@@ -2269,8 +2336,8 @@ const RenderPanel = ({
                                 Save poster
                             </LoadingButton>
                             <p className="text-xs text-tertiary">
-                                Files the image unchanged (just the optional border), DAPS-named —
-                                no logo, gradient, or reframe.
+                                Files the poster (new title + optional border, DAPS-named) — no
+                                logo, gradient, or reframe. Drawing the label costs no AI.
                             </p>
                         </div>
                     ) : (
