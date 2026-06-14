@@ -3,6 +3,7 @@ import { configAPI } from '../../../utils/api/config.js';
 import { SETTINGS_MODULES } from '../../../utils/constants/settings_schema.js';
 import { useModuleSchema } from '../../../hooks/useModuleSchema.js';
 import { shouldShowField } from '../../../utils/forms/conditionalFields.js';
+import { useInstancesData } from '../../../hooks/useInstancesData.js';
 import { FieldRegistry } from '../../../components/fields/FieldRegistry.jsx';
 import { Accordion } from '../../../components/ui/Accordion.jsx';
 import { AccordionItem } from '../../../components/ui/AccordionItem.jsx';
@@ -52,6 +53,11 @@ const ModuleSettingsContent = () => {
     const config = useConfig(); // Clean access to configuration data
     const { registerToolbar, clearToolbar } = useToolbar();
     const { schemas: dynamicSchemas } = useModuleSchema();
+    // Instances config (radarr/sonarr/lidarr/plex) for schema conditionals —
+    // e.g. the music fields gated on a Lidarr instance being configured
+    // (condition: service_configured, api_lookup: 'instances').
+    const { instancesData } = useInstancesData();
+    const conditionApiData = useMemo(() => ({ instances: instancesData || {} }), [instancesData]);
 
     // Simplified state management for the UI
     const [expandedModules, setExpandedModules] = useState([]);
@@ -298,7 +304,13 @@ const ModuleSettingsContent = () => {
                                         // current values (e.g. AI Endpoint only shows for the
                                         // providers that use it). Section-scoped data so the
                                         // dependent field name (e.g. ai_provider) resolves.
-                                        .filter(f => shouldShowField(f, formData[module.key] || {}))
+                                        .filter(f =>
+                                            shouldShowField(
+                                                f,
+                                                formData[module.key] || {},
+                                                conditionApiData
+                                            )
+                                        )
                                         .map((field, fieldIndex, visibleFields) => {
                                             try {
                                                 // Section divider: when a field's `section` differs from

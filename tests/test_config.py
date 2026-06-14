@@ -52,6 +52,26 @@ def test_asset_renamerr_defaults():
     assert config.notifications.asset_renamerr == {}
 
 
+def test_poster_renamerr_music_defaults():
+    """Music (Lidarr) artwork options default to off / local-only and the
+    config round-trips them."""
+    pr = ChubConfig().poster_renamerr
+    assert pr.music_lock_artist_art is False
+    assert pr.music_lma_sidecars is False
+    assert pr.music_source_dirs == []
+
+    loaded = ChubConfig(
+        poster_renamerr={
+            "music_lock_artist_art": True,
+            "music_lma_sidecars": True,
+            "music_source_dirs": ["/music/art"],
+        }
+    )
+    assert loaded.poster_renamerr.music_lock_artist_art is True
+    assert loaded.poster_renamerr.music_lma_sidecars is True
+    assert loaded.poster_renamerr.music_source_dirs == ["/music/art"]
+
+
 def test_asset_renamerr_banner_direct_combo_loads():
     """banner + plex apply must NOT be a hard validation error — the config
     has to stay loadable while a user toggles apply_method (the incompatibility

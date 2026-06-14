@@ -236,25 +236,30 @@ class BorderReplacerr(ChubModule):
             raise
 
     def replace_borders_with_image(
-        self, original_file: str, renamed_file: str, border_image_path: str
+        self,
+        original_file: str,
+        renamed_file: str,
+        border_image_path: str,
+        target_size: Tuple[int, int] = (1000, 1500),
     ) -> bool:
-        """Composite a 1000×1500 PNG border over a poster.
+        """Composite a PNG border over a poster at ``target_size``.
 
         The border PNG must have an opaque decorated outer ring and a
-        transparent rectangular center where the poster shows through.
-        Final output is 1000×1500 RGB.
+        transparent rectangular center where the poster shows through. Final
+        output is ``target_size`` RGB — portrait 1000×1500 for posters/artist
+        art, square 1000×1000 for album covers.
         """
         try:
             with Image.open(original_file) as image:
                 # Skip the resample when the source is already target size
-                # (often, since our own output is 1000x1500).
-                if image.size != (1000, 1500):
-                    image = image.resize((1000, 1500))
+                # (often, since our own output is the same size).
+                if image.size != target_size:
+                    image = image.resize(target_size)
                 poster = image.convert("RGBA")
             with Image.open(border_image_path) as border:
                 overlay = border.convert("RGBA")
-                if overlay.size != (1000, 1500):
-                    overlay = overlay.resize((1000, 1500))
+                if overlay.size != target_size:
+                    overlay = overlay.resize(target_size)
             out_img = Image.alpha_composite(poster, overlay).convert("RGB")
             if self._save_if_changed(out_img, renamed_file):
                 self.logger.debug(
@@ -277,7 +282,14 @@ class BorderReplacerr(ChubModule):
             # can tally it instead of silently counting it as processed.
             return None
 
-    def replace_borders(self, original_file, renamed_file, border_color, border_width):
+    def replace_borders(
+        self,
+        original_file,
+        renamed_file,
+        border_color,
+        border_width,
+        target_size: Tuple[int, int] = (1000, 1500),
+    ):
         try:
             with Image.open(original_file) as image:
                 width, height = image.size
@@ -293,8 +305,8 @@ class BorderReplacerr(ChubModule):
                 new_height = cropped.height + 2 * border_width
                 out_img = Image.new("RGB", (new_width, new_height), border_color)
                 out_img.paste(cropped, (border_width, border_width))
-                if out_img.size != (1000, 1500):
-                    out_img = out_img.resize((1000, 1500))
+                if out_img.size != target_size:
+                    out_img = out_img.resize(target_size)
                 out_img = out_img.convert("RGB")
 
                 if self._save_if_changed(out_img, renamed_file):
@@ -314,7 +326,13 @@ class BorderReplacerr(ChubModule):
             )
             return None  # None = failure (vs False = no change needed)
 
-    def remove_borders(self, original_file, renamed_file, border_width):
+    def remove_borders(
+        self,
+        original_file,
+        renamed_file,
+        border_width,
+        target_size: Tuple[int, int] = (1000, 1500),
+    ):
         try:
             with Image.open(original_file) as image:
                 width, height = image.size
@@ -326,8 +344,8 @@ class BorderReplacerr(ChubModule):
                         height - border_width,
                     )
                 )
-                if cropped.size != (1000, 1500):
-                    cropped = cropped.resize((1000, 1500))
+                if cropped.size != target_size:
+                    cropped = cropped.resize(target_size)
                 cropped = cropped.convert("RGB")
 
                 if self._save_if_changed(cropped, renamed_file):
@@ -572,6 +590,13 @@ class BorderReplacerr(ChubModule):
                 original_file = asset["original_file"]
                 renamed_file = asset["renamed_file"]
                 title = asset["title"]
+                # Album covers are square (1:1); everything else stays portrait
+                # 1000×1500. Artist posters are portrait, so only "album" flips.
+                target_size = (
+                    (1000, 1000)
+                    if asset.get("asset_type") == "album"
+                    else (1000, 1500)
+                )
                 if border_paths:
                     action, detail = "composited", os.path.basename(variant)
                     if dry_run:
@@ -580,7 +605,7 @@ class BorderReplacerr(ChubModule):
                         )
                         return True, title, action, detail, original_file, renamed_file, sig
                     result = self.replace_borders_with_image(
-                        original_file, renamed_file, variant
+                        original_file, renamed_file, variant, target_size
                     )
                 elif border_colors:
                     action, detail = "replaced", variant
@@ -590,7 +615,11 @@ class BorderReplacerr(ChubModule):
                         )
                         return True, title, action, detail, original_file, renamed_file, sig
                     result = self.replace_borders(
-                        original_file, renamed_file, variant, self.config.border_width
+                        original_file,
+                        renamed_file,
+                        variant,
+                        self.config.border_width,
+                        target_size,
                     )
                 else:
                     action, detail = "removed", ""
@@ -600,7 +629,10 @@ class BorderReplacerr(ChubModule):
                         )
                         return True, title, action, detail, original_file, renamed_file, sig
                     result = self.remove_borders(
-                        original_file, renamed_file, self.config.border_width
+                        original_file,
+                        renamed_file,
+                        self.config.border_width,
+                        target_size,
                     )
                 return result, title, action, detail, original_file, renamed_file, sig
 

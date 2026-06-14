@@ -18,11 +18,14 @@ def test_build_indexes_movie_by_title_and_guids():
             "guids": {"tmdb": "27205", "imdb": "tt1375666"},
         }
     ]
-    movie_idx, show_idx, season_idx, coll_idx = PosterUploader._build_indexes(cache)
+    movie_idx, show_idx, season_idx, coll_idx, artist_idx, album_idx = (
+        PosterUploader._build_indexes(cache)
+    )
     assert "title:inception" in movie_idx
     assert "tmdb:27205" in movie_idx
     assert "imdb:tt1375666" in movie_idx
     assert show_idx == {} and season_idx == {} and coll_idx == {}
+    assert artist_idx == {} and album_idx == {}
 
 
 def test_build_indexes_show_with_no_season_indexed_as_show():
@@ -34,7 +37,7 @@ def test_build_indexes_show_with_no_season_indexed_as_show():
             "guids": {"tvdb": "999"},
         }
     ]
-    _, show_idx, season_idx, _ = PosterUploader._build_indexes(cache)
+    _, show_idx, season_idx, *_ = PosterUploader._build_indexes(cache)
     assert "title:showname" in show_idx
     assert "tvdb:999" in show_idx
     assert season_idx == {}
@@ -49,7 +52,7 @@ def test_build_indexes_season_indexed_separately():
             "guids": {"tvdb": "999"},
         }
     ]
-    _, show_idx, season_idx, _ = PosterUploader._build_indexes(cache)
+    _, show_idx, season_idx, *_ = PosterUploader._build_indexes(cache)
     assert show_idx == {}
     assert "title:showname:S2" in season_idx
     assert "tvdb:999:S2" in season_idx
@@ -57,7 +60,7 @@ def test_build_indexes_season_indexed_separately():
 
 def test_build_indexes_collection():
     cache = [{"asset_type": "collection", "normalized_title": "marvelcinematic"}]
-    _, _, _, coll_idx = PosterUploader._build_indexes(cache)
+    _, _, _, coll_idx, _, _ = PosterUploader._build_indexes(cache)
     assert "title:marvelcinematic" in coll_idx
 
 

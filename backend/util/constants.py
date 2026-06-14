@@ -78,6 +78,15 @@ tvdb_id_regex = re.compile(r"(?i)\btvdb(?:id[-_\s]*|[-_\s])(\d+)\b")
 # Matches strings like "imdb-tt1234567", "imdb_tt1234567", or "imdb tt1234567", capturing the "tt" plus digits as the IMDb ID
 imdb_id_regex: Pattern = re.compile(r"imdb[-_\s](tt\d+)")
 
+# Matches a MusicBrainz id tag: "mbid-<uuid>", "mbid_<uuid>", "mbid <uuid>",
+# "mbid:<uuid>" (case-insensitive), capturing the canonical UUID. Used to
+# identify custom music art (artist/album) by MusicBrainz id in a filename or
+# folder, mirroring the tmdb/tvdb id tags.
+mbid_id_regex: Pattern = re.compile(
+    r"(?i)\bmbid[-_\s:]*"
+    r"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\b"
+)
+
 # Remove bracketed blocks containing TMDB, TVDB, or IMDb IDs. The tmdb/tvdb
 # branches accept the optional "id" suffix (e.g. {tvdbid-123}) so block
 # stripping stays consistent with tmdb_id_regex/tvdb_id_regex extraction —
@@ -87,7 +96,8 @@ id_content_regex = re.compile(
     r"\s*[\{\[]\s*(?:"
     r"tmdb(?:id[-_\s]*|[-_\s])\d+|"
     r"tvdb(?:id[-_\s]*|[-_\s])\d+|"
-    r"imdb(?:[-_\s](?:tt)?\d+)"
+    r"imdb(?:[-_\s](?:tt)?\d+)|"
+    r"mbid[-_\s:]*[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
     r")\s*[\}\]]",
     flags=re.IGNORECASE,
 )
