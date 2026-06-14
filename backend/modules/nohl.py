@@ -935,11 +935,11 @@ class Nohl(ChubModule):
                     [
                         ["Metric", "Count"],
                         [
-                            "Total Scanned Movies",
+                            "Total Non-Hardlinked Movies",
                             summary.get("total_scanned_movies", 0),
                         ],
                         [
-                            "Total Scanned Episodes",
+                            "Total Non-Hardlinked Episodes",
                             summary.get("total_scanned_series", 0),
                         ],
                         [
