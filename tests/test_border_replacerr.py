@@ -114,6 +114,34 @@ def test_replace_borders_with_image_composites(tmp_path):
         assert _close(result.getpixel((500, 750)), (255, 0, 0))
 
 
+def test_replace_borders_with_image_square_target(tmp_path):
+    """Album covers are 1:1 — passing target_size=(1000,1000) yields a square
+    output rather than the portrait default."""
+    poster_path = tmp_path / "cover.jpg"
+    Image.new("RGB", (1500, 1500), (0, 255, 0)).save(poster_path, "JPEG")
+    border_path = tmp_path / "border.png"
+    Image.new("RGBA", (1000, 1000), (0, 0, 0, 0)).save(border_path, "PNG")
+
+    out_path = tmp_path / "out.jpg"
+    br = _make_br()
+    assert br.replace_borders_with_image(
+        str(poster_path), str(out_path), str(border_path), (1000, 1000)
+    )
+    with Image.open(out_path) as result:
+        assert result.size == (1000, 1000)
+
+
+def test_remove_borders_square_target(tmp_path):
+    """remove_borders honours a square target_size for album covers."""
+    src = tmp_path / "cover.jpg"
+    Image.new("RGB", (1100, 1100), (10, 20, 30)).save(src, "JPEG")
+    out_path = tmp_path / "out.jpg"
+    br = _make_br()
+    assert br.remove_borders(str(src), str(out_path), 25, (1000, 1000))
+    with Image.open(out_path) as result:
+        assert result.size == (1000, 1000)
+
+
 def test_bundled_borders_dir_exists():
     """Sanity-check that the bundled asset tree shipped with the module."""
     assert _BUNDLED_BORDERS_DIR.is_dir()

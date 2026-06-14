@@ -151,3 +151,54 @@ def test_collection_upsert_refreshes_changed_id(db):
         fetch_one=True,
     )
     assert row["tmdb_id"] == 200
+
+
+def test_album_upsert_round_trips_parent_linkage(db):
+    """An album upserts with asset_type='album', its own MusicBrainz id, and
+    the parent artist's MBID/title — keyed parent-scoped so it's distinct from
+    a same-titled album under another artist."""
+    album = {
+        "title": "Greatest Hits",
+        "normalized_title": normalize_titles("Greatest Hits"),
+        "year": None,
+        "musicbrainz_id": "album-mb-1",
+        "parent_musicbrainz_id": "artist-mb-1",
+        "parent_title": "Queen",
+        "alternate_titles": [],
+        "normalized_alternate_titles": [],
+    }
+    db.media.upsert(album, "album", "lidarr", "lidarr_main")
+    row = db.media.execute_query(
+        "SELECT asset_type, musicbrainz_id, parent_musicbrainz_id, parent_title "
+        "FROM media_cache WHERE musicbrainz_id='album-mb-1'",
+        fetch_one=True,
+    )
+    assert row["asset_type"] == "album"
+    assert row["parent_musicbrainz_id"] == "artist-mb-1"
+    assert row["parent_title"] == "Queen"
+
+
+def test_album_identity_is_parent_scoped(db):
+    """Two artists' identically-titled, MBID-less albums must NOT collide into
+    one row (distinct identity via parent scoping)."""
+    base = {
+        "year": None,
+        "alternate_titles": [],
+        "normalized_alternate_titles": [],
+        "title": "Greatest Hits",
+        "normalized_title": normalize_titles("Greatest Hits"),
+        "musicbrainz_id": None,
+    }
+    db.media.upsert(
+        {**base, "parent_title": "Queen", "parent_musicbrainz_id": "q"},
+        "album", "lidarr", "lidarr_main",
+    )
+    db.media.upsert(
+        {**base, "parent_title": "ABBA", "parent_musicbrainz_id": "a"},
+        "album", "lidarr", "lidarr_main",
+    )
+    row = db.media.execute_query(
+        "SELECT COUNT(*) AS n FROM media_cache WHERE asset_type='album'",
+        fetch_one=True,
+    )
+    assert row["n"] == 2

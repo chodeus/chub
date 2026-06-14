@@ -42,7 +42,12 @@ class MediaCache(DatabaseBase):
         musicbrainz = norm_str(item.get("musicbrainz_id"))
 
         # choose stable cross-source id
-        if asset_type == "artist" and musicbrainz:
+        if asset_type == "album" and musicbrainz:
+            # Album MBID is unique, but scope under the artist MBID when known
+            # so the identity is self-describing and collision-proof.
+            parent_mb = norm_str(item.get("parent_musicbrainz_id"))
+            id_tag = f"mb:{parent_mb}:{musicbrainz}" if parent_mb else f"mb:{musicbrainz}"
+        elif asset_type == "artist" and musicbrainz:
             id_tag = f"mb:{musicbrainz}"
         elif imdb:
             id_tag = f"imdb:{imdb.lower()}"
@@ -50,6 +55,14 @@ class MediaCache(DatabaseBase):
             id_tag = f"tmdb:{tmdb}"
         elif asset_type != "movie" and tvdb:
             id_tag = f"tvdb:{tvdb}"
+        elif asset_type == "album":
+            # No album MBID — fall back to a parent-scoped title so two artists'
+            # identically-named albums ("Greatest Hits") don't collide.
+            parent_norm = norm_str(
+                item.get("parent_normalized_title") or item.get("parent_title")
+            )
+            base = f"{parent_norm}::{title_key}" if parent_norm else title_key
+            id_tag = f"title:{base}|y:{year_key}"
         else:
             id_tag = f"title:{title_key}|y:{year_key}"
 
@@ -81,6 +94,8 @@ class MediaCache(DatabaseBase):
             "tvdb_id",
             "imdb_id",
             "musicbrainz_id",
+            "parent_musicbrainz_id",
+            "parent_title",
             "folder",
             "root_folder",
             "media_file",
@@ -147,14 +162,18 @@ class MediaCache(DatabaseBase):
             INSERT INTO media_cache
                 (identity_key, asset_type, title, normalized_title,
                 alternate_titles, normalized_alternate_titles,
-                year, tmdb_id, tvdb_id, imdb_id, musicbrainz_id, folder, root_folder, media_file, tags,
+                year, tmdb_id, tvdb_id, imdb_id, musicbrainz_id,
+                parent_musicbrainz_id, parent_title,
+                folder, root_folder, media_file, tags,
                 season_number, matched, instance_name, source, poster_url, arr_id,
                 status, rating, studio, edition, runtime, language, monitored, has_content, genre)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(identity_key)
             DO UPDATE SET
                 title=excluded.title,
                 year=excluded.year,
+                parent_musicbrainz_id=excluded.parent_musicbrainz_id,
+                parent_title=excluded.parent_title,
                 -- Refresh secondary IDs too: when the row is keyed on one id
                 -- (e.g. imdb) and a *different* id changes on the *arr's side
                 -- (TVDb in particular re-issues ids), the stale value would
@@ -198,6 +217,8 @@ class MediaCache(DatabaseBase):
                 record["tvdb_id"],
                 record["imdb_id"],
                 record.get("musicbrainz_id") or None,
+                record.get("parent_musicbrainz_id") or None,
+                record.get("parent_title") or None,
                 record["folder"],
                 record.get("root_folder") or None,
                 record.get("media_file") or None,

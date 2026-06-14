@@ -388,8 +388,14 @@ class Connector:
                     "Lidarr": "artist",
                 }.get(client.instance_type, "show")
 
-                # Get all media with built-in retry logic from improved ARR client
-                raw_media = client.get_all_media()
+                # Get all media with built-in retry logic from improved ARR client.
+                # Lidarr needs include_episode=True so each artist's albums are
+                # fetched (one parallel /album call per artist) and surface as
+                # asset_type="album" rows; Radarr/Sonarr carry their child data
+                # in the main payload, so they stay on the cheap path.
+                raw_media = client.get_all_media(
+                    include_episode=(client.instance_type == "Lidarr")
+                )
                 if not raw_media:
                     return SyncResult(
                         instance_name=instance_config.name,
@@ -404,15 +410,37 @@ class Connector:
 
                 # Sync to database with enhanced metadata
                 # The sync_for_instance method will automatically use upsert_with_metadata
-                # when genres or cast_data are present in the media items
+                # when genres or cast_data are present in the media items.
+                #
+                # Partition by each row's own asset_type before syncing.
+                # sync_for_instance scopes its staleness comparison to one
+                # (instance, asset_type) pair, so Lidarr's mixed artist/album
+                # rows must be synced as two groups. Movies/shows are a single
+                # group, so this is a no-op for them.
                 try:
-                    self.db.media.sync_for_instance(
-                        instance_config.name,
-                        client.instance_type,
-                        asset_type,
-                        fresh_media,
-                        logger,
-                    )
+                    rows_by_type: Dict[str, List[Dict]] = {}
+                    for row in fresh_media:
+                        rows_by_type.setdefault(
+                            row.get("asset_type") or asset_type, []
+                        ).append(row)
+                    # Always sync every asset_type this instance can emit, even
+                    # when a type is empty this run — otherwise sync_for_instance
+                    # (scoped to one asset_type) never runs for it and its stale
+                    # rows are never purged. A Lidarr artist can drop all albums,
+                    # so 'album' must still be synced (with []) to delete them.
+                    types_to_sync = set(rows_by_type)
+                    if asset_type == "artist":
+                        types_to_sync |= {"artist", "album"}
+                    else:
+                        types_to_sync.add(asset_type)
+                    for row_asset_type in types_to_sync:
+                        self.db.media.sync_for_instance(
+                            instance_config.name,
+                            client.instance_type,
+                            row_asset_type,
+                            rows_by_type.get(row_asset_type, []),
+                            logger,
+                        )
 
                     return SyncResult(
                         instance_name=instance_config.name,
@@ -488,20 +516,44 @@ class Connector:
                         season_row["cast_data"] = show["cast_data"]
                     fresh_media.append(season_row)
         elif asset_type == "artist":
-            # Create entries for main artist and each album, preserving all metadata
+            from backend.util.normalization import normalize_titles
+
+            # Create entries for the main artist and each album. Albums become
+            # first-class asset_type="album" rows keyed by their own MusicBrainz
+            # ID (foreign_album_id) and scoped to the parent artist, so custom
+            # album covers can be matched/applied independently. (This replaces
+            # the older dormant "artist"+positional-season_number album rows,
+            # which dropped the album identity and could never be matched.)
             for artist in raw_media:
                 # Main artist entry - preserve all metadata fields
                 artist_row = dict(artist)
                 artist_row["season_number"] = None
+                artist_row["parent_musicbrainz_id"] = None
+                artist_row["parent_title"] = None
                 fresh_media.append(artist_row)
+
+                artist_title = artist.get("title")
+                artist_mbid = artist.get("musicbrainz_id")
 
                 # Album entries - inherit metadata from parent artist.
                 # Lidarr normalize returns seasons=None when include_episode=False,
                 # so coerce to [] to avoid "NoneType is not iterable".
                 for season in artist.get("seasons") or []:
-                    album_row = dict(artist)  # Copy all parent artist metadata
-                    album_row["season_number"] = season.get("season_number")
-                    album_row["asset_type"] = "artist"
+                    album_title = season.get("album_title") or ""
+                    album_row = dict(artist)  # Copy parent artist metadata
+                    album_row["asset_type"] = "album"
+                    album_row["season_number"] = None
+                    album_row["title"] = album_title
+                    album_row["normalized_title"] = normalize_titles(album_title)
+                    # Album-level identity + parent linkage
+                    album_row["musicbrainz_id"] = season.get("foreign_album_id")
+                    album_row["parent_musicbrainz_id"] = artist_mbid
+                    album_row["parent_title"] = artist_title
+                    album_row["arr_id"] = season.get("album_id")
+                    album_row["monitored"] = season.get("monitored")
+                    # Album titles don't share the artist's alternate titles.
+                    album_row["alternate_titles"] = None
+                    album_row["normalized_alternate_titles"] = None
                     # Preserve genres and cast_data from parent artist for each album
                     if "genres" in artist:
                         album_row["genres"] = artist["genres"]

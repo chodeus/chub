@@ -130,6 +130,11 @@ class SchemaManager:
                 ColumnDefinition("library_name", "TEXT"),
                 ColumnDefinition("title", "TEXT"),
                 ColumnDefinition("normalized_title", "TEXT"),
+                # Parent linkage for music albums: the owning artist's title.
+                # NULL for movies/shows/artists. Lets album rows resolve against
+                # the parent-scoped match keys ("{parent_norm}::{album_norm}").
+                ColumnDefinition("parent_title", "TEXT"),
+                ColumnDefinition("parent_normalized_title", "TEXT"),
                 ColumnDefinition("season_number", "INTEGER"),
                 ColumnDefinition("year", "TEXT"),
                 ColumnDefinition("guids", "TEXT"),
@@ -162,6 +167,12 @@ class SchemaManager:
                 ColumnDefinition("tvdb_id", "INTEGER"),
                 ColumnDefinition("imdb_id", "TEXT"),
                 ColumnDefinition("musicbrainz_id", "TEXT"),
+                # Parent linkage for music albums (asset_type="album"): the
+                # owning artist's MusicBrainz ID and title. NULL for every other
+                # asset type. Used to scope album match keys under their artist
+                # so identically-named albums ("Greatest Hits") don't collide.
+                ColumnDefinition("parent_musicbrainz_id", "TEXT"),
+                ColumnDefinition("parent_title", "TEXT"),
                 ColumnDefinition("folder", "TEXT"),
                 ColumnDefinition("root_folder", "TEXT"),
                 ColumnDefinition(
@@ -371,6 +382,14 @@ class SchemaManager:
                 ColumnDefinition("tmdb_id", "INTEGER"),
                 ColumnDefinition("tvdb_id", "INTEGER"),
                 ColumnDefinition("imdb_id", "TEXT"),
+                # MusicBrainz id of a music source poster (artist/album), plus
+                # parent linkage for albums. NULL for non-music posters. Lets a
+                # music cover match its media row by MBID first (is_match /
+                # find_asset_candidate), then by parent-scoped title.
+                ColumnDefinition("musicbrainz_id", "TEXT"),
+                ColumnDefinition("parent_musicbrainz_id", "TEXT"),
+                ColumnDefinition("parent_title", "TEXT"),
+                ColumnDefinition("parent_normalized_title", "TEXT"),
                 ColumnDefinition("season_number", "INTEGER"),
                 ColumnDefinition("folder", "TEXT"),
                 ColumnDefinition("file", "TEXT"),

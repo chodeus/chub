@@ -17,6 +17,7 @@ from tqdm import tqdm
 from backend.util.constants import (
     folder_year_regex,
     imdb_id_regex,
+    mbid_id_regex,
     prefixes,
     suffixes,
     tmdb_id_regex,
@@ -370,6 +371,18 @@ def extract_ids(text: str) -> Tuple[Optional[int], Optional[int], Optional[str]]
     return tmdb, tvdb, imdb
 
 
+def extract_mbid(text: str) -> Optional[str]:
+    """Extract a MusicBrainz id from text (an ``{mbid-<uuid>}`` style tag).
+
+    Returns the lower-cased canonical UUID, or None. Used to identify custom
+    music art (artist/album) by MusicBrainz id, mirroring extract_ids.
+    """
+    if not text:
+        return None
+    match = mbid_id_regex.search(text)
+    return match.group(1).lower() if match else None
+
+
 def compare_strings(string1: str, string2: str) -> bool:
     """Compare strings ignoring punctuation and case (useful for title matching)."""
     normalized1 = re.sub(r"\W+", "", string1).lower()
@@ -505,6 +518,37 @@ def is_match(
         except Exception:
             return None
 
+    # MusicBrainz id is the cross-source anchor for music (artists/albums). It
+    # is a GUID string, so it bypasses the integer normalization the other ids
+    # use. When both sides carry one it is authoritative: equal → match,
+    # different → reject (don't fall through to title, which would let two
+    # artists' identically-named albums collide).
+    asset_mbid = (str(asset.get("musicbrainz_id") or "").strip().lower()) or None
+    media_mbid = (str(media.get("musicbrainz_id") or "").strip().lower()) or None
+    if asset_mbid and media_mbid:
+        if asset_mbid == media_mbid:
+            return True, "ID match: musicbrainz_id"
+        return False, ""
+
+    # Album parent (artist) scoping: when an MBID isn't available on both sides,
+    # title-only matching must not let two artists' identically-titled albums
+    # ("Greatest Hits") cross-match. Both the poster record and the media row
+    # carry the owning artist (parent_normalized_title / parent_title); if both
+    # are known and differ, this is not the same album. When either side lacks a
+    # parent (can't disambiguate), fall through unchanged.
+    def _parent_norm(data: Dict[str, Any]) -> Optional[str]:
+        pnt = data.get("parent_normalized_title")
+        if pnt:
+            return str(pnt).strip().lower() or None
+        pt = data.get("parent_title")
+        return normalize_titles(pt) if pt else None
+
+    asset_parent = _parent_norm(asset)
+    media_parent = _parent_norm(media)
+    parent_mismatch = bool(
+        asset_parent and media_parent and asset_parent != media_parent
+    )
+
     shared_id_sources = []
     for key in ["tvdb_id", "tmdb_id", "imdb_id"]:
         asset_id = normalized_id(key, asset)
@@ -576,7 +620,7 @@ def is_match(
     ]
 
     for condition, reason in match_criteria:
-        if condition and year_matches():
+        if condition and year_matches() and not parent_mismatch:
             return True, reason
     return False, ""
 

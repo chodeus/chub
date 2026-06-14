@@ -46,13 +46,15 @@ class PlexCache(DatabaseBase):
         self.execute_query(
             """
             INSERT INTO plex_media_cache
-                (plex_id, instance_name, asset_type, library_name, title, normalized_title, season_number, year, guids, labels, file_paths, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                (plex_id, instance_name, asset_type, library_name, title, normalized_title, parent_title, parent_normalized_title, season_number, year, guids, labels, file_paths, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
             ON CONFLICT(plex_id, instance_name) DO UPDATE SET
                 asset_type = excluded.asset_type,
                 library_name = excluded.library_name,
                 title = excluded.title,
                 normalized_title = excluded.normalized_title,
+                parent_title = excluded.parent_title,
+                parent_normalized_title = excluded.parent_normalized_title,
                 season_number = excluded.season_number,
                 year = excluded.year,
                 guids = excluded.guids,
@@ -67,6 +69,8 @@ class PlexCache(DatabaseBase):
                 item["library_name"],
                 item["title"],
                 item["normalized_title"],
+                item.get("parent_title"),
+                item.get("parent_normalized_title"),
                 item["season_number"],
                 item["year"],
                 json.dumps(item["guids"]),
