@@ -4355,13 +4355,15 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
     }, []);
 
     // ─── Extract a logo from a poster (no AI) ──────────────────────────────────
-    // Brush over a white title on a poster; the key lifts it into a transparent
-    // logo, which becomes the custom logo and flows through the same whiten/save.
+    // Brush over a title on a poster; the key lifts it into a transparent logo,
+    // which becomes the custom logo and flows through the same whiten/save. White
+    // mode keys a white title by brightness; coloured mode keys it by colour.
     const [extractOpen, setExtractOpen] = useState(false);
     const [posterSource, setPosterSource] = useState('tmdb');
     const [posterPath, setPosterPath] = useState(null);
     const [customPoster, setCustomPoster] = useState(null); // { b64, url, name }
     const [extractMask, setExtractMask] = useState(null);
+    const [extractMode, setExtractMode] = useState('white'); // 'white' | 'subject'
     const [extracting, setExtracting] = useState(false);
     const posters = artBySource[posterSource]?.posters || [];
     const posterUrl = customPoster?.url || (posterPath ? urlForPath(posterPath) : null);
@@ -4395,6 +4397,7 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                 image_path: customPoster ? null : posterPath,
                 image_b64: customPoster?.b64 || null,
                 mask_b64: extractMask,
+                mode: extractMode,
             });
             const url = await new Promise(resolve => {
                 const fr = new FileReader();
@@ -4616,8 +4619,26 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                             )}
                             {posterUrl && (
                                 <div>
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <button
+                                            type="button"
+                                            className={seg(extractMode === 'white')}
+                                            onClick={() => setExtractMode('white')}
+                                        >
+                                            White title
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className={seg(extractMode === 'subject')}
+                                            onClick={() => setExtractMode('subject')}
+                                        >
+                                            Coloured title
+                                        </button>
+                                    </div>
                                     <p className="text-xs text-tertiary mb-1">
-                                        Brush over the title:
+                                        {extractMode === 'subject'
+                                            ? 'Brush over the coloured title (keep close to it):'
+                                            : 'Brush over the white title:'}
                                     </p>
                                     <div className="bg-black rounded p-1 inline-block max-w-full">
                                         <BrushMask

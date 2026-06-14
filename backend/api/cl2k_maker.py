@@ -37,7 +37,7 @@ from backend.modules.cl2k_maker import (
 )
 from backend.util.cl2k import geometry as geo, text_removal, tmdb_art
 from backend.util.cl2k.image_fetch import TMDB_IMAGE_CDN, download as download_image
-from backend.util.cl2k.logo_extract import extract_title_logo
+from backend.util.cl2k.logo_extract import extract_subject_logo, extract_title_logo
 from backend.util.cl2k.renderer import (
     process_logo,
     render_framed_art,
@@ -484,15 +484,19 @@ class LogoAssetRequest(BaseModel):
 
 class ExtractLogoRequest(BaseModel):
     # Source poster: an uploaded image (base64/data-url) wins over a TMDB/fanart/
-    # Plex path that we fetch. Extraction keys the white title out of the artwork.
+    # Plex path that we fetch. Extraction keys the title out of the artwork.
     image_b64: Optional[str] = None
     image_path: Optional[str] = None
-    # Brushed region (PNG, white = look here). Confines the key so bright areas
-    # outside the title can't leak in; without it the whole image is keyed.
+    # Brushed region (PNG, white = look here). Confines the key so areas outside
+    # the title can't leak in; without it the whole image is keyed.
     mask_b64: Optional[str] = None
-    # Min-channel smoothstep band; raise lo to reject more background.
-    lo: float = Field(165.0, ge=0.0, le=255.0)
-    hi: float = Field(215.0, ge=0.0, le=255.0)
+    # "white" keys a white/near-white title by brightness; "subject" keys a
+    # coloured title by its colour distance from the local background.
+    mode: str = "white"
+    # Smoothstep band, interpreted per mode (white: min-channel 0-255; subject:
+    # colour distance 0-441). None lets each mode use its own default.
+    lo: Optional[float] = Field(None, ge=0.0, le=441.0)
+    hi: Optional[float] = Field(None, ge=0.0, le=441.0)
 
 
 def _square_backdrop_bytes(req: SquareArtRequest) -> Optional[bytes]:
@@ -721,7 +725,9 @@ def extract_logo(
         raw = None
     if not raw:
         return error("No poster image provided", "NO_IMAGE")
-    png = extract_title_logo(raw, _mask_bytes(req.mask_b64), lo=req.lo, hi=req.hi)
+    band = {k: v for k, v in (("lo", req.lo), ("hi", req.hi)) if v is not None}
+    extract = extract_subject_logo if req.mode == "subject" else extract_title_logo
+    png = extract(raw, _mask_bytes(req.mask_b64), **band)
     return Response(
         content=png, media_type="image/png", headers={"Cache-Control": "no-store"}
     )
