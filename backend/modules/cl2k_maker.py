@@ -255,7 +255,9 @@ def _resolve_and_render(
         logo_source = "text" if cfg.text_logo_fallback else "none"
 
     if kind == "season" and not season_text and season_number is not None:
-        season_text = f"Season {season_number}"
+        # Season 0 is the Specials season — label it "Specials" (matching the
+        # `- Specials` filename in naming.py), not "Season 0".
+        season_text = "Specials" if season_number == 0 else f"Season {season_number}"
 
     blob = render_cl2k(
         backdrop_bytes=backdrop_bytes,
