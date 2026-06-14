@@ -106,6 +106,24 @@ class PosterRenamerrConfig(BaseModel):
     instances: List[Union[str, Dict[str, PosterRenamerrPlexInstance]]] = Field(
         default_factory=list
     )
+    # --- Music (Lidarr) artwork options ---
+    # Only meaningful when a Lidarr instance is configured; the frontend gates
+    # them on that. All are image-only / Plex-metadata operations — none ever
+    # touches audio, so seeded music torrents are never endangered.
+    #
+    # After a Plex-direct artist poster upload, lock thumb/art so Plex's music
+    # agent can't re-derive the artist image from album art on refresh.
+    # Artist-only; album covers are sticky and never need it.
+    music_lock_artist_art: bool = False
+    # Also write image-only sidecars (cover.jpg for albums, artist-poster.jpg /
+    # background.jpg for artists) into the Plex music library folders for
+    # refresh-proof art. Writes image files only; never audio.
+    music_lma_sidecars: bool = False
+    # When no local/Google-Drive custom art matches, fall back to the art Lidarr
+    # already fetched (fanart.tv upstream) via its mediacover URL.
+    music_art_from_lidarr: bool = False
+    # Ordered art-source preference for music. "local" = the user's custom art.
+    music_art_sources: List[str] = Field(default_factory=lambda: ["local"])
 
     @field_validator("action_type", mode="before")
     @classmethod

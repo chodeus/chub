@@ -818,6 +818,47 @@ class PlexClient:
             plex_id=plex_id,
         )
 
+    def lock_field(
+        self,
+        library_name: str,
+        item_title: str,
+        fields: List[str],
+        *,
+        year: Any = None,
+        season_number: Any = None,
+        dry_run: bool = False,
+        plex_id: Any = None,
+    ) -> bool:
+        """Lock one or more metadata fields (e.g. ``thumb``, ``art``) on a Plex
+        item so a metadata refresh can't overwrite a user-selected image.
+
+        Used for music artists: Plex's music agent otherwise re-derives an
+        artist's image from album art on refresh, reverting a custom poster.
+        Targets the exact item by ``plex_id`` (ratingKey) when available. This
+        edits Plex metadata only — it never touches files.
+        """
+        try:
+            targets = self._locate_targets(
+                library_name,
+                item_title,
+                year=year,
+                season_number=season_number,
+                plex_id=plex_id,
+            )
+            if not targets:
+                return False
+            if not dry_run:
+                edits = {f"{field}.locked": 1 for field in fields}
+                for tgt in targets:
+                    tgt.edit(**edits)
+            return True
+        except Exception as e:
+            self.logger.error(
+                f"Failed to lock {fields} for '{item_title}' in "
+                f"'{library_name}': {e}"
+            )
+            return False
+
     def remove_label(
         self,
         matched_entry: Dict[str, Any],

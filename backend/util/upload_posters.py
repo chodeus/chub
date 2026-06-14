@@ -844,6 +844,21 @@ class PosterUploader:
                 if not ok:
                     continue
                 uploaded_libs.append(str(entry.get("library_name")))
+                # Artist art reversion hedge: Plex's music agent re-derives an
+                # artist's image from album art on refresh, which would revert a
+                # custom poster. When opted in, lock thumb/art after the upload.
+                # Artist-only (albums are sticky); Plex-metadata only, no files.
+                if asset_type == "artist" and getattr(
+                    self.config, "music_lock_artist_art", False
+                ):
+                    plex_client.lock_field(
+                        library_name=entry["library_name"],
+                        item_title=entry["title"],
+                        fields=["thumb", "art"],
+                        year=entry.get("year"),
+                        dry_run=dry_run,
+                        plex_id=entry.get("plex_id"),
+                    )
                 # Remove overlay label if present (per-library item).
                 if self._has_overlay(entry):
                     plex_client.remove_label(entry, "Overlay", dry_run)
