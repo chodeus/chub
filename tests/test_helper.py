@@ -10,6 +10,7 @@ from backend.util.helper import (
     create_table,
     dict_diff,
     extract_ids,
+    extract_mbid,
     extract_year,
     generate_title_variants,
     get_config_dir,
@@ -84,6 +85,24 @@ def test_extract_ids_imdb_tt_prefix():
 
 def test_extract_ids_returns_none_when_absent():
     assert extract_ids("Just a title") == (None, None, None)
+
+
+# --- extract_mbid ---
+
+
+def test_extract_mbid_tag():
+    mbid = extract_mbid("REZZ {mbid-12345678-1234-1234-1234-123456789abc}")
+    assert mbid == "12345678-1234-1234-1234-123456789abc"
+
+
+def test_extract_mbid_lowercases():
+    mbid = extract_mbid("Artist {mbid-ABCDEF12-3456-7890-ABCD-EF1234567890}")
+    assert mbid == "abcdef12-3456-7890-abcd-ef1234567890"
+
+
+def test_extract_mbid_absent():
+    assert extract_mbid("Inception (2010) {tmdb-27205}") is None
+    assert extract_mbid("") is None
 
 
 # --- is_match: musicbrainz ---

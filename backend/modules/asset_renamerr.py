@@ -374,8 +374,10 @@ class AssetRenamerr(ChubModule):
         from backend.modules.poster_renamerr import build_asset_record
 
         active = set(self._active_asset_types())
-        source_dirs = self.config.source_dirs or []
-        for priority, source_dir in enumerate(source_dirs):
+        regular = self.config.source_dirs or []
+        music_dirs = list(getattr(self.config, "music_source_dirs", []) or [])
+        scan_plan = [(d, False) for d in regular] + [(d, True) for d in music_dirs]
+        for priority, (source_dir, is_music) in enumerate(scan_plan):
             if not source_dir or not os.path.isdir(source_dir):
                 self.logger.warning(f"Source dir not found: '{source_dir}'")
                 continue
@@ -390,10 +392,15 @@ class AssetRenamerr(ChubModule):
                 for fname in sorted(files, key=str.lower):
                     if not fname.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
                         continue
-                    record = build_asset_record(fname, root, priority=priority)
+                    record = build_asset_record(
+                        fname,
+                        root,
+                        priority=priority,
+                        music_root=source_dir if is_music else None,
+                    )
                     if record.get("image_type") in active:
-                        # classify asset_type (movie/show/collection) per-record;
-                        # season detection is already in the record.
+                        # classify asset_type per-record; music records are
+                        # pre-classified (artist/album) by the builder.
                         record["asset_type"] = self._classify(record)
                         records.append(record)
             # Batch the upserts: one transaction per chunk, not per row.
@@ -402,6 +409,8 @@ class AssetRenamerr(ChubModule):
 
     @staticmethod
     def _classify(record: dict) -> str:
+        if record.get("music_kind"):
+            return record["music_kind"]
         if record.get("season_number") is not None or record.get("tvdb_id"):
             return "show"
         if record.get("year") is None:

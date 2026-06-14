@@ -60,6 +60,7 @@ def test_poster_renamerr_music_defaults():
     assert pr.music_lma_sidecars is False
     assert pr.music_art_from_lidarr is False
     assert pr.music_art_sources == ["local"]
+    assert pr.music_source_dirs == []
 
     loaded = ChubConfig(
         poster_renamerr={

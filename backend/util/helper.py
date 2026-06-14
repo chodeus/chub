@@ -17,6 +17,7 @@ from tqdm import tqdm
 from backend.util.constants import (
     folder_year_regex,
     imdb_id_regex,
+    mbid_id_regex,
     prefixes,
     suffixes,
     tmdb_id_regex,
@@ -368,6 +369,18 @@ def extract_ids(text: str) -> Tuple[Optional[int], Optional[int], Optional[str]]
     imdb = imdb_match.group(1) if imdb_match else None
 
     return tmdb, tvdb, imdb
+
+
+def extract_mbid(text: str) -> Optional[str]:
+    """Extract a MusicBrainz id from text (an ``{mbid-<uuid>}`` style tag).
+
+    Returns the lower-cased canonical UUID, or None. Used to identify custom
+    music art (artist/album) by MusicBrainz id, mirroring extract_ids.
+    """
+    if not text:
+        return None
+    match = mbid_id_regex.search(text)
+    return match.group(1).lower() if match else None
 
 
 def compare_strings(string1: str, string2: str) -> bool:

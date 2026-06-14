@@ -791,3 +791,64 @@ def test_match_item_skips_unchanged_write(tmp_path):
         assert media_row()["matched"] == 0
     finally:
         db.__exit__(None, None, None)
+
+
+# --- build_asset_record: music classification (Phase 4 sourcing) ---
+
+
+def test_build_asset_record_music_folder_artist():
+    from backend.modules.poster_renamerr import build_asset_record
+
+    r = build_asset_record("artist.jpg", "/music/REZZ", music_root="/music")
+    assert r["music_kind"] == "artist"
+    assert r["title"] == "REZZ"
+    assert r["parent_title"] is None
+
+
+def test_build_asset_record_music_folder_album():
+    from backend.modules.poster_renamerr import build_asset_record
+
+    r = build_asset_record(
+        "cover.jpg", "/music/REZZ/Mass Manipulation", music_root="/music"
+    )
+    assert r["music_kind"] == "album"
+    assert r["title"] == "Mass Manipulation"
+    assert r["parent_title"] == "REZZ"
+
+
+def test_build_asset_record_music_flat_album():
+    from backend.modules.poster_renamerr import build_asset_record
+
+    r = build_asset_record(
+        "Boards of Canada - Geogaddi.jpg", "/music", music_root="/music"
+    )
+    assert r["music_kind"] == "album"
+    assert r["title"] == "Geogaddi"
+    assert r["parent_title"] == "Boards of Canada"
+
+
+def test_build_asset_record_mbid_tag_in_normal_dir():
+    """An {mbid-} tag marks a file as music even outside a music source dir."""
+    from backend.modules.poster_renamerr import build_asset_record
+
+    r = build_asset_record(
+        "REZZ {mbid-12345678-1234-1234-1234-123456789abc}.jpg", "/posters"
+    )
+    assert r["music_kind"] == "artist"
+    assert r["title"] == "REZZ"
+    assert r["musicbrainz_id"] == "12345678-1234-1234-1234-123456789abc"
+
+
+def test_build_asset_record_movie_unaffected():
+    """Non-music files keep the movie/show path (no music_kind)."""
+    from backend.modules.poster_renamerr import build_asset_record
+
+    r = build_asset_record("Inception (2010) {tmdb-27205}.jpg", "/posters")
+    assert r.get("music_kind") is None
+    assert r["tmdb_id"] == 27205
+
+
+def test_classify_asset_record_honors_music_kind():
+    m = make_module()
+    assert m._classify_asset_record({"music_kind": "album"}, set()) == "album"
+    assert m._classify_asset_record({"music_kind": "artist"}, set()) == "artist"

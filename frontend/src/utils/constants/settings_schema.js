@@ -325,6 +325,20 @@ const CORE_SETTINGS_SCHEMA = [
             },
             // ─── Music (only shown when a Lidarr instance is configured) ──
             {
+                key: 'music_source_dirs',
+                label: 'Music Art Source Directories',
+                type: 'dirlist_dragdrop',
+                section: 'Music',
+                conditional: {
+                    field: 'instances',
+                    condition: 'service_configured',
+                    value: 'lidarr',
+                    api_lookup: 'instances',
+                },
+                description:
+                    'Folders holding your custom ARTIST/ALBUM art. Files here are recognized as music by folder layout (<Artist>/artist.jpg or poster.jpg, <Artist>/<Album>/cover.jpg) or a flat "Artist.jpg" / "Artist - Album.jpg" name; an {mbid-<id>} tag overrides identity (and works in the regular Source Directories too). Kept separate so a flat "Title.jpg" is never mistaken for a movie poster.',
+            },
+            {
                 key: 'music_art_from_lidarr',
                 label: 'Fall back to Lidarr-fetched art',
                 type: 'check_box',

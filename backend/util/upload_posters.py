@@ -1,6 +1,7 @@
 import hashlib
 import json
 import os
+import shutil
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -214,6 +215,13 @@ class PosterUploader:
                 assets = self._get_assets_from_manifest()
                 upload_results = self._sync_all_assets(
                     assets, plex_client, indexes, self.config.dry_run
+                )
+                # Optional fallback: for music rows with no local custom art,
+                # push the artwork Lidarr already fetched (fanart.tv upstream).
+                upload_results.extend(
+                    self._sync_lidarr_art_fallback(
+                        plex_client, indexes, self.config.dry_run
+                    )
                 )
 
                 return InstanceResult(
@@ -859,6 +867,13 @@ class PosterUploader:
                         dry_run=dry_run,
                         plex_id=entry.get("plex_id"),
                     )
+                # Optional LMA disk sidecars (image-only, refresh-proof).
+                if asset_type in ("artist", "album") and getattr(
+                    self.config, "music_lma_sidecars", False
+                ):
+                    self._write_music_sidecar(
+                        asset_type, poster_path, entry, dry_run
+                    )
                 # Remove overlay label if present (per-library item).
                 if self._has_overlay(entry):
                     plex_client.remove_label(entry, "Overlay", dry_run)
@@ -1156,6 +1171,114 @@ class PosterUploader:
         PlexMediaIndex matcher so poster and asset paths key identically.
         """
         return PlexMediaIndex._match(index, priority_keys, values)
+
+    def _sync_lidarr_art_fallback(
+        self,
+        plex_client: PlexClient,
+        indexes: Tuple[Dict, Dict, Dict, Dict, Dict, Dict],
+        dry_run: bool,
+    ) -> List[UploadResult]:
+        """Push Lidarr-fetched artwork (fanart.tv upstream) for music rows that
+        have NO local custom art. Off unless ``music_art_from_lidarr`` is set.
+
+        Only acts on artist/album rows that are not locally matched (matched=0)
+        and carry a Lidarr ``poster_url``; resolves the Plex target via the same
+        MBID-first index and uploads the remote URL by ratingKey. Local custom
+        art always wins (those rows are matched=1 and handled by the normal
+        path), so this never overrides a user's own poster.
+        """
+        if not getattr(self.config, "music_art_from_lidarr", False):
+            return []
+        _, _, _, _, artist_index, album_index = indexes
+        try:
+            rows = (
+                self.db.media.execute_query(
+                    "SELECT * FROM media_cache "
+                    "WHERE asset_type IN ('artist','album') "
+                    "AND (matched IS NULL OR matched = 0) "
+                    "AND poster_url IS NOT NULL AND poster_url != ''",
+                    fetch_all=True,
+                )
+                or []
+            )
+        except Exception as e:
+            self.logger.warning(f"Lidarr art fallback query failed: {e}")
+            return []
+
+        results: List[UploadResult] = []
+        for row in rows:
+            asset_type = row.get("asset_type")
+            index = artist_index if asset_type == "artist" else album_index
+            if asset_type == "album":
+                parent_norm = normalize_titles(row.get("parent_title") or "")
+                album_norm = normalize_titles(row.get("title") or "")
+                title_key = (
+                    f"{parent_norm}::{album_norm}" if parent_norm else album_norm
+                )
+            else:
+                title_key = normalize_titles(row.get("title") or "")
+            values = {
+                "mbid": row.get("musicbrainz_id") or None,
+                "title": title_key,
+                "year": None,
+            }
+            entries, match_type = self.match_asset(index, ["mbid", "title"], values)
+            if not entries:
+                continue
+            seen_libs = set()
+            for entry in entries:
+                lib = entry.get("library_name")
+                if lib in seen_libs:
+                    continue
+                seen_libs.add(lib)
+                ok = plex_client.upload_poster(
+                    library_name=lib,
+                    item_title=entry.get("title"),
+                    url=row.get("poster_url"),
+                    year=entry.get("year"),
+                    dry_run=dry_run,
+                    plex_id=entry.get("plex_id"),
+                )
+                results.append(
+                    UploadResult(
+                        asset_title=row.get("title", "Unknown"),
+                        asset_type=asset_type,
+                        success=bool(ok),
+                        action="uploaded" if ok else "failed",
+                        reason="Lidarr-fetched art (no local custom art)",
+                        library_name=lib,
+                        match_type=match_type,
+                    )
+                )
+        return results
+
+    def _write_music_sidecar(
+        self, asset_type: str, poster_path: str, entry: Dict, dry_run: bool
+    ) -> None:
+        """Copy a poster/cover into the Plex music library folder as a Local
+        Media Assets sidecar — ``cover.jpg`` for albums, ``artist-poster.jpg``
+        for artists. Writes an image file ONLY (never audio), into a folder that
+        must already exist inside the Plex library. Non-fatal on any error.
+        """
+        try:
+            paths = entry.get("file_paths")
+            if isinstance(paths, str):
+                paths = json.loads(paths or "[]")
+            folders = [p for p in (paths or []) if p and os.path.isdir(p)]
+            if not folders:
+                return
+            name = "cover.jpg" if asset_type == "album" else "artist-poster.jpg"
+            for folder in folders:
+                dest = os.path.join(folder, name)
+                if dry_run:
+                    self.logger.debug(f"[DRY RUN] Would write music sidecar {dest}")
+                    continue
+                shutil.copyfile(poster_path, dest)
+                self.logger.debug(f"[MUSIC_SIDECAR] {dest}")
+        except Exception as e:
+            self.logger.warning(
+                f"Music sidecar write failed for '{entry.get('title')}': {e}"
+            )
 
     @staticmethod
     def _compute_file_hash(poster_path: str, dry_run: bool = False) -> Optional[str]:
