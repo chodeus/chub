@@ -1787,15 +1787,14 @@ const RenderPanel = ({
         if (!backdropUrl || !maskB64 || aiProvider === 'none') return;
         setAiErasing(true);
         try {
-            const blob = await (await fetch(backdropUrl)).blob();
-            const imageDataUrl = await new Promise((resolve, reject) => {
-                const fr = new FileReader();
-                fr.onload = () => resolve(fr.result);
-                fr.onerror = reject;
-                fr.readAsDataURL(blob);
-            });
+            // Custom uploads are sent as bytes (we already hold the b64); a remote
+            // CDN backdrop is sent as a path for the backend to fetch — the browser
+            // can't fetch image.tmdb.org directly (no CORS header).
+            const source = customBackdrop?.b64
+                ? { image_b64: customBackdrop.b64 }
+                : { image_path: backdrop };
             const resp = await cl2kMakerAPI.retext({
-                image_b64: imageDataUrl,
+                ...source,
                 mask_b64: maskB64,
                 apply_ai: true,
                 prompt: aiPrompt || config?.ai_prompt || '',
@@ -1830,6 +1829,7 @@ const RenderPanel = ({
         }
     }, [
         backdropUrl,
+        backdrop,
         maskB64,
         aiProvider,
         aiPrompt,
