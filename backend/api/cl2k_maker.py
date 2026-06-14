@@ -1056,7 +1056,11 @@ async def upload_poster(
 
 
 class RetextRequest(BaseModel):
-    image_b64: str  # uploaded poster (base64; data-URL prefix allowed)
+    # The source poster: uploaded bytes (base64) OR a TMDB/fanart/Plex path we
+    # fetch server-side. Prefer the path for remote art — the browser can't fetch
+    # image.tmdb.org directly (no CORS), so the frontend must not base64 it itself.
+    image_b64: Optional[str] = None  # uploaded poster (base64; data-URL prefix allowed)
+    image_path: Optional[str] = None  # remote art path/URL, fetched via download_image
     mask_b64: Optional[str] = None  # brushed mask over the old text (white=erase)
     apply_ai: bool = False  # run AI text-removal on the masked region
     prompt: Optional[str] = None  # per-edit AI prompt (defaults to ai_prompt)
@@ -1086,12 +1090,19 @@ def retext(
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
-    if not req.image_b64:
+    if req.image_b64:
+        try:
+            image_bytes = base64.b64decode(req.image_b64.split(",")[-1])
+        except Exception:
+            return error("invalid image data", "CL2K_RETEXT")
+    elif req.image_path:
+        try:
+            image_bytes = download_image(req.image_path)
+        except Exception as exc:  # disallowed host / fetch failure
+            logger.warning(f"CL2K retext: source image fetch failed — {exc}")
+            return error(f"could not fetch the source image: {exc}", "CL2K_RETEXT")
+    else:
         return error("no image provided", "CL2K_RETEXT")
-    try:
-        image_bytes = base64.b64decode(req.image_b64.split(",")[-1])
-    except Exception:
-        return error("invalid image data", "CL2K_RETEXT")
     logger.info(
         f"CL2K retext: {'preview' if req.preview else 'save'} "
         f"(apply_ai={req.apply_ai}, mask={'yes' if req.mask_b64 else 'no'}, "
