@@ -1859,12 +1859,24 @@ const RenderPanel = ({
         [isSeasonPoster, seasonNumber, effectiveKind, item]
     );
 
+    // The label actually drawn in File-as-is mode. Mirrors the full render's
+    // precedence: a season number wins (Season N / Specials, matching generate's
+    // season_text at modules/cl2k_maker.py), then an explicit banner, then the
+    // free-text "New title" fallback. Season and banner are mutually exclusive —
+    // the banner control is hidden once a season number is set.
+    const asisDrawnLabel = useMemo(() => {
+        if (isSeasonPoster) {
+            return Number(seasonNumber) === 0 ? 'Specials' : `Season ${Number(seasonNumber)}`;
+        }
+        return bandLabel || asisLabel;
+    }, [isSeasonPoster, seasonNumber, bandLabel, asisLabel]);
+
     // Signature of the inputs that affect the as-is render (image + label + border).
     // A rendered preview is shown only while it still matches, so changing any of
     // them drops the stale preview — no setState-in-effect.
     const asisSig = useMemo(
-        () => JSON.stringify([backdropUrl, asisLabel, asisTextY, asisBorder]),
-        [backdropUrl, asisLabel, asisTextY, asisBorder]
+        () => JSON.stringify([backdropUrl, asisDrawnLabel, asisTextY, asisBorder]),
+        [backdropUrl, asisDrawnLabel, asisTextY, asisBorder]
     );
 
     // apply_ai=false: draws the (optional) new label + border on whatever the
@@ -1879,7 +1891,7 @@ const RenderPanel = ({
                 image_b64,
                 mask_b64: null,
                 apply_ai: false,
-                label_text: asisLabel,
+                label_text: asisDrawnLabel,
                 text_y: asisTextY,
                 border: asisBorder,
                 preview: true,
@@ -1891,7 +1903,7 @@ const RenderPanel = ({
         } finally {
             setAsisPreviewing(false);
         }
-    }, [asisDataUrlFromSource, asisLabel, asisTextY, asisBorder, asisIds, asisSig, toast]);
+    }, [asisDataUrlFromSource, asisDrawnLabel, asisTextY, asisBorder, asisIds, asisSig, toast]);
 
     const runAsisSave = useCallback(async () => {
         const image_b64 = await asisDataUrlFromSource();
@@ -1902,7 +1914,7 @@ const RenderPanel = ({
                 image_b64,
                 mask_b64: null,
                 apply_ai: false,
-                label_text: asisLabel,
+                label_text: asisDrawnLabel,
                 text_y: asisTextY,
                 border: asisBorder,
                 preview: false,
@@ -1917,7 +1929,7 @@ const RenderPanel = ({
         }
     }, [
         asisDataUrlFromSource,
-        asisLabel,
+        asisDrawnLabel,
         asisTextY,
         asisBorder,
         asisIds,
@@ -1927,6 +1939,59 @@ const RenderPanel = ({
 
     const asisFresh = !!(asisPreview?.b64 && asisPreview.sig === asisSig);
     const asisShownSrc = asisFresh ? `data:image/jpeg;base64,${asisPreview.b64}` : backdropUrl;
+
+    // Latest as-is render inputs, read inside the debounced effect without making
+    // its identity a trigger (the effect fires off asisSig). Mirrors baseRequestRef
+    // for the full render.
+    const asisPreviewInputsRef = useRef(null);
+    useEffect(() => {
+        asisPreviewInputsRef.current = {
+            fromSource: asisDataUrlFromSource,
+            label_text: asisDrawnLabel,
+            text_y: asisTextY,
+            border: asisBorder,
+            ids: asisIds,
+            sig: asisSig,
+        };
+    }, [asisDataUrlFromSource, asisDrawnLabel, asisTextY, asisBorder, asisIds, asisSig]);
+
+    // Auto-render the as-is preview shortly after a label/position/border change
+    // settles, so typing a New title (or setting a season/banner) shows on the
+    // preview without a manual click — matching the full render's auto-preview.
+    // apply_ai stays false (the Send to AI erase is a separate, paid step), so
+    // this never spends AI credits.
+    useEffect(() => {
+        if (!isAsis || !hasBackdrop) return undefined;
+        let cancelled = false;
+        const handle = setTimeout(async () => {
+            const p = asisPreviewInputsRef.current;
+            const image_b64 = await p.fromSource();
+            if (cancelled || !image_b64) return;
+            setAsisPreviewing(true);
+            try {
+                const resp = await cl2kMakerAPI.retext({
+                    image_b64,
+                    mask_b64: null,
+                    apply_ai: false,
+                    label_text: p.label_text,
+                    text_y: p.text_y,
+                    border: p.border,
+                    preview: true,
+                    ...p.ids,
+                });
+                if (!cancelled)
+                    setAsisPreview({ b64: resp?.data?.preview_b64 || null, sig: p.sig });
+            } catch {
+                /* auto-render stays quiet; the Preview button surfaces errors */
+            } finally {
+                if (!cancelled) setAsisPreviewing(false);
+            }
+        }, 300);
+        return () => {
+            cancelled = true;
+            clearTimeout(handle);
+        };
+    }, [asisSig, isAsis, hasBackdrop]);
 
     return (
         <section className="mt-4 flex flex-col gap-4">
@@ -2291,14 +2356,46 @@ const RenderPanel = ({
                     {isAsis ? (
                         <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-2">
                             <h3 className="text-sm font-medium text-primary">Output</h3>
+                            {item.kind === 'show' && (
+                                <label className="flex items-center gap-2 text-sm text-secondary">
+                                    <span className="w-28">Season number</span>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        value={seasonNumber}
+                                        onChange={e => setSeasonNumber(e.target.value)}
+                                        placeholder="blank = none, 0 = Specials"
+                                        className="flex-1 bg-surface border border-border rounded px-2 py-1 text-sm text-primary"
+                                    />
+                                </label>
+                            )}
+                            {!isSeasonPoster && item.kind !== 'collection' && (
+                                <label className="flex items-center gap-2 text-sm text-secondary">
+                                    <span className="w-28">Banner</span>
+                                    <select
+                                        value={bandLabel}
+                                        onChange={e => setBandLabel(e.target.value)}
+                                        className="flex-1 bg-surface border border-border rounded px-2 py-1 text-sm text-primary"
+                                    >
+                                        {BAND_LABEL_OPTIONS.map(o => (
+                                            <option key={o.value} value={o.value}>
+                                                {o.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </label>
+                            )}
                             <label className="flex flex-col gap-1 text-sm text-secondary">
-                                <span>New title (drawn on the poster — optional)</span>
+                                <span>
+                                    New title (fallback — used when no season or banner is set)
+                                </span>
                                 <input
                                     type="text"
                                     value={asisLabel}
                                     onChange={e => setAsisLabel(e.target.value)}
+                                    disabled={isSeasonPoster || !!bandLabel}
                                     placeholder="leave blank to keep the poster as-is"
-                                    className="bg-surface border border-border rounded px-2 py-1 text-sm text-primary"
+                                    className="bg-surface border border-border rounded px-2 py-1 text-sm text-primary disabled:opacity-50"
                                 />
                             </label>
                             <label className="flex items-center gap-2 text-sm text-secondary">
@@ -2316,10 +2413,12 @@ const RenderPanel = ({
                                 </span>
                             </label>
                             <p className="text-xs text-tertiary">
-                                Drawn in the CL2K font. 96% is the locked CL2K band position (the
-                                season/specials line). Brush over the old title and{' '}
+                                Drawn in the CL2K font at 96% — the locked CL2K band position (the
+                                season/specials line). Set a Season number (draws SEASON N /
+                                SPECIALS) or pick a Banner; the New title box is the fallback for
+                                anything else. Brush over the old text and{' '}
                                 <span className="text-secondary">Send to AI</span> first to remove
-                                it, then type the new one here.
+                                it.
                             </p>
                             <label className="flex items-center gap-2 text-sm text-primary font-medium">
                                 <input

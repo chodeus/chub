@@ -921,14 +921,18 @@ def overlay_label(
     if center_y is None:
         center_y = geo.SEASON_TEXT_Y
     font = font_path or geo.resolve_font(bold=False)
+    txt = (text or "").upper()
+    # Long banners (e.g. COMPLETE LIMITED SERIES) use the tighter PSD tracking so
+    # they fit the width — same rule as render_cl2k's band_label branch.
+    tracking = geo.LABEL_TRACKING_LONG if len(txt) > 16 else geo.LABEL_TRACKING
     with Image(blob=image_bytes) as base:
         _draw_text(
             base,
-            (text or "").upper(),
+            txt,
             int(center_y),
             font,
             geo.LABEL_FONT_PX,
-            kerning=geo.tracking_to_kerning(geo.LABEL_TRACKING),
+            kerning=geo.tracking_to_kerning(tracking),
         )
         return _encode_jpeg(base)
 
