@@ -22,6 +22,7 @@ from backend.util.helper import (
     classify_match,
     create_table,
     extract_ids,
+    extract_mbid,
     extract_year,
     is_match,
     normalize_titles,
@@ -43,12 +44,116 @@ from backend.util.upload_posters import PosterUploader
 _POSTER_CACHE_REBUILD_LOCK = threading.Lock()
 
 
+# Filenames (sans extension/suffix) that denote artist-level art in a music
+# folder layout; everything else at album depth is an album cover.
+_MUSIC_ARTIST_STEMS = {
+    "artist",
+    "artist-poster",
+    "poster",
+    "folder",
+    "fanart",
+    "background",
+    "banner",
+    "logo",
+    "clearlogo",
+}
+
+
+def _strip_mbid_tag(text: str) -> str:
+    """Remove an ``{mbid-<uuid>}`` (or bare ``mbid-<uuid>``) tag from text."""
+    from backend.util.constants import mbid_id_regex
+
+    cleaned = mbid_id_regex.sub("", text)
+    return cleaned.replace("{}", "").replace("[]", "").strip(" -_{}[]")
+
+
+def _build_music_asset_record(
+    fname: str,
+    root: str,
+    *,
+    music_root: Optional[str],
+    mbid: Optional[str],
+    image_type: str,
+    base: str,
+    ext: str,
+    style: Optional[str],
+    priority: int,
+    search_only: int,
+) -> dict:
+    """Parse one music image file (artist poster / album cover / asset) into a
+    poster_cache record carrying asset_type + musicbrainz_id + parent linkage.
+
+    Identity is resolved from (in priority): an ``{mbid-<uuid>}`` tag, then the
+    folder layout under ``music_root`` (``<Artist>/`` = artist, ``<Artist>/
+    <Album>/`` = album), then a flat ``Artist - Album`` / ``Artist`` filename.
+    """
+    folder = os.path.basename(root)
+    stem = _strip_mbid_tag(base)
+    artist_title: Optional[str] = None
+    album_title: Optional[str] = None
+
+    rel_parts: List[str] = []
+    if music_root:
+        rel = os.path.relpath(root, music_root)
+        rel_parts = [p for p in rel.split(os.sep) if p not in (".", "")]
+
+    if len(rel_parts) >= 2:
+        # <music_root>/<Artist>/<Album>/<file>
+        artist_title, album_title = rel_parts[0], rel_parts[1]
+    elif len(rel_parts) == 1:
+        # <music_root>/<Artist>/<file> — artist art, unless a clearly album-y
+        # stem sits here (rare); default to artist at this depth.
+        artist_title = rel_parts[0]
+        if stem and stem.lower() not in _MUSIC_ARTIST_STEMS:
+            # e.g. <Artist>/<Album>.jpg flat-in-artist-folder layout.
+            album_title = stem
+    else:
+        # Flat file: "Artist - Album.jpg" => album; "Artist.jpg" => artist.
+        if " - " in stem:
+            artist_title, album_title = (p.strip() for p in stem.split(" - ", 1))
+        else:
+            artist_title = stem
+
+    if album_title:
+        asset_type = "album"
+        title = album_title
+        parent_title = artist_title
+    else:
+        asset_type = "artist"
+        title = artist_title or stem
+        parent_title = None
+
+    return {
+        "title": title,
+        "normalized_title": normalize_titles(title or ""),
+        "year": None,
+        "tmdb_id": None,
+        "tvdb_id": None,
+        "imdb_id": None,
+        "musicbrainz_id": mbid,
+        "parent_musicbrainz_id": None,
+        "parent_title": parent_title,
+        "parent_normalized_title": (
+            normalize_titles(parent_title) if parent_title else None
+        ),
+        "season_number": None,
+        "music_kind": asset_type,
+        "folder": folder,
+        "file": os.path.join(root, fname),
+        "style": style,
+        "priority": priority,
+        "image_type": image_type,
+        "search_only": search_only,
+    }
+
+
 def build_asset_record(
     fname: str,
     root: str,
     style: Optional[str] = None,
     priority: int = 0,
     search_only: int = 0,
+    music_root: Optional[str] = None,
 ) -> dict:
     """Parse one image file into a poster_cache record.
 
@@ -62,6 +167,11 @@ def build_asset_record(
     the original inline logic — do not let it drift. ``asset_type``
     (movie/show/collection) is NOT set here; it is classified across the full
     record set by the caller (it needs cross-record show_keys).
+
+    When ``music_root`` is set (the file lives under a configured music source
+    dir) or the file/folder carries an ``{mbid-<uuid>}`` tag, the record is
+    built as MUSIC (artist poster / album cover) via _build_music_asset_record
+    and stamped with ``music_kind`` so the caller classifies it as artist/album.
     """
     folder = os.path.basename(root)
     filename, ext = os.path.splitext(fname)
@@ -73,10 +183,31 @@ def build_asset_record(
         # parse_asset_filename's own splitext targets the extension (not a dot
         # inside a title like "8 A.M. Metro").
         base = asset_type_regex.sub("", filename).strip(" -_")
+    else:
+        image_type = "poster"
+        base = filename
+
+    # Music: a configured music_root, or an {mbid-} tag anywhere, routes to the
+    # music builder.
+    mbid = extract_mbid(fname) or extract_mbid(folder)
+    if music_root is not None or mbid:
+        return _build_music_asset_record(
+            fname,
+            root,
+            music_root=music_root,
+            mbid=mbid,
+            image_type=image_type,
+            base=base,
+            ext=ext,
+            style=style,
+            priority=priority,
+            search_only=search_only,
+        )
+
+    if m:
         title = parse_asset_filename(base + ext)
         normalized_title = normalize_titles(base)
     else:
-        image_type = "poster"
         title = parse_asset_filename(fname)
         # Derive the search/match key from the raw (ext-stripped) filename, not
         # from `title`. normalize_titles() already strips the year (and trailing
@@ -334,7 +465,7 @@ class PosterRenamerr(ChubModule):
         # ambiguous (conflicting-identity) matches.
         matched_candidates = []
 
-        for id_field in ["imdb_id", "tmdb_id", "tvdb_id"]:
+        for id_field in ["imdb_id", "tmdb_id", "tvdb_id", "musicbrainz_id"]:
             id_val = media.get(id_field)
             if id_val:
                 c = db.poster.get_by_id(
@@ -685,6 +816,23 @@ class PosterRenamerr(ChubModule):
             else:
                 new_file_name = f"{folder}_Season{season_str}{file_extension}"
             new_file_path = os.path.join(dest_dir, new_file_name)
+        elif asset_type == "album":
+            # Albums share their artist's folder, so a bare "poster" name would
+            # clobber the artist poster (and sibling albums). Stage each album
+            # under a sanitized "<Artist> - <Album>" filename — the artist is
+            # included so two artists' identically-titled albums staged from a
+            # shared flat folder don't collide and overwrite each other before
+            # upload. (Plex-direct upload reads this staged file by ratingKey;
+            # the on-disk Kometa music layout is out of scope for v1.)
+            parent = illegal_chars_regex.sub("", item.get("parent_title") or "").strip()
+            album = illegal_chars_regex.sub("", item.get("title") or "").strip()
+            album_base = f"{parent} - {album}".strip(" -") if parent else album
+            album_base = album_base or "album"
+            if config.asset_folders:
+                new_file_name = f"{album_base}{file_extension}"
+            else:
+                new_file_name = f"{folder}_{album_base}{file_extension}"
+            new_file_path = os.path.join(dest_dir, new_file_name)
         else:
             if config.asset_folders:
                 new_file_name = f"poster{file_extension}"
@@ -843,6 +991,8 @@ class PosterRenamerr(ChubModule):
             "collection": [],
             "movie": [],
             "show": [],
+            "artist": [],
+            "album": [],
         }
         manifest = {"media_cache": [], "collections_cache": []}
         matched_assets = self.get_matched_assets(db=db)
@@ -863,7 +1013,9 @@ class PosterRenamerr(ChubModule):
                         break
                     result = self.rename_file(item=item, db=db)
                     if result:
-                        output[item.get("asset_type", "movie")].append(result)
+                        output.setdefault(
+                            item.get("asset_type", "movie"), []
+                        ).append(result)
 
                     if item.get("asset_type") == "collection":
                         manifest["collections_cache"].append(item.get("id"))
@@ -882,8 +1034,14 @@ class PosterRenamerr(ChubModule):
         return output, manifest
 
     def handle_output(self, output: Dict[str, List[Dict[str, Any]]]):
-        headers = {"collection": "Collection", "movie": "Movie", "show": "Show"}
-        for asset_type in ["collection", "movie", "show"]:
+        headers = {
+            "collection": "Collection",
+            "movie": "Movie",
+            "show": "Show",
+            "artist": "Artist",
+            "album": "Album",
+        }
+        for asset_type in ["collection", "movie", "show", "artist", "album"]:
             assets = output.get(asset_type, [])
             header = f"{headers.get(asset_type, asset_type.capitalize())}s"
             self.logger.info(create_table([[header]]))
@@ -921,6 +1079,10 @@ class PosterRenamerr(ChubModule):
                     self.logger.info("")
 
     def _classify_asset_record(self, record: dict, show_keys: set) -> str:
+        # Music records are pre-classified by the builder (artist/album) — the
+        # show/movie/collection heuristics below don't apply to them.
+        if record.get("music_kind"):
+            return record["music_kind"]
         if record.get("season_number") is not None or record.get("tvdb_id"):
             return "show"
 
@@ -977,6 +1139,7 @@ class PosterRenamerr(ChubModule):
         priority: int = 0,
         include_assets: bool = False,
         search_only: int = 0,
+        music: bool = False,
     ):
         """Walk source_dir and parse each image into a cache record.
 
@@ -1010,6 +1173,7 @@ class PosterRenamerr(ChubModule):
                     style=style,
                     priority=priority,
                     search_only=search_only,
+                    music_root=source_dir if music else None,
                 )
                 if not include_assets and record.get("image_type") != "poster":
                     continue
@@ -1051,15 +1215,22 @@ class PosterRenamerr(ChubModule):
         # up front so each per-asset write contributes a proportional slice.
         # The dir-walk to count is fast (no DB ops) and lets us update job
         # progress smoothly instead of in big steps per source_dir.
+        # Music source dirs (custom artist/album art) are scanned with the
+        # music classifier appended after the regular dirs so their bottom-wins
+        # priority is highest. They feed the same poster_cache.
+        music_dirs = list(getattr(self.config, "music_source_dirs", []) or [])
+        scan_plan = [(d, False) for d in source_dirs] + [(d, True) for d in music_dirs]
+
         per_dir_assets = []
         total_all = 0
-        for idx, source_dir in enumerate(source_dirs):
+        for idx, (source_dir, is_music) in enumerate(scan_plan):
             if self.is_cancelled():
                 break
             assets = self._get_assets_files(
                 source_dir,
                 priority=idx,
                 include_assets=getattr(self.config, "run_asset_renamerr", False),
+                music=is_music,
             )
             per_dir_assets.append((source_dir, assets))
             total_all += len(assets)
@@ -1256,7 +1427,13 @@ class PosterRenamerr(ChubModule):
                     self.merge_gdrive_search_index(db)
 
                 # Process each media item
-                output = {"collection": [], "movie": [], "show": []}
+                output = {
+                    "collection": [],
+                    "movie": [],
+                    "show": [],
+                    "artist": [],
+                    "album": [],
+                }
                 manifest = {"media_cache": [], "collections_cache": []}
 
                 matched_count = 0
@@ -1279,7 +1456,7 @@ class PosterRenamerr(ChubModule):
 
                             if rename_result:
                                 asset_type = updated_item.get("asset_type", "movie")
-                                output[asset_type].append(rename_result)
+                                output.setdefault(asset_type, []).append(rename_result)
 
                                 # Add to manifest
                                 if asset_type == "collection":

@@ -1,6 +1,7 @@
 import hashlib
 import json
 import os
+import shutil
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -250,7 +251,7 @@ class PosterUploader:
 
     def _get_media_indexes(
         self, instance_name: str
-    ) -> Optional[Tuple[Dict, Dict, Dict, Dict]]:
+    ) -> Optional[Tuple[Dict, Dict, Dict, Dict, Dict, Dict]]:
         """Get or build media indexes for an instance"""
         if instance_name in self._media_indexes:
             return self._media_indexes[instance_name]
@@ -295,11 +296,18 @@ class PosterUploader:
         self,
         assets: List[Dict],
         plex_client: PlexClient,
-        indexes: Tuple[Dict, Dict, Dict, Dict],
+        indexes: Tuple[Dict, Dict, Dict, Dict, Dict, Dict],
         dry_run: bool,
     ) -> List[UploadResult]:
         """Sync all assets with consolidated progress reporting"""
-        movie_index, show_index, season_index, collection_index = indexes
+        (
+            movie_index,
+            show_index,
+            season_index,
+            collection_index,
+            artist_index,
+            album_index,
+        ) = indexes
         all_results = []
 
         # Group assets by type for efficient processing
@@ -327,6 +335,16 @@ class PosterUploader:
             for a in assets
             if a.get("asset_type") == "collection" and a.get("matched") == 1
         ]
+        artists = [
+            a
+            for a in assets
+            if a.get("asset_type") == "artist" and a.get("matched") == 1
+        ]
+        albums = [
+            a
+            for a in assets
+            if a.get("asset_type") == "album" and a.get("matched") == 1
+        ]
 
         # Process each type with progress bars
         if movies:
@@ -349,6 +367,16 @@ class PosterUploader:
                 self._sync_collections(
                     collections, plex_client, collection_index, dry_run
                 )
+            )
+
+        if artists:
+            all_results.extend(
+                self._sync_artists(artists, plex_client, artist_index, dry_run)
+            )
+
+        if albums:
+            all_results.extend(
+                self._sync_albums(albums, plex_client, album_index, dry_run)
             )
 
         return all_results
@@ -533,6 +561,104 @@ class PosterUploader:
 
         return results
 
+    def _sync_artists(
+        self,
+        artists: List[Dict],
+        plex_client: PlexClient,
+        artist_index: Dict,
+        dry_run: bool,
+    ) -> List[UploadResult]:
+        """Sync artist posters (music). MusicBrainz id first, then title."""
+        results = []
+
+        with progress(
+            artists,
+            desc="Syncing artist posters",
+            total=len(artists),
+            unit="artist",
+            logger=self.logger,
+        ) as bar:
+            for artist in bar:
+                try:
+                    result = self._sync_single_asset(
+                        asset=artist,
+                        plex_client=plex_client,
+                        index=artist_index,
+                        priority_keys=["mbid", "title"],
+                        dry_run=dry_run,
+                    )
+                    results.append(result)
+                except Exception as e:
+                    self.logger.warning(
+                        f"Error syncing artist '{artist.get('title')}': {e}"
+                    )
+                    results.append(
+                        UploadResult(
+                            asset_title=artist.get("title", "Unknown"),
+                            asset_type="artist",
+                            success=False,
+                            action="failed",
+                            reason=f"Processing error: {e}",
+                        )
+                    )
+
+        return results
+
+    def _sync_albums(
+        self,
+        albums: List[Dict],
+        plex_client: PlexClient,
+        album_index: Dict,
+        dry_run: bool,
+    ) -> List[UploadResult]:
+        """Sync album covers (music). MBID first, else parent-scoped title.
+
+        Album covers are uploaded to the same "poster" slot as everything else
+        (upload_poster targets by ratingKey, type-agnostic). The title key is
+        scoped under the parent artist ("{artist}::{album}") so identically
+        named albums across artists don't collide.
+        """
+        results = []
+
+        with progress(
+            albums,
+            desc="Syncing album covers",
+            total=len(albums),
+            unit="album",
+            logger=self.logger,
+        ) as bar:
+            for album in bar:
+                try:
+                    album_norm = normalize_titles(album.get("title") or "")
+                    parent_norm = normalize_titles(album.get("parent_title") or "")
+                    scoped = (
+                        f"{parent_norm}::{album_norm}" if parent_norm else album_norm
+                    )
+                    result = self._sync_single_asset(
+                        asset=album,
+                        plex_client=plex_client,
+                        index=album_index,
+                        priority_keys=["mbid", "title"],
+                        dry_run=dry_run,
+                        title_override=scoped,
+                    )
+                    results.append(result)
+                except Exception as e:
+                    self.logger.warning(
+                        f"Error syncing album '{album.get('title')}': {e}"
+                    )
+                    results.append(
+                        UploadResult(
+                            asset_title=album.get("title", "Unknown"),
+                            asset_type="album",
+                            success=False,
+                            action="failed",
+                            reason=f"Processing error: {e}",
+                        )
+                    )
+
+        return results
+
     def _sync_single_asset(
         self,
         asset: Dict,
@@ -556,6 +682,11 @@ class PosterUploader:
                 "tmdb": str(asset.get("tmdb_id")) if asset.get("tmdb_id") else None,
                 "imdb": asset.get("imdb_id"),
                 "tvdb": str(asset.get("tvdb_id")) if asset.get("tvdb_id") else None,
+                "mbid": (
+                    str(asset.get("musicbrainz_id")).lower()
+                    if asset.get("musicbrainz_id")
+                    else None
+                ),
                 "title": title_override or normalize_titles(asset_title),
                 # Year-disambiguates title-only matches so a same-title/different-
                 # year collision can't upload the wrong release (see
@@ -718,6 +849,28 @@ class PosterUploader:
                 if not ok:
                     continue
                 uploaded_libs.append(str(entry.get("library_name")))
+                # Artist art reversion hedge: Plex's music agent re-derives an
+                # artist's image from album art on refresh, which would revert a
+                # custom poster. When opted in, lock thumb/art after the upload.
+                # Artist-only (albums are sticky); Plex-metadata only, no files.
+                if asset_type == "artist" and getattr(
+                    self.config, "music_lock_artist_art", False
+                ):
+                    plex_client.lock_field(
+                        library_name=entry["library_name"],
+                        item_title=entry["title"],
+                        fields=["thumb", "art"],
+                        year=entry.get("year"),
+                        dry_run=dry_run,
+                        plex_id=entry.get("plex_id"),
+                    )
+                # Optional LMA disk sidecars (image-only, refresh-proof).
+                if asset_type in ("artist", "album") and getattr(
+                    self.config, "music_lma_sidecars", False
+                ):
+                    self._write_music_sidecar(
+                        asset_type, poster_path, entry, dry_run
+                    )
                 # Remove overlay label if present (per-library item).
                 if self._has_overlay(entry):
                     plex_client.remove_label(entry, "Overlay", dry_run)
@@ -981,18 +1134,27 @@ class PosterUploader:
 
     # Static/utility methods (keeping existing implementations but with improvements)
     @staticmethod
-    def _build_indexes(media_cache: List[Dict]) -> Tuple[Dict, Dict, Dict, Dict]:
+    def _build_indexes(
+        media_cache: List[Dict],
+    ) -> Tuple[Dict, Dict, Dict, Dict, Dict, Dict]:
         """Build the type-separated lookup indexes for fast asset matching.
 
         Thin wrapper over the shared :class:`PlexMediaIndex` (single source of
         truth for the guid-first keying, shared with asset_renamerr's plex
-        apply path). Returns the four raw dicts so the existing _sync_* call
+        apply path). Returns the six raw dicts so the existing _sync_* call
         sites stay unchanged; each key maps to a *list* of entries (the same
         title can live in more than one enabled library on a server, e.g. a
         "Movies" and a "Movies 4K" library — every copy must get the poster).
         """
         idx = PlexMediaIndex(media_cache)
-        return idx.movies, idx.shows, idx.seasons, idx.collections
+        return (
+            idx.movies,
+            idx.shows,
+            idx.seasons,
+            idx.collections,
+            idx.artists,
+            idx.albums,
+        )
 
     @staticmethod
     def match_asset(
@@ -1006,6 +1168,34 @@ class PosterUploader:
         PlexMediaIndex matcher so poster and asset paths key identically.
         """
         return PlexMediaIndex._match(index, priority_keys, values)
+
+    def _write_music_sidecar(
+        self, asset_type: str, poster_path: str, entry: Dict, dry_run: bool
+    ) -> None:
+        """Copy a poster/cover into the Plex music library folder as a Local
+        Media Assets sidecar — ``cover.jpg`` for albums, ``artist-poster.jpg``
+        for artists. Writes an image file ONLY (never audio), into a folder that
+        must already exist inside the Plex library. Non-fatal on any error.
+        """
+        try:
+            paths = entry.get("file_paths")
+            if isinstance(paths, str):
+                paths = json.loads(paths or "[]")
+            folders = [p for p in (paths or []) if p and os.path.isdir(p)]
+            if not folders:
+                return
+            name = "cover.jpg" if asset_type == "album" else "artist-poster.jpg"
+            for folder in folders:
+                dest = os.path.join(folder, name)
+                if dry_run:
+                    self.logger.debug(f"[DRY RUN] Would write music sidecar {dest}")
+                    continue
+                shutil.copyfile(poster_path, dest)
+                self.logger.debug(f"[MUSIC_SIDECAR] {dest}")
+        except Exception as e:
+            self.logger.warning(
+                f"Music sidecar write failed for '{entry.get('title')}': {e}"
+            )
 
     @staticmethod
     def _compute_file_hash(poster_path: str, dry_run: bool = False) -> Optional[str]:

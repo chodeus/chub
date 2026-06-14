@@ -33,6 +33,10 @@ MOVIE_PRIORITY_KEYS = ["tmdb", "imdb", "title"]
 SHOW_PRIORITY_KEYS = ["tvdb", "tmdb", "imdb", "title"]
 SEASON_PRIORITY_KEYS = ["tvdb", "tmdb", "imdb", "title"]
 COLLECTION_PRIORITY_KEYS = ["title"]
+# Music: MusicBrainz id is the cross-source anchor; fall back to a normalized
+# title (parent-scoped for albums, see _search_values / resolve).
+ARTIST_PRIORITY_KEYS = ["mbid", "title"]
+ALBUM_PRIORITY_KEYS = ["mbid", "title"]
 
 
 def _coerce_year(value: Any) -> Optional[int]:
@@ -71,6 +75,8 @@ class PlexMediaIndex:
         self.shows: Dict[str, List[Dict]] = {}
         self.seasons: Dict[str, List[Dict]] = {}
         self.collections: Dict[str, List[Dict]] = {}
+        self.artists: Dict[str, List[Dict]] = {}
+        self.albums: Dict[str, List[Dict]] = {}
         self._build(media_cache or [])
 
     # ----- build ----------------------------------------------------------
@@ -122,6 +128,36 @@ class PlexMediaIndex:
                 elif typ == "collection":
                     if norm_title:
                         self._add(self.collections, f"title:{norm_title}", entry)
+
+                elif typ == "artist":
+                    # MBID keys are lower-cased on both build and lookup sides
+                    # (Plex guids can be mixed-case; media_cache/extract_mbid are
+                    # lower) so an MBID match never silently falls back to title.
+                    if guids.get("mbid"):
+                        self._add(
+                            self.artists, f"mbid:{str(guids['mbid']).lower()}", entry
+                        )
+                    if norm_title:
+                        self._add(self.artists, f"title:{norm_title}", entry)
+
+                elif typ == "album":
+                    if guids.get("mbid"):
+                        self._add(
+                            self.albums, f"mbid:{str(guids['mbid']).lower()}", entry
+                        )
+                    # Scope the album title under its artist so identically
+                    # named albums ("Greatest Hits") across artists don't
+                    # collide. Fall back to the bare album title only when the
+                    # parent is unknown.
+                    parent_norm = entry.get("parent_normalized_title")
+                    if norm_title and parent_norm:
+                        self._add(
+                            self.albums,
+                            f"title:{parent_norm}::{norm_title}",
+                            entry,
+                        )
+                    elif norm_title:
+                        self._add(self.albums, f"title:{norm_title}", entry)
             except Exception:
                 # A single malformed row must not abort the whole index build.
                 continue
@@ -199,6 +235,8 @@ class PlexMediaIndex:
             "tmdb": str(asset.get("tmdb_id")) if asset.get("tmdb_id") else None,
             "imdb": asset.get("imdb_id"),
             "tvdb": str(asset.get("tvdb_id")) if asset.get("tvdb_id") else None,
+            "mbid": (str(asset.get("musicbrainz_id")).lower()
+                     if asset.get("musicbrainz_id") else None),
             "title": title_override or (normalize_titles(title) if title else None),
             # Carried for title-match year-disambiguation (see _match). Inert for
             # guid hits; None when the row has no year, which keeps current
@@ -238,7 +276,24 @@ class PlexMediaIndex:
             return self._match(self.shows, SHOW_PRIORITY_KEYS, values)
         if media_type == "collection":
             return self._match(self.collections, COLLECTION_PRIORITY_KEYS, values)
+        if media_type == "artist":
+            return self._match(self.artists, ARTIST_PRIORITY_KEYS, values)
+        if media_type == "album":
+            # Album titles are matched parent-scoped ("{artist}::{album}") to
+            # avoid cross-artist collisions; MBID (when present) wins first.
+            album_norm = normalize_titles(asset.get("title") or "")
+            parent_norm = normalize_titles(asset.get("parent_title") or "")
+            scoped = f"{parent_norm}::{album_norm}" if parent_norm else album_norm
+            album_values = self._search_values(asset, title_override=scoped)
+            return self._match(self.albums, ALBUM_PRIORITY_KEYS, album_values)
         return [], None
 
     def is_empty(self) -> bool:
-        return not (self.movies or self.shows or self.seasons or self.collections)
+        return not (
+            self.movies
+            or self.shows
+            or self.seasons
+            or self.collections
+            or self.artists
+            or self.albums
+        )

@@ -10,6 +10,7 @@ from backend.util.helper import (
     create_table,
     dict_diff,
     extract_ids,
+    extract_mbid,
     extract_year,
     generate_title_variants,
     get_config_dir,
@@ -84,6 +85,101 @@ def test_extract_ids_imdb_tt_prefix():
 
 def test_extract_ids_returns_none_when_absent():
     assert extract_ids("Just a title") == (None, None, None)
+
+
+# --- extract_mbid ---
+
+
+def test_extract_mbid_tag():
+    mbid = extract_mbid("REZZ {mbid-12345678-1234-1234-1234-123456789abc}")
+    assert mbid == "12345678-1234-1234-1234-123456789abc"
+
+
+def test_extract_mbid_lowercases():
+    mbid = extract_mbid("Artist {mbid-ABCDEF12-3456-7890-ABCD-EF1234567890}")
+    assert mbid == "abcdef12-3456-7890-abcd-ef1234567890"
+
+
+def test_extract_mbid_absent():
+    assert extract_mbid("Inception (2010) {tmdb-27205}") is None
+    assert extract_mbid("") is None
+
+
+# --- is_match: musicbrainz ---
+
+
+def test_is_match_musicbrainz_id_equal():
+    ok, reason = is_match(
+        {"musicbrainz_id": "abc-123", "title": "Different"},
+        {"musicbrainz_id": "abc-123", "title": "Whatever"},
+    )
+    assert ok and reason == "ID match: musicbrainz_id"
+
+
+def test_is_match_musicbrainz_id_differs_rejects():
+    # Both carry an MBID and they differ → no match, never falls through to a
+    # title heuristic (which would let two artists' albums collide).
+    ok, _ = is_match(
+        {"musicbrainz_id": "abc-123", "title": "Greatest Hits"},
+        {"musicbrainz_id": "xyz-999", "title": "Greatest Hits"},
+    )
+    assert ok is False
+
+
+def test_is_match_musicbrainz_one_sided_falls_back_to_title():
+    # Only one side has an MBID → fall through to title heuristics.
+    ok, _ = is_match(
+        {"title": "REZZ", "normalized_title": "rezz"},
+        {"musicbrainz_id": "abc-123", "title": "REZZ", "normalized_title": "rezz"},
+    )
+    assert ok is True
+
+
+def test_is_match_album_same_title_different_artist_rejected():
+    # No MBID on either side; same album title under different artists must NOT
+    # match (parent-scoping gate).
+    ok, _ = is_match(
+        {
+            "title": "Greatest Hits",
+            "normalized_title": "greatesthits",
+            "parent_title": "Queen",
+        },
+        {
+            "title": "Greatest Hits",
+            "normalized_title": "greatesthits",
+            "parent_title": "ABBA",
+        },
+    )
+    assert ok is False
+
+
+def test_is_match_album_same_title_same_artist_matches():
+    ok, _ = is_match(
+        {
+            "title": "Greatest Hits",
+            "normalized_title": "greatesthits",
+            "parent_title": "Queen",
+        },
+        {
+            "title": "Greatest Hits",
+            "normalized_title": "greatesthits",
+            "parent_title": "Queen",
+        },
+    )
+    assert ok is True
+
+
+def test_is_match_album_missing_one_parent_still_matches():
+    # When one side lacks a parent we can't disambiguate — fall through (match).
+    ok, _ = is_match(
+        {"title": "Greatest Hits", "normalized_title": "greatesthits"},
+        {
+            "title": "Greatest Hits",
+            "normalized_title": "greatesthits",
+            "parent_title": "Queen",
+        },
+    )
+    assert ok is True
 
 
 # --- compare_strings ---

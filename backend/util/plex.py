@@ -337,6 +337,40 @@ class PlexClient:
                                 "file_paths": artist_paths,
                             }
                         )
+                        # Emit a row per album so custom album covers have a
+                        # target. Albums carry their own mbid:// guid; we scope
+                        # them to the parent artist for collision-proof title
+                        # matching. Kept inside the paged walk (one albums() call
+                        # per artist) to bound API cost.
+                        artist_norm = normalize_titles(item.title)
+                        for album in item.albums():
+                            album_guids = {
+                                g.id.split("://")[0]: g.id.split("://")[1]
+                                for g in getattr(album, "guids", [])
+                                if "://" in g.id
+                            }
+                            items.append(
+                                {
+                                    "plex_id": str(album.ratingKey),
+                                    "instance_name": instance_name,
+                                    "asset_type": "album",
+                                    "library_name": library_name,
+                                    "title": album.title,
+                                    "normalized_title": normalize_titles(album.title),
+                                    "parent_title": item.title,
+                                    "parent_normalized_title": artist_norm,
+                                    "season_number": None,
+                                    "year": str(getattr(album, "year", None) or ""),
+                                    "guids": album_guids,
+                                    "labels": [
+                                        label.tag
+                                        for label in getattr(album, "labels", [])
+                                    ],
+                                    "file_paths": list(
+                                        getattr(album, "locations", []) or []
+                                    ),
+                                }
+                            )
                 except Exception as e:
                     logger.error(
                         f"Error processing item '{getattr(item, 'title', '')}': {e}"
@@ -783,6 +817,47 @@ class PlexClient:
             dry_run=dry_run,
             plex_id=plex_id,
         )
+
+    def lock_field(
+        self,
+        library_name: str,
+        item_title: str,
+        fields: List[str],
+        *,
+        year: Any = None,
+        season_number: Any = None,
+        dry_run: bool = False,
+        plex_id: Any = None,
+    ) -> bool:
+        """Lock one or more metadata fields (e.g. ``thumb``, ``art``) on a Plex
+        item so a metadata refresh can't overwrite a user-selected image.
+
+        Used for music artists: Plex's music agent otherwise re-derives an
+        artist's image from album art on refresh, reverting a custom poster.
+        Targets the exact item by ``plex_id`` (ratingKey) when available. This
+        edits Plex metadata only — it never touches files.
+        """
+        try:
+            targets = self._locate_targets(
+                library_name,
+                item_title,
+                year=year,
+                season_number=season_number,
+                plex_id=plex_id,
+            )
+            if not targets:
+                return False
+            if not dry_run:
+                edits = {f"{field}.locked": 1 for field in fields}
+                for tgt in targets:
+                    tgt.edit(**edits)
+            return True
+        except Exception as e:
+            self.logger.error(
+                f"Failed to lock {fields} for '{item_title}' in "
+                f"'{library_name}': {e}"
+            )
+            return False
 
     def remove_label(
         self,
