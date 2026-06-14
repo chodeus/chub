@@ -4347,6 +4347,62 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
         if (c) setLogo(null);
     }, []);
 
+    // ─── Extract a logo from a poster (no AI) ──────────────────────────────────
+    // Brush over a white title on a poster; the key lifts it into a transparent
+    // logo, which becomes the custom logo and flows through the same whiten/save.
+    const [extractOpen, setExtractOpen] = useState(false);
+    const [posterSource, setPosterSource] = useState('tmdb');
+    const [posterPath, setPosterPath] = useState(null);
+    const [customPoster, setCustomPoster] = useState(null); // { b64, url, name }
+    const [extractMask, setExtractMask] = useState(null);
+    const [extracting, setExtracting] = useState(false);
+    const posters = artBySource[posterSource]?.posters || [];
+    const posterUrl = customPoster?.url || (posterPath ? urlForPath(posterPath) : null);
+    const onPosterSource = s => {
+        setPosterSource(s);
+        if (s !== 'upload') setCustomPoster(null);
+    };
+    const pickPoster = p => {
+        setPosterPath(p);
+        setCustomPoster(null);
+        setExtractMask(null);
+    };
+    const onPosterFile = e => {
+        const f = e.target.files?.[0];
+        e.target.value = '';
+        if (!f) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+            const url = String(reader.result);
+            setCustomPoster({ b64: url.split(',').pop(), url, name: f.name });
+            setPosterPath(null);
+            setExtractMask(null);
+        };
+        reader.readAsDataURL(f);
+    };
+    const onExtract = async () => {
+        if (!posterUrl) return;
+        setExtracting(true);
+        try {
+            const blob = await cl2kMakerAPI.extractLogo({
+                image_path: customPoster ? null : posterPath,
+                image_b64: customPoster?.b64 || null,
+                mask_b64: extractMask,
+            });
+            const url = await new Promise(resolve => {
+                const fr = new FileReader();
+                fr.onload = () => resolve(String(fr.result));
+                fr.readAsDataURL(blob);
+            });
+            setCustomExclusive({ b64: url.split(',').pop(), url, name: 'extracted-logo.png' });
+            setExtractOpen(false);
+        } catch (err) {
+            toast.error(err.message || 'Extraction failed');
+        } finally {
+            setExtracting(false);
+        }
+    };
+
     const req = useMemo(
         () => ({
             kind: item.kind,
@@ -4455,6 +4511,19 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
         }
     };
 
+    // Download the processed logo (whiten/invert/flip applied) straight to the PC.
+    const onDownload = async () => {
+        setBusy(true);
+        try {
+            const blob = await cl2kMakerAPI.logoAssetPreview(req);
+            downloadBlob(blob, `${item.title}${item.year ? ` (${item.year})` : ''} - Logo.png`);
+        } catch (err) {
+            toast.error(err.message || 'Download failed');
+        } finally {
+            setBusy(false);
+        }
+    };
+
     const seg = on =>
         `px-3 py-1 text-sm rounded-md border ${
             on
@@ -4481,6 +4550,88 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                             : 'No logos from this source — switch source or Upload a custom PNG.'
                     }
                 />
+                <div className="bg-surface border border-border rounded-lg p-3">
+                    <button
+                        type="button"
+                        onClick={() => setExtractOpen(o => !o)}
+                        className="w-full flex items-center justify-between text-left"
+                    >
+                        <span className="text-sm font-medium text-primary">
+                            Extract logo from a poster{' '}
+                            <span className="text-tertiary font-normal">— no AI</span>
+                        </span>
+                        <span className="text-xs text-secondary">
+                            {extractOpen ? 'Hide' : 'Open'}
+                        </span>
+                    </button>
+                    {extractOpen && (
+                        <div className="mt-3 flex flex-col gap-3">
+                            <p className="text-xs text-tertiary">
+                                Pull a white title straight off a poster — no OpenAI. Pick a poster,
+                                brush over the title (a loose scribble is fine; keep off bright
+                                areas), then Extract. The result becomes your logo below.
+                            </p>
+                            {posterSource === 'upload' ? (
+                                <UploadArtCard
+                                    label="Poster"
+                                    headerRight={
+                                        <SourceSelector
+                                            value={posterSource}
+                                            onChange={onPosterSource}
+                                        />
+                                    }
+                                    custom={customPoster}
+                                    onFile={onPosterFile}
+                                    onClear={() => setCustomPoster(null)}
+                                />
+                            ) : (
+                                <Picker
+                                    label="Poster"
+                                    headerRight={
+                                        <SourceSelector
+                                            value={posterSource}
+                                            onChange={onPosterSource}
+                                        />
+                                    }
+                                    items={posters}
+                                    loading={loadingArt}
+                                    selected={posterPath}
+                                    onSelect={pickPoster}
+                                    aspect="aspect-poster"
+                                    emptyText={
+                                        posterSource === 'plex' &&
+                                        artBySource.plex?.reason &&
+                                        !posters.length
+                                            ? artBySource.plex.reason
+                                            : 'No posters from this source — switch source or Upload one.'
+                                    }
+                                />
+                            )}
+                            {posterUrl && (
+                                <div>
+                                    <p className="text-xs text-tertiary mb-1">
+                                        Brush over the title:
+                                    </p>
+                                    <div className="bg-black rounded p-1 inline-block max-w-full">
+                                        <BrushMask
+                                            imageUrl={posterUrl}
+                                            brushSize={18}
+                                            onMaskChange={setExtractMask}
+                                        />
+                                    </div>
+                                </div>
+                            )}
+                            <LoadingButton
+                                onClick={onExtract}
+                                loading={extracting}
+                                disabled={!posterUrl || !extractMask}
+                                icon="content_cut"
+                            >
+                                Extract logo
+                            </LoadingButton>
+                        </div>
+                    )}
+                </div>
                 <div className="bg-surface border border-border rounded-lg p-3">
                     <h3 className="text-sm font-medium text-primary mb-2">Colour</h3>
                     <div className="flex items-center gap-2">
@@ -4597,6 +4748,14 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                     >
                         Export &amp; save logo
                     </LoadingButton>
+                    <button
+                        type="button"
+                        onClick={onDownload}
+                        disabled={!hasLogo || busy || previewing}
+                        className="px-3 py-1.5 text-sm rounded-md border bg-surface text-secondary border-border hover:border-border-strong disabled:opacity-50"
+                    >
+                        Download to PC
+                    </button>
                 </div>
             </div>
         </section>

@@ -169,6 +169,10 @@ export const cl2kMakerAPI = {
     /** File a clear logo as a `- Logo.png` asset (whiten toggles CL2K white). */
     logoAssetGenerate: req => apiCore.post('/cl2k-maker/logo-asset-generate', req),
 
+    /** Extract a white title from a poster into a transparent logo PNG. Returns a
+     *  Blob. `req` = { image_b64 | image_path, mask_b64, lo, hi }. */
+    extractLogo: req => postBlob('/cl2k-maker/extract-logo', req),
+
     /** Recently generated posters (provenance). */
     generated: (limit = 200) =>
         apiCore.get(`/cl2k-maker/generated?${qs({ limit })}`, { useCache: false }),
