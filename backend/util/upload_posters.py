@@ -216,13 +216,6 @@ class PosterUploader:
                 upload_results = self._sync_all_assets(
                     assets, plex_client, indexes, self.config.dry_run
                 )
-                # Optional fallback: for music rows with no local custom art,
-                # push the artwork Lidarr already fetched (fanart.tv upstream).
-                upload_results.extend(
-                    self._sync_lidarr_art_fallback(
-                        plex_client, indexes, self.config.dry_run
-                    )
-                )
 
                 return InstanceResult(
                     instance_name=instance_name,
@@ -1175,90 +1168,6 @@ class PosterUploader:
         PlexMediaIndex matcher so poster and asset paths key identically.
         """
         return PlexMediaIndex._match(index, priority_keys, values)
-
-    def _sync_lidarr_art_fallback(
-        self,
-        plex_client: PlexClient,
-        indexes: Tuple[Dict, Dict, Dict, Dict, Dict, Dict],
-        dry_run: bool,
-    ) -> List[UploadResult]:
-        """Push Lidarr-fetched artwork (fanart.tv upstream) for music rows that
-        have NO local custom art. Off unless ``music_art_from_lidarr`` is set.
-
-        Only acts on artist/album rows that are not locally matched (matched=0)
-        and carry a Lidarr ``poster_url``; resolves the Plex target via the same
-        MBID-first index and uploads the remote URL by ratingKey. Local custom
-        art always wins (those rows are matched=1 and handled by the normal
-        path), so this never overrides a user's own poster.
-        """
-        if not getattr(self.config, "music_art_from_lidarr", False):
-            return []
-        _, _, _, _, artist_index, album_index = indexes
-        try:
-            rows = (
-                self.db.media.execute_query(
-                    "SELECT * FROM media_cache "
-                    "WHERE asset_type IN ('artist','album') "
-                    "AND (matched IS NULL OR matched = 0) "
-                    "AND poster_url IS NOT NULL AND poster_url != ''",
-                    fetch_all=True,
-                )
-                or []
-            )
-        except Exception as e:
-            self.logger.warning(f"Lidarr art fallback query failed: {e}")
-            return []
-
-        results: List[UploadResult] = []
-        for row in rows:
-            asset_type = row.get("asset_type")
-            index = artist_index if asset_type == "artist" else album_index
-            if asset_type == "album":
-                parent_norm = normalize_titles(row.get("parent_title") or "")
-                album_norm = normalize_titles(row.get("title") or "")
-                title_key = (
-                    f"{parent_norm}::{album_norm}" if parent_norm else album_norm
-                )
-            else:
-                title_key = normalize_titles(row.get("title") or "")
-            values = {
-                "mbid": (
-                    str(row.get("musicbrainz_id")).lower()
-                    if row.get("musicbrainz_id")
-                    else None
-                ),
-                "title": title_key,
-                "year": None,
-            }
-            entries, match_type = self.match_asset(index, ["mbid", "title"], values)
-            if not entries:
-                continue
-            seen_libs = set()
-            for entry in entries:
-                lib = entry.get("library_name")
-                if lib in seen_libs:
-                    continue
-                seen_libs.add(lib)
-                ok = plex_client.upload_poster(
-                    library_name=lib,
-                    item_title=entry.get("title"),
-                    url=row.get("poster_url"),
-                    year=entry.get("year"),
-                    dry_run=dry_run,
-                    plex_id=entry.get("plex_id"),
-                )
-                results.append(
-                    UploadResult(
-                        asset_title=row.get("title", "Unknown"),
-                        asset_type=asset_type,
-                        success=bool(ok),
-                        action="uploaded" if ok else "failed",
-                        reason="Lidarr-fetched art (no local custom art)",
-                        library_name=lib,
-                        match_type=match_type,
-                    )
-                )
-        return results
 
     def _write_music_sidecar(
         self, asset_type: str, poster_path: str, entry: Dict, dry_run: bool

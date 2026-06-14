@@ -58,18 +58,17 @@ def test_poster_renamerr_music_defaults():
     pr = ChubConfig().poster_renamerr
     assert pr.music_lock_artist_art is False
     assert pr.music_lma_sidecars is False
-    assert pr.music_art_from_lidarr is False
     assert pr.music_source_dirs == []
 
     loaded = ChubConfig(
         poster_renamerr={
             "music_lock_artist_art": True,
-            "music_art_from_lidarr": True,
+            "music_lma_sidecars": True,
             "music_source_dirs": ["/music/art"],
         }
     )
     assert loaded.poster_renamerr.music_lock_artist_art is True
-    assert loaded.poster_renamerr.music_art_from_lidarr is True
+    assert loaded.poster_renamerr.music_lma_sidecars is True
     assert loaded.poster_renamerr.music_source_dirs == ["/music/art"]
 
 

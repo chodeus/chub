@@ -551,11 +551,6 @@ class Connector:
                     album_row["parent_title"] = artist_title
                     album_row["arr_id"] = season.get("album_id")
                     album_row["monitored"] = season.get("monitored")
-                    # Album's OWN Lidarr cover URL — set unconditionally so an
-                    # album with no cover is None rather than inheriting the
-                    # artist's poster_url (which the music_art_from_lidarr
-                    # fallback would otherwise push as the album cover).
-                    album_row["poster_url"] = season.get("poster_url")
                     # Album titles don't share the artist's alternate titles.
                     album_row["alternate_titles"] = None
                     album_row["normalized_alternate_titles"] = None

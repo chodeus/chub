@@ -2091,9 +2091,6 @@ def normalize_arr_media(
                         "foreign_album_id": album.get("foreignAlbumId", ""),
                         "monitored": album.get("monitored", False),
                         "episode_data": [],  # Albums don't have sub-items to search
-                        # Lidarr's own album cover (fanart.tv upstream) — used as
-                        # the optional music_art_from_lidarr fallback source.
-                        "poster_url": extract_poster_url(album),
                     }
                 )
 

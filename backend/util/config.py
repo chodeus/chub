@@ -127,9 +127,6 @@ class PosterRenamerrConfig(BaseModel):
     # background.jpg for artists) into the Plex music library folders for
     # refresh-proof art. Writes image files only; never audio.
     music_lma_sidecars: bool = False
-    # When no local/Google-Drive custom art matches, fall back to the art Lidarr
-    # already fetched (fanart.tv upstream) via its mediacover URL.
-    music_art_from_lidarr: bool = False
 
     @field_validator("action_type", mode="before")
     @classmethod

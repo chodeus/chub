@@ -699,22 +699,19 @@ class PlexClient:
         self,
         library_name: str,
         item_title: str,
-        poster_path: Optional[str] = None,
+        poster_path: str,
         year: Any = None,
         is_collection: bool = False,
         season_number: Any = None,
         edition: Any = None,
         dry_run: bool = False,
         plex_id: Any = None,
-        url: Optional[str] = None,
     ) -> bool:
         """
         Upload a poster to Plex using plexapi's built-in methods.
         Supports uploading to a series season if season_number is given,
         and targeting a specific movie edition via editionTitle.
         ``plex_id`` (the cached ratingKey) targets the exact item directly.
-        Provide a local ``poster_path`` OR a remote ``url`` (e.g. a Lidarr
-        mediacover URL for the music_art_from_lidarr fallback).
         """
         return self._upload_artwork(
             "uploadPoster",
@@ -722,7 +719,6 @@ class PlexClient:
             library_name,
             item_title,
             filepath=poster_path,
-            url=url,
             year=year,
             is_collection=is_collection,
             season_number=season_number,
