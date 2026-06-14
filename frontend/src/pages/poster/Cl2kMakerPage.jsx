@@ -33,10 +33,11 @@ const KIND_OPTIONS = [
 ];
 
 // CL2K bottom-banner labels (from the template). Empty = no banner / auto label.
+// "Specials" is NOT here — it's a season (0), made via the Season box, which both
+// files as `- Specials` and renders the SPECIALS label.
 const BAND_LABEL_OPTIONS = [
     { value: '', label: 'None' },
     { value: 'COMPLETE LIMITED SERIES', label: 'Complete Limited Series' },
-    { value: 'SPECIALS', label: 'Specials' },
 ];
 
 // Wordmark logos first. TMDB's "logos" array is polluted with portrait
@@ -918,8 +919,12 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
     const [seasonNumber, setSeasonNumber] = useState(saved.seasonNumber ?? '');
     const [bulkSeasons, setBulkSeasons] = useState(saved.bulkSeasons ?? '');
     // Optional bottom banner (e.g. COMPLETE LIMITED SERIES). Overrides the auto
-    // COLLECTION / season label; not applied to season posters (they show SEASON N).
-    const [bandLabel, setBandLabel] = useState(saved.bandLabel ?? '');
+    // COLLECTION / season label; not applied to season posters (they show the
+    // season label). Drop a stale saved value no longer in the options (e.g. the
+    // retired "SPECIALS", now made via Season 0) so it can't silently re-apply.
+    const [bandLabel, setBandLabel] = useState(() =>
+        BAND_LABEL_OPTIONS.some(o => o.value === saved.bandLabel) ? saved.bandLabel : ''
+    );
 
     // AI text-removal
     const [removeText, setRemoveText] = useState(saved.removeText ?? false);
@@ -2115,7 +2120,9 @@ const RenderPanel = ({
                             onChange={onFocusChange}
                             mockLabel={
                                 isSeasonPoster
-                                    ? `Season ${seasonNumber}`
+                                    ? Number(seasonNumber) === 0
+                                        ? 'Specials'
+                                        : `Season ${seasonNumber}`
                                     : bandLabel || (item.kind === 'collection' ? 'COLLECTION' : '')
                             }
                             labelYFrac={
@@ -2406,7 +2413,7 @@ const SeasonControls = ({
                 min="0"
                 value={seasonNumber}
                 onChange={e => setSeasonNumber(e.target.value)}
-                placeholder="blank = main show poster"
+                placeholder="blank = show poster, 0 = Specials"
                 className="flex-1 bg-surface border border-border rounded px-2 py-1 text-sm text-primary"
             />
         </label>
