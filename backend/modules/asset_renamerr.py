@@ -128,7 +128,13 @@ class AssetRenamerr(ChubModule):
         return out
 
     # media asset_type -> the Plex library type that can actually hold it.
-    _PLEX_SECTION_TYPE = {"movie": "movie", "show": "show"}
+    # Artists and albums both live in "artist" (music) libraries.
+    _PLEX_SECTION_TYPE = {
+        "movie": "movie",
+        "show": "show",
+        "artist": "artist",
+        "album": "artist",
+    }
 
     def _get_plex_index(self, db: ChubDB, instance_name: str):
         """Build (once per run, cached) a PlexMediaIndex over this instance's
@@ -169,6 +175,8 @@ class AssetRenamerr(ChubModule):
             media_type = "movie"
         elif asset_type == "show":
             media_type = "season" if season_number is not None else "show"
+        elif asset_type in ("artist", "album"):
+            media_type = asset_type
         else:
             return None  # collections resolve via their own instance/library
         entries, _key = index.resolve(
@@ -858,6 +866,11 @@ class AssetRenamerr(ChubModule):
                     and media.get("asset_type") == "show"
                     and media.get("season_number") is not None
                 ):
+                    continue
+                # Albums likewise have no logos — providers publish artist-level
+                # logos only. Skip album+logo so it never sits as permanently
+                # "missing". Artist logos and album backgrounds are supported.
+                if image_type == "logo" and media.get("asset_type") == "album":
                     continue
                 # Manual-pick lock: when the user chose a specific file in the
                 # picker, reuse it verbatim instead of re-resolving — a re-run

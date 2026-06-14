@@ -382,6 +382,14 @@ class SchemaManager:
                 ColumnDefinition("tmdb_id", "INTEGER"),
                 ColumnDefinition("tvdb_id", "INTEGER"),
                 ColumnDefinition("imdb_id", "TEXT"),
+                # MusicBrainz id of a music source poster (artist/album), plus
+                # parent linkage for albums. NULL for non-music posters. Lets a
+                # music cover match its media row by MBID first (is_match /
+                # find_asset_candidate), then by parent-scoped title.
+                ColumnDefinition("musicbrainz_id", "TEXT"),
+                ColumnDefinition("parent_musicbrainz_id", "TEXT"),
+                ColumnDefinition("parent_title", "TEXT"),
+                ColumnDefinition("parent_normalized_title", "TEXT"),
                 ColumnDefinition("season_number", "INTEGER"),
                 ColumnDefinition("folder", "TEXT"),
                 ColumnDefinition("file", "TEXT"),

@@ -119,13 +119,20 @@ class PosterCache(DatabaseBase):
     _UPSERT_SQL = """
             INSERT INTO poster_cache
                 (asset_type, title, normalized_title, year,
-                 tmdb_id, tvdb_id, imdb_id, season_number, folder, file, style,
+                 tmdb_id, tvdb_id, imdb_id,
+                 musicbrainz_id, parent_musicbrainz_id, parent_title,
+                 parent_normalized_title,
+                 season_number, folder, file, style,
                  created_at, priority, image_type, search_only)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(title, year, tmdb_id, tvdb_id, imdb_id, season_number, file)
             DO UPDATE SET
                 asset_type=excluded.asset_type,
                 normalized_title=excluded.normalized_title,
+                musicbrainz_id=excluded.musicbrainz_id,
+                parent_musicbrainz_id=excluded.parent_musicbrainz_id,
+                parent_title=excluded.parent_title,
+                parent_normalized_title=excluded.parent_normalized_title,
                 folder=excluded.folder,
                 style=excluded.style,
                 priority=excluded.priority,
@@ -178,6 +185,10 @@ class PosterCache(DatabaseBase):
             record["tmdb_id"],
             record["tvdb_id"],
             record["imdb_id"],
+            record.get("musicbrainz_id"),
+            record.get("parent_musicbrainz_id"),
+            record.get("parent_title"),
+            record.get("parent_normalized_title"),
             record["season_number"],
             record["folder"],
             record["file"],

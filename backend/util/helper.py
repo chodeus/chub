@@ -505,6 +505,18 @@ def is_match(
         except Exception:
             return None
 
+    # MusicBrainz id is the cross-source anchor for music (artists/albums). It
+    # is a GUID string, so it bypasses the integer normalization the other ids
+    # use. When both sides carry one it is authoritative: equal → match,
+    # different → reject (don't fall through to title, which would let two
+    # artists' identically-named albums collide).
+    asset_mbid = (str(asset.get("musicbrainz_id") or "").strip().lower()) or None
+    media_mbid = (str(media.get("musicbrainz_id") or "").strip().lower()) or None
+    if asset_mbid and media_mbid:
+        if asset_mbid == media_mbid:
+            return True, "ID match: musicbrainz_id"
+        return False, ""
+
     shared_id_sources = []
     for key in ["tvdb_id", "tmdb_id", "imdb_id"]:
         asset_id = normalized_id(key, asset)

@@ -334,7 +334,7 @@ class PosterRenamerr(ChubModule):
         # ambiguous (conflicting-identity) matches.
         matched_candidates = []
 
-        for id_field in ["imdb_id", "tmdb_id", "tvdb_id"]:
+        for id_field in ["imdb_id", "tmdb_id", "tvdb_id", "musicbrainz_id"]:
             id_val = media.get(id_field)
             if id_val:
                 c = db.poster.get_by_id(
@@ -685,6 +685,21 @@ class PosterRenamerr(ChubModule):
             else:
                 new_file_name = f"{folder}_Season{season_str}{file_extension}"
             new_file_path = os.path.join(dest_dir, new_file_name)
+        elif asset_type == "album":
+            # Albums share their artist's folder, so a bare "poster" name would
+            # clobber the artist poster (and sibling albums). Stage each album
+            # under a sanitized album-title filename. (Plex-direct upload reads
+            # this staged file by ratingKey; the on-disk Kometa music layout is
+            # out of scope for v1.)
+            album_base = (
+                illegal_chars_regex.sub("", item.get("title") or "").strip()
+                or "album"
+            )
+            if config.asset_folders:
+                new_file_name = f"{album_base}{file_extension}"
+            else:
+                new_file_name = f"{folder}_{album_base}{file_extension}"
+            new_file_path = os.path.join(dest_dir, new_file_name)
         else:
             if config.asset_folders:
                 new_file_name = f"poster{file_extension}"
@@ -843,6 +858,8 @@ class PosterRenamerr(ChubModule):
             "collection": [],
             "movie": [],
             "show": [],
+            "artist": [],
+            "album": [],
         }
         manifest = {"media_cache": [], "collections_cache": []}
         matched_assets = self.get_matched_assets(db=db)
@@ -863,7 +880,9 @@ class PosterRenamerr(ChubModule):
                         break
                     result = self.rename_file(item=item, db=db)
                     if result:
-                        output[item.get("asset_type", "movie")].append(result)
+                        output.setdefault(
+                            item.get("asset_type", "movie"), []
+                        ).append(result)
 
                     if item.get("asset_type") == "collection":
                         manifest["collections_cache"].append(item.get("id"))
@@ -882,8 +901,14 @@ class PosterRenamerr(ChubModule):
         return output, manifest
 
     def handle_output(self, output: Dict[str, List[Dict[str, Any]]]):
-        headers = {"collection": "Collection", "movie": "Movie", "show": "Show"}
-        for asset_type in ["collection", "movie", "show"]:
+        headers = {
+            "collection": "Collection",
+            "movie": "Movie",
+            "show": "Show",
+            "artist": "Artist",
+            "album": "Album",
+        }
+        for asset_type in ["collection", "movie", "show", "artist", "album"]:
             assets = output.get(asset_type, [])
             header = f"{headers.get(asset_type, asset_type.capitalize())}s"
             self.logger.info(create_table([[header]]))
@@ -1256,7 +1281,13 @@ class PosterRenamerr(ChubModule):
                     self.merge_gdrive_search_index(db)
 
                 # Process each media item
-                output = {"collection": [], "movie": [], "show": []}
+                output = {
+                    "collection": [],
+                    "movie": [],
+                    "show": [],
+                    "artist": [],
+                    "album": [],
+                }
                 manifest = {"media_cache": [], "collections_cache": []}
 
                 matched_count = 0
@@ -1279,7 +1310,7 @@ class PosterRenamerr(ChubModule):
 
                             if rename_result:
                                 asset_type = updated_item.get("asset_type", "movie")
-                                output[asset_type].append(rename_result)
+                                output.setdefault(asset_type, []).append(rename_result)
 
                                 # Add to manifest
                                 if asset_type == "collection":
