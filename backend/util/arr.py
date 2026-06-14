@@ -1744,6 +1744,138 @@ class LidarrClient(BaseARRClient):
         }
         return self.make_delete_request(endpoint, params=params)
 
+    def delete_track_file(self, track_file_ids: Union[int, List[int]]) -> Any:
+        """Delete one or more track files by their file IDs.
+
+        Mirrors Sonarr's ``delete_episode_files`` (bulk endpoint). Used by NoHL
+        to remove the wasteful non-hardlinked library copy before re-grabbing a
+        properly linked release. Operates on track *files* only — the artist and
+        album records are untouched.
+        """
+        if isinstance(track_file_ids, int):
+            track_file_ids = [track_file_ids]
+        payload = {"trackFileIds": track_file_ids}
+        self.logger.debug(f"Delete track files payload: {payload}")
+        endpoint = f"{self.api_base}/trackfile/bulk"
+        return self.make_delete_request(endpoint, payload)
+
+    def get_rename_list(self, media_id: int, threadsafe: bool = False) -> Any:
+        """
+        Preview renaming for an artist's tracks.
+
+        Args:
+            media_id (int): Artist ID.
+            threadsafe (bool): Use a private session for concurrent calls.
+        Returns:
+            Any: List of rename items, each with ``trackFileId`` plus
+                ``existingPath``/``newPath``.
+        """
+        endpoint = f"{self.api_base}/rename?artistId={media_id}"
+        return self._requester(threadsafe)(endpoint, headers=self.headers)
+
+    def rename_media(self, media_ids: List[int]) -> Any:
+        """
+        Trigger renaming of artists' track files.
+
+        Unlike Radarr/Sonarr (which rename by movie/series ID via
+        ``RenameMovie``/``RenameSeries``), Lidarr's ``RenameFiles`` command is
+        per-artist and takes the explicit track-file IDs to rename. We derive
+        those from the rename preview, so passing the same artist-ID list the
+        renameinatorr loop already builds works transparently.
+
+        This renames the *library* copy to the existing naming scheme; it never
+        edits tags/content and respects hardlinks (the seeded download copy is a
+        separate hardlink to the same inode, untouched).
+
+        Args:
+            media_ids (List[int]): Artist IDs.
+        Returns:
+            Any: API response from the last command issued, or None.
+        """
+        endpoint = f"{self.api_base}/command"
+        result = None
+        for artist_id in media_ids:
+            preview = self.get_rename_list(artist_id) or []
+            file_ids = sorted(
+                {
+                    item.get("trackFileId")
+                    for item in preview
+                    if item.get("trackFileId") is not None
+                }
+            )
+            if not file_ids:
+                continue
+            payload = {
+                "name": "RenameFiles",
+                "artistId": artist_id,
+                "files": file_ids,
+            }
+            self.logger.debug(f"Rename payload: {payload}")
+            result = self.make_post_request(endpoint, json=payload)
+        return result
+
+    def rename_folders(self, media_ids: List[int], root_folder_path: str) -> Any:
+        """
+        Rename/move folders for given artists to the current naming scheme.
+
+        Args:
+            media_ids (List[int]): Artist IDs.
+            root_folder_path (str): Root folder path.
+        Returns:
+            Any: API response.
+        """
+        payload = {
+            "artistIds": media_ids,
+            "moveFiles": True,
+            "rootFolderPath": root_folder_path,
+        }
+        self.logger.debug(f"Rename Folder Payload: {payload}")
+        endpoint = f"{self.api_base}/artist/editor"
+        return self.make_put_request(endpoint, json=payload)
+
+    def get_mediacover_url(self, kind: str, media_id: int, file: str) -> str:
+        """Build a Lidarr mediacover URL for an artist or album image.
+
+        ``kind`` is ``"artist"`` or ``"album"``. Returns an absolute URL that
+        ``_upload_artwork(url=...)`` can push straight to Plex. Read-only source
+        only — Lidarr exposes no art-upload endpoint.
+        """
+        return f"{self.api_base}/mediacover/{kind}/{media_id}/{file}"
+
+    @staticmethod
+    def _extract_images(
+        images: Optional[List[Dict[str, Any]]], cover_map: Dict[str, str]
+    ) -> Dict[str, str]:
+        """Map an ARR ``images[]`` list to {plex_slot: url} via ``cover_map``.
+
+        ``cover_map`` maps Lidarr ``coverType`` values to CHUB image slots
+        (``poster``/``background``/``logo``). Prefers ``remoteUrl`` (the
+        upstream metadata-server URL) and falls back to the local ``url``.
+        """
+        result: Dict[str, str] = {}
+        for image in images or []:
+            slot = cover_map.get(image.get("coverType"))
+            if not slot:
+                continue
+            url = image.get("remoteUrl") or image.get("url")
+            if url:
+                result[slot] = url
+        return result
+
+    def extract_artist_images(self, artist: Dict[str, Any]) -> Dict[str, str]:
+        """Return {slot: url} for an artist (poster/fanart/logo)."""
+        return self._extract_images(
+            artist.get("images"),
+            {"poster": "poster", "fanart": "background", "logo": "logo"},
+        )
+
+    def extract_album_images(self, album: Dict[str, Any]) -> Dict[str, str]:
+        """Return {slot: url} for an album (cover → poster)."""
+        return self._extract_images(
+            album.get("images"),
+            {"cover": "poster"},
+        )
+
 
 def create_arr_client(
     url: str, api: str, logger: Any

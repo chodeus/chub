@@ -424,7 +424,7 @@ class Renameinatorr(ChubModule):
                 self.logger.info("")
 
             output = {}
-            for instance_type in ["radarr", "sonarr"]:
+            for instance_type in ["radarr", "sonarr", "lidarr"]:
                 instance_dict = getattr(self.full_config.instances, instance_type, {})
                 for instance_name, instance_cfg in instance_dict.items():
                     if instance_name in self.config.instances:

@@ -337,6 +337,40 @@ class PlexClient:
                                 "file_paths": artist_paths,
                             }
                         )
+                        # Emit a row per album so custom album covers have a
+                        # target. Albums carry their own mbid:// guid; we scope
+                        # them to the parent artist for collision-proof title
+                        # matching. Kept inside the paged walk (one albums() call
+                        # per artist) to bound API cost.
+                        artist_norm = normalize_titles(item.title)
+                        for album in item.albums():
+                            album_guids = {
+                                g.id.split("://")[0]: g.id.split("://")[1]
+                                for g in getattr(album, "guids", [])
+                                if "://" in g.id
+                            }
+                            items.append(
+                                {
+                                    "plex_id": str(album.ratingKey),
+                                    "instance_name": instance_name,
+                                    "asset_type": "album",
+                                    "library_name": library_name,
+                                    "title": album.title,
+                                    "normalized_title": normalize_titles(album.title),
+                                    "parent_title": item.title,
+                                    "parent_normalized_title": artist_norm,
+                                    "season_number": None,
+                                    "year": str(getattr(album, "year", None) or ""),
+                                    "guids": album_guids,
+                                    "labels": [
+                                        label.tag
+                                        for label in getattr(album, "labels", [])
+                                    ],
+                                    "file_paths": list(
+                                        getattr(album, "locations", []) or []
+                                    ),
+                                }
+                            )
                 except Exception as e:
                     logger.error(
                         f"Error processing item '{getattr(item, 'title', '')}': {e}"
