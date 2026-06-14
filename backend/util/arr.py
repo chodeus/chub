@@ -1833,49 +1833,6 @@ class LidarrClient(BaseARRClient):
         endpoint = f"{self.api_base}/artist/editor"
         return self.make_put_request(endpoint, json=payload)
 
-    def get_mediacover_url(self, kind: str, media_id: int, file: str) -> str:
-        """Build a Lidarr mediacover URL for an artist or album image.
-
-        ``kind`` is ``"artist"`` or ``"album"``. Returns an absolute URL that
-        ``_upload_artwork(url=...)`` can push straight to Plex. Read-only source
-        only — Lidarr exposes no art-upload endpoint.
-        """
-        return f"{self.api_base}/mediacover/{kind}/{media_id}/{file}"
-
-    @staticmethod
-    def _extract_images(
-        images: Optional[List[Dict[str, Any]]], cover_map: Dict[str, str]
-    ) -> Dict[str, str]:
-        """Map an ARR ``images[]`` list to {plex_slot: url} via ``cover_map``.
-
-        ``cover_map`` maps Lidarr ``coverType`` values to CHUB image slots
-        (``poster``/``background``/``logo``). Prefers ``remoteUrl`` (the
-        upstream metadata-server URL) and falls back to the local ``url``.
-        """
-        result: Dict[str, str] = {}
-        for image in images or []:
-            slot = cover_map.get(image.get("coverType"))
-            if not slot:
-                continue
-            url = image.get("remoteUrl") or image.get("url")
-            if url:
-                result[slot] = url
-        return result
-
-    def extract_artist_images(self, artist: Dict[str, Any]) -> Dict[str, str]:
-        """Return {slot: url} for an artist (poster/fanart/logo)."""
-        return self._extract_images(
-            artist.get("images"),
-            {"poster": "poster", "fanart": "background", "logo": "logo"},
-        )
-
-    def extract_album_images(self, album: Dict[str, Any]) -> Dict[str, str]:
-        """Return {slot: url} for an album (cover → poster)."""
-        return self._extract_images(
-            album.get("images"),
-            {"cover": "poster"},
-        )
-
 
 def create_arr_client(
     url: str, api: str, logger: Any

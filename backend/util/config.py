@@ -130,8 +130,6 @@ class PosterRenamerrConfig(BaseModel):
     # When no local/Google-Drive custom art matches, fall back to the art Lidarr
     # already fetched (fanart.tv upstream) via its mediacover URL.
     music_art_from_lidarr: bool = False
-    # Ordered art-source preference for music. "local" = the user's custom art.
-    music_art_sources: List[str] = Field(default_factory=lambda: ["local"])
 
     @field_validator("action_type", mode="before")
     @classmethod
