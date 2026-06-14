@@ -159,3 +159,70 @@ def test_genres_and_cast_preserved_per_season(connector):
     s1 = next(r for r in result if r["season_number"] == 1)
     assert s1["genres"] == ["Drama", "Romance"]
     assert s1["cast_data"] == [{"name": "Lead"}]
+
+
+# --- _process_arr_media: artist + album fan-out (music) ---
+
+
+def _artist_with_albums():
+    return [
+        {
+            "title": "REZZ",
+            "musicbrainz_id": "artist-mbid-1",
+            "monitored": True,
+            "genres": ["Electronic"],
+            "seasons": [
+                {
+                    "season_number": 0,
+                    "album_id": 101,
+                    "album_title": "Mass Manipulation",
+                    "foreign_album_id": "album-mbid-1",
+                    "monitored": True,
+                },
+                {
+                    "season_number": 1,
+                    "album_id": 102,
+                    "album_title": "Certain Kind of Magic",
+                    "foreign_album_id": "album-mbid-2",
+                    "monitored": False,
+                },
+            ],
+        }
+    ]
+
+
+def test_artist_fans_out_to_artist_plus_album_rows(connector):
+    """An artist with 2 albums yields the artist row plus 2 asset_type=album
+    rows — albums are first-class, NOT artist+season rows."""
+    result = connector._process_arr_media(_artist_with_albums(), "artist")
+    assert len(result) == 3
+    artist_row = result[0]
+    assert artist_row.get("asset_type") in (None, "artist")
+    assert artist_row["season_number"] is None
+    albums = [r for r in result if r.get("asset_type") == "album"]
+    assert len(albums) == 2
+    for a in albums:
+        assert a["season_number"] is None
+
+
+def test_album_rows_carry_mbid_and_parent_linkage(connector):
+    """Each album row carries its own album MBID and the parent artist's MBID
+    and title, so it can be matched independently and parent-scoped."""
+    result = connector._process_arr_media(_artist_with_albums(), "artist")
+    albums = {r["title"]: r for r in result if r.get("asset_type") == "album"}
+    mass = albums["Mass Manipulation"]
+    assert mass["musicbrainz_id"] == "album-mbid-1"
+    assert mass["parent_musicbrainz_id"] == "artist-mbid-1"
+    assert mass["parent_title"] == "REZZ"
+    assert mass["arr_id"] == 101
+    # Per-album monitored flag is preserved.
+    assert albums["Certain Kind of Magic"]["monitored"] is False
+
+
+def test_artist_without_albums_yields_only_artist_row(connector):
+    """seasons=None (include_episode=False) must not crash and yields just
+    the artist row."""
+    artists = [{"title": "Boards of Canada", "musicbrainz_id": "a", "seasons": None}]
+    result = connector._process_arr_media(artists, "artist")
+    assert len(result) == 1
+    assert result[0]["season_number"] is None

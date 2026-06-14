@@ -86,6 +86,36 @@ def test_extract_ids_returns_none_when_absent():
     assert extract_ids("Just a title") == (None, None, None)
 
 
+# --- is_match: musicbrainz ---
+
+
+def test_is_match_musicbrainz_id_equal():
+    ok, reason = is_match(
+        {"musicbrainz_id": "abc-123", "title": "Different"},
+        {"musicbrainz_id": "abc-123", "title": "Whatever"},
+    )
+    assert ok and reason == "ID match: musicbrainz_id"
+
+
+def test_is_match_musicbrainz_id_differs_rejects():
+    # Both carry an MBID and they differ → no match, never falls through to a
+    # title heuristic (which would let two artists' albums collide).
+    ok, _ = is_match(
+        {"musicbrainz_id": "abc-123", "title": "Greatest Hits"},
+        {"musicbrainz_id": "xyz-999", "title": "Greatest Hits"},
+    )
+    assert ok is False
+
+
+def test_is_match_musicbrainz_one_sided_falls_back_to_title():
+    # Only one side has an MBID → fall through to title heuristics.
+    ok, _ = is_match(
+        {"title": "REZZ", "normalized_title": "rezz"},
+        {"musicbrainz_id": "abc-123", "title": "REZZ", "normalized_title": "rezz"},
+    )
+    assert ok is True
+
+
 # --- compare_strings ---
 
 

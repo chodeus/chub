@@ -116,3 +116,94 @@ def test_malformed_row_does_not_abort_build():
 def test_is_empty():
     assert PlexMediaIndex([]).is_empty()
     assert not PlexMediaIndex([_movie(1, "Movies", tmdb="42")]).is_empty()
+
+
+# --- music: artists + albums ---
+
+
+def _artist(plex_id, lib, *, mbid=None, title="REZZ", norm="rezz"):
+    guids = {"mbid": mbid} if mbid else {}
+    return {
+        "plex_id": plex_id,
+        "instance_name": "plex1",
+        "asset_type": "artist",
+        "library_name": lib,
+        "title": title,
+        "normalized_title": norm,
+        "season_number": None,
+        "guids": guids,
+    }
+
+
+def _album(plex_id, lib, *, mbid=None, title="Hits", norm="hits", parent="REZZ"):
+    guids = {"mbid": mbid} if mbid else {}
+    from backend.util.normalization import normalize_titles
+
+    return {
+        "plex_id": plex_id,
+        "instance_name": "plex1",
+        "asset_type": "album",
+        "library_name": lib,
+        "title": title,
+        "normalized_title": norm,
+        "parent_title": parent,
+        "parent_normalized_title": normalize_titles(parent),
+        "season_number": None,
+        "guids": guids,
+    }
+
+
+def test_artist_resolves_by_mbid_first():
+    idx = PlexMediaIndex([_artist(1, "Music", mbid="art-1")])
+    entries, key = idx.resolve(
+        {"musicbrainz_id": "art-1", "title": "Wrong"}, media_type="artist"
+    )
+    assert key == "MBID" and [e["plex_id"] for e in entries] == [1]
+
+
+def test_artist_title_fallback():
+    idx = PlexMediaIndex([_artist(1, "Music", title="REZZ", norm="rezz")])
+    entries, key = idx.resolve({"title": "REZZ"}, media_type="artist")
+    assert key == "TITLE" and [e["plex_id"] for e in entries] == [1]
+
+
+def test_album_resolves_by_mbid_first():
+    idx = PlexMediaIndex([_album(5, "Music", mbid="alb-1")])
+    entries, key = idx.resolve(
+        {"musicbrainz_id": "alb-1", "title": "x", "parent_title": "y"},
+        media_type="album",
+    )
+    assert key == "MBID" and [e["plex_id"] for e in entries] == [5]
+
+
+def test_album_title_is_parent_scoped_no_cross_artist_collision():
+    # Two artists both have a "Greatest Hits" album with no MBID — a bare title
+    # match would collide; parent-scoping keeps them distinct.
+    idx = PlexMediaIndex(
+        [
+            _album(1, "Music", title="Greatest Hits", norm="greatesthits",
+                   parent="Queen"),
+            _album(2, "Music", title="Greatest Hits", norm="greatesthits",
+                   parent="ABBA"),
+        ]
+    )
+    entries, key = idx.resolve(
+        {"title": "Greatest Hits", "parent_title": "Queen"}, media_type="album"
+    )
+    assert key == "TITLE"
+    assert [e["plex_id"] for e in entries] == [1]
+
+
+def test_album_type_separation_from_artist():
+    idx = PlexMediaIndex([_artist(1, "Music", mbid="shared")])
+    # An album lookup against an index holding only an artist resolves nothing
+    # even on a shared id value.
+    entries, key = idx.resolve(
+        {"musicbrainz_id": "shared", "title": "x"}, media_type="album"
+    )
+    assert entries == [] and key is None
+
+
+def test_is_empty_includes_music():
+    assert not PlexMediaIndex([_artist(1, "Music", mbid="a")]).is_empty()
+    assert not PlexMediaIndex([_album(1, "Music", mbid="a")]).is_empty()
