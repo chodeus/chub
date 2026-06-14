@@ -9,7 +9,7 @@ import io
 
 from PIL import Image, ImageDraw
 
-from backend.util.cl2k.logo_extract import extract_title_logo
+from backend.util.cl2k.logo_extract import extract_subject_logo, extract_title_logo
 
 
 def _jpeg(img: Image.Image) -> bytes:
@@ -65,3 +65,33 @@ def test_blank_input_yields_empty_logo():
     out = extract_title_logo(_jpeg(blank))
     res = Image.open(io.BytesIO(out))
     assert res.split()[-1].getextrema()[1] == 0  # fully transparent
+
+
+def _poster_with_coloured_title() -> Image.Image:
+    # mid-grey field (not bright -> the white key ignores it), saturated RED title
+    img = Image.new("RGB", (400, 240), (120, 122, 124))
+    ImageDraw.Draw(img).rectangle((60, 100, 340, 140), fill=(210, 40, 40))
+    return img
+
+
+def test_subject_extracts_coloured_title_keeping_its_colour():
+    img = _poster_with_coloured_title()
+    mask = Image.new("L", img.size, 0)
+    ImageDraw.Draw(mask).rectangle((40, 80, 360, 160), fill=255)  # over the title + some field
+
+    out = extract_subject_logo(_jpeg(img), _png(mask))
+    res = Image.open(io.BytesIO(out))
+    assert res.mode == "RGBA"
+    # trimmed to roughly the red bar (~280 wide), not the full 400 frame
+    assert 250 <= res.width <= 320
+    assert res.height <= 80
+    # kept pixels keep their ORIGINAL red (NOT pre-whitened) at high alpha
+    r, g, b, a = res.getpixel((res.width // 2, res.height // 2))
+    assert r > 150 and g < 100 and b < 100 and a > 200
+
+
+def test_white_key_misses_the_coloured_title():
+    # the gap subject mode fills: the brightness key can't catch a saturated title
+    out = extract_title_logo(_jpeg(_poster_with_coloured_title()))
+    res = Image.open(io.BytesIO(out))
+    assert res.split()[-1].getextrema()[1] == 0  # nothing keyed -> fully transparent
