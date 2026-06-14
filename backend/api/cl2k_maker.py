@@ -37,6 +37,7 @@ from backend.modules.cl2k_maker import (
 )
 from backend.util.cl2k import geometry as geo, text_removal, tmdb_art
 from backend.util.cl2k.image_fetch import TMDB_IMAGE_CDN, download as download_image
+from backend.util.cl2k.logo_extract import extract_title_logo
 from backend.util.cl2k.renderer import (
     process_logo,
     render_framed_art,
@@ -481,6 +482,19 @@ class LogoAssetRequest(BaseModel):
     upload_gdrive: Optional[bool] = None
 
 
+class ExtractLogoRequest(BaseModel):
+    # Source poster: an uploaded image (base64/data-url) wins over a TMDB/fanart/
+    # Plex path that we fetch. Extraction keys the white title out of the artwork.
+    image_b64: Optional[str] = None
+    image_path: Optional[str] = None
+    # Brushed region (PNG, white = look here). Confines the key so bright areas
+    # outside the title can't leak in; without it the whole image is keyed.
+    mask_b64: Optional[str] = None
+    # Min-channel smoothstep band; raise lo to reject more background.
+    lo: float = Field(165.0, ge=0.0, le=255.0)
+    hi: float = Field(215.0, ge=0.0, le=255.0)
+
+
 def _square_backdrop_bytes(req: SquareArtRequest) -> Optional[bytes]:
     if req.backdrop_b64:
         return _b64_to_bytes(req.backdrop_b64)
@@ -683,6 +697,33 @@ def logo_asset_generate(
         return ok("Logo asset filed", result)
     return error(
         result.get("reason", "generation failed"), "CL2K_GENERATE", data=result
+    )
+
+
+@router.post(
+    "/extract-logo",
+    summary="Extract a white title from a poster into a transparent logo PNG",
+)
+def extract_logo(
+    req: ExtractLogoRequest,
+    db: ChubDB = Depends(get_database),
+    logger: Any = Depends(get_cl2k_logger),
+):
+    if req.image_b64:
+        raw = _b64_to_bytes(req.image_b64)
+    elif req.image_path:
+        try:
+            raw = download_image(req.image_path)
+        except Exception as exc:  # disallowed host / fetch failure
+            logger.warning(f"cl2k: extract-logo fetch failed: {exc}")
+            return error(f"Could not fetch that poster: {exc}", "IMAGE_FETCH")
+    else:
+        raw = None
+    if not raw:
+        return error("No poster image provided", "NO_IMAGE")
+    png = extract_title_logo(raw, _mask_bytes(req.mask_b64), lo=req.lo, hi=req.hi)
+    return Response(
+        content=png, media_type="image/png", headers={"Cache-Control": "no-store"}
     )
 
 
