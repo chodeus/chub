@@ -689,7 +689,11 @@ class PosterUploader:
                 "tmdb": str(asset.get("tmdb_id")) if asset.get("tmdb_id") else None,
                 "imdb": asset.get("imdb_id"),
                 "tvdb": str(asset.get("tvdb_id")) if asset.get("tvdb_id") else None,
-                "mbid": asset.get("musicbrainz_id") or None,
+                "mbid": (
+                    str(asset.get("musicbrainz_id")).lower()
+                    if asset.get("musicbrainz_id")
+                    else None
+                ),
                 "title": title_override or normalize_titles(asset_title),
                 # Year-disambiguates title-only matches so a same-title/different-
                 # year collision can't upload the wrong release (see
@@ -1218,7 +1222,11 @@ class PosterUploader:
             else:
                 title_key = normalize_titles(row.get("title") or "")
             values = {
-                "mbid": row.get("musicbrainz_id") or None,
+                "mbid": (
+                    str(row.get("musicbrainz_id")).lower()
+                    if row.get("musicbrainz_id")
+                    else None
+                ),
                 "title": title_key,
                 "year": None,
             }

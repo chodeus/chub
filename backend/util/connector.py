@@ -423,12 +423,22 @@ class Connector:
                         rows_by_type.setdefault(
                             row.get("asset_type") or asset_type, []
                         ).append(row)
-                    for row_asset_type, rows in rows_by_type.items():
+                    # Always sync every asset_type this instance can emit, even
+                    # when a type is empty this run — otherwise sync_for_instance
+                    # (scoped to one asset_type) never runs for it and its stale
+                    # rows are never purged. A Lidarr artist can drop all albums,
+                    # so 'album' must still be synced (with []) to delete them.
+                    types_to_sync = set(rows_by_type)
+                    if asset_type == "artist":
+                        types_to_sync |= {"artist", "album"}
+                    else:
+                        types_to_sync.add(asset_type)
+                    for row_asset_type in types_to_sync:
                         self.db.media.sync_for_instance(
                             instance_config.name,
                             client.instance_type,
                             row_asset_type,
-                            rows,
+                            rows_by_type.get(row_asset_type, []),
                             logger,
                         )
 
@@ -541,10 +551,11 @@ class Connector:
                     album_row["parent_title"] = artist_title
                     album_row["arr_id"] = season.get("album_id")
                     album_row["monitored"] = season.get("monitored")
-                    # Album's own Lidarr cover URL (not the artist's), for the
-                    # optional music_art_from_lidarr fallback.
-                    if season.get("poster_url"):
-                        album_row["poster_url"] = season.get("poster_url")
+                    # Album's OWN Lidarr cover URL — set unconditionally so an
+                    # album with no cover is None rather than inheriting the
+                    # artist's poster_url (which the music_art_from_lidarr
+                    # fallback would otherwise push as the album cover).
+                    album_row["poster_url"] = season.get("poster_url")
                     # Album titles don't share the artist's alternate titles.
                     album_row["alternate_titles"] = None
                     album_row["normalized_alternate_titles"] = None

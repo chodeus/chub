@@ -130,14 +130,21 @@ class PlexMediaIndex:
                         self._add(self.collections, f"title:{norm_title}", entry)
 
                 elif typ == "artist":
+                    # MBID keys are lower-cased on both build and lookup sides
+                    # (Plex guids can be mixed-case; media_cache/extract_mbid are
+                    # lower) so an MBID match never silently falls back to title.
                     if guids.get("mbid"):
-                        self._add(self.artists, f"mbid:{guids['mbid']}", entry)
+                        self._add(
+                            self.artists, f"mbid:{str(guids['mbid']).lower()}", entry
+                        )
                     if norm_title:
                         self._add(self.artists, f"title:{norm_title}", entry)
 
                 elif typ == "album":
                     if guids.get("mbid"):
-                        self._add(self.albums, f"mbid:{guids['mbid']}", entry)
+                        self._add(
+                            self.albums, f"mbid:{str(guids['mbid']).lower()}", entry
+                        )
                     # Scope the album title under its artist so identically
                     # named albums ("Greatest Hits") across artists don't
                     # collide. Fall back to the bare album title only when the
@@ -228,7 +235,8 @@ class PlexMediaIndex:
             "tmdb": str(asset.get("tmdb_id")) if asset.get("tmdb_id") else None,
             "imdb": asset.get("imdb_id"),
             "tvdb": str(asset.get("tvdb_id")) if asset.get("tvdb_id") else None,
-            "mbid": asset.get("musicbrainz_id") or None,
+            "mbid": (str(asset.get("musicbrainz_id")).lower()
+                     if asset.get("musicbrainz_id") else None),
             "title": title_override or (normalize_titles(title) if title else None),
             # Carried for title-match year-disambiguation (see _match). Inert for
             # guid hits; None when the row has no year, which keeps current

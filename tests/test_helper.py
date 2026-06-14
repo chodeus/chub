@@ -135,6 +135,53 @@ def test_is_match_musicbrainz_one_sided_falls_back_to_title():
     assert ok is True
 
 
+def test_is_match_album_same_title_different_artist_rejected():
+    # No MBID on either side; same album title under different artists must NOT
+    # match (parent-scoping gate).
+    ok, _ = is_match(
+        {
+            "title": "Greatest Hits",
+            "normalized_title": "greatesthits",
+            "parent_title": "Queen",
+        },
+        {
+            "title": "Greatest Hits",
+            "normalized_title": "greatesthits",
+            "parent_title": "ABBA",
+        },
+    )
+    assert ok is False
+
+
+def test_is_match_album_same_title_same_artist_matches():
+    ok, _ = is_match(
+        {
+            "title": "Greatest Hits",
+            "normalized_title": "greatesthits",
+            "parent_title": "Queen",
+        },
+        {
+            "title": "Greatest Hits",
+            "normalized_title": "greatesthits",
+            "parent_title": "Queen",
+        },
+    )
+    assert ok is True
+
+
+def test_is_match_album_missing_one_parent_still_matches():
+    # When one side lacks a parent we can't disambiguate — fall through (match).
+    ok, _ = is_match(
+        {"title": "Greatest Hits", "normalized_title": "greatesthits"},
+        {
+            "title": "Greatest Hits",
+            "normalized_title": "greatesthits",
+            "parent_title": "Queen",
+        },
+    )
+    assert ok is True
+
+
 # --- compare_strings ---
 
 

@@ -207,3 +207,23 @@ def test_album_type_separation_from_artist():
 def test_is_empty_includes_music():
     assert not PlexMediaIndex([_artist(1, "Music", mbid="a")]).is_empty()
     assert not PlexMediaIndex([_album(1, "Music", mbid="a")]).is_empty()
+
+
+def test_artist_mbid_match_is_case_insensitive():
+    # Plex guid may be mixed-case; the asset MBID (from extract_mbid / Lidarr)
+    # is lower-case. The index must still match.
+    idx = PlexMediaIndex([_artist(1, "Music", mbid="ABCDEF12-3456-7890-ABCD-EF1234567890")])
+    entries, key = idx.resolve(
+        {"musicbrainz_id": "abcdef12-3456-7890-abcd-ef1234567890"},
+        media_type="artist",
+    )
+    assert key == "MBID" and [e["plex_id"] for e in entries] == [1]
+
+
+def test_album_mbid_match_is_case_insensitive():
+    idx = PlexMediaIndex([_album(1, "Music", mbid="AAAA1111-2222-3333-4444-555566667777")])
+    entries, key = idx.resolve(
+        {"musicbrainz_id": "aaaa1111-2222-3333-4444-555566667777", "title": "x"},
+        media_type="album",
+    )
+    assert key == "MBID" and [e["plex_id"] for e in entries] == [1]

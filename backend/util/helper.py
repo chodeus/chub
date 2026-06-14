@@ -530,6 +530,25 @@ def is_match(
             return True, "ID match: musicbrainz_id"
         return False, ""
 
+    # Album parent (artist) scoping: when an MBID isn't available on both sides,
+    # title-only matching must not let two artists' identically-titled albums
+    # ("Greatest Hits") cross-match. Both the poster record and the media row
+    # carry the owning artist (parent_normalized_title / parent_title); if both
+    # are known and differ, this is not the same album. When either side lacks a
+    # parent (can't disambiguate), fall through unchanged.
+    def _parent_norm(data: Dict[str, Any]) -> Optional[str]:
+        pnt = data.get("parent_normalized_title")
+        if pnt:
+            return str(pnt).strip().lower() or None
+        pt = data.get("parent_title")
+        return normalize_titles(pt) if pt else None
+
+    asset_parent = _parent_norm(asset)
+    media_parent = _parent_norm(media)
+    parent_mismatch = bool(
+        asset_parent and media_parent and asset_parent != media_parent
+    )
+
     shared_id_sources = []
     for key in ["tvdb_id", "tmdb_id", "imdb_id"]:
         asset_id = normalized_id(key, asset)
@@ -601,7 +620,7 @@ def is_match(
     ]
 
     for condition, reason in match_criteria:
-        if condition and year_matches():
+        if condition and year_matches() and not parent_mismatch:
             return True, reason
     return False, ""
 

@@ -226,3 +226,35 @@ def test_artist_without_albums_yields_only_artist_row(connector):
     result = connector._process_arr_media(artists, "artist")
     assert len(result) == 1
     assert result[0]["season_number"] is None
+
+
+def test_album_does_not_inherit_artist_poster_url(connector):
+    """An album with no own cover must get poster_url=None, not the artist's —
+    otherwise the Lidarr-art fallback would push the artist photo as the cover."""
+    artists = [
+        {
+            "title": "REZZ",
+            "musicbrainz_id": "art-1",
+            "poster_url": "http://lidarr/artist.jpg",
+            "seasons": [
+                {
+                    "album_id": 1,
+                    "album_title": "No Cover Album",
+                    "foreign_album_id": "alb-1",
+                    "monitored": True,
+                    # no poster_url for this album
+                },
+                {
+                    "album_id": 2,
+                    "album_title": "Has Cover",
+                    "foreign_album_id": "alb-2",
+                    "monitored": True,
+                    "poster_url": "http://lidarr/album2.jpg",
+                },
+            ],
+        }
+    ]
+    result = connector._process_arr_media(artists, "artist")
+    albums = {r["title"]: r for r in result if r.get("asset_type") == "album"}
+    assert albums["No Cover Album"]["poster_url"] is None
+    assert albums["Has Cover"]["poster_url"] == "http://lidarr/album2.jpg"

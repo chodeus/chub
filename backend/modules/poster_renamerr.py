@@ -819,13 +819,15 @@ class PosterRenamerr(ChubModule):
         elif asset_type == "album":
             # Albums share their artist's folder, so a bare "poster" name would
             # clobber the artist poster (and sibling albums). Stage each album
-            # under a sanitized album-title filename. (Plex-direct upload reads
-            # this staged file by ratingKey; the on-disk Kometa music layout is
-            # out of scope for v1.)
-            album_base = (
-                illegal_chars_regex.sub("", item.get("title") or "").strip()
-                or "album"
-            )
+            # under a sanitized "<Artist> - <Album>" filename — the artist is
+            # included so two artists' identically-titled albums staged from a
+            # shared flat folder don't collide and overwrite each other before
+            # upload. (Plex-direct upload reads this staged file by ratingKey;
+            # the on-disk Kometa music layout is out of scope for v1.)
+            parent = illegal_chars_regex.sub("", item.get("parent_title") or "").strip()
+            album = illegal_chars_regex.sub("", item.get("title") or "").strip()
+            album_base = f"{parent} - {album}".strip(" -") if parent else album
+            album_base = album_base or "album"
             if config.asset_folders:
                 new_file_name = f"{album_base}{file_extension}"
             else:
