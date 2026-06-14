@@ -1744,6 +1744,95 @@ class LidarrClient(BaseARRClient):
         }
         return self.make_delete_request(endpoint, params=params)
 
+    def delete_track_file(self, track_file_ids: Union[int, List[int]]) -> Any:
+        """Delete one or more track files by their file IDs.
+
+        Mirrors Sonarr's ``delete_episode_files`` (bulk endpoint). Used by NoHL
+        to remove the wasteful non-hardlinked library copy before re-grabbing a
+        properly linked release. Operates on track *files* only — the artist and
+        album records are untouched.
+        """
+        if isinstance(track_file_ids, int):
+            track_file_ids = [track_file_ids]
+        payload = {"trackFileIds": track_file_ids}
+        self.logger.debug(f"Delete track files payload: {payload}")
+        endpoint = f"{self.api_base}/trackfile/bulk"
+        return self.make_delete_request(endpoint, payload)
+
+    def get_rename_list(self, media_id: int, threadsafe: bool = False) -> Any:
+        """
+        Preview renaming for an artist's tracks.
+
+        Args:
+            media_id (int): Artist ID.
+            threadsafe (bool): Use a private session for concurrent calls.
+        Returns:
+            Any: List of rename items, each with ``trackFileId`` plus
+                ``existingPath``/``newPath``.
+        """
+        endpoint = f"{self.api_base}/rename?artistId={media_id}"
+        return self._requester(threadsafe)(endpoint, headers=self.headers)
+
+    def rename_media(self, media_ids: List[int]) -> Any:
+        """
+        Trigger renaming of artists' track files.
+
+        Unlike Radarr/Sonarr (which rename by movie/series ID via
+        ``RenameMovie``/``RenameSeries``), Lidarr's ``RenameFiles`` command is
+        per-artist and takes the explicit track-file IDs to rename. We derive
+        those from the rename preview, so passing the same artist-ID list the
+        renameinatorr loop already builds works transparently.
+
+        This renames the *library* copy to the existing naming scheme; it never
+        edits tags/content and respects hardlinks (the seeded download copy is a
+        separate hardlink to the same inode, untouched).
+
+        Args:
+            media_ids (List[int]): Artist IDs.
+        Returns:
+            Any: API response from the last command issued, or None.
+        """
+        endpoint = f"{self.api_base}/command"
+        result = None
+        for artist_id in media_ids:
+            preview = self.get_rename_list(artist_id) or []
+            file_ids = sorted(
+                {
+                    item.get("trackFileId")
+                    for item in preview
+                    if item.get("trackFileId") is not None
+                }
+            )
+            if not file_ids:
+                continue
+            payload = {
+                "name": "RenameFiles",
+                "artistId": artist_id,
+                "files": file_ids,
+            }
+            self.logger.debug(f"Rename payload: {payload}")
+            result = self.make_post_request(endpoint, json=payload)
+        return result
+
+    def rename_folders(self, media_ids: List[int], root_folder_path: str) -> Any:
+        """
+        Rename/move folders for given artists to the current naming scheme.
+
+        Args:
+            media_ids (List[int]): Artist IDs.
+            root_folder_path (str): Root folder path.
+        Returns:
+            Any: API response.
+        """
+        payload = {
+            "artistIds": media_ids,
+            "moveFiles": True,
+            "rootFolderPath": root_folder_path,
+        }
+        self.logger.debug(f"Rename Folder Payload: {payload}")
+        endpoint = f"{self.api_base}/artist/editor"
+        return self.make_put_request(endpoint, json=payload)
+
 
 def create_arr_client(
     url: str, api: str, logger: Any

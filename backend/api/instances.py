@@ -1212,6 +1212,48 @@ def test_existing_instance(
         return error("Connection test failed", code="TEST_ERROR", status_code=500)
 
 
+def _arr_wanted_missing_count(
+    config: ChubConfig, instance_id: str, logger: Any
+) -> Optional[int]:
+    """Return the *arr wanted/missing total for an instance, or None.
+
+    Hits the service's ``/wanted/missing`` with ``pageSize=1`` and reads
+    ``totalRecords`` — the same count the *arr Wanted page shows (episode-level
+    for Sonarr, album-level for Lidarr). Best-effort: any failure (unreachable,
+    auth, unexpected shape) returns None so the stats card degrades gracefully
+    instead of erroring on a single down instance.
+    """
+    service, details = _find_instance(config, instance_id)
+    if not details or service == "plex":
+        return None
+    url = (details.url or "").rstrip("/")
+    api = details.api or ""
+    if not url or not api:
+        return None
+
+    from backend.util.ssrf_guard import is_safe_url
+
+    api_ver = "v1" if service == "lidarr" else "v3"
+    endpoint = f"{url}/api/{api_ver}/wanted/missing"
+    safe, reason = is_safe_url(endpoint)
+    if not safe:
+        logger.debug(f"wanted/missing URL refused for {instance_id}: {reason}")
+        return None
+    try:
+        resp = requests.get(
+            endpoint,
+            headers={"X-Api-Key": api},
+            params={"page": 1, "pageSize": 1, "monitored": "true"},
+            timeout=4,
+        )
+        if not resp.ok:
+            return None
+        return resp.json().get("totalRecords")
+    except (requests.exceptions.RequestException, ValueError) as exc:
+        logger.debug(f"wanted/missing fetch failed for {instance_id}: {exc}")
+        return None
+
+
 @router.get(
     "/instances/{instance_id}/stats",
     summary="Get instance statistics",
@@ -1227,8 +1269,7 @@ def test_existing_instance(
                         "data": {
                             "instance": "radarr_hd",
                             "total_media": 150,
-                            "matched": 120,
-                            "unmatched": 30,
+                            "wanted_missing": 8,
                         },
                     }
                 }
@@ -1243,18 +1284,20 @@ async def get_instance_stats(
     ),
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
+    config: ChubConfig = Depends(get_config),
 ) -> JSONResponse:
     """
     Retrieve media statistics for a specific service instance.
 
-    For ARR instances (radarr/sonarr): queries media_cache and returns
-    total, matched (has poster), and unmatched counts.
+    For ARR instances (radarr/sonarr/lidarr): returns the cached total media
+    count plus a live ``wanted_missing`` count read straight from the service's
+    Wanted page (monitored items released/aired with no file yet).
     For Plex instances: queries plex_media_cache and returns total items
     with a per-library breakdown.
 
     Args:
         instance_id: Name of the instance to get statistics for
-        service_type: Type of service (radarr, sonarr, plex)
+        service_type: Type of service (radarr, sonarr, lidarr, plex)
 
     Returns:
         Media counts appropriate to the service type
@@ -1290,7 +1333,6 @@ async def get_instance_stats(
         else:
             media = db.media.get_by_instance(instance_id)
             total = len(media)
-            matched = sum(1 for m in media if m.get("matched"))
             # ARR freshness comes from sync_state (written when the ARR sync
             # completes), not media_cache.updated_at — the latter only moves on
             # changed rows, so it would read "stale" right after a fresh sync of
@@ -1300,13 +1342,15 @@ async def get_instance_stats(
                 if service_type
                 else None
             )
+            # Live wanted/missing straight from the *arr — the authoritative
+            # count its own Wanted page shows. Best-effort; None if unreachable.
+            wanted_missing = _arr_wanted_missing_count(config, instance_id, logger)
             return ok(
                 f"Stats for instance '{instance_id}'",
                 {
                     "instance": instance_id,
                     "total_media": total,
-                    "matched": matched,
-                    "unmatched": total - matched,
+                    "wanted_missing": wanted_missing,
                     "snapshot_age_seconds": snapshot_age,
                 },
             )

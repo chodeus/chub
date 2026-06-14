@@ -323,6 +323,49 @@ const CORE_SETTINGS_SCHEMA = [
                 description:
                     'Radarr/Sonarr/Lidarr instances supply the media list to match against. Plex instances additionally receive uploaded posters when "Upload posters to this Plex instance" is enabled per-instance.',
             },
+            // ─── Music (only shown when a Lidarr instance is configured) ──
+            {
+                key: 'music_source_dirs',
+                label: 'Music Art Source Directories',
+                type: 'dirlist_dragdrop',
+                section: 'Music',
+                conditional: {
+                    field: 'instances',
+                    condition: 'service_configured',
+                    value: 'lidarr',
+                    api_lookup: 'instances',
+                },
+                description:
+                    'Folders holding your custom ARTIST/ALBUM art. Files here are recognized as music by folder layout (<Artist>/artist.jpg or poster.jpg, <Artist>/<Album>/cover.jpg) or a flat "Artist.jpg" / "Artist - Album.jpg" name; an {mbid-<id>} tag overrides identity (and works in the regular Source Directories too). Kept separate so a flat "Title.jpg" is never mistaken for a movie poster.',
+            },
+            {
+                key: 'music_lock_artist_art',
+                label: 'Lock artist art in Plex',
+                type: 'check_box',
+                section: 'Music',
+                conditional: {
+                    field: 'instances',
+                    condition: 'service_configured',
+                    value: 'lidarr',
+                    api_lookup: 'instances',
+                },
+                description:
+                    "After uploading an artist poster, lock the artist's thumb/art in Plex so the music agent can't re-derive it from album art on the next refresh. Artist-only — album covers are sticky and never need this. Enable only if you see artist posters revert.",
+            },
+            {
+                key: 'music_lma_sidecars',
+                label: 'Write music art sidecars',
+                type: 'check_box',
+                section: 'Music',
+                conditional: {
+                    field: 'instances',
+                    condition: 'service_configured',
+                    value: 'lidarr',
+                    api_lookup: 'instances',
+                },
+                description:
+                    'Also write image-only sidecar files (cover.jpg for albums, artist-poster.jpg / background.jpg for artists) into your Plex music library folders for refresh-proof art. Writes image files only — never touches audio, so seeded music torrents are unaffected. Requires the Local Media Assets agent prioritized in Plex.',
+            },
         ],
     },
 

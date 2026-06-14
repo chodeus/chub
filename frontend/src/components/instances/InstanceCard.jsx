@@ -127,16 +127,24 @@ export const InstanceCard = ({
                             ) : (
                                 <span
                                     className="text-secondary flex-1 text-sm"
-                                    title="Matched = has a poster file linked via Poster Renamerr. Unmatched = no poster found yet."
+                                    title="Missing = monitored items wanted by this service (released/aired) with no file yet, straight from its Wanted list."
                                 >
-                                    {instanceStats.total_media} total &middot;{' '}
-                                    <span className="text-success">
-                                        {instanceStats.matched || 0} matched
-                                    </span>{' '}
-                                    &middot;{' '}
-                                    <span className="text-warning">
-                                        {instanceStats.unmatched || 0} unmatched
-                                    </span>
+                                    {instanceStats.total_media} total
+                                    {instanceStats.wanted_missing != null && (
+                                        <>
+                                            {' '}
+                                            &middot;{' '}
+                                            <span
+                                                className={
+                                                    instanceStats.wanted_missing > 0
+                                                        ? 'text-warning'
+                                                        : 'text-success'
+                                                }
+                                            >
+                                                {instanceStats.wanted_missing} missing
+                                            </span>
+                                        </>
+                                    )}
                                 </span>
                             )}
                         </div>

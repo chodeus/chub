@@ -37,6 +37,14 @@ const CONDITION_TYPES = {
         selectedValue !== null &&
         selectedValue !== '' &&
         !(Array.isArray(selectedValue) && selectedValue.length === 0),
+    // True when at least one instance of the given service type is configured.
+    // `apiData` is the instances dict (via api_lookup: 'instances'); `value` is
+    // the service type, e.g. 'lidarr'. Used to reveal music-only options only
+    // when a Lidarr instance exists, independent of any selected-instance field.
+    service_configured: (selectedValue, serviceType, apiData) => {
+        const instances = apiData && apiData[serviceType];
+        return Boolean(instances && Object.keys(instances).length > 0);
+    },
 };
 
 /**

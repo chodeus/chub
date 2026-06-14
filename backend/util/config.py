@@ -102,10 +102,31 @@ class PosterRenamerrConfig(BaseModel):
     # behaviour). Only sleeps after an actual upload, never after a skip.
     upload_delay_ms: int = Field(default=0, ge=0, le=5000)
     source_dirs: List[str] = Field(default_factory=list)
+    # Source dirs whose contents are custom MUSIC art (artist posters / album
+    # covers). Files here are classified as artist/album by folder depth
+    # (<dir>/<Artist>/poster|artist.jpg, <dir>/<Artist>/<Album>/cover.jpg) or by
+    # a flat "Artist.jpg" / "Artist - Album.jpg" name; an {mbid-<uuid>} tag in
+    # the filename/folder overrides identity. (An {mbid-} tag is also honored in
+    # the regular source_dirs.) Kept separate so a flat "Title.jpg" is never
+    # mistaken for a movie poster.
+    music_source_dirs: List[str] = Field(default_factory=list)
     destination_dir: str = ""
     instances: List[Union[str, Dict[str, PosterRenamerrPlexInstance]]] = Field(
         default_factory=list
     )
+    # --- Music (Lidarr) artwork options ---
+    # Only meaningful when a Lidarr instance is configured; the frontend gates
+    # them on that. All are image-only / Plex-metadata operations — none ever
+    # touches audio, so seeded music torrents are never endangered.
+    #
+    # After a Plex-direct artist poster upload, lock thumb/art so Plex's music
+    # agent can't re-derive the artist image from album art on refresh.
+    # Artist-only; album covers are sticky and never need it.
+    music_lock_artist_art: bool = False
+    # Also write image-only sidecars (cover.jpg for albums, artist-poster.jpg /
+    # background.jpg for artists) into the Plex music library folders for
+    # refresh-proof art. Writes image files only; never audio.
+    music_lma_sidecars: bool = False
 
     @field_validator("action_type", mode="before")
     @classmethod
@@ -204,6 +225,9 @@ class AssetRenamerrConfig(BaseModel):
     asset_folders: bool = False  # per-title folders (kometa path)
     destination_dir: str = ""  # kometa path
     source_dirs: List[str] = Field(default_factory=list)  # local source
+    # Music art source dirs (artist backgrounds/logos), classified by folder
+    # depth / flat name / {mbid-} tag — see PosterRenamerrConfig.music_source_dirs.
+    music_source_dirs: List[str] = Field(default_factory=list)
     print_only_renames: bool = False
     sync_assets: bool = False  # run sync_gdrive first (standalone path)
     # Preferred languages for TMDB image selection, in priority order; the first
