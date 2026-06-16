@@ -240,11 +240,16 @@ def _resolve_and_render(
             logo_source = "fanart"
 
     # CL2K rule: a clear logo too small to render crisply at the ~600px box is
-    # worse than drawn title text. Reject low-res auto-sourced (TMDB/fanart) logos
-    # so render_cl2k's title-text fallback takes over. A custom-uploaded logo is
-    # the user's explicit choice and is kept as-is.
+    # worse than drawn title text. Reject low-res logos the maker chose ITSELF
+    # (the auto TMDB/fanart fallback, ``need_logo``) so render_cl2k's title-text
+    # fallback takes over. A logo the user picked in the art picker — like a
+    # custom upload — is their explicit choice and is kept as-is: the preview
+    # always shows it, so dropping it on save was a silent surprise (the small
+    # "The Tiny Chef Show" wordmarks are the canonical case). They can size it
+    # with the logo_scale slider if it's soft.
     if (
         logo_bytes
+        and need_logo
         and logo_source in ("tmdb", "fanart")
         and not logo_is_usable(logo_bytes)
     ):
