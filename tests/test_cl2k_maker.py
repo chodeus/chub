@@ -68,8 +68,15 @@ def test_explicit_small_logo_is_kept(env):
 
 def test_auto_sourced_small_logo_is_dropped(env, monkeypatch):
     """A logo the maker auto-selected (no ``logo_path`` given) is still rejected
-    when too small, so the title-text fallback takes over — unchanged behaviour."""
+    when too small — unchanged behaviour.
+
+    ``text_logo_fallback`` is off so the drop yields ``logo_source="none"`` and no
+    title wordmark is drawn: the wordmark path needs a real font, which the CI
+    runner lacks (``resolve_font`` -> None). The gate decision is what's under
+    test, not the text render.
+    """
     full_config, logger = env
+    full_config.cl2k_maker.text_logo_fallback = False
     monkeypatch.setattr(maker, "list_images", lambda *a, **k: {})
     monkeypatch.setattr(
         maker.image_fetch,
@@ -86,4 +93,4 @@ def test_auto_sourced_small_logo_is_dropped(env, monkeypatch):
         backdrop_bytes=_backdrop_png(),
         logo_path=None,
     )
-    assert info["logo_source"] == "text"  # too small -> drawn title text
+    assert info["logo_source"] == "none"  # too small -> dropped (no fallback configured)
