@@ -107,9 +107,10 @@ class GenerateRequest(BaseModel):
     # top, ~0.4 = headroom). In cover ("Fill") it pans the framing UP at the same
     # size — real artwork flows down into the gradient, no AI (0 = unchanged).
     v_pos: float = 0.0
-    # Zoom (>=1) for fit/extend: enlarge the subject above the full-width fit (sides
-    # crop) so a wide backdrop isn't shrunk to a tiny strip. 1.0 = plain fit.
-    zoom: float = Field(1.0, ge=1.0, le=3.0)
+    # Zoom (0.5-3.0): in fit/extend, >1 enlarges the subject above the full-width
+    # fit (sides crop) so a wide backdrop isn't shrunk to a tiny strip; in cover
+    # ("Fill"), <1 shrinks the art below the fill onto black. 1.0 = plain fit/cover.
+    zoom: float = Field(1.0, ge=0.5, le=3.0)
     # Explicit bottom banner (e.g. "COMPLETE LIMITED SERIES"); overrides the auto
     # COLLECTION / season label when set.
     band_label: str = ""
@@ -793,7 +794,7 @@ class SeasonsRequest(BaseModel):
     crop_w: Optional[float] = None
     crop_h: Optional[float] = None
     v_pos: float = 0.0
-    zoom: float = Field(1.0, ge=1.0, le=3.0)
+    zoom: float = Field(1.0, ge=0.5, le=3.0)
     logo_scale: float = Field(1.0, ge=0.25, le=3.0)
     logo_y_offset: int = Field(0, ge=-600, le=200)
     whiten: Optional[bool] = None  # None = module config (whiten_logo)
@@ -861,7 +862,7 @@ async def upload_generate(
     crop_w: Optional[float] = Form(None),
     crop_h: Optional[float] = Form(None),
     v_pos: float = Form(0.0),
-    zoom: float = Form(1.0, ge=1.0, le=3.0),
+    zoom: float = Form(1.0, ge=0.5, le=3.0),
     preview: bool = Form(False),
     save_local: bool = Form(True),
     upload_gdrive: Optional[bool] = Form(None),
