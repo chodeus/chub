@@ -371,6 +371,24 @@ def extract_ids(text: str) -> Tuple[Optional[int], Optional[int], Optional[str]]
     return tmdb, tvdb, imdb
 
 
+def parse_search_id(query: str) -> Tuple[Optional[int], Optional[int], Optional[str]]:
+    """Parse a search query into (tmdb_id, tvdb_id, imdb_id) for id-based search.
+
+    Recognizes the same filename-style tags as extract_ids ("tmdb-286532",
+    "{tvdb-417373}", "imdb-tt0910885") and additionally a bare IMDb id
+    ("tt0910885") typed on its own. Returns (None, None, None) for an ordinary
+    title query so callers can fall back to title matching.
+    """
+    if not query:
+        return None, None, None
+    tmdb, tvdb, imdb = extract_ids(query)
+    if not imdb:
+        bare = re.fullmatch(r"\s*(tt\d{6,})\s*", query, re.IGNORECASE)
+        if bare:
+            imdb = bare.group(1).lower()
+    return tmdb, tvdb, imdb
+
+
 def extract_mbid(text: str) -> Optional[str]:
     """Extract a MusicBrainz id from text (an ``{mbid-<uuid>}`` style tag).
 
