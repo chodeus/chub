@@ -6,7 +6,7 @@
  * Uses format: range(MM/DD-MM/DD)
  */
 
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo } from 'react';
 import { FieldWrapper, FieldLabel, FieldError, FieldDescription, SelectBase } from '../primitives';
 
 // Month configuration with days
@@ -65,6 +65,18 @@ export const DateRangeField = React.memo(
             () => parseSchedule(value),
             [value, parseSchedule]
         );
+
+        // A newly-added holiday starts with no schedule. The selects show sensible
+        // defaults (Jan 01 – Jan 01) but never emit them until the user changes one,
+        // so the saved holiday omitted `schedule` entirely and the backend (which
+        // requires it) rejected the save. Emit the default range once on mount when
+        // the value is unset, so a brand-new holiday always carries a valid schedule.
+        useEffect(() => {
+            if (typeof value !== 'string' || !value.startsWith('range(')) {
+                onChange(`range(${fromMonth}/${fromDay}-${toMonth}/${toDay})`);
+            }
+            // eslint-disable-next-line react-hooks/exhaustive-deps
+        }, []);
 
         // Generate day options for a given month
         const generateDayOptions = useCallback(monthValue => {
