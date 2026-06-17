@@ -194,11 +194,71 @@ def test_scan_ignore_list_spares_unmatched(tmp_path):
     assert orphans == []
 
 
+# ── Dead-symlink sweep ───────────────────────────────────────────────────────
+
+
+def test_scan_flags_broken_symlink_even_when_title_matches(tmp_path):
+    """A symlink whose target is gone is flagged as a dead link BEFORE the
+    spare-only checks — so it's caught even when its title matches the library
+    (which would otherwise spare it)."""
+    m = _make()
+    link = tmp_path / "Some Movie (2020).png"
+    link.symlink_to(tmp_path / "missing_target.png")  # target never created
+    title_key = normalize_titles("Some Movie (2020)")
+
+    orphans = m._scan_orphan_assets(
+        [str(tmp_path)],
+        library_titles={title_key},  # title matches — normally a spare
+        tmdb_ids=set(),
+        tvdb_ids=set(),
+    )
+
+    assert len(orphans) == 1
+    assert orphans[0]["path"] == str(link)
+    assert orphans[0]["reason"] == "dead_link"
+
+
+def test_scan_spares_healthy_symlink_with_matching_title(tmp_path):
+    """A symlink whose target exists is not a dead link; normal title matching
+    applies, so a matching title spares it."""
+    m = _make()
+    assets = tmp_path / "assets"
+    assets.mkdir()
+    target = tmp_path / "real_target.png"  # outside the scanned asset dir
+    target.write_bytes(b"x")
+    link = assets / "Some Movie (2020).png"
+    link.symlink_to(target)
+
+    orphans = m._scan_orphan_assets(
+        [str(assets)],
+        library_titles={normalize_titles("Some Movie (2020)")},
+        tmdb_ids=set(),
+        tvdb_ids=set(),
+    )
+
+    assert orphans == []
+
+
+def test_scan_dead_link_circuit_breaker_skips_when_target_unmounted(tmp_path):
+    """When most links are broken — what an unmounted link target looks like —
+    the sweep is skipped to avoid mass-flagging good links."""
+    m = _make()
+    for i in range(25):  # > DEAD_LINK_MIN_FOR_RATIO, 100% broken > the ratio
+        (tmp_path / f"Title {i} (2020).png").symlink_to(tmp_path / f"missing_{i}.png")
+
+    orphans = m._scan_orphan_assets(
+        [str(tmp_path)],
+        library_titles=set(),
+        tmdb_ids=set(),
+        tvdb_ids=set(),
+    )
+
+    assert orphans == []  # breaker tripped → nothing flagged
+
+
 def test_resolve_orphan_instances_prefers_orphan_instances():
     """When orphan_instances is set, it is used as the comparison-set source."""
-    cfg = SimpleNamespace(
-        orphan_instances=["radarr1", "sonarr1"], instances=["plex1"]
-    )
+    cfg = SimpleNamespace(orphan_instances=["radarr1", "sonarr1"], instances=["plex1"])
     assert PosterCleanarr._resolve_orphan_instances(cfg) == ["radarr1", "sonarr1"]
 
 

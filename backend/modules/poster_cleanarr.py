@@ -55,6 +55,13 @@ ORPHAN_RESTORE_DIR_NAME = ".chub_orphan_restore"
 PLEX_DB_NAME = "com.plexapp.plugins.library.db"
 DB_MAX_AGE_HOURS = 2
 
+# Dead-symlink sweep circuit-breaker: if at least this many links are scanned
+# and more than this fraction are broken, assume the link target volume is
+# unmounted (which makes EVERY link look broken) rather than the assets being
+# stale — skip the sweep instead of mass-flagging good links.
+DEAD_LINK_MIN_FOR_RATIO = 20
+DEAD_LINK_MAX_BROKEN_RATIO = 0.5
+
 MODE_LABELS = {
     "report": {"ed": "Reported", "ing": "Reporting"},
     "move": {"ed": "Moved", "ing": "Moving"},
@@ -896,6 +903,13 @@ class PosterCleanarr(ChubModule):
         every check below can only spare a file, never flag one, mirroring the
         upstream asset_cleanup script's spare-only matching.
 
+        One exception precedes the spare-only checks: a SYMLINK whose target no
+        longer exists (a stale link left after a rename, or one whose source was
+        removed) is flagged regardless of title — a broken link is dead weight
+        even if its name still matches the library. Broken links are tallied
+        against total links so an unmounted target (every link looks broken)
+        trips a circuit-breaker rather than mass-flagging good links.
+
         Matching, in priority order, per file:
 
           1. Ignore list — a normalized title in `ignore_keys` is always spared.
@@ -915,6 +929,8 @@ class PosterCleanarr(ChubModule):
         tvdb_ids = tvdb_ids or set()
         ignore_keys = ignore_keys or set()
         orphans: List[Dict[str, Any]] = []
+        dead_links: List[Dict[str, Any]] = []
+        total_links = 0
         for asset_dir in asset_dirs:
             restore_real = os.path.realpath(
                 os.path.join(asset_dir, ORPHAN_RESTORE_DIR_NAME)
@@ -943,6 +959,27 @@ class PosterCleanarr(ChubModule):
                     if not key and not folder_key:
                         continue
 
+                    fpath = os.path.join(root, fname)
+
+                    # 0. Dead symlink — flag a link whose target is gone BEFORE
+                    # the spare-only checks below, so a stale link is caught even
+                    # when its title still matches. Tallied for the circuit-
+                    # breaker; healthy links fall through to normal matching.
+                    if os.path.islink(fpath):
+                        total_links += 1
+                        if not os.path.exists(fpath):  # exists() follows the link
+                            dead_links.append(
+                                {
+                                    "path": fpath,
+                                    "asset_dir": asset_dir,
+                                    "parsed": parsed,
+                                    "key": key,
+                                    "size": 0,
+                                    "reason": "dead_link",
+                                }
+                            )
+                            continue
+
                     # 1. Ignore list — always spared.
                     if key in ignore_keys or folder_key in ignore_keys:
                         continue
@@ -963,7 +1000,6 @@ class PosterCleanarr(ChubModule):
                     if key in library_titles or folder_key in library_titles:
                         continue
 
-                    fpath = os.path.join(root, fname)
                     try:
                         size = os.path.getsize(fpath)
                     except OSError:
@@ -977,6 +1013,26 @@ class PosterCleanarr(ChubModule):
                             "size": size,
                         }
                     )
+
+        # Fold in confirmed dead links — unless an implausibly large share of
+        # links are broken, which means the target volume is likely unmounted
+        # (not that the links are stale): skip the sweep to avoid mass deletion.
+        if dead_links:
+            breaker_tripped = (
+                total_links >= DEAD_LINK_MIN_FOR_RATIO
+                and len(dead_links) / total_links > DEAD_LINK_MAX_BROKEN_RATIO
+            )
+            if breaker_tripped:
+                self.logger.warning(
+                    f"Dead-symlink sweep skipped: {len(dead_links)}/{total_links} "
+                    "links appear broken — likely an unmounted link target, not "
+                    "stale assets. Check the source mount and re-run."
+                )
+            else:
+                self.logger.info(
+                    f"Dead-symlink sweep: {len(dead_links)} broken link(s) flagged."
+                )
+                orphans.extend(dead_links)
         return orphans
 
     def _execute_orphan_mode(
@@ -991,7 +1047,8 @@ class PosterCleanarr(ChubModule):
             path = item["path"]
             size = item["size"]
             if mode == "report":
-                logger.info(f"  [ORPHAN] {path} (parsed='{item['parsed']}')")
+                label = "DEAD LINK" if item.get("reason") == "dead_link" else "ORPHAN"
+                logger.info(f"  [{label}] {path} (parsed='{item['parsed']}')")
                 count += 1
                 total_size += size
                 continue
