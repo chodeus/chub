@@ -9,6 +9,7 @@ from types import SimpleNamespace
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import pytest
+import yaml
 from pydantic import ValidationError
 
 import backend.util.scheduler as scheduler
@@ -1205,3 +1206,50 @@ def test_renameinatorr_count_coercion():
     assert ChubConfig().renameinatorr.count == 100
     with pytest.raises(ValidationError):
         ChubConfig.model_validate({"renameinatorr": {"count": "abc"}})
+
+
+# ── First-run setup wizard backfill ──────────────────────────────────────────
+
+
+def test_setup_backfill_used_config_missing_flag(tmp_path):
+    """An existing/used install missing setup_completed is treated as done so
+    upgraders never see the first-run wizard."""
+    config_path = tmp_path / "config.yml"
+    config_path.write_text(
+        yaml.safe_dump(
+            {
+                "auth": {"username": "admin", "password_hash": "x"},
+                "instances": {"radarr": {"Main": {"url": "http://r", "api": "k"}}},
+            }
+        )
+    )
+    assert load_config(str(config_path)).general.setup_completed is True
+
+
+def test_setup_backfill_tmdb_only_counts_as_used(tmp_path):
+    """A TMDB key alone is enough to count an install as already set up."""
+    config_path = tmp_path / "config.yml"
+    config_path.write_text(yaml.safe_dump({"tmdb": {"apikey": "abc123"}}))
+    assert load_config(str(config_path)).general.setup_completed is True
+
+
+def test_setup_backfill_empty_config_is_not_completed(tmp_path):
+    """A near-empty (fresh) config gets setup_completed=False → wizard shows."""
+    config_path = tmp_path / "config.yml"
+    config_path.write_text(yaml.safe_dump({"general": {"log_level": "info"}}))
+    assert load_config(str(config_path)).general.setup_completed is False
+
+
+def test_setup_explicit_value_respected(tmp_path):
+    """An explicit setup_completed is never overridden by the backfill, even
+    when the config otherwise looks used."""
+    config_path = tmp_path / "config.yml"
+    config_path.write_text(
+        yaml.safe_dump(
+            {
+                "general": {"setup_completed": False},
+                "auth": {"username": "admin", "password_hash": "x"},
+            }
+        )
+    )
+    assert load_config(str(config_path)).general.setup_completed is False

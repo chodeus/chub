@@ -31,6 +31,7 @@ from backend.api import (
     notifications as notifications_router,
     posters as posters_router,
     schedule as schedule_router,
+    setup as setup_router,
     system as system_router,
     webhooks as webhooks_router,
 )
@@ -48,6 +49,9 @@ AUTH_EXEMPT_PATHS = (
     "/api/auth/login",
     "/api/auth/setup",
     "/api/auth/status",
+    # Setup status carries no secret and the wizard must be reachable before a
+    # login exists, so mirror /api/auth/status and keep it exempt.
+    "/api/setup/status",
     # Inbound webhooks from Sonarr/Radarr/Tautulli authenticate with the
     # shared X-Webhook-Secret (verify_webhook_secret), never a JWT. Without
     # this exemption AuthMiddleware would 401 every inbound webhook the moment
@@ -174,9 +178,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 )
         except ConfigError:
             if log:
-                log.debug(
-                    "Skipped ErrorNotifyHandler setup — config not loadable yet."
-                )
+                log.debug("Skipped ErrorNotifyHandler setup — config not loadable yet.")
 
         # CREATE SHARED DATABASE INSTANCE FOR ALL API ENDPOINTS
         try:
@@ -408,6 +410,7 @@ async def handle_validation_exception(
 
 # Register API routers with proper organization
 app.include_router(auth_router.router)
+app.include_router(setup_router.router)
 app.include_router(system_router.router)
 app.include_router(config_router.router)
 app.include_router(instances_router.router)

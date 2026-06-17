@@ -64,6 +64,13 @@ const SETTINGS_CARDS = [
         title: 'System',
         description: 'Database statistics and maintenance.',
     },
+    {
+        to: '/setup',
+        icon: 'auto_fix_high',
+        title: 'Setup Wizard',
+        description: 'Re-run guided first-run setup. Pre-fills what’s configured.',
+        badge: 5,
+    },
 ];
 
 export const SettingsSplash = React.memo(() => {

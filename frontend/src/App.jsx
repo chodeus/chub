@@ -44,6 +44,7 @@ const SystemSettingsPage = React.lazy(() =>
 
 // Lazy-loaded pages - other
 const Logs = React.lazy(() => import('./pages/Logs.jsx'));
+const SetupWizardPage = React.lazy(() => import('./pages/SetupWizardPage.jsx'));
 
 // Lazy-loaded pages - media
 const MediaSearchPage = React.lazy(() => import('./pages/media/MediaSearchPage.jsx'));
@@ -89,8 +90,11 @@ const SuspenseFallback = () => <Spinner size="large" text="Loading..." center />
  * Renders children directly when auth is not yet configured (first-run) or user is logged in.
  */
 const RequireAuth = ({ children }) => {
-    const { loading, authConfigured, isAuthenticated } = useAuth();
+    const { loading, authConfigured, isAuthenticated, setupComplete } = useAuth();
     if (loading) return <SuspenseFallback />;
+    // First-run gate: a fresh install (setup not complete) goes to the wizard.
+    // Existing installs are backfilled complete, so they skip straight past.
+    if (setupComplete === false) return <Navigate to="/setup" replace />;
     if (authConfigured && !isAuthenticated) return <Navigate to="/login" replace />;
     return children;
 };
@@ -99,8 +103,11 @@ const RequireAuth = ({ children }) => {
  * Login route gate — redirects authenticated users away from login page.
  */
 const LoginRoute = () => {
-    const { loading, authConfigured, isAuthenticated } = useAuth();
+    const { loading, authConfigured, isAuthenticated, setupComplete } = useAuth();
     if (loading) return <SuspenseFallback />;
+    // On a fresh install the wizard owns account creation, so send first-run
+    // visitors there instead of the bare login screen.
+    if (setupComplete === false) return <Navigate to="/setup" replace />;
     if (isAuthenticated && authConfigured) return <Navigate to="/dashboard" replace />;
     return <LoginPage />;
 };
@@ -163,6 +170,17 @@ const App = () => {
                                         <Suspense fallback={<SuspenseFallback />}>
                                             <Routes>
                                                 <Route path="/login" element={<LoginRoute />} />
+                                                <Route
+                                                    path="/setup"
+                                                    element={
+                                                        <PageErrorBoundary
+                                                            pageName="Setup Wizard"
+                                                            pageDescription="First-run configuration"
+                                                        >
+                                                            <SetupWizardPage />
+                                                        </PageErrorBoundary>
+                                                    }
+                                                />
                                                 <Route
                                                     path="/"
                                                     element={
