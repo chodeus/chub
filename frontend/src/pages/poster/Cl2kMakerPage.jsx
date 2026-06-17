@@ -1160,7 +1160,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             crop_h: (fitMode === 'fit' || fitMode === 'extend') && crop ? crop.h : null,
             // v_pos applies to every mode now (Fill pans up; fit/extend position).
             v_pos: vPos,
-            zoom: fitMode === 'fit' || fitMode === 'extend' ? zoom : 1,
+            zoom: zoom,
             // Banner overrides the auto label, but a season poster keeps its SEASON N.
             band_label: isSeasonPoster ? '' : bandLabel,
             // Save destinations (ignored by /preview, honoured by /generate).
@@ -1224,7 +1224,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                 fm: fitMode,
                 c: (fitMode === 'fit' || fitMode === 'extend') && crop ? crop : null,
                 vp: vPos,
-                zm: fitMode === 'fit' || fitMode === 'extend' ? zoom : 1,
+                zm: zoom,
                 fx: focusX,
                 fy: focusY,
                 bl: isSeasonPoster ? '' : bandLabel,
@@ -1359,7 +1359,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                 crop_w: (fitMode === 'fit' || fitMode === 'extend') && crop ? crop.w : null,
                 crop_h: (fitMode === 'fit' || fitMode === 'extend') && crop ? crop.h : null,
                 v_pos: vPos,
-                zoom: fitMode === 'fit' || fitMode === 'extend' ? zoom : 1,
+                zoom: zoom,
                 logo_scale: logoScale,
                 logo_y_offset: logoYOffset,
                 // Deliberate manual action — overwrite existing season posters too.
@@ -3116,12 +3116,12 @@ const CropFramer = ({
                           : `${Math.round(vPos * 100)}% up`}
                 </span>
             </label>
-            {isBox && (
+            {(isBox || fitMode === 'cover') && (
                 <label className="flex items-center gap-2 text-xs text-secondary mb-2">
                     <span className="shrink-0 w-24">Zoom</span>
                     <input
                         type="range"
-                        min="1"
+                        min="0.5"
                         max="3"
                         step="0.05"
                         value={zoom ?? 1}
