@@ -166,13 +166,16 @@ async def search_media(
                                 {
                                     "asset_type": "movie",
                                     "total": 500,
-                                    "matched": 480,
+                                    "in_library": 480,
+                                    "missing": 15,
+                                    "monitored": 495,
                                     "instances": 2,
                                 }
                             ],
                             "total": 750,
-                            "matched": 700,
-                            "unmatched": 50,
+                            "in_library": 700,
+                            "missing": 40,
+                            "monitored": 740,
                         },
                     }
                 }
@@ -252,6 +255,21 @@ async def get_media_stats_detailed(
             period_days = period_map.get(period)
 
         stats = db.media.get_detailed_stats(asset_type=type, period_days=period_days)
+
+        # Attach freshness to each *arr instance — the cache sync is on-demand,
+        # so the snapshot age is meaningful. *arr freshness comes from sync_state
+        # (media_cache has no per-row sync timestamp); None when never synced.
+        for row in stats.get("by_instance", []):
+            src = row.get("source")
+            name = row.get("instance_name")
+            row["snapshot_age_seconds"] = (
+                db.sync_state.age_seconds(src, name) if src and name else None
+            )
+
+        # Plex lives in a separate cache with no monitored/missing concept —
+        # surface it as per-library item counts alongside the *arr health stats.
+        stats["plex"] = db.plex.get_stats()
+
         return ok("Detailed media statistics retrieved", stats)
 
     except Exception as e:
@@ -399,8 +417,8 @@ async def get_collections(
                                     "count": 2,
                                     "ids": "12,13",
                                     "identities": "tvdb:449931,tvdb:465530",
-                                    "folders": "[\"/data/media/tv/Destination X (US)\",\"/data/media/tv/Destination X (UK)\"]",
-                                    "titles": "[\"Destination X (US)\",\"Destination X (UK)\"]",
+                                    "folders": '["/data/media/tv/Destination X (US)","/data/media/tv/Destination X (UK)"]',
+                                    "titles": '["Destination X (US)","Destination X (UK)"]',
                                 }
                             ],
                             "total": 0,
@@ -1880,9 +1898,7 @@ async def delete_media_item(
         # If deleteFiles requested, remove from ARR first. The connect probe +
         # delete request are blocking, so run them off the event loop.
         def _delete_from_arr() -> None:
-            if not (
-                delete_files and item.get("arr_id") and item.get("instance_name")
-            ):
+            if not (delete_files and item.get("arr_id") and item.get("instance_name")):
                 return
             try:
                 config = load_config()
