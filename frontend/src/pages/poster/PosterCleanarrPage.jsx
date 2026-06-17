@@ -443,10 +443,28 @@ const PosterCleanarrPage = () => {
 
     // ---- Scan data ----
     const byMedia = useApiData({
-        apiFunction: useCallback(
-            () => postersAPI.listPlexMetadataByMedia({ limit: PAGE_SIZE, offset: 0 }),
-            []
-        ),
+        apiFunction: useCallback(async () => {
+            // The endpoint caps `limit` at 500 and returns one page, but the
+            // master-detail view needs every bundle client-side (the tabs filter
+            // the full list locally). Page through `total` so large libraries
+            // aren't truncated to the first 500. The scan is server-cached, so
+            // follow-up pages reuse it and are cheap.
+            const first = await postersAPI.listPlexMetadataByMedia({
+                limit: PAGE_SIZE,
+                offset: 0,
+            });
+            const payload = first?.data || {};
+            const total = payload.total ?? (payload.bundles?.length || 0);
+            const all = [...(payload.bundles || [])];
+            for (let off = PAGE_SIZE; off < total; off += PAGE_SIZE) {
+                const next = await postersAPI.listPlexMetadataByMedia({
+                    limit: PAGE_SIZE,
+                    offset: off,
+                });
+                all.push(...(next?.data?.bundles || []));
+            }
+            return { ...first, data: { ...payload, bundles: all } };
+        }, []),
         dependencies: [],
         options: { showErrorToast: false, immediate: false },
     });
