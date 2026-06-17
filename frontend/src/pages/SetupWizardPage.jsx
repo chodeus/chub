@@ -30,13 +30,22 @@ const normalizeInstances = raw => {
         }));
     }
     if (raw && typeof raw === 'object') {
-        return Object.entries(raw).flatMap(([service, entries]) =>
-            (Array.isArray(entries) ? entries : []).map(i => ({
+        // /api/instances returns each service as a dict keyed by instance name
+        // ({radarr: {radarr_main: {...}}}), not an array — flatten both shapes
+        // so existing instances hydrate the wizard's Plex/*arr steps.
+        return Object.entries(raw).flatMap(([service, entries]) => {
+            const rows = Array.isArray(entries)
+                ? entries
+                : Object.entries(entries || {}).map(([name, detail]) => ({
+                      name,
+                      ...(detail && typeof detail === 'object' ? detail : {}),
+                  }));
+            return rows.map(i => ({
                 service: service.toLowerCase(),
                 name: i.name,
                 url: i.url,
-            }))
-        );
+            }));
+        });
     }
     return [];
 };
