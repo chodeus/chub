@@ -55,19 +55,42 @@ def test_season_asset_suffix_composes_with_season_name():
     asset_renamerr renames it."""
     from backend.util.cl2k.naming import build_poster_filename
 
-    assert build_poster_filename(
-        kind="season",
-        title="Breaking Bad",
-        year=2008,
-        tvdb_id=81189,
-        season_number=1,
-        asset_suffix=" - Background",
-    ) == "Breaking Bad (2008) {tvdb-81189} - Season 01 - Background.jpg"
-    assert build_poster_filename(
-        kind="season",
-        title="Breaking Bad",
-        year=2008,
-        tvdb_id=81189,
-        season_number=0,
-        asset_suffix=" - SquareArt",
-    ) == "Breaking Bad (2008) {tvdb-81189} - Specials - SquareArt.jpg"
+    assert (
+        build_poster_filename(
+            kind="season",
+            title="Breaking Bad",
+            year=2008,
+            tvdb_id=81189,
+            season_number=1,
+            asset_suffix=" - Background",
+        )
+        == "Breaking Bad (2008) {tvdb-81189} - Season 01 - Background.jpg"
+    )
+    assert (
+        build_poster_filename(
+            kind="season",
+            title="Breaking Bad",
+            year=2008,
+            tvdb_id=81189,
+            season_number=0,
+            asset_suffix=" - SquareArt",
+        )
+        == "Breaking Bad (2008) {tvdb-81189} - Specials - SquareArt.jpg"
+    )
+
+
+def test_embedded_dots_are_preserved():
+    """Interior dots are legal in filenames and must survive intact."""
+    name = build_poster_filename(
+        kind="movie", title="S.W.A.T.", year=2003, tmdb_id=9444
+    )
+    assert name == "S.W.A.T. (2003) {tmdb-9444}.jpg"
+
+
+def test_leading_dot_is_stripped():
+    """A leading dot would make a hidden dotfile — strip it (but keep interior
+    dots, so the rest of the title is untouched)."""
+    name = build_poster_filename(
+        kind="movie", title=".hack Liminality", year=2002, tmdb_id=12345
+    )
+    assert name == "hack Liminality (2002) {tmdb-12345}.jpg"
