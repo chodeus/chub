@@ -544,6 +544,12 @@ class GeneralConfig(BaseModel):
     dashboard_refresh_seconds: int = Field(default=30, ge=0, le=3600)
     # How many upcoming scheduled runs the dashboard Scheduler panel lists.
     dashboard_upcoming_limit: int = Field(default=5, ge=1, le=50)
+    # First-run setup wizard gate. False routes the UI into the wizard; set True
+    # once it completes. For pre-existing installs the key is absent from
+    # config.yml, so load_config backfills it True when the config already shows
+    # use (see _backfill_setup_completed) — only a genuinely fresh install stays
+    # False and sees the wizard.
+    setup_completed: bool = False
 
     @field_validator("log_level", mode="before")
     @classmethod
@@ -747,6 +753,12 @@ SENSITIVE_FIELD_NAMES = frozenset(
         "password_hash",
         "jwt_secret",
         "webhook_secret",
+        # Outbound notification webhook URLs are themselves credentials: a
+        # Discord webhook URL grants posting rights, and a Notifiarr passthrough
+        # URL embeds the user's API key. Exact-leaf-name match, so the unrelated
+        # `webhook_secret` / `webhook_force_reupload` / `webhook_*_delay` fields
+        # are unaffected.
+        "webhook",
     }
 )
 
@@ -870,6 +882,37 @@ def _print_cli_validation_errors(validation_error: ValidationError) -> None:
     print("💡 Check your config.yml file and fix the issues above")
 
 
+def _backfill_setup_completed(raw: Dict[str, Any]) -> None:
+    """Mark pre-existing installs as setup-complete so only genuinely fresh
+    configs see the first-run wizard.
+
+    Runs on EVERY load (not just legacy migration): a chub-native config written
+    before this field existed simply lacks the key, and pydantic would otherwise
+    default it to False and wrongly re-trigger the wizard for existing users.
+    Mutates ``raw`` in place; a no-op once ``general.setup_completed`` is present
+    (so an explicit true/false is always respected).
+    """
+    general = raw.get("general")
+    if not isinstance(general, dict):
+        general = {}
+        raw["general"] = general
+    if "setup_completed" in general:
+        return  # explicit value wins
+
+    auth = raw.get("auth") or {}
+    instances = raw.get("instances") or {}
+    tmdb = raw.get("tmdb") or {}
+    used = bool(
+        (auth.get("username") and auth.get("password_hash"))
+        or instances.get("radarr")
+        or instances.get("sonarr")
+        or instances.get("lidarr")
+        or instances.get("plex")
+        or tmdb.get("apikey")
+    )
+    general["setup_completed"] = used
+
+
 def load_config(path: Optional[str] = None) -> ChubConfig:
     """
     Load and validate configuration from YAML.
@@ -903,6 +946,8 @@ def load_config(path: Optional[str] = None) -> ChubConfig:
 
     if is_legacy_config(raw):
         raw = _auto_migrate_and_persist(raw, config_path)
+
+    _backfill_setup_completed(raw)
 
     try:
         return ChubConfig.model_validate(raw)
@@ -948,9 +993,7 @@ def _auto_migrate_and_persist(raw: dict, config_path: str) -> dict:
             yaml.safe_dump(migrated, f, sort_keys=False)
         os.replace(tmp_path, config_path)
     except Exception as e:  # pragma: no cover - best-effort write
-        _emit(
-            f"⚠️  Failed to rewrite migrated config to {config_path}: {e}", "warning"
-        )
+        _emit(f"⚠️  Failed to rewrite migrated config to {config_path}: {e}", "warning")
 
     _emit(
         f"🔄 Legacy config detected at {config_path}. "

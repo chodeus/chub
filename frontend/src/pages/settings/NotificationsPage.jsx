@@ -11,6 +11,12 @@ import { FieldRegistry } from '../../components/fields/FieldRegistry';
 import { NOTIFICATIONS_SCHEMA } from '../../utils/constants/notifications_schema';
 import { useToast } from '../../contexts/ToastContext';
 import { humanize } from '../../utils/tools';
+import { moduleOrder } from '../../utils/constants/constants';
+
+// Every notifiable channel (matches the backend ConfigNotifications model):
+// all modules in display order plus the global "main" error channel, minus the
+// non-notifiable "general" section.
+const NOTIFY_MODULES = moduleOrder.filter(m => m !== 'general');
 
 /**
  * Notifications Management page
@@ -49,6 +55,14 @@ export const NotificationsPage = () => {
 
     // Testing state
     const [testingServices, setTestingServices] = useState(new Set());
+
+    // Bulk "apply to multiple modules" state
+    const [bulkOpen, setBulkOpen] = useState(false);
+    const [bulkService, setBulkService] = useState(null);
+    const [bulkForm, setBulkForm] = useState({});
+    const [bulkErrors, setBulkErrors] = useState({});
+    const [bulkModules, setBulkModules] = useState(() => new Set(NOTIFY_MODULES));
+    const [bulkSaving, setBulkSaving] = useState(false);
 
     /**
      * Handle add notification action
@@ -249,6 +263,85 @@ export const NotificationsPage = () => {
         }
     }, [moduleToDelete, serviceToDelete, toast, refreshNotifications]);
 
+    /**
+     * Open the "apply to multiple modules" flow (defaults to all modules).
+     */
+    const openBulk = useCallback(() => {
+        setBulkService(null);
+        setBulkForm({});
+        setBulkErrors({});
+        setBulkModules(new Set(NOTIFY_MODULES));
+        setBulkOpen(true);
+    }, []);
+
+    const toggleBulkModule = useCallback(key => {
+        setBulkModules(prev => {
+            const next = new Set(prev);
+            next.has(key) ? next.delete(key) : next.add(key);
+            return next;
+        });
+    }, []);
+
+    const handleBulkFieldChange = useCallback((fieldKey, value) => {
+        setBulkForm(prev => ({ ...prev, [fieldKey]: value }));
+        setBulkErrors(prev => {
+            const next = { ...prev };
+            delete next[fieldKey];
+            return next;
+        });
+    }, []);
+
+    /**
+     * Apply one service config to every selected module via the existing
+     * per-module endpoint (no bulk backend route needed).
+     */
+    const handleBulkSubmit = useCallback(async () => {
+        const errors = {};
+        const serviceSchema = NOTIFICATIONS_SCHEMA.find(s => s.type === bulkService);
+        serviceSchema?.fields.forEach(field => {
+            if (field.required && !bulkForm[field.key]) {
+                errors[field.key] = `${field.label} is required`;
+            }
+            if (field.validate && bulkForm[field.key] && !field.validate(bulkForm[field.key])) {
+                errors[field.key] = `${field.label} format is invalid`;
+            }
+        });
+        setBulkErrors(errors);
+        if (Object.keys(errors).length > 0) {
+            toast.error('Please fill in all required fields correctly');
+            return;
+        }
+        if (bulkModules.size === 0) {
+            toast.error('Select at least one module to apply to');
+            return;
+        }
+
+        setBulkSaving(true);
+        const targets = [...bulkModules];
+        const results = await Promise.allSettled(
+            targets.map(m =>
+                notificationsAPI.updateNotification({
+                    module: m,
+                    service_type: bulkService,
+                    config: bulkForm,
+                })
+            )
+        );
+        setBulkSaving(false);
+
+        const failed = results.filter(r => r.status === 'rejected').length;
+        const ok = targets.length - failed;
+        if (failed === 0) {
+            toast.success(`${bulkService} applied to ${ok} module${ok === 1 ? '' : 's'}`);
+        } else if (ok === 0) {
+            toast.error(`Failed to apply to all ${failed} module(s)`);
+        } else {
+            toast.error(`Applied to ${ok} module(s); ${failed} failed`);
+        }
+        setBulkOpen(false);
+        refreshNotifications({ useCache: false });
+    }, [bulkService, bulkForm, bulkModules, toast, refreshNotifications]);
+
     // Calculate statistics
     const statistics = useMemo(() => {
         if (!notifications?.data?.notifications) {
@@ -363,6 +456,13 @@ export const NotificationsPage = () => {
                     />
                 ))}
             </StatGrid>
+
+            {/* Bulk action — apply one webhook to many modules at once */}
+            <div className="flex justify-end mb-6">
+                <Button variant="secondary" onClick={openBulk}>
+                    + Apply to multiple modules
+                </Button>
+            </div>
 
             {/* Module Sections */}
             {notifications?.data?.notifications &&
@@ -651,6 +751,145 @@ export const NotificationsPage = () => {
                         <Button variant="danger" onClick={handleConfirmDelete} disabled={isSaving}>
                             {isSaving ? 'Deleting...' : 'Delete Notification'}
                         </Button>
+                    </Modal.Footer>
+                </Modal>
+            )}
+
+            {/* Bulk: apply one service config to multiple modules */}
+            {bulkOpen && (
+                <Modal isOpen={true} onClose={() => setBulkOpen(false)} size="medium">
+                    <Modal.Header>Apply a notification to multiple modules</Modal.Header>
+                    <Modal.Body>
+                        {!bulkService ? (
+                            <div className="flex flex-col gap-4">
+                                <p className="text-sm text-secondary">
+                                    Choose a service, then pick which modules it should notify.
+                                </p>
+                                {NOTIFICATIONS_SCHEMA.map(service => (
+                                    <Button
+                                        key={service.type}
+                                        variant="ghost"
+                                        fullWidth
+                                        className="justify-start"
+                                        onClick={() => {
+                                            setBulkService(service.type);
+                                            setBulkForm({});
+                                            setBulkErrors({});
+                                        }}
+                                    >
+                                        <div className="flex items-center gap-3 w-full">
+                                            <div className="flex items-center justify-center min-w-6">
+                                                <ServiceIcon service={service.type} size="medium" />
+                                            </div>
+                                            <div className="flex-1 text-left">
+                                                <div className="font-medium">{service.label}</div>
+                                            </div>
+                                        </div>
+                                    </Button>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="flex flex-col gap-4">
+                                {NOTIFICATIONS_SCHEMA.find(s => s.type === bulkService)?.fields.map(
+                                    field => {
+                                        const FieldComponent = FieldRegistry.getField(field.type);
+                                        return (
+                                            <FieldComponent
+                                                key={field.key}
+                                                field={field}
+                                                value={bulkForm[field.key] || ''}
+                                                onChange={value =>
+                                                    handleBulkFieldChange(field.key, value)
+                                                }
+                                                errorMessage={bulkErrors[field.key]}
+                                                highlightInvalid={!!bulkErrors[field.key]}
+                                            />
+                                        );
+                                    }
+                                )}
+                                <div>
+                                    <div className="flex items-center justify-between mb-2">
+                                        <span className="text-sm font-medium text-secondary">
+                                            Apply to modules ({bulkModules.size})
+                                        </span>
+                                        <div className="flex gap-2">
+                                            <Button
+                                                variant="ghost"
+                                                size="small"
+                                                onClick={() =>
+                                                    setBulkModules(new Set(NOTIFY_MODULES))
+                                                }
+                                            >
+                                                Select all
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="small"
+                                                onClick={() => setBulkModules(new Set(['main']))}
+                                            >
+                                                Errors only
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="small"
+                                                onClick={() => setBulkModules(new Set())}
+                                            >
+                                                Clear
+                                            </Button>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2 max-h-60 overflow-y-auto">
+                                        {NOTIFY_MODULES.map(m => (
+                                            <label
+                                                key={m}
+                                                className="flex items-center gap-2 p-2 rounded-lg bg-surface-alt cursor-pointer"
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    checked={bulkModules.has(m)}
+                                                    onChange={() => toggleBulkModule(m)}
+                                                    style={{ accentColor: 'var(--primary)' }}
+                                                />
+                                                <span className="text-sm">
+                                                    {m === 'main'
+                                                        ? 'All errors (global)'
+                                                        : humanize(m)}
+                                                </span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </Modal.Body>
+                    <Modal.Footer>
+                        {bulkService && (
+                            <Button
+                                variant="ghost"
+                                onClick={() => setBulkService(null)}
+                                disabled={bulkSaving}
+                            >
+                                Back
+                            </Button>
+                        )}
+                        <Button
+                            variant="secondary"
+                            onClick={() => setBulkOpen(false)}
+                            disabled={bulkSaving}
+                        >
+                            Cancel
+                        </Button>
+                        {bulkService && (
+                            <Button
+                                variant="primary"
+                                onClick={handleBulkSubmit}
+                                disabled={bulkSaving || bulkModules.size === 0}
+                            >
+                                {bulkSaving
+                                    ? 'Applying...'
+                                    : `Apply to ${bulkModules.size} module${bulkModules.size === 1 ? '' : 's'}`}
+                            </Button>
+                        )}
                     </Modal.Footer>
                 </Modal>
             )}

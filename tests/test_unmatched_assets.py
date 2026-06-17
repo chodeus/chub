@@ -133,15 +133,19 @@ def test_should_include_filters_tags_from_csv_string():
 
 
 def test_should_include_filters_unreleased_status():
-    """Status blocklist drops announced/tba/upcoming/deleted regardless of has_content."""
+    """Unreleased status (announced/tba/upcoming/deleted) is filtered only when
+    the item isn't already in the library. An item with downloaded content is in
+    Plex and can take a poster, so it stays included even with an unreleased
+    *arr status (an early/leaked grab, or a Sonarr series still 'upcoming')."""
     m = make_module()
-    # Even with has_content=1 (e.g. stale cache from before status filtering),
-    # an announced movie should be excluded.
-    assert m.should_include({"status": "announced", "has_content": 1}) is False
-    assert m.should_include({"status": "tba", "has_content": 1}) is False
-    assert m.should_include({"status": "upcoming", "has_content": 1}) is False
-    assert m.should_include({"status": "deleted", "has_content": 1}) is False
-    # Released / continuing / inCinemas / unknown / missing should pass the status gate.
+    # Unreleased + no/unknown content -> excluded (nothing in Plex to match).
+    for status in ("announced", "tba", "upcoming", "deleted"):
+        assert m.should_include({"status": status, "has_content": None}) is False
+        assert m.should_include({"status": status, "has_content": 0}) is False
+    # Unreleased BUT already in the library (has_content truthy) -> included.
+    assert m.should_include({"status": "announced", "has_content": 1}) is True
+    assert m.should_include({"status": "upcoming", "has_content": 1}) is True
+    # Released / continuing / inCinemas / unknown / missing pass the status gate.
     assert m.should_include({"status": "released", "has_content": 1}) is True
     assert m.should_include({"status": "continuing", "has_content": 1}) is True
     assert m.should_include({"status": "inCinemas", "has_content": 1}) is True
