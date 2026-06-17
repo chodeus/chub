@@ -42,6 +42,7 @@ def _cover_resize(
     focus_x: float = 0.5,
     focus_y: float = 0.5,
     v_pos: float = 0.0,
+    zoom: float = 1.0,
 ) -> None:
     """Resize + crop ``img`` in place to exactly width×height (cover fill).
 
@@ -55,9 +56,34 @@ def _cover_resize(
     CL2K gradient/black zone, so it stays hidden. This lets a tall subject sit
     higher (real artwork flowing down into the gradient) with no AI. 0 = the
     focal-point crop above, unchanged.
+
+    ``zoom`` (0.5..3.0) scales relative to the cover-fill baseline. 1.0 = plain
+    cover (unchanged). >1 crops tighter (punch in). <1 scales the art *below* the
+    fill so more of a high-resolution source stays visible — the art is then
+    centred on black and the freed bands merge into the CL2K gradient/border.
     """
-    scale = max(width / img.width, height / img.height)
-    img.resize(int(round(img.width * scale)), int(round(img.height * scale)))
+    zoom = max(0.5, min(float(zoom or 1.0), 3.0))
+    scale = max(width / img.width, height / img.height) * zoom
+    img.resize(
+        max(1, int(round(img.width * scale))), max(1, int(round(img.height * scale)))
+    )
+
+    # Zoom-out: the scaled art no longer fills the frame. Crop whichever axis
+    # still overflows, then centre on black and pad the deficient axis/axes.
+    if img.width < width or img.height < height:
+        if img.width > width:
+            cx = int(round(focus_x * img.width - width / 2))
+            cx = max(0, min(cx, img.width - width))
+            img.crop(cx, 0, width=width, height=img.height)
+        if img.height > height:
+            cy = int(round(focus_y * img.height - height / 2))
+            cy = max(0, min(cy, img.height - height))
+            img.crop(0, cy, width=img.width, height=height)
+        img.background_color = Color("black")
+        off_x = -((width - img.width) // 2) if img.width < width else 0
+        off_y = -((height - img.height) // 2) if img.height < height else 0
+        img.extent(width=width, height=height, x=off_x, y=off_y)
+        return
     left = int(round(focus_x * img.width - width / 2))
     left = max(0, min(left, img.width - width))
     base_top = int(round(focus_y * img.height - height / 2))
@@ -750,6 +776,42 @@ def render_square_art(
     )
 
 
+def _framed_inset_base(
+    backdrop_bytes: bytes,
+    *,
+    focus_x: float,
+    focus_y: float,
+    fit_mode: str,
+    crop: Optional[Tuple[float, float, float, float]],
+    v_pos: float,
+    zoom: float,
+) -> Image:
+    """Frame the backdrop INSIDE the 26px border and return a full CANVAS image.
+
+    CL2K source posters already leave room for the default frame, so the artwork
+    must sit *inside* the border rather than full-bleed beneath it — otherwise
+    ``_draw_border`` paints over (clips) the outer BORDER_WIDTH px of artwork.
+    The art is framed to the inner rect (canvas minus the border on every side)
+    and composited at the border offset; the margin is filled with the border
+    colour and the real border is drawn on top later. render_cl2k and
+    frame_backdrop both go through here, so they stay pixel-identical (the PSD
+    POSTER-layer parity the exporter relies on).
+    """
+    bw = geo.BORDER_WIDTH
+    inner_w = geo.CANVAS_W - 2 * bw
+    inner_h = geo.CANVAS_H - 2 * bw
+    base = Image(
+        width=geo.CANVAS_W, height=geo.CANVAS_H, background=Color(geo.BORDER_COLOR)
+    )
+    with Image(blob=backdrop_bytes) as art:
+        if fit_mode == "fit":
+            _fit_resize(art, inner_w, inner_h, crop, v_pos, zoom)
+        else:
+            _cover_resize(art, inner_w, inner_h, focus_x, focus_y, v_pos, zoom)
+        base.composite(art, left=bw, top=bw)
+    return base
+
+
 def frame_backdrop(
     *,
     backdrop_bytes: bytes,
@@ -768,11 +830,15 @@ def frame_backdrop(
     (edge-extend fills, seam blending) live only in this module and must not be
     re-implemented elsewhere.
     """
-    with Image(blob=backdrop_bytes) as base:
-        if fit_mode == "fit":
-            _fit_resize(base, geo.CANVAS_W, geo.CANVAS_H, crop, v_pos, zoom)
-        else:
-            _cover_resize(base, geo.CANVAS_W, geo.CANVAS_H, focus_x, focus_y, v_pos)
+    with _framed_inset_base(
+        backdrop_bytes,
+        focus_x=focus_x,
+        focus_y=focus_y,
+        fit_mode=fit_mode,
+        crop=crop,
+        v_pos=v_pos,
+        zoom=zoom,
+    ) as base:
         base.format = "png"
         return base.make_blob()
 
@@ -827,12 +893,15 @@ def render_cl2k(
     label_font = font_path or geo.resolve_font(bold=False)
     title_font = font_path or geo.resolve_font(bold=True)
 
-    with Image(blob=backdrop_bytes) as base:
-        if fit_mode == "fit":
-            _fit_resize(base, geo.CANVAS_W, geo.CANVAS_H, crop, v_pos, zoom)
-        else:
-            _cover_resize(base, geo.CANVAS_W, geo.CANVAS_H, focus_x, focus_y, v_pos)
-
+    with _framed_inset_base(
+        backdrop_bytes,
+        focus_x=focus_x,
+        focus_y=focus_y,
+        fit_mode=fit_mode,
+        crop=crop,
+        v_pos=v_pos,
+        zoom=zoom,
+    ) as base:
         with Image(filename=str(geo.GRADIENT_PNG)) as grad:
             base.composite(grad, left=0, top=0)
 
