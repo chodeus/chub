@@ -1,6 +1,7 @@
 import json
 from typing import Any, List, Optional
 
+from backend.util.helper import parse_search_id
 from backend.util.normalization import normalize_titles
 
 from .db_base import DatabaseBase
@@ -785,8 +786,22 @@ class MediaCache(DatabaseBase):
             # whose normalized form has the punctuation stripped. Raw
             # title LIKE is the case-insensitive fallback for exact
             # stored substrings. Same fix as poster_cache.search.
-            conditions.append("(normalized_title LIKE ? OR title LIKE ?)")
-            params.extend([f"%{normalize_titles(query)}%", f"%{query}%"])
+            sub = ["normalized_title LIKE ?", "title LIKE ?"]
+            sub_params: List[Any] = [f"%{normalize_titles(query)}%", f"%{query}%"]
+            # Also match an id pasted from a filename tag ({tmdb-…}/{tvdb-…}/
+            # {imdb-tt…}) or a bare IMDb id, so users can search by id.
+            tmdb, tvdb, imdb = parse_search_id(query)
+            if tmdb is not None:
+                sub.append("tmdb_id = ?")
+                sub_params.append(tmdb)
+            if tvdb is not None:
+                sub.append("tvdb_id = ?")
+                sub_params.append(tvdb)
+            if imdb:
+                sub.append("LOWER(imdb_id) = ?")
+                sub_params.append(imdb.lower())
+            conditions.append("(" + " OR ".join(sub) + ")")
+            params.extend(sub_params)
 
         if asset_type and asset_type != "all":
             conditions.append("asset_type = ?")
