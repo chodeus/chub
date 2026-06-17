@@ -172,6 +172,70 @@ class PlexCache(DatabaseBase):
         )
         return rows if rows else None
 
+    def get_stats(self) -> dict:
+        """Per-instance Plex library counts for the Library Statistics page.
+
+        Plex has no monitored/missing concept — this is pure presence: how many
+        items each library holds. Counts every cached row (consistent with the
+        per-instance card), so season rows count toward the show library total.
+        Each instance also carries the age of its snapshot since the Plex walk
+        is on-demand, like the *arr sync.
+        """
+        rows = (
+            self.execute_query(
+                """SELECT instance_name, library_name, asset_type, COUNT(*) as count
+                FROM plex_media_cache
+                GROUP BY instance_name, library_name, asset_type""",
+                fetch_all=True,
+            )
+            or []
+        )
+
+        instances: dict = {}
+        for row in rows:
+            inst = row.get("instance_name") or "Unknown"
+            lib = row.get("library_name") or "Unknown"
+            atype = row.get("asset_type") or "unknown"
+            cnt = row.get("count") or 0
+            entry = instances.setdefault(
+                inst, {"total": 0, "libraries": {}, "by_type": {}}
+            )
+            entry["total"] += cnt
+            entry["libraries"][lib] = entry["libraries"].get(lib, 0) + cnt
+            entry["by_type"][atype] = entry["by_type"].get(atype, 0) + cnt
+
+        result = []
+        for inst, entry in instances.items():
+            result.append(
+                {
+                    "instance_name": inst,
+                    "total": entry["total"],
+                    "libraries": sorted(
+                        [
+                            {"library_name": k, "count": v}
+                            for k, v in entry["libraries"].items()
+                        ],
+                        key=lambda x: x["count"],
+                        reverse=True,
+                    ),
+                    "by_type": sorted(
+                        [
+                            {"asset_type": k, "count": v}
+                            for k, v in entry["by_type"].items()
+                        ],
+                        key=lambda x: x["count"],
+                        reverse=True,
+                    ),
+                    "snapshot_age_seconds": self.last_synced_age_seconds(inst),
+                }
+            )
+        result.sort(key=lambda x: x["total"], reverse=True)
+
+        return {
+            "instances": result,
+            "total": sum(e["total"] for e in result),
+        }
+
     def delete(
         self, item: dict, logger: Optional[Any] = None, instance_name: str = None
     ) -> None:
