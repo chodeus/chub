@@ -42,7 +42,7 @@ const normalizeInstances = raw => {
 };
 
 const SetupWizardPage = () => {
-    useDocumentTitle('Setup');
+    useDocumentTitle();
     const navigate = useNavigate();
     const toast = useToast();
     const { authConfigured, setup, markSetupComplete } = useAuth();
