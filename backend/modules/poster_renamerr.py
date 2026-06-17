@@ -335,7 +335,19 @@ class PosterRenamerr(ChubModule):
     def process_file(self, file: str, new_file_path: str, action_type: str):
         try:
             if action_type == "copy":
-                shutil.copy(file, new_file_path)
+                # Copy to a temp name in the destination dir, then atomically
+                # os.replace() into place — an interrupted copy (crash, kill,
+                # ENOSPC) can't leave a truncated poster at the real path or
+                # clobber an existing good file with a partial one. Mirrors
+                # asset_renamerr._file_op's destroy-safe link handling.
+                tmp = f"{new_file_path}.chub-tmp-{os.getpid()}"
+                try:
+                    shutil.copy(file, tmp)
+                    os.replace(tmp, new_file_path)
+                except OSError:
+                    with contextlib.suppress(OSError):
+                        os.remove(tmp)
+                    raise
             elif action_type == "move":
                 shutil.move(file, new_file_path)
             elif action_type == "hardlink":
@@ -345,9 +357,7 @@ class PosterRenamerr(ChubModule):
             # Per-file action trace — visible when log_level: debug.
             # Single source of truth so every call site (rename_file,
             # future orphan cleanup, etc.) logs the same shape.
-            self.logger.debug(
-                f"[{action_type.upper()}] {new_file_path} ← {file}"
-            )
+            self.logger.debug(f"[{action_type.upper()}] {new_file_path} ← {file}")
             return True
         except OSError as e:
             self.logger.error(f"Error {action_type}ing file: {e}")
@@ -675,9 +685,7 @@ class PosterRenamerr(ChubModule):
                     media.get("id"), new_matched_at, new_file
                 )
             else:
-                db.media.set_match_provenance(
-                    media.get("id"), new_matched_at, new_file
-                )
+                db.media.set_match_provenance(media.get("id"), new_matched_at, new_file)
 
         if asset_type == "show":
             if season_number is not None:
@@ -1013,9 +1021,9 @@ class PosterRenamerr(ChubModule):
                         break
                     result = self.rename_file(item=item, db=db)
                     if result:
-                        output.setdefault(
-                            item.get("asset_type", "movie"), []
-                        ).append(result)
+                        output.setdefault(item.get("asset_type", "movie"), []).append(
+                            result
+                        )
 
                     if item.get("asset_type") == "collection":
                         manifest["collections_cache"].append(item.get("id"))
@@ -1368,7 +1376,9 @@ class PosterRenamerr(ChubModule):
         """
         return [self.config.destination_dir] if self.config.destination_dir else []
 
-    def run_border_replacerr(self, manifest: Optional[dict], progress_window=None, process_all=False):
+    def run_border_replacerr(
+        self, manifest: Optional[dict], progress_window=None, process_all=False
+    ):
         from backend.modules.border_replacerr import BorderReplacerr
 
         if process_all:
