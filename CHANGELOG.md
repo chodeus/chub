@@ -2,6 +2,25 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.31.0](https://github.com/chodeus/chub/compare/v2.30.0...v2.31.0) (2026-06-17)
+
+
+### Features
+
+* **instances:** show live wanted/missing from *arr; drop poster match stats ([58ee1f1](https://github.com/chodeus/chub/commit/58ee1f153b3f71411436dfed2e5e43e746c0c440))
+* **notifications:** apply one webhook to multiple modules ([fb31439](https://github.com/chodeus/chub/commit/fb3143927f752cc83a2f2924d2963f6659d8302c))
+* **poster-cleanarr:** prune dead symlinks in the orphan pass ([b2241c8](https://github.com/chodeus/chub/commit/b2241c800de70933737eeb00793748ef42c10fee))
+* **setup:** first-run setup wizard with a config-aware gate ([483e0b8](https://github.com/chodeus/chub/commit/483e0b8a2f0afb0a5a8660be9ba4b9fc77505647))
+
+
+### Bug Fixes
+
+* **nohl:** label summary counts as non-hardlinked, not "scanned" ([8c9f4b4](https://github.com/chodeus/chub/commit/8c9f4b440d4793c873e14b4d6aa7f29d3282720a))
+* **notifications:** redact webhook URLs and align schema to backend ([685ecd6](https://github.com/chodeus/chub/commit/685ecd679b16b53ad55abaab3d6b57d7f16cb5db))
+* **poster-renamerr:** atomic poster copy via temp + os.replace ([7098b92](https://github.com/chodeus/chub/commit/7098b92d014e316e9ba4b5ab945fd8dbb5cdc1f3))
+* **renameinatorr:** honour ignore tags across the tag-cycle reset ([6d35bfd](https://github.com/chodeus/chub/commit/6d35bfdef3b6b89bcc06ffdde6c580a795a5d245))
+* **unmatched-assets:** count in-library items with a stale unreleased status ([584fc20](https://github.com/chodeus/chub/commit/584fc20accd9c3d9726cfd566ae54941da64095f))
+
 ## [2.30.0](https://github.com/chodeus/chub/compare/v2.29.0...v2.30.0) (2026-06-11)
 
 
