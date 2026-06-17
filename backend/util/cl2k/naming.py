@@ -25,8 +25,14 @@ from backend.util.constants import illegal_chars_regex
 
 
 def _safe(title: str) -> str:
-    """Strip filesystem-illegal characters from a title."""
-    return illegal_chars_regex.sub("", title or "").strip()
+    """Strip filesystem-illegal characters and any leading dots from a title.
+
+    Interior and trailing dots are kept (so "S.W.A.T." / "Mr. Robot" survive
+    intact), but a leading dot is stripped — otherwise a title like ".hack"
+    would yield a hidden dotfile that some tools skip over.
+    """
+    cleaned = illegal_chars_regex.sub("", title or "").strip()
+    return cleaned.lstrip(".").strip()
 
 
 def _id_tags(
@@ -82,5 +88,9 @@ def build_poster_filename(
         # Season 0 is the Specials season — write the `- Specials` form that
         # community CL2K makers use (Kometa/Plex and CHUB's season_number_regex
         # both read it back as season 0). Numbered seasons keep ` - Season NN`.
-        base = f"{base} - Specials" if season_number == 0 else f"{base} - Season {season_number:02d}"
+        base = (
+            f"{base} - Specials"
+            if season_number == 0
+            else f"{base} - Season {season_number:02d}"
+        )
     return f"{base}{asset_suffix}{ext}"
