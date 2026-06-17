@@ -14,7 +14,13 @@ from pydantic import BaseModel
 
 from backend.api.utils import error, ok
 from backend.modules import MODULES
-from backend.util.config import ChubConfig, load_config, save_config
+from backend.util.config import (
+    ChubConfig,
+    load_config,
+    redact_secrets,
+    save_config,
+    strip_redacted_placeholders,
+)
 from backend.util.notification import NotificationManager
 
 router = APIRouter(
@@ -111,9 +117,18 @@ def test_notification(
         logger.debug(
             "Serving POST /api/test-notification for module: %s", payload.module
         )
-        logger.debug("Payload: %s", payload.dict())
+        # Redact webhook URLs / secrets before logging the payload.
+        logger.debug("Payload: %s", redact_secrets(payload.dict()))
 
         config = payload.dict()
+        # Resolve redacted placeholders against the stored config so testing an
+        # already-saved notification uses the real webhook, not "********".
+        stored_module = get_notification_section(load_config(), payload.module)
+        incoming = config.get("notifications") or {}
+        config["notifications"] = {
+            svc: strip_redacted_placeholders(svc_cfg, stored_module.get(svc) or {})
+            for svc, svc_cfg in incoming.items()
+        }
         manager = NotificationManager(config, logger, module_name=payload.module)
         result = manager.send_test_notification()
 
@@ -195,7 +210,7 @@ async def get_all_notifications(
     """
     try:
         logger.debug("Serving GET /api/notifications")
-        notifications_data = config.notifications.model_dump()
+        notifications_data = redact_secrets(config.notifications.model_dump())
 
         return ok(
             "Notifications retrieved successfully",
@@ -270,7 +285,10 @@ async def get_module_notifications(
 
         return ok(
             f"Notifications for '{module_id}' retrieved successfully",
-            {"module": module_id, "notifications": module_notifications},
+            {
+                "module": module_id,
+                "notifications": redact_secrets(module_notifications),
+            },
         )
 
     except Exception as e:
@@ -359,9 +377,15 @@ async def update_module_notification(
         # Load current config
         config = load_config()
 
-        # Update notification for the module and service type
+        # Update notification for the module and service type, preserving any
+        # secret the UI sent back as the redaction placeholder ("********")
+        # instead of clobbering the stored value with the placeholder.
         module_notifications = get_notification_section(config, module_name)
-        module_notifications[service_type] = notification_config
+        existing_service = module_notifications.get(service_type) or {}
+        merged_config = strip_redacted_placeholders(
+            notification_config, existing_service
+        )
+        module_notifications[service_type] = merged_config
         set_notification_section(config, module_name, module_notifications)
 
         # Save updated configuration
@@ -375,7 +399,7 @@ async def update_module_notification(
             {
                 "module": module_name,
                 "service_type": service_type,
-                "config": notification_config,
+                "config": redact_secrets(merged_config),
             },
         )
 
