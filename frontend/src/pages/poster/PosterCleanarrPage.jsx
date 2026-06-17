@@ -901,7 +901,15 @@ const PosterCleanarrPage = () => {
                         className="grid"
                         style={{
                             gridTemplateColumns: isMobile ? '1fr' : '560px 1fr',
-                            minHeight: isMobile ? undefined : '680px',
+                            // Cap the panel near the viewport so a long media
+                            // list scrolls inside its own pane instead of the
+                            // whole page growing to fit it. The report header
+                            // above can still scroll away. The single
+                            // minmax(0, 1fr) row is what actually constrains the
+                            // columns to that height — a bare max-height would
+                            // just clip the list instead of letting it scroll.
+                            gridTemplateRows: isMobile ? undefined : 'minmax(0, 1fr)',
+                            maxHeight: isMobile ? undefined : 'calc(100vh - 150px)',
                         }}
                     >
                         {/* Left pane — hidden on mobile when a node is selected */}
@@ -966,7 +974,7 @@ const PosterCleanarrPage = () => {
                         )}
                         {/* Right pane — on mobile, only rendered when a node is selected */}
                         {(!isMobile || selected) && (
-                            <div className="flex flex-col min-w-0">
+                            <div className="flex flex-col min-w-0 min-h-0">
                                 {!detail ? (
                                     <div className="p-12 text-center text-tertiary">
                                         Select an item on the left. Shows have chevrons to drill
