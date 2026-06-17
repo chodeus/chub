@@ -6,11 +6,15 @@ from backend.util.release_readiness import UNRELEASED_STATUSES, is_release_ready
 
 
 @pytest.mark.parametrize("status", sorted(UNRELEASED_STATUSES))
-def test_unreleased_status_is_not_ready(status):
-    # Unreleased/deleted statuses are gated even when has_content is unknown.
+def test_unreleased_status_gated_only_without_content(status):
+    # Unreleased/deleted statuses are gated when content is unknown (None) or
+    # known-absent — there's nothing in Plex to attach a poster to.
     assert is_release_ready({"status": status, "has_content": None}) is False
-    # ...and even if a stale row claims content.
-    assert is_release_ready({"status": status, "has_content": True}) is False
+    assert is_release_ready({"status": status, "has_content": False}) is False
+    # ...but an item already in the library (an early/leaked grab, or a Sonarr
+    # series still flagged "upcoming" with episodes on disk) IS in Plex and can
+    # take a poster, so it stays eligible despite the unreleased status.
+    assert is_release_ready({"status": status, "has_content": True}) is True
 
 
 def test_undownloaded_is_not_ready():

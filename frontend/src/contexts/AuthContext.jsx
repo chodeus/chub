@@ -27,6 +27,7 @@ export const AuthProvider = ({ children }) => {
     const [token, setToken] = useState(getStoredToken);
     const [user, setUser] = useState(null);
     const [authConfigured, setAuthConfigured] = useState(null); // null = loading
+    const [setupComplete, setSetupComplete] = useState(null); // null = loading
     const [loading, setLoading] = useState(true);
 
     /**
@@ -77,12 +78,23 @@ export const AuthProvider = ({ children }) => {
                 })
                 .catch(() => {
                     if (!cancelled) setAuthConfigured(false);
-                })
-                .finally(() => {
-                    if (!cancelled) setLoading(false);
                 });
 
-        run();
+        // First-run gate. Fail-safe to "complete" on any error so a status
+        // hiccup never traps an existing user inside the wizard.
+        const setupStatus = () =>
+            fetch('/api/setup/status')
+                .then(res => res.json())
+                .then(data => {
+                    if (!cancelled) setSetupComplete(data?.data?.completed ?? true);
+                })
+                .catch(() => {
+                    if (!cancelled) setSetupComplete(true);
+                });
+
+        Promise.all([run(), setupStatus()]).finally(() => {
+            if (!cancelled) setLoading(false);
+        });
 
         return () => {
             cancelled = true;
@@ -130,6 +142,24 @@ export const AuthProvider = ({ children }) => {
         setUser(null);
     }, []);
 
+    /**
+     * Persist that the first-run wizard is done so it no longer gates the app.
+     * Optimistically flips local state even if the POST fails (the backfill /
+     * next status check self-heals) so finishing the wizard never dead-ends.
+     */
+    const markSetupComplete = useCallback(async () => {
+        try {
+            const storedToken = getStoredToken();
+            await fetch('/api/setup/complete', {
+                method: 'POST',
+                headers: storedToken ? { Authorization: `Bearer ${storedToken}` } : {},
+            });
+        } catch {
+            // ignore — local state still advances
+        }
+        setSetupComplete(true);
+    }, []);
+
     const isAuthenticated = Boolean(token);
 
     const value = {
@@ -137,10 +167,12 @@ export const AuthProvider = ({ children }) => {
         user,
         isAuthenticated,
         authConfigured,
+        setupComplete,
         loading,
         login,
         setup,
         logout,
+        markSetupComplete,
     };
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
