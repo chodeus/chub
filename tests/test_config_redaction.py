@@ -58,6 +58,42 @@ def test_redact_secrets_token_field():
     assert out["sync_gdrive"]["token"] == REDACTED_PLACEHOLDER
 
 
+def test_redact_secrets_notification_webhook():
+    """Discord/Notifiarr webhook URLs are credentials (the Notifiarr one embeds
+    the API key) and must be redacted in API responses; channel_id is a plain
+    identifier and must NOT be."""
+    data = {
+        "notifications": {
+            "poster_renamerr": {
+                "discord": {
+                    "bot_name": "CHUB",
+                    "webhook": "https://discord.com/api/webhooks/1/x",
+                },
+                "notifiarr": {
+                    "webhook": "https://notifiarr.com/api/v1/notification/passthrough/SECRET",
+                    "channel_id": "123456789",
+                },
+            }
+        }
+    }
+    out = redact_secrets(data)
+    notif = out["notifications"]["poster_renamerr"]
+    assert notif["discord"]["webhook"] == REDACTED_PLACEHOLDER
+    assert notif["discord"]["bot_name"] == "CHUB"  # not a secret
+    assert notif["notifiarr"]["webhook"] == REDACTED_PLACEHOLDER
+    assert notif["notifiarr"]["channel_id"] == "123456789"  # identifier, not redacted
+
+
+def test_strip_placeholder_preserves_notification_webhook():
+    """Saving a notification with the redacted placeholder keeps the stored
+    webhook rather than overwriting it with '********'."""
+    current = {"bot_name": "CHUB", "webhook": "https://discord.com/api/webhooks/1/real"}
+    incoming = {"bot_name": "CHUB Renamed", "webhook": REDACTED_PLACEHOLDER}
+    merged = strip_redacted_placeholders(incoming, current)
+    assert merged["webhook"] == "https://discord.com/api/webhooks/1/real"  # preserved
+    assert merged["bot_name"] == "CHUB Renamed"  # real edit applied
+
+
 # --- strip_redacted_placeholders ---
 
 

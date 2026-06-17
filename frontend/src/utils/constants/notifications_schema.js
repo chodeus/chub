@@ -2,7 +2,7 @@
  * CHUB Notification Service Schema
  *
  * Schema definitions for notification service configurations.
- * Supports Discord, Notifiarr, and Email notification services.
+ * Supports Discord and Notifiarr notification services.
  *
  * Field types used:
  * - text: Standard text input
@@ -39,7 +39,7 @@ export const NOTIFICATIONS_SCHEMA = [
                 key: 'bot_name',
                 label: 'Bot Name',
                 type: 'text',
-                required: true,
+                required: false,
                 placeholder: 'My CHUB Bot',
             },
             {
