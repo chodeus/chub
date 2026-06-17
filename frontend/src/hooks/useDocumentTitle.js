@@ -8,6 +8,7 @@ import { useLocation } from 'react-router-dom';
  */
 const ROUTE_TITLES = {
     '/login': 'Sign in',
+    '/setup': 'Setup',
     '/dashboard': 'Dashboard',
     '/media/search': 'Library Search',
     '/media/manage': 'Library Management',
