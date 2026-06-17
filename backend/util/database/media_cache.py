@@ -46,7 +46,9 @@ class MediaCache(DatabaseBase):
             # Album MBID is unique, but scope under the artist MBID when known
             # so the identity is self-describing and collision-proof.
             parent_mb = norm_str(item.get("parent_musicbrainz_id"))
-            id_tag = f"mb:{parent_mb}:{musicbrainz}" if parent_mb else f"mb:{musicbrainz}"
+            id_tag = (
+                f"mb:{parent_mb}:{musicbrainz}" if parent_mb else f"mb:{musicbrainz}"
+            )
         elif asset_type == "artist" and musicbrainz:
             id_tag = f"mb:{musicbrainz}"
         elif imdb:
@@ -166,8 +168,10 @@ class MediaCache(DatabaseBase):
                 parent_musicbrainz_id, parent_title,
                 folder, root_folder, media_file, tags,
                 season_number, matched, instance_name, source, poster_url, arr_id,
-                status, rating, studio, edition, runtime, language, monitored, has_content, genre)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                status, rating, studio, edition, runtime, language, monitored, has_content, genre,
+                created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                CURRENT_TIMESTAMP)
             ON CONFLICT(identity_key)
             DO UPDATE SET
                 title=excluded.title,
@@ -202,7 +206,9 @@ class MediaCache(DatabaseBase):
                 monitored=excluded.monitored,
                 has_content=excluded.has_content,
                 genre=excluded.genre
-                -- Preserve: matched, original_file, renamed_file, file_hash, plex_mapping_id
+                -- Preserve: matched, original_file, renamed_file, file_hash, plex_mapping_id,
+                -- created_at (stamped once on first insert = first-seen time; re-syncs
+                -- are UPDATEs and must not reset it, so "recently added" stays truthful)
                 -- These fields should only be updated by specific operations, not ARR sync
             """,
             (
@@ -862,12 +868,20 @@ class MediaCache(DatabaseBase):
         where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
         params = tuple(params)
 
+        # Library-health metrics (NOT poster matching):
+        #   in_library = item's file is present (has_content)
+        #   missing    = monitored but no file yet — the real "still need" count
+        #   monitored  = tracked by the *arr
+        # Lidarr artists carry no has_content, so they contribute to neither
+        # in_library nor missing; album rows supply the music signal.
         rows = (
             self.execute_query(
                 f"""
                 SELECT asset_type,
                        COUNT(*) as total,
-                       SUM(CASE WHEN matched=1 THEN 1 ELSE 0 END) as matched,
+                       SUM(CASE WHEN has_content=1 THEN 1 ELSE 0 END) as in_library,
+                       SUM(CASE WHEN monitored=1 AND COALESCE(has_content,0)=0 THEN 1 ELSE 0 END) as missing,
+                       SUM(CASE WHEN monitored=1 THEN 1 ELSE 0 END) as monitored,
                        COUNT(DISTINCT instance_name) as instances
                 FROM media_cache {where}
                 GROUP BY asset_type
@@ -881,7 +895,9 @@ class MediaCache(DatabaseBase):
         totals = self.execute_query(
             f"""
             SELECT COUNT(*) as total,
-                   SUM(CASE WHEN matched=1 THEN 1 ELSE 0 END) as matched
+                   SUM(CASE WHEN has_content=1 THEN 1 ELSE 0 END) as in_library,
+                   SUM(CASE WHEN monitored=1 AND COALESCE(has_content,0)=0 THEN 1 ELSE 0 END) as missing,
+                   SUM(CASE WHEN monitored=1 THEN 1 ELSE 0 END) as monitored
             FROM media_cache {where}
             """,
             params,
@@ -891,10 +907,9 @@ class MediaCache(DatabaseBase):
         return {
             "by_type": rows,
             "total": totals["total"] if totals else 0,
-            "matched": totals["matched"] if totals else 0,
-            "unmatched": (totals["total"] or 0) - (totals["matched"] or 0)
-            if totals
-            else 0,
+            "in_library": (totals["in_library"] or 0) if totals else 0,
+            "missing": (totals["missing"] or 0) if totals else 0,
+            "monitored": (totals["monitored"] or 0) if totals else 0,
         }
 
     def get_detailed_stats(
@@ -916,13 +931,15 @@ class MediaCache(DatabaseBase):
         # Base stats (same as get_stats)
         base = self.get_stats(asset_type=asset_type, period_days=period_days)
 
-        # By instance
+        # By instance (source = service type: radarr/sonarr/lidarr/plex)
         by_instance = (
             self.execute_query(
-                f"""SELECT instance_name, COUNT(*) as total,
-                       SUM(CASE WHEN matched=1 THEN 1 ELSE 0 END) as matched
+                f"""SELECT instance_name, source, COUNT(*) as total,
+                       SUM(CASE WHEN has_content=1 THEN 1 ELSE 0 END) as in_library,
+                       SUM(CASE WHEN monitored=1 AND COALESCE(has_content,0)=0 THEN 1 ELSE 0 END) as missing,
+                       SUM(CASE WHEN monitored=1 THEN 1 ELSE 0 END) as monitored
                 FROM media_cache {where}
-                GROUP BY instance_name ORDER BY total DESC""",
+                GROUP BY instance_name, source ORDER BY total DESC""",
                 params,
                 fetch_all=True,
             )
@@ -1058,9 +1075,57 @@ class MediaCache(DatabaseBase):
             reverse=True,
         )
 
+        # By root folder (where media lives on disk — *arr only; Plex has none)
+        by_root_folder = (
+            self.execute_query(
+                f"""SELECT root_folder, COUNT(*) as count
+                FROM media_cache {where + (" AND" if where else "WHERE")} root_folder IS NOT NULL AND root_folder != ''
+                GROUP BY root_folder ORDER BY count DESC""",
+                params,
+                fetch_all=True,
+            )
+            or []
+        )
+
+        # By tag (Python-side aggregation since tags is a JSON array of names)
+        tag_rows = (
+            self.execute_query(
+                f"SELECT tags FROM media_cache {where + (' AND' if where else 'WHERE')} tags IS NOT NULL AND tags != '' AND tags != '[]'",
+                params,
+                fetch_all=True,
+            )
+            or []
+        )
+        tag_counts: dict = {}
+        for row in tag_rows:
+            raw = row.get("tags", "")
+            if not raw:
+                continue
+            try:
+                parsed = json.loads(raw)
+                tags = (
+                    [str(t).strip() for t in parsed if t]
+                    if isinstance(parsed, list)
+                    else []
+                )
+            except (json.JSONDecodeError, TypeError):
+                tags = [t.strip() for t in raw.split(",") if t.strip()]
+            for t in tags:
+                tag_counts[t] = tag_counts.get(t, 0) + 1
+        by_tags = sorted(
+            [{"tag": k, "count": v} for k, v in tag_counts.items()],
+            key=lambda x: x["count"],
+            reverse=True,
+        )
+
+        recently_added = self.get_recently_added(asset_type=asset_type)
+
         return {
             **base,
             "by_instance": by_instance,
+            "recently_added": recently_added,
+            "by_root_folder": by_root_folder,
+            "by_tags": by_tags,
             "by_status": by_status,
             "by_language": by_language,
             "by_rating": by_rating,
@@ -1069,6 +1134,53 @@ class MediaCache(DatabaseBase):
             "by_runtime": by_runtime,
             "by_genre": by_genre,
             "monitored": monitored,
+        }
+
+    def get_recently_added(
+        self, asset_type: Optional[str] = None, limit: int = 12
+    ) -> dict:
+        """Most recently added library items, keyed on ``created_at`` (stamped
+        once on first insert = first-seen time).
+
+        Rows that predate created_at stamping carry NULL and never appear here,
+        so this reflects genuinely new additions going forward — it is not a
+        backfill of the existing library. Per-item ``added_age_seconds`` uses
+        SQLite's clock (matching the snapshot-age fields) so the frontend never
+        has to parse a bare timestamp.
+        """
+        conditions = ["created_at IS NOT NULL"]
+        params: list = []
+        if asset_type and asset_type != "all":
+            conditions.append("asset_type = ?")
+            params.append(asset_type)
+        where = "WHERE " + " AND ".join(conditions)
+
+        def _count(days: int) -> int:
+            row = self.execute_query(
+                f"SELECT COUNT(*) AS n FROM media_cache {where} "
+                "AND created_at >= datetime('now', ?)",
+                tuple(params + [f"-{days} days"]),
+                fetch_one=True,
+            )
+            return (row["n"] or 0) if row else 0
+
+        items = (
+            self.execute_query(
+                f"""SELECT title, asset_type, instance_name, source, year,
+                       CAST(strftime('%s','now') - strftime('%s', created_at) AS REAL)
+                           AS added_age_seconds
+                FROM media_cache {where}
+                ORDER BY created_at DESC LIMIT ?""",
+                tuple(params + [limit]),
+                fetch_all=True,
+            )
+            or []
+        )
+
+        return {
+            "last_7d": _count(7),
+            "last_30d": _count(30),
+            "items": items,
         }
 
     def get_distinct_genres(self, asset_type: Optional[str] = None) -> List[str]:
@@ -1257,12 +1369,8 @@ class MediaCache(DatabaseBase):
                     "instance_name": instance,
                     "count": len(members),
                     "ids": ",".join(str(m.get("id", "")) for m in members),
-                    "instances": ",".join(
-                        m.get("instance_name", "") for m in members
-                    ),
-                    "folders": json.dumps(
-                        [m.get("folder") or "" for m in members]
-                    ),
+                    "instances": ",".join(m.get("instance_name", "") for m in members),
+                    "folders": json.dumps([m.get("folder") or "" for m in members]),
                     "identities": ",".join(sorted(identities)),
                     "titles": json.dumps([m.get("title") or "" for m in members]),
                 }
