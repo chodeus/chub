@@ -1,6 +1,7 @@
 import json
 from typing import Optional
 
+from backend.util.helper import parse_search_id
 from backend.util.normalization import normalize_titles
 
 from .db_base import DatabaseBase
@@ -433,8 +434,22 @@ class PosterCache(DatabaseBase):
             # column so hyphenated / special-char searches ("x-men") still
             # find rows where the stored value collapsed to "xmen". Fall back
             # to a raw `title LIKE` so exact stored substrings still hit too.
-            conditions.append("(normalized_title LIKE ? OR title LIKE ?)")
-            params.extend([f"%{normalize_titles(query)}%", f"%{query}%"])
+            sub = ["normalized_title LIKE ?", "title LIKE ?"]
+            sub_params: list = [f"%{normalize_titles(query)}%", f"%{query}%"]
+            # Also match an id pasted from a filename tag ({tmdb-…}/{tvdb-…}/
+            # {imdb-tt…}) or a bare IMDb id, so users can search by id.
+            tmdb, tvdb, imdb = parse_search_id(query)
+            if tmdb is not None:
+                sub.append("tmdb_id = ?")
+                sub_params.append(tmdb)
+            if tvdb is not None:
+                sub.append("tvdb_id = ?")
+                sub_params.append(tvdb)
+            if imdb:
+                sub.append("LOWER(imdb_id) = ?")
+                sub_params.append(imdb.lower())
+            conditions.append("(" + " OR ".join(sub) + ")")
+            params.extend(sub_params)
 
         where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
 
@@ -462,7 +477,10 @@ class PosterCache(DatabaseBase):
         all_records = self.get_all()
         grouped = {"movies": [], "shows": [], "seasons": [], "collections": []}
         for record in all_records:
-            if image_type is not None and (record.get("image_type") or "poster") != image_type:
+            if (
+                image_type is not None
+                and (record.get("image_type") or "poster") != image_type
+            ):
                 continue
             asset_type = record.get("asset_type")
             season = record.get("season_number")
