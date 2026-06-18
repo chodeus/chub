@@ -1066,6 +1066,22 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
     const isSeasonPoster = item.kind === 'show' && String(seasonNumber).trim() !== '';
     const effectiveKind = isSeasonPoster ? 'season' : item.kind;
 
+    // Picking a banner (e.g. COMPLETE LIMITED SERIES) on a show with no season
+    // number defaults it to Season 1: that banner belongs on the limited series'
+    // season poster, so this saves it to the season slot rather than the main
+    // show poster. An explicit season number is never overridden, and clearing
+    // the season afterwards keeps the banner — a main-poster banner stays
+    // possible.
+    const onBandLabel = useCallback(
+        value => {
+            setBandLabel(value);
+            if (value && item.kind === 'show' && String(seasonNumber).trim() === '') {
+                setSeasonNumber('1');
+            }
+        },
+        [item.kind, seasonNumber]
+    );
+
     // Load TMDB + fanart art. Builder is keyed by item, so selection/art state
     // starts fresh on each item — no synchronous resets needed here.
     useEffect(() => {
@@ -1507,7 +1523,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                     seasonNumber={seasonNumber}
                     setSeasonNumber={setSeasonNumber}
                     bandLabel={bandLabel}
-                    setBandLabel={setBandLabel}
+                    setBandLabel={onBandLabel}
                     isSeasonPoster={isSeasonPoster}
                     bulkSeasons={bulkSeasons}
                     setBulkSeasons={setBulkSeasons}
