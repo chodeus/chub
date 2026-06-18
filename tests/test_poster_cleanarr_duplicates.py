@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from backend.modules.poster_cleanarr import PosterCleanarr
+from backend.modules.poster_cleanarr import ORPHAN_RESTORE_DIR_NAME, PosterCleanarr
 from backend.util.database import ChubDB
 
 
@@ -123,11 +123,6 @@ def test_scan_stale_marks_canonical_present(tmp_path):
     assert stale[0]["canonical_present"] is True
 
 
-def _cfg(m, mode="remove"):
-    m.config = SimpleNamespace()
-    return m
-
-
 def test_execute_stale_remove_deletes_old_folder(tmp_path):
     m = _make()
     root = tmp_path / "assets"
@@ -146,7 +141,7 @@ def test_execute_stale_remove_deletes_old_folder(tmp_path):
             "size": 1,
         }
     ]
-    res = m._execute_stale_mode(stale, "remove")
+    res = m._execute_stale_mode(stale, "remove", _logger())
     assert res["count"] == 1
     assert not old.exists()
 
@@ -170,7 +165,7 @@ def test_execute_stale_remove_keeps_only_copy(tmp_path):
             "size": 1,
         }
     ]
-    res = m._execute_stale_mode(stale, "remove")
+    res = m._execute_stale_mode(stale, "remove", _logger())
     assert res["count"] == 0  # nothing removed
     assert old.exists()  # only copy preserved
 
@@ -192,9 +187,62 @@ def test_execute_stale_report_deletes_nothing(tmp_path):
             "size": 1,
         }
     ]
-    res = m._execute_stale_mode(stale, "report")
+    res = m._execute_stale_mode(stale, "report", _logger())
     assert res["count"] == 1
     assert old.exists()
+
+
+def test_execute_stale_move_moves_folder(tmp_path):
+    """move mode: stale folder with canonical present is moved under
+    <asset_dir>/<ORPHAN_RESTORE_DIR_NAME>/<name> and the original is gone."""
+    m = _make()
+    root = tmp_path / "assets"
+    canonical_name = "Show (2024) {tvdb-1}"
+    (root / canonical_name).mkdir(parents=True)  # canonical present on disk
+    old = root / "Show (2024) {tvdb-1} OLD"
+    old.mkdir(parents=True)
+    (old / "poster.jpg").write_bytes(b"x")
+    stale = [
+        {
+            "folder": str(old),
+            "asset_dir": str(root),
+            "name": old.name,
+            "canonical": canonical_name,
+            "canonical_present": True,
+            "id": ("tvdb", 1),
+            "size": 1,
+        }
+    ]
+    res = m._execute_stale_mode(stale, "move", _logger())
+    expected_dest = root / ORPHAN_RESTORE_DIR_NAME / old.name
+    assert res["count"] == 1
+    assert not old.exists()
+    assert expected_dest.exists()
+
+
+def test_scan_stale_both_ids_resolves_via_tvdb(db, tmp_path):
+    """A folder with both {tvdb-N} and {tmdb-M} in the name resolves via the
+    tvdb branch (elif priority in _scan_stale_duplicates) when both ids are
+    in the canonical map."""
+    m = _make()
+    tvdb_canonical = "Show (2024) {tvdb-1}"
+    tmdb_canonical = "Show (2024) {tmdb-2}"
+    cmap = {
+        ("tvdb", 1): tvdb_canonical,
+        ("tmdb", 2): tmdb_canonical,
+    }
+    root = tmp_path / "assets"
+    # Folder name carries BOTH ids but a different name (stale for both)
+    folder_name = "Show (2024) {tvdb-1} {tmdb-2}"
+    stale_dir = root / folder_name
+    stale_dir.mkdir(parents=True)
+    (stale_dir / "poster.jpg").write_bytes(b"x")
+    stale = m._scan_stale_duplicates([str(root)], cmap)
+    assert len(stale) == 1
+    entry = stale[0]
+    # tvdb branch wins (the elif means tvdb is checked first)
+    assert entry["id"] == ("tvdb", 1)
+    assert entry["canonical"] == tvdb_canonical
 
 
 def test_run_stale_pass_aborts_when_no_instances(db, tmp_path):
