@@ -40,6 +40,16 @@ export const scheduleAPI = {
     },
 
     /**
+     * Replace a module's multi-block schedules (each block has its own
+     * schedule string + overrides applied to that run only).
+     * @param {Object} data - { module, blocks: Array<{label,enabled,schedule,overrides}> }
+     * @returns {Promise<Object>} Update response
+     */
+    updateScheduleBlocks: data => {
+        return apiCore.post('/schedule/blocks', data);
+    },
+
+    /**
      * Delete module schedule
      * @param {string} moduleId - Module identifier
      * @returns {Promise<Object>} Deletion response
