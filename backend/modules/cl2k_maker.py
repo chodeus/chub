@@ -1133,18 +1133,33 @@ def generate_seasons(
     whiten: Optional[bool] = None,  # None = module config (whiten_logo)
     invert: bool = False,  # plate logo -> clearlogo (white->transparent, black->white)
     force: bool = False,
+    backdrop_path: Optional[str] = None,
+    backdrop_bytes: Optional[bytes] = None,
+    logo_path: Optional[str] = None,
+    custom_logo_bytes: Optional[bytes] = None,
+    save_local: bool = True,
+    upload_gdrive: Optional[bool] = None,
+    progress_cb=None,
 ) -> Dict[str, Any]:
     """Generate CL2K season posters for each number in ``seasons``.
 
-    Each season reuses the show's existing backdrop (via generate_for_item's
-    season-reuse path) and only changes the season number. The framing
-    (``fit_mode`` / ``focus`` / ``crop`` / ``logo_scale``) is carried from the
-    show poster so every season is composed identically.
+    The backdrop and logo the user built in the preview are passed through to
+    EVERY season (``backdrop_path``/``backdrop_bytes`` + ``logo_path``/
+    ``custom_logo_bytes``), so each season is composed from the same art rather
+    than re-resolving a fresh auto-pick server-side. When no backdrop is supplied
+    the season-reuse path in :func:`generate_for_item` still falls back to the
+    show's most-recent stored backdrop. The framing (``fit_mode`` / ``focus`` /
+    ``crop`` / ``logo_scale``) is carried from the show poster so every season is
+    composed identically.
+
+    ``progress_cb`` (optional) is invoked with each season's result dict as it
+    completes, so a background runner can report live progress. A failure on one
+    season is captured as an ``error`` result and never aborts the batch.
     """
     results = []
     for n in seasons:
-        results.append(
-            generate_for_item(
+        try:
+            res = generate_for_item(
                 db=db,
                 full_config=full_config,
                 logger=logger,
@@ -1155,6 +1170,10 @@ def generate_seasons(
                 tvdb_id=tvdb_id,
                 imdb_id=imdb_id,
                 season_number=int(n),
+                backdrop_path=backdrop_path,
+                backdrop_bytes=backdrop_bytes,
+                logo_path=logo_path,
+                custom_logo_bytes=custom_logo_bytes,
                 fit_mode=fit_mode,
                 focus_x=focus_x,
                 focus_y=focus_y,
@@ -1166,8 +1185,19 @@ def generate_seasons(
                 whiten=whiten,
                 invert=invert,
                 force=force,
+                save_local=save_local,
+                upload_gdrive=upload_gdrive,
             )
-        )
+        except Exception as exc:  # one bad season must not sink the rest
+            logger.error(f"cl2k: season {n} generation failed: {exc}", exc_info=True)
+            res = {"status": "error", "reason": str(exc)}
+        entry = {"season": int(n), **res}
+        results.append(entry)
+        if progress_cb is not None:
+            try:
+                progress_cb(entry)
+            except Exception:  # progress reporting is best-effort
+                pass
     return {"results": results}
 
 
