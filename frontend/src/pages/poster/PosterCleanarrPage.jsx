@@ -397,6 +397,9 @@ const PosterCleanarrPage = () => {
 
     // Action-bar state (global bulk cleanup flow — Report/Move/Remove).
     const [mode, setMode] = useState('report');
+    const [cleanBloat, setCleanBloat] = useState(true);
+    const [cleanStale, setCleanStale] = useState(false);
+    const [cleanOrphan, setCleanOrphan] = useState(false);
 
     // Stale-duplicate + orphan data from the Kometa assets scan.
     const [staleByRk, setStaleByRk] = useState(() => new Map());
@@ -666,6 +669,13 @@ const PosterCleanarrPage = () => {
             const body = { mode };
             if (meta.scopeable && selectedPaths.size > 0)
                 body.target_paths = Array.from(selectedPaths);
+            // Bloat: when unchecked, force the harmless "nothing" mode so the
+            // job skips Plex-variant deletion but can still run stale/orphan.
+            body.mode = cleanBloat ? mode : 'nothing';
+            body.stale_duplicates_enabled = cleanStale;
+            body.orphan_assets_enabled = cleanOrphan;
+            if (cleanStale) body.stale_duplicates_mode = mode;
+            if (cleanOrphan) body.orphan_assets_mode = mode;
             const res = await postersAPI.runPlexMetadataCleanup(body);
             const jobId = res?.data?.job_id;
             if (!jobId) {
@@ -685,7 +695,7 @@ const PosterCleanarrPage = () => {
         } finally {
             setIsEnqueuing(false);
         }
-    }, [mode, selectedPaths, toast]);
+    }, [mode, cleanBloat, cleanStale, cleanOrphan, selectedPaths, toast]);
 
     const runCleanup = () => {
         // Report mode is the UI scan — populate tiles, don't enqueue a backend
@@ -881,6 +891,32 @@ const PosterCleanarrPage = () => {
                 <span className="text-xs text-tertiary" style={{ maxWidth: '420px' }}>
                     {MODE_META[mode]?.description}
                 </span>
+                <div className="flex items-center gap-3 ml-3 text-sm">
+                    <label className="flex items-center gap-1 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            checked={cleanBloat}
+                            onChange={e => setCleanBloat(e.target.checked)}
+                        />
+                        Bloat
+                    </label>
+                    <label className="flex items-center gap-1 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            checked={cleanStale}
+                            onChange={e => setCleanStale(e.target.checked)}
+                        />
+                        Stale
+                    </label>
+                    <label className="flex items-center gap-1 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            checked={cleanOrphan}
+                            onChange={e => setCleanOrphan(e.target.checked)}
+                        />
+                        Orphan
+                    </label>
+                </div>
                 <div className="ml-auto flex items-center gap-2">
                     {MODE_META[mode]?.scopeable && (
                         <span className="text-xs text-secondary">
