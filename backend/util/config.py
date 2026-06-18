@@ -591,6 +591,10 @@ class PosterCleanarrConfig(BaseModel):
     # Titles that are never flagged as orphans, regardless of whether they
     # match a library entry. Matched on the same normalized key as the scan.
     orphan_ignore_titles: List[str] = Field(default_factory=list)
+    # Stale-duplicate cleanup: a Kometa asset folder whose {tvdb/tmdb} id
+    # matches a live item but whose name != the item's canonical folder.
+    stale_duplicates_enabled: bool = False
+    stale_duplicates_mode: str = "report"  # report | move | remove
 
 
 class PlexMaintenanceConfig(BaseModel):
