@@ -636,6 +636,10 @@ export const postersAPI = {
     /** Enqueue a Poster Cleanarr cleanup job. */
     runPlexMetadataCleanup: body => apiCore.post('/posters/plex-metadata/cleanup', body || {}),
 
+    /** Walk the Kometa assets dir once; return stale duplicates (keyed by Plex
+     *  rating_key) and orphan assets. Read-only — never deletes. */
+    scanKometaAssets: () => apiCore.get('/posters/plex-metadata/kometa-assets-scan'),
+
     /** Delete one variant file on disk. */
     deletePlexMetadataVariant: path =>
         apiCore.delete('/posters/plex-metadata/variant', {
