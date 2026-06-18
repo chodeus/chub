@@ -356,6 +356,7 @@ class ChubScheduler:
                         queued_modules.add(name)
 
             self._tick_upgradinatorr_profiles(queued_modules)
+            self._tick_schedule_blocks(queued_modules)
 
         except Exception as e:
             if self.logger:
@@ -425,6 +426,78 @@ class ChubScheduler:
                 print(
                     f"[SCHEDULER] Failed to queue Upgradinatorr profiles: {result['message']}"
                 )
+
+    def _tick_schedule_blocks(self, queued_modules: set) -> None:
+        """Queue module runs from multi-block schedules (config.schedule_blocks).
+
+        Each block fires on its own schedule string and injects its `overrides`
+        into the run (e.g. one block reports daily, another removes weekly).
+        Blocks for a module already queued this tick — or already running — are
+        skipped; if several blocks for one module are due at the same minute,
+        their overrides are merged (later blocks win). The per-block schedule
+        key keeps each block's cron next-run cache independent.
+        """
+        blocks_by_module = getattr(self.config, "schedule_blocks", None) or {}
+        if not blocks_by_module:
+            return
+
+        log_adapter = self.logger.get_adapter("scheduler") if self.logger else None
+
+        for module_name, blocks in blocks_by_module.items():
+            if module_name in queued_modules or not blocks:
+                continue
+
+            status = self.module_orchestrator.get_module_status(module_name)
+            if status["running"]:
+                continue
+
+            merged_overrides: Dict[str, Any] = {}
+            due_labels: List[str] = []
+            for index, block in enumerate(blocks):
+                if not _profile_value(block, "enabled", True):
+                    continue
+                sched = _profile_value(block, "schedule", "")
+                if not sched:
+                    continue
+                label = _profile_value(block, "label", "") or f"block {index + 1}"
+                schedule_key = f"{module_name}:block:{index}:{label}"
+                if check_schedule(schedule_key, sched, log_adapter):
+                    overrides = _profile_value(block, "overrides", {}) or {}
+                    if isinstance(overrides, dict):
+                        merged_overrides.update(overrides)
+                    due_labels.append(label)
+
+            if not due_labels:
+                continue
+
+            if self.logger:
+                self.logger.get_adapter("SCHEDULER").info(
+                    f"Running scheduled {module_name} block(s): "
+                    + ", ".join(due_labels)
+                )
+            else:
+                print(
+                    f"[SCHEDULER] Running scheduled {module_name} block(s): "
+                    + ", ".join(due_labels)
+                )
+
+            result = self.module_orchestrator.run_module_async(
+                module_name,
+                f"scheduled:blocks:{','.join(due_labels)}",
+                overrides=merged_overrides or None,
+            )
+            if not result["success"]:
+                if self.logger:
+                    self.logger.get_adapter("SCHEDULER").error(
+                        f"Failed to queue {module_name} blocks: {result['message']}"
+                    )
+                else:
+                    print(
+                        f"[SCHEDULER] Failed to queue {module_name} blocks: "
+                        f"{result['message']}"
+                    )
+                continue
+            queued_modules.add(module_name)
 
     def _system_tick(self) -> None:
         """
