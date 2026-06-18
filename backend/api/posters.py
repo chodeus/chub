@@ -3033,14 +3033,20 @@ async def run_plex_metadata_cleanup(
     logger: Any = Depends(get_cleanarr_logger),
 ):
     """
-    Enqueue a `poster_cleanarr` job. Request body:
+    Enqueue a `poster_cleanarr` job. Request body (all optional):
         {
-          "mode": "report" | "move" | "remove",          # bloat-image mode
-          "target_paths": [str, ...],                    # optional bloat subset
-          "orphan_assets_enabled": bool,                 # optional, default config value
+          "mode": "report"|"move"|"remove"|"nothing",    # bloat-image mode
+                                                         # ("nothing" skips bloat
+                                                         #  so stale/orphan can
+                                                         #  run on their own)
+          "target_paths": [str, ...],                    # bloat subset
+          "orphan_assets_enabled": bool,
           "orphan_assets_mode": "report"|"move"|"remove",
-          "asset_dirs": [str, ...]                       # optional override
+          "stale_duplicates_enabled": bool,
+          "stale_duplicates_mode": "report"|"move"|"remove",
+          "asset_dirs": [str, ...]                       # override
         }
+    Each cleaner (bloat / orphan / stale) runs independently in its own mode.
     """
     try:
         body: dict = {}
