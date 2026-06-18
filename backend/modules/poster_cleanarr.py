@@ -242,12 +242,16 @@ class PosterCleanarr(ChubModule):
 
             # === Report ===
             elapsed = time.time() - start_time
-            output = self._build_output(bloat_stats, orphan_stats, empty_dirs, elapsed)
+            output = self._build_output(
+                bloat_stats, orphan_stats, stale_stats, empty_dirs, elapsed
+            )
             self._print_report(output)
 
             # === Notify ===
             has_activity = (
-                bloat_stats.get("count", 0) > 0 or orphan_stats.get("count", 0) > 0
+                bloat_stats.get("count", 0) > 0
+                or orphan_stats.get("count", 0) > 0
+                or stale_stats.get("count", 0) > 0
             )
             if has_activity:
                 try:
@@ -1306,6 +1310,7 @@ class PosterCleanarr(ChubModule):
         self,
         bloat_stats: Dict[str, Any],
         orphan_stats: Dict[str, Any],
+        stale_stats: Dict[str, Any],
         empty_dirs: int,
         elapsed: float,
     ) -> Dict[str, Any]:
@@ -1323,6 +1328,12 @@ class PosterCleanarr(ChubModule):
                 "size": orphan_stats.get("total_size", 0),
                 "size_human": format_bytes(orphan_stats.get("total_size", 0)),
                 "mode": orphan_stats.get("mode", ""),
+            },
+            "stale": {
+                "count": stale_stats.get("count", 0),
+                "size": stale_stats.get("total_size", 0),
+                "size_human": format_bytes(stale_stats.get("total_size", 0)),
+                "mode": stale_stats.get("mode", ""),
             },
             "empty_dirs": empty_dirs,
             "elapsed": round(elapsed, 1),
@@ -1350,6 +1361,18 @@ class PosterCleanarr(ChubModule):
                     f"Orphan Assets ({orphan_label})",
                     str(output["orphan"]["count"]),
                     output["orphan"]["size_human"],
+                ]
+            )
+
+        if output["stale"]["count"] > 0 or output["stale"].get("mode"):
+            stale_label = MODE_LABELS.get(
+                output["stale"].get("mode", "report"), {}
+            ).get("ed", "Processed")
+            summary_rows.append(
+                [
+                    f"Stale Duplicates ({stale_label})",
+                    str(output["stale"]["count"]),
+                    output["stale"]["size_human"],
                 ]
             )
 
