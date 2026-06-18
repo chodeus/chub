@@ -121,7 +121,19 @@ const classifyVariant = variant => {
     // strip the source prefix so path-matching below is stable
     const body = rel.replace(/^Uploads\//, '').replace(/^Contents\//, '');
 
-    const se = body.match(/posters\/seasons\/(\d+)\/episodes\/(\d+)/);
+    // Category from the top-level folder. Background art / banners can be set
+    // per-season too, so the season segment isn't unique to posters/.
+    const category =
+        body.startsWith('art/') || body.startsWith('Art/')
+            ? 'Background art'
+            : body.startsWith('banners/') || body.startsWith('Banners/')
+              ? 'Banner'
+              : 'Poster';
+
+    // Match the season/episode segment wherever it sits (posters/seasons/…,
+    // art/seasons/…, banners/seasons/…) so per-season art and banners nest
+    // under their season instead of piling onto the show node.
+    const se = body.match(/seasons\/(\d+)\/episodes\/(\d+)/);
     if (se) {
         return {
             source,
@@ -131,19 +143,20 @@ const classifyVariant = variant => {
             context: `S${String(se[1]).padStart(2, '0')} · E${String(se[2]).padStart(2, '0')}`,
         };
     }
-    const s = body.match(/posters\/seasons\/(\d+)\//);
+    const s = body.match(/seasons\/(\d+)\//);
     if (s) {
+        const n = Number(s[1]);
         return {
             source,
             level: 'season',
-            season: Number(s[1]),
-            context: `Season ${Number(s[1])}`,
+            season: n,
+            context: category === 'Poster' ? `Season ${n}` : `Season ${n} · ${category}`,
         };
     }
-    if (body.startsWith('art/') || body.startsWith('Art/')) {
+    if (category === 'Background art') {
         return { source, level: 'show', context: 'Background art' };
     }
-    if (body.startsWith('banners/') || body.startsWith('Banners/')) {
+    if (category === 'Banner') {
         return { source, level: 'show', context: 'Banner' };
     }
     return { source, level: 'show', context: 'Show poster' };
