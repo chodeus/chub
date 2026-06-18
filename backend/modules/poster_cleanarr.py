@@ -49,6 +49,7 @@ def format_bytes(size: int) -> str:
 
 VALID_MODES = {"report", "move", "remove", "restore", "clear", "nothing"}
 VALID_ORPHAN_MODES = {"report", "move", "remove"}
+VALID_STALE_MODES = {"report", "move", "remove"}
 ASSET_IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".webp")
 RESTORE_DIR_NAME = "Poster Cleanarr Restore"
 ORPHAN_RESTORE_DIR_NAME = ".chub_orphan_restore"
