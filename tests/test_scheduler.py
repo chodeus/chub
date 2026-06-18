@@ -288,3 +288,111 @@ def test_scheduler_does_not_double_run_upgradinatorr(monkeypatch):
     assert orch.calls[0][0][0] == "upgradinatorr"
     # Args/kwargs should be plain "scheduled" origin, not profile overrides
     assert orch.calls[0][0][1] == "scheduled"
+
+
+# --- ChubScheduler multi-block schedules (schedule_blocks) ---
+
+
+def test_scheduler_schedule_block_fires_with_overrides(monkeypatch):
+    monkeypatch.setattr(scheduler, "datetime", FixedNow)
+    cfg = SimpleNamespace(
+        schedule={},
+        upgradinatorr=SimpleNamespace(instances_list=[]),
+        schedule_blocks={
+            "poster_cleanarr": [
+                SimpleNamespace(
+                    label="daily report",
+                    enabled=True,
+                    schedule="daily(09:00)",
+                    overrides={"mode": "report"},
+                ),
+            ]
+        },
+    )
+    orch = FakeOrchOK()
+    s = ChubScheduler(cfg, logger=None, module_orchestrator=orch)
+    s._tick(cfg.schedule)
+    assert len(orch.calls) == 1
+    args, kwargs = orch.calls[0]
+    assert args[0] == "poster_cleanarr"
+    assert kwargs["overrides"] == {"mode": "report"}
+
+
+def test_scheduler_schedule_block_disabled_and_empty_skipped(monkeypatch):
+    monkeypatch.setattr(scheduler, "datetime", FixedNow)
+    cfg = SimpleNamespace(
+        schedule={},
+        upgradinatorr=SimpleNamespace(instances_list=[]),
+        schedule_blocks={
+            "poster_cleanarr": [
+                SimpleNamespace(
+                    label="off",
+                    enabled=False,
+                    schedule="daily(09:00)",
+                    overrides={"mode": "remove"},
+                ),
+                SimpleNamespace(
+                    label="no-sched", enabled=True, schedule="", overrides={}
+                ),
+            ]
+        },
+    )
+    orch = FakeOrchOK()
+    s = ChubScheduler(cfg, logger=None, module_orchestrator=orch)
+    s._tick(cfg.schedule)
+    assert orch.calls == []
+
+
+def test_scheduler_schedule_block_skips_already_queued(monkeypatch):
+    """A top-level schedule already queued the module — blocks must not re-fire."""
+    monkeypatch.setattr(scheduler, "datetime", FixedNow)
+    cfg = SimpleNamespace(
+        schedule={"poster_cleanarr": "daily(09:00)"},
+        upgradinatorr=SimpleNamespace(instances_list=[]),
+        schedule_blocks={
+            "poster_cleanarr": [
+                SimpleNamespace(
+                    label="b",
+                    enabled=True,
+                    schedule="daily(09:00)",
+                    overrides={"mode": "remove"},
+                ),
+            ]
+        },
+    )
+    orch = FakeOrchOK()
+    s = ChubScheduler(cfg, logger=None, module_orchestrator=orch)
+    s._tick(cfg.schedule)
+    assert len(orch.calls) == 1
+    args, _ = orch.calls[0]
+    assert args[1] == "scheduled"  # top-level origin, not a block dispatch
+
+
+def test_scheduler_schedule_blocks_merge_overrides_last_wins(monkeypatch):
+    monkeypatch.setattr(scheduler, "datetime", FixedNow)
+    cfg = SimpleNamespace(
+        schedule={},
+        upgradinatorr=SimpleNamespace(instances_list=[]),
+        schedule_blocks={
+            "poster_cleanarr": [
+                SimpleNamespace(
+                    label="a",
+                    enabled=True,
+                    schedule="daily(09:00)",
+                    overrides={"mode": "report", "orphan_assets_enabled": True},
+                ),
+                SimpleNamespace(
+                    label="b",
+                    enabled=True,
+                    schedule="weekly(monday@09:00)",
+                    overrides={"mode": "remove"},
+                ),
+            ]
+        },
+    )
+    orch = FakeOrchOK()
+    s = ChubScheduler(cfg, logger=None, module_orchestrator=orch)
+    s._tick(cfg.schedule)
+    assert len(orch.calls) == 1
+    _, kwargs = orch.calls[0]
+    assert kwargs["overrides"] == {"mode": "remove", "orphan_assets_enabled": True}
