@@ -219,6 +219,10 @@ export const cl2kMakerAPI = {
      */
     retext: req => apiCore.post('/cl2k-maker/retext', req, { timeout: AI_TIMEOUT_MS }),
 
+    /** Start a background File-as-is season batch (one source poster, re-filed per
+     *  season with that season's band). Returns { job_id, total }; poll seasonsStatus. */
+    retextSeasons: req => apiCore.post('/cl2k-maker/retext-seasons', req),
+
     /** Fetch TMDB external ids (tvdb_id + imdb_id) for a picked title. */
     externalIds: (tmdbId, type = 'movie') =>
         apiCore.get(`/cl2k-maker/external-ids?${qs({ tmdb_id: tmdbId, type })}`, {

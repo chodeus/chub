@@ -141,6 +141,19 @@ def _number_to_words(n: int) -> str:
     return f"{_ONES[hundreds]} hundred" + (f" {_number_to_words(rem)}" if rem else "")
 
 
+def season_band_text(season_number: int) -> str:
+    """The CL2K season band label for a season number. Season 0 is the Specials
+    season — "Specials" (matching the `- Specials` filename in naming.py), not
+    "Season 0". Other seasons spell the number out per the template ("SEASON ONE",
+    not "SEASON 1"); year-numbered seasons stay as digits (see _number_to_words).
+    The renderer uppercases this."""
+    return (
+        "Specials"
+        if season_number == 0
+        else f"Season {_number_to_words(season_number)}"
+    )
+
+
 def _resolve_and_render(
     db: ChubDB,
     full_config,
@@ -296,14 +309,7 @@ def _resolve_and_render(
         logo_source = "text" if cfg.text_logo_fallback else "none"
 
     if kind == "season" and not season_text and season_number is not None:
-        # Season 0 is the Specials season — label it "Specials" (matching the
-        # `- Specials` filename in naming.py), not "Season 0". Other seasons spell
-        # the number out per the CL2K template ("SEASON ONE", not "SEASON 1").
-        season_text = (
-            "Specials"
-            if season_number == 0
-            else f"Season {_number_to_words(season_number)}"
-        )
+        season_text = season_band_text(season_number)
 
     blob = render_cl2k(
         backdrop_bytes=backdrop_bytes,

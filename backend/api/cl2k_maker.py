@@ -27,6 +27,7 @@ from backend.api.utils import error, get_database, get_module_logger, ok
 from backend.modules.cl2k_maker import (
     fanart_images,
     generate_background_art,
+    season_band_text,
     generate_for_item,
     generate_logo_asset,
     generate_seasons,
@@ -959,6 +960,118 @@ def seasons_status(job_id: int) -> JSONResponse:
             "error": job["error"],
         },
     )
+
+
+# ─── File-as-is season batch ─────────────────────────────────────────────────
+# The "File as is" output files ONE finished poster, drawing a band label + border
+# (no logo/reframe). This batches that over a list of seasons: the same source
+# image is re-filed once per season with that season's SEASON-N band, reusing the
+# background-job registry + /seasons-status poll the full-CL2K season batch uses.
+
+
+class RetextSeasonsRequest(BaseModel):
+    # Source poster: uploaded bytes (base64) OR a remote path fetched server-side
+    # (mirrors RetextRequest). The same image is reused for every season.
+    image_b64: Optional[str] = None
+    image_path: Optional[str] = None
+    seasons: List[int]
+    title: str = ""
+    tmdb_id: int = 0
+    year: Optional[int] = None
+    tvdb_id: Optional[int] = None
+    imdb_id: Optional[str] = None
+    text_y: Optional[float] = None  # band vertical position, 0..1 (None = CL2K band)
+    border: bool = True
+    save_local: bool = True
+    upload_gdrive: Optional[bool] = None
+
+
+def _run_retext_seasons_job(
+    jid: int, db: ChubDB, logger: Any, image_bytes: bytes, req: RetextSeasonsRequest
+) -> None:
+    """Worker body: re-file the one source poster once per season, drawing that
+    season's SEASON-N band. Never raises — a crash is recorded as the job error so
+    the frontend poll terminates instead of spinning on a stuck "running"."""
+    full_config = load_config()
+    try:
+        for n in req.seasons:
+            n = int(n)
+            try:
+                res = retext_poster(
+                    db=db,
+                    full_config=full_config,
+                    logger=logger,
+                    image_bytes=image_bytes,
+                    apply_ai=False,
+                    label_text=season_band_text(n),
+                    text_y_frac=req.text_y,
+                    save=True,
+                    kind="season",
+                    title=req.title,
+                    tmdb_id=req.tmdb_id,
+                    year=req.year,
+                    tvdb_id=req.tvdb_id,
+                    imdb_id=req.imdb_id,
+                    season_number=n,
+                    add_border=req.border,
+                    save_local=req.save_local,
+                    upload_gdrive=req.upload_gdrive,
+                )
+            except Exception as exc:  # one bad season must not sink the rest
+                logger.error(f"cl2k: as-is season {n} failed: {exc}", exc_info=True)
+                res = {"status": "error", "reason": str(exc)}
+            if not isinstance(res, dict):
+                res = {"status": "generated"}
+            with _season_jobs_lock:
+                job = _season_jobs.get(jid)
+                if job is not None:
+                    job["results"].append({"season": n, **res})
+                    job["done"] += 1
+        with _season_jobs_lock:
+            job = _season_jobs.get(jid)
+            if job is not None:
+                job["status"] = "done"
+    except Exception as exc:  # defensive: never leave a job stuck "running"
+        logger.error(f"cl2k: as-is season batch {jid} crashed: {exc}", exc_info=True)
+        with _season_jobs_lock:
+            job = _season_jobs.get(jid)
+            if job is not None:
+                job["status"] = "error"
+                job["error"] = str(exc)
+
+
+@router.post("/retext-seasons", summary="Start a background File-as-is season batch")
+def retext_seasons_endpoint(
+    req: RetextSeasonsRequest,
+    db: ChubDB = Depends(get_database),
+    logger: Any = Depends(get_cl2k_logger),
+) -> JSONResponse:
+    seasons = [int(n) for n in (req.seasons or [])]
+    if not seasons:
+        return error("No seasons requested", "CL2K_NO_SEASONS")
+    if req.image_b64:
+        try:
+            image_bytes = base64.b64decode(req.image_b64.split(",")[-1])
+        except Exception:
+            return error("invalid image data", "CL2K_RETEXT")
+    elif req.image_path:
+        try:
+            image_bytes = download_image(req.image_path)
+        except Exception as exc:
+            logger.warning(f"CL2K retext-seasons: source fetch failed — {exc}")
+            return error(f"could not fetch the source image: {exc}", "CL2K_RETEXT")
+    else:
+        return error("no image provided", "CL2K_RETEXT")
+    jid = _new_season_job(len(seasons), req.title)
+    thread = threading.Thread(
+        target=_run_retext_seasons_job,
+        args=(jid, db, logger, image_bytes, req),
+        daemon=True,
+        name=f"cl2k-retext-seasons-{jid}",
+    )
+    thread.start()
+    logger.info(f"cl2k: as-is season batch {jid} started ({len(seasons)} seasons)")
+    return ok("Season generation started", {"job_id": jid, "total": len(seasons)})
 
 
 @router.post(
