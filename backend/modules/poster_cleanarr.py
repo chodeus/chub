@@ -978,6 +978,58 @@ class PosterCleanarr(ChubModule):
                 )
         return out
 
+    def _execute_stale_mode(
+        self, dupes: List[Dict[str, Any]], mode: str
+    ) -> Dict[str, Any]:
+        """report/move/remove stale-duplicate FOLDERS. move/remove are skipped
+        for an entry whose canonical folder is not yet on disk so the only
+        staged copy is never destroyed (the renamer recreates the canonical
+        folder on its next run, after which this dup is safe to drop)."""
+        count = 0
+        total_size = 0
+        touched: Set[str] = set()
+        for d in dupes:
+            folder = d["folder"]
+            size = d.get("size", 0)
+            if mode == "report":
+                self.logger.info(f"  [STALE DUP] {folder} (current: {d['canonical']})")
+                count += 1
+                total_size += size
+                continue
+            if not d.get("canonical_present"):
+                self.logger.info(
+                    f"  [STALE KEPT] {folder} — canonical '{d['canonical']}' "
+                    "not staged yet; keeping the only copy"
+                )
+                continue
+            if mode == "move":
+                dest_root = os.path.join(d["asset_dir"], ORPHAN_RESTORE_DIR_NAME)
+                dest = os.path.join(dest_root, d["name"])
+                try:
+                    os.makedirs(os.path.dirname(dest), exist_ok=True)
+                    shutil.move(folder, dest)
+                    self.logger.info(f"  [STALE MOVED] {folder} -> {dest}")
+                    count += 1
+                    total_size += size
+                    touched.add(d["asset_dir"])
+                except OSError as e:
+                    self.logger.error(f"Failed to move {folder}: {e}")
+            elif mode == "remove":
+                try:
+                    shutil.rmtree(folder)
+                    self.logger.info(f"  [STALE REMOVED] {folder}")
+                    count += 1
+                    total_size += size
+                    touched.add(d["asset_dir"])
+                except OSError as e:
+                    self.logger.error(f"Failed to remove {folder}: {e}")
+        empty = sum(self._clean_empty_dirs(d) for d in touched)
+        self.logger.info(
+            f"   → stale duplicates: {count} {mode}d"
+            + (f", {empty} empty dir(s) pruned" if empty else "")
+        )
+        return {"count": count, "total_size": total_size, "mode": mode}
+
     def _scan_orphan_assets(
         self,
         asset_dirs: List[str],
