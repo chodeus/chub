@@ -1938,24 +1938,29 @@ const RenderPanel = ({
         [isSeasonPoster, seasonNumber, effectiveKind, item]
     );
 
-    // The label actually drawn in File-as-is mode. Mirrors the full render's
-    // precedence (renderer.py): an explicit banner wins (e.g. COMPLETE LIMITED
-    // SERIES on a limited-series season poster), else a season number draws
-    // SEASON N / Specials (matching generate's season_text at
-    // modules/cl2k_maker.py), else the free-text "New title" fallback.
-    const asisDrawnLabel = useMemo(() => {
-        if (isSeasonPoster) {
-            return bandLabel || seasonBandText(seasonNumber);
-        }
-        return bandLabel || asisLabel;
-    }, [isSeasonPoster, seasonNumber, bandLabel, asisLabel]);
+    // The EXPLICIT label override sent to /retext — a banner (e.g. COMPLETE LIMITED
+    // SERIES) wins, else the free-text "New title" (only for non-season posters).
+    // The SEASON N / Specials band is NOT spelled out here: the backend derives it
+    // from season_number (season_band_text is the single source of truth), so an
+    // empty label on a season poster tells it to draw the season band.
+    const asisExplicitLabel = useMemo(
+        () => bandLabel || (isSeasonPoster ? '' : asisLabel),
+        [bandLabel, isSeasonPoster, asisLabel]
+    );
 
-    // Signature of the inputs that affect the as-is render (image + label + border).
-    // A rendered preview is shown only while it still matches, so changing any of
-    // them drops the stale preview — no setState-in-effect.
+    // Signature of the inputs that affect the as-is render. season_number is in here
+    // because the backend derives the band from it, so changing the season must drop
+    // the stale preview. A rendered preview is shown only while the sig still matches.
     const asisSig = useMemo(
-        () => JSON.stringify([backdropUrl, asisDrawnLabel, asisTextY, asisBorder]),
-        [backdropUrl, asisDrawnLabel, asisTextY, asisBorder]
+        () =>
+            JSON.stringify([
+                backdropUrl,
+                asisExplicitLabel,
+                isSeasonPoster ? Number(seasonNumber) : null,
+                asisTextY,
+                asisBorder,
+            ]),
+        [backdropUrl, asisExplicitLabel, isSeasonPoster, seasonNumber, asisTextY, asisBorder]
     );
 
     // apply_ai=false: draws the (optional) new label + border on whatever the
@@ -1970,7 +1975,7 @@ const RenderPanel = ({
                 image_b64,
                 mask_b64: null,
                 apply_ai: false,
-                label_text: asisDrawnLabel,
+                label_text: asisExplicitLabel,
                 text_y: asisTextY,
                 border: asisBorder,
                 preview: true,
@@ -1982,7 +1987,7 @@ const RenderPanel = ({
         } finally {
             setAsisPreviewing(false);
         }
-    }, [asisDataUrlFromSource, asisDrawnLabel, asisTextY, asisBorder, asisIds, asisSig, toast]);
+    }, [asisDataUrlFromSource, asisExplicitLabel, asisTextY, asisBorder, asisIds, asisSig, toast]);
 
     const runAsisSave = useCallback(async () => {
         const image_b64 = await asisDataUrlFromSource();
@@ -1993,7 +1998,7 @@ const RenderPanel = ({
                 image_b64,
                 mask_b64: null,
                 apply_ai: false,
-                label_text: asisDrawnLabel,
+                label_text: asisExplicitLabel,
                 text_y: asisTextY,
                 border: asisBorder,
                 preview: false,
@@ -2008,7 +2013,7 @@ const RenderPanel = ({
         }
     }, [
         asisDataUrlFromSource,
-        asisDrawnLabel,
+        asisExplicitLabel,
         asisTextY,
         asisBorder,
         asisIds,
@@ -2099,13 +2104,13 @@ const RenderPanel = ({
     useEffect(() => {
         asisPreviewInputsRef.current = {
             fromSource: asisDataUrlFromSource,
-            label_text: asisDrawnLabel,
+            label_text: asisExplicitLabel,
             text_y: asisTextY,
             border: asisBorder,
             ids: asisIds,
             sig: asisSig,
         };
-    }, [asisDataUrlFromSource, asisDrawnLabel, asisTextY, asisBorder, asisIds, asisSig]);
+    }, [asisDataUrlFromSource, asisExplicitLabel, asisTextY, asisBorder, asisIds, asisSig]);
 
     // Auto-render the as-is preview shortly after a label/position/border change
     // settles, so typing a New title (or setting a season/banner) shows on the
@@ -5191,39 +5196,6 @@ const parseSeasonList = s =>
         .split(',')
         .map(x => parseInt(x.trim(), 10))
         .filter(n => Number.isInteger(n) && n >= 0);
-
-// Mirrors backend season_band_text (modules/cl2k_maker.py): the season band spells
-// the number out ("Season One", uppercased to SEASON ONE by the renderer), Season 0
-// is "Specials", and year-numbered seasons (>= 1000) stay as digits ("Season 2026").
-const _ONES =
-    'zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen'.split(
-        ' '
-    );
-const _TENS = [
-    '',
-    '',
-    'twenty',
-    'thirty',
-    'forty',
-    'fifty',
-    'sixty',
-    'seventy',
-    'eighty',
-    'ninety',
-];
-const numberToWords = n => {
-    if (!Number.isInteger(n) || n < 0 || n >= 1000) return String(n);
-    if (n < 20) return _ONES[n];
-    if (n < 100) {
-        const t = Math.floor(n / 10);
-        const o = n % 10;
-        return _TENS[t] + (o ? `-${_ONES[o]}` : '');
-    }
-    const h = Math.floor(n / 100);
-    const r = n % 100;
-    return `${_ONES[h]} hundred` + (r ? ` ${numberToWords(r)}` : '');
-};
-const seasonBandText = n => (Number(n) === 0 ? 'Specials' : `Season ${numberToWords(Number(n))}`);
 
 const downloadBlob = (blob, filename) => {
     const url = URL.createObjectURL(blob);

@@ -27,7 +27,6 @@ from backend.api.utils import error, get_database, get_module_logger, ok
 from backend.modules.cl2k_maker import (
     fanart_images,
     generate_background_art,
-    season_band_text,
     generate_for_item,
     generate_logo_asset,
     generate_seasons,
@@ -760,6 +759,7 @@ def psd_export(
         tmdb_id=req.tmdb_id,
         backdrop_path=req.backdrop_path,
         logo_path=req.logo_path,
+        season_number=req.season_number,
         logo_scale=req.logo_scale,
         logo_y_offset=req.logo_y_offset,
         focus_x=req.focus_x,
@@ -1003,7 +1003,8 @@ def _run_retext_seasons_job(
                     logger=logger,
                     image_bytes=image_bytes,
                     apply_ai=False,
-                    label_text=season_band_text(n),
+                    # No label_text — retext_poster derives the SEASON-N band from
+                    # season_number (single source of truth, season_band_text).
                     text_y_frac=req.text_y,
                     save=True,
                     kind="season",
