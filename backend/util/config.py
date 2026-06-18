@@ -694,8 +694,25 @@ class ConfigNotifications(BaseModel):
 # ==== ROOT CONFIG MODEL ====
 
 
+class ScheduleBlock(BaseModel):
+    """One entry in a module's multi-block schedule. Each block fires on its own
+    `schedule` string and injects `overrides` into that scheduled run's config,
+    so a single module can e.g. report daily and remove weekly. Overrides reuse
+    the same job-payload mechanism as Upgradinatorr's per-profile schedules."""
+
+    label: str = ""
+    enabled: bool = True
+    schedule: str = ""
+    overrides: Dict[str, Any] = Field(default_factory=dict)
+
+
 class ChubConfig(BaseModel):
     schedule: Dict[str, Any] = Field(default_factory=dict)
+    # Optional multi-block schedules keyed by module name. Additive to
+    # `schedule` above (the single-string-per-module form, untouched); a module
+    # may use either or both. Each block carries its own override set (e.g.
+    # {"mode": "remove"}) applied only to that scheduled run.
+    schedule_blocks: Dict[str, List[ScheduleBlock]] = Field(default_factory=dict)
     instances: InstancesConfig = Field(default_factory=InstancesConfig)
     notifications: ConfigNotifications = Field(default_factory=ConfigNotifications)
     sync_gdrive: SyncGDriveConfig = Field(default_factory=SyncGDriveConfig)

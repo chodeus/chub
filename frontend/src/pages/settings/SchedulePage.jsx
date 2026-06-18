@@ -11,6 +11,11 @@ import { StatGrid } from '../../components/statistics';
 import { StatCard, Button, Modal } from '../../components/ui';
 import { ScheduleCard } from '../../components/modules/ScheduleCard';
 import { ScheduleField } from '../../components/fields/custom/ScheduleField';
+import {
+    ScheduleBlocksEditor,
+    blocksFromConfig,
+    blocksToConfig,
+} from '../../components/modules/ScheduleBlocksEditor';
 
 export const SchedulePage = () => {
     // Toast for notifications
@@ -20,6 +25,7 @@ export const SchedulePage = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingModule, setEditingModule] = useState(null);
     const [scheduleValue, setScheduleValue] = useState('');
+    const [blockValue, setBlockValue] = useState([]);
     const [isSaving, setIsSaving] = useState(false);
 
     // API Data - Schedule
@@ -79,6 +85,11 @@ export const SchedulePage = () => {
         }
         return grouped;
     }, [scheduleData?.data?.sub_schedules]);
+    // Editable multi-block schedules keyed by module.
+    const scheduleBlocksByModule = useMemo(
+        () => scheduleData?.data?.schedule_blocks || {},
+        [scheduleData?.data?.schedule_blocks]
+    );
     const availableModules = useMemo(
         () =>
             moduleOrder
@@ -139,9 +150,10 @@ export const SchedulePage = () => {
             // Set modal state and open
             setEditingModule(module);
             setScheduleValue(currentSchedule);
+            setBlockValue(blocksFromConfig(scheduleBlocksByModule[moduleKey] || []));
             setIsModalOpen(true);
         },
-        [availableModules, schedules]
+        [availableModules, schedules, scheduleBlocksByModule]
     );
 
     const handleModalClose = useCallback(() => {
@@ -150,6 +162,7 @@ export const SchedulePage = () => {
         setIsModalOpen(false);
         setEditingModule(null);
         setScheduleValue('');
+        setBlockValue([]);
         setIsSaving(false);
     }, [isSaving]);
 
@@ -160,6 +173,16 @@ export const SchedulePage = () => {
     const handleSave = useCallback(async () => {
         if (!editingModule || isSaving) return;
 
+        // Validate/serialize blocks before any write so an invalid advanced
+        // JSON override aborts cleanly without a partial save.
+        let payloadBlocks;
+        try {
+            payloadBlocks = blocksToConfig(blockValue);
+        } catch (error) {
+            toast.error(error.message || 'Invalid schedule block');
+            return;
+        }
+
         setIsSaving(true);
 
         try {
@@ -167,6 +190,12 @@ export const SchedulePage = () => {
             await scheduleAPI.updateSchedule({
                 module: editingModule.key,
                 schedule: scheduleValue,
+            });
+
+            // Persist the module's multi-block schedules.
+            await scheduleAPI.updateScheduleBlocks({
+                module: editingModule.key,
+                blocks: payloadBlocks,
             });
 
             // Refresh schedule data (bypass cache to show updated data)
@@ -184,7 +213,15 @@ export const SchedulePage = () => {
             toast.error(`Failed to save schedule: ${error.message || 'Unknown error'}`);
             setIsSaving(false);
         }
-    }, [editingModule, scheduleValue, toast, refetchSchedules, handleModalClose, isSaving]);
+    }, [
+        editingModule,
+        scheduleValue,
+        blockValue,
+        toast,
+        refetchSchedules,
+        handleModalClose,
+        isSaving,
+    ]);
 
     const handleRemove = useCallback(async () => {
         if (!editingModule || isSaving) return;
@@ -290,17 +327,25 @@ export const SchedulePage = () => {
                 <Modal.Header>Configure Schedule - {editingModule?.label || 'Module'}</Modal.Header>
                 <Modal.Body>
                     {editingModule && (
-                        <ScheduleField
-                            field={{
-                                key: 'schedule',
-                                label: 'Schedule Configuration',
-                                description: 'Configure when this module should run automatically',
-                                required: false,
-                            }}
-                            value={scheduleValue}
-                            onChange={handleScheduleChange}
-                            disabled={isSaving}
-                        />
+                        <>
+                            <ScheduleField
+                                field={{
+                                    key: 'schedule',
+                                    label: 'Schedule Configuration',
+                                    description:
+                                        'Configure when this module should run automatically',
+                                    required: false,
+                                }}
+                                value={scheduleValue}
+                                onChange={handleScheduleChange}
+                                disabled={isSaving}
+                            />
+                            <ScheduleBlocksEditor
+                                blocks={blockValue}
+                                onChange={setBlockValue}
+                                disabled={isSaving}
+                            />
+                        </>
                     )}
                 </Modal.Body>
                 <Modal.Footer>

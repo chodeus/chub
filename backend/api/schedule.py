@@ -13,7 +13,7 @@ from pydantic import BaseModel
 
 from backend.api.utils import error, get_logger, ok
 from backend.modules import MODULES
-from backend.util.config import ChubConfig, load_config, save_config
+from backend.util.config import ChubConfig, ScheduleBlock, load_config, save_config
 from backend.util.scheduler import (
     _profile_value,
     _upgradinatorr_profile_label,
@@ -34,6 +34,22 @@ class ScheduleUpdateRequest(BaseModel):
 
     module: str
     schedule: str
+
+
+class ScheduleBlockInput(BaseModel):
+    """One multi-block schedule entry from the editor."""
+
+    label: str = ""
+    enabled: bool = True
+    schedule: str = ""
+    overrides: dict = {}
+
+
+class ScheduleBlocksUpdateRequest(BaseModel):
+    """Replace the full set of multi-block schedules for one module."""
+
+    module: str
+    blocks: list[ScheduleBlockInput] = []
 
 
 def get_config() -> ChubConfig:
@@ -112,12 +128,49 @@ async def get_all_schedules(
                 }
             )
 
+        # Multi-block schedules (config.schedule_blocks): module -> [blocks].
+        # Each enabled block is also surfaced in sub_schedules so the dashboard
+        # Upcoming list + cron next-run cover it; the raw blocks are returned
+        # under schedule_blocks for the editor.
+        schedule_blocks: dict[str, list[dict[str, Any]]] = {}
+        blocks_by_module = getattr(config, "schedule_blocks", None) or {}
+        for module_name, blocks in blocks_by_module.items():
+            out_blocks: list[dict[str, Any]] = []
+            for index, block in enumerate(blocks or []):
+                sched = (_profile_value(block, "schedule", "") or "").strip()
+                label = _profile_value(block, "label", "") or f"block {index + 1}"
+                enabled = bool(_profile_value(block, "enabled", True))
+                overrides = _profile_value(block, "overrides", {}) or {}
+                nr = cron_next_run(sched) if sched else None
+                next_run = nr.isoformat() if nr is not None else None
+                out_blocks.append(
+                    {
+                        "label": label,
+                        "enabled": enabled,
+                        "schedule": sched,
+                        "overrides": overrides,
+                        "next_run": next_run,
+                    }
+                )
+                if sched and enabled:
+                    sub_schedules.append(
+                        {
+                            "module": module_name,
+                            "label": label,
+                            "schedule": sched,
+                            "enabled": enabled,
+                            "next_run": next_run,
+                        }
+                    )
+            schedule_blocks[module_name] = out_blocks
+
         return ok(
             "Schedules retrieved successfully",
             {
                 "schedule": schedule_data,
                 "next_runs": next_runs,
                 "sub_schedules": sub_schedules,
+                "schedule_blocks": schedule_blocks,
             },
         )
 
@@ -265,6 +318,67 @@ async def update_module_schedule(
         return error(
             f"Failed to update schedule: {str(e)}",
             code="SCHEDULE_UPDATE_ERROR",
+            status_code=500,
+        )
+
+
+@router.post(
+    "/schedule/blocks",
+    summary="Replace a module's multi-block schedules",
+    description=(
+        "Set the full list of schedule blocks for a module. Each block has its "
+        "own schedule string and an overrides map applied only to that run, so "
+        "one module can e.g. report daily and remove weekly."
+    ),
+)
+async def update_module_schedule_blocks(
+    data: ScheduleBlocksUpdateRequest, logger: Any = Depends(get_logger)
+) -> JSONResponse:
+    """Replace config.schedule_blocks[module] with the supplied blocks."""
+    try:
+        module_name = data.module
+        if module_name not in MODULES:
+            available_modules = ", ".join(sorted(MODULES.keys()))
+            return error(
+                f"Invalid module name: '{module_name}'. "
+                f"Available modules: {available_modules}",
+                code="INVALID_MODULE_NAME",
+                status_code=400,
+            )
+
+        config = load_config()
+        blocks = [
+            ScheduleBlock(
+                label=b.label,
+                enabled=b.enabled,
+                schedule=b.schedule,
+                overrides=b.overrides or {},
+            )
+            for b in data.blocks
+        ]
+        if blocks:
+            config.schedule_blocks[module_name] = blocks
+        else:
+            # Empty list clears the module's blocks rather than persisting [].
+            config.schedule_blocks.pop(module_name, None)
+
+        save_config(config)
+        logger.info(
+            f"Updated {len(blocks)} schedule block(s) for module: {module_name}"
+        )
+        return ok(
+            f"Schedule blocks for '{module_name}' updated successfully",
+            {
+                "module": module_name,
+                "blocks": [b.model_dump() for b in blocks],
+            },
+        )
+
+    except Exception as e:
+        logger.error(f"Failed to update schedule blocks for module {data.module}: {e}")
+        return error(
+            f"Failed to update schedule blocks: {str(e)}",
+            code="SCHEDULE_BLOCKS_UPDATE_ERROR",
             status_code=500,
         )
 

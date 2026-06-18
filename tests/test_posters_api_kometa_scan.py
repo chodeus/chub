@@ -13,21 +13,28 @@ def _logger():
     )
 
 
-def test_resolve_rating_keys_via_plex_mapping(tmp_path):
-    from backend.api.posters import _stale_rating_key_map
+def test_resolve_plex_match_via_plex_mapping(tmp_path):
+    from backend.api.posters import _stale_plex_match_map
 
     with ChubDB(_logger(), db_path=str(tmp_path / "chub.db")) as db:
         db.media.execute_query(
-            "INSERT INTO plex_media_cache (id, plex_id, instance_name) VALUES (?,?,?)",
-            (5, "12345", "Chodeus"),
+            "INSERT INTO plex_media_cache (id, plex_id, instance_name, title, year) "
+            "VALUES (?,?,?,?,?)",
+            (5, "12345", "Chodeus", "Euphoria", 2019),
         )
         db.media.execute_query(
             "INSERT INTO media_cache (identity_key, instance_name, tvdb_id, "
             "plex_mapping_id, asset_type, matched) VALUES (?,?,?,?,?,1)",
             ("k", "sonarr", 367118, 5, "show"),
         )
-        m = _stale_rating_key_map(db, [("tvdb", 367118)])
-        assert m[("tvdb", 367118)] == 12345
+        m = _stale_plex_match_map(db, [("tvdb", 367118)])
+        # rating_key for the drifted-cache fallback, plus the Plex title+year
+        # the UI matches on when the rating_key no longer lines up with a bundle.
+        assert m[("tvdb", 367118)] == {
+            "rating_key": 12345,
+            "title": "Euphoria",
+            "year": 2019,
+        }
 
 
 def test_cleanup_overrides_parse_stale():
@@ -43,6 +50,15 @@ def test_cleanup_overrides_parse_stale():
     assert ov["mode"] == "remove"
     assert ov["stale_duplicates_enabled"] is True
     assert ov["stale_duplicates_mode"] == "move"
+
+
+def test_cleanup_overrides_parse_overlays_only():
+    from backend.api.posters import _build_cleanup_overrides
+
+    assert _build_cleanup_overrides({"overlays_only": True})["overlays_only"] is True
+    assert _build_cleanup_overrides({"overlays_only": False})["overlays_only"] is False
+    # absent -> not in overrides (module keeps its saved overlays_only)
+    assert "overlays_only" not in _build_cleanup_overrides({"mode": "report"})
 
 
 def test_cleanup_overrides_allows_nothing_and_rejects_bad_stale_mode():

@@ -40,15 +40,19 @@ def get_cleanarr_logger(request: Request) -> Any:
     return get_module_logger(request, "poster_cleanarr")
 
 
-def _stale_rating_key_map(db: "ChubDB", ids: list) -> dict:
-    """Map ('tvdb'|'tmdb', id) -> Plex rating_key (int) via
-    media_cache.plex_mapping_id -> plex_media_cache.plex_id. Missing mappings
-    are simply absent from the result."""
+def _stale_plex_match_map(db: "ChubDB", ids: list) -> dict:
+    """Map ('tvdb'|'tmdb', id) -> {rating_key, title, year} for live media, via
+    media_cache.plex_mapping_id -> plex_media_cache. The Plex title+year let the
+    UI attach a stale folder to its poster row even when the cached rating_key
+    has drifted from Plex's live metadata (a re-add / re-match mints a new key,
+    so the cached plex_id no longer matches the on-disk bundle). Missing
+    mappings are simply absent from the result."""
     out: dict = {}
     if not ids:
         return out
     rows = db.media.execute_query(
-        "SELECT m.tvdb_id AS tvdb_id, m.tmdb_id AS tmdb_id, p.plex_id AS plex_id "
+        "SELECT m.tvdb_id AS tvdb_id, m.tmdb_id AS tmdb_id, "
+        "p.plex_id AS plex_id, p.title AS title, p.year AS year "
         "FROM media_cache m JOIN plex_media_cache p ON m.plex_mapping_id = p.id "
         "WHERE m.plex_mapping_id IS NOT NULL",
         fetch_all=True,
@@ -58,14 +62,25 @@ def _stale_rating_key_map(db: "ChubDB", ids: list) -> dict:
         try:
             pid = int(r["plex_id"])
         except (ValueError, TypeError, KeyError):
-            continue
+            pid = None  # keep the title/year so the UI can still match by name
         for kind, raw in (("tvdb", r.get("tvdb_id")), ("tmdb", r.get("tmdb_id"))):
             try:
                 key = (kind, int(raw)) if raw not in (None, "", 0) else None
             except (ValueError, TypeError):
                 key = None
             if key in wanted:
-                out[key] = pid
+                # plex_media_cache.year is TEXT; coerce to int so it lines up
+                # with the bundle scan's integer year for the UI match.
+                year_raw = r.get("year")
+                try:
+                    year_val = int(year_raw) if year_raw not in (None, "") else None
+                except (ValueError, TypeError):
+                    year_val = None
+                out[key] = {
+                    "rating_key": pid,
+                    "title": r.get("title") or "",
+                    "year": year_val,
+                }
     return out
 
 
@@ -3023,6 +3038,9 @@ def _build_cleanup_overrides(body: dict) -> dict:
     asset_dirs = body.get("asset_dirs")
     if isinstance(asset_dirs, list):
         overrides["asset_dirs"] = [str(p) for p in asset_dirs]
+
+    if "overlays_only" in body:
+        overrides["overlays_only"] = bool(body.get("overlays_only"))
     return overrides
 
 
@@ -3258,10 +3276,12 @@ async def scan_kometa_assets(
 
         canonical = ca._build_canonical_folder_map(db, instances)
         stale_raw = ca._scan_stale_duplicates(asset_dirs, canonical)
-        rk = _stale_rating_key_map(db, [d["id"] for d in stale_raw])
+        match = _stale_plex_match_map(db, [d["id"] for d in stale_raw])
         stale = [
             {
-                "rating_key": rk.get(d["id"]),
+                "rating_key": (match.get(d["id"]) or {}).get("rating_key"),
+                "plex_title": (match.get(d["id"]) or {}).get("title", ""),
+                "plex_year": (match.get(d["id"]) or {}).get("year"),
                 "name": d["name"],
                 "canonical": d["canonical"],
                 "canonical_present": d["canonical_present"],
