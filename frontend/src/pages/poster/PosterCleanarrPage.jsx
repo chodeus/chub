@@ -397,6 +397,39 @@ const PosterCleanarrPage = () => {
 
     // Action-bar state (global bulk cleanup flow — Report/Move/Remove).
     const [mode, setMode] = useState('report');
+    const [cleanBloat, setCleanBloat] = useState(true);
+    const [cleanStale, setCleanStale] = useState(false);
+    const [cleanOrphan, setCleanOrphan] = useState(false);
+
+    // Stale-duplicate + orphan data from the Kometa assets scan.
+    const [staleByRk, setStaleByRk] = useState(() => new Map());
+    const [orphans, setOrphans] = useState([]);
+
+    useEffect(() => {
+        let cancelled = false;
+        postersAPI
+            .scanKometaAssets()
+            .then(res => {
+                if (cancelled) return;
+                const data = res?.data || {};
+                const map = new Map();
+                for (const s of data.stale || []) {
+                    if (s.rating_key == null) continue;
+                    map.set(s.rating_key, (map.get(s.rating_key) || 0) + 1);
+                }
+                setStaleByRk(map);
+                setOrphans(data.orphans || []);
+            })
+            .catch(() => {
+                if (!cancelled) {
+                    setStaleByRk(new Map());
+                    setOrphans([]);
+                }
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     // Scan state. Session-only — scanning is an explicit user action, so we
     // intentionally don't persist this. Navigating away and back resets the
@@ -636,6 +669,13 @@ const PosterCleanarrPage = () => {
             const body = { mode };
             if (meta.scopeable && selectedPaths.size > 0)
                 body.target_paths = Array.from(selectedPaths);
+            // Bloat: when unchecked, force the harmless "nothing" mode so the
+            // job skips Plex-variant deletion but can still run stale/orphan.
+            body.mode = cleanBloat ? mode : 'nothing';
+            body.stale_duplicates_enabled = cleanStale;
+            body.orphan_assets_enabled = cleanOrphan;
+            if (cleanStale) body.stale_duplicates_mode = mode;
+            if (cleanOrphan) body.orphan_assets_mode = mode;
             const res = await postersAPI.runPlexMetadataCleanup(body);
             const jobId = res?.data?.job_id;
             if (!jobId) {
@@ -655,7 +695,7 @@ const PosterCleanarrPage = () => {
         } finally {
             setIsEnqueuing(false);
         }
-    }, [mode, selectedPaths, toast]);
+    }, [mode, cleanBloat, cleanStale, cleanOrphan, selectedPaths, toast]);
 
     const runCleanup = () => {
         // Report mode is the UI scan — populate tiles, don't enqueue a backend
@@ -790,6 +830,23 @@ const PosterCleanarrPage = () => {
               .filter(v => !v.active && (v.cls?.source || 'uploads') !== 'plex')
               .reduce((s, v) => s + (v.size || 0), 0)
         : 0;
+    // Subtree bloat — all bloat variants across the whole bundle tree (show +
+    // seasons + episodes), used in the detail header when a show node is selected
+    // to distinguish "here" (show-level) from the full subtree count.
+    const subtreeBloat =
+        detail && selected?.kind === 'show'
+            ? (() => {
+                  const tree = bundleTrees.get(detail.bundle.rating_key);
+                  if (!tree) return 0;
+                  return (tree.show || [])
+                      .concat(
+                          [...(tree.seasons.values() || [])].flatMap(s =>
+                              s.posters.concat([...s.episodes.values()].flatMap(e => e.thumbs))
+                          )
+                      )
+                      .filter(v => !v.active && (v.cls?.source || 'uploads') !== 'plex').length;
+              })()
+            : 0;
 
     return (
         <div className="flex flex-col gap-4">
@@ -806,6 +863,17 @@ const PosterCleanarrPage = () => {
                         {stats.bundle_count} items · {stats.variant_count} variants ·{' '}
                         <span className="text-error">{stats.bloat_count} bloat</span> ·{' '}
                         {formatBytes(stats.bloat_size)} reclaimable
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-tertiary mt-1">
+                        <span className="flex items-center gap-1">
+                            <span style={bloatPill}>●</span> bloat
+                        </span>
+                        <span className="flex items-center gap-1">
+                            <span style={stalePill}>⧉</span> stale duplicate
+                        </span>
+                        {orphans.length > 0 && (
+                            <span>orphaned assets: {orphans.length} (see below)</span>
+                        )}
                     </div>
                     {transcoder && transcoder.count > 0 && (
                         <div>
@@ -840,6 +908,32 @@ const PosterCleanarrPage = () => {
                 <span className="text-xs text-tertiary" style={{ maxWidth: '420px' }}>
                     {MODE_META[mode]?.description}
                 </span>
+                <div className="flex items-center gap-3 ml-3 text-sm">
+                    <label className="flex items-center gap-1 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            checked={cleanBloat}
+                            onChange={e => setCleanBloat(e.target.checked)}
+                        />
+                        Bloat
+                    </label>
+                    <label className="flex items-center gap-1 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            checked={cleanStale}
+                            onChange={e => setCleanStale(e.target.checked)}
+                        />
+                        Stale
+                    </label>
+                    <label className="flex items-center gap-1 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            checked={cleanOrphan}
+                            onChange={e => setCleanOrphan(e.target.checked)}
+                        />
+                        Orphan
+                    </label>
+                </div>
                 <div className="ml-auto flex items-center gap-2">
                     {MODE_META[mode]?.scopeable && (
                         <span className="text-xs text-secondary">
@@ -890,252 +984,300 @@ const PosterCleanarrPage = () => {
                     No poster variants found. Plex metadata looks clean.
                 </div>
             ) : (
-                // ---- Master-detail split ----
-                // On mobile we collapse to a single column and toggle which pane
-                // is visible based on selection; on desktop both panes render
-                // side-by-side as before. Internal scroll containers are still
-                // present on mobile but become no-ops because the grid has no
-                // minHeight there — the page scrolls naturally instead.
-                <section className="rounded-lg border border-border overflow-hidden bg-surface">
-                    <div
-                        className="grid"
-                        style={{
-                            gridTemplateColumns: isMobile ? '1fr' : '560px 1fr',
-                            // Cap the panel near the viewport so a long media
-                            // list scrolls inside its own pane instead of the
-                            // whole page growing to fit it. The report header
-                            // above can still scroll away. The single
-                            // minmax(0, 1fr) row is what actually constrains the
-                            // columns to that height — a bare max-height would
-                            // just clip the list instead of letting it scroll.
-                            gridTemplateRows: isMobile ? undefined : 'minmax(0, 1fr)',
-                            maxHeight: isMobile ? undefined : 'calc(100vh - 150px)',
-                        }}
-                    >
-                        {/* Left pane — hidden on mobile when a node is selected */}
-                        {(!isMobile || !selected) && (
-                            <div
-                                className={`flex flex-col min-h-0 overflow-hidden ${
-                                    isMobile ? '' : 'border-r border-border'
-                                }`}
-                            >
-                                {/* Tabs */}
-                                <div className="flex gap-1 p-2 border-b border-border">
-                                    {[
-                                        ['all', 'All'],
-                                        ['movie', 'Movies'],
-                                        ['show', 'Shows'],
-                                        ['collection', 'Collections'],
-                                    ].map(([v, label]) => (
-                                        <button
-                                            key={v}
-                                            type="button"
-                                            onClick={() => setTab(v)}
-                                            className={`flex-1 px-2 py-1.5 text-xs rounded-md cursor-pointer border ${
-                                                tab === v
-                                                    ? 'bg-primary/20 text-primary border-primary/40'
-                                                    : 'bg-transparent text-secondary border-transparent hover:bg-surface-alt'
-                                            }`}
-                                        >
-                                            {label}
-                                        </button>
-                                    ))}
+                <>
+                    {/* ---- Master-detail split ---- */}
+                    {/* On mobile we collapse to a single column and toggle which pane
+                    is visible based on selection; on desktop both panes render
+                    side-by-side as before. Internal scroll containers are still
+                    present on mobile but become no-ops because the grid has no
+                    minHeight there — the page scrolls naturally instead. */}
+                    <section className="rounded-lg border border-border overflow-hidden bg-surface">
+                        <div
+                            className="grid"
+                            style={{
+                                gridTemplateColumns: isMobile ? '1fr' : '560px 1fr',
+                                // Cap the panel near the viewport so a long media
+                                // list scrolls inside its own pane instead of the
+                                // whole page growing to fit it. The report header
+                                // above can still scroll away. The single
+                                // minmax(0, 1fr) row is what actually constrains the
+                                // columns to that height — a bare max-height would
+                                // just clip the list instead of letting it scroll.
+                                gridTemplateRows: isMobile ? undefined : 'minmax(0, 1fr)',
+                                maxHeight: isMobile ? undefined : 'calc(100vh - 150px)',
+                            }}
+                        >
+                            {/* Left pane — hidden on mobile when a node is selected */}
+                            {(!isMobile || !selected) && (
+                                <div
+                                    className={`flex flex-col min-h-0 overflow-hidden ${
+                                        isMobile ? '' : 'border-r border-border'
+                                    }`}
+                                >
+                                    {/* Tabs */}
+                                    <div className="flex gap-1 p-2 border-b border-border">
+                                        {[
+                                            ['all', 'All'],
+                                            ['movie', 'Movies'],
+                                            ['show', 'Shows'],
+                                            ['collection', 'Collections'],
+                                        ].map(([v, label]) => (
+                                            <button
+                                                key={v}
+                                                type="button"
+                                                onClick={() => setTab(v)}
+                                                className={`flex-1 px-2 py-1.5 text-xs rounded-md cursor-pointer border ${
+                                                    tab === v
+                                                        ? 'bg-primary/20 text-primary border-primary/40'
+                                                        : 'bg-transparent text-secondary border-transparent hover:bg-surface-alt'
+                                                }`}
+                                            >
+                                                {label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <input
+                                        type="search"
+                                        value={search}
+                                        onChange={e => setSearch(e.target.value)}
+                                        placeholder="Search titles..."
+                                        className="m-2 px-3 py-1.5 rounded bg-surface-alt border border-border text-sm"
+                                    />
+                                    {/* Tree list */}
+                                    <div className="overflow-y-auto flex-1">
+                                        {filteredBundles.length === 0 ? (
+                                            <div className="text-center text-tertiary text-sm p-4">
+                                                No matches
+                                            </div>
+                                        ) : (
+                                            filteredBundles.map(bundle => (
+                                                <BundleTreeRow
+                                                    key={bundle.bundle_path}
+                                                    bundle={bundle}
+                                                    tree={bundleTrees.get(bundle.rating_key)}
+                                                    selected={selected}
+                                                    expandedShows={expandedShows}
+                                                    expandedSeasons={expandedSeasons}
+                                                    onToggleShow={toggleShow}
+                                                    onToggleSeason={toggleSeason}
+                                                    onSelect={selectNode}
+                                                    staleCount={
+                                                        staleByRk.get(bundle.rating_key) || 0
+                                                    }
+                                                />
+                                            ))
+                                        )}
+                                    </div>
                                 </div>
-                                <input
-                                    type="search"
-                                    value={search}
-                                    onChange={e => setSearch(e.target.value)}
-                                    placeholder="Search titles..."
-                                    className="m-2 px-3 py-1.5 rounded bg-surface-alt border border-border text-sm"
-                                />
-                                {/* Tree list */}
-                                <div className="overflow-y-auto flex-1">
-                                    {filteredBundles.length === 0 ? (
-                                        <div className="text-center text-tertiary text-sm p-4">
-                                            No matches
+                            )}
+                            {/* Right pane — on mobile, only rendered when a node is selected */}
+                            {(!isMobile || selected) && (
+                                <div className="flex flex-col min-w-0 min-h-0">
+                                    {!detail ? (
+                                        <div className="p-12 text-center text-tertiary">
+                                            Select an item on the left. Shows have chevrons to drill
+                                            into seasons and episodes.
                                         </div>
                                     ) : (
-                                        filteredBundles.map(bundle => (
-                                            <BundleTreeRow
-                                                key={bundle.bundle_path}
-                                                bundle={bundle}
-                                                tree={bundleTrees.get(bundle.rating_key)}
-                                                selected={selected}
-                                                expandedShows={expandedShows}
-                                                expandedSeasons={expandedSeasons}
-                                                onToggleShow={toggleShow}
-                                                onToggleSeason={toggleSeason}
-                                                onSelect={selectNode}
-                                            />
-                                        ))
-                                    )}
-                                </div>
-                            </div>
-                        )}
-                        {/* Right pane — on mobile, only rendered when a node is selected */}
-                        {(!isMobile || selected) && (
-                            <div className="flex flex-col min-w-0 min-h-0">
-                                {!detail ? (
-                                    <div className="p-12 text-center text-tertiary">
-                                        Select an item on the left. Shows have chevrons to drill
-                                        into seasons and episodes.
-                                    </div>
-                                ) : (
-                                    <>
-                                        <header className="p-4 border-b border-border">
-                                            {isMobile && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => selectNode(null)}
-                                                    className="mb-2 text-sm text-primary cursor-pointer inline-flex items-center gap-1 hover:underline"
-                                                >
-                                                    ← Back to list
-                                                </button>
-                                            )}
-                                            <div className="text-xs text-secondary mb-1 flex items-center gap-2">
-                                                {detail.breadcrumb.map((crumb, i) => (
-                                                    <React.Fragment key={i}>
-                                                        {i > 0 && (
-                                                            <span className="text-tertiary">›</span>
-                                                        )}
-                                                        <span
-                                                            className={
-                                                                i < detail.breadcrumb.length - 1
-                                                                    ? 'cursor-pointer hover:text-primary'
-                                                                    : ''
-                                                            }
-                                                            onClick={() => {
-                                                                if (
-                                                                    i >=
-                                                                    detail.breadcrumb.length - 1
-                                                                )
-                                                                    return;
-                                                                if (i === 0)
-                                                                    selectNode({
-                                                                        kind: 'show',
-                                                                        ratingKey:
-                                                                            detail.bundle
-                                                                                .rating_key,
-                                                                    });
-                                                                else if (i === 1)
-                                                                    selectNode({
-                                                                        kind: 'season',
-                                                                        ratingKey:
-                                                                            detail.bundle
-                                                                                .rating_key,
-                                                                        season: selected.season,
-                                                                    });
-                                                            }}
-                                                        >
-                                                            {crumb}
-                                                        </span>
-                                                    </React.Fragment>
-                                                ))}
-                                            </div>
-                                            <h3 className="text-xl font-semibold text-primary m-0">
-                                                {detail.breadcrumb[detail.breadcrumb.length - 1]}
-                                            </h3>
-                                            <div className="text-xs text-secondary mt-1">
-                                                {detail.variants.length} variants ·{' '}
-                                                <span className="text-success">
-                                                    {activeInDetail} active
-                                                </span>{' '}
-                                                ·{' '}
-                                                <span className="text-error">
-                                                    {bloatInDetail} bloat
-                                                </span>
-                                                {plexInDetail > 0 && (
-                                                    <>
-                                                        {' '}
-                                                        ·{' '}
-                                                        <span className="text-tertiary">
-                                                            {plexInDetail} plex
-                                                        </span>
-                                                    </>
+                                        <>
+                                            <header className="p-4 border-b border-border">
+                                                {isMobile && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => selectNode(null)}
+                                                        className="mb-2 text-sm text-primary cursor-pointer inline-flex items-center gap-1 hover:underline"
+                                                    >
+                                                        ← Back to list
+                                                    </button>
                                                 )}
-                                                {bloatInDetail > 0 && (
-                                                    <>
-                                                        {' '}
-                                                        · {formatBytes(reclaimableBytes)}{' '}
-                                                        reclaimable
-                                                    </>
-                                                )}
-                                            </div>
-                                        </header>
-                                        <div className="flex-1 overflow-y-auto p-4">
-                                            {detail.variants.length === 0 ? (
-                                                <div className="text-center text-tertiary py-12">
-                                                    No variants at this level.
-                                                </div>
-                                            ) : (
-                                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-                                                    {detail.variants.map(v => (
-                                                        <VariantTile
-                                                            key={v.path}
-                                                            variant={v}
-                                                            selected={selectedPaths.has(v.path)}
-                                                            onToggleSelect={toggleSelect}
-                                                            onPreview={variant =>
-                                                                setPreviewTarget({
-                                                                    variant,
-                                                                    bundle: detail.bundle,
-                                                                })
-                                                            }
-                                                        />
+                                                <div className="text-xs text-secondary mb-1 flex items-center gap-2">
+                                                    {detail.breadcrumb.map((crumb, i) => (
+                                                        <React.Fragment key={i}>
+                                                            {i > 0 && (
+                                                                <span className="text-tertiary">
+                                                                    ›
+                                                                </span>
+                                                            )}
+                                                            <span
+                                                                className={
+                                                                    i < detail.breadcrumb.length - 1
+                                                                        ? 'cursor-pointer hover:text-primary'
+                                                                        : ''
+                                                                }
+                                                                onClick={() => {
+                                                                    if (
+                                                                        i >=
+                                                                        detail.breadcrumb.length - 1
+                                                                    )
+                                                                        return;
+                                                                    if (i === 0)
+                                                                        selectNode({
+                                                                            kind: 'show',
+                                                                            ratingKey:
+                                                                                detail.bundle
+                                                                                    .rating_key,
+                                                                        });
+                                                                    else if (i === 1)
+                                                                        selectNode({
+                                                                            kind: 'season',
+                                                                            ratingKey:
+                                                                                detail.bundle
+                                                                                    .rating_key,
+                                                                            season: selected.season,
+                                                                        });
+                                                                }}
+                                                            >
+                                                                {crumb}
+                                                            </span>
+                                                        </React.Fragment>
                                                     ))}
                                                 </div>
-                                            )}
-                                        </div>
-                                        {/* Per-item bulk action bar */}
-                                        {detail.variants.length > 0 && (
-                                            <div className="flex flex-wrap items-center gap-2 p-3 border-t border-border bg-surface-alt">
-                                                <span className="text-xs text-secondary mr-auto">
-                                                    {selectedPaths.size > 0
-                                                        ? `${selectedPaths.size} selected`
-                                                        : `${bloatInDetail} bloat available`}
-                                                </span>
-                                                <Button
-                                                    variant="ghost"
-                                                    onClick={selectAllBloat}
-                                                    disabled={bloatInDetail === 0}
-                                                >
-                                                    Select all bloat
-                                                </Button>
-                                                <LoadingButton
-                                                    loading={bulkBusy}
-                                                    loadingText="Deleting…"
-                                                    variant="danger"
-                                                    onClick={() => setConfirmBulkDelete(true)}
-                                                    disabled={selectedPaths.size === 0}
-                                                >
-                                                    Delete selected
-                                                </LoadingButton>
-                                                <LoadingButton
-                                                    loading={bulkBusy}
-                                                    loadingText="Applying…"
-                                                    variant="primary"
-                                                    onClick={() => {
-                                                        if (selectedPaths.size !== 1) {
-                                                            toast.error(
-                                                                'Tick exactly one variant to promote'
-                                                            );
-                                                            return;
-                                                        }
-                                                        const [keepPath] = [...selectedPaths];
-                                                        setConfirmMakeActive({ keepPath });
-                                                    }}
-                                                    disabled={selectedPaths.size !== 1}
-                                                >
-                                                    Make active &amp; delete rest
-                                                </LoadingButton>
+                                                <h3 className="text-xl font-semibold text-primary m-0">
+                                                    {
+                                                        detail.breadcrumb[
+                                                            detail.breadcrumb.length - 1
+                                                        ]
+                                                    }
+                                                </h3>
+                                                <div className="text-xs text-secondary mt-1">
+                                                    {detail.variants.length} variants ·{' '}
+                                                    <span className="text-success">
+                                                        {activeInDetail} active
+                                                    </span>{' '}
+                                                    ·{' '}
+                                                    <span className="text-error">
+                                                        {bloatInDetail} bloat here
+                                                    </span>
+                                                    {selected?.kind === 'show' &&
+                                                        subtreeBloat > bloatInDetail && (
+                                                            <>
+                                                                {' '}
+                                                                ·{' '}
+                                                                <span className="text-tertiary">
+                                                                    {subtreeBloat} in subtree
+                                                                </span>
+                                                            </>
+                                                        )}
+                                                    {plexInDetail > 0 && (
+                                                        <>
+                                                            {' '}
+                                                            ·{' '}
+                                                            <span className="text-tertiary">
+                                                                {plexInDetail} plex
+                                                            </span>
+                                                        </>
+                                                    )}
+                                                    {bloatInDetail > 0 && (
+                                                        <>
+                                                            {' '}
+                                                            · {formatBytes(reclaimableBytes)}{' '}
+                                                            reclaimable
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </header>
+                                            <div className="flex-1 overflow-y-auto p-4">
+                                                {detail.variants.length === 0 ? (
+                                                    <div className="text-center text-tertiary py-12">
+                                                        No variants at this level.
+                                                    </div>
+                                                ) : (
+                                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                                                        {detail.variants.map(v => (
+                                                            <VariantTile
+                                                                key={v.path}
+                                                                variant={v}
+                                                                selected={selectedPaths.has(v.path)}
+                                                                onToggleSelect={toggleSelect}
+                                                                onPreview={variant =>
+                                                                    setPreviewTarget({
+                                                                        variant,
+                                                                        bundle: detail.bundle,
+                                                                    })
+                                                                }
+                                                            />
+                                                        ))}
+                                                    </div>
+                                                )}
                                             </div>
-                                        )}
-                                    </>
-                                )}
+                                            {/* Per-item bulk action bar */}
+                                            {detail.variants.length > 0 && (
+                                                <div className="flex flex-wrap items-center gap-2 p-3 border-t border-border bg-surface-alt">
+                                                    <span className="text-xs text-secondary mr-auto">
+                                                        {selectedPaths.size > 0
+                                                            ? `${selectedPaths.size} selected`
+                                                            : `${bloatInDetail} bloat available`}
+                                                    </span>
+                                                    <Button
+                                                        variant="ghost"
+                                                        onClick={selectAllBloat}
+                                                        disabled={bloatInDetail === 0}
+                                                    >
+                                                        Select all bloat
+                                                    </Button>
+                                                    <LoadingButton
+                                                        loading={bulkBusy}
+                                                        loadingText="Deleting…"
+                                                        variant="danger"
+                                                        onClick={() => setConfirmBulkDelete(true)}
+                                                        disabled={selectedPaths.size === 0}
+                                                    >
+                                                        Delete selected
+                                                    </LoadingButton>
+                                                    <LoadingButton
+                                                        loading={bulkBusy}
+                                                        loadingText="Applying…"
+                                                        variant="primary"
+                                                        onClick={() => {
+                                                            if (selectedPaths.size !== 1) {
+                                                                toast.error(
+                                                                    'Tick exactly one variant to promote'
+                                                                );
+                                                                return;
+                                                            }
+                                                            const [keepPath] = [...selectedPaths];
+                                                            setConfirmMakeActive({ keepPath });
+                                                        }}
+                                                        disabled={selectedPaths.size !== 1}
+                                                    >
+                                                        Make active &amp; delete rest
+                                                    </LoadingButton>
+                                                </div>
+                                            )}
+                                        </>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </section>
+
+                    {orphans.length > 0 && (
+                        <section className="rounded-lg border border-border bg-surface mt-4 p-4">
+                            <div className="flex items-center gap-2 mb-3">
+                                <h2 className="text-sm font-semibold text-primary">
+                                    Orphaned assets
+                                </h2>
+                                <span style={typeBadge}>{orphans.length}</span>
+                                <span className="text-tertiary text-xs">
+                                    Kometa assets with no matching media in your library
+                                </span>
                             </div>
-                        )}
-                    </div>
-                </section>
+                            <div className="overflow-y-auto" style={{ maxHeight: '320px' }}>
+                                {orphans.map(o => (
+                                    <div
+                                        key={o.path}
+                                        className="flex items-center justify-between gap-2 py-1.5 border-b border-border text-sm"
+                                    >
+                                        <span className="truncate text-secondary">{o.path}</span>
+                                        <span className="text-tertiary text-xs whitespace-nowrap">
+                                            {formatBytes(o.size)}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        </section>
+                    )}
+                </>
             )}
 
             <VariantPreviewModal
@@ -1331,6 +1473,14 @@ const bloatPill = {
     fontWeight: 600,
     fontSize: '10px',
 };
+const stalePill = {
+    padding: '1px 6px',
+    borderRadius: '9999px',
+    background: 'rgba(245,158,11,0.2)',
+    color: '#f59e0b',
+    fontWeight: 600,
+    fontSize: '10px',
+};
 const typeBadge = {
     fontSize: '9px',
     textTransform: 'uppercase',
@@ -1350,6 +1500,7 @@ const BundleTreeRow = ({
     onToggleShow,
     onToggleSeason,
     onSelect,
+    staleCount = 0,
 }) => {
     const isShow = bundle.metadata_type_label === 'show';
     const showExpanded = expandedShows.has(bundle.rating_key);
@@ -1391,6 +1542,11 @@ const BundleTreeRow = ({
                             {bundle.library_name || ''} · {bundle.variants.length} variants
                         </span>
                         {bloatCount > 0 && <span style={bloatPill}>● {bloatCount}</span>}
+                        {staleCount > 0 && (
+                            <span style={stalePill} title="Stale duplicate asset folder">
+                                ⧉ {staleCount}
+                            </span>
+                        )}
                     </div>
                 </div>
             </div>

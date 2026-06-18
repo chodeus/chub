@@ -49,6 +49,7 @@ def format_bytes(size: int) -> str:
 
 VALID_MODES = {"report", "move", "remove", "restore", "clear", "nothing"}
 VALID_ORPHAN_MODES = {"report", "move", "remove"}
+VALID_STALE_MODES = {"report", "move", "remove"}
 ASSET_IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".webp")
 RESTORE_DIR_NAME = "Poster Cleanarr Restore"
 ORPHAN_RESTORE_DIR_NAME = ".chub_orphan_restore"
@@ -222,6 +223,18 @@ class PosterCleanarr(ChubModule):
                         ),
                     )
 
+            # === Stale-duplicate asset cleanup ===
+            stale_stats: Dict[str, Any] = {"count": 0, "total_size": 0}
+            if getattr(self.config, "stale_duplicates_enabled", False):
+                with ChubDB(logger=self.logger) as db:
+                    stale_stats = self._run_stale_pass(
+                        db=db,
+                        instances=self._resolve_orphan_instances(self.config),
+                        asset_dirs=list(getattr(self.config, "asset_dirs", []) or []),
+                        mode=getattr(self.config, "stale_duplicates_mode", "report"),
+                        logger=self.logger,
+                    )
+
             # === Clean empty directories ===
             empty_dirs = 0
             if self.mode not in ("report", "nothing") and metadata_dir:
@@ -229,12 +242,16 @@ class PosterCleanarr(ChubModule):
 
             # === Report ===
             elapsed = time.time() - start_time
-            output = self._build_output(bloat_stats, orphan_stats, empty_dirs, elapsed)
+            output = self._build_output(
+                bloat_stats, orphan_stats, stale_stats, empty_dirs, elapsed
+            )
             self._print_report(output)
 
             # === Notify ===
             has_activity = (
-                bloat_stats.get("count", 0) > 0 or orphan_stats.get("count", 0) > 0
+                bloat_stats.get("count", 0) > 0
+                or orphan_stats.get("count", 0) > 0
+                or stale_stats.get("count", 0) > 0
             )
             if has_activity:
                 try:
@@ -890,6 +907,196 @@ class PosterCleanarr(ChubModule):
                 pass  # non-numeric / malformed id — skip it
         return tmdb_ids, tvdb_ids
 
+    def _build_canonical_folder_map(
+        self, db: ChubDB, instances: List[str]
+    ) -> Dict[Tuple[str, int], str]:
+        """Map ('tvdb'|'tmdb', id) -> the media item's canonical folder name
+        (media_cache.folder), scoped to `instances`. Only main (season-less)
+        rows define the folder, so the show-level folder isn't shadowed by a
+        season row. Used to tell a stale-duplicate asset folder (wrong name)
+        from the canonical one."""
+        wanted = set(instances)
+        out: Dict[Tuple[str, int], str] = {}
+        for row in db.media.get_all():
+            if row.get("instance_name") not in wanted:
+                continue
+            if row.get("season_number") is not None:
+                continue
+            folder = row.get("folder")
+            if not folder:
+                continue
+            for kind, raw in (
+                ("tvdb", row.get("tvdb_id")),
+                ("tmdb", row.get("tmdb_id")),
+            ):
+                try:
+                    if raw not in (None, "", 0):
+                        out[(kind, int(raw))] = folder
+                except (ValueError, TypeError):
+                    continue
+        return out
+
+    def _scan_stale_duplicates(
+        self,
+        asset_dirs: List[str],
+        canonical_by_id: Dict[Tuple[str, int], str],
+    ) -> List[Dict[str, Any]]:
+        """Top-level asset folders whose {tvdb/tmdb} id matches a live media
+        item but whose name != that item's canonical folder. Spare-only on the
+        id: an id with no live match is left to the orphan pass, never flagged
+        here. `canonical_present` records whether the correctly-named folder is
+        already on disk — removal must keep the only copy (see
+        _execute_stale_mode)."""
+        out: List[Dict[str, Any]] = []
+        for asset_dir in asset_dirs:
+            if not os.path.isdir(asset_dir):
+                continue
+            try:
+                entries = sorted(os.listdir(asset_dir))
+            except OSError:
+                continue
+            for name in entries:
+                full = os.path.join(asset_dir, name)
+                if not os.path.isdir(full):
+                    continue
+                canonical = None
+                ident = None
+                mt = tmdb_id_regex.search(name)
+                mv = tvdb_id_regex.search(name)
+                if mv and ("tvdb", int(mv.group(1))) in canonical_by_id:
+                    ident = ("tvdb", int(mv.group(1)))
+                elif mt and ("tmdb", int(mt.group(1))) in canonical_by_id:
+                    ident = ("tmdb", int(mt.group(1)))
+                if ident is None:
+                    continue  # no live id match -> orphan-pass territory, not stale
+                canonical = canonical_by_id[ident]
+                if name == canonical:
+                    continue  # this IS the canonical folder
+                size = 0
+                for r, _d, files in os.walk(full):
+                    for f in files:
+                        try:
+                            size += os.path.getsize(os.path.join(r, f))
+                        except OSError:
+                            pass
+                out.append(
+                    {
+                        "folder": full,
+                        "asset_dir": asset_dir,
+                        "name": name,
+                        "canonical": canonical,
+                        "canonical_present": os.path.isdir(
+                            os.path.join(asset_dir, canonical)
+                        ),
+                        "id": ident,
+                        "size": size,
+                    }
+                )
+        return out
+
+    def _execute_stale_mode(
+        self, dupes: List[Dict[str, Any]], mode: str, logger: Logger
+    ) -> Dict[str, Any]:
+        """report/move/remove stale-duplicate FOLDERS. move/remove are skipped
+        for an entry whose canonical folder is not yet on disk so the only
+        staged copy is never destroyed (the renamer recreates the canonical
+        folder on its next run, after which this dup is safe to drop)."""
+        count = 0
+        total_size = 0
+        touched: Set[str] = set()
+        for d in dupes:
+            folder = d["folder"]
+            size = d.get("size", 0)
+            if mode == "report":
+                logger.info(f"  [STALE DUP] {folder} (current: {d['canonical']})")
+                count += 1
+                total_size += size
+                continue
+            if not d.get("canonical_present"):
+                logger.info(
+                    f"  [STALE KEPT] {folder} — canonical '{d['canonical']}' "
+                    "not staged yet; keeping the only copy"
+                )
+                continue
+            if mode == "move":
+                dest_root = os.path.join(d["asset_dir"], ORPHAN_RESTORE_DIR_NAME)
+                dest = os.path.join(dest_root, d["name"])
+                try:
+                    os.makedirs(os.path.dirname(dest), exist_ok=True)
+                    shutil.move(folder, dest)
+                    logger.info(f"  [STALE MOVED] {folder} -> {dest}")
+                    count += 1
+                    total_size += size
+                    touched.add(d["asset_dir"])
+                except OSError as e:
+                    logger.error(f"Failed to move {folder}: {e}")
+            elif mode == "remove":
+                try:
+                    shutil.rmtree(folder)
+                    logger.info(f"  [STALE REMOVED] {folder}")
+                    count += 1
+                    total_size += size
+                    touched.add(d["asset_dir"])
+                except OSError as e:
+                    logger.error(f"Failed to remove {folder}: {e}")
+        empty = sum(self._clean_empty_dirs(d) for d in touched)
+        logger.info(
+            f"   → stale duplicates: {count} {mode}d"
+            + (f", {empty} empty dir(s) pruned" if empty else "")
+        )
+        return {"count": count, "total_size": total_size, "mode": mode}
+
+    def _run_stale_pass(
+        self,
+        db: ChubDB,
+        instances: List[str],
+        asset_dirs: List[str],
+        mode: str,
+        logger: Logger,
+    ) -> Dict[str, Any]:
+        """Detect + act on stale-duplicate asset folders. Mirrors
+        _run_orphan_pass's guards: invalid mode / empty asset_dirs / no
+        instances all abort to a no-op."""
+        if mode not in VALID_STALE_MODES:
+            logger.error(
+                f"Invalid stale_duplicates_mode '{mode}'. "
+                f"Must be one of: {', '.join(sorted(VALID_STALE_MODES))}"
+            )
+            return {"count": 0, "total_size": 0, "mode": mode}
+
+        if not asset_dirs:
+            logger.warning(
+                "Stale-duplicate cleanup enabled but asset_dirs is empty; skipping."
+            )
+            return {"count": 0, "total_size": 0, "mode": mode}
+
+        for d in asset_dirs:
+            if not os.path.isdir(d):
+                logger.warning(f"asset_dir does not exist, skipping: {d}")
+        valid_dirs = [d for d in asset_dirs if os.path.isdir(d)]
+        if not valid_dirs:
+            return {"count": 0, "total_size": 0, "mode": mode}
+
+        if not instances:
+            logger.error(
+                "Stale-duplicate cleanup enabled but no instances selected; "
+                "cannot build a comparison set."
+            )
+            return {"count": 0, "total_size": 0, "mode": mode}
+        canonical = self._build_canonical_folder_map(db, instances)
+        if not canonical:
+            logger.warning(
+                "No canonical folders for the configured instances — run "
+                "poster_renamerr to populate media_cache before stale cleanup."
+            )
+            return {"count": 0, "total_size": 0, "mode": mode}
+        dupes = self._scan_stale_duplicates(valid_dirs, canonical)
+        total = sum(d["size"] for d in dupes)
+        logger.info(
+            f"Found {len(dupes)} stale-duplicate folder(s) ({format_bytes(total)})."
+        )
+        return self._execute_stale_mode(dupes, mode, logger)
+
     def _scan_orphan_assets(
         self,
         asset_dirs: List[str],
@@ -1117,6 +1324,7 @@ class PosterCleanarr(ChubModule):
         self,
         bloat_stats: Dict[str, Any],
         orphan_stats: Dict[str, Any],
+        stale_stats: Dict[str, Any],
         empty_dirs: int,
         elapsed: float,
     ) -> Dict[str, Any]:
@@ -1134,6 +1342,12 @@ class PosterCleanarr(ChubModule):
                 "size": orphan_stats.get("total_size", 0),
                 "size_human": format_bytes(orphan_stats.get("total_size", 0)),
                 "mode": orphan_stats.get("mode", ""),
+            },
+            "stale": {
+                "count": stale_stats.get("count", 0),
+                "size": stale_stats.get("total_size", 0),
+                "size_human": format_bytes(stale_stats.get("total_size", 0)),
+                "mode": stale_stats.get("mode", ""),
             },
             "empty_dirs": empty_dirs,
             "elapsed": round(elapsed, 1),
@@ -1161,6 +1375,18 @@ class PosterCleanarr(ChubModule):
                     f"Orphan Assets ({orphan_label})",
                     str(output["orphan"]["count"]),
                     output["orphan"]["size_human"],
+                ]
+            )
+
+        if output["stale"]["count"] > 0 or output["stale"].get("mode"):
+            stale_label = MODE_LABELS.get(
+                output["stale"].get("mode", "report"), {}
+            ).get("ed", "Processed")
+            summary_rows.append(
+                [
+                    f"Stale Duplicates ({stale_label})",
+                    str(output["stale"]["count"]),
+                    output["stale"]["size_human"],
                 ]
             )
 
@@ -1212,4 +1438,20 @@ def run_orphan_assets_pass(
         include_collections=include_collections,
         logger=logger,
         ignore_titles=ignore_titles,
+    )
+
+
+def run_stale_duplicates_pass(
+    db: ChubDB,
+    instances: List[str],
+    asset_dirs: List[str],
+    mode: str,
+    logger: Logger,
+) -> Dict[str, Any]:
+    """Shared entry point so poster_renamerr (or any future caller) can run the
+    stale-duplicate pass without a full PosterCleanarr instance."""
+    cleanarr = PosterCleanarr.__new__(PosterCleanarr)
+    cleanarr.logger = logger
+    return cleanarr._run_stale_pass(
+        db=db, instances=instances, asset_dirs=asset_dirs, mode=mode, logger=logger
     )
