@@ -995,7 +995,7 @@ class PosterCleanarr(ChubModule):
         return out
 
     def _execute_stale_mode(
-        self, dupes: List[Dict[str, Any]], mode: str
+        self, dupes: List[Dict[str, Any]], mode: str, logger: Logger
     ) -> Dict[str, Any]:
         """report/move/remove stale-duplicate FOLDERS. move/remove are skipped
         for an entry whose canonical folder is not yet on disk so the only
@@ -1008,12 +1008,12 @@ class PosterCleanarr(ChubModule):
             folder = d["folder"]
             size = d.get("size", 0)
             if mode == "report":
-                self.logger.info(f"  [STALE DUP] {folder} (current: {d['canonical']})")
+                logger.info(f"  [STALE DUP] {folder} (current: {d['canonical']})")
                 count += 1
                 total_size += size
                 continue
             if not d.get("canonical_present"):
-                self.logger.info(
+                logger.info(
                     f"  [STALE KEPT] {folder} — canonical '{d['canonical']}' "
                     "not staged yet; keeping the only copy"
                 )
@@ -1024,23 +1024,23 @@ class PosterCleanarr(ChubModule):
                 try:
                     os.makedirs(os.path.dirname(dest), exist_ok=True)
                     shutil.move(folder, dest)
-                    self.logger.info(f"  [STALE MOVED] {folder} -> {dest}")
+                    logger.info(f"  [STALE MOVED] {folder} -> {dest}")
                     count += 1
                     total_size += size
                     touched.add(d["asset_dir"])
                 except OSError as e:
-                    self.logger.error(f"Failed to move {folder}: {e}")
+                    logger.error(f"Failed to move {folder}: {e}")
             elif mode == "remove":
                 try:
                     shutil.rmtree(folder)
-                    self.logger.info(f"  [STALE REMOVED] {folder}")
+                    logger.info(f"  [STALE REMOVED] {folder}")
                     count += 1
                     total_size += size
                     touched.add(d["asset_dir"])
                 except OSError as e:
-                    self.logger.error(f"Failed to remove {folder}: {e}")
+                    logger.error(f"Failed to remove {folder}: {e}")
         empty = sum(self._clean_empty_dirs(d) for d in touched)
-        self.logger.info(
+        logger.info(
             f"   → stale duplicates: {count} {mode}d"
             + (f", {empty} empty dir(s) pruned" if empty else "")
         )
@@ -1063,11 +1063,25 @@ class PosterCleanarr(ChubModule):
                 f"Must be one of: {', '.join(sorted(VALID_STALE_MODES))}"
             )
             return {"count": 0, "total_size": 0, "mode": mode}
+
+        if not asset_dirs:
+            logger.warning(
+                "Stale-duplicate cleanup enabled but asset_dirs is empty; skipping."
+            )
+            return {"count": 0, "total_size": 0, "mode": mode}
+
+        for d in asset_dirs:
+            if not os.path.isdir(d):
+                logger.warning(f"asset_dir does not exist, skipping: {d}")
         valid_dirs = [d for d in asset_dirs if os.path.isdir(d)]
         if not valid_dirs:
             return {"count": 0, "total_size": 0, "mode": mode}
+
         if not instances:
-            logger.error("Stale-duplicate cleanup enabled but no instances selected.")
+            logger.error(
+                "Stale-duplicate cleanup enabled but no instances selected; "
+                "cannot build a comparison set."
+            )
             return {"count": 0, "total_size": 0, "mode": mode}
         canonical = self._build_canonical_folder_map(db, instances)
         if not canonical:
@@ -1081,7 +1095,7 @@ class PosterCleanarr(ChubModule):
         logger.info(
             f"Found {len(dupes)} stale-duplicate folder(s) ({format_bytes(total)})."
         )
-        return self._execute_stale_mode(dupes, mode)
+        return self._execute_stale_mode(dupes, mode, logger)
 
     def _scan_orphan_assets(
         self,
