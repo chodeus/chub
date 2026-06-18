@@ -272,3 +272,63 @@ def test_run_stale_pass_reports(db, tmp_path):
         logger=_logger(),
     )
     assert res["count"] == 1
+
+
+def test_run_invokes_orphan_and_stale_passes(monkeypatch, tmp_path):
+    """run() with mode='nothing' (skips Plex/bloat) must still invoke BOTH the
+    orphan and stale passes when their config flags are set — the path a
+    SCHEDULED job takes, reading saved config. Proves all three cleaners are
+    independently driven by config, so a schedule can run them in any mode."""
+    import backend.modules.poster_cleanarr as mod
+
+    class _FakeDB:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    monkeypatch.setattr(mod, "ChubDB", lambda *a, **k: _FakeDB())
+
+    def _sched_logger():
+        return SimpleNamespace(
+            debug=lambda *a, **k: None,
+            info=lambda *a, **k: None,
+            warning=lambda *a, **k: None,
+            error=lambda *a, **k: None,
+            get_adapter=lambda *a, **k: _sched_logger(),
+            log_outro=lambda *a, **k: None,
+        )
+
+    m = object.__new__(mod.PosterCleanarr)
+    m.logger = _sched_logger()
+    m.mode = "nothing"
+    m.plex_path = ""
+    m.full_config = SimpleNamespace()
+    m.config = SimpleNamespace(
+        local_db=True,
+        orphan_assets_enabled=True,
+        orphan_assets_mode="report",
+        stale_duplicates_enabled=True,
+        stale_duplicates_mode="report",
+        asset_dirs=[str(tmp_path)],
+        instances=["sonarr"],
+        orphan_instances=[],
+        include_collections=True,
+        orphan_ignore_titles=[],
+        target_paths=None,
+    )
+    calls = []
+    monkeypatch.setattr(
+        m,
+        "_run_orphan_pass",
+        lambda **k: calls.append("orphan") or {"count": 0, "total_size": 0},
+    )
+    monkeypatch.setattr(
+        m,
+        "_run_stale_pass",
+        lambda **k: calls.append("stale") or {"count": 0, "total_size": 0},
+    )
+    m.run()
+    assert "orphan" in calls
+    assert "stale" in calls
