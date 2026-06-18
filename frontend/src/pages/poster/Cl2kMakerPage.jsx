@@ -1833,6 +1833,10 @@ const RenderPanel = ({
     const [asisPreview, setAsisPreview] = useState(null); // { b64, sig }
     const [asisPreviewing, setAsisPreviewing] = useState(false);
     const [asisSaving, setAsisSaving] = useState(false);
+    // File-as-is "Generate seasons" batch — local busy + "n/total" readout (the
+    // full-CL2K batch's busy/bulkProgress are parent props for a different flow).
+    const [asisBulkBusy, setAsisBulkBusy] = useState(false);
+    const [asisBulkProgress, setAsisBulkProgress] = useState('');
 
     // The source poster as a data URL — /retext decodes it and draws the new label.
     const asisDataUrlFromSource = useCallback(async () => {
@@ -1941,10 +1945,7 @@ const RenderPanel = ({
     // modules/cl2k_maker.py), else the free-text "New title" fallback.
     const asisDrawnLabel = useMemo(() => {
         if (isSeasonPoster) {
-            return (
-                bandLabel ||
-                (Number(seasonNumber) === 0 ? 'Specials' : `Season ${Number(seasonNumber)}`)
-            );
+            return bandLabel || seasonBandText(seasonNumber);
         }
         return bandLabel || asisLabel;
     }, [isSeasonPoster, seasonNumber, bandLabel, asisLabel]);
@@ -2011,6 +2012,79 @@ const RenderPanel = ({
         asisTextY,
         asisBorder,
         asisIds,
+        saveTargets.fields,
+        toast,
+    ]);
+
+    // File-as-is "Generate seasons": re-file the one source poster once per season,
+    // each with its own SEASON-N band (the backend derives the label). Runs in the
+    // background and polls progress, mirroring the full-CL2K season batch.
+    const runAsisBulkSeasons = useCallback(async () => {
+        const nums = parseSeasonList(bulkSeasons);
+        if (!nums.length) {
+            toast.error('Enter season numbers, e.g. 1,2,3');
+            return;
+        }
+        const image_b64 = await asisDataUrlFromSource();
+        if (!image_b64) {
+            toast.error('Upload or grab a poster first.');
+            return;
+        }
+        setAsisBulkBusy(true);
+        setAsisBulkProgress(`0/${nums.length}`);
+        try {
+            const resp = await cl2kMakerAPI.retextSeasons({
+                image_b64,
+                seasons: nums,
+                title: item.title,
+                tmdb_id: item.tmdb_id,
+                year: item.year,
+                tvdb_id: item.tvdb_id,
+                imdb_id: item.imdb_id,
+                text_y: asisTextY,
+                border: asisBorder,
+                ...saveTargets.fields,
+            });
+            const jobId = resp?.data?.job_id;
+            if (!jobId) throw new Error(resp?.message || 'Could not start season batch');
+
+            let fails = 0;
+            while (true) {
+                await new Promise(r => setTimeout(r, 1500));
+                let d;
+                try {
+                    d = (await cl2kMakerAPI.seasonsStatus(jobId))?.data;
+                } catch {
+                    if (++fails >= 10) throw new Error('Lost contact with the season job');
+                    continue;
+                }
+                if (!d) {
+                    if (++fails >= 10) throw new Error('Lost contact with the season job');
+                    continue;
+                }
+                fails = 0;
+                setAsisBulkProgress(`${d.done}/${d.total}`);
+                if (d.status === 'done' || d.status === 'error') {
+                    if (d.status === 'error') {
+                        toast.error(d.error || 'Season generation failed');
+                    } else {
+                        toast.success(`Seasons: ${d.generated}/${d.total} generated`);
+                    }
+                    break;
+                }
+            }
+        } catch (err) {
+            toast.error(err.message || 'Season generation failed');
+        } finally {
+            setAsisBulkBusy(false);
+            setAsisBulkProgress('');
+        }
+    }, [
+        bulkSeasons,
+        asisDataUrlFromSource,
+        item,
+        asisTextY,
+        asisBorder,
         saveTargets.fields,
         toast,
     ]);
@@ -2449,6 +2523,42 @@ const RenderPanel = ({
                                         className="flex-1 bg-surface border border-border rounded px-2 py-1 text-sm text-primary"
                                     />
                                 </label>
+                            )}
+                            {item.kind === 'show' && (
+                                <div className="flex flex-col gap-1">
+                                    <div className="flex items-center gap-2">
+                                        <span className="w-28 text-sm text-secondary">
+                                            All seasons
+                                        </span>
+                                        <input
+                                            type="text"
+                                            value={bulkSeasons}
+                                            onChange={e => setBulkSeasons(e.target.value)}
+                                            placeholder="Generate all: 1,2,3"
+                                            className="flex-1 bg-surface border border-border rounded px-2 py-1 text-sm text-primary"
+                                        />
+                                        <LoadingButton
+                                            onClick={runAsisBulkSeasons}
+                                            loading={asisBulkBusy}
+                                            disabled={!hasBackdrop || saveTargets.noTarget}
+                                            variant="secondary"
+                                            icon="grid_view"
+                                            size="small"
+                                        >
+                                            Generate seasons
+                                        </LoadingButton>
+                                        {asisBulkBusy && asisBulkProgress && (
+                                            <span className="text-xs text-secondary tabular-nums whitespace-nowrap">
+                                                {asisBulkProgress}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <p className="text-xs text-tertiary">
+                                        Files this poster once per season with its own SEASON N band
+                                        (Season 0 = Specials). Runs in the background — the count
+                                        updates as each season is saved.
+                                    </p>
+                                </div>
                             )}
                             {item.kind !== 'collection' && (
                                 <label className="flex items-center gap-2 text-sm text-secondary">
@@ -5081,6 +5191,39 @@ const parseSeasonList = s =>
         .split(',')
         .map(x => parseInt(x.trim(), 10))
         .filter(n => Number.isInteger(n) && n >= 0);
+
+// Mirrors backend season_band_text (modules/cl2k_maker.py): the season band spells
+// the number out ("Season One", uppercased to SEASON ONE by the renderer), Season 0
+// is "Specials", and year-numbered seasons (>= 1000) stay as digits ("Season 2026").
+const _ONES =
+    'zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen'.split(
+        ' '
+    );
+const _TENS = [
+    '',
+    '',
+    'twenty',
+    'thirty',
+    'forty',
+    'fifty',
+    'sixty',
+    'seventy',
+    'eighty',
+    'ninety',
+];
+const numberToWords = n => {
+    if (!Number.isInteger(n) || n < 0 || n >= 1000) return String(n);
+    if (n < 20) return _ONES[n];
+    if (n < 100) {
+        const t = Math.floor(n / 10);
+        const o = n % 10;
+        return _TENS[t] + (o ? `-${_ONES[o]}` : '');
+    }
+    const h = Math.floor(n / 100);
+    const r = n % 100;
+    return `${_ONES[h]} hundred` + (r ? ` ${numberToWords(r)}` : '');
+};
+const seasonBandText = n => (Number(n) === 0 ? 'Specials' : `Season ${numberToWords(Number(n))}`);
 
 const downloadBlob = (blob, filename) => {
     const url = URL.createObjectURL(blob);
