@@ -27,7 +27,7 @@ def db():
         try:
             os.unlink(path)
         except OSError:
-            pass
+            pass  # temp file already gone — nothing to clean up
 
 
 def test_parse_search_id_forms():
