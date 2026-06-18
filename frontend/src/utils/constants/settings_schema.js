@@ -1280,7 +1280,7 @@ const CORE_SETTINGS_SCHEMA = [
                 type: 'check_box',
                 section: 'Stale Duplicate Cleanup',
                 description:
-                    'Detects Kometa asset folders whose {tmdb-N}/{tvdb-N} id matches a live item but whose folder name no longer matches the media folder (e.g. after a Sonarr/Radarr folder rename). The canonical folder is always kept; a non-canonical duplicate is reported/moved/removed. Skipped if the canonical folder is not yet staged (never deletes the only copy).',
+                    'Detects Kometa asset folders whose {tmdb-N}/{tvdb-N} id matches a live item but whose folder name no longer matches the media folder (e.g. after a Sonarr/Radarr folder rename). The canonical folder is always kept; a non-canonical duplicate is reported/moved/removed. Skipped if the canonical folder is not yet staged (never deletes the only copy). Uses the same instance comparison set as Orphan Asset Cleanup (Orphan Instances, falling back to Instances).',
             },
             {
                 key: 'stale_duplicates_mode',
