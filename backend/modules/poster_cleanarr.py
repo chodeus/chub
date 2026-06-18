@@ -891,6 +891,35 @@ class PosterCleanarr(ChubModule):
                 pass  # non-numeric / malformed id — skip it
         return tmdb_ids, tvdb_ids
 
+    def _build_canonical_folder_map(
+        self, db: ChubDB, instances: List[str]
+    ) -> Dict[Tuple[str, int], str]:
+        """Map ('tvdb'|'tmdb', id) -> the media item's canonical folder name
+        (media_cache.folder), scoped to `instances`. Only main (season-less)
+        rows define the folder, so the show-level folder isn't shadowed by a
+        season row. Used to tell a stale-duplicate asset folder (wrong name)
+        from the canonical one."""
+        wanted = set(instances)
+        out: Dict[Tuple[str, int], str] = {}
+        for row in db.media.get_all():
+            if row.get("instance_name") not in wanted:
+                continue
+            if row.get("season_number") is not None:
+                continue
+            folder = row.get("folder")
+            if not folder:
+                continue
+            for kind, raw in (
+                ("tvdb", row.get("tvdb_id")),
+                ("tmdb", row.get("tmdb_id")),
+            ):
+                try:
+                    if raw not in (None, "", 0):
+                        out[(kind, int(raw))] = folder
+                except (ValueError, TypeError):
+                    continue
+        return out
+
     def _scan_orphan_assets(
         self,
         asset_dirs: List[str],
