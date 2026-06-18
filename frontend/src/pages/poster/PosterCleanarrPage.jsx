@@ -398,6 +398,36 @@ const PosterCleanarrPage = () => {
     // Action-bar state (global bulk cleanup flow — Report/Move/Remove).
     const [mode, setMode] = useState('report');
 
+    // Stale-duplicate + orphan data from the Kometa assets scan.
+    const [staleByRk, setStaleByRk] = useState(() => new Map());
+    const [orphans, setOrphans] = useState([]);
+
+    useEffect(() => {
+        let cancelled = false;
+        postersAPI
+            .scanKometaAssets()
+            .then(res => {
+                if (cancelled) return;
+                const data = res?.data || {};
+                const map = new Map();
+                for (const s of data.stale || []) {
+                    if (s.rating_key == null) continue;
+                    map.set(s.rating_key, (map.get(s.rating_key) || 0) + 1);
+                }
+                setStaleByRk(map);
+                setOrphans(data.orphans || []);
+            })
+            .catch(() => {
+                if (!cancelled) {
+                    setStaleByRk(new Map());
+                    setOrphans([]);
+                }
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
     // Scan state. Session-only — scanning is an explicit user action, so we
     // intentionally don't persist this. Navigating away and back resets the
     // page to the "Ready to scan" empty state rather than firing a fresh
@@ -807,6 +837,17 @@ const PosterCleanarrPage = () => {
                         <span className="text-error">{stats.bloat_count} bloat</span> ·{' '}
                         {formatBytes(stats.bloat_size)} reclaimable
                     </div>
+                    <div className="flex items-center gap-3 text-xs text-tertiary mt-1">
+                        <span className="flex items-center gap-1">
+                            <span style={bloatPill}>●</span> bloat
+                        </span>
+                        <span className="flex items-center gap-1">
+                            <span style={stalePill}>⧉</span> stale duplicate
+                        </span>
+                        {orphans.length > 0 && (
+                            <span>orphaned assets: {orphans.length} (see below)</span>
+                        )}
+                    </div>
                     {transcoder && transcoder.count > 0 && (
                         <div>
                             PhotoTranscoder cache: {transcoder.count.toLocaleString()} files ·{' '}
@@ -966,6 +1007,7 @@ const PosterCleanarrPage = () => {
                                                 onToggleShow={toggleShow}
                                                 onToggleSeason={toggleSeason}
                                                 onSelect={selectNode}
+                                                staleCount={staleByRk.get(bundle.rating_key) || 0}
                                             />
                                         ))
                                     )}
@@ -1331,6 +1373,14 @@ const bloatPill = {
     fontWeight: 600,
     fontSize: '10px',
 };
+const stalePill = {
+    padding: '1px 6px',
+    borderRadius: '9999px',
+    background: 'rgba(245,158,11,0.2)',
+    color: '#f59e0b',
+    fontWeight: 600,
+    fontSize: '10px',
+};
 const typeBadge = {
     fontSize: '9px',
     textTransform: 'uppercase',
@@ -1350,6 +1400,7 @@ const BundleTreeRow = ({
     onToggleShow,
     onToggleSeason,
     onSelect,
+    staleCount = 0,
 }) => {
     const isShow = bundle.metadata_type_label === 'show';
     const showExpanded = expandedShows.has(bundle.rating_key);
@@ -1391,6 +1442,11 @@ const BundleTreeRow = ({
                             {bundle.library_name || ''} · {bundle.variants.length} variants
                         </span>
                         {bloatCount > 0 && <span style={bloatPill}>● {bloatCount}</span>}
+                        {staleCount > 0 && (
+                            <span style={stalePill} title="Stale duplicate asset folder">
+                                ⧉ {staleCount}
+                            </span>
+                        )}
                     </div>
                 </div>
             </div>
