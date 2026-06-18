@@ -2,6 +2,49 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.32.0](https://github.com/chodeus/chub/compare/v2.31.0...v2.32.0) (2026-06-18)
+
+
+### Features
+
+* **api:** kometa-assets-scan endpoint + stale toggles in cleanup job ([0349a73](https://github.com/chodeus/chub/commit/0349a737eed84fecdd6fef85976ea876222ea4cd))
+* **config:** add poster_cleanarr stale_duplicates settings ([f02a7ce](https://github.com/chodeus/chub/commit/f02a7ce71b9655803fea870cd3bce4dc0407a28a))
+* **frontend:** add Orphaned assets section to Poster Cleanarr ([c36c0be](https://github.com/chodeus/chub/commit/c36c0be11a1eac3b76f60119046ba5c0cfe8117c))
+* **frontend:** add scanKometaAssets API client method ([aa4f7ed](https://github.com/chodeus/chub/commit/aa4f7ed24fd99723ac554c9a79911344c9d09d84))
+* **frontend:** clean-mode Bloat/Stale/Orphan checkboxes ([63d4a3b](https://github.com/chodeus/chub/commit/63d4a3b49cc4eb7fd8fd3458aacf87b0aa981568))
+* **frontend:** numbered stale pill + pill legend on Poster Cleanarr ([e257138](https://github.com/chodeus/chub/commit/e2571389591e632052a365ff8331471a0503ab66))
+* **library-stats:** report library health instead of poster matches ([f45366a](https://github.com/chodeus/chub/commit/f45366affd4c001ad853e108bc2fff3bfe33da5f))
+* **poster-cleanarr:** add VALID_STALE_MODES constant ([c7c0c94](https://github.com/chodeus/chub/commit/c7c0c9422f08a35d5395c60af84a07f1f2d6af11))
+* **poster-cleanarr:** build canonical-folder map for stale detection ([1d8ca1c](https://github.com/chodeus/chub/commit/1d8ca1cebfad98f53fe5739f964dcc8cba18149a))
+* **poster-cleanarr:** execute stale-duplicate report/move/remove safely ([03bb241](https://github.com/chodeus/chub/commit/03bb241c7bb36407e0d981c6141b28f9e7e217a8))
+* **poster-cleanarr:** orchestrate stale-duplicate pass + run() wiring ([73a57df](https://github.com/chodeus/chub/commit/73a57dfdb7458421ae79fc7b635ec910bc5548b4))
+* **poster-cleanarr:** scan for stale-duplicate asset folders ([5cafc9f](https://github.com/chodeus/chub/commit/5cafc9f1f925a94ccbe13214938bfbc49dcc91b3))
+* **poster-cleanarr:** surface stale-duplicate stats in report + notification ([d1668dd](https://github.com/chodeus/chub/commit/d1668ddeeaa99cb561217390353adf0c1fadd989))
+* **search:** match tmdb/tvdb/imdb id in asset and library search ([fb120da](https://github.com/chodeus/chub/commit/fb120da4bc928880504fc4ec1ef6c7fc07a1f8e1))
+* **settings:** add poster_cleanarr stale-duplicate settings ([e05d94e](https://github.com/chodeus/chub/commit/e05d94e32e909186c4fcd613a8d8a5cad73679eb))
+
+
+### Bug Fixes
+
+* **poster-cleanarr:** bound the panel to the viewport so the media list scrolls internally ([2906746](https://github.com/chodeus/chub/commit/2906746b4e666a54785b19e29b5e50043cef35e5))
+* **poster-cleanarr:** clarify detail bloat is selected-level scope ([d726a9a](https://github.com/chodeus/chub/commit/d726a9a8ef9a21784ba1d844da4a9180f14610e8))
+* **poster-cleanarr:** page through all bundles so tabs show the whole library ([adc0ae3](https://github.com/chodeus/chub/commit/adc0ae3670ee26e75ee93a5e73e03c3d774049d8))
+* **poster-renamerr:** re-stage assets when a media folder is renamed ([7165f84](https://github.com/chodeus/chub/commit/7165f842b5dafd51e0bbe444de6085222ec7f936))
+* **settings:** default holiday schedule so a new Border Replacerr holiday saves ([68d9db6](https://github.com/chodeus/chub/commit/68d9db6196a0c72407b5c9b5f96de9a497814253))
+* **setup:** correct the setup wizard tab title ([414e3d3](https://github.com/chodeus/chub/commit/414e3d37c010ce110a11e6bc4d4b09da974679ce))
+* **setup:** hydrate existing Plex/*arr instances in the first-run wizard ([1d98d39](https://github.com/chodeus/chub/commit/1d98d39939ef292bd3b043d38321f2a5055fc864))
+
+
+### Refactoring
+
+* **poster-cleanarr:** logger param + guard parity + move/both-id tests for stale pass ([bc4da3f](https://github.com/chodeus/chub/commit/bc4da3f576fbe75b94cff1f2c4767075a5d90b2b))
+
+
+### Documentation
+
+* plan for Poster Cleanarr stale/orphan UI feature ([28f7561](https://github.com/chodeus/chub/commit/28f7561cf39e7f0fc1141278da5da1da93925a5d))
+* **poster-cleanarr:** document stale fields in cleanup API + note stale shares orphan instances ([96fffba](https://github.com/chodeus/chub/commit/96fffbac3c79db6f2cd429605e01ce3d4c082e47))
+
 ## [2.31.0](https://github.com/chodeus/chub/compare/v2.30.0...v2.31.0) (2026-06-17)
 
 
