@@ -830,6 +830,23 @@ const PosterCleanarrPage = () => {
               .filter(v => !v.active && (v.cls?.source || 'uploads') !== 'plex')
               .reduce((s, v) => s + (v.size || 0), 0)
         : 0;
+    // Subtree bloat — all bloat variants across the whole bundle tree (show +
+    // seasons + episodes), used in the detail header when a show node is selected
+    // to distinguish "here" (show-level) from the full subtree count.
+    const subtreeBloat =
+        detail && selected?.kind === 'show'
+            ? (() => {
+                  const tree = bundleTrees.get(detail.bundle.rating_key);
+                  if (!tree) return 0;
+                  return (tree.show || [])
+                      .concat(
+                          [...(tree.seasons.values() || [])].flatMap(s =>
+                              s.posters.concat([...s.episodes.values()].flatMap(e => e.thumbs))
+                          )
+                      )
+                      .filter(v => !v.active && (v.cls?.source || 'uploads') !== 'plex').length;
+              })()
+            : 0;
 
     return (
         <div className="flex flex-col gap-4">
@@ -1129,8 +1146,18 @@ const PosterCleanarrPage = () => {
                                                     </span>{' '}
                                                     ·{' '}
                                                     <span className="text-error">
-                                                        {bloatInDetail} bloat
+                                                        {bloatInDetail} bloat here
                                                     </span>
+                                                    {selected?.kind === 'show' &&
+                                                        subtreeBloat > bloatInDetail && (
+                                                            <>
+                                                                {' '}
+                                                                ·{' '}
+                                                                <span className="text-tertiary">
+                                                                    {subtreeBloat} in subtree
+                                                                </span>
+                                                            </>
+                                                        )}
                                                     {plexInDetail > 0 && (
                                                         <>
                                                             {' '}
