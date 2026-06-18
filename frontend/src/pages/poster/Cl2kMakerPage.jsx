@@ -919,9 +919,11 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
     const [seasonNumber, setSeasonNumber] = useState(saved.seasonNumber ?? '');
     const [bulkSeasons, setBulkSeasons] = useState(saved.bulkSeasons ?? '');
     // Optional bottom banner (e.g. COMPLETE LIMITED SERIES). Overrides the auto
-    // COLLECTION / season label; not applied to season posters (they show the
-    // season label). Drop a stale saved value no longer in the options (e.g. the
-    // retired "SPECIALS", now made via Season 0) so it can't silently re-apply.
+    // COLLECTION / season label — including on a season poster, so a limited
+    // series can show COMPLETE LIMITED SERIES in place of SEASON N (the file is
+    // still saved as `- Season NN`). Drop a stale saved value no longer in the
+    // options (e.g. the retired "SPECIALS", now made via Season 0) so it can't
+    // silently re-apply.
     const [bandLabel, setBandLabel] = useState(() =>
         BAND_LABEL_OPTIONS.some(o => o.value === saved.bandLabel) ? saved.bandLabel : ''
     );
@@ -1161,8 +1163,9 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             // v_pos applies to every mode now (Fill pans up; fit/extend position).
             v_pos: vPos,
             zoom: zoom,
-            // Banner overrides the auto label, but a season poster keeps its SEASON N.
-            band_label: isSeasonPoster ? '' : bandLabel,
+            // Banner overrides the auto COLLECTION / SEASON label — e.g. a season
+            // poster drawing COMPLETE LIMITED SERIES in place of SEASON N.
+            band_label: bandLabel,
             // Save destinations (ignored by /preview, honoured by /generate).
             save_local: saveTargets.saveLocal,
             upload_gdrive: saveTargets.uploadGdrive,
@@ -1227,7 +1230,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                 zm: zoom,
                 fx: focusX,
                 fy: focusY,
-                bl: isSeasonPoster ? '' : bandLabel,
+                bl: bandLabel,
                 pl: !hasLogo,
                 ti: hasLogo ? null : item.title,
                 ls: hasLogo ? null : logoScale,
@@ -1860,13 +1863,16 @@ const RenderPanel = ({
     );
 
     // The label actually drawn in File-as-is mode. Mirrors the full render's
-    // precedence: a season number wins (Season N / Specials, matching generate's
-    // season_text at modules/cl2k_maker.py), then an explicit banner, then the
-    // free-text "New title" fallback. Season and banner are mutually exclusive —
-    // the banner control is hidden once a season number is set.
+    // precedence (renderer.py): an explicit banner wins (e.g. COMPLETE LIMITED
+    // SERIES on a limited-series season poster), else a season number draws
+    // SEASON N / Specials (matching generate's season_text at
+    // modules/cl2k_maker.py), else the free-text "New title" fallback.
     const asisDrawnLabel = useMemo(() => {
         if (isSeasonPoster) {
-            return Number(seasonNumber) === 0 ? 'Specials' : `Season ${Number(seasonNumber)}`;
+            return (
+                bandLabel ||
+                (Number(seasonNumber) === 0 ? 'Specials' : `Season ${Number(seasonNumber)}`)
+            );
         }
         return bandLabel || asisLabel;
     }, [isSeasonPoster, seasonNumber, bandLabel, asisLabel]);
@@ -2185,9 +2191,10 @@ const RenderPanel = ({
                             onChange={onFocusChange}
                             mockLabel={
                                 isSeasonPoster
-                                    ? Number(seasonNumber) === 0
-                                        ? 'Specials'
-                                        : `Season ${seasonNumber}`
+                                    ? bandLabel ||
+                                      (Number(seasonNumber) === 0
+                                          ? 'Specials'
+                                          : `Season ${seasonNumber}`)
                                     : bandLabel || (item.kind === 'collection' ? 'COLLECTION' : '')
                             }
                             labelYFrac={
@@ -2238,7 +2245,7 @@ const RenderPanel = ({
                         />
                     )}
 
-                    {!isAsis && !isSeasonPoster && item.kind !== 'collection' && (
+                    {!isAsis && item.kind !== 'collection' && (
                         <div className="bg-surface border border-border rounded-lg p-3">
                             <label className="flex items-center gap-2 text-sm text-secondary">
                                 <span className="w-28 text-primary font-medium">Banner</span>
@@ -2256,7 +2263,8 @@ const RenderPanel = ({
                             </label>
                             <p className="text-xs text-tertiary mt-2">
                                 Optional bottom banner in the CL2K label band (e.g. a limited
-                                series).
+                                series). On a season poster it replaces the SEASON N text — the file
+                                is still saved as the season poster.
                             </p>
                         </div>
                     )}
@@ -2369,7 +2377,7 @@ const RenderPanel = ({
                                     />
                                 </label>
                             )}
-                            {!isSeasonPoster && item.kind !== 'collection' && (
+                            {item.kind !== 'collection' && (
                                 <label className="flex items-center gap-2 text-sm text-secondary">
                                     <span className="w-28">Banner</span>
                                     <select
@@ -2415,10 +2423,10 @@ const RenderPanel = ({
                             <p className="text-xs text-tertiary">
                                 Drawn in the CL2K font at 96% — the locked CL2K band position (the
                                 season/specials line). Set a Season number (draws SEASON N /
-                                SPECIALS) or pick a Banner; the New title box is the fallback for
-                                anything else. Brush over the old text and{' '}
-                                <span className="text-secondary">Send to AI</span> first to remove
-                                it.
+                                SPECIALS); a Banner overrides it (e.g. COMPLETE LIMITED SERIES). The
+                                New title box is the fallback when neither is set. Brush over the
+                                old text and <span className="text-secondary">Send to AI</span>{' '}
+                                first to remove it.
                             </p>
                             <label className="flex items-center gap-2 text-sm text-primary font-medium">
                                 <input
