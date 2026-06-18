@@ -983,6 +983,8 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
     const [previewUrl, setPreviewUrl] = useState(null);
     const [previewing, setPreviewing] = useState(false);
     const [busy, setBusy] = useState(false);
+    // Live "n/total" readout while a background season batch runs (see runBulkSeasons).
+    const [bulkProgress, setBulkProgress] = useState('');
 
     // A real (chosen/custom) logo is drawn as a live overlay on the logo-less base
     // so the size/position sliders move it without a server render. No logo = a
@@ -1361,8 +1363,15 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             toast.error('Enter season numbers, e.g. 1,2,3');
             return;
         }
+        if (!backdrop && !customBackdrop) {
+            toast.error('Pick a backdrop first — seasons reuse the poster you built.');
+            return;
+        }
         setBusy(true);
+        setBulkProgress(`0/${nums.length}`);
         try {
+            // The seasons reuse the SAME backdrop + logo the user built in the
+            // preview (mirrors baseRequest) instead of a server-side auto-pick.
             const resp = await cl2kMakerAPI.generateSeasons({
                 tmdb_id: item.tmdb_id,
                 title: item.title,
@@ -1370,6 +1379,12 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                 year: item.year,
                 tvdb_id: item.tvdb_id,
                 imdb_id: item.imdb_id,
+                backdrop_path: customBackdrop ? null : backdrop,
+                backdrop_b64: customBackdrop?.b64 || null,
+                logo_path: logo,
+                logo_b64: customLogo?.b64 || null,
+                whiten: whitenLogo,
+                invert: invertLogo,
                 fit_mode: fitMode,
                 focus_x: focusX,
                 focus_y: focusY,
@@ -1381,20 +1396,59 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                 zoom: zoom,
                 logo_scale: logoScale,
                 logo_y_offset: logoYOffset,
+                save_local: saveTargets.saveLocal,
+                upload_gdrive: saveTargets.uploadGdrive,
                 // Deliberate manual action — overwrite existing season posters too.
                 force: true,
             });
-            const results = resp?.data?.results || [];
-            const gen = results.filter(r => r.status === 'generated').length;
-            toast.success(`Seasons: ${gen}/${results.length} generated`);
+            const jobId = resp?.data?.job_id;
+            if (!jobId) throw new Error(resp?.message || 'Could not start season batch');
+
+            // The batch runs server-side (it outlasts a request timeout) — poll its
+            // progress instead of blocking on one long request. Tolerate transient
+            // poll errors, but bail after a run of them (job evicted / server gone)
+            // so the button never sticks in a spinner forever.
+            let fails = 0;
+            while (true) {
+                await new Promise(r => setTimeout(r, 1500));
+                let d;
+                try {
+                    d = (await cl2kMakerAPI.seasonsStatus(jobId))?.data;
+                } catch {
+                    if (++fails >= 10) throw new Error('Lost contact with the season job');
+                    continue;
+                }
+                if (!d) {
+                    if (++fails >= 10) throw new Error('Lost contact with the season job');
+                    continue;
+                }
+                fails = 0;
+                setBulkProgress(`${d.done}/${d.total}`);
+                if (d.status === 'done' || d.status === 'error') {
+                    if (d.status === 'error') {
+                        toast.error(d.error || 'Season generation failed');
+                    } else {
+                        toast.success(`Seasons: ${d.generated}/${d.total} generated`);
+                    }
+                    break;
+                }
+            }
         } catch (err) {
             toast.error(err.message || 'Season generation failed');
         } finally {
             setBusy(false);
+            setBulkProgress('');
         }
     }, [
         bulkSeasons,
         item,
+        backdrop,
+        customBackdrop,
+        logo,
+        customLogo,
+        whitenLogo,
+        invertLogo,
+        saveTargets,
         fitMode,
         focusX,
         focusY,
@@ -1528,6 +1582,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                     bulkSeasons={bulkSeasons}
                     setBulkSeasons={setBulkSeasons}
                     onBulkSeasons={runBulkSeasons}
+                    bulkProgress={bulkProgress}
                     removeText={removeText}
                     setRemoveText={setRemoveText}
                     brushSize={brushSize}
@@ -1629,6 +1684,7 @@ const RenderPanel = ({
     bulkSeasons,
     setBulkSeasons,
     onBulkSeasons,
+    bulkProgress,
     removeText,
     setRemoveText,
     brushSize,
@@ -2257,6 +2313,7 @@ const RenderPanel = ({
                             bulkSeasons={bulkSeasons}
                             setBulkSeasons={setBulkSeasons}
                             onBulkSeasons={onBulkSeasons}
+                            bulkProgress={bulkProgress}
                             busy={busy}
                         />
                     )}
@@ -2525,6 +2582,7 @@ const SeasonControls = ({
     bulkSeasons,
     setBulkSeasons,
     onBulkSeasons,
+    bulkProgress,
     busy,
 }) => (
     <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-3">
@@ -2557,9 +2615,16 @@ const SeasonControls = ({
             >
                 Generate seasons
             </LoadingButton>
+            {busy && bulkProgress && (
+                <span className="text-xs text-secondary tabular-nums whitespace-nowrap">
+                    {bulkProgress}
+                </span>
+            )}
         </div>
         <p className="text-xs text-tertiary">
-            Each season reuses the show&apos;s stored backdrop; only the season number changes.
+            Each season reuses the backdrop &amp; logo from the poster you built above; only the
+            season number changes. Runs in the background — the count updates as each season is
+            saved.
         </p>
     </div>
 );

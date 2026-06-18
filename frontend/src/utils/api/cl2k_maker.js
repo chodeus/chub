@@ -180,8 +180,11 @@ export const cl2kMakerAPI = {
     /** Export the poster as a layered .psd. Returns a Blob. */
     psdExport: req => postBlob('/cl2k-maker/psd-export', req),
 
-    /** Generate CL2K posters for multiple seasons. */
+    /** Start a background CL2K season batch. Returns { job_id, total }. */
     generateSeasons: req => apiCore.post('/cl2k-maker/generate-seasons', req),
+
+    /** Poll a background season batch's progress. */
+    seasonsStatus: jobId => apiCore.get(`/cl2k-maker/seasons-status/${jobId}`, { useCache: false }),
 
     /** Generate from a manually-cleaned backdrop (multipart). */
     uploadGenerate: (file, meta) => {

@@ -16,7 +16,8 @@ Module settings are read/saved through the generic /api/config endpoints.
 """
 
 import base64
-from typing import Any, List, Optional
+import threading
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
 from fastapi.responses import JSONResponse, Response
@@ -785,6 +786,14 @@ class SeasonsRequest(BaseModel):
     year: Optional[int] = None
     tvdb_id: Optional[int] = None
     imdb_id: Optional[str] = None
+    # Art carried over from the show poster the user built in the preview, so every
+    # season reuses the SAME backdrop + logo instead of the backend re-resolving a
+    # fresh auto-pick (which produced "a random poster"). Mirrors GenerateRequest:
+    # an uploaded backdrop/logo (``*_b64``) wins over a chosen TMDB/Plex path.
+    backdrop_path: Optional[str] = None
+    backdrop_b64: Optional[str] = None
+    logo_path: Optional[str] = None
+    logo_b64: Optional[str] = None
     # Framing carried over from the show poster so every season matches it.
     fit_mode: str = "cover"
     focus_x: float = 0.5
@@ -800,37 +809,156 @@ class SeasonsRequest(BaseModel):
     whiten: Optional[bool] = None  # None = module config (whiten_logo)
     invert: bool = False  # plate logo -> clearlogo
     force: bool = False
+    # Save destinations (mirror GenerateRequest): honour the same targets the
+    # single-poster Generate used. upload_gdrive=None falls back to module config.
+    save_local: bool = True
+    upload_gdrive: Optional[bool] = None
 
 
-@router.post("/generate-seasons", summary="Generate CL2K posters for multiple seasons")
+# ─── Background season-batch jobs ────────────────────────────────────────────
+# Generating a full show's worth of seasons (download + ImageMagick text-removal
+# + render + Drive upload, per season) easily outlasts a reverse-proxy timeout, so
+# the request returned a false failure even though every poster was written. The
+# batch now runs in a daemon thread and the frontend polls /seasons-status.
+#
+# The CL2K maker runs in a single-process uvicorn (see backend/api/server.py), so
+# this in-process registry is shared by the request handlers and the worker
+# thread — no cross-process store needed. Jobs are ephemeral (lost on restart);
+# the posters themselves persist to disk/Drive + cl2k_generated, so a lost status
+# only loses the progress readout, never the work.
+_season_jobs: Dict[int, Dict[str, Any]] = {}
+_season_jobs_lock = threading.Lock()
+_season_job_seq = 0
+
+
+# Keep a small tail of finished jobs so a poll that arrives just after completion
+# still sees the result, without the registry growing unbounded over long uptime.
+_SEASON_JOB_KEEP = 50
+
+
+def _new_season_job(total: int, title: str) -> int:
+    global _season_job_seq
+    with _season_jobs_lock:
+        # Evict the oldest finished jobs once we're over the cap (the just-created
+        # and any still-running jobs are newest, so they're never pruned).
+        if len(_season_jobs) >= _SEASON_JOB_KEEP:
+            finished = [k for k, v in _season_jobs.items() if v["status"] != "running"]
+            for k in sorted(finished)[: len(_season_jobs) - _SEASON_JOB_KEEP + 1]:
+                _season_jobs.pop(k, None)
+        _season_job_seq += 1
+        jid = _season_job_seq
+        _season_jobs[jid] = {
+            "id": jid,
+            "status": "running",
+            "title": title,
+            "total": total,
+            "done": 0,
+            "results": [],
+            "error": None,
+        }
+    return jid
+
+
+def _season_job_snapshot(jid: int) -> Optional[Dict[str, Any]]:
+    with _season_jobs_lock:
+        job = _season_jobs.get(jid)
+        return dict(job) if job else None
+
+
+def _run_seasons_job(jid: int, db: ChubDB, logger: Any, req: SeasonsRequest) -> None:
+    """Worker body: render every requested season, updating the registry as each
+    completes. Never raises — a crash is recorded as the job's error so the
+    frontend poll terminates instead of spinning on a stuck "running"."""
+
+    def _progress(entry: Dict[str, Any]) -> None:
+        with _season_jobs_lock:
+            job = _season_jobs.get(jid)
+            if job is not None:
+                job["results"].append(entry)
+                job["done"] += 1
+
+    try:
+        generate_seasons(
+            db=db,
+            full_config=load_config(),
+            logger=logger,
+            tmdb_id=req.tmdb_id,
+            title=req.title,
+            seasons=req.seasons,
+            year=req.year,
+            tvdb_id=req.tvdb_id,
+            imdb_id=req.imdb_id,
+            backdrop_path=req.backdrop_path,
+            backdrop_bytes=_b64_to_bytes(req.backdrop_b64),
+            logo_path=req.logo_path,
+            custom_logo_bytes=_b64_to_bytes(req.logo_b64),
+            fit_mode=req.fit_mode,
+            focus_x=req.focus_x,
+            focus_y=req.focus_y,
+            crop=_crop_tuple(req),
+            v_pos=req.v_pos,
+            zoom=req.zoom,
+            logo_scale=req.logo_scale,
+            logo_y_offset=req.logo_y_offset,
+            whiten=req.whiten,
+            invert=req.invert,
+            force=req.force,
+            save_local=req.save_local,
+            upload_gdrive=req.upload_gdrive,
+            progress_cb=_progress,
+        )
+        with _season_jobs_lock:
+            job = _season_jobs.get(jid)
+            if job is not None:
+                job["status"] = "done"
+    except Exception as exc:  # defensive: never leave a job stuck "running"
+        logger.error(f"cl2k: season batch {jid} crashed: {exc}", exc_info=True)
+        with _season_jobs_lock:
+            job = _season_jobs.get(jid)
+            if job is not None:
+                job["status"] = "error"
+                job["error"] = str(exc)
+
+
+@router.post("/generate-seasons", summary="Start a background CL2K season batch")
 def generate_seasons_endpoint(
     req: SeasonsRequest,
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
-    out = generate_seasons(
-        db=db,
-        full_config=load_config(),
-        logger=logger,
-        tmdb_id=req.tmdb_id,
-        title=req.title,
-        seasons=req.seasons,
-        year=req.year,
-        tvdb_id=req.tvdb_id,
-        imdb_id=req.imdb_id,
-        fit_mode=req.fit_mode,
-        focus_x=req.focus_x,
-        focus_y=req.focus_y,
-        crop=_crop_tuple(req),
-        v_pos=req.v_pos,
-        zoom=req.zoom,
-        logo_scale=req.logo_scale,
-        logo_y_offset=req.logo_y_offset,
-        whiten=req.whiten,
-        invert=req.invert,
-        force=req.force,
+    seasons = [int(n) for n in (req.seasons or [])]
+    if not seasons:
+        return error("No seasons requested", "CL2K_NO_SEASONS")
+    jid = _new_season_job(len(seasons), req.title)
+    thread = threading.Thread(
+        target=_run_seasons_job,
+        args=(jid, db, logger, req),
+        daemon=True,
+        name=f"cl2k-seasons-{jid}",
     )
-    return ok("Seasons generated", out)
+    thread.start()
+    logger.info(f"cl2k: season batch {jid} started ({len(seasons)} seasons)")
+    return ok("Season generation started", {"job_id": jid, "total": len(seasons)})
+
+
+@router.get("/seasons-status/{job_id}", summary="Progress of a background season batch")
+def seasons_status(job_id: int) -> JSONResponse:
+    job = _season_job_snapshot(job_id)
+    if job is None:
+        return error("Unknown season job", "CL2K_NO_JOB", status_code=404)
+    generated = sum(1 for r in job["results"] if r.get("status") == "generated")
+    return ok(
+        "Season job status",
+        {
+            "job_id": job["id"],
+            "status": job["status"],
+            "total": job["total"],
+            "done": job["done"],
+            "generated": generated,
+            "results": job["results"],
+            "error": job["error"],
+        },
+    )
 
 
 @router.post(
