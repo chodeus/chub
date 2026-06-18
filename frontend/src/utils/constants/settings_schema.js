@@ -1274,6 +1274,23 @@ const CORE_SETTINGS_SCHEMA = [
                 description:
                     "Titles to never flag as orphans (one per line), even when they don't match a library entry or carry a stale ID tag. Matched on the same normalized key as the scan, so casing/punctuation/year differences are ignored — e.g. 'The Matrix (1999)' and 'the matrix' are equivalent. Useful for personal or manually-placed posters.",
             },
+            {
+                key: 'stale_duplicates_enabled',
+                label: 'Enable Stale Duplicate Cleanup',
+                type: 'check_box',
+                section: 'Stale Duplicate Cleanup',
+                description:
+                    'Detects Kometa asset folders whose {tmdb-N}/{tvdb-N} id matches a live item but whose folder name no longer matches the media folder (e.g. after a Sonarr/Radarr folder rename). The canonical folder is always kept; a non-canonical duplicate is reported/moved/removed. Skipped if the canonical folder is not yet staged (never deletes the only copy).',
+            },
+            {
+                key: 'stale_duplicates_mode',
+                label: 'Stale Mode',
+                type: 'dropdown',
+                options: ['report', 'move', 'remove'],
+                section: 'Stale Duplicate Cleanup',
+                description:
+                    'report (log only) · move (to the restore dir, reversible) · remove (delete).',
+            },
         ],
     },
 
