@@ -121,3 +121,77 @@ def test_scan_stale_marks_canonical_present(tmp_path):
     stale = m._scan_stale_duplicates([str(root)], cmap)
     assert len(stale) == 1
     assert stale[0]["canonical_present"] is True
+
+
+def _cfg(m, mode="remove"):
+    m.config = SimpleNamespace()
+    return m
+
+
+def test_execute_stale_remove_deletes_old_folder(tmp_path):
+    m = _make()
+    root = tmp_path / "assets"
+    (root / "Dune Prophecy (2024) {tvdb-1}").mkdir(parents=True)  # canonical present
+    old = root / "Dune - Prophecy (2024) {tvdb-1}"
+    old.mkdir(parents=True)
+    (old / "poster.jpg").write_bytes(b"x")
+    stale = [
+        {
+            "folder": str(old),
+            "asset_dir": str(root),
+            "name": old.name,
+            "canonical": "Dune Prophecy (2024) {tvdb-1}",
+            "canonical_present": True,
+            "id": ("tvdb", 1),
+            "size": 1,
+        }
+    ]
+    res = m._execute_stale_mode(stale, "remove")
+    assert res["count"] == 1
+    assert not old.exists()
+
+
+def test_execute_stale_remove_keeps_only_copy(tmp_path):
+    """If the canonical folder is NOT on disk yet, removing the stale dup would
+    delete the only staged copy — keep it and report instead."""
+    m = _make()
+    root = tmp_path / "assets"
+    old = root / "Dune - Prophecy (2024) {tvdb-1}"
+    old.mkdir(parents=True)
+    (old / "poster.jpg").write_bytes(b"x")
+    stale = [
+        {
+            "folder": str(old),
+            "asset_dir": str(root),
+            "name": old.name,
+            "canonical": "Dune Prophecy (2024) {tvdb-1}",
+            "canonical_present": False,
+            "id": ("tvdb", 1),
+            "size": 1,
+        }
+    ]
+    res = m._execute_stale_mode(stale, "remove")
+    assert res["count"] == 0  # nothing removed
+    assert old.exists()  # only copy preserved
+
+
+def test_execute_stale_report_deletes_nothing(tmp_path):
+    m = _make()
+    root = tmp_path / "assets"
+    old = root / "Dune - Prophecy (2024) {tvdb-1}"
+    old.mkdir(parents=True)
+    (old / "poster.jpg").write_bytes(b"x")
+    stale = [
+        {
+            "folder": str(old),
+            "asset_dir": str(root),
+            "name": old.name,
+            "canonical": "Dune Prophecy (2024) {tvdb-1}",
+            "canonical_present": True,
+            "id": ("tvdb", 1),
+            "size": 1,
+        }
+    ]
+    res = m._execute_stale_mode(stale, "report")
+    assert res["count"] == 1
+    assert old.exists()
