@@ -779,6 +779,106 @@ class PosterRenamerr(ChubModule):
         self.logger.debug(f"{matches} total_matches")
         self.logger.debug(f"{non_matches} non_matches")
 
+    def _staged_dest(self, item: dict) -> Optional[str]:
+        """Absolute path rename_file() stages *item* to under the CURRENT
+        folder/title, computed with no side effects (no traversal guard, no
+        mkdir). Single source of truth for the staged path so
+        get_matched_assets() can detect when an already-staged asset has
+        drifted — e.g. its media folder was renamed and the poster is stranded
+        under the old name — and re-queue it. Returns None when there is no
+        source file to stage. Keep in sync with rename_file(), which reuses it.
+        """
+        file = item.get("original_file") or item.get("file")
+        if not file:
+            return None
+        asset_type = item.get("asset_type")
+        folder = item.get("folder", item.get("media_folder", "")) or ""
+        if asset_type == "collection" and not folder:
+            folder = illegal_chars_regex.sub("", item.get("title") or "").strip()
+        file_extension = os.path.splitext(file)[1]
+        season_number = item.get("season_number")
+        config = self.config
+        dest_dir = (
+            os.path.join(config.destination_dir, folder)
+            if config.asset_folders
+            else config.destination_dir
+        )
+        if asset_type == "show" and season_number is not None:
+            season_str = str(season_number).zfill(2)
+            new_file_name = (
+                f"Season{season_str}{file_extension}"
+                if config.asset_folders
+                else f"{folder}_Season{season_str}{file_extension}"
+            )
+        elif asset_type == "album":
+            parent = illegal_chars_regex.sub("", item.get("parent_title") or "").strip()
+            album = illegal_chars_regex.sub("", item.get("title") or "").strip()
+            album_base = f"{parent} - {album}".strip(" -") if parent else album
+            album_base = album_base or "album"
+            new_file_name = (
+                f"{album_base}{file_extension}"
+                if config.asset_folders
+                else f"{folder}_{album_base}{file_extension}"
+            )
+        else:
+            new_file_name = (
+                f"poster{file_extension}"
+                if config.asset_folders
+                else f"{folder}{file_extension}"
+            )
+        return os.path.join(dest_dir, new_file_name)
+
+    def _needs_staging(self, row: dict) -> bool:
+        """True when a matched asset must be (re)staged: nothing staged yet, the
+        staged file is missing, OR it sits at a stale path because the media
+        folder/title was renamed (so the poster is stranded under the old name).
+        The path check is what lets a folder rename self-heal on the next run
+        instead of being skipped forever because the old staged file still
+        exists.
+        """
+        current = row.get("renamed_file")
+        if not current or not os.path.exists(current):
+            return True
+        expected = self._staged_dest(row)
+        return bool(expected) and os.path.normpath(current) != os.path.normpath(
+            expected
+        )
+
+    def _remove_superseded(self, previous: Optional[str], new_file_path: str) -> None:
+        """Delete the file an asset was PREVIOUSLY staged to once it has moved to
+        a new path (e.g. the media folder was renamed). Without this a folder
+        rename leaves the old "<Old Folder>/poster.jpg" stranded forever: Kometa
+        ignores it (the folder name no longer matches the item) and the
+        orphan-asset pass spares it (its {tvdb-id}/{tmdb-id} still matches a live
+        title), so duplicate folders accumulate. Bounded to destination_dir;
+        never removes the destination root. Best-effort — failures only warn.
+        """
+        config = self.config
+        if not previous or previous == new_file_path:
+            return
+        if config.dry_run or config.run_border_replacerr:
+            return
+        try:
+            real_base = os.path.realpath(config.destination_dir)
+            real_prev = os.path.realpath(previous)
+            if not real_prev.startswith(real_base + os.sep):
+                return  # outside the staging tree — leave it alone
+            if not os.path.lexists(previous):
+                return
+            os.remove(previous)
+            self.logger.debug(f"[CLEANUP] removed superseded staged asset {previous}")
+            parent = os.path.dirname(previous)
+            if (
+                config.asset_folders
+                and os.path.realpath(parent) != real_base
+                and os.path.isdir(parent)
+                and not os.listdir(parent)
+            ):
+                os.rmdir(parent)
+                self.logger.debug(f"[CLEANUP] removed emptied stale folder {parent}")
+        except OSError as e:
+            self.logger.warning(f"Could not remove superseded asset {previous}: {e}")
+
     def rename_file(self, item: dict, db: ChubDB) -> Optional[dict]:
         asset_type = item.get("asset_type")
         file = item.get("original_file") or item.get("file")
@@ -790,12 +890,23 @@ class PosterRenamerr(ChubModule):
         if asset_type == "collection" and not folder:
             folder = illegal_chars_regex.sub("", item.get("title") or "").strip()
         file_name = os.path.basename(file)
-        file_extension = os.path.splitext(file)[1]
-        season_number = item.get("season_number")
         config = self.config
+        # Where this asset was staged on the previous run (may be a stale path
+        # under an old folder name); used to clean up after a folder rename.
+        previous_renamed = item.get("renamed_file")
+
+        # _staged_dest() is the single source of truth for the destination
+        # (shared with _needs_staging so a renamed media folder gets re-queued
+        # rather than skipped); rename_file only adds the side effects below —
+        # the path-traversal guard and directory creation. The per-type naming
+        # (poster / SeasonNN / "<Artist> - <Album>") lives in _staged_dest().
+        new_file_path = self._staged_dest(item)
+        if not new_file_path:
+            return None
+        new_file_name = os.path.basename(new_file_path)
+        dest_dir = os.path.dirname(new_file_path)
 
         if config.asset_folders:
-            dest_dir = os.path.join(config.destination_dir, folder)
             # Prevent path traversal
             real_dest = os.path.realpath(dest_dir)
             real_base = os.path.realpath(config.destination_dir)
@@ -814,39 +925,6 @@ class PosterRenamerr(ChubModule):
                 except OSError as e:
                     self.logger.error(f"Failed to create directory {dest_dir}: {e}")
                     return None
-        else:
-            dest_dir = config.destination_dir
-
-        if asset_type == "show" and season_number is not None:
-            season_str = str(season_number).zfill(2)
-            if config.asset_folders:
-                new_file_name = f"Season{season_str}{file_extension}"
-            else:
-                new_file_name = f"{folder}_Season{season_str}{file_extension}"
-            new_file_path = os.path.join(dest_dir, new_file_name)
-        elif asset_type == "album":
-            # Albums share their artist's folder, so a bare "poster" name would
-            # clobber the artist poster (and sibling albums). Stage each album
-            # under a sanitized "<Artist> - <Album>" filename — the artist is
-            # included so two artists' identically-titled albums staged from a
-            # shared flat folder don't collide and overwrite each other before
-            # upload. (Plex-direct upload reads this staged file by ratingKey;
-            # the on-disk Kometa music layout is out of scope for v1.)
-            parent = illegal_chars_regex.sub("", item.get("parent_title") or "").strip()
-            album = illegal_chars_regex.sub("", item.get("title") or "").strip()
-            album_base = f"{parent} - {album}".strip(" -") if parent else album
-            album_base = album_base or "album"
-            if config.asset_folders:
-                new_file_name = f"{album_base}{file_extension}"
-            else:
-                new_file_name = f"{folder}_{album_base}{file_extension}"
-            new_file_path = os.path.join(dest_dir, new_file_name)
-        else:
-            if config.asset_folders:
-                new_file_name = f"poster{file_extension}"
-            else:
-                new_file_name = f"{folder}{file_extension}"
-            new_file_path = os.path.join(dest_dir, new_file_name)
 
         item["renamed_file"] = new_file_path
 
@@ -929,6 +1007,11 @@ class PosterRenamerr(ChubModule):
                     )
                     return None
 
+        # Now that the asset is staged at its current path, drop any copy left
+        # behind at the previous path (folder-rename self-cleanup).
+        if file_ops_enabled and not config.dry_run:
+            self._remove_superseded(previous_renamed, new_file_path)
+
         if messages or discord_message:
             return {
                 "title": item.get("title"),
@@ -947,10 +1030,7 @@ class PosterRenamerr(ChubModule):
             if isinstance(inst, str):
                 instance_name = inst
                 for row in db.media.get_by_instance(instance_name):
-                    if row.get("matched") and (
-                        not row.get("renamed_file")
-                        or not os.path.exists(row.get("renamed_file"))
-                    ):
+                    if row.get("matched") and self._needs_staging(row):
                         matched_assets.append(row)
             elif isinstance(inst, dict):
                 for instance_name, params in inst.items():
@@ -960,10 +1040,7 @@ class PosterRenamerr(ChubModule):
                             for row in db.collection.get_by_instance_and_library(
                                 instance_name, library_name
                             ):
-                                if row.get("matched") and (
-                                    not row.get("renamed_file")
-                                    or not os.path.exists(row.get("renamed_file"))
-                                ):
+                                if row.get("matched") and self._needs_staging(row):
                                     matched_assets.append(row)
         return matched_assets
 
