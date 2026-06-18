@@ -91,6 +91,25 @@ const formatBytes = bytes => {
 // Module-level so reference is stable across renders (fixes exhaustive-deps warning).
 const TERMINAL_STATUSES = ['success', 'error', 'cancelled'];
 
+// ---------------------------------------------------------------------------
+// Stale-duplicate → bundle matching helpers
+// ---------------------------------------------------------------------------
+// A stale asset folder is identified by its {tvdb/tmdb} id; the scan resolves
+// that to a Plex rating_key + title/year via plex_media_cache. The cached
+// rating_key frequently drifts from the live bundle scan (a re-add/re-match
+// mints a new key), so we match by rating_key first, then fall back to the
+// Plex title+year, then the folder's own parsed title+year.
+const normTitle = t => (t || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+const titleYearKey = (title, year) => `${normTitle(title)}|${year ?? ''}`;
+// Parse "Show Name (2019) {tvdb-123}" → { title: 'Show Name', year: 2019 }.
+const parseFolderTitleYear = name => {
+    const noId = (name || '').replace(/\s*\{[^}]*\}\s*$/, '');
+    const ym = noId.match(/\((\d{4})\)\s*$/);
+    const year = ym ? Number(ym[1]) : null;
+    const title = noId.replace(/\s*\(\d{4}\)\s*$/, '').trim();
+    return { title, year };
+};
+
 // Matches Tailwind's `md` breakpoint (already used by the thumbnail grid below).
 // Below this we collapse the master-detail layout into a single column and
 // toggle between list/detail views based on selection.
@@ -413,9 +432,15 @@ const PosterCleanarrPage = () => {
     const [cleanBloat, setCleanBloat] = useState(true);
     const [cleanStale, setCleanStale] = useState(false);
     const [cleanOrphan, setCleanOrphan] = useState(false);
+    // Narrow the bloat pass to Kometa overlay images only (matched by EXIF tag),
+    // sparing user-uploaded customs. Only applies when bloat is running.
+    const [cleanOverlaysOnly, setCleanOverlaysOnly] = useState(false);
 
-    // Stale-duplicate + orphan data from the Kometa assets scan.
-    const [staleByRk, setStaleByRk] = useState(() => new Map());
+    // Stale-duplicate + orphan data from the Kometa assets scan. We keep the
+    // raw stale list (not a pre-built rating_key map) because the cached Plex
+    // rating_key drifts from the live bundle scan — matching is done below
+    // against the actual bundle set by rating_key, then Plex title+year.
+    const [staleItems, setStaleItems] = useState([]);
     const [orphans, setOrphans] = useState([]);
 
     useEffect(() => {
@@ -425,17 +450,12 @@ const PosterCleanarrPage = () => {
             .then(res => {
                 if (cancelled) return;
                 const data = res?.data || {};
-                const map = new Map();
-                for (const s of data.stale || []) {
-                    if (s.rating_key == null) continue;
-                    map.set(s.rating_key, (map.get(s.rating_key) || 0) + 1);
-                }
-                setStaleByRk(map);
+                setStaleItems(data.stale || []);
                 setOrphans(data.orphans || []);
             })
             .catch(() => {
                 if (!cancelled) {
-                    setStaleByRk(new Map());
+                    setStaleItems([]);
                     setOrphans([]);
                 }
             });
@@ -558,6 +578,33 @@ const PosterCleanarrPage = () => {
         for (const b of bundles) m.set(b.rating_key, buildBundleTree(b));
         return m;
     }, [bundles]);
+
+    // Attribute each stale folder to a bundle: rating_key first, then Plex
+    // title+year, then the folder's own parsed title+year. Folders that match
+    // no bundle (no poster row exists, or the title isn't in Plex) are surfaced
+    // separately so they aren't silently dropped.
+    const { staleByRk, unmatchedStale } = useMemo(() => {
+        const counts = new Map();
+        const unmatched = [];
+        if (!staleItems.length) return { staleByRk: counts, unmatchedStale: unmatched };
+        const byRk = new Map();
+        const byTY = new Map();
+        for (const b of bundles) {
+            byRk.set(String(b.rating_key), b);
+            byTY.set(titleYearKey(b.title, b.year), b);
+        }
+        for (const s of staleItems) {
+            let b = s.rating_key != null ? byRk.get(String(s.rating_key)) : null;
+            if (!b && s.plex_title) b = byTY.get(titleYearKey(s.plex_title, s.plex_year));
+            if (!b) {
+                const { title, year } = parseFolderTitleYear(s.canonical || s.name);
+                b = byTY.get(titleYearKey(title, year));
+            }
+            if (b) counts.set(b.rating_key, (counts.get(b.rating_key) || 0) + 1);
+            else unmatched.push(s);
+        }
+        return { staleByRk: counts, unmatchedStale: unmatched };
+    }, [staleItems, bundles]);
 
     // Persist view/tree state (tab, expansion, selection). `hasScanned` is
     // deliberately excluded — scans must be explicit (see state decl).
@@ -689,6 +736,9 @@ const PosterCleanarrPage = () => {
             body.orphan_assets_enabled = cleanOrphan;
             if (cleanStale) body.stale_duplicates_mode = mode;
             if (cleanOrphan) body.orphan_assets_mode = mode;
+            // Overlays-only narrows the bloat pass to Kometa overlay images;
+            // only meaningful when bloat is actually running.
+            body.overlays_only = cleanBloat && cleanOverlaysOnly;
             const res = await postersAPI.runPlexMetadataCleanup(body);
             const jobId = res?.data?.job_id;
             if (!jobId) {
@@ -708,7 +758,7 @@ const PosterCleanarrPage = () => {
         } finally {
             setIsEnqueuing(false);
         }
-    }, [mode, cleanBloat, cleanStale, cleanOrphan, selectedPaths, toast]);
+    }, [mode, cleanBloat, cleanStale, cleanOrphan, cleanOverlaysOnly, selectedPaths, toast]);
 
     const runCleanup = () => {
         // Report mode is the UI scan — populate tiles, don't enqueue a backend
@@ -838,6 +888,9 @@ const PosterCleanarrPage = () => {
         ? detail.variants.filter(v => (v.cls?.source || 'uploads') === 'plex').length
         : 0;
     const activeInDetail = detail ? detail.variants.filter(v => v.active).length : 0;
+    // Stale duplicates are a property of the whole media item, not a single
+    // node — surface the bundle's count on any node within it.
+    const staleInDetail = detail ? staleByRk.get(detail.bundle.rating_key) || 0 : 0;
     const reclaimableBytes = detail
         ? detail.variants
               .filter(v => !v.active && (v.cls?.source || 'uploads') !== 'plex')
@@ -876,6 +929,16 @@ const PosterCleanarrPage = () => {
                         {stats.bundle_count} items · {stats.variant_count} variants ·{' '}
                         <span className="text-error">{stats.bloat_count} bloat</span> ·{' '}
                         {formatBytes(stats.bloat_size)} reclaimable
+                        {staleItems.length > 0 && (
+                            <>
+                                {' '}
+                                ·{' '}
+                                <span style={{ color: '#f59e0b' }}>
+                                    {staleItems.length} stale duplicate
+                                    {staleItems.length === 1 ? '' : 's'}
+                                </span>
+                            </>
+                        )}
                     </div>
                     <div className="flex items-center gap-3 text-xs text-tertiary mt-1">
                         <span className="flex items-center gap-1">
@@ -884,6 +947,11 @@ const PosterCleanarrPage = () => {
                         <span className="flex items-center gap-1">
                             <span style={stalePill}>⧉</span> stale duplicate
                         </span>
+                        {unmatchedStale.length > 0 && (
+                            <span>
+                                {unmatchedStale.length} stale not matched to a Plex item (see below)
+                            </span>
+                        )}
                         {orphans.length > 0 && (
                             <span>orphaned assets: {orphans.length} (see below)</span>
                         )}
@@ -945,6 +1013,20 @@ const PosterCleanarrPage = () => {
                             onChange={e => setCleanOrphan(e.target.checked)}
                         />
                         Orphan
+                    </label>
+                    <label
+                        className={`flex items-center gap-1 ${
+                            cleanBloat ? 'cursor-pointer' : 'opacity-40 cursor-not-allowed'
+                        }`}
+                        title="Limit the bloat pass to Kometa overlay images (EXIF-tagged), sparing user-uploaded customs"
+                    >
+                        <input
+                            type="checkbox"
+                            checked={cleanOverlaysOnly}
+                            disabled={!cleanBloat}
+                            onChange={e => setCleanOverlaysOnly(e.target.checked)}
+                        />
+                        Overlays only
                     </label>
                 </div>
                 <div className="ml-auto flex items-center gap-2">
@@ -1161,6 +1243,16 @@ const PosterCleanarrPage = () => {
                                                     <span className="text-error">
                                                         {bloatInDetail} bloat here
                                                     </span>
+                                                    {staleInDetail > 0 && (
+                                                        <>
+                                                            {' '}
+                                                            ·{' '}
+                                                            <span style={{ color: '#f59e0b' }}>
+                                                                {staleInDetail} stale duplicate
+                                                                {staleInDetail === 1 ? '' : 's'}
+                                                            </span>
+                                                        </>
+                                                    )}
                                                     {selected?.kind === 'show' &&
                                                         subtreeBloat > bloatInDetail && (
                                                             <>
@@ -1263,6 +1355,37 @@ const PosterCleanarrPage = () => {
                             )}
                         </div>
                     </section>
+
+                    {unmatchedStale.length > 0 && (
+                        <section className="rounded-lg border border-border bg-surface mt-4 p-4">
+                            <div className="flex items-center gap-2 mb-3">
+                                <h2 className="text-sm font-semibold text-primary">
+                                    Stale duplicates without a Plex poster row
+                                </h2>
+                                <span style={typeBadge}>{unmatchedStale.length}</span>
+                                <span className="text-tertiary text-xs">
+                                    Renamed asset folders whose title isn&apos;t in the Plex bundle
+                                    scan — still cleaned by the Stale pass
+                                </span>
+                            </div>
+                            <div className="overflow-y-auto" style={{ maxHeight: '320px' }}>
+                                {unmatchedStale.map(s => (
+                                    <div
+                                        key={s.folder || s.name}
+                                        className="flex items-center justify-between gap-2 py-1.5 border-b border-border text-sm"
+                                    >
+                                        <span className="truncate text-secondary">
+                                            <span style={stalePill}>⧉</span> {s.name}
+                                            <span className="text-tertiary"> → {s.canonical}</span>
+                                        </span>
+                                        <span className="text-tertiary text-xs whitespace-nowrap">
+                                            {formatBytes(s.size)}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        </section>
+                    )}
 
                     {orphans.length > 0 && (
                         <section className="rounded-lg border border-border bg-surface mt-4 p-4">
