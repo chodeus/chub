@@ -3028,12 +3028,23 @@ const CropFramer = ({
             return { x: c.x + (c.w - w) / 2, y: c.y, w, h: c.h };
         }
         if (!coverRect) return null;
-        const shift = clamp01(vPos) * 0.3 * coverRect.h;
+        // Zoom scales the sampled region by 1/z about the cover crop's centre,
+        // mirroring the backend's cover-fill zoom: >1 punches in (smaller
+        // region), <1 samples beyond the cover crop so more of the source shows,
+        // the freed bands falling into the CL2K gradient/border as black.
+        const z = Math.max(0.5, Math.min(zoom || 1, 3));
+        const w = coverRect.w / z;
+        const h0 = coverRect.h / z;
+        const x = coverRect.left + (coverRect.w - w) / 2;
+        const y0 = coverRect.top + (coverRect.h - h0) / 2;
+        // vPos then pans the framing UP at the same size: shift down through the
+        // source, the floor fading to black below (FitMock's bottom fill).
+        const shift = clamp01(vPos) * 0.3 * h0;
         return {
-            x: coverRect.left,
-            y: Math.min(coverRect.top + shift, coverRect.top + coverRect.h - 0.05),
-            w: coverRect.w,
-            h: Math.max(0.05, coverRect.h - shift),
+            x,
+            y: Math.min(y0 + shift, y0 + h0 - 0.05),
+            w,
+            h: Math.max(0.05, h0 - shift),
         };
     }, [isBox, crop, zoom, coverRect, vPos]);
 
