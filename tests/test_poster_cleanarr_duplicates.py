@@ -70,3 +70,54 @@ def test_canonical_folder_map_respects_instances(db):
     cmap = m._build_canonical_folder_map(db, ["sonarr"])
     assert ("tvdb", 1) in cmap
     assert ("tvdb", 2) not in cmap
+
+
+def test_scan_stale_flags_wrong_named_folder(tmp_path):
+    m = _make()
+    root = tmp_path / "assets"
+    old = root / "Dune - Prophecy (2024) {tvdb-367118}"
+    old.mkdir(parents=True)
+    (old / "poster.jpg").write_bytes(b"x")
+    (old / "Season01.jpg").write_bytes(b"yy")
+    cmap = {("tvdb", 367118): "Dune Prophecy (2024) {tvdb-367118}"}
+    stale = m._scan_stale_duplicates([str(root)], cmap)
+    assert len(stale) == 1
+    e = stale[0]
+    assert e["folder"] == str(old)
+    assert e["name"] == "Dune - Prophecy (2024) {tvdb-367118}"
+    assert e["canonical"] == "Dune Prophecy (2024) {tvdb-367118}"
+    assert e["canonical_present"] is False
+    assert e["size"] == 3
+    assert e["id"] == ("tvdb", 367118)
+
+
+def test_scan_stale_skips_canonical_folder(tmp_path):
+    m = _make()
+    root = tmp_path / "assets"
+    good = root / "Dune Prophecy (2024) {tvdb-367118}"
+    good.mkdir(parents=True)
+    (good / "poster.jpg").write_bytes(b"x")
+    cmap = {("tvdb", 367118): "Dune Prophecy (2024) {tvdb-367118}"}
+    assert m._scan_stale_duplicates([str(root)], cmap) == []
+
+
+def test_scan_stale_ignores_unknown_id(tmp_path):
+    m = _make()
+    root = tmp_path / "assets"
+    folder = root / "Some Show (2020) {tvdb-999}"
+    folder.mkdir(parents=True)
+    (folder / "poster.jpg").write_bytes(b"x")
+    assert m._scan_stale_duplicates([str(root)], {("tvdb", 1): "X"}) == []
+
+
+def test_scan_stale_marks_canonical_present(tmp_path):
+    m = _make()
+    root = tmp_path / "assets"
+    (root / "Dune Prophecy (2024) {tvdb-367118}").mkdir(parents=True)
+    old = root / "Dune - Prophecy (2024) {tvdb-367118}"
+    old.mkdir(parents=True)
+    (old / "poster.jpg").write_bytes(b"x")
+    cmap = {("tvdb", 367118): "Dune Prophecy (2024) {tvdb-367118}"}
+    stale = m._scan_stale_duplicates([str(root)], cmap)
+    assert len(stale) == 1
+    assert stale[0]["canonical_present"] is True

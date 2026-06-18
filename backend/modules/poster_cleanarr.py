@@ -920,6 +920,64 @@ class PosterCleanarr(ChubModule):
                     continue
         return out
 
+    def _scan_stale_duplicates(
+        self,
+        asset_dirs: List[str],
+        canonical_by_id: Dict[Tuple[str, int], str],
+    ) -> List[Dict[str, Any]]:
+        """Top-level asset folders whose {tvdb/tmdb} id matches a live media
+        item but whose name != that item's canonical folder. Spare-only on the
+        id: an id with no live match is left to the orphan pass, never flagged
+        here. `canonical_present` records whether the correctly-named folder is
+        already on disk — removal must keep the only copy (see
+        _execute_stale_mode)."""
+        out: List[Dict[str, Any]] = []
+        for asset_dir in asset_dirs:
+            if not os.path.isdir(asset_dir):
+                continue
+            try:
+                entries = sorted(os.listdir(asset_dir))
+            except OSError:
+                continue
+            for name in entries:
+                full = os.path.join(asset_dir, name)
+                if not os.path.isdir(full):
+                    continue
+                canonical = None
+                ident = None
+                mt = tmdb_id_regex.search(name)
+                mv = tvdb_id_regex.search(name)
+                if mv and ("tvdb", int(mv.group(1))) in canonical_by_id:
+                    ident = ("tvdb", int(mv.group(1)))
+                elif mt and ("tmdb", int(mt.group(1))) in canonical_by_id:
+                    ident = ("tmdb", int(mt.group(1)))
+                if ident is None:
+                    continue  # no live id match -> orphan-pass territory, not stale
+                canonical = canonical_by_id[ident]
+                if name == canonical:
+                    continue  # this IS the canonical folder
+                size = 0
+                for r, _d, files in os.walk(full):
+                    for f in files:
+                        try:
+                            size += os.path.getsize(os.path.join(r, f))
+                        except OSError:
+                            pass
+                out.append(
+                    {
+                        "folder": full,
+                        "asset_dir": asset_dir,
+                        "name": name,
+                        "canonical": canonical,
+                        "canonical_present": os.path.isdir(
+                            os.path.join(asset_dir, canonical)
+                        ),
+                        "id": ident,
+                        "size": size,
+                    }
+                )
+        return out
+
     def _scan_orphan_assets(
         self,
         asset_dirs: List[str],
