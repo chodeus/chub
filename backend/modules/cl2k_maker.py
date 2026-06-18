@@ -1129,11 +1129,18 @@ def retext_poster(
         img = text_removal.remove_text(
             img, config=cfg, mask_bytes=mask_bytes, prompt=prompt, logger=logger
         )
-    if label_text:
+    # An explicit label_text (a banner override or a free-text title) wins; otherwise
+    # a season draws its SEASON-N band, derived here so season_band_text is the ONE
+    # source of truth for the on-poster label (the full render path uses it too) —
+    # no caller, frontend included, re-spells the number.
+    label = label_text
+    if not label and kind == "season" and season_number is not None:
+        label = season_band_text(season_number)
+    if label:
         center_y = None
         if text_y_frac is not None:
             center_y = int(max(0.0, min(1.0, text_y_frac)) * geo.CANVAS_H)
-        img = overlay_label(img, label_text, center_y=center_y)
+        img = overlay_label(img, label, center_y=center_y)
     if add_border:
         img = apply_border(img)
     if not save:
@@ -1259,6 +1266,7 @@ def psd_for_item(
     backdrop_path: Optional[str] = None,
     logo_path: Optional[str] = None,
     season_text: str = "",
+    season_number: Optional[int] = None,
     logo_scale: float = 1.0,
     logo_y_offset: int = 0,
     focus_x: float = 0.5,
@@ -1274,10 +1282,14 @@ def psd_for_item(
 
     The backdrop is framed via the renderer's own fit/cover/v_pos machinery so
     the PSD's POSTER layer is pixel-identical to what /preview and /generate
-    show for the same framing knobs.
+    show for the same framing knobs. A season's SEASON-N band is derived from
+    ``season_number`` (via season_band_text — same rule as the render path) so the
+    PSD carries the label too, unless an explicit ``season_text`` is given.
     """
     from backend.util.cl2k.psd_export import export_psd
 
+    if not season_text and kind == "season" and season_number is not None:
+        season_text = season_band_text(season_number)
     cfg = full_config.cl2k_maker
     lang = cfg.language or "en"
     tmdb = TMDBClient(full_config.tmdb, db, logger)
