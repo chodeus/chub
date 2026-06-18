@@ -279,7 +279,6 @@ def test_run_invokes_orphan_and_stale_passes(monkeypatch, tmp_path):
     orphan and stale passes when their config flags are set — the path a
     SCHEDULED job takes, reading saved config. Proves all three cleaners are
     independently driven by config, so a schedule can run them in any mode."""
-    import backend.modules.poster_cleanarr as mod
 
     class _FakeDB:
         def __enter__(self):
@@ -288,7 +287,9 @@ def test_run_invokes_orphan_and_stale_passes(monkeypatch, tmp_path):
         def __exit__(self, *a):
             return False
 
-    monkeypatch.setattr(mod, "ChubDB", lambda *a, **k: _FakeDB())
+    monkeypatch.setattr(
+        "backend.modules.poster_cleanarr.ChubDB", lambda *a, **k: _FakeDB()
+    )
 
     def _sched_logger():
         return SimpleNamespace(
@@ -300,7 +301,7 @@ def test_run_invokes_orphan_and_stale_passes(monkeypatch, tmp_path):
             log_outro=lambda *a, **k: None,
         )
 
-    m = object.__new__(mod.PosterCleanarr)
+    m = object.__new__(PosterCleanarr)
     m.logger = _sched_logger()
     m.mode = "nothing"
     m.plex_path = ""

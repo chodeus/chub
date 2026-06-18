@@ -978,7 +978,7 @@ class PosterCleanarr(ChubModule):
                         try:
                             size += os.path.getsize(os.path.join(r, f))
                         except OSError:
-                            pass
+                            pass  # file vanished mid-walk — don't count it
                 out.append(
                     {
                         "folder": full,
