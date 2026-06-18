@@ -223,6 +223,18 @@ class PosterCleanarr(ChubModule):
                         ),
                     )
 
+            # === Stale-duplicate asset cleanup ===
+            stale_stats: Dict[str, Any] = {"count": 0, "total_size": 0}
+            if getattr(self.config, "stale_duplicates_enabled", False):
+                with ChubDB(logger=self.logger) as db:
+                    stale_stats = self._run_stale_pass(
+                        db=db,
+                        instances=self._resolve_orphan_instances(self.config),
+                        asset_dirs=list(getattr(self.config, "asset_dirs", []) or []),
+                        mode=getattr(self.config, "stale_duplicates_mode", "report"),
+                        logger=self.logger,
+                    )
+
             # === Clean empty directories ===
             empty_dirs = 0
             if self.mode not in ("report", "nothing") and metadata_dir:
@@ -1030,6 +1042,43 @@ class PosterCleanarr(ChubModule):
         )
         return {"count": count, "total_size": total_size, "mode": mode}
 
+    def _run_stale_pass(
+        self,
+        db: ChubDB,
+        instances: List[str],
+        asset_dirs: List[str],
+        mode: str,
+        logger: Logger,
+    ) -> Dict[str, Any]:
+        """Detect + act on stale-duplicate asset folders. Mirrors
+        _run_orphan_pass's guards: invalid mode / empty asset_dirs / no
+        instances all abort to a no-op."""
+        if mode not in VALID_STALE_MODES:
+            logger.error(
+                f"Invalid stale_duplicates_mode '{mode}'. "
+                f"Must be one of: {', '.join(sorted(VALID_STALE_MODES))}"
+            )
+            return {"count": 0, "total_size": 0, "mode": mode}
+        valid_dirs = [d for d in asset_dirs if os.path.isdir(d)]
+        if not valid_dirs:
+            return {"count": 0, "total_size": 0, "mode": mode}
+        if not instances:
+            logger.error("Stale-duplicate cleanup enabled but no instances selected.")
+            return {"count": 0, "total_size": 0, "mode": mode}
+        canonical = self._build_canonical_folder_map(db, instances)
+        if not canonical:
+            logger.warning(
+                "No canonical folders for the configured instances — run "
+                "poster_renamerr to populate media_cache before stale cleanup."
+            )
+            return {"count": 0, "total_size": 0, "mode": mode}
+        dupes = self._scan_stale_duplicates(valid_dirs, canonical)
+        total = sum(d["size"] for d in dupes)
+        logger.info(
+            f"Found {len(dupes)} stale-duplicate folder(s) ({format_bytes(total)})."
+        )
+        return self._execute_stale_mode(dupes, mode)
+
     def _scan_orphan_assets(
         self,
         asset_dirs: List[str],
@@ -1352,4 +1401,20 @@ def run_orphan_assets_pass(
         include_collections=include_collections,
         logger=logger,
         ignore_titles=ignore_titles,
+    )
+
+
+def run_stale_duplicates_pass(
+    db: ChubDB,
+    instances: List[str],
+    asset_dirs: List[str],
+    mode: str,
+    logger: Logger,
+) -> Dict[str, Any]:
+    """Shared entry point so poster_renamerr (or any future caller) can run the
+    stale-duplicate pass without a full PosterCleanarr instance."""
+    cleanarr = PosterCleanarr.__new__(PosterCleanarr)
+    cleanarr.logger = logger
+    return cleanarr._run_stale_pass(
+        db=db, instances=instances, asset_dirs=asset_dirs, mode=mode, logger=logger
     )
