@@ -105,6 +105,42 @@ def _backfill_title_year(
     return title, year
 
 
+# CL2K season bands spell the number out ("SEASON ONE", not "SEASON 1"), matching
+# the template convention. Year-numbered seasons stay as digits, though — Formula 1
+# "Season 2026" reads "SEASON 2026", not "SEASON TWO THOUSAND…". A real season count
+# never reaches four digits, so anything >= 1000 is treated as a year and kept as
+# digits (which also serves as the always-produce-a-label fallback).
+_ONES = (
+    "zero one two three four five six seven eight nine ten eleven twelve thirteen "
+    "fourteen fifteen sixteen seventeen eighteen nineteen"
+).split()
+_TENS = (
+    "",
+    "",
+    "twenty",
+    "thirty",
+    "forty",
+    "fifty",
+    "sixty",
+    "seventy",
+    "eighty",
+    "ninety",
+)
+
+
+def _number_to_words(n: int) -> str:
+    """Cardinal number as English words: 1 -> 'one', 21 -> 'twenty-one'."""
+    if not isinstance(n, int) or n < 0 or n >= 1000:
+        return str(n)
+    if n < 20:
+        return _ONES[n]
+    if n < 100:
+        tens, ones = divmod(n, 10)
+        return _TENS[tens] + (f"-{_ONES[ones]}" if ones else "")
+    hundreds, rem = divmod(n, 100)
+    return f"{_ONES[hundreds]} hundred" + (f" {_number_to_words(rem)}" if rem else "")
+
+
 def _resolve_and_render(
     db: ChubDB,
     full_config,
@@ -261,8 +297,13 @@ def _resolve_and_render(
 
     if kind == "season" and not season_text and season_number is not None:
         # Season 0 is the Specials season — label it "Specials" (matching the
-        # `- Specials` filename in naming.py), not "Season 0".
-        season_text = "Specials" if season_number == 0 else f"Season {season_number}"
+        # `- Specials` filename in naming.py), not "Season 0". Other seasons spell
+        # the number out per the CL2K template ("SEASON ONE", not "SEASON 1").
+        season_text = (
+            "Specials"
+            if season_number == 0
+            else f"Season {_number_to_words(season_number)}"
+        )
 
     blob = render_cl2k(
         backdrop_bytes=backdrop_bytes,
