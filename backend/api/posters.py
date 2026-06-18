@@ -40,6 +40,35 @@ def get_cleanarr_logger(request: Request) -> Any:
     return get_module_logger(request, "poster_cleanarr")
 
 
+def _stale_rating_key_map(db: "ChubDB", ids: list) -> dict:
+    """Map ('tvdb'|'tmdb', id) -> Plex rating_key (int) via
+    media_cache.plex_mapping_id -> plex_media_cache.plex_id. Missing mappings
+    are simply absent from the result."""
+    out: dict = {}
+    if not ids:
+        return out
+    rows = db.media.execute_query(
+        "SELECT m.tvdb_id AS tvdb_id, m.tmdb_id AS tmdb_id, p.plex_id AS plex_id "
+        "FROM media_cache m JOIN plex_media_cache p ON m.plex_mapping_id = p.id "
+        "WHERE m.plex_mapping_id IS NOT NULL",
+        fetch_all=True,
+    )
+    wanted = set(ids)
+    for r in rows or []:
+        try:
+            pid = int(r["plex_id"])
+        except (ValueError, TypeError, KeyError):
+            continue
+        for kind, raw in (("tvdb", r.get("tvdb_id")), ("tmdb", r.get("tmdb_id"))):
+            try:
+                key = (kind, int(raw)) if raw not in (None, "", 0) else None
+            except (ValueError, TypeError):
+                key = None
+            if key in wanted:
+                out[key] = pid
+    return out
+
+
 # --- New endpoints: search, stats, browse, collections ---
 
 
@@ -379,7 +408,6 @@ async def search_gdrive_sources(
             code="GDRIVE_SEARCH_ERROR",
             status_code=500,
         )
-
 
 
 @router.post(
@@ -1422,9 +1450,7 @@ async def ignore_artwork(
             {"id": media_id, "image_type": image_type, "ignored": bool(ignored)},
         )
     except Exception as e:
-        logger.error(
-            f"Error updating artwork ignore for {media_id}/{image_type}: {e}"
-        )
+        logger.error(f"Error updating artwork ignore for {media_id}/{image_type}: {e}")
         return error(
             f"Error updating artwork ignore flag: {str(e)}",
             code="ARTWORK_IGNORE_ERROR",
@@ -1478,7 +1504,9 @@ async def get_artwork_candidates(
         except (ValueError, TypeError):
             alts = []
         search_titles = [row.get("title")] + [a for a in alts if a]
-        row_norm = row.get("normalized_title") or normalize_titles(row.get("title") or "")
+        row_norm = row.get("normalized_title") or normalize_titles(
+            row.get("title") or ""
+        )
 
         seen = set()
         gathered = []
@@ -1722,7 +1750,9 @@ async def approve_match(
 ) -> JSONResponse:
     """Mark a reviewed row as confidently matched."""
     try:
-        logger.debug(f"Serving POST /api/posters/match/{media_id}/approve (kind={kind})")
+        logger.debug(
+            f"Serving POST /api/posters/match/{media_id}/approve (kind={kind})"
+        )
         table = "collections_cache" if kind == "collection" else "media_cache"
         iface = db.collection if kind == "collection" else db.media
         iface.execute_query(
@@ -1816,7 +1846,9 @@ async def get_match_candidates(
         except (ValueError, TypeError):
             alts = []
         search_titles = [row.get("title")] + [a for a in alts if a]
-        row_norm = row.get("normalized_title") or normalize_titles(row.get("title") or "")
+        row_norm = row.get("normalized_title") or normalize_titles(
+            row.get("title") or ""
+        )
 
         seen = set()
         gathered = []
@@ -2955,6 +2987,45 @@ async def list_plex_metadata_bloat(
         )
 
 
+def _build_cleanup_overrides(body: dict) -> dict:
+    """Assemble the poster_cleanarr job overrides from a cleanup request body.
+    Raises ValueError on an invalid mode (the route maps it to a 400). Bloat
+    accepts "nothing" so the UI can run stale/orphan cleanup with bloat off."""
+    mode = (body.get("mode") or "report").lower()
+    if mode not in ("report", "move", "remove", "nothing"):
+        raise ValueError(f"Invalid mode '{mode}'")
+    overrides: dict = {"mode": mode}
+
+    target_paths = body.get("target_paths")
+    if isinstance(target_paths, list) and target_paths:
+        overrides["target_paths"] = [str(p) for p in target_paths]
+
+    if "orphan_assets_enabled" in body:
+        overrides["orphan_assets_enabled"] = bool(body.get("orphan_assets_enabled"))
+    orphan_mode = body.get("orphan_assets_mode")
+    if isinstance(orphan_mode, str):
+        orphan_mode = orphan_mode.lower()
+        if orphan_mode not in ("report", "move", "remove"):
+            raise ValueError(f"Invalid orphan_assets_mode '{orphan_mode}'")
+        overrides["orphan_assets_mode"] = orphan_mode
+
+    if "stale_duplicates_enabled" in body:
+        overrides["stale_duplicates_enabled"] = bool(
+            body.get("stale_duplicates_enabled")
+        )
+    stale_mode = body.get("stale_duplicates_mode")
+    if isinstance(stale_mode, str):
+        stale_mode = stale_mode.lower()
+        if stale_mode not in ("report", "move", "remove"):
+            raise ValueError(f"Invalid stale_duplicates_mode '{stale_mode}'")
+        overrides["stale_duplicates_mode"] = stale_mode
+
+    asset_dirs = body.get("asset_dirs")
+    if isinstance(asset_dirs, list):
+        overrides["asset_dirs"] = [str(p) for p in asset_dirs]
+    return overrides
+
+
 @router.post("/plex-metadata/cleanup")
 async def run_plex_metadata_cleanup(
     request: Request,
@@ -2977,30 +3048,11 @@ async def run_plex_metadata_cleanup(
             body = await request.json()
         except Exception:
             body = {}
-        mode = (body.get("mode") or "report").lower()
-        if mode not in ("report", "move", "remove"):
-            return error(f"Invalid mode '{mode}'", code="INVALID_MODE", status_code=400)
-        overrides: dict = {"mode": mode}
-
-        target_paths = body.get("target_paths")
-        if isinstance(target_paths, list) and target_paths:
-            overrides["target_paths"] = [str(p) for p in target_paths]
-
-        if "orphan_assets_enabled" in body:
-            overrides["orphan_assets_enabled"] = bool(body.get("orphan_assets_enabled"))
-        orphan_mode = body.get("orphan_assets_mode")
-        if isinstance(orphan_mode, str):
-            orphan_mode = orphan_mode.lower()
-            if orphan_mode not in ("report", "move", "remove"):
-                return error(
-                    f"Invalid orphan_assets_mode '{orphan_mode}'",
-                    code="INVALID_MODE",
-                    status_code=400,
-                )
-            overrides["orphan_assets_mode"] = orphan_mode
-        asset_dirs = body.get("asset_dirs")
-        if isinstance(asset_dirs, list):
-            overrides["asset_dirs"] = [str(p) for p in asset_dirs]
+        try:
+            overrides = _build_cleanup_overrides(body)
+        except ValueError as ve:
+            return error(str(ve), code="INVALID_MODE", status_code=400)
+        mode = overrides["mode"]
 
         payload = {
             "module_name": "poster_cleanarr",
@@ -3178,6 +3230,70 @@ async def get_plex_variant_thumbnail(
     if not real.startswith(metadata_dir + os.sep) or not os.path.isfile(real):
         return error("Invalid path", code="INVALID_PATH", status_code=400)
     return FileResponse(real, media_type="image/jpeg")
+
+
+@router.get("/plex-metadata/kometa-assets-scan")
+async def scan_kometa_assets(
+    db: ChubDB = Depends(get_database),
+    logger: Any = Depends(get_cleanarr_logger),
+):
+    """Walk the Kometa assets dir once; return stale-duplicate folders (keyed by
+    resolved Plex rating_key) and orphan assets. Read-only — never deletes.
+    Detection reuses poster_cleanarr so this matches the cleanup job exactly."""
+    try:
+        from backend.modules.poster_cleanarr import PosterCleanarr
+        from backend.util.config import load_config
+
+        cfg = load_config().poster_cleanarr
+        instances = PosterCleanarr._resolve_orphan_instances(cfg)
+        asset_dirs = list(getattr(cfg, "asset_dirs", []) or [])
+        ca = PosterCleanarr.__new__(PosterCleanarr)
+        ca.logger = logger
+
+        canonical = ca._build_canonical_folder_map(db, instances)
+        stale_raw = ca._scan_stale_duplicates(asset_dirs, canonical)
+        rk = _stale_rating_key_map(db, [d["id"] for d in stale_raw])
+        stale = [
+            {
+                "rating_key": rk.get(d["id"]),
+                "name": d["name"],
+                "canonical": d["canonical"],
+                "canonical_present": d["canonical_present"],
+                "size": d["size"],
+                "folder": d["folder"],
+            }
+            for d in stale_raw
+        ]
+
+        titles = ca._build_library_title_set(db, instances, True)
+        tmdb_ids, tvdb_ids = ca._build_library_id_sets(db, instances)
+        orphan_raw = (
+            ca._scan_orphan_assets(asset_dirs, titles, tmdb_ids, tvdb_ids, set())
+            if titles
+            else []
+        )
+        orphans = [
+            {"path": o["path"], "parsed": o.get("parsed"), "size": o["size"]}
+            for o in orphan_raw
+        ]
+        return ok(
+            "Kometa asset scan complete",
+            {
+                "stale": stale,
+                "orphans": orphans,
+                "stats": {
+                    "stale_count": len(stale),
+                    "orphan_count": len(orphans),
+                },
+            },
+        )
+    except Exception as e:
+        logger.error(f"Kometa asset scan failed: {e}")
+        return error(
+            f"Kometa asset scan failed: {str(e)}",
+            code="KOMETA_SCAN_ERROR",
+            status_code=500,
+        )
 
 
 # --- Parameterized poster ID endpoints ---
