@@ -195,3 +195,32 @@ def test_execute_stale_report_deletes_nothing(tmp_path):
     res = m._execute_stale_mode(stale, "report")
     assert res["count"] == 1
     assert old.exists()
+
+
+def test_run_stale_pass_aborts_when_no_instances(db, tmp_path):
+    m = _make()
+    res = m._run_stale_pass(
+        db=db,
+        instances=[],
+        asset_dirs=[str(tmp_path)],
+        mode="report",
+        logger=_logger(),
+    )
+    assert res["count"] == 0
+
+
+def test_run_stale_pass_reports(db, tmp_path):
+    m = _make()
+    _seed(db, "sonarr", "Dune Prophecy (2024) {tvdb-367118}", tvdb=367118)
+    root = tmp_path / "assets"
+    old = root / "Dune - Prophecy (2024) {tvdb-367118}"
+    old.mkdir(parents=True)
+    (old / "poster.jpg").write_bytes(b"x")
+    res = m._run_stale_pass(
+        db=db,
+        instances=["sonarr"],
+        asset_dirs=[str(root)],
+        mode="report",
+        logger=_logger(),
+    )
+    assert res["count"] == 1
