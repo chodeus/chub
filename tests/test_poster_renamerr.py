@@ -852,3 +852,122 @@ def test_classify_asset_record_honors_music_kind():
     m = make_module()
     assert m._classify_asset_record({"music_kind": "album"}, set()) == "album"
     assert m._classify_asset_record({"music_kind": "artist"}, set()) == "artist"
+
+
+# --- _staged_dest / _needs_staging (media-folder rename drift) ---
+
+
+def _staging_module(destination_dir="/kometa/assets", asset_folders=True):
+    m = make_module()
+    m.config = SimpleNamespace(
+        destination_dir=destination_dir,
+        asset_folders=asset_folders,
+        dry_run=False,
+        run_border_replacerr=False,
+    )
+    return m
+
+
+def test_staged_dest_uses_current_folder():
+    m = _staging_module()
+    item = {
+        "asset_type": "show",
+        "folder": "Anthony Bourdain Parts Unknown (2013) {tvdb-264108}",
+        "original_file": "/src/Anthony Bourdain Parts Unknown.jpg",
+        "season_number": None,
+    }
+    assert m._staged_dest(item) == (
+        "/kometa/assets/Anthony Bourdain Parts Unknown (2013) {tvdb-264108}/poster.jpg"
+    )
+
+
+def test_needs_staging_when_folder_renamed(tmp_path):
+    """A matched asset staged under the OLD folder name (file still on disk)
+    must be re-queued once the media folder is renamed — not skipped just
+    because the stale file exists. This is the Bourdain/Dune-class bug."""
+    m = _staging_module(destination_dir=str(tmp_path))
+    old_dir = tmp_path / "Dune - Prophecy (2024) {tvdb-367118}"
+    old_dir.mkdir()
+    staged = old_dir / "poster.jpg"
+    staged.write_bytes(b"x")
+    row = {
+        "asset_type": "show",
+        "matched": 1,
+        "folder": "Dune Prophecy (2024) {tvdb-367118}",  # corrected media folder
+        "original_file": "/src/Dune Prophecy.jpg",
+        "season_number": None,
+        "renamed_file": str(staged),  # still points at the old hyphen folder
+    }
+    assert m._needs_staging(row) is True
+
+
+def test_needs_staging_false_when_path_current(tmp_path):
+    m = _staging_module(destination_dir=str(tmp_path))
+    folder = "Dune Prophecy (2024) {tvdb-367118}"
+    d = tmp_path / folder
+    d.mkdir()
+    staged = d / "poster.jpg"
+    staged.write_bytes(b"x")
+    row = {
+        "asset_type": "show",
+        "matched": 1,
+        "folder": folder,
+        "original_file": "/src/Dune Prophecy.jpg",
+        "season_number": None,
+        "renamed_file": str(staged),
+    }
+    assert m._needs_staging(row) is False
+
+
+def test_needs_staging_when_nothing_staged():
+    m = _staging_module()
+    row = {
+        "asset_type": "movie",
+        "matched": 1,
+        "folder": "Movie (2020)",
+        "original_file": "/src/Movie.jpg",
+        "season_number": None,
+        "renamed_file": None,
+    }
+    assert m._needs_staging(row) is True
+
+
+def test_remove_superseded_drops_old_folder(tmp_path):
+    """Re-staging after a folder rename removes the stale file and its now-empty
+    old folder — Kometa ignores it and the orphan pass spares its id, so it
+    would otherwise linger forever."""
+    m = _staging_module(destination_dir=str(tmp_path))
+    old_dir = tmp_path / "Dune - Prophecy (2024) {tvdb-367118}"
+    old_dir.mkdir()
+    old = old_dir / "poster.jpg"
+    old.write_bytes(b"x")
+    new = tmp_path / "Dune Prophecy (2024) {tvdb-367118}" / "poster.jpg"
+    m._remove_superseded(str(old), str(new))
+    assert not old.exists()
+    assert not old_dir.exists()  # emptied folder is removed too
+
+
+def test_remove_superseded_keeps_shared_folder_until_empty(tmp_path):
+    """A season poster left in the old folder keeps the folder until the last
+    file is gone."""
+    m = _staging_module(destination_dir=str(tmp_path))
+    old_dir = tmp_path / "Show - X (2024) {tvdb-1}"
+    old_dir.mkdir()
+    (old_dir / "poster.jpg").write_bytes(b"x")
+    (old_dir / "Season01.jpg").write_bytes(b"x")
+    m._remove_superseded(
+        str(old_dir / "poster.jpg"),
+        str(tmp_path / "Show X (2024) {tvdb-1}" / "poster.jpg"),
+    )
+    assert old_dir.exists()  # Season01.jpg still there
+    assert (old_dir / "Season01.jpg").exists()
+
+
+def test_remove_superseded_ignores_paths_outside_destination(tmp_path):
+    """Never delete outside the staging tree, even if asked."""
+    m = _staging_module(destination_dir=str(tmp_path / "assets"))
+    (tmp_path / "assets").mkdir()
+    outside = tmp_path / "elsewhere.jpg"
+    outside.write_bytes(b"x")
+    m._remove_superseded(str(outside), str(tmp_path / "assets" / "poster.jpg"))
+    assert outside.exists()  # untouched
