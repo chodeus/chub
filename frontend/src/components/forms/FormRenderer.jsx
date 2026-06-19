@@ -173,7 +173,7 @@ export const FormRenderer = React.memo(
 
         if (!schema) {
             return (
-                <div className="p-6 text-center bg-surface border border-error rounded-lg text-error-text">
+                <div className="p-6 text-center bg-surface border border-error rounded-lg text-error">
                     <h3>Form Configuration Error</h3>
                     <p>The form schema is invalid or missing. Please check the configuration.</p>
                 </div>

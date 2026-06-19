@@ -24,7 +24,7 @@ export const ActionButtons = ({ logText }) => {
             <button
                 type="button"
                 onClick={onDownload}
-                className="flex items-center justify-center p-2 rounded-lg border border-divider bg-input text-primary hover:bg-surface-alt transition-colors min-h-11 min-w-11"
+                className="flex items-center justify-center p-2 rounded-lg border border-border bg-input text-primary hover:bg-surface-alt transition-colors min-h-11 min-w-11"
                 title="Download log"
                 aria-label="Download log"
             >
@@ -36,7 +36,7 @@ export const ActionButtons = ({ logText }) => {
                 type="button"
                 onClick={uploadState.handleUpload}
                 disabled={uploadState.uploading}
-                className="flex items-center justify-center p-2 rounded-lg border border-divider bg-input text-primary hover:bg-surface-alt transition-colors min-h-11 min-w-11 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center justify-center p-2 rounded-lg border border-border bg-input text-primary hover:bg-surface-alt transition-colors min-h-11 min-w-11 disabled:opacity-50 disabled:cursor-not-allowed"
                 title={uploadState.tooltipText}
                 aria-label={uploadState.tooltipText}
             >

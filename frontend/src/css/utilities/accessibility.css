@@ -1,4 +1,6 @@
 @layer utilities {
+    .touch-manipulation { touch-action: manipulation; }
+
     /* ===========================================
      SCREEN READER UTILITIES - ESSENTIAL PATTERNS
      =========================================== */

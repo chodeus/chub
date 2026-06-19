@@ -1,6 +1,10 @@
 @layer utilities {
     /* Font sizes */
+    .text-\[10px\] { font-size: 10px; }
+    .text-\[11px\] { font-size: 11px; }
     .text-xs { font-size: 0.75rem; }
+    .italic { font-style: italic; }
+    .font-display { font-family: var(--font-display); }
     .text-sm { font-size: 0.875rem; }
     .text-base { font-size: 1rem; }
     .text-lg { font-size: 1.125rem; }

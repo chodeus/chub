@@ -734,7 +734,7 @@ const FieldTestPage = () => {
                             id="filter-select"
                             value={filter}
                             onChange={e => setFilter(e.target.value)}
-                            className="touch-target-target py-2.5 px-3 border bg-surface text-primary text-sm min-w-200 rounded-sm min-h-11"
+                            className="touch-target py-2.5 px-3 border bg-surface text-primary text-sm min-w-200 rounded-sm min-h-11"
                         >
                             <option value="all">All Field Types</option>
                             <option value="working">Working Only</option>
@@ -760,7 +760,7 @@ const FieldTestPage = () => {
                                 id="field-type-select"
                                 value={selectedFieldType}
                                 onChange={e => handleFieldTypeSelect(e.target.value)}
-                                className="touch-target-target py-2.5 px-3 border bg-surface text-primary text-sm min-w-200 rounded-sm min-h-11"
+                                className="touch-target py-2.5 px-3 border bg-surface text-primary text-sm min-w-200 rounded-sm min-h-11"
                             >
                                 {filteredFieldTypes.map(type => (
                                     <option key={type} value={type}>

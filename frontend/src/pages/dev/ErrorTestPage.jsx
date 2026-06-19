@@ -233,7 +233,7 @@ const ErrorTestPage = () => {
                     <li>Warning banner above error container</li>
                     <li>Inline container (border border-error rounded-md)</li>
                     <li>Warning icon (text-xl) with title</li>
-                    <li>Error message box (bg-surface-variant border border-error)</li>
+                    <li>Error message box (bg-surface-alt border border-error)</li>
                     <li>
                         Buttons: Retry (primary), Skip, Copy Error (info/success/error states),
                         Reload

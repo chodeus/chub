@@ -6,6 +6,18 @@
  */
 
 @layer utilities {
+    /* Scale gaps: min/max sizing */
+    .min-w-6 { min-width: 1.5rem; }
+    .min-w-auto { min-width: auto; }
+    .min-h-7 { min-height: 1.75rem; }
+    .min-h-30 { min-height: 7.5rem; }
+    .max-h-60 { max-height: 15rem; }
+    .max-w-\[120px\] { max-width: 120px; }
+
+    @media (min-width: 640px) {
+        .sm\:min-w-\[200px\] { min-width: 200px; }
+    }
+
     /* ===========================================
      WIDTH UTILITIES - COMPLETE SYSTEM
      =========================================== */
