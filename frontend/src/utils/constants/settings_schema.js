@@ -718,7 +718,24 @@ const CORE_SETTINGS_SCHEMA = [
                         key: 'count_mode',
                         label: 'Count Mode',
                         type: 'dropdown',
-                        options: ['series_artist', 'season_album'],
+                        options: [
+                            {
+                                value: 'series_artist',
+                                labelByType: {
+                                    sonarr: 'Series',
+                                    lidarr: 'Artist',
+                                    default: 'Series / Artist',
+                                },
+                            },
+                            {
+                                value: 'season_album',
+                                labelByType: {
+                                    sonarr: 'Season',
+                                    lidarr: 'Album',
+                                    default: 'Season / Album',
+                                },
+                            },
+                        ],
                         defaultValue: 'series_artist',
                         required: false,
                         conditional: {
@@ -727,16 +744,21 @@ const CORE_SETTINGS_SCHEMA = [
                             value: ['sonarr', 'lidarr'],
                             api_lookup: 'instances',
                         },
-                        description:
-                            'series_artist: Count caps how many series/artists are processed per run (every monitored season/album of each gets searched). season_album: Count caps the number of season/album searches — safer for trackers; partially-processed series/artists resume next run.',
+                        descriptionByType: {
+                            sonarr: 'Series: Count caps how many series are processed per run (every monitored season of each gets searched). Season: Count caps the number of season searches — safer for trackers; partially-processed series resume next run.',
+                            lidarr: 'Artist: Count caps how many artists are processed per run (every monitored album of each gets searched). Album: Count caps the number of album searches — safer for trackers; partially-processed artists resume next run.',
+                        },
                     },
                     {
                         key: 'count',
                         label: 'Count',
                         type: 'number',
                         required: true,
-                        description:
-                            'Items per run. Interpreted by Count Mode: series/artists (Radarr, or series_artist mode) or individual season/album searches (season_album mode).',
+                        descriptionByType: {
+                            sonarr: 'Items per run. Per Count Mode: whole series (Series mode) or individual season searches (Season mode).',
+                            lidarr: 'Items per run. Per Count Mode: whole artists (Artist mode) or individual album searches (Album mode).',
+                            default: 'Items per run.',
+                        },
                     },
                     {
                         key: 'tag_name',

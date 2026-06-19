@@ -84,6 +84,50 @@ export const shouldShowField = (field, formData, apiData = {}) => {
 };
 
 /**
+ * Resolve instance-type-aware labels/description on a field.
+ *
+ * A field may declare per-instance-type display overrides so one shared
+ * setting can speak the right vocabulary (e.g. Sonarr "Series/Season" vs
+ * Lidarr "Artist/Album") while its stored values stay constant:
+ *   - option.labelByType[type] overrides that option's display label
+ *   - field.descriptionByType[type] overrides the field description
+ * Both maps support a 'default' key used when no type matches. Returns the
+ * field unchanged when it declares no such overrides (cheap no-op).
+ *
+ * @param {Object} field - Field schema, possibly with *ByType overrides
+ * @param {string|null} instanceType - Resolved service type (sonarr, lidarr, …)
+ * @returns {Object} - Field with display strings resolved for instanceType
+ */
+export const resolveTypeAwareField = (field, instanceType) => {
+    const hasOptionLabels = Array.isArray(field.options)
+        ? field.options.some(opt => opt && typeof opt === 'object' && opt.labelByType)
+        : false;
+    if (!field.descriptionByType && !hasOptionLabels) {
+        return field;
+    }
+
+    const pick = map => (instanceType && map[instanceType]) ?? map.default;
+
+    const resolved = { ...field };
+
+    if (field.descriptionByType) {
+        resolved.description = pick(field.descriptionByType) ?? field.description;
+    }
+
+    if (hasOptionLabels) {
+        resolved.options = field.options.map(opt => {
+            if (!opt || typeof opt !== 'object' || !opt.labelByType) {
+                return opt;
+            }
+            const { labelByType, ...rest } = opt;
+            return { ...rest, label: pick(labelByType) ?? rest.label ?? rest.value };
+        });
+    }
+
+    return resolved;
+};
+
+/**
  * Get instance type from instance name using API data
  * @param {string} instanceName - Selected instance name
  * @param {Object} instancesData - API response data structure

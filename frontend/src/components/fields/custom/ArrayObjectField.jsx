@@ -3,7 +3,12 @@ import { FieldWrapper, FieldLabel, FieldError, FieldDescription } from '../primi
 import { RemoveButton, AddButton, ColorSwatches } from '../features/shared';
 import { FieldRegistry } from '../FieldRegistry';
 import { BulkPresetPicker } from './BulkPresetPicker';
-import { shouldShowField, generateInstanceOptions } from '../../../utils/forms/conditionalFields';
+import {
+    shouldShowField,
+    generateInstanceOptions,
+    getInstanceType,
+    resolveTypeAwareField,
+} from '../../../utils/forms/conditionalFields';
 import { useInstancesData } from '../../../hooks/useInstancesData';
 import { scheduleToHuman } from '../../../utils/schedule';
 
@@ -238,6 +243,16 @@ export const ArrayObjectField = ({
                                     placeholder: '— Select instance... —', // Override DropdownField default
                                 };
                             }
+
+                            // Resolve instance-type-aware labels/description so a
+                            // shared setting speaks the right vocabulary (e.g.
+                            // Sonarr "Series/Season" vs Lidarr "Artist/Album").
+                            const typeField = subField.typeField || 'instance';
+                            const instanceType = getInstanceType(
+                                editingData[typeField],
+                                apiData.instances
+                            );
+                            enhancedField = resolveTypeAwareField(enhancedField, instanceType);
 
                             return (
                                 <div key={subField.key}>
