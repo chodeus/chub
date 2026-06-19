@@ -152,6 +152,7 @@ def export_psd(
     logo_bytes: Optional[bytes] = None,
     title: str = "",
     season_text: str = "",
+    band_label: str = "",
     logo_max_width: int = geo.LOGO_WIDTH_RECOMMENDED,
     logo_scale: float = 1.0,
     logo_y_offset: int = 0,
@@ -199,15 +200,21 @@ def export_psd(
             tw = max(1, round(tw * h / th))
             th = h
         lg = lg.resize((tw, th), Image.Resampling.LANCZOS)
-        off = max(-600, min(int(logo_y_offset or 0), 200))
+        off = max(
+            geo.LOGO_Y_OFFSET_MIN, min(int(logo_y_offset or 0), geo.LOGO_Y_OFFSET_MAX)
+        )
         top = max(0, min(baseline - th + off, h - th))
         logo_layer.alpha_composite(lg, (geo.CENTER_X - tw // 2, top))
 
     # The bottom label, when there is one, becomes its own self-describing layer
     # ("COLLECTION" / "SEASON 3") instead of a generic "TEXT" layer — and movies,
     # which have no label, get no empty layer at all.
+    # Precedence mirrors render_cl2k: an explicit banner wins, else COLLECTION, else
+    # the season band — so the .psd label matches the flattened /generate output.
     label_text, label_y = "", geo.SEASON_TEXT_Y
-    if kind == "collection":
+    if band_label:
+        label_text = band_label.upper()
+    elif kind == "collection":
         label_text, label_y = "COLLECTION", geo.COLLECTION_LABEL_Y
     elif kind == "season" and season_text:
         label_text = season_text.upper()

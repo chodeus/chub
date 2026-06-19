@@ -62,7 +62,7 @@ def _cover_resize(
     fill so more of a high-resolution source stays visible — the art is then
     centred on black and the freed bands merge into the CL2K gradient/border.
     """
-    zoom = max(0.5, min(float(zoom or 1.0), 3.0))
+    zoom = max(geo.ZOOM_MIN, min(float(zoom or 1.0), geo.ZOOM_MAX))
     scale = max(width / img.width, height / img.height) * zoom
     img.resize(
         max(1, int(round(img.width * scale))), max(1, int(round(img.height * scale)))
@@ -514,8 +514,12 @@ def _place_logo(
     y≈1349 too), so the offset is an escape hatch for odd logo artwork, not a
     routine adjustment.
     """
-    logo_scale = max(0.25, min(float(logo_scale or 1.0), 3.0))
-    logo_y_offset = max(-600, min(int(logo_y_offset or 0), 200))
+    logo_scale = max(
+        geo.LOGO_SCALE_MIN, min(float(logo_scale or 1.0), geo.LOGO_SCALE_MAX)
+    )
+    logo_y_offset = max(
+        geo.LOGO_Y_OFFSET_MIN, min(int(logo_y_offset or 0), geo.LOGO_Y_OFFSET_MAX)
+    )
     with _read_logo_image(logo_bytes) as logo:
         logo.background_color = Color("transparent")
         logo.trim(color=Color("transparent"))  # drop padding -> width == content
@@ -733,7 +737,7 @@ def render_framed_art(
     the window when the image overflows the canvas; plain black letterbox where the
     image doesn't cover. Encoded at CL2K quality.
     """
-    zoom = max(0.5, min(float(zoom or 1.0), 3.0))
+    zoom = max(geo.ZOOM_MIN, min(float(zoom or 1.0), geo.ZOOM_MAX))
     with Image(blob=backdrop_bytes) as img:
         base = (
             min(width / img.width, height / img.height)
