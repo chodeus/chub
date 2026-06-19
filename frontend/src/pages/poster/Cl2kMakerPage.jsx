@@ -206,6 +206,14 @@ const CL2K_LOGO_BASELINE_MAIN = 1352; // geo.MAIN_LOGO_BOTTOM ("Main Logo Bottom
 const CL2K_LOGO_BASELINE_COLLECTION = 1319; // geo.COLLECTION_LOGO_BOTTOM
 const CL2K_LOGO_WIDTH_MAX = 800; // geo.LOGO_WIDTH_MAX (guide line, not a clamp)
 const CL2K_LOGO_ZONE_TOP = 1100; // geo.LOGO_ZONE_TOP ("Main Logo Height")
+// Slider/clamp ranges — mirror of geometry.py's interactive control ranges (the
+// backend pydantic Field/Form ge/le validate against the same numbers). Keep in
+// sync with backend/util/cl2k/geometry.py.
+const CONTROL_RANGES = {
+    logoScale: { min: 0.25, max: 3 }, // geo.LOGO_SCALE_MIN/MAX
+    logoYOffset: { min: -600, max: 200 }, // geo.LOGO_Y_OFFSET_MIN/MAX
+    zoom: { min: 0.5, max: 3 }, // geo.ZOOM_MIN/MAX
+};
 
 const cl2kLogoBaseline = kind =>
     (kind || '').toLowerCase() === 'collection'
@@ -219,8 +227,14 @@ const cl2kLogoBaseline = kind =>
 const logoBoxPct = ({ natW, natH, maxWidth, scale = 1, yOffset = 0, baseline }) => {
     if (!natW || !natH) return null;
     const base = baseline || CL2K_LOGO_BASELINE_MAIN;
-    const s = Math.max(0.25, Math.min(scale || 1, 3));
-    const off = Math.max(-600, Math.min(Math.round(yOffset || 0), 200));
+    const s = Math.max(
+        CONTROL_RANGES.logoScale.min,
+        Math.min(scale || 1, CONTROL_RANGES.logoScale.max)
+    );
+    const off = Math.max(
+        CONTROL_RANGES.logoYOffset.min,
+        Math.min(Math.round(yOffset || 0), CONTROL_RANGES.logoYOffset.max)
+    );
     let targetW = Math.min(maxWidth || 700, CL2K_LOGO_WIDTH_MAX);
     let targetH = Math.round((natH * targetW) / natW);
     const maxH = base - CL2K_LOGO_ZONE_TOP;
@@ -3236,7 +3250,7 @@ const CropFramer = ({
         // mirroring the backend's cover-fill zoom: >1 punches in (smaller
         // region), <1 samples beyond the cover crop so more of the source shows,
         // the freed bands falling into the CL2K gradient/border as black.
-        const z = Math.max(0.5, Math.min(zoom || 1, 3));
+        const z = Math.max(CONTROL_RANGES.zoom.min, Math.min(zoom || 1, CONTROL_RANGES.zoom.max));
         const w = coverRect.w / z;
         const h0 = coverRect.h / z;
         const x = coverRect.left + (coverRect.w - w) / 2;
@@ -3937,7 +3951,7 @@ const SquareFramer = ({
     // current Fill/Fit + zoom — mirrors render_framed_art's scale+pan maths.
     const rect = useMemo(() => {
         if (!ratio) return null;
-        const z = Math.max(0.5, Math.min(zoom || 1, 3));
+        const z = Math.max(CONTROL_RANGES.zoom.min, Math.min(zoom || 1, CONTROL_RANGES.zoom.max));
         // frame width = 1, height = aspect; source width = 1, height = ratio (h/w).
         const base = fitMode === 'fit' ? Math.min(1, aspect / ratio) : Math.max(1, aspect / ratio);
         const s = base * z;

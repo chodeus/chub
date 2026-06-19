@@ -79,10 +79,10 @@ class GenerateRequest(BaseModel):
     )
     # Logo size: relaxes the height clamp (the y=1100 zone-top guide) so tall/boxy
     # logos can render readable; 1.0 = the strict CL2K guide box. Width caps still apply.
-    logo_scale: float = Field(1.0, ge=0.25, le=3.0)
+    logo_scale: float = Field(1.0, ge=geo.LOGO_SCALE_MIN, le=geo.LOGO_SCALE_MAX)
     # Logo position: vertical shift in px from the locked baseline (positive = down).
     # Size is unaffected; the placement is clamped onto the canvas.
-    logo_y_offset: int = Field(0, ge=-600, le=200)
+    logo_y_offset: int = Field(0, ge=geo.LOGO_Y_OFFSET_MIN, le=geo.LOGO_Y_OFFSET_MAX)
     # Per-render CL2K-whiten override; None falls back to the module config
     # (whiten_logo). True = two-tone white, False = the original colored logo.
     whiten: Optional[bool] = None
@@ -111,7 +111,7 @@ class GenerateRequest(BaseModel):
     # Zoom (0.5-3.0): in fit/extend, >1 enlarges the subject above the full-width
     # fit (sides crop) so a wide backdrop isn't shrunk to a tiny strip; in cover
     # ("Fill"), <1 shrinks the art below the fill onto black. 1.0 = plain fit/cover.
-    zoom: float = Field(1.0, ge=0.5, le=3.0)
+    zoom: float = Field(1.0, ge=geo.ZOOM_MIN, le=geo.ZOOM_MAX)
     # Explicit bottom banner (e.g. "COMPLETE LIMITED SERIES"); overrides the auto
     # COLLECTION / season label when set.
     band_label: str = ""
@@ -463,7 +463,7 @@ class SquareArtRequest(BaseModel):
     focus_x: float = 0.5
     focus_y: float = 0.5
     fit_mode: str = "cover"  # cover (focal crop) | fit (contain on black)
-    zoom: float = Field(1.0, ge=0.5, le=3.0)
+    zoom: float = Field(1.0, ge=geo.ZOOM_MIN, le=geo.ZOOM_MAX)
     save_local: bool = True
     upload_gdrive: Optional[bool] = None
 
@@ -578,7 +578,7 @@ class BackgroundArtRequest(BaseModel):
     focus_x: float = 0.5
     focus_y: float = 0.5
     fit_mode: str = "cover"  # cover (focal crop) | fit (contain on black)
-    zoom: float = Field(1.0, ge=0.5, le=3.0)
+    zoom: float = Field(1.0, ge=geo.ZOOM_MIN, le=geo.ZOOM_MAX)
     resolution: str = "1080p"  # 1080p (1920x1080) | 4k (3840x2160), per Plex dims
     save_local: bool = True
     upload_gdrive: Optional[bool] = None
@@ -760,6 +760,7 @@ def psd_export(
         backdrop_path=req.backdrop_path,
         logo_path=req.logo_path,
         season_number=req.season_number,
+        band_label=req.band_label,
         logo_scale=req.logo_scale,
         logo_y_offset=req.logo_y_offset,
         focus_x=req.focus_x,
@@ -804,9 +805,9 @@ class SeasonsRequest(BaseModel):
     crop_w: Optional[float] = None
     crop_h: Optional[float] = None
     v_pos: float = 0.0
-    zoom: float = Field(1.0, ge=0.5, le=3.0)
-    logo_scale: float = Field(1.0, ge=0.25, le=3.0)
-    logo_y_offset: int = Field(0, ge=-600, le=200)
+    zoom: float = Field(1.0, ge=geo.ZOOM_MIN, le=geo.ZOOM_MAX)
+    logo_scale: float = Field(1.0, ge=geo.LOGO_SCALE_MIN, le=geo.LOGO_SCALE_MAX)
+    logo_y_offset: int = Field(0, ge=geo.LOGO_Y_OFFSET_MIN, le=geo.LOGO_Y_OFFSET_MAX)
     whiten: Optional[bool] = None  # None = module config (whiten_logo)
     invert: bool = False  # plate logo -> clearlogo
     force: bool = False
@@ -1089,8 +1090,8 @@ async def upload_generate(
     season_number: Optional[int] = Form(None),
     logo_path: Optional[str] = Form(None),
     logo_b64: Optional[str] = Form(None),
-    logo_scale: float = Form(1.0, ge=0.25, le=3.0),
-    logo_y_offset: int = Form(0, ge=-600, le=200),
+    logo_scale: float = Form(1.0, ge=geo.LOGO_SCALE_MIN, le=geo.LOGO_SCALE_MAX),
+    logo_y_offset: int = Form(0, ge=geo.LOGO_Y_OFFSET_MIN, le=geo.LOGO_Y_OFFSET_MAX),
     whiten: Optional[bool] = Form(None),  # None = module config (whiten_logo)
     invert: bool = Form(False),  # plate logo -> clearlogo
     # Framing — same semantics as GenerateRequest: cover (focus point), fit
@@ -1104,7 +1105,7 @@ async def upload_generate(
     crop_w: Optional[float] = Form(None),
     crop_h: Optional[float] = Form(None),
     v_pos: float = Form(0.0),
-    zoom: float = Form(1.0, ge=0.5, le=3.0),
+    zoom: float = Form(1.0, ge=geo.ZOOM_MIN, le=geo.ZOOM_MAX),
     preview: bool = Form(False),
     save_local: bool = Form(True),
     upload_gdrive: Optional[bool] = Form(None),
@@ -1233,8 +1234,8 @@ async def upload_poster(
     border: bool = Form(True),
     logo_path: Optional[str] = Form(None),
     logo_b64: Optional[str] = Form(None),
-    logo_scale: float = Form(1.0, ge=0.25, le=3.0),
-    logo_y_offset: int = Form(0, ge=-600, le=200),
+    logo_scale: float = Form(1.0, ge=geo.LOGO_SCALE_MIN, le=geo.LOGO_SCALE_MAX),
+    logo_y_offset: int = Form(0, ge=geo.LOGO_Y_OFFSET_MIN, le=geo.LOGO_Y_OFFSET_MAX),
     whiten: Optional[bool] = Form(None),  # None = module config (whiten_logo)
     invert: bool = Form(False),  # plate logo -> clearlogo
     preview: bool = Form(False),

@@ -10,9 +10,9 @@ from backend.util.cl2k import color
 from backend.util.cl2k import geometry as geo
 from backend.util.cl2k import image_fetch, text_removal
 from backend.util.cl2k.naming import build_poster_filename
-from backend.util.cl2k.tmdb_art import list_images
 from backend.util.cl2k import renderer
 from backend.util.cl2k.renderer import logo_is_usable, render_cl2k
+from backend.util.cl2k.tmdb_art import list_images
 from backend.util.database import ChubDB
 from backend.util.database.cl2k_generated import cl2k_generated_for
 from backend.util.fanart import FanartClient
@@ -154,6 +154,34 @@ def season_band_text(season_number: int) -> str:
     )
 
 
+def _resolve_default_art(
+    tmdb,
+    tmdb_id: int,
+    kind: str,
+    lang: str,
+    backdrop_path: Optional[str],
+    logo_path: Optional[str],
+    *,
+    need_backdrop: bool = True,
+    need_logo: bool = True,
+) -> Tuple[Optional[str], Optional[str]]:
+    """Fill a default backdrop/logo path from TMDB for whichever is still unset.
+
+    The ONE place CL2K auto-picks art, shared by the render path and the PSD export
+    so they can never drift to different pictures. A caller that already holds
+    uploaded bytes for one input passes ``need_*=False`` to leave it alone. A single
+    list_images call covers both. Returns the (possibly filled) ``(backdrop, logo)``.
+    """
+    if (need_backdrop and backdrop_path is None) or (need_logo and logo_path is None):
+        images = list_images(tmdb, tmdb_id, kind, languages=lang) or {}
+        sel = image_fetch.select_cl2k_inputs(images, lang=lang)
+        if need_backdrop and backdrop_path is None:
+            backdrop_path = sel.get("backdrop")
+        if need_logo and logo_path is None:
+            logo_path = sel.get("logo")
+    return backdrop_path, logo_path
+
+
 def _resolve_and_render(
     db: ChubDB,
     full_config,
@@ -204,17 +232,23 @@ def _resolve_and_render(
     if kind == "season" and backdrop_path is None and backdrop_bytes is None:
         backdrop_path = cl2k_generated_for(db).get_backdrop_for(tmdb_id)
 
-    # Resolve a logo path (unless a custom logo was uploaded or one was chosen)
-    # and a backdrop path (unless bytes were uploaded for the manual-handoff flow).
-    need_logo = custom_logo_bytes is None and logo_path is None
-    need_backdrop = backdrop_bytes is None and backdrop_path is None
-    if need_logo or need_backdrop:
-        images = list_images(tmdb, tmdb_id, kind, languages=lang) or {}
-        sel = image_fetch.select_cl2k_inputs(images, lang=lang)
-        if backdrop_bytes is None:
-            backdrop_path = backdrop_path or sel.get("backdrop")
-        if custom_logo_bytes is None:
-            logo_path = logo_path or sel.get("logo")
+    # Was the logo auto-sourced (no upload, no chosen path)? Captured BEFORE
+    # resolution because the small-logo drop below applies only to auto picks —
+    # a user's explicit choice is always honoured.
+    logo_auto_sourced = custom_logo_bytes is None and logo_path is None
+
+    # Fill a default backdrop/logo from TMDB for anything still unset. Uploaded
+    # bytes (manual-handoff backdrop, custom logo) mean "don't auto-resolve this".
+    backdrop_path, logo_path = _resolve_default_art(
+        tmdb,
+        tmdb_id,
+        kind,
+        lang,
+        backdrop_path,
+        logo_path,
+        need_backdrop=backdrop_bytes is None,
+        need_logo=custom_logo_bytes is None,
+    )
 
     if backdrop_bytes is None:
         if not backdrop_path:
@@ -298,7 +332,7 @@ def _resolve_and_render(
     # with the logo_scale slider if it's soft.
     if (
         logo_bytes
-        and need_logo
+        and logo_auto_sourced
         and logo_source in ("tmdb", "fanart")
         and not logo_is_usable(logo_bytes)
     ):
@@ -1267,6 +1301,7 @@ def psd_for_item(
     logo_path: Optional[str] = None,
     season_text: str = "",
     season_number: Optional[int] = None,
+    band_label: str = "",
     logo_scale: float = 1.0,
     logo_y_offset: int = 0,
     focus_x: float = 0.5,
@@ -1283,21 +1318,20 @@ def psd_for_item(
     The backdrop is framed via the renderer's own fit/cover/v_pos machinery so
     the PSD's POSTER layer is pixel-identical to what /preview and /generate
     show for the same framing knobs. A season's SEASON-N band is derived from
-    ``season_number`` (via season_band_text — same rule as the render path) so the
-    PSD carries the label too, unless an explicit ``season_text`` is given.
+    ``season_number`` (via season_band_text — same rule as the render path), and a
+    ``band_label`` override wins over it, so the PSD carries the same label the
+    flattened poster would, unless an explicit ``season_text`` is given.
     """
     from backend.util.cl2k.psd_export import export_psd
 
-    if not season_text and kind == "season" and season_number is not None:
-        season_text = season_band_text(season_number)
     cfg = full_config.cl2k_maker
     lang = cfg.language or "en"
+    if not season_text and kind == "season" and season_number is not None:
+        season_text = season_band_text(season_number)
     tmdb = TMDBClient(full_config.tmdb, db, logger)
-    if backdrop_path is None or logo_path is None:
-        images = list_images(tmdb, tmdb_id, kind, languages=lang) or {}
-        sel = image_fetch.select_cl2k_inputs(images, lang=lang)
-        backdrop_path = backdrop_path or sel.get("backdrop")
-        logo_path = logo_path or sel.get("logo")
+    backdrop_path, logo_path = _resolve_default_art(
+        tmdb, tmdb_id, kind, lang, backdrop_path, logo_path
+    )
     if not backdrop_path:
         return None
     backdrop_bytes = renderer.frame_backdrop(
@@ -1316,6 +1350,7 @@ def psd_for_item(
         logo_bytes=logo_bytes,
         title=title,
         season_text=season_text,
+        band_label=band_label,
         logo_scale=logo_scale,
         logo_y_offset=logo_y_offset,
         whiten=cfg.whiten_logo if whiten is None else whiten,

@@ -44,6 +44,16 @@ LOGO_ZONE_TOP = 1100  # "Main Logo Height" — logos must not extend above this 
 MAIN_LOGO_BOTTOM = 1352  # "Main Logo Bottom" — movie/show/season clear-logo bottom
 COLLECTION_LOGO_BOTTOM = 1319  # "Collection Logo Bottom" (COLLECTION label below it)
 
+# ----- interactive control ranges --------------------------------------------
+# One source of truth for the maker's size/position/zoom sliders: the API request
+# models validate against these (pydantic Field/Form ge/le), the renderers clamp
+# to them, and the frontend mirrors them (CONTROL_RANGES in Cl2kMakerPage.jsx —
+# keep both in sync). logo_scale relaxes the height clamp; logo_y_offset shifts the
+# logo off its baseline; zoom enlarges/shrinks the framed backdrop.
+LOGO_SCALE_MIN, LOGO_SCALE_MAX = 0.25, 3.0
+LOGO_Y_OFFSET_MIN, LOGO_Y_OFFSET_MAX = -600, 200
+ZOOM_MIN, ZOOM_MAX = 0.5, 3.0
+
 # ----- logo whitening (CL2K two-tone) -----------------------------------------
 # Real CL2K logos are black & white, not flat white silhouettes: coloured/bright
 # fills go pure white while the artwork's dark keylines and interior accents stay
