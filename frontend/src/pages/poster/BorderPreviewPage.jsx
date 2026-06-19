@@ -378,7 +378,7 @@ const HolidayCard = ({ holiday, onChange, disabled }) => {
                     />
 
                     {borders.length > 0 && (
-                        <div className="text-xs text-tertiary flex items-start gap-2 p-2 rounded bg-info-bg/30">
+                        <div className="text-xs text-tertiary flex items-start gap-2 p-2 rounded bg-info/30">
                             <span className="material-symbols-outlined text-sm shrink-0">info</span>
                             <span>
                                 Image mode active — selected border art is composited over each
@@ -469,7 +469,7 @@ const BordersPicker = ({ holidayName, selected, onChange, disabled }) => {
             )}
 
             {data && !data.folder && !isLoading && (
-                <div className="text-xs text-tertiary p-3 rounded bg-surface-subtle border border-dashed">
+                <div className="text-xs text-tertiary p-3 rounded bg-surface-alt border border-dashed">
                     No bundled border folder maps to this holiday name. Drop custom PNGs at
                     <code className="mx-1 text-primary">/config/borders/&lt;folder&gt;/</code>
                     to add your own.
@@ -549,7 +549,7 @@ const ThumbnailGroup = ({
                                 className="absolute inset-0 w-full h-full object-cover bg-black"
                             />
                             {isSelected && (
-                                <span className="absolute top-1 right-1 inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary text-white shadow">
+                                <span className="absolute top-1 right-1 inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary text-white shadow-md">
                                     <span className="material-symbols-outlined text-base">
                                         check
                                     </span>
@@ -642,7 +642,7 @@ const PreviewSection = ({ isDirty }) => {
             />
 
             {isDirty && (
-                <div className="mb-3 p-2 rounded text-xs text-warning bg-warning-bg/30 border border-warning-border/40 flex items-start gap-2">
+                <div className="mb-3 p-2 rounded text-xs text-warning bg-warning-bg/30 border border-warning/40 flex items-start gap-2">
                     <span className="material-symbols-outlined text-sm shrink-0">info</span>
                     <span>
                         Unsaved changes won&apos;t appear in the preview until you save. The preview

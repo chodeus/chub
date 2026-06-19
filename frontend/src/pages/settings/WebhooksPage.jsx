@@ -223,7 +223,7 @@ const PosterAddCard = ({ wiringData, originsData, onRefresh }) => {
                                             {row.client_host}{' '}
                                             <span className="text-secondary">→ {row.endpoint}</span>
                                         </span>
-                                        <span className="text-xs px-2 py-0.5 rounded-full bg-brand-primary/15 text-brand-primary font-medium">
+                                        <span className="text-xs px-2 py-0.5 rounded-full bg-primary/15 text-brand-primary font-medium">
                                             {row.count}
                                         </span>
                                     </div>

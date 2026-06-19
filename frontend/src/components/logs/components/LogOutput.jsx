@@ -68,7 +68,7 @@ export const LogOutput = React.memo(
         // Empty state
         if (filteredBlocks.length === 0) {
             return (
-                <div className="flex-1 overflow-y-auto font-mono text-sm p-3 border border-divider bg-input rounded scrollbar-hidden">
+                <div className="flex-1 overflow-y-auto font-mono text-sm p-3 border border-border bg-input rounded scrollbar-hidden">
                     <div className="text-secondary">No logs available</div>
                 </div>
             );
@@ -80,7 +80,7 @@ export const LogOutput = React.memo(
         return (
             <div
                 ref={scrollParentRef}
-                className="flex-1 overflow-y-auto font-mono text-sm p-3 border border-divider bg-input rounded scrollbar-hidden"
+                className="flex-1 overflow-y-auto font-mono text-sm p-3 border border-border bg-input rounded scrollbar-hidden"
             >
                 <div
                     style={{

@@ -31,7 +31,7 @@ import PropTypes from 'prop-types';
  * <ButtonBase variant="secondary" hoverClass="hover:bg-warning-bg">Custom Hover</ButtonBase>
  *
  * // Precedence: utility overrides win
- * <ButtonBase variant="primary" bgClass="bg-warning" textClass="text-text-primary">
+ * <ButtonBase variant="primary" bgClass="bg-warning" textClass="text-primary">
  *   // Uses warning background and primary text, NOT primary variant colors
  * </ButtonBase>
  *
@@ -42,7 +42,7 @@ import PropTypes from 'prop-types';
  * @param {string} props.variant - Button variant (primary, secondary, success, danger, ghost, warning, info, muted, surface)
  * @param {string} props.size - Button size (small, medium, large) - provides guidance for common cases
  * @param {string} props.bgClass - Background utility override (e.g., 'bg-surface-elevated', 'bg-warning')
- * @param {string} props.textClass - Text color utility override (e.g., 'text-warning', 'text-text-primary')
+ * @param {string} props.textClass - Text color utility override (e.g., 'text-warning', 'text-primary')
  * @param {string} props.sizeClass - Size utility override (e.g., 'px-8 py-4 text-xl', 'min-h-12 px-6')
  * @param {string} props.hoverClass - Hover state utility override (e.g., 'hover:bg-warning-bg', 'hover:shadow-lg')
  * @param {boolean} props.fullWidth - Expand to full container width
@@ -110,11 +110,11 @@ export const ButtonBase = React.memo(
             secondary: 'text-secondary-contrast',
             success: 'text-success-contrast',
             danger: 'text-danger-contrast',
-            ghost: 'text-text-primary',
+            ghost: 'text-primary',
             warning: 'text-primary-contrast', // White text on warning bg
             info: 'text-primary-contrast', // White text on info bg
-            muted: 'text-text-primary', // Primary text on muted bg
-            surface: 'text-text-primary', // Primary text on surface bg
+            muted: 'text-primary', // Primary text on muted bg
+            surface: 'text-primary', // Primary text on surface bg
         };
 
         // Ghost variant needs border (not overridden by bgClass/textClass)
