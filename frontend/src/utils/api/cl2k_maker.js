@@ -15,8 +15,6 @@
  *   GET  /api/cl2k-maker/generated         provenance (recent)
  *   POST /api/cl2k-maker/psd-export        layered .psd (binary)
  *   POST /api/cl2k-maker/generate-seasons  generate posters for many seasons
- *   POST /api/cl2k-maker/upload-generate   render from a cleaned backdrop (file)
- *   POST /api/cl2k-maker/upload-poster     file a finished poster as-is (file)
  *
  * /preview and /psd-export return raw bytes, so they bypass apiCore (which reads
  * the body as JSON/text) and use a small fetch helper that returns a Blob.
@@ -185,30 +183,6 @@ export const cl2kMakerAPI = {
 
     /** Poll a background season batch's progress. */
     seasonsStatus: jobId => apiCore.get(`/cl2k-maker/seasons-status/${jobId}`, { useCache: false }),
-
-    /** Generate from a manually-cleaned backdrop (multipart). */
-    uploadGenerate: (file, meta) => {
-        const fd = new FormData();
-        fd.append('file', file);
-        Object.entries(meta).forEach(([k, v]) => {
-            if (v !== undefined && v !== null && v !== '') fd.append(k, String(v));
-        });
-        return apiCore.post('/cl2k-maker/upload-generate', fd);
-    },
-
-    /**
-     * File a finished poster (multipart). `meta` may include a logo to composite
-     * (logo_path or logo_b64), border, save targets (save_local/upload_gdrive),
-     * and preview=true to get { preview_b64 } back instead of saving.
-     */
-    uploadPoster: (file, meta) => {
-        const fd = new FormData();
-        fd.append('file', file);
-        Object.entries(meta).forEach(([k, v]) => {
-            if (v !== undefined && v !== null && v !== '') fd.append(k, String(v));
-        });
-        return apiCore.post('/cl2k-maker/upload-poster', fd);
-    },
 
     /**
      * Re-text a finished poster: AI-erase the brushed old text + redraw a label
