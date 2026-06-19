@@ -263,7 +263,7 @@ const AccessibilityTest = React.memo(() => {
                             className={`p-2 rounded text-sm ${
                                 prefersReducedMotion
                                     ? 'bg-surface text-success border border-success'
-                                    : 'bg-info-subtle text-info border border-info'
+                                    : 'bg-info/10 text-info border border-info'
                             }`}
                         >
                             {prefersReducedMotion
@@ -282,7 +282,7 @@ const AccessibilityTest = React.memo(() => {
                     </div>
                 </div>
 
-                <div className="bg-info-subtle border border-info rounded p-3">
+                <div className="bg-info/10 border border-info rounded p-3">
                     <h4 className="text-sm font-semibold text-info mb-2">
                         Accessibility Features:
                     </h4>

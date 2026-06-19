@@ -113,7 +113,7 @@ export function ToastProvider({ children }) {
     return (
         <ToastContext.Provider value={toastMethods}>
             {children}
-            <div className="fixed bottom-4 right-4 md:max-w-sm max-w-none flex flex-col gap-2 z-toast pointer-events-none">
+            <div className="fixed bottom-4 right-4 md:max-w-sm max-w-none flex flex-col gap-2 z-notification pointer-events-none">
                 {toasts.map(toast => (
                     <Toast key={toast.id} {...toast} onClose={removeToast} />
                 ))}

@@ -201,7 +201,7 @@ class PageErrorBoundaryBase extends Component {
                     </div>
                 )}
 
-                <div className="bg-surface-variant border border-border rounded-md p-4 mb-6">
+                <div className="bg-surface-alt border border-border rounded-md p-4 mb-6">
                     <h3 className="text-primary text-xl font-semibold m-0 mb-3">Error Details</h3>
                     <div className="mb-2 text-sm font-mono break-words">
                         <strong>Error:</strong> {error?.message || 'Unknown error'}
