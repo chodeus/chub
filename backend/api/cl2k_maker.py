@@ -19,7 +19,7 @@ import base64
 import threading
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 
@@ -34,7 +34,6 @@ from backend.modules.cl2k_maker import (
     psd_for_item,
     render_preview,
     retext_poster,
-    save_finished_poster,
 )
 from backend.util.cl2k import geometry as geo, text_removal, tmdb_art
 from backend.util.cl2k.image_fetch import TMDB_IMAGE_CDN, download as download_image
@@ -1076,90 +1075,6 @@ def retext_seasons_endpoint(
     return ok("Season generation started", {"job_id": jid, "total": len(seasons)})
 
 
-@router.post(
-    "/upload-generate", summary="Generate from a manually-cleaned backdrop (handoff)"
-)
-async def upload_generate(
-    file: UploadFile = File(...),
-    kind: str = Form(...),
-    title: str = Form(...),
-    tmdb_id: int = Form(...),
-    year: Optional[int] = Form(None),
-    tvdb_id: Optional[int] = Form(None),
-    imdb_id: Optional[str] = Form(None),
-    season_number: Optional[int] = Form(None),
-    logo_path: Optional[str] = Form(None),
-    logo_b64: Optional[str] = Form(None),
-    logo_scale: float = Form(1.0, ge=geo.LOGO_SCALE_MIN, le=geo.LOGO_SCALE_MAX),
-    logo_y_offset: int = Form(0, ge=geo.LOGO_Y_OFFSET_MIN, le=geo.LOGO_Y_OFFSET_MAX),
-    whiten: Optional[bool] = Form(None),  # None = module config (whiten_logo)
-    invert: bool = Form(False),  # plate logo -> clearlogo
-    # Framing — same semantics as GenerateRequest: cover (focus point), fit
-    # (top-anchor + black-fill bottom; optional crop isolates a region first;
-    # v_pos slides the photo down), or extend.
-    fit_mode: str = Form("cover"),
-    focus_x: float = Form(0.5),
-    focus_y: float = Form(0.5),
-    crop_x: Optional[float] = Form(None),
-    crop_y: Optional[float] = Form(None),
-    crop_w: Optional[float] = Form(None),
-    crop_h: Optional[float] = Form(None),
-    v_pos: float = Form(0.0),
-    zoom: float = Form(1.0, ge=geo.ZOOM_MIN, le=geo.ZOOM_MAX),
-    preview: bool = Form(False),
-    save_local: bool = Form(True),
-    upload_gdrive: Optional[bool] = Form(None),
-    db: ChubDB = Depends(get_database),
-    logger: Any = Depends(get_cl2k_logger),
-) -> JSONResponse:
-    backdrop_bytes = await file.read()
-    crop_parts = (crop_x, crop_y, crop_w, crop_h)
-    crop = tuple(crop_parts) if all(p is not None for p in crop_parts) else None
-    common = dict(
-        kind=kind,
-        title=title,
-        tmdb_id=tmdb_id,
-        tvdb_id=tvdb_id,
-        imdb_id=imdb_id,
-        season_number=season_number,
-        backdrop_bytes=backdrop_bytes,
-        logo_path=logo_path,
-        custom_logo_bytes=_b64_to_bytes(logo_b64),
-        logo_scale=logo_scale,
-        logo_y_offset=logo_y_offset,
-        whiten=whiten,
-        invert=invert,
-        fit_mode=fit_mode,
-        focus_x=focus_x,
-        focus_y=focus_y,
-        crop=crop,
-        v_pos=v_pos,
-        zoom=zoom,
-    )
-    if preview:
-        # Render-only (no save, no provenance) so the framing can be adjusted
-        # against a live preview before generating.
-        blob = render_preview(db, load_config(), logger, **common)
-        if blob is None:
-            return error("render failed", "CL2K_GENERATE")
-        return ok("ok", {"preview_b64": base64.b64encode(blob).decode()})
-    result = generate_for_item(
-        db=db,
-        full_config=load_config(),
-        logger=logger,
-        year=year,
-        force=True,
-        save_local=save_local,
-        upload_gdrive=upload_gdrive,
-        **common,
-    )
-    if result.get("status") == "generated":
-        return ok("Poster generated", result)
-    return error(
-        result.get("reason", "generation failed"), "CL2K_GENERATE", data=result
-    )
-
-
 @router.get("/fanart-images", summary="fanart.tv logo + background for the art picker")
 def fanart_images_endpoint(
     tmdb_id: int = Query(...),
@@ -1219,84 +1134,6 @@ def plex_images_endpoint(
         imdb_id=imdb_id,
     )
     return ok("ok", res)
-
-
-@router.post("/upload-poster", summary="File a finished poster (optionally add a logo)")
-async def upload_poster(
-    file: UploadFile = File(...),
-    kind: str = Form(...),
-    title: str = Form(...),
-    tmdb_id: int = Form(...),
-    year: Optional[int] = Form(None),
-    tvdb_id: Optional[int] = Form(None),
-    imdb_id: Optional[str] = Form(None),
-    season_number: Optional[int] = Form(None),
-    border: bool = Form(True),
-    logo_path: Optional[str] = Form(None),
-    logo_b64: Optional[str] = Form(None),
-    logo_scale: float = Form(1.0, ge=geo.LOGO_SCALE_MIN, le=geo.LOGO_SCALE_MAX),
-    logo_y_offset: int = Form(0, ge=geo.LOGO_Y_OFFSET_MIN, le=geo.LOGO_Y_OFFSET_MAX),
-    whiten: Optional[bool] = Form(None),  # None = module config (whiten_logo)
-    invert: bool = Form(False),  # plate logo -> clearlogo
-    preview: bool = Form(False),
-    save_local: bool = Form(True),
-    upload_gdrive: Optional[bool] = Form(None),
-    db: ChubDB = Depends(get_database),
-    logger: Any = Depends(get_cl2k_logger),
-) -> JSONResponse:
-    image_bytes = await file.read()
-    try:
-        logo_bytes = _resolve_logo_bytes(logo_path, logo_b64)
-    except LogoFetchError as exc:
-        logger.warning(f"cl2k: logo fetch failed: {exc}")
-        return error(f"Could not fetch that logo from its source: {exc}", "LOGO_FETCH")
-    logo_source = "custom" if logo_b64 else "tmdb" if logo_path else "upload"
-    if preview:
-        # Mirror the save pipeline (normalize -> overlay logo -> border) so the
-        # preview matches the file that would be written, without persisting it.
-        from backend.modules.cl2k_maker import _normalize_poster
-        from backend.util.cl2k.renderer import apply_border, overlay_logo
-
-        cfg = load_config().cl2k_maker
-        blob = _normalize_poster(image_bytes)
-        if logo_bytes:
-            blob = overlay_logo(
-                blob,
-                logo_bytes,
-                kind=(kind or "movie").lower(),
-                logo_scale=logo_scale,
-                logo_y_offset=logo_y_offset,
-                whiten=cfg.whiten_logo if whiten is None else whiten,
-                invert=invert,
-            )
-        if border:
-            blob = apply_border(blob)
-        return ok("ok", {"preview_b64": base64.b64encode(blob).decode()})
-    result = save_finished_poster(
-        db=db,
-        full_config=load_config(),
-        logger=logger,
-        kind=kind,
-        title=title,
-        tmdb_id=tmdb_id,
-        year=year,
-        tvdb_id=tvdb_id,
-        imdb_id=imdb_id,
-        season_number=season_number,
-        image_bytes=image_bytes,
-        logo_source=logo_source,
-        add_border=border,
-        logo_bytes=logo_bytes,
-        logo_scale=logo_scale,
-        logo_y_offset=logo_y_offset,
-        whiten=whiten,
-        invert=invert,
-        save_local=save_local,
-        upload_gdrive=upload_gdrive,
-    )
-    if result.get("status") == "generated":
-        return ok("Poster saved", result)
-    return error(result.get("reason", "save failed"), "CL2K_UPLOAD", data=result)
 
 
 class RetextRequest(BaseModel):
