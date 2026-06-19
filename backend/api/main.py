@@ -38,7 +38,12 @@ from backend.api import (
 from backend.api.utils import error, get_logger
 from backend.extensions import extension_routers
 from backend.util.auth import decode_access_token
-from backend.util.config import ConfigError, load_config
+from backend.util.config import (
+    ConfigError,
+    ConfigValidationError,
+    format_validation_errors,
+    load_config,
+)
 from backend.util.database import ChubDB
 from backend.util.job_processor import process_job
 from backend.util.notification import install_error_notify_handler
@@ -176,8 +181,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                     "ErrorNotifyHandler attached to root logger — ERROR-level logs "
                     "will be forwarded to the 'main' notification target."
                 )
-        except ConfigError:
+        except ConfigError as exc:
             if log:
+                log.error(f"Configuration could not be loaded: {exc}")
+                if isinstance(exc, ConfigValidationError) and exc.validation_error:
+                    for line in format_validation_errors(exc.validation_error):
+                        log.error(f"  • {line}")
                 log.debug("Skipped ErrorNotifyHandler setup — config not loadable yet.")
 
         # CREATE SHARED DATABASE INSTANCE FOR ALL API ENDPOINTS
@@ -363,6 +372,30 @@ app.mount(
     StaticFiles(directory=STATIC_DIR / "posters", check_dir=False),
     name="posters",
 )
+
+
+@app.exception_handler(ConfigError)
+async def handle_config_error(request: Request, exc: ConfigError) -> JSONResponse:
+    """Surface config load/validation failures clearly instead of as a generic 500.
+
+    Covers ConfigParseError (bad YAML — message carries the file + line) and
+    ConfigValidationError (schema mismatch — per-field detail is formatted into
+    both the log and the response so a malformed/ported config is diagnosable
+    from the logs rather than appearing as an opaque internal error.
+    """
+    logger = get_logger(request, "ERROR")
+    logger.error(f"Configuration error: {exc}")
+    detail_lines = []
+    if isinstance(exc, ConfigValidationError) and exc.validation_error:
+        detail_lines = format_validation_errors(exc.validation_error)
+        for line in detail_lines:
+            logger.error(f"  • {line}")
+    return error(
+        f"Configuration invalid: {exc}",
+        code="CONFIG_INVALID",
+        data={"errors": detail_lines} if detail_lines else None,
+        status_code=500,
+    )
 
 
 @app.exception_handler(Exception)

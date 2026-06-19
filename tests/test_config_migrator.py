@@ -116,9 +116,7 @@ def test_detection_holidays_list_is_chub_native():
 
 def test_detection_unmatched_instances_dict_entry_triggers():
     assert (
-        is_legacy_config(
-            {"unmatched_assets": {"instances": ["radarr", {"Plex": {}}]}}
-        )
+        is_legacy_config({"unmatched_assets": {"instances": ["radarr", {"Plex": {}}]}})
         is True
     )
 
@@ -250,13 +248,9 @@ def test_rule_flatten_unmatched_instances_dict_entry():
 
 
 def test_rule_flatten_unmatched_instances_all_strings_is_noop():
-    out, notes = migrate(
-        {"unmatched_assets": {"instances": ["radarr", "sonarr"]}}
-    )
+    out, notes = migrate({"unmatched_assets": {"instances": ["radarr", "sonarr"]}})
     assert out["unmatched_assets"]["instances"] == ["radarr", "sonarr"]
-    assert not any(
-        n.rule == "flatten:unmatched_assets.instances" for n in notes
-    )
+    assert not any(n.rule == "flatten:unmatched_assets.instances" for n in notes)
 
 
 def test_rule_holidays_dict_to_list_single_string_color():
@@ -391,6 +385,62 @@ def test_rule_split_cleanarr_instances_is_idempotent():
     once, _ = migrate(_cleanarr_presplit())
     twice, second_notes = migrate(once)
     assert twice == once
-    assert not any(
-        "split:poster_cleanarr.instances" in n.rule for n in second_notes
+    assert not any("split:poster_cleanarr.instances" in n.rule for n in second_notes)
+
+
+# ─── poster_cleanarr instances flatten (legacy plex dict entries) ─────────
+
+
+def test_detection_cleanarr_plex_dict_entry_triggers():
+    assert (
+        is_legacy_config(
+            {
+                "poster_cleanarr": {
+                    "instances": [{"plex": {"library_names": ["Movies"]}}]
+                }
+            }
+        )
+        is True
     )
+
+
+def test_rule_flatten_cleanarr_plex_dict_entry():
+    out, notes = migrate(
+        {"poster_cleanarr": {"instances": [{"plex": {"library_names": ["Movies"]}}]}}
+    )
+    assert out["poster_cleanarr"]["instances"] == ["plex"]
+    assert any(
+        n.rule == "flatten:poster_cleanarr.instances" and n.level == "warning"
+        for n in notes
+    )
+
+
+def test_rule_flatten_cleanarr_instances_all_strings_is_noop():
+    out, notes = migrate({"poster_cleanarr": {"instances": ["plex"]}})
+    assert out["poster_cleanarr"]["instances"] == ["plex"]
+    assert not any(n.rule == "flatten:poster_cleanarr.instances" for n in notes)
+
+
+def test_cleanarr_flatten_then_split_real_daps_shape():
+    """The real-world DAPS shape: a plain ARR name + a plex dict entry.
+
+    The plex dict must flatten to a name string first, then the ARR name must
+    split out into `orphan_instances`, leaving only the Plex name in
+    `instances` so it validates against the `List[str]` schema.
+    """
+    cfg = {
+        "instances": {
+            "plex": {"plex": {"url": "x", "api": "y"}},
+            "radarr": {"radarr-uhd": {}},
+        },
+        "poster_cleanarr": {
+            "dry_run": True,
+            "instances": ["radarr-uhd", {"plex": {"library_names": ["Movies"]}}],
+        },
+    }
+    out, _ = migrate(cfg)
+    sec = out["poster_cleanarr"]
+    assert sec["instances"] == ["plex"]
+    assert sec["orphan_instances"] == ["radarr-uhd"]
+    assert all(isinstance(i, str) for i in sec["instances"])
+    assert is_legacy_config(out) is False  # fully migrated, no second pass needed
