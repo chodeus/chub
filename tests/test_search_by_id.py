@@ -98,3 +98,31 @@ def test_poster_search_by_id(db):
         assert _titles(db.poster.search(query=q)) == {"Shaun of the Dead"}, q
     assert _titles(db.poster.search(query="Shaun")) == {"Shaun of the Dead"}
     assert _titles(db.poster.search(query="tmdb-999999")) == set()
+
+
+def test_poster_browse_by_id(db):
+    db.poster.upsert(
+        {
+            "title": "Shaun of the Dead",
+            "normalized_title": normalize_titles("Shaun of the Dead"),
+            "year": 2004,
+            "tmdb_id": 747,
+            "tvdb_id": None,
+            "imdb_id": "tt0365748",
+            "season_number": None,
+            "folder": "Owner",
+            "file": "/src/shaun.png",
+            "style": None,
+            "priority": 0,
+            "image_type": "poster",
+            "asset_type": "movie",
+        }
+    )
+    for q in ("tmdb-747", "{tmdb-747}", "tt0365748", "imdb-tt0365748"):
+        assert _titles(db.poster.browse(query=q)) == {"Shaun of the Dead"}, q
+    # title and wildcard search unaffected
+    assert _titles(db.poster.browse(query="Shaun")) == {"Shaun of the Dead"}
+    assert _titles(db.poster.browse(query="Shaun*")) == {"Shaun of the Dead"}
+    # a non-matching id / title returns nothing
+    assert _titles(db.poster.browse(query="tmdb-999999")) == set()
+    assert _titles(db.poster.browse(query="Nonexistent")) == set()
