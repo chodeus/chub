@@ -411,7 +411,7 @@ export const JobsPage = () => {
                                                     .map(([k, v]) => (
                                                         <div
                                                             key={k}
-                                                            className="p-1.5 rounded bg-surface-alt"
+                                                            className="flex flex-col justify-center gap-1 px-3 py-2 rounded-lg bg-surface-alt"
                                                         >
                                                             <span className="text-tertiary capitalize block">
                                                                 {k.replace(/_/g, ' ')}
@@ -535,7 +535,7 @@ export const JobsPage = () => {
                                                             .map(([k, v]) => (
                                                                 <div
                                                                     key={k}
-                                                                    className="p-1.5 rounded bg-surface-alt"
+                                                                    className="flex flex-col justify-center gap-1 px-3 py-2 rounded-lg bg-surface-alt"
                                                                 >
                                                                     <span className="text-tertiary capitalize block">
                                                                         {k.replace(/_/g, ' ')}
