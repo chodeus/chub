@@ -229,7 +229,7 @@ export const FormRenderer = React.memo(
                 {/* Render form validation summary if there are errors */}
                 {Object.keys(validationErrors).length > 0 && (
                     <div className="mb-4 p-3 bg-surface border border-error rounded-md">
-                        <h4 className="m-0 mb-2 text-sm font-medium text-error-text">
+                        <h4 className="m-0 mb-2 text-sm font-medium text-error">
                             Please fix the following errors:
                         </h4>
                         <ul className="list-none m-0 p-0">
@@ -237,7 +237,7 @@ export const FormRenderer = React.memo(
                                 const field = schema.fields?.find(f => f.key === fieldKey);
                                 const fieldLabel = field?.label || fieldKey;
                                 return (
-                                    <li key={fieldKey} className="text-sm text-error-text">
+                                    <li key={fieldKey} className="text-sm text-error">
                                         {fieldLabel}: {error}
                                     </li>
                                 );

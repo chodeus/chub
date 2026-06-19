@@ -121,7 +121,7 @@ const SearchInterface = React.memo(
                             <input
                                 ref={inputRef}
                                 type="text"
-                                className="flex-1 py-input pr-4 pl-10 border-none bg-transparent text-primary outline-none w-full h-full"
+                                className="flex-1 py-2 pr-4 pl-10 border-none bg-transparent text-primary outline-none w-full h-full"
                                 placeholder={getContextualPlaceholder()}
                                 value={term}
                                 onChange={handleSearchChange}

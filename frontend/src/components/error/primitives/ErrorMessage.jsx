@@ -44,7 +44,7 @@ export const ErrorMessage = ({
                         </div>
                     )}
 
-                    <div className="bg-surface-variant border border-border rounded-md p-4 mb-6">
+                    <div className="bg-surface-alt border border-border rounded-md p-4 mb-6">
                         <h3 className="text-primary text-xl font-semibold m-0 mb-3">
                             Error Details
                         </h3>
@@ -84,7 +84,7 @@ export const ErrorMessage = ({
             </div>
 
             <div className="text-primary">
-                <div className="bg-surface-variant border border-error p-3 mb-4 text-sm break-words">
+                <div className="bg-surface-alt border border-error p-3 mb-4 text-sm break-words">
                     <strong>Error:</strong> {message || 'Component failed to render'}
                     {retryCount > 0 && (
                         <span className="text-secondary font-normal">

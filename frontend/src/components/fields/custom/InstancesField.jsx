@@ -55,7 +55,7 @@ const SimpleInstanceSelector = React.memo(
 
         if (serviceInstances.length === 0) {
             return (
-                <div className="flex flex-col items-center gap-4 p-8 text-center bg-surface-subtle border border-dashed border-border-subtle rounded-lg text-secondary">
+                <div className="flex flex-col items-center gap-4 p-8 text-center bg-surface-alt border border-dashed border-border-subtle rounded-lg text-secondary">
                     <div className="text-3xl text-secondary opacity-60">📋</div>
                     <div className="font-semibold text-primary">
                         No {humanize(serviceType)} instances configured
@@ -226,7 +226,7 @@ const PlexLibrarySelector = React.memo(
 
         if (librariesLoading) {
             return (
-                <div className="flex items-center gap-3 p-4 text-sm text-secondary bg-surface-subtle border border-border-subtle rounded-lg">
+                <div className="flex items-center gap-3 p-4 text-sm text-secondary bg-surface-alt border border-border-subtle rounded-lg">
                     <div className="w-4 h-4 border-2 border-border border-t-primary rounded-full animate-spin" />
                     <span>Loading libraries...</span>
                 </div>
@@ -246,7 +246,7 @@ const PlexLibrarySelector = React.memo(
             movieLibraries.length + tvLibraries.length + uncategorizedLibraries.length;
         if (totalLibraries === 0) {
             return (
-                <div className="flex items-center gap-3 p-4 text-sm text-secondary bg-surface-subtle border border-border-subtle rounded-lg">
+                <div className="flex items-center gap-3 p-4 text-sm text-secondary bg-surface-alt border border-border-subtle rounded-lg">
                     <span className="text-base">ℹ️</span>
                     <span>No libraries found for this Plex instance</span>
                 </div>

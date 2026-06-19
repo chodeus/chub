@@ -33,7 +33,7 @@ const LogControlsContent = ({ logText }) => {
     const useStackedLayout = viewport.width < 1200;
 
     return (
-        <div className="flex flex-col gap-3 p-3 rounded-lg border border-divider bg-surface-alt">
+        <div className="flex flex-col gap-3 p-3 rounded-lg border border-border bg-surface-alt">
             {/* Show/Hide toggle - always visible in stacked layout */}
             {useStackedLayout && <CollapseButton />}
 

@@ -1,4 +1,10 @@
 @layer utilities {
+    /* Scale gaps: misc color utilities */
+    .bg-border-light { background: var(--border-light); }
+    .text-primary-text { color: var(--primary-text); }
+    .text-bg { color: var(--bg); }
+    .accent-primary { accent-color: var(--primary); }
+
     /* Background colors */
     .bg-primary { background: var(--primary); }
     .bg-primary-hover { background: var(--focus); }

@@ -257,7 +257,7 @@ const SettingsMockPage = () => {
                                                                                     key={
                                                                                         nestedField.key
                                                                                     }
-                                                                                    className="inline-block px-2 py-1 bg-bg-tertiary text-xs rounded mr-2 mb-1"
+                                                                                    className="inline-block px-2 py-1 bg-bg-secondary text-xs rounded mr-2 mb-1"
                                                                                 >
                                                                                     {
                                                                                         nestedField.label

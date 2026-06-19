@@ -246,7 +246,7 @@ class FeatureErrorBoundaryBase extends Component {
         if (retryCount >= 3) {
             return (
                 <div
-                    className="bg-surface-alt border border-text-disabled rounded-md my-2 opacity-70 font-sans"
+                    className="bg-surface-alt border border-border-subtle rounded-md my-2 opacity-70 font-sans"
                     title={`${featureName} is temporarily disabled due to repeated errors`}
                 >
                     <div className="p-3 text-sm text-tertiary flex items-center gap-2">
@@ -319,7 +319,7 @@ class FeatureErrorBoundaryBase extends Component {
                     </div>
 
                     <div className="text-primary">
-                        <div className="bg-surface-variant border border-error p-3 mb-4 text-sm break-words">
+                        <div className="bg-surface-alt border border-error p-3 mb-4 text-sm break-words">
                             <strong>Error:</strong> {error?.message || 'Component failed to render'}
                             {retryCount > 0 && (
                                 <span className="text-secondary font-normal">

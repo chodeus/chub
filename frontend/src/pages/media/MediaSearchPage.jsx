@@ -255,7 +255,7 @@ const MediaSearchPage = () => {
                                                 <h3 className="font-semibold text-primary text-lg flex items-baseline gap-2 flex-wrap">
                                                     <span>{item.title}</span>
                                                     {item.season_number != null && (
-                                                        <span className="px-1.5 py-0.5 rounded bg-brand-primary/15 text-brand-primary text-xs font-medium">
+                                                        <span className="px-1.5 py-0.5 rounded bg-primary/15 text-brand-primary text-xs font-medium">
                                                             {item.season_number === 0
                                                                 ? 'Specials'
                                                                 : `Season ${item.season_number}`}

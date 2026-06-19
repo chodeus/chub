@@ -164,7 +164,7 @@ export const ArrayObjectField = ({
                                 <div className="text-xs text-secondary truncate">{secondary}</div>
                             ))}
                         {badge && (
-                            <div className="inline-flex items-center px-2 py-0.5 bg-accent-bg text-brand-primary-text rounded text-xs font-medium whitespace-nowrap self-start md:ml-auto md:flex-shrink-0">
+                            <div className="inline-flex items-center px-2 py-0.5 bg-primary/15 text-brand-primary rounded text-xs font-medium whitespace-nowrap self-start md:ml-auto md:flex-shrink-0">
                                 {/* Show color swatches for items with colors array */}
                                 {item.colors && Array.isArray(item.colors) ? (
                                     <ColorSwatches colors={item.colors} size="sm" maxDisplay={3} />

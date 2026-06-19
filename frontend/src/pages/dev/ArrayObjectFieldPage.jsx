@@ -405,7 +405,7 @@ export default function ArrayObjectFieldPage() {
                         </div>
                         <div>
                             <h4 className="font-medium text-primary mb-2">New Schema (Unified)</h4>
-                            <pre className="text-xs p-3 bg-accent-bg rounded border overflow-auto">
+                            <pre className="text-xs p-3 bg-primary/15 rounded border overflow-auto">
                                 {`{
   key: 'gdrive_list',
   type: 'object_array',        // ← Unified type
