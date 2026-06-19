@@ -103,6 +103,15 @@ def is_legacy_config(raw: Dict[str, Any]) -> bool:
     ):
         return True
 
+    # `poster_cleanarr.instances` likewise accepted `{plex_name: {...}}` dict
+    # entries in the legacy schema (same shape as poster_renamerr). The current
+    # schema is `List[str]`, so any non-string element is a legacy shape signal.
+    cleanarr_instances = raw.get("poster_cleanarr", {}).get("instances")
+    if isinstance(cleanarr_instances, list) and any(
+        not isinstance(item, str) for item in cleanarr_instances
+    ):
+        return True
+
     # Pre-split `poster_cleanarr`: ARR names were listed in `instances`
     # (shared between the Plex bloat pass and the ARR orphan pass) before
     # `orphan_instances` existed. Mixed ARR names there with no
@@ -320,6 +329,53 @@ def _rule_split_cleanarr_instances(
     )
 
 
+def _rule_flatten_cleanarr_instances(
+    raw: Dict[str, Any], notes: List[MigrationNote]
+) -> None:
+    """Flatten `poster_cleanarr.instances` dict entries down to their key.
+
+    Legacy DAPS accepted `{plex_name: {library_names: [...]}}` entries here,
+    matching the `poster_renamerr.instances` shape. The current schema only
+    accepts strings (the Plex selection drives the bloat-image pass), so the
+    inner `library_names` filter is discarded. Runs before the ARR/Plex split
+    so the split sees plain name strings. A warning note records what was
+    collapsed.
+    """
+    sec = raw.get("poster_cleanarr")
+    if not isinstance(sec, dict):
+        return
+    items = sec.get("instances")
+    if not isinstance(items, list):
+        return
+
+    new_items: List[str] = []
+    flattened: List[str] = []
+    for item in items:
+        if isinstance(item, str):
+            new_items.append(item)
+        elif isinstance(item, dict) and item:
+            key = next(iter(item))
+            if isinstance(key, str):
+                new_items.append(key)
+                flattened.append(key)
+        # Anything else (None, list, empty dict) is dropped silently.
+
+    if flattened:
+        sec["instances"] = new_items
+        notes.append(
+            MigrationNote(
+                rule="flatten:poster_cleanarr.instances",
+                message=(
+                    f"Flattened legacy dict entries in "
+                    f"`poster_cleanarr.instances` to instance names: "
+                    f"{flattened}. Per-library filtering is no longer applied "
+                    f"here."
+                ),
+                level="warning",
+            )
+        )
+
+
 def _rule_flatten_unmatched_instances(
     raw: Dict[str, Any], notes: List[MigrationNote]
 ) -> None:
@@ -480,6 +536,7 @@ def migrate(raw: Dict[str, Any]) -> Tuple[Dict[str, Any], List[MigrationNote]]:
 
     # Shape conversions
     _rule_flatten_unmatched_instances(out, notes)
+    _rule_flatten_cleanarr_instances(out, notes)
     _rule_split_cleanarr_instances(out, notes)
 
     # Type conversions
