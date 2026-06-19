@@ -65,14 +65,18 @@ class PosterCache(DatabaseBase):
 
     @staticmethod
     def _title_search_clause(query: str) -> tuple:
-        """Return an ``(sql, params)`` title filter matching normalized_title
-        and raw title.
+        """Return an ``(sql, params)`` filter matching normalized_title, raw
+        title, and external ids.
 
         A ``*`` in the query is a wildcard (SQL ``LIKE %``): ``*1952`` matches
         titles ENDING in 1952, ``1952*`` those STARTING with it, ``*1952*``
         anywhere. Literal ``%``/``_``/``\\`` in the query are escaped so they
         match literally. With no ``*`` the query is a plain substring match
         (legacy behaviour), so existing searches are unchanged.
+
+        Also matches an id pasted from a filename tag ({tmdb-…}/{tvdb-…}/
+        {imdb-tt…}) or a bare IMDb id, so users can search by id (mirrors
+        poster_cache.search / media_cache.search).
         """
 
         def esc(s: str) -> str:
@@ -82,13 +86,27 @@ class PosterCache(DatabaseBase):
             parts = query.split("*")
             norm_pat = "%".join(esc(normalize_titles(p)) for p in parts)
             raw_pat = "%".join(esc(p) for p in parts)
-            sql = "(normalized_title LIKE ? ESCAPE '\\' OR title LIKE ? ESCAPE '\\')"
-            return sql, [norm_pat, raw_pat]
+            sub = [
+                "normalized_title LIKE ? ESCAPE '\\'",
+                "title LIKE ? ESCAPE '\\'",
+            ]
+            sub_params: list = [norm_pat, raw_pat]
+        else:
+            sub = ["normalized_title LIKE ?", "title LIKE ?"]
+            sub_params = [f"%{normalize_titles(query)}%", f"%{query}%"]
 
-        return (
-            "(normalized_title LIKE ? OR title LIKE ?)",
-            [f"%{normalize_titles(query)}%", f"%{query}%"],
-        )
+        tmdb, tvdb, imdb = parse_search_id(query)
+        if tmdb is not None:
+            sub.append("tmdb_id = ?")
+            sub_params.append(tmdb)
+        if tvdb is not None:
+            sub.append("tvdb_id = ?")
+            sub_params.append(tvdb)
+        if imdb:
+            sub.append("LOWER(imdb_id) = ?")
+            sub_params.append(imdb.lower())
+
+        return "(" + " OR ".join(sub) + ")", sub_params
 
     @staticmethod
     def _canonical_key(item: dict) -> tuple:
