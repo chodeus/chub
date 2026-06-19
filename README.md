@@ -126,7 +126,7 @@ I write large portions of CHUB's source, tests, and documentation with the help 
 
 ## Credits
 
-CHUB is a fork of [DAPS](https://github.com/Drazzilb08/daps) by **Drazzilb08** — thank you for the scripts and inspiration that made this possible.
+CHUB is a fork of [DAPS](https://github.com/Drazzilb08/daps) by **Drazzilb08** — thank you for the scripts and inspiration that made this possible. For the behavioral differences between CHUB and DAPS (including upstream bugs CHUB fixes), see [docs/daps-divergence.md](docs/daps-divergence.md).
 
 Logo and background artwork is sourced from [fanart.tv](https://fanart.tv) — images and metadata are provided by fanart.tv and its contributors.
 
