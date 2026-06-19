@@ -2,10 +2,17 @@
 
 @layer utilities {
     /* Scale gaps: borders, dividers, radius */
-    .border-y { border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+    .border-y {
+        border-top: 1px solid var(--border);
+        border-bottom: 1px solid var(--border);
+    }
     .border-border-light { border-color: var(--border-light); }
     .border-warning\/40 { border-color: color-mix(in srgb, var(--warning) 40%, transparent); }
-    .rounded-l-lg { border-top-left-radius: 0.75rem; border-bottom-left-radius: 0.75rem; }
+
+    .rounded-l-lg {
+        border-top-left-radius: 0.75rem;
+        border-bottom-left-radius: 0.75rem;
+    }
     .divide-y > * + * { border-top: 1px solid var(--border); }
     .divide-border > * + * { border-color: var(--border); }
 

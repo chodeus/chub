@@ -14,7 +14,7 @@
     .max-h-60 { max-height: 15rem; }
     .max-w-\[120px\] { max-width: 120px; }
 
-    @media (min-width: 640px) {
+    @media (width >= 640px) {
         .sm\:min-w-\[200px\] { min-width: 200px; }
     }
 
