@@ -2,6 +2,19 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.33.0](https://github.com/chodeus/chub/compare/v2.32.0...v2.33.0) (2026-06-21)
+
+
+### Features
+
+* **css:** migrate frontend from hand-rolled utilities to Tailwind v4 ([8180473](https://github.com/chodeus/chub/commit/818047349ab36a09c0476aa673156cd586762f77))
+
+
+### Bug Fixes
+
+* **deps:** update all non-major dependencies ([#251](https://github.com/chodeus/chub/issues/251)) ([5ef2764](https://github.com/chodeus/chub/commit/5ef27643f3172d65c155bc6e369152e34befbf4c))
+* **deps:** update all non-major dependencies ([#254](https://github.com/chodeus/chub/issues/254)) ([3a9d876](https://github.com/chodeus/chub/commit/3a9d8766ac8f3bca0efd5b3c739f032f764a3ec9))
+
 ## [2.32.0](https://github.com/chodeus/chub/compare/v2.31.0...v2.32.0) (2026-06-18)
 
 
