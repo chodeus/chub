@@ -251,7 +251,7 @@ export const SchedulePage = () => {
     if (isLoadingSchedule) {
         return (
             <div className="flex justify-center items-center min-h-64">
-                <div className="text-primary text-lg">Loading module schedules...</div>
+                <div className="text-fg text-lg">Loading module schedules...</div>
             </div>
         );
     }
@@ -309,7 +309,7 @@ export const SchedulePage = () => {
 
             {/* Empty State */}
             {availableModules.length === 0 && (
-                <div className="text-center py-12 text-secondary">
+                <div className="text-center py-12 text-fg-muted">
                     <span className="material-symbols-outlined text-4xl mb-2 block opacity-50">
                         schedule
                     </span>

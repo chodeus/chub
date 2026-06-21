@@ -185,7 +185,7 @@ class PageErrorBoundaryBase extends Component {
                     <h1 className="text-error text-3xl font-bold m-0 mb-2 leading-tight">
                         {pageName} Page Error
                     </h1>
-                    <p className="text-secondary text-lg leading-relaxed">
+                    <p className="text-fg-muted text-lg leading-relaxed">
                         {pageDescription
                             ? `There was a problem loading the ${pageDescription.toLowerCase()}.`
                             : `There was a problem loading the ${pageName} page.`}
@@ -202,7 +202,7 @@ class PageErrorBoundaryBase extends Component {
                 )}
 
                 <div className="bg-surface-alt border border-border rounded-md p-4 mb-6">
-                    <h3 className="text-primary text-xl font-semibold m-0 mb-3">Error Details</h3>
+                    <h3 className="text-fg text-xl font-semibold m-0 mb-3">Error Details</h3>
                     <div className="mb-2 text-sm font-mono break-words">
                         <strong>Error:</strong> {error?.message || 'Unknown error'}
                     </div>
@@ -226,10 +226,8 @@ class PageErrorBoundaryBase extends Component {
 
                 <div className="mt-6">
                     <div className="bg-surface-alt border border-border rounded-md p-4">
-                        <h4 className="text-primary text-lg font-semibold m-0 mb-3">
-                            What can I do?
-                        </h4>
-                        <ul className="m-0 pl-6 text-secondary text-sm leading-relaxed">
+                        <h4 className="text-fg text-lg font-semibold m-0 mb-3">What can I do?</h4>
+                        <ul className="m-0 pl-6 text-fg-muted text-sm leading-relaxed">
                             <li className="mb-2">
                                 Click &quot;Try Again&quot; to attempt reloading this page
                             </li>
@@ -245,7 +243,7 @@ class PageErrorBoundaryBase extends Component {
                 </div>
 
                 <div className="mt-6 pt-4 border-t border-border text-center">
-                    <p className="m-0 text-sm text-secondary leading-relaxed">
+                    <p className="m-0 text-sm text-fg-muted leading-relaxed">
                         If this error continues to occur, please check the application logs or
                         contact support for assistance.
                     </p>

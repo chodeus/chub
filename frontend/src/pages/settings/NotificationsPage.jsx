@@ -409,7 +409,7 @@ export const NotificationsPage = () => {
                     icon="notifications"
                 />
                 <div className="text-center py-12">
-                    <p className="text-secondary">Loading notifications...</p>
+                    <p className="text-fg-muted">Loading notifications...</p>
                 </div>
             </div>
         );
@@ -472,7 +472,7 @@ export const NotificationsPage = () => {
                         <div key={moduleName} className="mb-8">
                             {/* Module Header */}
                             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
-                                <h2 className="text-2xl font-semibold text-primary">
+                                <h2 className="text-2xl font-semibold text-fg">
                                     {humanize(moduleName)}
                                 </h2>
                                 <Button variant="primary" onClick={() => handleAdd(moduleName)}>
@@ -501,7 +501,7 @@ export const NotificationsPage = () => {
                     )
                 )
             ) : (
-                <div className="text-center py-12 text-secondary">
+                <div className="text-center py-12 text-fg-muted">
                     <p>No notifications configured</p>
                     <p className="text-sm mt-2">Add a notification to get started</p>
                 </div>
@@ -550,7 +550,7 @@ export const NotificationsPage = () => {
                                             <div className="flex-1 text-left">
                                                 <div className="font-medium">{service.label}</div>
                                                 {alreadyConfigured && (
-                                                    <div className="text-secondary text-sm">
+                                                    <div className="text-fg-muted text-sm">
                                                         Already configured
                                                     </div>
                                                 )}
@@ -591,9 +591,9 @@ export const NotificationsPage = () => {
                     </Modal.Header>
                     <Modal.Body>
                         <div className="mb-4">
-                            <p className="text-sm text-secondary">
+                            <p className="text-sm text-fg-muted">
                                 Module:{' '}
-                                <span className="font-medium text-primary">{selectedModule}</span>
+                                <span className="font-medium text-fg">{selectedModule}</span>
                             </p>
                         </div>
                         <div className="flex flex-col gap-4">
@@ -625,7 +625,7 @@ export const NotificationsPage = () => {
                         <Button
                             variant="ghost"
                             bgClass="bg-transparent"
-                            textClass="text-primary"
+                            textClass="text-fg"
                             onClick={() => {
                                 setAddModalOpen(false);
                                 setSelectedServiceType(null);
@@ -655,13 +655,13 @@ export const NotificationsPage = () => {
                     </Modal.Header>
                     <Modal.Body>
                         <div className="mb-4">
-                            <p className="text-sm text-secondary">
+                            <p className="text-sm text-fg-muted">
                                 Module:{' '}
-                                <span className="font-medium text-primary">{selectedModule}</span>
+                                <span className="font-medium text-fg">{selectedModule}</span>
                             </p>
-                            <p className="text-sm text-secondary">
+                            <p className="text-sm text-fg-muted">
                                 Service:{' '}
-                                <span className="font-medium text-primary">
+                                <span className="font-medium text-fg">
                                     {
                                         NOTIFICATIONS_SCHEMA.find(
                                             s => s.type === selectedServiceType
@@ -692,7 +692,7 @@ export const NotificationsPage = () => {
                         <Button
                             variant="ghost"
                             bgClass="bg-transparent"
-                            textClass="text-primary"
+                            textClass="text-fg"
                             onClick={() => setEditModalOpen(false)}
                             disabled={isSaving}
                             style={{ border: '2px solid var(--primary)' }}
@@ -722,11 +722,11 @@ export const NotificationsPage = () => {
                             <div className="p-4 bg-surface-alt rounded-lg border border-border">
                                 <div className="flex flex-col gap-2 text-sm">
                                     <div>
-                                        <span className="text-secondary">Module:</span>{' '}
+                                        <span className="text-fg-muted">Module:</span>{' '}
                                         <span className="font-medium">{moduleToDelete}</span>
                                     </div>
                                     <div>
-                                        <span className="text-secondary">Service:</span>{' '}
+                                        <span className="text-fg-muted">Service:</span>{' '}
                                         <span className="font-medium">
                                             {
                                                 NOTIFICATIONS_SCHEMA.find(
@@ -762,7 +762,7 @@ export const NotificationsPage = () => {
                     <Modal.Body>
                         {!bulkService ? (
                             <div className="flex flex-col gap-4">
-                                <p className="text-sm text-secondary">
+                                <p className="text-sm text-fg-muted">
                                     Choose a service, then pick which modules it should notify.
                                 </p>
                                 {NOTIFICATIONS_SCHEMA.map(service => (
@@ -809,7 +809,7 @@ export const NotificationsPage = () => {
                                 )}
                                 <div>
                                     <div className="flex items-center justify-between mb-2">
-                                        <span className="text-sm font-medium text-secondary">
+                                        <span className="text-sm font-medium text-fg-muted">
                                             Apply to modules ({bulkModules.size})
                                         </span>
                                         <div className="flex gap-2">

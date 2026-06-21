@@ -167,7 +167,7 @@ class FeatureErrorBoundaryBase extends Component {
         if (skipped) {
             return (
                 <div className="bg-surface-alt border border-warning rounded-md my-2 font-sans">
-                    <div className="p-3 text-sm text-secondary flex items-center gap-2">
+                    <div className="p-3 text-sm text-fg-muted flex items-center gap-2">
                         <span className="material-symbols-outlined text-base shrink-0">
                             skip_next
                         </span>
@@ -176,7 +176,7 @@ class FeatureErrorBoundaryBase extends Component {
                         </span>
                         <button
                             onClick={this.handleRetry}
-                            className="touch-target bg-transparent text-primary px-2 py-1 border border-transparent rounded-md cursor-pointer transition-colors hover:bg-surface-hover inline-flex items-center justify-center text-sm"
+                            className="touch-target bg-transparent text-fg px-2 py-1 border border-transparent rounded-md cursor-pointer transition-colors hover:bg-surface-hover inline-flex items-center justify-center text-sm"
                             type="button"
                             title="Try to load this feature again"
                         >
@@ -230,7 +230,7 @@ class FeatureErrorBoundaryBase extends Component {
                     <h2 className="text-error text-2xl font-bold m-0 mb-4 text-center leading-tight">
                         Critical Feature Error
                     </h2>
-                    <p className="text-primary text-base m-0 mb-5 text-center leading-relaxed">
+                    <p className="text-fg text-base m-0 mb-5 text-center leading-relaxed">
                         The {featureName} feature is required for the application to function
                         properly.
                     </p>
@@ -249,7 +249,7 @@ class FeatureErrorBoundaryBase extends Component {
                     className="bg-surface-alt border border-border-subtle rounded-md my-2 opacity-70 font-sans"
                     title={`${featureName} is temporarily disabled due to repeated errors`}
                 >
-                    <div className="p-3 text-sm text-tertiary flex items-center gap-2">
+                    <div className="p-3 text-sm text-fg-subtle flex items-center gap-2">
                         <span className="material-symbols-outlined text-base shrink-0">
                             warning
                         </span>
@@ -311,18 +311,18 @@ class FeatureErrorBoundaryBase extends Component {
                                 {featureName} Error
                             </h3>
                             {featureDescription && (
-                                <p className="text-secondary text-sm leading-relaxed">
+                                <p className="text-fg-muted text-sm leading-relaxed">
                                     {featureDescription}
                                 </p>
                             )}
                         </div>
                     </div>
 
-                    <div className="text-primary">
+                    <div className="text-fg">
                         <div className="bg-surface-alt border border-error p-3 mb-4 text-sm break-words">
                             <strong>Error:</strong> {error?.message || 'Component failed to render'}
                             {retryCount > 0 && (
-                                <span className="text-secondary font-normal">
+                                <span className="text-fg-muted font-normal">
                                     {' '}
                                     (Attempt {retryCount + 1})
                                 </span>

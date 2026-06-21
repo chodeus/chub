@@ -179,7 +179,7 @@ const SortableDirectoryItem = React.memo(
                 {/* Non-touch devices: Drag Handle (left side) */}
                 {enableReordering && (
                     <div
-                        className="flex items-center justify-center w-11 h-11 text-brand-primary cursor-grab hover:text-primary transition-colors touch-target flex-shrink-0"
+                        className="flex items-center justify-center w-11 h-11 text-brand-primary cursor-grab hover:text-fg transition-colors touch-target flex-shrink-0"
                         {...attributes}
                         {...listeners}
                     >
@@ -553,7 +553,7 @@ export const DirectoryArray = React.memo(
                     <Modal.Footer>
                         <button
                             onClick={() => setModalOpen(false)}
-                            className="px-4 py-2 bg-surface-alt text-primary rounded-lg hover:bg-surface-hover transition-colors min-h-11"
+                            className="px-4 py-2 bg-surface-alt text-fg rounded-lg hover:bg-surface-hover transition-colors min-h-11"
                         >
                             Close
                         </button>

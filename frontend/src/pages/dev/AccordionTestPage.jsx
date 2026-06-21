@@ -18,17 +18,15 @@ const AccordionTestPage = () => {
 
     return (
         <div className="p-6 max-w-4xl mx-auto">
-            <h1 className="text-2xl font-bold mb-6 text-primary">
-                AccordionItem Component Testing
-            </h1>
+            <h1 className="text-2xl font-bold mb-6 text-fg">AccordionItem Component Testing</h1>
 
             <div className="space-y-8">
                 {/* Test 1: Uncontrolled Mode */}
                 <section>
-                    <h2 className="text-xl font-semibold mb-4 text-primary">
+                    <h2 className="text-xl font-semibold mb-4 text-fg">
                         Test 1: Uncontrolled Mode
                     </h2>
-                    <p className="mb-4 text-secondary">
+                    <p className="mb-4 text-fg-muted">
                         Component starts expanded, clicking toggles state internally.
                     </p>
 
@@ -38,10 +36,10 @@ const AccordionTestPage = () => {
                     >
                         <AccordionItem.Header className="list-none">
                             <div className="w-full px-4 py-4 md:px-6 bg-surface hover:bg-surface-hover flex items-center justify-between min-h-11 touch-manipulation">
-                                <span className="font-medium text-sm md:text-base text-primary pr-2">
+                                <span className="font-medium text-sm md:text-base text-fg pr-2">
                                     Test Header (Uncontrolled)
                                 </span>
-                                <span className="material-symbols-outlined transition-transform duration-200 text-xl text-secondary flex-shrink-0">
+                                <span className="material-symbols-outlined transition-transform duration-200 text-xl text-fg-muted flex-shrink-0">
                                     expand_more
                                 </span>
                             </div>
@@ -49,7 +47,7 @@ const AccordionTestPage = () => {
                         <AccordionItem.Body>
                             <div className="bg-surface-elevated border-t border-border-subtle">
                                 <div className="px-4 py-4 md:px-6">
-                                    <div className="text-primary">
+                                    <div className="text-fg">
                                         Test Body Content - This accordion starts expanded and
                                         manages its own state.
                                     </div>
@@ -61,10 +59,8 @@ const AccordionTestPage = () => {
 
                 {/* Test 2: Controlled Mode */}
                 <section>
-                    <h2 className="text-xl font-semibold mb-4 text-primary">
-                        Test 2: Controlled Mode
-                    </h2>
-                    <p className="mb-4 text-secondary">
+                    <h2 className="text-xl font-semibold mb-4 text-fg">Test 2: Controlled Mode</h2>
+                    <p className="mb-4 text-fg-muted">
                         Parent controls state, onToggle callback fires on click.
                     </p>
 
@@ -88,10 +84,10 @@ const AccordionTestPage = () => {
                     >
                         <AccordionItem.Header className="list-none">
                             <div className="w-full px-4 py-4 md:px-6 bg-surface hover:bg-surface-hover flex items-center justify-between min-h-11 touch-manipulation">
-                                <span className="font-medium text-sm md:text-base text-primary pr-2">
+                                <span className="font-medium text-sm md:text-base text-fg pr-2">
                                     Controlled Header
                                 </span>
-                                <span className="material-symbols-outlined transition-transform duration-200 text-xl text-secondary flex-shrink-0">
+                                <span className="material-symbols-outlined transition-transform duration-200 text-xl text-fg-muted flex-shrink-0">
                                     expand_more
                                 </span>
                             </div>
@@ -99,7 +95,7 @@ const AccordionTestPage = () => {
                         <AccordionItem.Body>
                             <div className="bg-surface-elevated border-t border-border-subtle">
                                 <div className="px-4 py-4 md:px-6">
-                                    <div className="text-primary">
+                                    <div className="text-fg">
                                         Controlled Body - State managed by parent component.
                                     </div>
                                 </div>
@@ -110,10 +106,10 @@ const AccordionTestPage = () => {
 
                 {/* Test 3: Render Prop Pattern */}
                 <section>
-                    <h2 className="text-xl font-semibold mb-4 text-primary">
+                    <h2 className="text-xl font-semibold mb-4 text-fg">
                         Test 3: Render Prop Pattern
                     </h2>
-                    <p className="mb-4 text-secondary">
+                    <p className="mb-4 text-fg-muted">
                         Render function receives isExpanded prop, icon rotates based on state.
                     </p>
 
@@ -121,11 +117,11 @@ const AccordionTestPage = () => {
                         <AccordionItem.Header className="list-none">
                             {({ isExpanded }) => (
                                 <div className="w-full px-4 py-4 md:px-6 bg-surface hover:bg-surface-hover flex items-center justify-between min-h-11 touch-manipulation">
-                                    <span className="font-medium text-sm md:text-base text-primary pr-2">
+                                    <span className="font-medium text-sm md:text-base text-fg pr-2">
                                         Dynamic Header (Render Prop)
                                     </span>
                                     <span
-                                        className="material-symbols-outlined transition-transform duration-200 text-xl text-secondary flex-shrink-0"
+                                        className="material-symbols-outlined transition-transform duration-200 text-xl text-fg-muted flex-shrink-0"
                                         style={{
                                             transform: isExpanded
                                                 ? 'rotate(90deg)'
@@ -140,7 +136,7 @@ const AccordionTestPage = () => {
                         <AccordionItem.Body>
                             <div className="bg-surface-elevated border-t border-border-subtle">
                                 <div className="px-4 py-4 md:px-6">
-                                    <div className="text-primary">
+                                    <div className="text-fg">
                                         Dynamic content with rotating chevron icon.
                                     </div>
                                 </div>
@@ -151,20 +147,20 @@ const AccordionTestPage = () => {
 
                 {/* Test 4: Keyboard Navigation */}
                 <section>
-                    <h2 className="text-xl font-semibold mb-4 text-primary">
+                    <h2 className="text-xl font-semibold mb-4 text-fg">
                         Test 4: Keyboard Navigation
                     </h2>
-                    <p className="mb-4 text-secondary">
+                    <p className="mb-4 text-fg-muted">
                         Tab to focus header, then use Enter or Space to toggle.
                     </p>
 
                     <AccordionItem>
                         <AccordionItem.Header className="list-none focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2">
                             <div className="w-full px-4 py-4 md:px-6 bg-surface hover:bg-surface-hover flex items-center justify-between min-h-11 touch-manipulation">
-                                <span className="font-medium text-sm md:text-base text-primary pr-2">
+                                <span className="font-medium text-sm md:text-base text-fg pr-2">
                                     Keyboard Test Header
                                 </span>
-                                <span className="material-symbols-outlined transition-transform duration-200 text-xl text-secondary flex-shrink-0">
+                                <span className="material-symbols-outlined transition-transform duration-200 text-xl text-fg-muted flex-shrink-0">
                                     expand_more
                                 </span>
                             </div>
@@ -172,7 +168,7 @@ const AccordionTestPage = () => {
                         <AccordionItem.Body>
                             <div className="bg-surface-elevated border-t border-border-subtle">
                                 <div className="px-4 py-4 md:px-6">
-                                    <div className="text-primary">
+                                    <div className="text-fg">
                                         Content accessible via keyboard navigation.
                                     </div>
                                 </div>
@@ -183,10 +179,10 @@ const AccordionTestPage = () => {
 
                 {/* Test 5: Multiple Accordions */}
                 <section>
-                    <h2 className="text-xl font-semibold mb-4 text-primary">
+                    <h2 className="text-xl font-semibold mb-4 text-fg">
                         Test 5: Multiple Accordions
                     </h2>
-                    <p className="mb-4 text-secondary">
+                    <p className="mb-4 text-fg-muted">
                         Each accordion is independent, state isolated per component.
                     </p>
 
@@ -197,10 +193,10 @@ const AccordionTestPage = () => {
                         >
                             <AccordionItem.Header className="list-none">
                                 <div className="w-full px-4 py-4 md:px-6 bg-surface hover:bg-surface-hover flex items-center justify-between min-h-11 touch-manipulation">
-                                    <span className="font-medium text-sm md:text-base text-primary pr-2">
+                                    <span className="font-medium text-sm md:text-base text-fg pr-2">
                                         First Accordion (Default Expanded)
                                     </span>
-                                    <span className="material-symbols-outlined transition-transform duration-200 text-xl text-secondary flex-shrink-0">
+                                    <span className="material-symbols-outlined transition-transform duration-200 text-xl text-fg-muted flex-shrink-0">
                                         expand_more
                                     </span>
                                 </div>
@@ -208,7 +204,7 @@ const AccordionTestPage = () => {
                             <AccordionItem.Body>
                                 <div className="bg-surface-elevated border-t border-border-subtle">
                                     <div className="px-4 py-4 md:px-6">
-                                        <div className="text-primary">
+                                        <div className="text-fg">
                                             First content - starts expanded.
                                         </div>
                                     </div>
@@ -222,10 +218,10 @@ const AccordionTestPage = () => {
                         >
                             <AccordionItem.Header className="list-none">
                                 <div className="w-full px-4 py-4 md:px-6 bg-surface hover:bg-surface-hover flex items-center justify-between min-h-11 touch-manipulation">
-                                    <span className="font-medium text-sm md:text-base text-primary pr-2">
+                                    <span className="font-medium text-sm md:text-base text-fg pr-2">
                                         Second Accordion (Default Collapsed)
                                     </span>
-                                    <span className="material-symbols-outlined transition-transform duration-200 text-xl text-secondary flex-shrink-0">
+                                    <span className="material-symbols-outlined transition-transform duration-200 text-xl text-fg-muted flex-shrink-0">
                                         expand_more
                                     </span>
                                 </div>
@@ -233,7 +229,7 @@ const AccordionTestPage = () => {
                             <AccordionItem.Body>
                                 <div className="bg-surface-elevated border-t border-border-subtle">
                                     <div className="px-4 py-4 md:px-6">
-                                        <div className="text-primary">
+                                        <div className="text-fg">
                                             Second content - starts collapsed.
                                         </div>
                                     </div>
@@ -247,10 +243,10 @@ const AccordionTestPage = () => {
                         >
                             <AccordionItem.Header className="list-none">
                                 <div className="w-full px-4 py-4 md:px-6 bg-surface hover:bg-surface-hover flex items-center justify-between min-h-11 touch-manipulation">
-                                    <span className="font-medium text-sm md:text-base text-primary pr-2">
+                                    <span className="font-medium text-sm md:text-base text-fg pr-2">
                                         Third Accordion (Default Collapsed)
                                     </span>
-                                    <span className="material-symbols-outlined transition-transform duration-200 text-xl text-secondary flex-shrink-0">
+                                    <span className="material-symbols-outlined transition-transform duration-200 text-xl text-fg-muted flex-shrink-0">
                                         expand_more
                                     </span>
                                 </div>
@@ -258,7 +254,7 @@ const AccordionTestPage = () => {
                             <AccordionItem.Body>
                                 <div className="bg-surface-elevated border-t border-border-subtle">
                                     <div className="px-4 py-4 md:px-6">
-                                        <div className="text-primary">
+                                        <div className="text-fg">
                                             Third content - starts collapsed.
                                         </div>
                                     </div>
@@ -270,10 +266,10 @@ const AccordionTestPage = () => {
 
                 {/* Test 6: Configurable Cursor */}
                 <section>
-                    <h2 className="text-xl font-semibold mb-4 text-primary">
+                    <h2 className="text-xl font-semibold mb-4 text-fg">
                         Test 6: Configurable Cursor
                     </h2>
-                    <p className="mb-4 text-secondary">
+                    <p className="mb-4 text-fg-muted">
                         Testing cursor behavior - default pointer cursor vs overridden default
                         cursor.
                     </p>
@@ -283,10 +279,10 @@ const AccordionTestPage = () => {
                         <AccordionItem>
                             <AccordionItem.Header className="list-none">
                                 <div className="w-full px-4 py-4 md:px-6 bg-surface hover:bg-surface-hover flex items-center justify-between min-h-11 touch-manipulation">
-                                    <span className="font-medium text-sm md:text-base text-primary pr-2">
+                                    <span className="font-medium text-sm md:text-base text-fg pr-2">
                                         Default Cursor Test - Should show pointer cursor on hover
                                     </span>
-                                    <span className="material-symbols-outlined transition-transform duration-200 text-xl text-secondary flex-shrink-0">
+                                    <span className="material-symbols-outlined transition-transform duration-200 text-xl text-fg-muted flex-shrink-0">
                                         expand_more
                                     </span>
                                 </div>
@@ -294,7 +290,7 @@ const AccordionTestPage = () => {
                             <AccordionItem.Body>
                                 <div className="bg-surface-elevated border-t border-border-subtle">
                                     <div className="px-4 py-4 md:px-6">
-                                        <div className="text-primary">
+                                        <div className="text-fg">
                                             This accordion header shows the default pointer cursor
                                             on hover.
                                         </div>
@@ -307,11 +303,11 @@ const AccordionTestPage = () => {
                         <AccordionItem>
                             <AccordionItem.Header className="list-none cursor-default">
                                 <div className="w-full px-4 py-4 md:px-6 bg-surface hover:bg-surface-hover flex items-center justify-between min-h-11 touch-manipulation">
-                                    <span className="font-medium text-sm md:text-base text-primary pr-2">
+                                    <span className="font-medium text-sm md:text-base text-fg pr-2">
                                         Default Cursor Override Test - Should show default cursor on
                                         hover
                                     </span>
-                                    <span className="material-symbols-outlined transition-transform duration-200 text-xl text-secondary flex-shrink-0">
+                                    <span className="material-symbols-outlined transition-transform duration-200 text-xl text-fg-muted flex-shrink-0">
                                         expand_more
                                     </span>
                                 </div>
@@ -319,7 +315,7 @@ const AccordionTestPage = () => {
                             <AccordionItem.Body>
                                 <div className="bg-surface-elevated border-t border-border-subtle">
                                     <div className="px-4 py-4 md:px-6">
-                                        <div className="text-primary">
+                                        <div className="text-fg">
                                             This accordion header uses the
                                             &apos;cursor-default&apos; utility class to override the
                                             pointer cursor.
@@ -333,10 +329,8 @@ const AccordionTestPage = () => {
 
                 {/* Error Handling Test */}
                 <section>
-                    <h2 className="text-xl font-semibold mb-4 text-primary">
-                        Test 7: Error Handling
-                    </h2>
-                    <p className="mb-4 text-secondary">
+                    <h2 className="text-xl font-semibold mb-4 text-fg">Test 7: Error Handling</h2>
+                    <p className="mb-4 text-fg-muted">
                         Using subcomponents outside AccordionItem should throw errors (check
                         console).
                     </p>
@@ -358,10 +352,10 @@ const AccordionTestPage = () => {
 
                 {/* Phase 2: Accordion Container Tests */}
                 <section>
-                    <h2 className="text-xl font-semibold mb-4 text-primary">
+                    <h2 className="text-xl font-semibold mb-4 text-fg">
                         Phase 2: Accordion Container Integration Tests
                     </h2>
-                    <p className="mb-4 text-secondary">
+                    <p className="mb-4 text-fg-muted">
                         Testing Accordion container component with AccordionItem compound
                         components.
                     </p>
@@ -369,20 +363,18 @@ const AccordionTestPage = () => {
                     <div className="space-y-6">
                         {/* Test: Basic Integration */}
                         <div>
-                            <h3 className="text-lg font-medium mb-2 text-primary">
-                                Basic Integration
-                            </h3>
-                            <p className="mb-3 text-sm text-secondary">
+                            <h3 className="text-lg font-medium mb-2 text-fg">Basic Integration</h3>
+                            <p className="mb-3 text-sm text-fg-muted">
                                 Multiple AccordionItems in Accordion container with default spacing
                             </p>
                             <Accordion>
                                 <AccordionItem>
                                     <AccordionItem.Header className="list-none">
                                         <div className="w-full px-4 py-4 md:px-6 bg-surface hover:bg-surface-hover flex items-center justify-between min-h-11 touch-manipulation">
-                                            <span className="font-medium text-sm md:text-base text-primary pr-2">
+                                            <span className="font-medium text-sm md:text-base text-fg pr-2">
                                                 Container Item 1
                                             </span>
-                                            <span className="material-symbols-outlined transition-transform duration-200 text-xl text-secondary flex-shrink-0">
+                                            <span className="material-symbols-outlined transition-transform duration-200 text-xl text-fg-muted flex-shrink-0">
                                                 expand_more
                                             </span>
                                         </div>
@@ -390,7 +382,7 @@ const AccordionTestPage = () => {
                                     <AccordionItem.Body>
                                         <div className="bg-surface-elevated border-t border-border-subtle">
                                             <div className="px-4 py-4 md:px-6">
-                                                <div className="text-primary">
+                                                <div className="text-fg">
                                                     Content within Accordion container
                                                 </div>
                                             </div>
@@ -400,10 +392,10 @@ const AccordionTestPage = () => {
                                 <AccordionItem>
                                     <AccordionItem.Header className="list-none">
                                         <div className="w-full px-4 py-4 md:px-6 bg-surface hover:bg-surface-hover flex items-center justify-between min-h-11 touch-manipulation">
-                                            <span className="font-medium text-sm md:text-base text-primary pr-2">
+                                            <span className="font-medium text-sm md:text-base text-fg pr-2">
                                                 Container Item 2
                                             </span>
-                                            <span className="material-symbols-outlined transition-transform duration-200 text-xl text-secondary flex-shrink-0">
+                                            <span className="material-symbols-outlined transition-transform duration-200 text-xl text-fg-muted flex-shrink-0">
                                                 expand_more
                                             </span>
                                         </div>
@@ -411,7 +403,7 @@ const AccordionTestPage = () => {
                                     <AccordionItem.Body>
                                         <div className="bg-surface-elevated border-t border-border-subtle">
                                             <div className="px-4 py-4 md:px-6">
-                                                <div className="text-primary">
+                                                <div className="text-fg">
                                                     Second content with proper spacing
                                                 </div>
                                             </div>
@@ -423,10 +415,10 @@ const AccordionTestPage = () => {
 
                         {/* Test: Custom Spacing */}
                         <div>
-                            <h3 className="text-lg font-medium mb-2 text-primary">
+                            <h3 className="text-lg font-medium mb-2 text-fg">
                                 Custom Spacing Test
                             </h3>
-                            <p className="mb-3 text-sm text-secondary">
+                            <p className="mb-3 text-sm text-fg-muted">
                                 Accordion with space-y-4 custom spacing
                             </p>
                             <Accordion className="space-y-4">
@@ -436,10 +428,10 @@ const AccordionTestPage = () => {
                                 >
                                     <AccordionItem.Header className="list-none">
                                         <div className="w-full px-4 py-4 md:px-6 bg-surface hover:bg-surface-hover flex items-center justify-between min-h-11 touch-manipulation">
-                                            <span className="font-medium text-sm md:text-base text-primary pr-2">
+                                            <span className="font-medium text-sm md:text-base text-fg pr-2">
                                                 Spaced Item 1 (Expanded)
                                             </span>
-                                            <span className="material-symbols-outlined transition-transform duration-200 text-xl text-secondary flex-shrink-0">
+                                            <span className="material-symbols-outlined transition-transform duration-200 text-xl text-fg-muted flex-shrink-0">
                                                 expand_more
                                             </span>
                                         </div>
@@ -447,7 +439,7 @@ const AccordionTestPage = () => {
                                     <AccordionItem.Body>
                                         <div className="bg-surface-elevated border-t border-border-subtle">
                                             <div className="px-4 py-4 md:px-6">
-                                                <div className="text-primary">
+                                                <div className="text-fg">
                                                     First item with increased spacing below
                                                 </div>
                                             </div>
@@ -457,10 +449,10 @@ const AccordionTestPage = () => {
                                 <AccordionItem>
                                     <AccordionItem.Header className="list-none">
                                         <div className="w-full px-4 py-4 md:px-6 bg-surface hover:bg-surface-hover flex items-center justify-between min-h-11 touch-manipulation">
-                                            <span className="font-medium text-sm md:text-base text-primary pr-2">
+                                            <span className="font-medium text-sm md:text-base text-fg pr-2">
                                                 Spaced Item 2
                                             </span>
-                                            <span className="material-symbols-outlined transition-transform duration-200 text-xl text-secondary flex-shrink-0">
+                                            <span className="material-symbols-outlined transition-transform duration-200 text-xl text-fg-muted flex-shrink-0">
                                                 expand_more
                                             </span>
                                         </div>
@@ -468,7 +460,7 @@ const AccordionTestPage = () => {
                                     <AccordionItem.Body>
                                         <div className="bg-surface-elevated border-t border-border-subtle">
                                             <div className="px-4 py-4 md:px-6">
-                                                <div className="text-primary">
+                                                <div className="text-fg">
                                                     Spacing preserved during expansion/collapse
                                                 </div>
                                             </div>
@@ -480,10 +472,8 @@ const AccordionTestPage = () => {
 
                         {/* Test: Single Item */}
                         <div>
-                            <h3 className="text-lg font-medium mb-2 text-primary">
-                                Single Item Test
-                            </h3>
-                            <p className="mb-3 text-sm text-secondary">
+                            <h3 className="text-lg font-medium mb-2 text-fg">Single Item Test</h3>
+                            <p className="mb-3 text-sm text-fg-muted">
                                 Single AccordionItem in Accordion container
                             </p>
                             <Accordion>
@@ -493,10 +483,10 @@ const AccordionTestPage = () => {
                                 >
                                     <AccordionItem.Header className="list-none">
                                         <div className="w-full px-4 py-4 md:px-6 bg-surface hover:bg-surface-hover flex items-center justify-between min-h-11 touch-manipulation">
-                                            <span className="font-medium text-sm md:text-base text-primary pr-2">
+                                            <span className="font-medium text-sm md:text-base text-fg pr-2">
                                                 Single Item (Expanded)
                                             </span>
-                                            <span className="material-symbols-outlined transition-transform duration-200 text-xl text-secondary flex-shrink-0">
+                                            <span className="material-symbols-outlined transition-transform duration-200 text-xl text-fg-muted flex-shrink-0">
                                                 expand_more
                                             </span>
                                         </div>
@@ -504,7 +494,7 @@ const AccordionTestPage = () => {
                                     <AccordionItem.Body>
                                         <div className="bg-surface-elevated border-t border-border-subtle">
                                             <div className="px-4 py-4 md:px-6">
-                                                <div className="text-primary">
+                                                <div className="text-fg">
                                                     Single item within container works perfectly
                                                 </div>
                                             </div>
@@ -518,19 +508,17 @@ const AccordionTestPage = () => {
 
                 {/* Modal Tests - Phase 1 */}
                 <section>
-                    <h2 className="text-xl font-semibold mb-4 text-primary">
+                    <h2 className="text-xl font-semibold mb-4 text-fg">
                         Modal Component Tests (Phase 1)
                     </h2>
-                    <p className="mb-4 text-secondary">
+                    <p className="mb-4 text-fg-muted">
                         Testing Modal compound component with controlled/uncontrolled modes
                     </p>
 
                     <div className="space-y-4">
                         {/* Controlled Mode Test */}
                         <div>
-                            <h3 className="text-lg font-medium mb-2 text-primary">
-                                Controlled Mode
-                            </h3>
+                            <h3 className="text-lg font-medium mb-2 text-fg">Controlled Mode</h3>
                             <button
                                 onClick={() => setControlledModalOpen(true)}
                                 className="bg-primary text-white px-4 py-2 rounded hover:bg-primary-hover min-h-11"
@@ -544,17 +532,17 @@ const AccordionTestPage = () => {
                             >
                                 <Modal.Header>Controlled Modal</Modal.Header>
                                 <Modal.Body>
-                                    <p className="text-primary">
+                                    <p className="text-fg">
                                         This is a controlled modal. Parent manages the state.
                                     </p>
-                                    <p className="text-secondary mt-2">
+                                    <p className="text-fg-muted mt-2">
                                         Click backdrop, ESC key, or close button to close.
                                     </p>
                                 </Modal.Body>
                                 <Modal.Footer align="right">
                                     <button
                                         onClick={() => setControlledModalOpen(false)}
-                                        className="bg-secondary text-white px-4 py-2 rounded hover:bg-secondary-hover min-h-11"
+                                        className="bg-surface-alt text-white px-4 py-2 rounded hover:bg-secondary-hover min-h-11"
                                     >
                                         Close
                                     </button>
@@ -564,7 +552,7 @@ const AccordionTestPage = () => {
 
                         {/* Size Variants Test */}
                         <div>
-                            <h3 className="text-lg font-medium mb-2 text-primary">Size Variants</h3>
+                            <h3 className="text-lg font-medium mb-2 text-fg">Size Variants</h3>
                             <div className="flex gap-3 flex-wrap">
                                 {['small', 'medium', 'large', 'full'].map(size => (
                                     <button
@@ -589,15 +577,15 @@ const AccordionTestPage = () => {
                                         Modal
                                     </Modal.Header>
                                     <Modal.Body>
-                                        <p className="text-primary">
+                                        <p className="text-fg">
                                             This is a {modalOpen} modal demonstrating size variant.
                                         </p>
                                         <div className="mt-4 space-y-2">
-                                            <p className="text-secondary">
+                                            <p className="text-fg-muted">
                                                 Sample content to show scrolling:
                                             </p>
                                             {Array.from({ length: 10 }, (_, i) => (
-                                                <p key={i} className="text-secondary">
+                                                <p key={i} className="text-fg-muted">
                                                     Line {i + 1}: Lorem ipsum dolor sit amet,
                                                     consectetur adipiscing elit.
                                                 </p>
@@ -607,7 +595,7 @@ const AccordionTestPage = () => {
                                     <Modal.Footer align="space-between">
                                         <button
                                             onClick={() => setModalOpen(false)}
-                                            className="bg-secondary text-white px-4 py-2 rounded hover:bg-secondary-hover min-h-11"
+                                            className="bg-surface-alt text-white px-4 py-2 rounded hover:bg-secondary-hover min-h-11"
                                         >
                                             Cancel
                                         </button>

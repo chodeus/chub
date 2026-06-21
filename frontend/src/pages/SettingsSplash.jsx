@@ -78,8 +78,8 @@ export const SettingsSplash = React.memo(() => {
         <div className="flex flex-col gap-6">
             {/* Page Header */}
             <div className="flex flex-col gap-2">
-                <h1 className="text-3xl font-bold text-primary font-display m-0">Settings</h1>
-                <p className="text-base text-secondary m-0">
+                <h1 className="text-3xl font-bold text-fg font-display m-0">Settings</h1>
+                <p className="text-base text-fg-muted m-0">
                     Tune CHUB to match the shape of your stack.
                 </p>
             </div>
@@ -105,10 +105,10 @@ export const SettingsSplash = React.memo(() => {
                                 </span>
                             </span>
                             <div className="flex flex-col gap-1 min-w-0">
-                                <h2 className="text-base font-semibold text-primary m-0">
+                                <h2 className="text-base font-semibold text-fg m-0">
                                     {card.title}
                                 </h2>
-                                <p className="text-sm text-secondary m-0 leading-snug">
+                                <p className="text-sm text-fg-muted m-0 leading-snug">
                                     {card.description}
                                 </p>
                             </div>

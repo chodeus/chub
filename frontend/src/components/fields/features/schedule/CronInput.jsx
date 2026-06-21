@@ -78,7 +78,7 @@ export const CronInput = React.memo(
 
         return (
             <div className={`mb-4 ${className}`}>
-                <div className="text-sm font-medium text-secondary mb-2">Cron Expression</div>
+                <div className="text-sm font-medium text-fg-muted mb-2">Cron Expression</div>
 
                 <input
                     type="text"
@@ -88,7 +88,7 @@ export const CronInput = React.memo(
                     placeholder="0 9 * * 1-5  (9 AM on weekdays)"
                     className={`
                     w-full px-3 py-2 border rounded-lg min-h-11
-                    bg-input text-primary font-mono text-sm
+                    bg-input text-fg font-mono text-sm
                     transition-colors duration-200
                     ${
                         disabled
@@ -104,13 +104,13 @@ export const CronInput = React.memo(
                 />
 
                 {/* Help text */}
-                <div className="text-xs text-tertiary mt-1">
+                <div className="text-xs text-fg-subtle mt-1">
                     Format: minute hour day month weekday
                     <a
                         href="https://crontab.guru"
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="ml-2 text-primary hover:text-primary-hover underline"
+                        className="ml-2 text-fg hover:text-primary-hover underline"
                     >
                         crontab.guru helper
                     </a>
@@ -137,7 +137,7 @@ export const CronInput = React.memo(
 
                 {/* Common examples */}
                 {!value.trim() && (
-                    <div className="mt-2 text-xs text-tertiary">
+                    <div className="mt-2 text-xs text-fg-subtle">
                         <div className="font-medium mb-1">Common examples:</div>
                         <div className="space-y-1">
                             <div>

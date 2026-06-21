@@ -34,7 +34,7 @@ export const WeekdaySelector = React.memo(
 
         return (
             <div className={`mb-4 ${className}`}>
-                <div className="text-sm font-medium text-secondary mb-2">Select Days</div>
+                <div className="text-sm font-medium text-fg-muted mb-2">Select Days</div>
 
                 {/* Mobile: Stack layout for touch accessibility */}
                 <div className="md:hidden space-y-2">
@@ -54,7 +54,7 @@ export const WeekdaySelector = React.memo(
                                 ${
                                     isSelected
                                         ? 'bg-primary text-white border border-primary shadow-sm'
-                                        : 'bg-surface-elevated text-primary border border-border hover:bg-primary hover:border-border-light'
+                                        : 'bg-surface-elevated text-fg border border-border hover:bg-primary hover:border-border-light'
                                 }
                             `}
                             >
@@ -84,7 +84,7 @@ export const WeekdaySelector = React.memo(
                                 ${
                                     isSelected
                                         ? 'bg-primary text-white border border-primary shadow-sm'
-                                        : 'bg-surface-elevated text-primary border border-border hover:bg-primary hover:border-border-light'
+                                        : 'bg-surface-elevated text-fg border border-border hover:bg-primary hover:border-border-light'
                                 }
                             `}
                             >
@@ -95,7 +95,7 @@ export const WeekdaySelector = React.memo(
                 </div>
 
                 {selectedDays.length > 0 && (
-                    <div className="text-xs text-tertiary mt-2">
+                    <div className="text-xs text-fg-subtle mt-2">
                         Selected:{' '}
                         {selectedDays
                             .map(day => WEEKDAYS.find(w => w.key === day)?.fullName)

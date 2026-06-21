@@ -11,7 +11,7 @@ const SpinnerSizeDemo = React.memo(() => {
 
     return (
         <div className="bg-surface-elevated rounded p-6 border">
-            <h3 className="text-lg font-semibold text-primary mb-4">Spinner Sizes</h3>
+            <h3 className="text-lg font-semibold text-fg mb-4">Spinner Sizes</h3>
 
             <div className="grid grid-cols-3 gap-6">
                 {sizes.map(size => (
@@ -19,8 +19,8 @@ const SpinnerSizeDemo = React.memo(() => {
                         <div className="flex justify-center items-center mb-3 h-16">
                             <Spinner size={size} />
                         </div>
-                        <div className="text-sm text-secondary font-medium capitalize">{size}</div>
-                        <div className="text-xs text-tertiary mt-1">
+                        <div className="text-sm text-fg-muted font-medium capitalize">{size}</div>
+                        <div className="text-xs text-fg-subtle mt-1">
                             {size === 'small' && '16px (w-4 h-4)'}
                             {size === 'medium' && '24px (w-6 h-6)'}
                             {size === 'large' && '32px (w-8 h-8)'}
@@ -43,7 +43,7 @@ const SpinnerTextDemo = React.memo(() => {
 
     return (
         <div className="bg-surface-elevated rounded p-6 border">
-            <h3 className="text-lg font-semibold text-primary mb-4">Spinners with Text</h3>
+            <h3 className="text-lg font-semibold text-fg mb-4">Spinners with Text</h3>
 
             <div className="space-y-4">
                 {configurations.map(({ size, text }) => (
@@ -64,7 +64,7 @@ SpinnerTextDemo.displayName = 'SpinnerTextDemo';
 const CenteredSpinnerDemo = React.memo(() => {
     return (
         <div className="bg-surface-elevated rounded border">
-            <h3 className="text-lg font-semibold text-primary p-6 pb-0 mb-4">
+            <h3 className="text-lg font-semibold text-fg p-6 pb-0 mb-4">
                 Centered Spinners (Suspense Fallbacks)
             </h3>
 
@@ -109,12 +109,12 @@ const LoadingStateSimulation = React.memo(() => {
 
     return (
         <div className="bg-surface-elevated rounded p-6 border">
-            <h3 className="text-lg font-semibold text-primary mb-4">Interactive Loading States</h3>
+            <h3 className="text-lg font-semibold text-fg mb-4">Interactive Loading States</h3>
 
             <div className="grid grid-cols-2 gap-4">
                 {/* Button Loading */}
                 <div className="space-y-2">
-                    <label className="text-sm font-medium text-secondary">Button Loading:</label>
+                    <label className="text-sm font-medium text-fg-muted">Button Loading:</label>
                     <button
                         onClick={() => simulateLoading('button')}
                         disabled={loadingStates.button}
@@ -127,7 +127,7 @@ const LoadingStateSimulation = React.memo(() => {
 
                 {/* Form Submission */}
                 <div className="space-y-2">
-                    <label className="text-sm font-medium text-secondary">Form Submission:</label>
+                    <label className="text-sm font-medium text-fg-muted">Form Submission:</label>
                     <button
                         onClick={() => simulateLoading('form', 3000)}
                         disabled={loadingStates.form}
@@ -140,7 +140,7 @@ const LoadingStateSimulation = React.memo(() => {
 
                 {/* Data Loading */}
                 <div className="space-y-2">
-                    <label className="text-sm font-medium text-secondary">Data Loading:</label>
+                    <label className="text-sm font-medium text-fg-muted">Data Loading:</label>
                     <button
                         onClick={() => simulateLoading('data', 1500)}
                         disabled={loadingStates.data}
@@ -153,7 +153,7 @@ const LoadingStateSimulation = React.memo(() => {
 
                 {/* Save Operation */}
                 <div className="space-y-2">
-                    <label className="text-sm font-medium text-secondary">Save Operation:</label>
+                    <label className="text-sm font-medium text-fg-muted">Save Operation:</label>
                     <button
                         onClick={() => simulateLoading('save', 2500)}
                         disabled={loadingStates.save}
@@ -186,11 +186,11 @@ const AnimationPerformanceTest = React.memo(() => {
 
     return (
         <div className="bg-surface-elevated rounded p-6 border">
-            <h3 className="text-lg font-semibold text-primary mb-4">Animation Performance Test</h3>
+            <h3 className="text-lg font-semibold text-fg mb-4">Animation Performance Test</h3>
 
             <div className="space-y-4">
                 <div className="flex items-center gap-4">
-                    <label className="text-sm font-medium text-secondary">
+                    <label className="text-sm font-medium text-fg-muted">
                         Spinner Count: {spinnerCount}
                     </label>
                     <input
@@ -251,12 +251,12 @@ const AccessibilityTest = React.memo(() => {
 
     return (
         <div className="bg-surface-elevated rounded p-6 border">
-            <h3 className="text-lg font-semibold text-primary mb-4">Accessibility Compliance</h3>
+            <h3 className="text-lg font-semibold text-fg mb-4">Accessibility Compliance</h3>
 
             <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                        <label className="text-sm font-medium text-secondary">
+                        <label className="text-sm font-medium text-fg-muted">
                             Reduced Motion Preference:
                         </label>
                         <div
@@ -273,7 +273,7 @@ const AccessibilityTest = React.memo(() => {
                     </div>
 
                     <div className="space-y-2">
-                        <label className="text-sm font-medium text-secondary">
+                        <label className="text-sm font-medium text-fg-muted">
                             Spinner with Motion:
                         </label>
                         <div className="flex justify-center p-4 bg-surface rounded border">
@@ -286,7 +286,7 @@ const AccessibilityTest = React.memo(() => {
                     <h4 className="text-sm font-semibold text-info mb-2">
                         Accessibility Features:
                     </h4>
-                    <ul className="text-sm text-secondary space-y-1">
+                    <ul className="text-sm text-fg-muted space-y-1">
                         <li>
                             • Respects <code>prefers-reduced-motion</code> media query
                         </li>
@@ -325,10 +325,8 @@ const SpinnerTestPage = () => {
             <div className="space-y-6">
                 {/* Header */}
                 <div className="text-center">
-                    <h1 className="text-2xl font-bold text-primary mb-2">
-                        Spinner Component Testing
-                    </h1>
-                    <p className="text-secondary">
+                    <h1 className="text-2xl font-bold text-fg mb-2">Spinner Component Testing</h1>
+                    <p className="text-fg-muted">
                         Comprehensive testing interface for spinner components, animations, and
                         loading states
                     </p>
@@ -344,7 +342,7 @@ const SpinnerTestPage = () => {
                                 className={`px-3 py-2 text-sm rounded transition-colors ${
                                     activeTest === test.id
                                         ? 'bg-primary text-brand-primary'
-                                        : 'bg-surface hover:bg-surface-hover text-secondary hover:text-primary'
+                                        : 'bg-surface hover:bg-surface-hover text-fg-muted hover:text-fg'
                                 }`}
                             >
                                 {test.label}
@@ -363,7 +361,7 @@ const SpinnerTestPage = () => {
                 ) : ActiveComponent ? (
                     <ActiveComponent />
                 ) : (
-                    <div className="text-center py-8 text-secondary">
+                    <div className="text-center py-8 text-fg-muted">
                         Select a test category to begin
                     </div>
                 )}

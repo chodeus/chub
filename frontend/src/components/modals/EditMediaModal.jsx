@@ -128,7 +128,7 @@ const EditMediaModal = ({ isOpen, onClose, item, onSave, isSaving = false }) => 
                             <button
                                 type="button"
                                 onClick={() => setHistoryOpen(o => !o)}
-                                className="w-full flex items-center justify-between px-3 py-2 text-sm text-secondary hover:text-primary"
+                                className="w-full flex items-center justify-between px-3 py-2 text-sm text-fg-muted hover:text-fg"
                             >
                                 <span className="flex items-center gap-2">
                                     <span className="material-symbols-outlined text-base">
@@ -142,7 +142,7 @@ const EditMediaModal = ({ isOpen, onClose, item, onSave, isSaving = false }) => 
                             </button>
                             {historyOpen && (
                                 <div className="border-t border-border px-3 py-2 max-h-56 overflow-y-auto text-xs">
-                                    {historyLoading && <p className="text-tertiary">Loading…</p>}
+                                    {historyLoading && <p className="text-fg-subtle">Loading…</p>}
                                     {historyError && !historyLoading && (
                                         <p className="text-error">{historyError}</p>
                                     )}
@@ -150,7 +150,7 @@ const EditMediaModal = ({ isOpen, onClose, item, onSave, isSaving = false }) => 
                                         !historyError &&
                                         history &&
                                         history.length === 0 && (
-                                            <p className="text-tertiary">
+                                            <p className="text-fg-subtle">
                                                 No metadata edits recorded for this item.
                                             </p>
                                         )}
@@ -161,20 +161,20 @@ const EditMediaModal = ({ isOpen, onClose, item, onSave, isSaving = false }) => 
                                                     key={row.id}
                                                     className="flex flex-wrap items-baseline gap-x-2"
                                                 >
-                                                    <span className="text-tertiary whitespace-nowrap">
+                                                    <span className="text-fg-subtle whitespace-nowrap">
                                                         {formatHistoryTimestamp(row.edited_at)}
                                                     </span>
-                                                    <span className="text-primary font-medium">
+                                                    <span className="text-fg font-medium">
                                                         {row.field}
                                                     </span>
-                                                    <span className="text-tertiary">
+                                                    <span className="text-fg-subtle">
                                                         {row.old_value ?? '∅'} →{' '}
-                                                        <span className="text-primary">
+                                                        <span className="text-fg">
                                                             {row.new_value ?? '∅'}
                                                         </span>
                                                     </span>
                                                     {row.edited_by && (
-                                                        <span className="text-tertiary ml-auto">
+                                                        <span className="text-fg-subtle ml-auto">
                                                             by {row.edited_by}
                                                         </span>
                                                     )}
@@ -193,14 +193,14 @@ const EditMediaModal = ({ isOpen, onClose, item, onSave, isSaving = false }) => 
                                 key={field.key}
                                 className={field.key === 'title' ? 'sm:col-span-2' : ''}
                             >
-                                <label className="block text-xs font-medium text-secondary mb-1">
+                                <label className="block text-xs font-medium text-fg-muted mb-1">
                                     {field.label}
                                 </label>
                                 {field.type === 'select' ? (
                                     <select
                                         value={formData[field.key] || ''}
                                         onChange={e => handleChange(field.key, e.target.value)}
-                                        className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-primary text-sm focus:border-primary outline-none"
+                                        className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-fg text-sm focus:border-primary outline-none"
                                     >
                                         {field.options.map(opt => (
                                             <option key={opt} value={opt}>
@@ -214,7 +214,7 @@ const EditMediaModal = ({ isOpen, onClose, item, onSave, isSaving = false }) => 
                                         value={formData[field.key] || ''}
                                         onChange={e => handleChange(field.key, e.target.value)}
                                         placeholder={field.placeholder || ''}
-                                        className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-primary text-sm focus:border-primary outline-none"
+                                        className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-fg text-sm focus:border-primary outline-none"
                                     />
                                 )}
                             </div>

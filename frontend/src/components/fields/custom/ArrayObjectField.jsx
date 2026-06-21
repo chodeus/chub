@@ -145,7 +145,7 @@ export const ArrayObjectField = ({
                     }}
                 >
                     <div className="flex-1 flex flex-col gap-1 md:flex-row md:items-center md:gap-4 min-w-0">
-                        <div className="font-medium text-primary text-sm truncate">{primary}</div>
+                        <div className="font-medium text-fg text-sm truncate">{primary}</div>
                         {secondary &&
                             (Array.isArray(secondary) ? (
                                 <div className="flex flex-wrap gap-1.5">
@@ -154,14 +154,14 @@ export const ArrayObjectField = ({
                                         .map((seg, i) => (
                                             <span
                                                 key={i}
-                                                className="inline-flex items-center px-1.5 py-0.5 rounded bg-surface-alt text-xs text-secondary"
+                                                className="inline-flex items-center px-1.5 py-0.5 rounded bg-surface-alt text-xs text-fg-muted"
                                             >
                                                 {seg}
                                             </span>
                                         ))}
                                 </div>
                             ) : (
-                                <div className="text-xs text-secondary truncate">{secondary}</div>
+                                <div className="text-xs text-fg-muted truncate">{secondary}</div>
                             ))}
                         {badge && (
                             <div className="inline-flex items-center px-2 py-0.5 bg-primary/15 text-brand-primary rounded text-xs font-medium whitespace-nowrap self-start md:ml-auto md:flex-shrink-0">
@@ -208,7 +208,7 @@ export const ArrayObjectField = ({
         return (
             <div className="border border-border rounded-lg bg-surface-alt overflow-hidden animate-slide-down">
                 <div className="p-4 border-b border-border bg-surface">
-                    <h3 className="m-0 text-base font-semibold text-primary">{title}</h3>
+                    <h3 className="m-0 text-base font-semibold text-fg">{title}</h3>
                 </div>
 
                 <div className="p-4 flex flex-col gap-4">
@@ -276,7 +276,7 @@ export const ArrayObjectField = ({
                 <div className="flex gap-3 p-4 border-t border-border bg-surface justify-end flex-col-reverse md:flex-row">
                     <button
                         type="button"
-                        className="min-h-11 min-w-11 inline-flex items-center justify-center px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer border bg-surface text-primary border-border hover:bg-surface-hover focus:outline-2 focus:outline-primary focus:outline-offset-2 disabled:opacity-50 disabled:cursor-not-allowed w-full md:w-auto md:min-w-25"
+                        className="min-h-11 min-w-11 inline-flex items-center justify-center px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer border bg-surface text-fg border-border hover:bg-surface-hover focus:outline-2 focus:outline-primary focus:outline-offset-2 disabled:opacity-50 disabled:cursor-not-allowed w-full md:w-auto md:min-w-25"
                         onClick={handleCancel}
                         disabled={disabled}
                     >
@@ -318,7 +318,7 @@ export const ArrayObjectField = ({
                     </div>
                 ) : (
                     <div className="p-8 text-center border border-dashed border-border rounded-lg bg-surface-alt">
-                        <div className="text-sm text-secondary">
+                        <div className="text-sm text-fg-muted">
                             No {displayTemplate.itemName.toLowerCase()}s configured
                         </div>
                     </div>

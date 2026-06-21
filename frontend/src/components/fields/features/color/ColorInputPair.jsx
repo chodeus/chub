@@ -78,7 +78,6 @@ export const ColorInputPair = React.memo(
                     disabled={disabled}
                     ariaLabel={pickerAriaLabel}
                     title={`Select color for ${label}: ${normalizedValue}`}
-                    className={invalid ? 'invalid' : ''}
                 />
 
                 <ColorTextInput

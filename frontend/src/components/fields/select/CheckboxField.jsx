@@ -98,7 +98,7 @@ export const CheckboxField = React.memo(
                             htmlFor={inputId}
                             label={field.label}
                             required={field.required}
-                            className="text-sm font-normal leading-normal text-primary cursor-pointer select-none"
+                            className="text-sm font-normal leading-normal text-fg cursor-pointer select-none"
                         />
 
                         {field.description && (

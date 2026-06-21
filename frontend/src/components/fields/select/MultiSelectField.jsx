@@ -69,9 +69,9 @@ export const MultiSelectField = React.memo(
                         {selected.map((v, i) => (
                             <span
                                 key={v}
-                                className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-primary/20 text-primary text-sm"
+                                className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-primary/20 text-fg text-sm"
                             >
-                                <span className="text-xs text-tertiary">{i + 1}.</span>
+                                <span className="text-xs text-fg-subtle">{i + 1}.</span>
                                 {labelFor(v)}
                                 {!disabled && (
                                     <button

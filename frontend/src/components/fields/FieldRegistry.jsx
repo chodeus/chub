@@ -79,7 +79,7 @@ const UnknownFieldType = ({ field }) => {
 
     return (
         <>
-            <label className="text-sm font-medium text-secondary">
+            <label className="text-sm font-medium text-fg-muted">
                 {field.label}
                 {field.required && <span className="text-error ml-1">*</span>}
             </label>
@@ -93,7 +93,7 @@ const UnknownFieldType = ({ field }) => {
             </div>
 
             {field.description && (
-                <div id={`${inputId}-description`} className="text-sm text-tertiary mt-1">
+                <div id={`${inputId}-description`} className="text-sm text-fg-subtle mt-1">
                     {field.description}
                 </div>
             )}

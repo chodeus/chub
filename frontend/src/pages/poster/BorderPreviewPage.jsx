@@ -219,8 +219,8 @@ const BorderReplacerrPage = () => {
 const SectionHeader = ({ title, description, action = null }) => (
     <div className="flex items-start justify-between gap-3 mb-3">
         <div>
-            <h2 className="text-lg font-semibold text-primary">{title}</h2>
-            {description && <p className="text-sm text-tertiary mt-1 max-w-2xl">{description}</p>}
+            <h2 className="text-lg font-semibold text-fg">{title}</h2>
+            {description && <p className="text-sm text-fg-subtle mt-1 max-w-2xl">{description}</p>}
         </div>
         {action}
     </div>
@@ -254,16 +254,13 @@ const HolidaysSection = ({ holidays, onChange, disabled }) => {
     if (!holidays.length) {
         return (
             <section className="mt-6 p-6 bg-surface border border-dashed rounded-lg text-center">
-                <span className="material-symbols-outlined text-3xl text-tertiary block mb-2">
+                <span className="material-symbols-outlined text-3xl text-fg-subtle block mb-2">
                     event
                 </span>
-                <h2 className="text-lg font-semibold text-primary">No holidays configured</h2>
-                <p className="text-sm text-tertiary mt-1">
+                <h2 className="text-lg font-semibold text-fg">No holidays configured</h2>
+                <p className="text-sm text-fg-subtle mt-1">
                     Add holidays (name and date window) in{' '}
-                    <Link
-                        to="/settings/modules"
-                        className="text-primary underline hover:no-underline"
-                    >
+                    <Link to="/settings/modules" className="text-fg underline hover:no-underline">
                         Module Settings → Border Replacerr
                     </Link>
                     . They&apos;ll show up here so you can pick colors and themed border art.
@@ -328,10 +325,10 @@ const HolidayCard = ({ holiday, onChange, disabled }) => {
                 aria-expanded={expanded}
             >
                 <div className="min-w-0 flex-1">
-                    <div className="text-base font-medium text-primary truncate">
+                    <div className="text-base font-medium text-fg truncate">
                         {holiday.name || '(unnamed holiday)'}
                     </div>
-                    <div className="text-xs text-tertiary mt-0.5 flex flex-wrap gap-x-3 gap-y-1">
+                    <div className="text-xs text-fg-subtle mt-0.5 flex flex-wrap gap-x-3 gap-y-1">
                         <span>{holiday.schedule || 'No schedule set'}</span>
                         <span>·</span>
                         <span>
@@ -345,7 +342,7 @@ const HolidayCard = ({ holiday, onChange, disabled }) => {
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                     <ColorSwatchRow colors={colors} />
-                    <span className="material-symbols-outlined text-tertiary" aria-hidden="true">
+                    <span className="material-symbols-outlined text-fg-subtle" aria-hidden="true">
                         {expanded ? 'expand_less' : 'expand_more'}
                     </span>
                 </div>
@@ -353,11 +350,11 @@ const HolidayCard = ({ holiday, onChange, disabled }) => {
 
             {expanded && (
                 <div className="p-4 border-t border-border-subtle flex flex-col gap-5">
-                    <div className="text-xs text-tertiary">
+                    <div className="text-xs text-fg-subtle">
                         Name and date window edited in{' '}
                         <Link
                             to="/settings/modules"
-                            className="text-primary underline hover:no-underline"
+                            className="text-fg underline hover:no-underline"
                         >
                             Module Settings →
                         </Link>
@@ -378,7 +375,7 @@ const HolidayCard = ({ holiday, onChange, disabled }) => {
                     />
 
                     {borders.length > 0 && (
-                        <div className="text-xs text-tertiary flex items-start gap-2 p-2 rounded bg-info/30">
+                        <div className="text-xs text-fg-subtle flex items-start gap-2 p-2 rounded bg-info/30">
                             <span className="material-symbols-outlined text-sm shrink-0">info</span>
                             <span>
                                 Image mode active — selected border art is composited over each
@@ -408,7 +405,7 @@ const ColorSwatchRow = ({ colors }) => {
                     aria-hidden="true"
                 />
             ))}
-            {remainder > 0 && <span className="text-xs text-tertiary">+{remainder}</span>}
+            {remainder > 0 && <span className="text-xs text-fg-subtle">+{remainder}</span>}
         </div>
     );
 };
@@ -455,13 +452,13 @@ const BordersPicker = ({ holidayName, selected, onChange, disabled }) => {
     return (
         <div>
             <div className="flex items-baseline justify-between mb-2">
-                <h3 className="text-sm font-medium text-primary">Themed border art</h3>
-                <span className="text-xs text-tertiary">
+                <h3 className="text-sm font-medium text-fg">Themed border art</h3>
+                <span className="text-xs text-fg-subtle">
                     Click thumbnails to add/remove. Order = rotation order per poster.
                 </span>
             </div>
 
-            {isLoading && <div className="text-xs text-tertiary">Loading variants…</div>}
+            {isLoading && <div className="text-xs text-fg-subtle">Loading variants…</div>}
             {error && (
                 <div className="text-xs text-error">
                     {error.message || 'Failed to load border variants'}
@@ -469,9 +466,9 @@ const BordersPicker = ({ holidayName, selected, onChange, disabled }) => {
             )}
 
             {data && !data.folder && !isLoading && (
-                <div className="text-xs text-tertiary p-3 rounded bg-surface-alt border border-dashed">
+                <div className="text-xs text-fg-subtle p-3 rounded bg-surface-alt border border-dashed">
                     No bundled border folder maps to this holiday name. Drop custom PNGs at
-                    <code className="mx-1 text-primary">/config/borders/&lt;folder&gt;/</code>
+                    <code className="mx-1 text-fg">/config/borders/&lt;folder&gt;/</code>
                     to add your own.
                 </div>
             )}
@@ -499,8 +496,8 @@ const BordersPicker = ({ holidayName, selected, onChange, disabled }) => {
                         emptyMessage={
                             <>
                                 Drop PNG files at{' '}
-                                <code className="text-primary">/config/borders/{data.folder}/</code>{' '}
-                                to add custom variants.
+                                <code className="text-fg">/config/borders/{data.folder}/</code> to
+                                add custom variants.
                             </>
                         }
                     />
@@ -521,9 +518,9 @@ const ThumbnailGroup = ({
     emptyMessage,
 }) => (
     <div className="mt-3">
-        <div className="text-xs text-secondary uppercase tracking-wide mb-2">{label}</div>
+        <div className="text-xs text-fg-muted uppercase tracking-wide mb-2">{label}</div>
         {variants.length === 0 ? (
-            <div className="text-xs text-tertiary p-2">{emptyMessage}</div>
+            <div className="text-xs text-fg-subtle p-2">{emptyMessage}</div>
         ) : (
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2">
                 {variants.map(name => {
@@ -613,14 +610,14 @@ const PreviewSection = ({ isDirty }) => {
                 description="Side-by-side composites for a small mix of your matched media. The preview reads saved configuration."
                 action={
                     <div className="flex items-center gap-3 flex-wrap">
-                        <label className="flex items-center gap-2 text-sm text-secondary">
+                        <label className="flex items-center gap-2 text-sm text-fg-muted">
                             <span className="material-symbols-outlined text-base">event</span>
                             <span>Holiday</span>
                             <select
                                 value={holiday}
                                 onChange={handleHolidayChange}
                                 disabled={isLoadingOptions || isGenerating}
-                                className="bg-surface border border-border rounded px-2 py-1 text-sm text-primary"
+                                className="bg-surface border border-border rounded px-2 py-1 text-sm text-fg"
                             >
                                 {options.map(opt => (
                                     <option key={opt.value} value={opt.value}>
@@ -660,26 +657,26 @@ const PreviewSection = ({ isDirty }) => {
                 </div>
             )}
 
-            <div className="mb-3 text-sm text-secondary flex flex-wrap gap-x-6 gap-y-1">
+            <div className="mb-3 text-sm text-fg-muted flex flex-wrap gap-x-6 gap-y-1">
                 {mode === 'image' ? (
                     <span>
-                        <span className="text-tertiary">Mode: </span>
-                        <span className="text-primary font-medium">
+                        <span className="text-fg-subtle">Mode: </span>
+                        <span className="text-fg font-medium">
                             Image ({borderCount} variant{borderCount === 1 ? '' : 's'})
                         </span>
                     </span>
                 ) : (
                     borderWidth != null && (
                         <span>
-                            <span className="text-tertiary">Border width: </span>
-                            <span className="text-primary font-medium">{borderWidth}px</span>
+                            <span className="text-fg-subtle">Border width: </span>
+                            <span className="text-fg font-medium">{borderWidth}px</span>
                         </span>
                     )
                 )}
                 {activeHoliday && (
                     <span>
-                        <span className="text-tertiary">Active holiday: </span>
-                        <span className="text-primary font-medium">{activeHoliday}</span>
+                        <span className="text-fg-subtle">Active holiday: </span>
+                        <span className="text-fg font-medium">{activeHoliday}</span>
                     </span>
                 )}
                 {mode === 'remove' && previewData && (
@@ -690,8 +687,8 @@ const PreviewSection = ({ isDirty }) => {
                 )}
                 {mode === 'color' && paletteSize > 0 && (
                     <span>
-                        <span className="text-tertiary">Palette: </span>
-                        <span className="text-primary font-medium">
+                        <span className="text-fg-subtle">Palette: </span>
+                        <span className="text-fg font-medium">
                             {paletteSize} color{paletteSize === 1 ? '' : 's'}
                         </span>
                     </span>
@@ -705,12 +702,12 @@ const PreviewSection = ({ isDirty }) => {
             )}
 
             {!isGenerating && previewData && previews.length === 0 && (
-                <div className="mt-4 p-6 text-center bg-surface border border-dashed rounded-lg text-secondary">
-                    <span className="material-symbols-outlined text-4xl text-tertiary block mb-2">
+                <div className="mt-4 p-6 text-center bg-surface border border-dashed rounded-lg text-fg-muted">
+                    <span className="material-symbols-outlined text-4xl text-fg-subtle block mb-2">
                         image_not_supported
                     </span>
-                    <p className="text-primary font-medium">No matched posters yet</p>
-                    <p className="text-sm text-tertiary mt-1">
+                    <p className="text-fg font-medium">No matched posters yet</p>
+                    <p className="text-sm text-fg-subtle mt-1">
                         Run Poster Renamerr first to populate the matched-media cache, then come
                         back to preview borders.
                     </p>
@@ -750,24 +747,21 @@ const PreviewCard = ({ preview }) => {
             />
             <div className="p-3 flex items-center justify-between gap-2">
                 <div className="min-w-0">
-                    <div
-                        className="text-sm font-medium text-primary truncate"
-                        title={preview.title}
-                    >
+                    <div className="text-sm font-medium text-fg truncate" title={preview.title}>
                         {preview.title}
                     </div>
-                    <div className="text-xs text-tertiary">{kindLabel}</div>
+                    <div className="text-xs text-fg-subtle">{kindLabel}</div>
                 </div>
                 {preview.border ? (
                     <div
-                        className="text-xs text-secondary font-mono truncate max-w-[120px]"
+                        className="text-xs text-fg-muted font-mono truncate max-w-[120px]"
                         title={preview.border}
                     >
                         {preview.border}
                     </div>
                 ) : (
                     preview.color && (
-                        <div className="flex items-center gap-1 text-xs text-secondary">
+                        <div className="flex items-center gap-1 text-xs text-fg-muted">
                             <span
                                 className="inline-block w-4 h-4 rounded border border-border-subtle"
                                 style={{ backgroundColor: preview.color }}

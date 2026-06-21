@@ -39,7 +39,7 @@ export const CardPrimitivesTestPage = () => {
                 <Card.Body>
                     <div className="flex flex-wrap gap-4">
                         <label className="flex flex-col gap-1">
-                            <span className="text-sm text-secondary">Image Aspect Ratio</span>
+                            <span className="text-sm text-fg-muted">Image Aspect Ratio</span>
                             <select
                                 value={aspectRatio}
                                 onChange={e => setAspectRatio(e.target.value)}
@@ -53,7 +53,7 @@ export const CardPrimitivesTestPage = () => {
                         </label>
 
                         <label className="flex flex-col gap-1">
-                            <span className="text-sm text-secondary">Image Object Fit</span>
+                            <span className="text-sm text-fg-muted">Image Object Fit</span>
                             <select
                                 value={objectFit}
                                 onChange={e => setObjectFit(e.target.value)}
@@ -71,12 +71,10 @@ export const CardPrimitivesTestPage = () => {
 
             {/* Primitive Composition Pattern */}
             <section className="flex flex-col gap-3">
-                <h2 className="text-xl font-semibold text-primary">
-                    Primitive Composition Pattern
-                </h2>
+                <h2 className="text-xl font-semibold text-fg">Primitive Composition Pattern</h2>
                 <Card>
                     <Card.Body>
-                        <div className="text-sm text-secondary space-y-2">
+                        <div className="text-sm text-fg-muted space-y-2">
                             <p>
                                 <strong>5 Atomic Primitives:</strong>
                             </p>
@@ -116,7 +114,7 @@ export const CardPrimitivesTestPage = () => {
 
             {/* CardContainer Primitive - State Variations */}
             <section className="flex flex-col gap-3">
-                <h2 className="text-xl font-semibold text-primary">
+                <h2 className="text-xl font-semibold text-fg">
                     CardContainer Primitive (State Variations)
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -183,7 +181,7 @@ export const CardPrimitivesTestPage = () => {
 
             {/* CardHeader Primitive - Variations */}
             <section className="flex flex-col gap-3">
-                <h2 className="text-xl font-semibold text-primary">
+                <h2 className="text-xl font-semibold text-fg">
                     CardHeader Primitive (Title, Subtitle, Action)
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -240,7 +238,7 @@ export const CardPrimitivesTestPage = () => {
 
             {/* CardBody Primitive - Content Variations */}
             <section className="flex flex-col gap-3">
-                <h2 className="text-xl font-semibold text-primary">
+                <h2 className="text-xl font-semibold text-fg">
                     CardBody Primitive (Flexible Content)
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -304,7 +302,7 @@ export const CardPrimitivesTestPage = () => {
 
             {/* CardFooter Primitive - Alignment Options */}
             <section className="flex flex-col gap-3">
-                <h2 className="text-xl font-semibold text-primary">
+                <h2 className="text-xl font-semibold text-fg">
                     CardFooter Primitive (Alignment Options)
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -374,7 +372,7 @@ export const CardPrimitivesTestPage = () => {
 
             {/* CardImage Primitive - Aspect Ratios and States */}
             <section className="flex flex-col gap-3">
-                <h2 className="text-xl font-semibold text-primary">
+                <h2 className="text-xl font-semibold text-fg">
                     CardImage Primitive (Aspect Ratios & Object Fit)
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -430,7 +428,7 @@ export const CardPrimitivesTestPage = () => {
 
             {/* CardImage Error State */}
             <section className="flex flex-col gap-3">
-                <h2 className="text-xl font-semibold text-primary">
+                <h2 className="text-xl font-semibold text-fg">
                     CardImage Error State (Broken URL)
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -451,7 +449,7 @@ export const CardPrimitivesTestPage = () => {
 
             {/* Compound Component Full Example */}
             <section className="flex flex-col gap-3">
-                <h2 className="text-xl font-semibold text-primary">
+                <h2 className="text-xl font-semibold text-fg">
                     Compound Component Pattern (Full Example)
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -480,7 +478,7 @@ export const CardPrimitivesTestPage = () => {
                             </p>
                         </Card.Body>
                         <Card.Footer align="space-between">
-                            <span className="text-sm text-secondary">2 hours ago</span>
+                            <span className="text-sm text-fg-muted">2 hours ago</span>
                             <Button variant="primary" size="small">
                                 Read More
                             </Button>
@@ -517,7 +515,7 @@ export const CardPrimitivesTestPage = () => {
 
             {/* Preset Pattern: MediaCard */}
             <section className="flex flex-col gap-3">
-                <h2 className="text-xl font-semibold text-primary">MediaCard Preset Pattern</h2>
+                <h2 className="text-xl font-semibold text-fg">MediaCard Preset Pattern</h2>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <MediaCard
                         image="https://picsum.photos/800/533?random=3"
@@ -552,7 +550,7 @@ export const CardPrimitivesTestPage = () => {
 
             {/* Preset Pattern: ActionCard */}
             <section className="flex flex-col gap-3">
-                <h2 className="text-xl font-semibold text-primary">ActionCard Preset Pattern</h2>
+                <h2 className="text-xl font-semibold text-fg">ActionCard Preset Pattern</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <ActionCard
                         title="Start Your Free Trial"
@@ -604,25 +602,23 @@ export const CardPrimitivesTestPage = () => {
 
             {/* Interactive States Demo */}
             <section className="flex flex-col gap-3">
-                <h2 className="text-xl font-semibold text-primary">
-                    Interactive States Demonstration
-                </h2>
+                <h2 className="text-xl font-semibold text-fg">Interactive States Demonstration</h2>
                 <Card>
                     <Card.Body>
                         <div className="space-y-3">
-                            <p className="text-sm text-secondary">
+                            <p className="text-sm text-fg-muted">
                                 <strong>Hover States:</strong> Cards with hoverable prop show shadow
                                 elevation on hover
                             </p>
-                            <p className="text-sm text-secondary">
+                            <p className="text-sm text-fg-muted">
                                 <strong>Click States:</strong> Clickable cards have cursor pointer
                                 and can be activated with click or Enter key
                             </p>
-                            <p className="text-sm text-secondary">
+                            <p className="text-sm text-fg-muted">
                                 <strong>Selected States:</strong> Selected cards show primary border
                                 color
                             </p>
-                            <p className="text-sm text-secondary">
+                            <p className="text-sm text-fg-muted">
                                 <strong>Keyboard Navigation:</strong> Tab to focus, Enter or Space
                                 to activate clickable cards
                             </p>
@@ -635,7 +631,7 @@ export const CardPrimitivesTestPage = () => {
             <Card>
                 <Card.Header title="Architecture Documentation" />
                 <Card.Body>
-                    <div className="text-sm text-secondary space-y-2">
+                    <div className="text-sm text-fg-muted space-y-2">
                         <p>
                             <strong>Primitive Composition:</strong> Every card is built by
                             composing:
