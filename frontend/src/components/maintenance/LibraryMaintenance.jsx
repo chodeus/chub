@@ -16,11 +16,11 @@ const MaintenanceCard = ({ title, icon, description, children, defaultOpen = fal
             >
                 <span className="material-symbols-outlined text-warning">{icon}</span>
                 <div className="flex-1 min-w-0">
-                    <div className="font-medium text-primary">{title}</div>
-                    <div className="text-xs text-tertiary mt-0.5">{description}</div>
+                    <div className="font-medium text-fg">{title}</div>
+                    <div className="text-xs text-fg-subtle mt-0.5">{description}</div>
                 </div>
                 <span
-                    className="material-symbols-outlined text-secondary transition-transform"
+                    className="material-symbols-outlined text-fg-muted transition-transform"
                     style={{ transform: open ? 'rotate(90deg)' : 'rotate(0deg)' }}
                 >
                     chevron_right
@@ -87,7 +87,7 @@ const OrphanedCacheCard = () => {
                 </LoadingButton>
                 {data && (
                     <>
-                        <span className="text-sm text-secondary">
+                        <span className="text-sm text-fg-muted">
                             {items.length} orphaned · instances checked:{' '}
                             {(data.instances_checked || []).join(', ') || 'none'}
                         </span>
@@ -108,7 +108,7 @@ const OrphanedCacheCard = () => {
             </div>
             {items.length > 0 && (
                 <div className="rounded bg-surface-alt">
-                    <div className="flex items-center gap-2 p-2 border-b border-border text-xs text-tertiary">
+                    <div className="flex items-center gap-2 p-2 border-b border-border text-xs text-fg-subtle">
                         <input type="checkbox" checked={allSelected} onChange={toggleAll} />
                         <span>Select all</span>
                     </div>
@@ -126,14 +126,14 @@ const OrphanedCacheCard = () => {
                                     checked={selected.has(row.id)}
                                     onChange={() => toggleOne(row.id)}
                                 />
-                                <span className="flex-1 min-w-0 truncate text-primary text-sm">
+                                <span className="flex-1 min-w-0 truncate text-fg text-sm">
                                     {row.title}
                                 </span>
-                                <span className="text-xs text-tertiary capitalize">
+                                <span className="text-xs text-fg-subtle capitalize">
                                     {row.asset_type}
                                 </span>
-                                <span className="text-xs text-tertiary">{row.instance_name}</span>
-                                <span className="text-xs text-tertiary font-mono">
+                                <span className="text-xs text-fg-subtle">{row.instance_name}</span>
+                                <span className="text-xs text-fg-subtle font-mono">
                                     arr_id {row.arr_id}
                                 </span>
                             </label>
@@ -142,13 +142,13 @@ const OrphanedCacheCard = () => {
                 </div>
             )}
             {data && items.length === 0 && (
-                <div className="text-sm text-secondary">No orphaned rows found.</div>
+                <div className="text-sm text-fg-muted">No orphaned rows found.</div>
             )}
 
             <Modal isOpen={confirmPurge} onClose={() => setConfirmPurge(false)} size="small">
                 <Modal.Header>Purge {selected.size} cache row(s)?</Modal.Header>
                 <Modal.Body>
-                    <p className="text-sm text-secondary">
+                    <p className="text-sm text-fg-muted">
                         These rows will be removed from CHUB&apos;s local cache only. Nothing is
                         deleted from Radarr, Sonarr, Lidarr, or disk.
                     </p>
@@ -251,7 +251,7 @@ const IncompleteMetadataCard = () => {
                 >
                     Refresh check
                 </LoadingButton>
-                {data && <span className="text-sm text-secondary">{items.length} item(s)</span>}
+                {data && <span className="text-sm text-fg-muted">{items.length} item(s)</span>}
             </div>
             {items.length > 0 && (
                 <div className="rounded bg-surface-alt">
@@ -261,14 +261,14 @@ const IncompleteMetadataCard = () => {
                     >
                         {items.map(row => (
                             <div key={row.id} className="flex items-center gap-2 p-2">
-                                <span className="flex-1 min-w-0 truncate text-primary text-sm">
+                                <span className="flex-1 min-w-0 truncate text-fg text-sm">
                                     {row.title}
                                     {row.year ? ` (${row.year})` : ''}
                                 </span>
-                                <span className="text-xs text-tertiary capitalize">
+                                <span className="text-xs text-fg-subtle capitalize">
                                     {row.asset_type}
                                 </span>
-                                <span className="text-xs text-tertiary">{row.instance_name}</span>
+                                <span className="text-xs text-fg-subtle">{row.instance_name}</span>
                                 <span className="text-xs text-warning">
                                     missing: {whatsMissing(row) || '—'}
                                 </span>
@@ -278,7 +278,7 @@ const IncompleteMetadataCard = () => {
                 </div>
             )}
             {data && items.length === 0 && (
-                <div className="text-sm text-secondary">No items missing the selected fields.</div>
+                <div className="text-sm text-fg-muted">No items missing the selected fields.</div>
             )}
         </MaintenanceCard>
     );
@@ -286,7 +286,7 @@ const IncompleteMetadataCard = () => {
 
 export const LibraryMaintenance = () => (
     <section>
-        <h3 className="text-lg font-semibold text-primary mb-3 flex items-center gap-2">
+        <h3 className="text-lg font-semibold text-fg mb-3 flex items-center gap-2">
             <span className="material-symbols-outlined text-brand-primary">build</span>
             Library Maintenance
         </h3>

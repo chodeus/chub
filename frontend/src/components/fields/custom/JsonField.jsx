@@ -116,7 +116,7 @@ export const JsonField = ({
                         type="button"
                         onClick={formatJson}
                         disabled={disabled || !textValue.trim()}
-                        className="touch-target bg-surface text-primary px-3 py-2 border border-border rounded-lg cursor-pointer transition-colors hover:bg-surface-hover inline-flex items-center justify-center text-sm"
+                        className="touch-target bg-surface text-fg px-3 py-2 border border-border rounded-lg cursor-pointer transition-colors hover:bg-surface-hover inline-flex items-center justify-center text-sm"
                         title="Format JSON with indentation"
                         aria-label="Format JSON"
                     >
@@ -126,7 +126,7 @@ export const JsonField = ({
                         type="button"
                         onClick={minifyJson}
                         disabled={disabled || !textValue.trim()}
-                        className="touch-target bg-surface text-primary px-3 py-2 border border-border rounded-lg cursor-pointer transition-colors hover:bg-surface-hover inline-flex items-center justify-center text-sm"
+                        className="touch-target bg-surface text-fg px-3 py-2 border border-border rounded-lg cursor-pointer transition-colors hover:bg-surface-hover inline-flex items-center justify-center text-sm"
                         title="Minify JSON to single line"
                         aria-label="Minify JSON"
                     >

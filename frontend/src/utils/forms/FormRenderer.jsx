@@ -205,7 +205,7 @@ export const FormRenderer = React.memo(
                     {Object.entries(sections).map(([sectionName, sectionFields]) => (
                         <div key={sectionName} className="mb-8">
                             <div className="mb-4 pb-2 border-b border-border">
-                                <h3 className="m-0 text-lg font-semibold text-primary mb-1">
+                                <h3 className="m-0 text-lg font-semibold text-fg mb-1">
                                     {sectionName}
                                 </h3>
                             </div>
@@ -249,11 +249,9 @@ export const FormRenderer = React.memo(
                 {/* Form title and description */}
                 {schema.label && (
                     <div className="mb-4 pb-2 border-b border-border">
-                        <h2 className="m-0 text-lg font-semibold text-primary mb-1">
-                            {schema.label}
-                        </h2>
+                        <h2 className="m-0 text-lg font-semibold text-fg mb-1">{schema.label}</h2>
                         {schema.description && (
-                            <p className="m-0 text-sm text-secondary">{schema.description}</p>
+                            <p className="m-0 text-sm text-fg-muted">{schema.description}</p>
                         )}
                     </div>
                 )}

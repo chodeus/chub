@@ -22,30 +22,28 @@ const FieldStatusOverview = React.memo(() => {
 
     return (
         <div className="bg-surface-elevated rounded p-4 mb-8 border">
-            <h2 className="text-lg font-semibold text-primary mb-3 text-center">
+            <h2 className="text-lg font-semibold text-fg mb-3 text-center">
                 Field Implementation Status
             </h2>
 
             <div className="grid grid-cols-auto gap-3 mb-4">
                 <div className="bg-surface border rounded-sm p-3 text-center border-success">
-                    <div className="text-xl font-bold text-primary mb-1">{workingCount}</div>
-                    <div className="text-sm text-secondary">Working Fields</div>
+                    <div className="text-xl font-bold text-fg mb-1">{workingCount}</div>
+                    <div className="text-sm text-fg-muted">Working Fields</div>
                 </div>
                 <div className="bg-surface border rounded-sm p-3 text-center border-error">
-                    <div className="text-xl font-bold text-primary mb-1">{placeholderCount}</div>
-                    <div className="text-sm text-secondary">Placeholder Fields</div>
+                    <div className="text-xl font-bold text-fg mb-1">{placeholderCount}</div>
+                    <div className="text-sm text-fg-muted">Placeholder Fields</div>
                 </div>
                 <div className="bg-surface border rounded-sm p-3 text-center border-primary">
-                    <div className="text-xl font-bold text-primary mb-1">
-                        {completionPercentage}%
-                    </div>
-                    <div className="text-sm text-secondary">Completion Rate</div>
+                    <div className="text-xl font-bold text-fg mb-1">{completionPercentage}%</div>
+                    <div className="text-sm text-fg-muted">Completion Rate</div>
                 </div>
             </div>
 
             <div className="grid gap-4 grid-cols-auto-fit-md">
                 <div className="bg-surface border rounded-sm p-3">
-                    <h3 className="text-base font-medium text-primary mb-2">✅ Working Fields</h3>
+                    <h3 className="text-base font-medium text-fg mb-2">✅ Working Fields</h3>
                     <div className="flex flex-wrap gap-1">
                         {workingTypes.map(type => (
                             <span
@@ -59,9 +57,7 @@ const FieldStatusOverview = React.memo(() => {
                 </div>
 
                 <div className="bg-surface border rounded-sm p-3">
-                    <h3 className="text-base font-medium text-primary mb-2">
-                        ❌ Placeholder Fields
-                    </h3>
+                    <h3 className="text-base font-medium text-fg mb-2">❌ Placeholder Fields</h3>
                     <div className="flex flex-wrap gap-1">
                         {placeholderTypes.slice(0, 12).map(type => (
                             <span
@@ -72,7 +68,7 @@ const FieldStatusOverview = React.memo(() => {
                             </span>
                         ))}
                         {placeholderCount > 12 && (
-                            <span className="inline-flex items-center px-2 py-1 text-sm font-medium border rounded-sm bg-surface-elevated text-secondary border-border italic">
+                            <span className="inline-flex items-center px-2 py-1 text-sm font-medium border rounded-sm bg-surface-elevated text-fg-muted border-border italic">
                                 +{placeholderCount - 12} more
                             </span>
                         )}
@@ -377,7 +373,7 @@ const FieldTester = React.memo(
                 className={`bg-surface border rounded p-4 ${!isWorking ? 'opacity-70 border-dashed' : ''}`}
             >
                 <div className="flex justify-between items-center mb-4 flex-wrap gap-2">
-                    <h3 className="text-lg font-medium text-primary font-mono m-0">{fieldType}</h3>
+                    <h3 className="text-lg font-medium text-fg font-mono m-0">{fieldType}</h3>
                     <div className="flex gap-2">
                         {!isWorking && (
                             <span className="inline-flex items-center px-2 py-1 text-sm font-medium border rounded-sm bg-surface text-error border-error">
@@ -400,11 +396,11 @@ const FieldTester = React.memo(
                 {isWorking && (
                     <>
                         <div className="mb-4 p-3 bg-surface-elevated border rounded-sm">
-                            <h4 className="text-base font-medium text-primary mb-2">
+                            <h4 className="text-base font-medium text-fg mb-2">
                                 Field Configuration
                             </h4>
                             <div className="flex gap-4 flex-wrap">
-                                <label className="flex items-center justify-center gap-2 text-sm text-primary cursor-pointer touch-target px-2 py-2">
+                                <label className="flex items-center justify-center gap-2 text-sm text-fg cursor-pointer touch-target px-2 py-2">
                                     <input
                                         type="checkbox"
                                         checked={testConfig.required}
@@ -415,7 +411,7 @@ const FieldTester = React.memo(
                                     />
                                     Required
                                 </label>
-                                <label className="flex items-center justify-center gap-2 text-sm text-primary cursor-pointer touch-target px-2 py-2">
+                                <label className="flex items-center justify-center gap-2 text-sm text-fg cursor-pointer touch-target px-2 py-2">
                                     <input
                                         type="checkbox"
                                         checked={testConfig.disabled}
@@ -426,7 +422,7 @@ const FieldTester = React.memo(
                                     />
                                     Disabled
                                 </label>
-                                <label className="flex items-center justify-center gap-2 text-sm text-primary cursor-pointer touch-target px-2 py-2">
+                                <label className="flex items-center justify-center gap-2 text-sm text-fg cursor-pointer touch-target px-2 py-2">
                                     <input
                                         type="checkbox"
                                         checked={showError}
@@ -439,7 +435,7 @@ const FieldTester = React.memo(
                         </div>
 
                         <div className="mb-4 p-3 bg-surface-elevated border rounded-sm">
-                            <h4 className="text-base font-medium text-primary mb-2">Field Test</h4>
+                            <h4 className="text-base font-medium text-fg mb-2">Field Test</h4>
 
                             {fieldType === 'instances' ? (
                                 // Special handling for InstancesField with API data
@@ -474,9 +470,7 @@ const FieldTester = React.memo(
                         </div>
 
                         <div className="p-3 bg-surface-elevated border border-primary rounded-sm">
-                            <h4 className="text-base font-medium text-primary mb-2">
-                                Approval Status
-                            </h4>
+                            <h4 className="text-base font-medium text-fg mb-2">Approval Status</h4>
                             <div className="flex gap-2 flex-wrap">
                                 {isApproved ? (
                                     <button
@@ -505,7 +499,7 @@ const FieldTester = React.memo(
                 )}
 
                 {!isWorking && (
-                    <div className="p-4 text-center text-secondary italic">
+                    <div className="p-4 text-center text-fg-muted italic">
                         <p>
                             This field type is not implemented. It will show a placeholder message
                             in forms.
@@ -695,8 +689,8 @@ const FieldTestPage = () => {
     return (
         <div className="max-w-6xl mx-auto p-4">
             <div className="text-center mb-8 pb-4 border-b">
-                <h1 className="text-2xl font-bold text-primary mb-2">Field Development Testing</h1>
-                <p className="text-base text-secondary max-w-60ch mx-auto mb-4">
+                <h1 className="text-2xl font-bold text-fg mb-2">Field Development Testing</h1>
+                <p className="text-base text-fg-muted max-w-60ch mx-auto mb-4">
                     Development interface for testing and approving field implementations. Focus on
                     working field types and approval workflow.
                 </p>
@@ -706,20 +700,18 @@ const FieldTestPage = () => {
 
             <div className="bg-surface-elevated rounded p-4 mb-8 border">
                 <div className="flex justify-between items-center mb-4 flex-wrap gap-2">
-                    <h2 className="text-lg font-semibold text-primary m-0">
-                        Individual Field Testing
-                    </h2>
+                    <h2 className="text-lg font-semibold text-fg m-0">Individual Field Testing</h2>
                     <div className="flex flex-wrap gap-3">
-                        <span className="text-sm text-secondary bg-surface border p-1 px-2">
+                        <span className="text-sm text-fg-muted bg-surface border p-1 px-2">
                             Working: {stats.working}
                         </span>
-                        <span className="text-sm text-secondary bg-surface border p-1 px-2">
+                        <span className="text-sm text-fg-muted bg-surface border p-1 px-2">
                             Approved: {stats.approved}
                         </span>
-                        <span className="text-sm text-secondary bg-surface border p-1 px-2">
+                        <span className="text-sm text-fg-muted bg-surface border p-1 px-2">
                             Needs Testing: {stats.unapproved}
                         </span>
-                        <span className="text-sm text-secondary bg-surface border p-1 px-2">
+                        <span className="text-sm text-fg-muted bg-surface border p-1 px-2">
                             Placeholder: {stats.placeholder}
                         </span>
                     </div>
@@ -727,14 +719,14 @@ const FieldTestPage = () => {
 
                 <div className="flex gap-4 mb-4 flex-wrap">
                     <div className="flex items-center gap-2">
-                        <label htmlFor="filter-select" className="text-sm font-medium text-primary">
+                        <label htmlFor="filter-select" className="text-sm font-medium text-fg">
                             Filter:
                         </label>
                         <select
                             id="filter-select"
                             value={filter}
                             onChange={e => setFilter(e.target.value)}
-                            className="touch-target py-2.5 px-3 border bg-surface text-primary text-sm min-w-200 rounded-sm min-h-11"
+                            className="touch-target py-2.5 px-3 border bg-surface text-fg text-sm min-w-200 rounded-sm min-h-11"
                         >
                             <option value="all">All Field Types</option>
                             <option value="working">Working Only</option>
@@ -745,14 +737,11 @@ const FieldTestPage = () => {
                     </div>
 
                     <div className="flex items-center gap-2">
-                        <label
-                            htmlFor="field-type-select"
-                            className="text-sm font-medium text-primary"
-                        >
+                        <label htmlFor="field-type-select" className="text-sm font-medium text-fg">
                             Test Field:
                         </label>
                         {filteredFieldTypes.length === 0 ? (
-                            <div className="text-sm text-secondary">
+                            <div className="text-sm text-fg-muted">
                                 <span>No fields match this filter</span>
                             </div>
                         ) : (
@@ -760,7 +749,7 @@ const FieldTestPage = () => {
                                 id="field-type-select"
                                 value={selectedFieldType}
                                 onChange={e => handleFieldTypeSelect(e.target.value)}
-                                className="touch-target py-2.5 px-3 border bg-surface text-primary text-sm min-w-200 rounded-sm min-h-11"
+                                className="touch-target py-2.5 px-3 border bg-surface text-fg text-sm min-w-200 rounded-sm min-h-11"
                             >
                                 {filteredFieldTypes.map(type => (
                                     <option key={type} value={type}>
@@ -778,10 +767,10 @@ const FieldTestPage = () => {
                 <div className="mb-4">
                     {filteredFieldTypes.length === 0 ? (
                         <div className="text-center p-4">
-                            <h3 className="text-lg font-medium text-primary mb-2">
+                            <h3 className="text-lg font-medium text-fg mb-2">
                                 No Fields Available
                             </h3>
-                            <p className="text-secondary">
+                            <p className="text-fg-muted">
                                 No field types match the current filter. Try adjusting your filter
                                 selection to see available fields for testing.
                             </p>
@@ -805,12 +794,12 @@ const FieldTestPage = () => {
             </div>
 
             <div className="bg-surface-elevated rounded p-4 border mb-4">
-                <h3 className="text-lg font-semibold text-primary mb-3 text-center">
+                <h3 className="text-lg font-semibold text-fg mb-3 text-center">
                     Button Primitive Component Test
                 </h3>
                 <div className="space-y-4">
                     <div>
-                        <h4 className="text-sm font-medium text-primary mb-2">Color Variants:</h4>
+                        <h4 className="text-sm font-medium text-fg mb-2">Color Variants:</h4>
                         <div className="flex gap-2 flex-wrap">
                             <Button color="primary">Primary</Button>
                             <Button color="success">Success</Button>
@@ -822,7 +811,7 @@ const FieldTestPage = () => {
                         </div>
                     </div>
                     <div>
-                        <h4 className="text-sm font-medium text-primary mb-2">Size Variants:</h4>
+                        <h4 className="text-sm font-medium text-fg mb-2">Size Variants:</h4>
                         <div className="flex gap-2 items-center flex-wrap">
                             <Button size="small" color="primary">
                                 Small (36px)
@@ -836,7 +825,7 @@ const FieldTestPage = () => {
                         </div>
                     </div>
                     <div>
-                        <h4 className="text-sm font-medium text-primary mb-2">States:</h4>
+                        <h4 className="text-sm font-medium text-fg mb-2">States:</h4>
                         <div className="flex gap-2 flex-wrap">
                             <Button color="primary">Normal</Button>
                             <Button color="primary" disabled>
@@ -848,9 +837,7 @@ const FieldTestPage = () => {
             </div>
 
             <div className="bg-surface-elevated rounded p-4 border">
-                <h3 className="text-lg font-semibold text-primary mb-3 text-center">
-                    Quick Actions
-                </h3>
+                <h3 className="text-lg font-semibold text-fg mb-3 text-center">Quick Actions</h3>
                 <div className="flex gap-2 justify-center flex-wrap">
                     <Button
                         color="primary"

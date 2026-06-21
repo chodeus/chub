@@ -87,11 +87,11 @@ const statusPillClass = status => {
         case 'error':
             return 'bg-error/20 text-error';
         case 'running':
-            return 'bg-primary/20 text-primary';
+            return 'bg-primary/20 text-fg';
         case 'pending':
             return 'bg-warning/20 text-warning';
         default:
-            return 'bg-surface-alt text-secondary';
+            return 'bg-surface-alt text-fg-muted';
     }
 };
 
@@ -500,10 +500,10 @@ const DashboardPage = () => {
                 style={{ order: 0 }}
             >
                 <div className="min-w-0">
-                    <h1 className="text-3xl md:text-4xl font-bold text-primary m-0">
+                    <h1 className="text-3xl md:text-4xl font-bold text-fg m-0">
                         Hello{user ? `, ${user}` : ''}!
                     </h1>
-                    <p className="text-secondary mt-1 mb-0">
+                    <p className="text-fg-muted mt-1 mb-0">
                         Here&apos;s what&apos;s happening across your media stack today.
                     </p>
                 </div>
@@ -533,8 +533,8 @@ const DashboardPage = () => {
                 (diskMounts.length > 0 || instanceHealth.total > 0 || jobStats.failed > 0) && (
                     <section style={sectionStyle('health')}>
                         <div className="mb-4">
-                            <h2 className="text-xl font-bold text-primary m-0">Health</h2>
-                            <p className="text-secondary text-sm mt-1 mb-0">
+                            <h2 className="text-xl font-bold text-fg m-0">Health</h2>
+                            <p className="text-fg-muted text-sm mt-1 mb-0">
                                 Quick look at disk, instances, and recent failures.
                             </p>
                         </div>
@@ -568,12 +568,12 @@ const DashboardPage = () => {
                                             to="/settings/instances"
                                             className={`no-underline bg-surface border border-border-light rounded-lg p-4 flex flex-col gap-1 hover:border-border ${borderTone}`}
                                         >
-                                            <div className="text-tertiary text-xs uppercase tracking-wider">
+                                            <div className="text-fg-subtle text-xs uppercase tracking-wider">
                                                 Instances
                                             </div>
                                             {hasProbes ? (
                                                 <>
-                                                    <div className="text-2xl font-bold text-primary">
+                                                    <div className="text-2xl font-bold text-fg">
                                                         {instanceHealth.reachable} /{' '}
                                                         {instanceHealth.probedCount} up
                                                     </div>
@@ -587,7 +587,7 @@ const DashboardPage = () => {
                                                 </>
                                             ) : (
                                                 <>
-                                                    <div className="text-2xl font-bold text-primary">
+                                                    <div className="text-2xl font-bold text-fg">
                                                         {instanceHealth.enabled} /{' '}
                                                         {instanceHealth.total}
                                                     </div>
@@ -612,11 +612,11 @@ const DashboardPage = () => {
                                     lastFailure ? 'border-error/30' : ''
                                 }`}
                             >
-                                <div className="text-tertiary text-xs uppercase tracking-wider">
+                                <div className="text-fg-subtle text-xs uppercase tracking-wider">
                                     Last failure
                                 </div>
                                 <div
-                                    className={`text-lg font-bold truncate ${lastFailure ? 'text-error' : 'text-primary'}`}
+                                    className={`text-lg font-bold truncate ${lastFailure ? 'text-error' : 'text-fg'}`}
                                     title={
                                         lastFailure?.ts ? formatDateTime(lastFailure.ts) : undefined
                                     }
@@ -625,7 +625,7 @@ const DashboardPage = () => {
                                         ? formatTimeAgo(lastFailure.ts, new Date(tick))
                                         : 'None'}
                                 </div>
-                                <div className="text-xs text-tertiary truncate">
+                                <div className="text-xs text-fg-subtle truncate">
                                     {lastFailure
                                         ? humanize(lastFailure.moduleName)
                                         : 'No failed jobs'}
@@ -636,13 +636,13 @@ const DashboardPage = () => {
                                     to="/poster/search/assets"
                                     className="no-underline bg-surface border border-border-light rounded-lg p-4 flex flex-col gap-1 hover:border-border"
                                 >
-                                    <div className="text-tertiary text-xs uppercase tracking-wider">
+                                    <div className="text-fg-subtle text-xs uppercase tracking-wider">
                                         Cached posters
                                     </div>
-                                    <div className="text-2xl font-bold text-primary">
+                                    <div className="text-2xl font-bold text-fg">
                                         {posterStats.cached.toLocaleString()}
                                     </div>
-                                    <div className="text-xs text-tertiary">
+                                    <div className="text-xs text-fg-subtle">
                                         In local asset cache
                                     </div>
                                 </Link>
@@ -668,10 +668,10 @@ const DashboardPage = () => {
                                                 : paths[0]
                                         }
                                     >
-                                        <div className="text-tertiary text-xs uppercase tracking-wider truncate">
+                                        <div className="text-fg-subtle text-xs uppercase tracking-wider truncate">
                                             {paths.join(' · ')}
                                         </div>
-                                        <div className="text-2xl font-bold text-primary">
+                                        <div className="text-2xl font-bold text-fg">
                                             {freeGb} GB
                                         </div>
                                         <div className={`text-xs ${tone}`}>
@@ -689,8 +689,8 @@ const DashboardPage = () => {
                 <section style={sectionStyle('modules')}>
                     <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2 mb-4">
                         <div>
-                            <h2 className="text-xl font-bold text-primary m-0">Modules</h2>
-                            <p className="text-secondary text-sm mt-1 mb-0">
+                            <h2 className="text-xl font-bold text-fg m-0">Modules</h2>
+                            <p className="text-fg-muted text-sm mt-1 mb-0">
                                 Live status of your modules. Click a card to open its log.
                             </p>
                         </div>
@@ -734,7 +734,7 @@ const DashboardPage = () => {
                                     className="no-underline bg-surface border border-border-light rounded-lg p-4 flex flex-col gap-2 min-w-0 transition-transform hover:-translate-y-0.5 hover:border-border"
                                 >
                                     <div className="flex items-center justify-between gap-2 min-w-0">
-                                        <span className="font-semibold text-primary truncate min-w-0">
+                                        <span className="font-semibold text-fg truncate min-w-0">
                                             {humanize(mod.name)}
                                         </span>
                                         <div
@@ -761,12 +761,12 @@ const DashboardPage = () => {
                                             )}
                                         </div>
                                     </div>
-                                    <div className="text-sm text-secondary break-words">
+                                    <div className="text-sm text-fg-muted break-words">
                                         {schedule ? (
                                             <span>Schedule: {scheduleToHuman(schedule)}</span>
                                         ) : (
                                             <span className="inline-flex items-center gap-3 flex-wrap">
-                                                <span className="text-xs px-2 py-0.5 rounded-full bg-surface-alt text-tertiary">
+                                                <span className="text-xs px-2 py-0.5 rounded-full bg-surface-alt text-fg-subtle">
                                                     Manual only
                                                 </span>
                                                 {!isRunning && (
@@ -776,7 +776,7 @@ const DashboardPage = () => {
                                                             stopNav(e);
                                                             setRunNowTarget(mod.name);
                                                         }}
-                                                        className="inline-flex items-center gap-1 min-h-11 px-3 py-1.5 text-xs font-medium rounded-lg bg-primary/10 text-primary border border-primary/25 hover:bg-primary/20 transition-colors cursor-pointer"
+                                                        className="inline-flex items-center gap-1 min-h-11 px-3 py-1.5 text-xs font-medium rounded-lg bg-primary/10 text-fg border border-primary/25 hover:bg-primary/20 transition-colors cursor-pointer"
                                                     >
                                                         <span
                                                             className="material-symbols-outlined text-base"
@@ -791,7 +791,7 @@ const DashboardPage = () => {
                                         )}
                                     </div>
                                     {moduleSubSchedules.length > 0 && (
-                                        <div className="text-xs text-tertiary">
+                                        <div className="text-xs text-fg-subtle">
                                             <span className="font-semibold uppercase tracking-wider">
                                                 Per-instance
                                             </span>
@@ -815,7 +815,7 @@ const DashboardPage = () => {
                                         </div>
                                     )}
                                     {lastRun && (
-                                        <div className="text-xs text-tertiary">
+                                        <div className="text-xs text-fg-subtle">
                                             Last run: {formatTimeAgo(lastRun, new Date(tick))}
                                         </div>
                                     )}
@@ -841,10 +841,10 @@ const DashboardPage = () => {
                                 <span className="material-symbols-outlined">schedule</span>
                             </span>
                             <div className="min-w-0">
-                                <div className="text-xs font-semibold uppercase tracking-wider text-tertiary">
+                                <div className="text-xs font-semibold uppercase tracking-wider text-fg-subtle">
                                     Scheduler
                                 </div>
-                                <div className="text-lg font-bold text-primary">
+                                <div className="text-lg font-bold text-fg">
                                     {schedulerStateLabel}
                                 </div>
                             </div>
@@ -859,25 +859,25 @@ const DashboardPage = () => {
 
                     <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-sm">
                         <div className="bg-surface rounded-lg px-3 py-2">
-                            <div className="text-tertiary text-xs">Modules</div>
-                            <div className="font-semibold text-primary">{moduleCount}</div>
+                            <div className="text-fg-subtle text-xs">Modules</div>
+                            <div className="font-semibold text-fg">{moduleCount}</div>
                         </div>
                         <div className="bg-surface rounded-lg px-3 py-2">
-                            <div className="text-tertiary text-xs">Scheduled</div>
-                            <div className="font-semibold text-primary">{scheduledCount}</div>
+                            <div className="text-fg-subtle text-xs">Scheduled</div>
+                            <div className="font-semibold text-fg">{scheduledCount}</div>
                         </div>
                         <div className="bg-surface rounded-lg px-3 py-2">
-                            <div className="text-tertiary text-xs">Running</div>
-                            <div className="font-semibold text-primary">{runningCount}</div>
+                            <div className="text-fg-subtle text-xs">Running</div>
+                            <div className="font-semibold text-fg">{runningCount}</div>
                         </div>
                         <div className="bg-surface rounded-lg px-3 py-2">
-                            <div className="text-tertiary text-xs">Pending</div>
-                            <div className="font-semibold text-primary">{jobStats.pending}</div>
+                            <div className="text-fg-subtle text-xs">Pending</div>
+                            <div className="font-semibold text-fg">{jobStats.pending}</div>
                         </div>
                         <div className="bg-surface rounded-lg px-3 py-2">
-                            <div className="text-tertiary text-xs">Failed</div>
+                            <div className="text-fg-subtle text-xs">Failed</div>
                             <div
-                                className={`font-semibold ${jobStats.failed > 0 ? 'text-error' : 'text-primary'}`}
+                                className={`font-semibold ${jobStats.failed > 0 ? 'text-error' : 'text-fg'}`}
                             >
                                 {jobStats.failed}
                             </div>
@@ -885,11 +885,11 @@ const DashboardPage = () => {
                     </div>
 
                     <div>
-                        <div className="text-xs font-semibold uppercase tracking-wider text-tertiary mb-2">
+                        <div className="text-xs font-semibold uppercase tracking-wider text-fg-subtle mb-2">
                             Up next
                         </div>
                         {upcomingRuns.length === 0 ? (
-                            <div className="text-sm text-tertiary italic">
+                            <div className="text-sm text-fg-subtle italic">
                                 No scheduled runs coming up.
                             </div>
                         ) : (
@@ -900,15 +900,15 @@ const DashboardPage = () => {
                                         className="flex items-center justify-between gap-3 bg-surface rounded-lg px-3 py-2 text-sm"
                                     >
                                         <div className="min-w-0">
-                                            <div className="font-semibold text-primary truncate">
+                                            <div className="font-semibold text-fg truncate">
                                                 {entry.label}
                                             </div>
-                                            <div className="text-xs text-tertiary truncate">
+                                            <div className="text-xs text-fg-subtle truncate">
                                                 {scheduleToHuman(entry.schedule)}
                                             </div>
                                         </div>
                                         <div className="text-right shrink-0">
-                                            <div className="text-xs text-tertiary">
+                                            <div className="text-xs text-fg-subtle">
                                                 {entry.next.toLocaleTimeString([], {
                                                     hour: '2-digit',
                                                     minute: '2-digit',
@@ -930,8 +930,8 @@ const DashboardPage = () => {
             {showSection('quick_start') && (
                 <section style={sectionStyle('quick_start')}>
                     <div className="mb-4">
-                        <h2 className="text-xl font-bold text-primary m-0">Quick start</h2>
-                        <p className="text-secondary text-sm mt-1 mb-0">
+                        <h2 className="text-xl font-bold text-fg m-0">Quick start</h2>
+                        <p className="text-fg-muted text-sm mt-1 mb-0">
                             Jump straight into the things you do most.
                         </p>
                     </div>
@@ -949,8 +949,8 @@ const DashboardPage = () => {
                                     <span className="material-symbols-outlined">{card.icon}</span>
                                 </span>
                                 <div>
-                                    <div className="font-semibold text-primary">{card.title}</div>
-                                    <div className="text-sm text-secondary mt-1">
+                                    <div className="font-semibold text-fg">{card.title}</div>
+                                    <div className="text-sm text-fg-muted mt-1">
                                         {card.description}
                                     </div>
                                 </div>
@@ -963,7 +963,7 @@ const DashboardPage = () => {
             {/* Footer */}
             {prettyVersion && (
                 <footer
-                    className="text-xs text-tertiary text-center pt-4 border-t border-border-light"
+                    className="text-xs text-fg-subtle text-center pt-4 border-t border-border-light"
                     title={prettyVersion.raw}
                     style={{ order: 100 }}
                 >
@@ -975,9 +975,9 @@ const DashboardPage = () => {
             <Modal isOpen={!!runNowTarget} onClose={() => setRunNowTarget(null)} size="small">
                 <Modal.Header>Run {runNowTarget ? humanize(runNowTarget) : ''}?</Modal.Header>
                 <Modal.Body>
-                    <p className="text-secondary">
+                    <p className="text-fg-muted">
                         Queue{' '}
-                        <span className="font-semibold text-primary">
+                        <span className="font-semibold text-fg">
                             {runNowTarget ? humanize(runNowTarget) : ''}
                         </span>{' '}
                         for an immediate run. The module will execute with its currently saved

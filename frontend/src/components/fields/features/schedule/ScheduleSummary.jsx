@@ -114,13 +114,13 @@ export const ScheduleSummary = React.memo(
 
         return (
             <div
-                className={`p-3 rounded-lg border ${isEmpty ? 'bg-surface-alt border-border-light text-tertiary' : 'bg-surface-alt border-border text-primary'} ${className}`}
+                className={`p-3 rounded-lg border ${isEmpty ? 'bg-surface-alt border-border-light text-fg-subtle' : 'bg-surface-alt border-border text-fg'} ${className}`}
             >
                 <div className="text-sm">
-                    <div className={`font-medium ${isEmpty ? 'text-tertiary' : 'text-primary'}`}>
+                    <div className={`font-medium ${isEmpty ? 'text-fg-subtle' : 'text-fg'}`}>
                         Schedule Summary
                     </div>
-                    <div className={`mt-1 ${isEmpty ? 'text-tertiary' : 'text-secondary'}`}>
+                    <div className={`mt-1 ${isEmpty ? 'text-fg-subtle' : 'text-fg-muted'}`}>
                         {summary}
                     </div>
                 </div>

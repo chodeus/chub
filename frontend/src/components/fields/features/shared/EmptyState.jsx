@@ -58,7 +58,7 @@ export const EmptyState = React.memo(
         // Use utility classes instead of phantom classes
         const baseClasses = `flex flex-col items-center p-4 rounded-lg text-${textAlign}`;
         const sizeClasses = size === 'small' ? 'gap-2' : 'gap-4';
-        const variantClasses = variant === 'subtle' ? 'text-secondary' : 'text-primary';
+        const variantClasses = variant === 'subtle' ? 'text-fg-muted' : 'text-fg';
         const emptyStateClasses =
             `${baseClasses} ${sizeClasses} ${variantClasses} ${className}`.trim();
 
@@ -77,10 +77,10 @@ export const EmptyState = React.memo(
                 )}
 
                 <div className="text-center">
-                    <div className="font-medium text-primary">{message}</div>
+                    <div className="font-medium text-fg">{message}</div>
 
                     {secondaryMessage && (
-                        <div className="text-sm text-secondary mt-1">{secondaryMessage}</div>
+                        <div className="text-sm text-fg-muted mt-1">{secondaryMessage}</div>
                     )}
 
                     {children && <div className="mt-3">{children}</div>}

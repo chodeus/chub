@@ -4,7 +4,7 @@ import PropTypes from 'prop-types';
 /**
  * StatLabel - Label text primitive for statistics
  *
- * Provides consistent label styling with semantic color (text-secondary)
+ * Provides consistent label styling with semantic color (text-fg-muted)
  * and configurable sizing.
  *
  * @param {Object} props
@@ -26,7 +26,7 @@ export const StatLabel = React.memo(({ children, size = 'sm', className = '' }) 
         base: 'text-base',
     };
 
-    const labelClasses = `${sizeClasses[size] || sizeClasses.sm} text-secondary ${className}`;
+    const labelClasses = `${sizeClasses[size] || sizeClasses.sm} text-fg-muted ${className}`;
 
     return <span className={labelClasses}>{children}</span>;
 });

@@ -97,7 +97,7 @@ export const ScheduleCard = React.memo(
                 />
                 <Card.Body>
                     <div
-                        className={`text-sm font-medium ${hasSchedule ? 'text-success' : 'text-secondary'}`}
+                        className={`text-sm font-medium ${hasSchedule ? 'text-success' : 'text-fg-muted'}`}
                     >
                         {humanReadableSchedule}
                     </div>
@@ -106,14 +106,14 @@ export const ScheduleCard = React.memo(
                         module's own instance settings, surfaced here for visibility. */}
                     {subSchedules.length > 0 && (
                         <div className="mt-2 pt-2 border-t border-default">
-                            <div className="text-xs font-semibold uppercase tracking-wider text-tertiary mb-1">
+                            <div className="text-xs font-semibold uppercase tracking-wider text-fg-subtle mb-1">
                                 Per-instance schedules
                             </div>
                             <ul className="flex flex-col gap-0.5 m-0 p-0 list-none">
                                 {subSchedules.map(sub => (
                                     <li
                                         key={sub.label}
-                                        className={`text-xs flex justify-between gap-2 ${sub.enabled ? 'text-secondary' : 'text-tertiary opacity-60'}`}
+                                        className={`text-xs flex justify-between gap-2 ${sub.enabled ? 'text-fg-muted' : 'text-fg-subtle opacity-60'}`}
                                     >
                                         <span className="truncate">{sub.label}</span>
                                         <span className="shrink-0 text-right">
@@ -132,7 +132,7 @@ export const ScheduleCard = React.memo(
                         <button
                             type="button"
                             onClick={handleTestClick}
-                            className="text-xs text-secondary hover:text-primary transition-colors cursor-pointer bg-transparent border-none p-0 mt-1"
+                            className="text-xs text-fg-muted hover:text-fg transition-colors cursor-pointer bg-transparent border-none p-0 mt-1"
                         >
                             Test connectivity
                         </button>

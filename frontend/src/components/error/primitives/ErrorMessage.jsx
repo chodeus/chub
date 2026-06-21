@@ -34,10 +34,10 @@ export const ErrorMessage = ({
                     <h1 className="text-error text-3xl font-bold m-0 mb-2 leading-tight">
                         {title}
                     </h1>
-                    <p className="text-secondary text-lg leading-relaxed">{description}</p>
+                    <p className="text-fg-muted text-lg leading-relaxed">{description}</p>
                 </div>
 
-                <div className="text-primary">
+                <div className="text-fg">
                     {description && (
                         <div className="bg-surface-alt rounded-md p-4 mb-6">
                             <p className="text-base leading-relaxed">{description}</p>
@@ -45,9 +45,7 @@ export const ErrorMessage = ({
                     )}
 
                     <div className="bg-surface-alt border border-border rounded-md p-4 mb-6">
-                        <h3 className="text-primary text-xl font-semibold m-0 mb-3">
-                            Error Details
-                        </h3>
+                        <h3 className="text-fg text-xl font-semibold m-0 mb-3">Error Details</h3>
                         <div className="mb-2 text-sm font-mono break-words">
                             <strong>Error:</strong> {message || 'Unknown error'}
                         </div>
@@ -78,16 +76,16 @@ export const ErrorMessage = ({
                         {title}
                     </h3>
                     {description && (
-                        <p className="text-secondary text-sm leading-relaxed">{description}</p>
+                        <p className="text-fg-muted text-sm leading-relaxed">{description}</p>
                     )}
                 </div>
             </div>
 
-            <div className="text-primary">
+            <div className="text-fg">
                 <div className="bg-surface-alt border border-error p-3 mb-4 text-sm break-words">
                     <strong>Error:</strong> {message || 'Component failed to render'}
                     {retryCount > 0 && (
-                        <span className="text-secondary font-normal">
+                        <span className="text-fg-muted font-normal">
                             {' '}
                             (Attempt {retryCount + 1})
                         </span>

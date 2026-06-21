@@ -55,12 +55,12 @@ const SimpleInstanceSelector = React.memo(
 
         if (serviceInstances.length === 0) {
             return (
-                <div className="flex flex-col items-center gap-4 p-8 text-center bg-surface-alt border border-dashed border-border-subtle rounded-lg text-secondary">
-                    <div className="text-3xl text-secondary opacity-60">📋</div>
-                    <div className="font-semibold text-primary">
+                <div className="flex flex-col items-center gap-4 p-8 text-center bg-surface-alt border border-dashed border-border-subtle rounded-lg text-fg-muted">
+                    <div className="text-3xl text-fg-muted opacity-60">📋</div>
+                    <div className="font-semibold text-fg">
                         No {humanize(serviceType)} instances configured
                     </div>
-                    <div className="text-sm text-tertiary max-w-xs">
+                    <div className="text-sm text-fg-subtle max-w-xs">
                         Configure instances in Settings → Instances to get started
                     </div>
                 </div>
@@ -111,10 +111,10 @@ const SimpleInstanceSelector = React.memo(
                                     <FieldLabel
                                         htmlFor={inputId}
                                         label={humanize(instance.name)}
-                                        className="text-sm font-normal leading-normal text-primary cursor-pointer select-none"
+                                        className="text-sm font-normal leading-normal text-fg cursor-pointer select-none"
                                     />
                                     {instance.url && (
-                                        <div className="text-xs text-secondary">{instance.url}</div>
+                                        <div className="text-xs text-fg-muted">{instance.url}</div>
                                     )}
                                 </div>
                             </div>
@@ -226,7 +226,7 @@ const PlexLibrarySelector = React.memo(
 
         if (librariesLoading) {
             return (
-                <div className="flex items-center gap-3 p-4 text-sm text-secondary bg-surface-alt border border-border-subtle rounded-lg">
+                <div className="flex items-center gap-3 p-4 text-sm text-fg-muted bg-surface-alt border border-border-subtle rounded-lg">
                     <div className="w-4 h-4 border-2 border-border border-t-primary rounded-full animate-spin" />
                     <span>Loading libraries...</span>
                 </div>
@@ -246,7 +246,7 @@ const PlexLibrarySelector = React.memo(
             movieLibraries.length + tvLibraries.length + uncategorizedLibraries.length;
         if (totalLibraries === 0) {
             return (
-                <div className="flex items-center gap-3 p-4 text-sm text-secondary bg-surface-alt border border-border-subtle rounded-lg">
+                <div className="flex items-center gap-3 p-4 text-sm text-fg-muted bg-surface-alt border border-border-subtle rounded-lg">
                     <span className="text-base">ℹ️</span>
                     <span>No libraries found for this Plex instance</span>
                 </div>
@@ -255,7 +255,7 @@ const PlexLibrarySelector = React.memo(
 
         return (
             <div>
-                <div className="text-base font-semibold text-primary mb-3 pb-2 border-b border-border-subtle">
+                <div className="text-base font-semibold text-fg mb-3 pb-2 border-b border-border-subtle">
                     Select Libraries
                 </div>
 
@@ -263,7 +263,7 @@ const PlexLibrarySelector = React.memo(
                 <div className="md:hidden">
                     {movieLibraries.length > 0 && (
                         <div className="mb-4">
-                            <div className="text-sm font-medium text-primary mb-2">Movies</div>
+                            <div className="text-sm font-medium text-fg mb-2">Movies</div>
                             <div className="grid gap-2 grid-cols-auto-fit-xs">
                                 {movieLibraries.map(library => {
                                     const isSelected = selectedLibraries.includes(library);
@@ -273,8 +273,8 @@ const PlexLibrarySelector = React.memo(
                                             type="button"
                                             className={`relative flex items-center justify-center text-center py-2 px-3 min-h-11 rounded-lg border-2 text-sm font-medium cursor-pointer transition-all duration-200 truncate ${
                                                 isSelected
-                                                    ? 'bg-surface border-primary text-primary shadow-md scale-105'
-                                                    : 'bg-surface-elevated border-border text-primary hover:bg-surface-hover hover:border-border-hover hover:-translate-y-0.5 hover:shadow-sm'
+                                                    ? 'bg-surface border-primary text-fg shadow-md scale-105'
+                                                    : 'bg-surface-elevated border-border text-fg hover:bg-surface-hover hover:border-border-hover hover:-translate-y-0.5 hover:shadow-sm'
                                             }`}
                                             onClick={() =>
                                                 handleLibraryToggle(library, !isSelected)
@@ -297,7 +297,7 @@ const PlexLibrarySelector = React.memo(
 
                     {tvLibraries.length > 0 && (
                         <div className="mb-4">
-                            <div className="text-sm font-medium text-primary mb-2">TV Shows</div>
+                            <div className="text-sm font-medium text-fg mb-2">TV Shows</div>
                             <div className="grid gap-2 grid-cols-auto-fit-xs">
                                 {tvLibraries.map(library => {
                                     const isSelected = selectedLibraries.includes(library);
@@ -307,8 +307,8 @@ const PlexLibrarySelector = React.memo(
                                             type="button"
                                             className={`relative flex items-center justify-center text-center py-2 px-3 min-h-11 rounded-lg border-2 text-sm font-medium cursor-pointer transition-all duration-200 truncate ${
                                                 isSelected
-                                                    ? 'bg-surface border-primary text-primary shadow-md scale-105'
-                                                    : 'bg-surface-elevated border-border text-primary hover:bg-surface-hover hover:border-border-hover hover:-translate-y-0.5 hover:shadow-sm'
+                                                    ? 'bg-surface border-primary text-fg shadow-md scale-105'
+                                                    : 'bg-surface-elevated border-border text-fg hover:bg-surface-hover hover:border-border-hover hover:-translate-y-0.5 hover:shadow-sm'
                                             }`}
                                             onClick={() =>
                                                 handleLibraryToggle(library, !isSelected)
@@ -331,7 +331,7 @@ const PlexLibrarySelector = React.memo(
 
                     {uncategorizedLibraries.length > 0 && (
                         <div>
-                            <div className="text-sm font-medium text-primary mb-2">Other</div>
+                            <div className="text-sm font-medium text-fg mb-2">Other</div>
                             <div className="grid gap-2 grid-cols-auto-fit-xs">
                                 {uncategorizedLibraries.map(library => {
                                     const isSelected = selectedLibraries.includes(library);
@@ -341,8 +341,8 @@ const PlexLibrarySelector = React.memo(
                                             type="button"
                                             className={`relative flex items-center justify-center text-center py-2 px-3 min-h-11 rounded-lg border-2 text-sm font-medium cursor-pointer transition-all duration-200 truncate ${
                                                 isSelected
-                                                    ? 'bg-surface border-primary text-primary shadow-md scale-105'
-                                                    : 'bg-surface-elevated border-border text-primary hover:bg-surface-hover hover:border-border-hover hover:-translate-y-0.5 hover:shadow-sm'
+                                                    ? 'bg-surface border-primary text-fg shadow-md scale-105'
+                                                    : 'bg-surface-elevated border-border text-fg hover:bg-surface-hover hover:border-border-hover hover:-translate-y-0.5 hover:shadow-sm'
                                             }`}
                                             onClick={() =>
                                                 handleLibraryToggle(library, !isSelected)
@@ -368,7 +368,7 @@ const PlexLibrarySelector = React.memo(
                 <div className="max-md:hidden">
                     {movieLibraries.length > 0 && (
                         <div className="mb-6">
-                            <div className="text-sm font-semibold text-primary mb-3 pb-1 border-b border-border">
+                            <div className="text-sm font-semibold text-fg mb-3 pb-1 border-b border-border">
                                 Movies
                             </div>
                             <div className="grid gap-3 grid-cols-2">
@@ -420,7 +420,7 @@ const PlexLibrarySelector = React.memo(
                                                     <FieldLabel
                                                         htmlFor={libraryId}
                                                         label={library}
-                                                        className="text-sm font-medium leading-normal text-primary cursor-pointer select-none truncate"
+                                                        className="text-sm font-medium leading-normal text-fg cursor-pointer select-none truncate"
                                                         title={library}
                                                     />
                                                 </div>
@@ -434,7 +434,7 @@ const PlexLibrarySelector = React.memo(
 
                     {tvLibraries.length > 0 && (
                         <div className="mb-6">
-                            <div className="text-sm font-semibold text-primary mb-3 pb-1 border-b border-border">
+                            <div className="text-sm font-semibold text-fg mb-3 pb-1 border-b border-border">
                                 TV Shows
                             </div>
                             <div className="grid gap-3 grid-cols-2">
@@ -486,7 +486,7 @@ const PlexLibrarySelector = React.memo(
                                                     <FieldLabel
                                                         htmlFor={libraryId}
                                                         label={library}
-                                                        className="text-sm font-medium leading-normal text-primary cursor-pointer select-none truncate"
+                                                        className="text-sm font-medium leading-normal text-fg cursor-pointer select-none truncate"
                                                         title={library}
                                                     />
                                                 </div>
@@ -500,7 +500,7 @@ const PlexLibrarySelector = React.memo(
 
                     {uncategorizedLibraries.length > 0 && (
                         <div>
-                            <div className="text-sm font-semibold text-primary mb-3 pb-1 border-b border-border">
+                            <div className="text-sm font-semibold text-fg mb-3 pb-1 border-b border-border">
                                 Other
                             </div>
                             <div className="grid gap-3 grid-cols-2">
@@ -552,7 +552,7 @@ const PlexLibrarySelector = React.memo(
                                                     <FieldLabel
                                                         htmlFor={libraryId}
                                                         label={library}
-                                                        className="text-sm font-medium leading-normal text-primary cursor-pointer select-none truncate"
+                                                        className="text-sm font-medium leading-normal text-fg cursor-pointer select-none truncate"
                                                         title={library}
                                                     />
                                                 </div>
@@ -730,9 +730,9 @@ const PlexInstanceSelector = React.memo(
 
         if (plexInstances.length === 0) {
             return (
-                <div className="flex flex-col items-center gap-3 p-6 text-center bg-surface border border-dashed rounded-lg text-secondary">
-                    <div className="font-medium text-primary">No Plex instances configured</div>
-                    <div className="text-sm text-tertiary">
+                <div className="flex flex-col items-center gap-3 p-6 text-center bg-surface border border-dashed rounded-lg text-fg-muted">
+                    <div className="font-medium text-fg">No Plex instances configured</div>
+                    <div className="text-sm text-fg-subtle">
                         Configure instances in Settings → Instances
                     </div>
                 </div>
@@ -789,10 +789,10 @@ const PlexInstanceSelector = React.memo(
                                     <FieldLabel
                                         htmlFor={instanceId}
                                         label={humanize(instance.name)}
-                                        className="text-sm font-normal leading-normal text-primary cursor-pointer select-none"
+                                        className="text-sm font-normal leading-normal text-fg cursor-pointer select-none"
                                     />
                                     {instance.url && (
-                                        <div className="text-xs text-secondary">{instance.url}</div>
+                                        <div className="text-xs text-fg-muted">{instance.url}</div>
                                     )}
                                 </div>
                             </div>
@@ -850,9 +850,9 @@ const PlexInstanceSelector = React.memo(
                                                     <FieldLabel
                                                         htmlFor={uploadId}
                                                         label="Upload to this Plex instance"
-                                                        className="text-sm font-medium leading-normal text-primary cursor-pointer select-none"
+                                                        className="text-sm font-medium leading-normal text-fg cursor-pointer select-none"
                                                     />
-                                                    <span className="text-xs text-tertiary">
+                                                    <span className="text-xs text-fg-subtle">
                                                         Only used when this module&apos;s Apply
                                                         Method is set to Plex.
                                                     </span>
@@ -1030,7 +1030,7 @@ export const InstancesField = React.memo(
             return (
                 <FieldWrapper invalid={highlightInvalid}>
                     <FieldLabel label={field.label} required={isRequired} />
-                    <div className="flex flex-col items-center justify-center gap-3 text-center bg-surface border-2 text-secondary">
+                    <div className="flex flex-col items-center justify-center gap-3 text-center bg-surface border-2 text-fg-muted">
                         <div className="w-8 h-8 border-2 border-border border-t-primary rounded-full animate-spin" />
                         <span>Loading instances...</span>
                     </div>
@@ -1104,7 +1104,7 @@ export const InstancesField = React.memo(
                     {instanceTypes.length === 1 ? (
                         // Single service type - simplified UI
                         <div className="flex flex-col gap-4">
-                            <h4 className="text-lg font-bold text-primary mb-2 border-b border-border pb-2">
+                            <h4 className="text-lg font-bold text-fg mb-2 border-b border-border pb-2">
                                 {humanize(instanceTypes[0])}
                             </h4>
                             {renderServiceSelector(instanceTypes[0])}
@@ -1121,7 +1121,7 @@ export const InstancesField = React.memo(
                                             key={serviceType}
                                             className="flex flex-col gap-3 bg-surface border border-border rounded-lg p-4 shadow-sm"
                                         >
-                                            <h4 className="text-lg font-bold text-primary mb-1 border-b border-border pb-2">
+                                            <h4 className="text-lg font-bold text-fg mb-1 border-b border-border pb-2">
                                                 {humanize(serviceType)}
                                             </h4>
                                             {renderServiceSelector(serviceType)}
@@ -1132,7 +1132,7 @@ export const InstancesField = React.memo(
                             {/* Plex full width below */}
                             {instanceTypes.includes('plex') && (
                                 <div className="flex flex-col gap-3 bg-surface border border-border rounded-lg p-4 shadow-sm">
-                                    <h4 className="text-lg font-bold text-primary mb-1 border-b border-border pb-2">
+                                    <h4 className="text-lg font-bold text-fg mb-1 border-b border-border pb-2">
                                         {humanize('plex')}
                                     </h4>
                                     {renderServiceSelector('plex')}

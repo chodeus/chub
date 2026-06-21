@@ -50,11 +50,7 @@ export const StatChange = React.memo(({ value, direction, inverse = false, class
     const isBadChange = inverse ? detectedDirection === 'up' : detectedDirection === 'down';
 
     // Color classes based on change interpretation
-    const colorClass = isGoodChange
-        ? 'text-success'
-        : isBadChange
-          ? 'text-error'
-          : 'text-secondary';
+    const colorClass = isGoodChange ? 'text-success' : isBadChange ? 'text-error' : 'text-fg-muted';
 
     // Arrow icons based on direction
     const arrow = detectedDirection === 'up' ? '↑' : detectedDirection === 'down' ? '↓' : '';

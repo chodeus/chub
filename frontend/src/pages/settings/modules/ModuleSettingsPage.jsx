@@ -243,7 +243,7 @@ const ModuleSettingsContent = () => {
             {/* Search functionality */}
             <div className="mb-6">
                 <div className="relative">
-                    <span className="material-symbols-outlined absolute left-3 top-3 text-secondary">
+                    <span className="material-symbols-outlined absolute left-3 top-3 text-fg-muted">
                         search
                     </span>
                     <input
@@ -251,7 +251,7 @@ const ModuleSettingsContent = () => {
                         placeholder="Search modules and fields..."
                         value={searchTerm}
                         onChange={e => setSearchTerm(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2 border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent min-h-11 bg-surface text-primary"
+                        className="w-full pl-10 pr-4 py-2 border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent min-h-11 bg-surface text-fg"
                     />
                 </div>
             </div>
@@ -267,17 +267,17 @@ const ModuleSettingsContent = () => {
                         <AccordionItem.Header className="px-6 py-4 bg-surface hover:bg-surface-hover border-b border-border-subtle">
                             <div className="flex items-center justify-between min-h-11">
                                 <div className="flex flex-col">
-                                    <span className="font-medium text-base text-primary">
+                                    <span className="font-medium text-base text-fg">
                                         {module.label}
                                     </span>
                                     {moduleDescriptions[module.key] && (
-                                        <span className="text-xs text-tertiary mt-0.5">
+                                        <span className="text-xs text-fg-subtle mt-0.5">
                                             {moduleDescriptions[module.key]}
                                         </span>
                                     )}
                                 </div>
                                 <span
-                                    className="material-symbols-outlined text-xl text-secondary transition-transform duration-200"
+                                    className="material-symbols-outlined text-xl text-fg-muted transition-transform duration-200"
                                     style={{
                                         transform: expandedModules.includes(module.key)
                                             ? 'rotate(90deg)'
@@ -368,7 +368,7 @@ const ModuleSettingsContent = () => {
                                                                 role="heading"
                                                                 aria-level={3}
                                                             >
-                                                                <span className="text-xs font-semibold uppercase tracking-wider text-secondary">
+                                                                <span className="text-xs font-semibold uppercase tracking-wider text-fg-muted">
                                                                     {field.section}
                                                                 </span>
                                                             </div>
@@ -415,7 +415,7 @@ const ModuleSettingsContent = () => {
                                         })}
                                 </form>
                             ) : (
-                                <div className="text-center py-8 text-tertiary">
+                                <div className="text-center py-8 text-fg-subtle">
                                     <span className="material-symbols-outlined text-4xl mb-2 block">
                                         inbox
                                     </span>
@@ -466,7 +466,7 @@ export const ModuleSettingsPage = () => {
                 <div className="flex items-center justify-center py-12">
                     <div className="text-center">
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-                        <p className="text-secondary">Loading configuration...</p>
+                        <p className="text-fg-muted">Loading configuration...</p>
                     </div>
                 </div>
             </div>

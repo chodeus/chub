@@ -142,10 +142,10 @@ export const FormCompoundsTest = () => {
 
             {/* Test 1: Manual Compound Composition */}
             <div className="mb-8 bg-surface border border-border rounded-md p-6">
-                <h2 className="text-xl font-semibold mb-2 text-primary">
+                <h2 className="text-xl font-semibold mb-2 text-fg">
                     Test 1: Manual Compound Composition
                 </h2>
-                <p className="text-sm text-secondary mb-4">
+                <p className="text-sm text-fg-muted mb-4">
                     Direct composition of Form.Header, Form.Section, Form.Actions with individual
                     fields
                 </p>
@@ -222,10 +222,10 @@ export const FormCompoundsTest = () => {
 
             {/* Test 2: Schema-Driven FormRenderer */}
             <div className="mb-8 bg-surface border border-border rounded-md p-6">
-                <h2 className="text-xl font-semibold mb-2 text-primary">
+                <h2 className="text-xl font-semibold mb-2 text-fg">
                     Test 2: Schema-Driven FormRenderer
                 </h2>
-                <p className="text-sm text-secondary mb-4">
+                <p className="text-sm text-fg-muted mb-4">
                     Same form structure generated from schema (uses Form compounds internally)
                 </p>
 
@@ -241,10 +241,10 @@ export const FormCompoundsTest = () => {
 
             {/* Test 3: Custom Layout Composition */}
             <div className="bg-surface border border-border rounded-md p-6">
-                <h2 className="text-xl font-semibold mb-2 text-primary">
+                <h2 className="text-xl font-semibold mb-2 text-fg">
                     Test 3: Custom Layout Composition
                 </h2>
-                <p className="text-sm text-secondary mb-4">
+                <p className="text-sm text-fg-muted mb-4">
                     Grid layout demonstrating flexible Form.Section composition
                 </p>
 
@@ -304,7 +304,7 @@ export const FormCompoundsTest = () => {
                     <span className="material-symbols-outlined text-info">info</span>
                     Test Validation Notes
                 </h3>
-                <ul className="text-sm text-secondary space-y-1 list-disc list-inside">
+                <ul className="text-sm text-fg-muted space-y-1 list-disc list-inside">
                     <li>
                         <strong>Test 1:</strong> Manual composition - validates Form.Header,
                         Form.Section (collapsible), Form.Actions

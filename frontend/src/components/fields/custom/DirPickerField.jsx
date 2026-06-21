@@ -158,7 +158,7 @@ export const DirPickerField = React.memo(({ field, value, onChange, disabled = f
                 <div className="flex items-center gap-2 mb-2">
                     <label
                         htmlFor={`${inputId}-root`}
-                        className="text-xs text-secondary whitespace-nowrap"
+                        className="text-xs text-fg-muted whitespace-nowrap"
                     >
                         Root:
                     </label>
@@ -167,7 +167,7 @@ export const DirPickerField = React.memo(({ field, value, onChange, disabled = f
                         value={activeRoot || ''}
                         onChange={handleRootChange}
                         disabled={disabled || loading}
-                        className="flex-1 px-2 py-1 text-xs bg-input border border-border rounded text-primary focus:border-primary focus:outline-none"
+                        className="flex-1 px-2 py-1 text-xs bg-input border border-border rounded text-fg focus:border-primary focus:outline-none"
                     >
                         {roots.map(r => (
                             <option key={r} value={r}>
@@ -181,7 +181,7 @@ export const DirPickerField = React.memo(({ field, value, onChange, disabled = f
             {/* Breadcrumb trail so users keep orientation in deep trees */}
             {currentPath && (
                 <nav
-                    className="mb-2 flex flex-wrap items-center gap-1 text-xs text-tertiary"
+                    className="mb-2 flex flex-wrap items-center gap-1 text-xs text-fg-subtle"
                     aria-label="Path breadcrumb"
                 >
                     {(() => {
@@ -207,7 +207,7 @@ export const DirPickerField = React.memo(({ field, value, onChange, disabled = f
                                     type="button"
                                     onClick={() => loadDirectory(c.path)}
                                     disabled={disabled || loading || i === crumbs.length - 1}
-                                    className="px-1.5 py-0.5 rounded hover:bg-surface-alt text-secondary disabled:text-primary disabled:font-medium disabled:cursor-default"
+                                    className="px-1.5 py-0.5 rounded hover:bg-surface-alt text-fg-muted disabled:text-fg disabled:font-medium disabled:cursor-default"
                                 >
                                     {c.name}
                                 </button>
@@ -221,7 +221,7 @@ export const DirPickerField = React.memo(({ field, value, onChange, disabled = f
                 narrow viewports so users see what they're about to select */}
             <div className="flex items-center gap-2 mb-2">
                 <span
-                    className="text-xs text-secondary font-mono flex-1 truncate truncate-start bg-surface-alt px-2 py-1 rounded"
+                    className="text-xs text-fg-muted font-mono flex-1 truncate truncate-start bg-surface-alt px-2 py-1 rounded"
                     title={currentPath}
                 >
                     {currentPath}
@@ -230,7 +230,7 @@ export const DirPickerField = React.memo(({ field, value, onChange, disabled = f
                     type="button"
                     onClick={handleSelect}
                     disabled={disabled || loading || !currentPath}
-                    className="shrink-0 px-3 py-1 text-xs font-medium bg-primary/15 text-primary border border-primary/25 rounded cursor-pointer hover:bg-primary/25 disabled:opacity-50"
+                    className="shrink-0 px-3 py-1 text-xs font-medium bg-primary/15 text-fg border border-primary/25 rounded cursor-pointer hover:bg-primary/25 disabled:opacity-50"
                 >
                     Select
                 </button>
@@ -242,18 +242,18 @@ export const DirPickerField = React.memo(({ field, value, onChange, disabled = f
                     <button
                         type="button"
                         onClick={handleGoUp}
-                        className="w-full text-left px-3 py-1.5 text-sm text-secondary hover:bg-surface-alt cursor-pointer border-b border-border flex items-center gap-2"
+                        className="w-full text-left px-3 py-1.5 text-sm text-fg-muted hover:bg-surface-alt cursor-pointer border-b border-border flex items-center gap-2"
                     >
                         <span className="material-symbols-outlined text-base">arrow_upward</span>
                         ..
                     </button>
                 )}
                 {loading ? (
-                    <div className="px-3 py-3 text-xs text-tertiary">Loading...</div>
+                    <div className="px-3 py-3 text-xs text-fg-subtle">Loading...</div>
                 ) : error ? (
                     <div className="px-3 py-3 text-xs text-error">{error}</div>
                 ) : entries.length === 0 ? (
-                    <div className="px-3 py-3 text-xs text-tertiary">Empty directory</div>
+                    <div className="px-3 py-3 text-xs text-fg-subtle">Empty directory</div>
                 ) : (
                     entries.map(entry => {
                         const name = typeof entry === 'string' ? entry : entry.name;
@@ -262,9 +262,9 @@ export const DirPickerField = React.memo(({ field, value, onChange, disabled = f
                                 key={name}
                                 type="button"
                                 onClick={() => handleNavigate(name)}
-                                className="w-full text-left px-3 py-1.5 text-sm text-primary hover:bg-surface-alt cursor-pointer border-b border-border last:border-b-0 flex items-center gap-2"
+                                className="w-full text-left px-3 py-1.5 text-sm text-fg hover:bg-surface-alt cursor-pointer border-b border-border last:border-b-0 flex items-center gap-2"
                             >
-                                <span className="material-symbols-outlined text-base text-secondary">
+                                <span className="material-symbols-outlined text-base text-fg-muted">
                                     folder
                                 </span>
                                 {name}
@@ -282,7 +282,7 @@ export const DirPickerField = React.memo(({ field, value, onChange, disabled = f
                     onChange={e => setNewDirName(e.target.value)}
                     placeholder="New folder name..."
                     disabled={disabled || creating}
-                    className="flex-1 px-2 py-1 text-sm bg-input border border-border rounded text-primary focus:border-primary focus:outline-none"
+                    className="flex-1 px-2 py-1 text-sm bg-input border border-border rounded text-fg focus:border-primary focus:outline-none"
                     onKeyDown={e => {
                         if (e.key === 'Enter') handleCreateDir();
                     }}

@@ -7,11 +7,11 @@ import Spinner from '../../components/ui/Spinner.jsx';
 import { formatSecondsAgo } from '../../utils/schedule';
 
 /** Reusable stat card — always reserves the subtext row so sibling cards align */
-const StatCard = ({ label, value, subtext, color = 'text-primary' }) => (
+const StatCard = ({ label, value, subtext, color = 'text-fg' }) => (
     <div className="p-5 rounded-xl bg-surface border border-border flex flex-col">
-        <p className="text-sm text-secondary mb-1">{label}</p>
+        <p className="text-sm text-fg-muted mb-1">{label}</p>
         <p className={`text-3xl font-bold ${color}`}>{(value || 0).toLocaleString()}</p>
-        <p className="text-xs text-tertiary mt-1" style={{ minHeight: '1rem' }}>
+        <p className="text-xs text-fg-subtle mt-1" style={{ minHeight: '1rem' }}>
             {subtext || ' '}
         </p>
     </div>
@@ -42,11 +42,11 @@ const HealthCard = ({ title, badge, row, footer }) => {
                     : undefined
             }
         >
-            <p className="text-sm font-medium text-primary mb-2 flex items-center gap-2 capitalize">
+            <p className="text-sm font-medium text-fg mb-2 flex items-center gap-2 capitalize">
                 <span className="truncate">{title}</span>
                 {badge && (
                     <span
-                        className="uppercase tracking-wider px-1.5 py-0.5 rounded bg-surface-alt text-tertiary shrink-0"
+                        className="uppercase tracking-wider px-1.5 py-0.5 rounded bg-surface-alt text-fg-subtle shrink-0"
                         style={{ fontSize: '10px' }}
                     >
                         {badge}
@@ -54,7 +54,7 @@ const HealthCard = ({ title, badge, row, footer }) => {
                 )}
             </p>
             <div className="flex items-baseline gap-3 flex-wrap">
-                <span className="text-2xl font-bold text-primary">
+                <span className="text-2xl font-bold text-fg">
                     {(row.total || 0).toLocaleString()}
                 </span>
                 <span className="text-sm text-success">
@@ -72,7 +72,7 @@ const HealthCard = ({ title, badge, row, footer }) => {
                     />
                 </div>
             )}
-            <p className="text-xs text-tertiary mt-2" style={{ minHeight: '1rem' }}>
+            <p className="text-xs text-fg-subtle mt-2" style={{ minHeight: '1rem' }}>
                 {footer || `${pct}% complete`}
             </p>
         </div>
@@ -100,7 +100,7 @@ const BreakdownBars = ({ items, labelKey, countKey = 'count', maxItems = null })
                             className="grid items-center gap-3 text-sm"
                             style={{ gridTemplateColumns: 'minmax(6rem, 12rem) 1fr auto' }}
                         >
-                            <span className="text-primary capitalize truncate">
+                            <span className="text-fg capitalize truncate">
                                 {item[labelKey] || 'Unknown'}
                             </span>
                             <div
@@ -115,7 +115,7 @@ const BreakdownBars = ({ items, labelKey, countKey = 'count', maxItems = null })
                                     }}
                                 />
                             </div>
-                            <span className="tabular-nums text-tertiary font-medium">
+                            <span className="tabular-nums text-fg-subtle font-medium">
                                 {count.toLocaleString()}
                             </span>
                         </div>
@@ -162,7 +162,7 @@ const BreakdownTabs = ({ stats }) => {
 
     return (
         <section>
-            <h3 className="text-lg font-semibold text-primary mb-3">Breakdowns</h3>
+            <h3 className="text-lg font-semibold text-fg mb-3">Breakdowns</h3>
             <div className="flex flex-wrap gap-2 mb-4" role="tablist">
                 {availableTabs.map(tab => {
                     const isActive = tab.key === resolvedActive;
@@ -184,7 +184,7 @@ const BreakdownTabs = ({ stats }) => {
                         >
                             <span>{tab.label}</span>
                             <span
-                                className="ml-2 text-tertiary font-medium tabular-nums"
+                                className="ml-2 text-fg-subtle font-medium tabular-nums"
                                 style={{
                                     paddingLeft: '0.5rem',
                                     borderLeft: `1px solid ${
@@ -216,8 +216,8 @@ const PlexSection = ({ plex }) => {
     if (instances.length === 0) return null;
     return (
         <section>
-            <h3 className="text-lg font-semibold text-primary mb-1">Plex Libraries</h3>
-            <p className="text-sm text-secondary mb-3">
+            <h3 className="text-lg font-semibold text-fg mb-1">Plex Libraries</h3>
+            <p className="text-sm text-fg-muted mb-3">
                 Item counts per Plex library. Plex tracks presence only — no monitored or missing
                 state.
             </p>
@@ -227,21 +227,21 @@ const PlexSection = ({ plex }) => {
                         key={inst.instance_name}
                         className="p-4 rounded-lg bg-surface border border-border flex flex-col"
                     >
-                        <p className="text-sm font-medium text-primary mb-2 flex items-center gap-2">
+                        <p className="text-sm font-medium text-fg mb-2 flex items-center gap-2">
                             <span className="truncate">{inst.instance_name}</span>
                             <span
-                                className="uppercase tracking-wider px-1.5 py-0.5 rounded bg-surface-alt text-tertiary shrink-0"
+                                className="uppercase tracking-wider px-1.5 py-0.5 rounded bg-surface-alt text-fg-subtle shrink-0"
                                 style={{ fontSize: '10px' }}
                             >
                                 plex
                             </span>
                         </p>
-                        <span className="text-2xl font-bold text-primary mb-2">
+                        <span className="text-2xl font-bold text-fg mb-2">
                             {(inst.total || 0).toLocaleString()}
                         </span>
                         <BreakdownBars items={inst.libraries || []} labelKey="library_name" />
                         {inst.snapshot_age_seconds != null && (
-                            <p className="text-xs text-tertiary mt-2">
+                            <p className="text-xs text-fg-subtle mt-2">
                                 Synced {formatSecondsAgo(inst.snapshot_age_seconds)}
                             </p>
                         )}
@@ -260,13 +260,13 @@ const RecentlyAdded = ({ data }) => {
     const last30 = data?.last_30d || 0;
     return (
         <section>
-            <h3 className="text-lg font-semibold text-primary mb-1">Recently Added</h3>
-            <p className="text-sm text-secondary mb-3">
+            <h3 className="text-lg font-semibold text-fg mb-1">Recently Added</h3>
+            <p className="text-sm text-fg-muted mb-3">
                 {last7.toLocaleString()} in the last 7 days · {last30.toLocaleString()} in the last
                 30 days
             </p>
             {items.length === 0 ? (
-                <div className="p-4 rounded-lg bg-surface border border-border text-sm text-tertiary">
+                <div className="p-4 rounded-lg bg-surface border border-border text-sm text-fg-subtle">
                     No additions tracked yet — newly added media will appear here as your instances
                     sync.
                 </div>
@@ -277,25 +277,25 @@ const RecentlyAdded = ({ data }) => {
                             key={`${item.title}:${item.instance_name}:${idx}`}
                             className={`flex items-center gap-3 px-4 py-2.5 text-sm ${idx < items.length - 1 ? 'border-b border-border' : ''}`}
                         >
-                            <span className="text-primary truncate flex-1 min-w-0">
+                            <span className="text-fg truncate flex-1 min-w-0">
                                 {item.title}
                                 {item.year ? (
-                                    <span className="text-tertiary"> ({item.year})</span>
+                                    <span className="text-fg-subtle"> ({item.year})</span>
                                 ) : null}
                             </span>
                             <span
-                                className="uppercase tracking-wider px-1.5 py-0.5 rounded bg-surface-alt text-tertiary shrink-0"
+                                className="uppercase tracking-wider px-1.5 py-0.5 rounded bg-surface-alt text-fg-subtle shrink-0"
                                 style={{ fontSize: '10px' }}
                             >
                                 {item.asset_type}
                             </span>
                             <span
-                                className="text-secondary shrink-0 truncate hidden sm:inline"
+                                className="text-fg-muted shrink-0 truncate hidden sm:inline"
                                 style={{ maxWidth: '10rem' }}
                             >
                                 {item.instance_name}
                             </span>
-                            <span className="text-tertiary shrink-0 tabular-nums">
+                            <span className="text-fg-subtle shrink-0 tabular-nums">
                                 {formatSecondsAgo(item.added_age_seconds)}
                             </span>
                         </div>
@@ -376,7 +376,7 @@ const MediaStatsPage = () => {
                     label="Missing"
                     value={missing}
                     subtext="monitored, no file yet"
-                    color={missing > 0 ? 'text-warning' : 'text-primary'}
+                    color={missing > 0 ? 'text-warning' : 'text-fg'}
                 />
             </div>
 
@@ -386,7 +386,7 @@ const MediaStatsPage = () => {
             {/* By Type */}
             {byType.length > 0 && (
                 <section>
-                    <h3 className="text-lg font-semibold text-primary mb-3">By Type</h3>
+                    <h3 className="text-lg font-semibold text-fg mb-3">By Type</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                         {byType.map(row => (
                             <HealthCard
@@ -403,7 +403,7 @@ const MediaStatsPage = () => {
             {/* By Instance */}
             {byInstance.length > 0 && (
                 <section>
-                    <h3 className="text-lg font-semibold text-primary mb-3">By Instance</h3>
+                    <h3 className="text-lg font-semibold text-fg mb-3">By Instance</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                         {byInstance.map(row => (
                             <HealthCard

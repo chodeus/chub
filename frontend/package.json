@@ -1,7 +1,7 @@
 {
   "name": "chub-media-manager",
   "version": "1.0.0",
-  "description": "CHUB — Chodeus' Media Script Hub (React 19 frontend)",
+  "description": "CHUB \u2014 Chodeus' Media Script Hub (React 19 frontend)",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,8 +9,7 @@
     "preview": "vite preview",
     "lint": "eslint src --ext .js,.jsx && node scripts/check-field-types.js",
     "check:schema": "node scripts/check-field-types.js",
-    "format": "prettier --write \"src/**/*.{js,jsx,css,json,md}\" && npm run format:utilities",
-    "format:utilities": "node scripts/format-utilities.js",
+    "format": "prettier --write \"src/**/*.{js,jsx,css,json,md}\"",
     "stylelint": "stylelint 'src/**/*.css' --fix"
   },
   "dependencies": {
@@ -26,6 +25,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
+    "@tailwindcss/vite": "^4.3.1",
     "@vitejs/plugin-react": "^6.0.2",
     "eslint": "^9.39.4",
     "eslint-config-prettier": "^10.1.8",
@@ -36,6 +36,7 @@
     "stylelint": "^17.13.0",
     "stylelint-config-standard": "^40.0.0",
     "stylelint-selector-bem-pattern": "^5.0.0",
+    "tailwindcss": "^4.3.1",
     "vite": "^8.0.16"
   },
   "engines": {

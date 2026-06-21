@@ -58,7 +58,7 @@ const ReelPosterCard = ({ poster }) => {
                 title={poster.title || poster.file || ''}
             >
                 {failed ? (
-                    <span className="material-symbols-outlined text-tertiary text-3xl">
+                    <span className="material-symbols-outlined text-fg-subtle text-3xl">
                         broken_image
                     </span>
                 ) : (
@@ -72,7 +72,7 @@ const ReelPosterCard = ({ poster }) => {
                     />
                 )}
             </div>
-            <p className="mt-1 text-xs text-tertiary text-center truncate">{caption}</p>
+            <p className="mt-1 text-xs text-fg-subtle text-center truncate">{caption}</p>
         </div>
     );
 };
@@ -98,7 +98,7 @@ const RecentPosterReel = ({ posters, onRefresh }) => {
     return (
         <section>
             <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
-                <h3 className="text-lg font-semibold text-primary flex items-center gap-2">
+                <h3 className="text-lg font-semibold text-fg flex items-center gap-2">
                     <span className="material-symbols-outlined text-brand-primary">movie</span>
                     Recently matched
                 </h3>
@@ -110,8 +110,8 @@ const RecentPosterReel = ({ posters, onRefresh }) => {
                                 onClick={() => selectFilter(f.key)}
                                 className={`px-3 py-1 text-sm rounded-lg border ${
                                     filterKey === f.key
-                                        ? 'border-brand-primary/50 bg-surface-alt text-primary'
-                                        : 'border-border text-secondary hover:text-primary'
+                                        ? 'border-brand-primary/50 bg-surface-alt text-fg'
+                                        : 'border-border text-fg-muted hover:text-fg'
                                 }`}
                             >
                                 {f.label}
@@ -119,7 +119,7 @@ const RecentPosterReel = ({ posters, onRefresh }) => {
                         ))}
                     </div>
                     <span
-                        className="text-xs text-tertiary text-center"
+                        className="text-xs text-fg-subtle text-center"
                         style={{ minWidth: '3rem' }}
                     >
                         {safePage + 1} / {pageCount}
@@ -202,8 +202,8 @@ const SortHeader = ({ label, sortKey, sort, onSort, align = 'left' }) => {
                 type="button"
                 onClick={() => onSort(sortKey)}
                 aria-label={`Sort by ${label}`}
-                className={`inline-flex items-center gap-1 font-medium hover:text-primary ${
-                    active ? 'text-primary' : ''
+                className={`inline-flex items-center gap-1 font-medium hover:text-fg ${
+                    active ? 'text-fg' : ''
                 } ${align === 'right' ? 'flex-row-reverse' : ''}`}
             >
                 {label}
@@ -311,7 +311,7 @@ const UnmatchedList = ({ items, onRefresh, typeKey: typeKeyProp, onTypeChange })
 
     if (all.length === 0) {
         return (
-            <p className="text-sm text-secondary">
+            <p className="text-sm text-fg-muted">
                 Nothing unmatched — every tracked item has a poster.
             </p>
         );
@@ -330,8 +330,8 @@ const UnmatchedList = ({ items, onRefresh, typeKey: typeKeyProp, onTypeChange })
                             }}
                             className={`px-3 py-1 text-sm rounded-lg border ${
                                 typeKey === t.key
-                                    ? 'border-primary bg-surface-alt text-primary'
-                                    : 'border-border text-secondary hover:text-primary'
+                                    ? 'border-primary bg-surface-alt text-fg'
+                                    : 'border-border text-fg-muted hover:text-fg'
                             }`}
                         >
                             {t.label}
@@ -347,17 +347,17 @@ const UnmatchedList = ({ items, onRefresh, typeKey: typeKeyProp, onTypeChange })
                     }}
                     placeholder="Search title…"
                     aria-label="Search unmatched titles"
-                    className="px-3 py-2 bg-input border border-border rounded-md text-primary text-sm"
+                    className="px-3 py-2 bg-input border border-border rounded-md text-fg text-sm"
                     style={{ minWidth: '14rem' }}
                 />
             </div>
             {filtered.length === 0 ? (
-                <p className="text-sm text-tertiary">No matches.</p>
+                <p className="text-sm text-fg-subtle">No matches.</p>
             ) : (
                 <div className="overflow-x-auto rounded-lg border border-border">
                     <table className="w-full text-sm">
                         <thead>
-                            <tr className="bg-surface-alt text-secondary text-left">
+                            <tr className="bg-surface-alt text-fg-muted text-left">
                                 <SortHeader
                                     label="Title"
                                     sortKey="title"
@@ -400,7 +400,7 @@ const UnmatchedList = ({ items, onRefresh, typeKey: typeKeyProp, onTypeChange })
                                     key={`${item._type}-${item.tmdb_id || item.tvdb_id || item.title || idx}`}
                                     className="bg-surface hover:bg-surface-alt"
                                 >
-                                    <td className="px-3 py-2 text-primary">
+                                    <td className="px-3 py-2 text-fg">
                                         {item._type !== 'collection' ? (
                                             <Link
                                                 to={`/poster/search/assets?q=${encodeURIComponent(item.title)}`}
@@ -413,11 +413,11 @@ const UnmatchedList = ({ items, onRefresh, typeKey: typeKeyProp, onTypeChange })
                                             item.title
                                         )}
                                     </td>
-                                    <td className="px-3 py-2 text-secondary">
+                                    <td className="px-3 py-2 text-fg-muted">
                                         {TYPE_LABELS[item._type]}
                                     </td>
-                                    <td className="px-3 py-2 text-secondary">{item.year || '—'}</td>
-                                    <td className="px-3 py-2 text-secondary">
+                                    <td className="px-3 py-2 text-fg-muted">{item.year || '—'}</td>
+                                    <td className="px-3 py-2 text-fg-muted">
                                         {item._type === 'series' ? (
                                             <>
                                                 {item.missing_main_poster && (
@@ -436,16 +436,16 @@ const UnmatchedList = ({ items, onRefresh, typeKey: typeKeyProp, onTypeChange })
                                             '—'
                                         )}
                                     </td>
-                                    <td className="px-3 py-2 text-secondary">
+                                    <td className="px-3 py-2 text-fg-muted">
                                         {item.instance_name || '—'}
                                     </td>
-                                    <td className="px-3 py-2 text-tertiary font-mono text-xs">
+                                    <td className="px-3 py-2 text-fg-subtle font-mono text-xs">
                                         {formatId(item.tmdb_id) || '—'}
                                     </td>
-                                    <td className="px-3 py-2 text-tertiary font-mono text-xs">
+                                    <td className="px-3 py-2 text-fg-subtle font-mono text-xs">
                                         {formatId(item.imdb_id) || '—'}
                                     </td>
-                                    <td className="px-3 py-2 text-tertiary font-mono text-xs">
+                                    <td className="px-3 py-2 text-fg-subtle font-mono text-xs">
                                         {formatId(item.tvdb_id) || '—'}
                                     </td>
                                     <td className="px-3 py-2 text-right whitespace-nowrap">
@@ -454,7 +454,7 @@ const UnmatchedList = ({ items, onRefresh, typeKey: typeKeyProp, onTypeChange })
                                             return action ? (
                                                 <Link
                                                     to={action.to}
-                                                    className="inline-flex items-center justify-center w-8 h-8 rounded text-tertiary hover:text-accent hover:bg-surface-alt align-middle"
+                                                    className="inline-flex items-center justify-center w-8 h-8 rounded text-fg-subtle hover:text-accent hover:bg-surface-alt align-middle"
                                                     aria-label={action.ariaLabel}
                                                     title={action.title}
                                                 >
@@ -493,7 +493,7 @@ const UnmatchedList = ({ items, onRefresh, typeKey: typeKeyProp, onTypeChange })
                 </div>
             )}
             {filtered.length > 0 && pageCount > 1 && (
-                <div className="flex items-center justify-center gap-3 text-sm text-secondary">
+                <div className="flex items-center justify-center gap-3 text-sm text-fg-muted">
                     <IconButton
                         icon="chevron_left"
                         variant="ghost"
@@ -526,7 +526,7 @@ const STATUS_VIEWS = [
 
 /** Colour for a 0–1 confidence score. */
 const confidenceTone = c => {
-    if (c == null) return 'text-tertiary';
+    if (c == null) return 'text-fg-subtle';
     if (c >= 0.9) return 'text-success';
     if (c >= 0.7) return 'text-warning';
     return 'text-error';
@@ -586,7 +586,7 @@ const MatchReviewList = ({ rows, mode, onRefresh, onPick }) => {
             emptyMsg =
                 'No ignored items. Dismiss a row from Unmatched or Needs Review to park it here.';
         }
-        return <p className="text-sm text-secondary">{emptyMsg}</p>;
+        return <p className="text-sm text-fg-muted">{emptyMsg}</p>;
     }
 
     return (
@@ -597,16 +597,16 @@ const MatchReviewList = ({ rows, mode, onRefresh, onPick }) => {
                 onChange={e => setQuery(e.target.value)}
                 placeholder="Search title…"
                 aria-label="Search titles"
-                className="px-3 py-2 bg-input border border-border rounded-md text-primary text-sm self-start"
+                className="px-3 py-2 bg-input border border-border rounded-md text-fg text-sm self-start"
                 style={{ minWidth: '14rem' }}
             />
             {filtered.length === 0 ? (
-                <p className="text-sm text-tertiary">No matches.</p>
+                <p className="text-sm text-fg-subtle">No matches.</p>
             ) : (
                 <div className="overflow-x-auto rounded-lg border border-border">
                     <table className="w-full text-sm">
                         <thead>
-                            <tr className="bg-surface-alt text-secondary text-left">
+                            <tr className="bg-surface-alt text-fg-muted text-left">
                                 <SortHeader
                                     label="Title"
                                     sortKey="title"
@@ -647,7 +647,7 @@ const MatchReviewList = ({ rows, mode, onRefresh, onPick }) => {
                                     key={`${item.id ?? idx}`}
                                     className="bg-surface hover:bg-surface-alt align-top"
                                 >
-                                    <td className="px-3 py-2 text-primary">
+                                    <td className="px-3 py-2 text-fg">
                                         <Link
                                             to={`/poster/search/assets?q=${encodeURIComponent(item.title || '')}`}
                                             className="hover:text-accent hover:underline"
@@ -656,14 +656,14 @@ const MatchReviewList = ({ rows, mode, onRefresh, onPick }) => {
                                             {item.title}
                                         </Link>
                                     </td>
-                                    <td className="px-3 py-2 text-secondary">
+                                    <td className="px-3 py-2 text-fg-muted">
                                         {TYPE_LABELS[item.type] ||
                                             TYPE_LABELS[item.asset_type] ||
                                             item.type ||
                                             '—'}
                                     </td>
-                                    <td className="px-3 py-2 text-secondary">{item.year || '—'}</td>
-                                    <td className="px-3 py-2 text-secondary">
+                                    <td className="px-3 py-2 text-fg-muted">{item.year || '—'}</td>
+                                    <td className="px-3 py-2 text-fg-muted">
                                         {item.instance_name || '—'}
                                     </td>
                                     <td className="px-3 py-2">
@@ -674,10 +674,10 @@ const MatchReviewList = ({ rows, mode, onRefresh, onPick }) => {
                                                 {Math.round(item.match_confidence * 100)}%
                                             </span>
                                         ) : (
-                                            <span className="text-tertiary">—</span>
+                                            <span className="text-fg-subtle">—</span>
                                         )}
                                     </td>
-                                    <td className="px-3 py-2 text-secondary max-w-md">
+                                    <td className="px-3 py-2 text-fg-muted max-w-md">
                                         <span>{item.match_reason || '—'}</span>
                                         {item.conflicts?.length > 1 && (
                                             <span className="block text-xs text-warning mt-1">
@@ -819,7 +819,7 @@ const ARTWORK_TRANSPARENCY_BG = {
 
 /** Chip listing the artwork type(s) a media row is missing/failed/ignored. */
 const MissingChips = ({ typeKeys, reasons }) => {
-    if (!typeKeys?.length) return <span className="text-tertiary">—</span>;
+    if (!typeKeys?.length) return <span className="text-fg-subtle">—</span>;
     return (
         <span className="flex flex-wrap gap-1">
             {typeKeys.map(tk => {
@@ -829,7 +829,7 @@ const MissingChips = ({ typeKeys, reasons }) => {
                     <span
                         key={tk}
                         title={reason || undefined}
-                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-surface-alt text-secondary text-xs whitespace-nowrap"
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-surface-alt text-fg-muted text-xs whitespace-nowrap"
                     >
                         <span className="leading-none">{meta?.icon}</span>
                         {meta?.label || tk}
@@ -1009,12 +1009,12 @@ const ArtworkView = ({ data, status, isLoading, onRefresh, onPick }) => {
                                     : 'bg-surface border-border hover:border-primary/50'
                             }`}
                         >
-                            <p className="text-sm text-secondary flex items-center gap-1.5">
+                            <p className="text-sm text-fg-muted flex items-center gap-1.5">
                                 <span className="text-base leading-none">{icon}</span>
                                 {label}
                             </p>
                             <p className="text-2xl font-bold text-warning">{t.missing ?? 0}</p>
-                            <p className="text-xs text-tertiary mt-1">
+                            <p className="text-xs text-fg-subtle mt-1">
                                 of {t.total || 0} total &mdash;{' '}
                                 {t.percent_complete?.toFixed(1) || 0}% complete
                             </p>
@@ -1043,8 +1043,8 @@ const ArtworkView = ({ data, status, isLoading, onRefresh, onPick }) => {
                                 }}
                                 className={`px-3 py-1 text-sm rounded-lg border ${
                                     mediaTypeKey === t.key
-                                        ? 'border-primary bg-surface-alt text-primary'
-                                        : 'border-border text-secondary hover:text-primary'
+                                        ? 'border-primary bg-surface-alt text-fg'
+                                        : 'border-border text-fg-muted hover:text-fg'
                                 }`}
                             >
                                 {t.label}
@@ -1055,7 +1055,7 @@ const ArtworkView = ({ data, status, isLoading, onRefresh, onPick }) => {
                         <button
                             type="button"
                             onClick={() => setTypeFilter(null)}
-                            className="text-xs text-secondary hover:text-primary underline"
+                            className="text-xs text-fg-muted hover:text-fg underline"
                         >
                             Clear {ARTWORK_TYPES.find(a => a.key === typeFilter)?.label} filter
                         </button>
@@ -1070,13 +1070,13 @@ const ArtworkView = ({ data, status, isLoading, onRefresh, onPick }) => {
                     }}
                     placeholder="Search title…"
                     aria-label="Search titles"
-                    className="px-3 py-2 bg-input border border-border rounded-md text-primary text-sm"
+                    className="px-3 py-2 bg-input border border-border rounded-md text-fg text-sm"
                     style={{ minWidth: '14rem' }}
                 />
             </div>
 
             {filtered.length === 0 ? (
-                <p className="text-sm text-secondary">
+                <p className="text-sm text-fg-muted">
                     {isIgnoredTab
                         ? 'Nothing marked “not needed”.'
                         : status === 'review'
@@ -1088,7 +1088,7 @@ const ArtworkView = ({ data, status, isLoading, onRefresh, onPick }) => {
                     <div className="overflow-x-auto rounded-lg border border-border">
                         <table className="w-full text-sm">
                             <thead>
-                                <tr className="bg-surface-alt text-secondary text-left">
+                                <tr className="bg-surface-alt text-fg-muted text-left">
                                     <SortHeader
                                         label="Title"
                                         sortKey="title"
@@ -1132,7 +1132,7 @@ const ArtworkView = ({ data, status, isLoading, onRefresh, onPick }) => {
                                         key={`${item.id ?? idx}`}
                                         className="bg-surface hover:bg-surface-alt align-top"
                                     >
-                                        <td className="px-3 py-2 text-primary">
+                                        <td className="px-3 py-2 text-fg">
                                             <Link
                                                 to={`/poster/search/assets?q=${encodeURIComponent(item.title || '')}&image_type=${typeFilter || 'artwork'}`}
                                                 className="hover:text-accent hover:underline"
@@ -1141,14 +1141,14 @@ const ArtworkView = ({ data, status, isLoading, onRefresh, onPick }) => {
                                                 {item.title}
                                             </Link>
                                             {item.season_number != null && (
-                                                <span className="ml-2 text-xs text-tertiary">
+                                                <span className="ml-2 text-xs text-fg-subtle">
                                                     {item.season_number === 0
                                                         ? 'Specials'
                                                         : `S${String(item.season_number).padStart(2, '0')}`}
                                                 </span>
                                             )}
                                         </td>
-                                        <td className="px-3 py-2 text-secondary">
+                                        <td className="px-3 py-2 text-fg-muted">
                                             {item.asset_type === 'show'
                                                 ? item.season_number != null
                                                     ? 'Season'
@@ -1157,7 +1157,7 @@ const ArtworkView = ({ data, status, isLoading, onRefresh, onPick }) => {
                                                   item.asset_type ||
                                                   '—'}
                                         </td>
-                                        <td className="px-3 py-2 text-secondary">
+                                        <td className="px-3 py-2 text-fg-muted">
                                             {item.year || '—'}
                                         </td>
                                         <td className="px-3 py-2">
@@ -1167,7 +1167,7 @@ const ArtworkView = ({ data, status, isLoading, onRefresh, onPick }) => {
                                             />
                                         </td>
                                         {isReviewTab && (
-                                            <td className="px-3 py-2 text-secondary max-w-xs">
+                                            <td className="px-3 py-2 text-fg-muted max-w-xs">
                                                 {(() => {
                                                     const reasons = item.reasons || {};
                                                     const uniq = [
@@ -1182,23 +1182,23 @@ const ArtworkView = ({ data, status, isLoading, onRefresh, onPick }) => {
                                                             {uniq.join('; ')}
                                                         </span>
                                                     ) : (
-                                                        <span className="text-tertiary">
+                                                        <span className="text-fg-subtle">
                                                             No detail recorded
                                                         </span>
                                                     );
                                                 })()}
                                             </td>
                                         )}
-                                        <td className="px-3 py-2 text-secondary">
+                                        <td className="px-3 py-2 text-fg-muted">
                                             {item.instance_name || '—'}
                                         </td>
-                                        <td className="px-3 py-2 text-tertiary font-mono text-xs">
+                                        <td className="px-3 py-2 text-fg-subtle font-mono text-xs">
                                             {formatId(item.tmdb_id) || '—'}
                                         </td>
-                                        <td className="px-3 py-2 text-tertiary font-mono text-xs">
+                                        <td className="px-3 py-2 text-fg-subtle font-mono text-xs">
                                             {formatId(item.imdb_id) || '—'}
                                         </td>
-                                        <td className="px-3 py-2 text-tertiary font-mono text-xs">
+                                        <td className="px-3 py-2 text-fg-subtle font-mono text-xs">
                                             {formatId(item.tvdb_id) || '—'}
                                         </td>
                                         <td className="px-3 py-2 text-right whitespace-nowrap">
@@ -1265,7 +1265,7 @@ const ArtworkView = ({ data, status, isLoading, onRefresh, onPick }) => {
                     </div>
 
                     {pageCount > 1 && (
-                        <div className="flex items-center justify-center gap-3 text-sm text-secondary">
+                        <div className="flex items-center justify-center gap-3 text-sm text-fg-muted">
                             <IconButton
                                 icon="chevron_left"
                                 variant="ghost"
@@ -1309,7 +1309,7 @@ const PickerThumb = ({ cand, busy, onApply }) => {
                 style={{ aspectRatio: '2 / 3' }}
             >
                 {failed ? (
-                    <span className="material-symbols-outlined text-tertiary text-3xl">
+                    <span className="material-symbols-outlined text-fg-subtle text-3xl">
                         broken_image
                     </span>
                 ) : (
@@ -1323,9 +1323,9 @@ const PickerThumb = ({ cand, busy, onApply }) => {
                 )}
             </div>
             <div className="px-2 py-1">
-                <p className="text-xs text-secondary truncate">{cand.style || cand.owner || '—'}</p>
+                <p className="text-xs text-fg-muted truncate">{cand.style || cand.owner || '—'}</p>
                 {cand.season_number != null && (
-                    <p className="text-[10px] text-tertiary">Season {cand.season_number}</p>
+                    <p className="text-[10px] text-fg-subtle">Season {cand.season_number}</p>
                 )}
             </div>
             <span className="absolute inset-0 flex items-center justify-center bg-primary/80 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1382,7 +1382,7 @@ const PosterPickerModal = ({ item, onClose, onApplied }) => {
                 {item.season_number != null ? ` · Season ${item.season_number}` : ''}
             </Modal.Header>
             <Modal.Body>
-                <p className="text-xs text-tertiary mb-3">
+                <p className="text-xs text-fg-subtle mb-3">
                     Applying follows Poster Renamerr&apos;s <strong>Apply Method</strong>: with{' '}
                     <strong>Plex</strong> the poster is uploaded straight to Plex (for instances
                     you&apos;ve opted in); with <strong>Kometa</strong> it&apos;s copied into your
@@ -1390,9 +1390,9 @@ const PosterPickerModal = ({ item, onClose, onApplied }) => {
                     way.
                 </p>
                 {candidates === null ? (
-                    <p className="text-sm text-secondary">Searching for posters…</p>
+                    <p className="text-sm text-fg-muted">Searching for posters…</p>
                 ) : candidates.length === 0 ? (
-                    <p className="text-sm text-secondary">
+                    <p className="text-sm text-fg-muted">
                         No candidate posters found in your cache for this title. The asset may not
                         exist in any synced source.
                     </p>
@@ -1439,7 +1439,7 @@ const ArtworkPickerThumb = ({ cand, busy, onApply }) => {
                 style={{ aspectRatio: '3 / 2', ...ARTWORK_TRANSPARENCY_BG }}
             >
                 {failed ? (
-                    <span className="material-symbols-outlined text-tertiary text-3xl">
+                    <span className="material-symbols-outlined text-fg-subtle text-3xl">
                         broken_image
                     </span>
                 ) : (
@@ -1453,9 +1453,9 @@ const ArtworkPickerThumb = ({ cand, busy, onApply }) => {
                 )}
             </div>
             <div className="px-2 py-1">
-                <p className="text-xs text-secondary truncate">{cand.style || cand.owner || '—'}</p>
+                <p className="text-xs text-fg-muted truncate">{cand.style || cand.owner || '—'}</p>
                 {cand.season_number != null && (
-                    <p className="text-[10px] text-tertiary">Season {cand.season_number}</p>
+                    <p className="text-[10px] text-fg-subtle">Season {cand.season_number}</p>
                 )}
             </div>
             <span className="absolute inset-0 flex items-center justify-center bg-primary/80 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1533,8 +1533,8 @@ const ArtworkPickerModal = ({ item, imageTypes, onClose, onApplied }) => {
                                 onClick={() => setImageType(t)}
                                 className={`px-3 py-1 text-sm rounded-lg border ${
                                     imageType === t
-                                        ? 'border-brand-primary/50 bg-surface-alt text-primary'
-                                        : 'border-border text-secondary hover:text-primary'
+                                        ? 'border-brand-primary/50 bg-surface-alt text-fg'
+                                        : 'border-border text-fg-muted hover:text-fg'
                                 }`}
                             >
                                 {ARTWORK_TYPE_LABELS[t] || t}
@@ -1542,16 +1542,16 @@ const ArtworkPickerModal = ({ item, imageTypes, onClose, onApplied }) => {
                         ))}
                     </div>
                 )}
-                <p className="text-xs text-tertiary mb-3">
+                <p className="text-xs text-fg-subtle mb-3">
                     Applying follows Asset Renamerr&apos;s <strong>Apply Method</strong>: with{' '}
                     <strong>Plex</strong> the {typeLabel} is uploaded straight to Plex; with{' '}
                     <strong>Kometa</strong> it&apos;s copied into your assets directory. The pick is
                     saved &amp; locked either way.
                 </p>
                 {candidates === null ? (
-                    <p className="text-sm text-secondary">Searching for artwork…</p>
+                    <p className="text-sm text-fg-muted">Searching for artwork…</p>
                 ) : candidates.length === 0 ? (
-                    <p className="text-sm text-secondary">
+                    <p className="text-sm text-fg-muted">
                         No candidate {typeLabel} files found in your cache for this title.
                     </p>
                 ) : (
@@ -1613,7 +1613,7 @@ const ResetControl = ({ assetClass, onComplete }) => {
             <Modal isOpen={open} onClose={() => !busy && setOpen(false)} size="small">
                 <Modal.Header>{label}?</Modal.Header>
                 <Modal.Body>
-                    <div className="flex flex-col gap-3 text-sm text-secondary">
+                    <div className="flex flex-col gap-3 text-sm text-fg-muted">
                         {isArt ? (
                             <p>
                                 Clears all additional-artwork coverage (logos / backgrounds / square
@@ -1629,7 +1629,7 @@ const ResetControl = ({ assetClass, onComplete }) => {
                                 items are kept.
                             </p>
                         )}
-                        <p className="text-tertiary text-xs">
+                        <p className="text-fg-subtle text-xs">
                             This only resets CHUB&apos;s tracking — it does not delete posters or
                             artwork from disk or Plex.
                         </p>
@@ -1723,8 +1723,8 @@ const UnmatchedAssetsPage = () => {
                 icon="warning"
             />
             {grandTotal.total > 0 && (
-                <p className="text-sm text-secondary">
-                    <span className="font-medium text-primary">{grandTotal.unmatched || 0}</span>{' '}
+                <p className="text-sm text-fg-muted">
+                    <span className="font-medium text-fg">{grandTotal.unmatched || 0}</span>{' '}
                     unmatched of {grandTotal.total.toLocaleString()} —{' '}
                     {(grandTotal.percent_complete || 0).toFixed(1)}% complete
                 </p>
@@ -1763,7 +1763,7 @@ const UnmatchedAssetsPage = () => {
                             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
                                 assetClass === c.key
                                     ? 'bg-primary text-on-color shadow-sm'
-                                    : 'text-secondary hover:text-primary'
+                                    : 'text-fg-muted hover:text-fg'
                             }`}
                         >
                             {c.label}
@@ -1772,7 +1772,7 @@ const UnmatchedAssetsPage = () => {
                                     className={`text-xs px-1.5 py-0.5 rounded-full ${
                                         assetClass === c.key
                                             ? 'bg-white/25 text-on-color'
-                                            : 'bg-surface text-secondary'
+                                            : 'bg-surface text-fg-muted'
                                     }`}
                                 >
                                     {c.count}
@@ -1781,7 +1781,7 @@ const UnmatchedAssetsPage = () => {
                         </button>
                     ))}
                 </div>
-                <span className="text-xs text-tertiary">
+                <span className="text-xs text-fg-subtle">
                     {assetClass === 'art'
                         ? 'Asset renamer for logos, backgrounds and square art'
                         : 'The main artwork shown in Plex.'}
@@ -1808,12 +1808,12 @@ const UnmatchedAssetsPage = () => {
                         onClick={() => setViewMode(v.key)}
                         className={`px-3 py-1 text-sm rounded-lg border flex items-center gap-2 ${
                             viewMode === v.key
-                                ? 'border-brand-primary/50 bg-surface-alt text-primary'
-                                : 'border-border text-secondary hover:text-primary'
+                                ? 'border-brand-primary/50 bg-surface-alt text-fg'
+                                : 'border-border text-fg-muted hover:text-fg'
                         }`}
                     >
                         {v.label}
-                        <span className="text-xs text-tertiary">{viewCounts[v.key]}</span>
+                        <span className="text-xs text-fg-subtle">{viewCounts[v.key]}</span>
                     </button>
                 ))}
             </div>
@@ -1845,7 +1845,7 @@ const UnmatchedAssetsPage = () => {
             {assetClass === 'poster' &&
                 viewMode === 'unmatched' &&
                 (!hasData ? (
-                    <p className="text-sm text-secondary">
+                    <p className="text-sm text-fg-muted">
                         No unmatched-asset data yet. Run &ldquo;Run Unmatched Assets&rdquo; to scan
                         your library.
                     </p>
@@ -1881,14 +1881,14 @@ const UnmatchedAssetsPage = () => {
                                                 : 'bg-surface border-border hover:border-primary/50'
                                         }`}
                                     >
-                                        <p className="text-sm text-secondary flex items-center gap-1.5">
+                                        <p className="text-sm text-fg-muted flex items-center gap-1.5">
                                             <span className="text-base leading-none">{icon}</span>
                                             {label}
                                         </p>
                                         <p className="text-2xl font-bold text-warning">
                                             {typeData.unmatched || 0}
                                         </p>
-                                        <p className="text-xs text-tertiary mt-1">
+                                        <p className="text-xs text-fg-subtle mt-1">
                                             of {typeData.total || 0} total &mdash;{' '}
                                             {typeData.percent_complete?.toFixed(1) || 0}% complete
                                         </p>

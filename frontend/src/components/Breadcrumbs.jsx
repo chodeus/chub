@@ -51,26 +51,26 @@ export default function Breadcrumbs() {
     return (
         <nav
             aria-label="Breadcrumb"
-            className="flex items-center gap-1.5 text-xs text-tertiary mb-3 flex-wrap"
+            className="flex items-center gap-1.5 text-xs text-fg-subtle mb-3 flex-wrap"
         >
-            <Link to="/dashboard" className="no-underline hover:text-primary hover:underline">
+            <Link to="/dashboard" className="no-underline hover:text-fg hover:underline">
                 Home
             </Link>
             {crumbs.map((crumb, idx) => {
                 const isLast = idx === crumbs.length - 1;
                 return (
                     <React.Fragment key={`${crumb.label}-${idx}`}>
-                        <span aria-hidden="true" className="text-tertiary/60">
+                        <span aria-hidden="true" className="text-fg-subtle/60">
                             /
                         </span>
                         {isLast || !crumb.to ? (
-                            <span aria-current="page" className="text-secondary">
+                            <span aria-current="page" className="text-fg-muted">
                                 {crumb.label}
                             </span>
                         ) : (
                             <Link
                                 to={crumb.to}
-                                className="no-underline hover:text-primary hover:underline"
+                                className="no-underline hover:text-fg hover:underline"
                             >
                                 {crumb.label}
                             </Link>

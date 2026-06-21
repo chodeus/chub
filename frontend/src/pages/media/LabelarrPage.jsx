@@ -48,11 +48,11 @@ const LabelarrPage = () => {
             />
 
             <section className="p-4 rounded-lg bg-surface border border-border">
-                <h3 className="text-lg font-semibold text-primary mb-3 flex items-center gap-2">
-                    <span className="material-symbols-outlined text-secondary">info</span>
+                <h3 className="text-lg font-semibold text-fg mb-3 flex items-center gap-2">
+                    <span className="material-symbols-outlined text-fg-muted">info</span>
                     About Label Sync
                 </h3>
-                <p className="text-secondary text-sm">
+                <p className="text-fg-muted text-sm">
                     The labelarr module synchronizes tags between your Radarr/Sonarr instances and
                     Plex labels. This ensures your media is consistently tagged across all services
                     for filtering and organization.
@@ -60,7 +60,7 @@ const LabelarrPage = () => {
             </section>
 
             <section className="p-4 rounded-lg bg-surface border border-border">
-                <h3 className="text-lg font-semibold text-primary mb-3 flex items-center gap-2">
+                <h3 className="text-lg font-semibold text-fg mb-3 flex items-center gap-2">
                     <span className="material-symbols-outlined text-brand-primary">label</span>
                     Sync Status
                 </h3>
@@ -68,7 +68,7 @@ const LabelarrPage = () => {
                 {labelarrState ? (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div className="p-3 rounded bg-surface-alt">
-                            <span className="text-xs text-secondary block mb-1">Status</span>
+                            <span className="text-xs text-fg-muted block mb-1">Status</span>
                             <span
                                 className={`font-medium capitalize ${
                                     labelarrState.status === 'success'
@@ -77,15 +77,15 @@ const LabelarrPage = () => {
                                           ? 'text-danger'
                                           : labelarrState.status === 'running'
                                             ? 'text-brand-primary'
-                                            : 'text-primary'
+                                            : 'text-fg'
                                 }`}
                             >
                                 {labelarrState.status || 'unknown'}
                             </span>
                         </div>
                         <div className="p-3 rounded bg-surface-alt">
-                            <span className="text-xs text-secondary block mb-1">Last Run</span>
-                            <span className="font-medium text-primary">
+                            <span className="text-xs text-fg-muted block mb-1">Last Run</span>
+                            <span className="font-medium text-fg">
                                 {labelarrState.last_run
                                     ? formatDateTime(labelarrState.last_run)
                                     : 'Never'}
@@ -93,23 +93,21 @@ const LabelarrPage = () => {
                         </div>
                         {labelarrState.duration != null && (
                             <div className="p-3 rounded bg-surface-alt">
-                                <span className="text-xs text-secondary block mb-1">Duration</span>
-                                <span className="font-medium text-primary">
+                                <span className="text-xs text-fg-muted block mb-1">Duration</span>
+                                <span className="font-medium text-fg">
                                     {labelarrState.duration}s
                                 </span>
                             </div>
                         )}
                         {labelarrState.message && (
                             <div className="p-3 rounded bg-surface-alt sm:col-span-2">
-                                <span className="text-xs text-secondary block mb-1">Message</span>
-                                <span className="text-sm text-primary">
-                                    {labelarrState.message}
-                                </span>
+                                <span className="text-xs text-fg-muted block mb-1">Message</span>
+                                <span className="text-sm text-fg">{labelarrState.message}</span>
                             </div>
                         )}
                     </div>
                 ) : (
-                    <p className="text-secondary text-sm">
+                    <p className="text-fg-muted text-sm">
                         No sync history yet. Click &ldquo;Sync Now&rdquo; to run the first label
                         sync.
                     </p>

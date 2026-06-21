@@ -65,12 +65,12 @@ export default function RecentQueries({ entries, onSelect, onClear, label = 'Rec
     return (
         <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between gap-2">
-                <span className="text-xs uppercase tracking-wider text-tertiary">{label}</span>
+                <span className="text-xs uppercase tracking-wider text-fg-subtle">{label}</span>
                 {onClear && (
                     <button
                         type="button"
                         onClick={handleClearClick}
-                        className="text-xs text-tertiary hover:text-primary underline-offset-2 hover:underline bg-transparent border-0 p-0 cursor-pointer"
+                        className="text-xs text-fg-subtle hover:text-fg underline-offset-2 hover:underline bg-transparent border-0 p-0 cursor-pointer"
                     >
                         Clear
                     </button>
@@ -82,7 +82,7 @@ export default function RecentQueries({ entries, onSelect, onClear, label = 'Rec
                         key={q}
                         type="button"
                         onClick={() => onSelect(q)}
-                        className="text-xs px-2.5 py-1 rounded-full bg-surface-alt text-secondary hover:bg-surface hover:text-primary border border-border-light"
+                        className="text-xs px-2.5 py-1 rounded-full bg-surface-alt text-fg-muted hover:bg-surface hover:text-fg border border-border-light"
                     >
                         {q}
                     </button>

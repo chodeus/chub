@@ -80,11 +80,11 @@ export const ScheduleBlocksEditor = ({ blocks, onChange, disabled }) => {
     return (
         <div className="flex flex-col gap-3 mt-4 pt-4 border-t border-border">
             <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold text-primary">Schedule blocks</span>
-                <span className="text-xs text-tertiary">
+                <span className="text-sm font-semibold text-fg">Schedule blocks</span>
+                <span className="text-xs text-fg-subtle">
                     Extra schedules, each with its own overrides — e.g. a daily{' '}
-                    <span className="text-secondary">report</span> plus a weekly{' '}
-                    <span className="text-secondary">remove</span>.
+                    <span className="text-fg-muted">report</span> plus a weekly{' '}
+                    <span className="text-fg-muted">remove</span>.
                 </span>
             </div>
 
@@ -139,7 +139,7 @@ export const ScheduleBlocksEditor = ({ blocks, onChange, disabled }) => {
                         </select>
                     </label>
 
-                    <label className="flex flex-col gap-1 text-xs text-tertiary">
+                    <label className="flex flex-col gap-1 text-xs text-fg-subtle">
                         Advanced overrides (JSON, optional)
                         <input
                             type="text"
@@ -147,7 +147,7 @@ export const ScheduleBlocksEditor = ({ blocks, onChange, disabled }) => {
                             disabled={disabled}
                             onChange={e => update(i, { extra: e.target.value })}
                             placeholder='{"stale_duplicates_enabled": true}'
-                            className="px-2 py-1 rounded bg-surface border border-border text-sm font-mono text-secondary"
+                            className="px-2 py-1 rounded bg-surface border border-border text-sm font-mono text-fg-muted"
                         />
                     </label>
                 </div>

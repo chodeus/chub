@@ -139,11 +139,11 @@ const PosterGDriveSearchPage = () => {
             {sources.length > 0 && (
                 <div className="flex flex-wrap items-center gap-3 p-3 rounded-lg bg-surface border border-border">
                     <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-                        <label className="text-sm text-secondary">Sync folder</label>
+                        <label className="text-sm text-fg-muted">Sync folder</label>
                         <select
                             value={pickerSelection}
                             onChange={e => setPickerSelection(e.target.value)}
-                            className="flex-1 sm:flex-none min-w-0 sm:min-w-[200px] px-3 py-1.5 rounded-lg bg-surface border border-border text-primary text-sm"
+                            className="flex-1 sm:flex-none min-w-0 sm:min-w-[200px] px-3 py-1.5 rounded-lg bg-surface border border-border text-fg text-sm"
                         >
                             <option value="">Select a folder...</option>
                             {[...sources]
@@ -167,11 +167,11 @@ const PosterGDriveSearchPage = () => {
                     </div>
 
                     <div className="flex items-center gap-2">
-                        <label className="text-sm text-secondary">Sort</label>
+                        <label className="text-sm text-fg-muted">Sort</label>
                         <select
                             value={sortBy}
                             onChange={e => setSortBy(e.target.value)}
-                            className="px-3 py-1.5 rounded-lg bg-surface border border-border text-primary text-sm"
+                            className="px-3 py-1.5 rounded-lg bg-surface border border-border text-fg text-sm"
                         >
                             {SORT_OPTIONS.map(o => (
                                 <option key={o.value} value={o.value}>
@@ -182,7 +182,7 @@ const PosterGDriveSearchPage = () => {
                     </div>
 
                     <div className="flex items-center gap-2">
-                        <label className="text-sm text-secondary">Show</label>
+                        <label className="text-sm text-fg-muted">Show</label>
                         <div className="flex gap-1">
                             {FILTER_OPTIONS.map(o => (
                                 <Button
@@ -202,7 +202,7 @@ const PosterGDriveSearchPage = () => {
             {isLoading && <Spinner size="large" text="Loading GDrive sources..." center />}
 
             {!isLoading && sources.length === 0 && (
-                <div className="text-center py-16 text-tertiary">
+                <div className="text-center py-16 text-fg-subtle">
                     <span className="material-symbols-outlined text-5xl mb-4 block opacity-40">
                         cloud_off
                     </span>
@@ -214,7 +214,7 @@ const PosterGDriveSearchPage = () => {
             )}
 
             {!isLoading && sources.length > 0 && displayedSources.length === 0 && (
-                <div className="text-center py-16 text-tertiary">
+                <div className="text-center py-16 text-fg-subtle">
                     <span className="material-symbols-outlined text-5xl mb-4 block opacity-40">
                         filter_alt_off
                     </span>
@@ -234,13 +234,13 @@ const PosterGDriveSearchPage = () => {
                                     folder
                                 </span>
                                 <div className="flex-1 min-w-0">
-                                    <h3 className="font-semibold text-primary truncate">
+                                    <h3 className="font-semibold text-fg truncate">
                                         {source.name}
                                     </h3>
-                                    <p className="text-xs text-tertiary truncate mt-1">
+                                    <p className="text-xs text-fg-subtle truncate mt-1">
                                         {source.location}
                                     </p>
-                                    <div className="flex items-center gap-3 mt-2 text-sm text-secondary">
+                                    <div className="flex items-center gap-3 mt-2 text-sm text-fg-muted">
                                         <span className="flex items-center gap-1">
                                             <span className="material-symbols-outlined text-sm">
                                                 description
@@ -256,7 +256,7 @@ const PosterGDriveSearchPage = () => {
                                             </span>
                                         )}
                                     </div>
-                                    <p className="text-xs text-tertiary mt-1">
+                                    <p className="text-xs text-fg-subtle mt-1">
                                         Last synced: {formatLastSynced(source._lastSyncedMs)}
                                     </p>
                                     <div className="mt-3">

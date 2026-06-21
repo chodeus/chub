@@ -57,13 +57,11 @@ const BreakdownBars = ({ bars, onSelect, activeLabel }) => {
                 const inner = (
                     <>
                         <div className="flex justify-between text-sm mb-1">
-                            <span
-                                className={activeLabel === label ? 'text-accent' : 'text-primary'}
-                            >
+                            <span className={activeLabel === label ? 'text-accent' : 'text-fg'}>
                                 {label}
-                                {interactive && <span className="text-tertiary"> ›</span>}
+                                {interactive && <span className="text-fg-subtle"> ›</span>}
                             </span>
-                            <span className="text-tertiary">
+                            <span className="text-fg-subtle">
                                 {count.toLocaleString()} · {pct.toFixed(1)}%
                             </span>
                         </div>
@@ -164,8 +162,8 @@ const AppliedVariantTable = ({ style }) => {
     return (
         <div className="p-5 rounded-xl bg-surface border border-border">
             <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
-                <p className="text-sm text-secondary">
-                    <span className="text-primary font-medium">{style}</span> posters —{' '}
+                <p className="text-sm text-fg-muted">
+                    <span className="text-fg font-medium">{style}</span> posters —{' '}
                     {total.toLocaleString()} items
                 </p>
                 <div className="flex flex-wrap gap-1">
@@ -175,8 +173,8 @@ const AppliedVariantTable = ({ style }) => {
                             onClick={() => selectType(f.key)}
                             className={`px-2 py-1 text-xs rounded-lg border ${
                                 typeKey === f.key
-                                    ? 'border-brand-primary/50 bg-surface-alt text-primary'
-                                    : 'border-border text-secondary hover:text-primary'
+                                    ? 'border-brand-primary/50 bg-surface-alt text-fg'
+                                    : 'border-border text-fg-muted hover:text-fg'
                             }`}
                         >
                             {f.label}
@@ -185,7 +183,7 @@ const AppliedVariantTable = ({ style }) => {
                 </div>
             </div>
             {items.length === 0 ? (
-                <p className="text-sm text-tertiary">No matched media for this variant/type.</p>
+                <p className="text-sm text-fg-subtle">No matched media for this variant/type.</p>
             ) : (
                 <>
                     <div
@@ -194,7 +192,7 @@ const AppliedVariantTable = ({ style }) => {
                     >
                         <table className="w-full text-sm">
                             <thead>
-                                <tr className="bg-surface-alt text-secondary text-left">
+                                <tr className="bg-surface-alt text-fg-muted text-left">
                                     <th className="px-3 py-2 font-medium">Title</th>
                                     <th className="px-3 py-2 font-medium">Type</th>
                                     <th className="px-3 py-2 font-medium">Year</th>
@@ -205,18 +203,18 @@ const AppliedVariantTable = ({ style }) => {
                             <tbody className="divide-y divide-border">
                                 {items.map(item => (
                                     <tr key={item.id} className="bg-surface hover:bg-surface-alt">
-                                        <td className="px-3 py-2 text-primary">{item.title}</td>
-                                        <td className="px-3 py-2 text-secondary capitalize">
+                                        <td className="px-3 py-2 text-fg">{item.title}</td>
+                                        <td className="px-3 py-2 text-fg-muted capitalize">
                                             {item.resolved_type}
                                             {item.resolved_type === 'season' &&
                                             item.season_number != null
                                                 ? ` ${item.season_number}`
                                                 : ''}
                                         </td>
-                                        <td className="px-3 py-2 text-secondary">
+                                        <td className="px-3 py-2 text-fg-muted">
                                             {item.year || '—'}
                                         </td>
-                                        <td className="px-3 py-2 text-tertiary font-mono text-xs">
+                                        <td className="px-3 py-2 text-fg-subtle font-mono text-xs">
                                             {formatId(item.tmdb_id) || '—'}
                                         </td>
                                         <td className="px-3 py-2 text-right">
@@ -235,7 +233,7 @@ const AppliedVariantTable = ({ style }) => {
                         </table>
                     </div>
                     {pageCount > 1 && (
-                        <div className="flex items-center justify-end gap-2 mt-3 text-sm text-tertiary">
+                        <div className="flex items-center justify-end gap-2 mt-3 text-sm text-fg-subtle">
                             <IconButton
                                 icon="chevron_left"
                                 size="small"
@@ -380,7 +378,7 @@ const PosterStatsPage = () => {
                     <select
                         value={period}
                         onChange={e => setPeriod(e.target.value)}
-                        className="px-3 py-2 bg-surface border border-border rounded-md text-primary text-sm cursor-pointer"
+                        className="px-3 py-2 bg-surface border border-border rounded-md text-fg text-sm cursor-pointer"
                         aria-label="Time period"
                     >
                         {PERIOD_OPTIONS.map(opt => (
@@ -401,28 +399,26 @@ const PosterStatsPage = () => {
             {/* Summary Cards */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="p-5 rounded-xl bg-surface border border-border">
-                    <p className="text-sm text-secondary mb-1">Cached Posters</p>
-                    <p className="text-3xl font-bold text-primary">
+                    <p className="text-sm text-fg-muted mb-1">Cached Posters</p>
+                    <p className="text-3xl font-bold text-fg">
                         {(stats.poster_cache_count || 0).toLocaleString()}
                     </p>
                 </div>
                 <div className="p-5 rounded-xl bg-surface border border-border">
-                    <p className="text-sm text-secondary mb-1">GDrive Sources</p>
-                    <p className="text-3xl font-bold text-primary">{gdriveStats.length}</p>
+                    <p className="text-sm text-fg-muted mb-1">GDrive Sources</p>
+                    <p className="text-3xl font-bold text-fg">{gdriveStats.length}</p>
                 </div>
                 <div className="p-5 rounded-xl bg-surface border border-border">
-                    <p className="text-sm text-secondary mb-1">Synced Size</p>
-                    <p className="text-3xl font-bold text-primary">
-                        {formatSize(totalSyncedBytes)}
-                    </p>
+                    <p className="text-sm text-fg-muted mb-1">Synced Size</p>
+                    <p className="text-3xl font-bold text-fg">{formatSize(totalSyncedBytes)}</p>
                 </div>
                 <div className="p-5 rounded-xl bg-surface border border-border">
-                    <p className="text-sm text-secondary mb-1">Match Completion</p>
-                    <p className="text-3xl font-bold text-primary">
+                    <p className="text-sm text-fg-muted mb-1">Match Completion</p>
+                    <p className="text-3xl font-bold text-fg">
                         {(grandTotal.percent_complete || 0).toFixed(1)}%
                     </p>
                     {grandTotal.total > 0 && (
-                        <p className="text-xs text-tertiary mt-1">
+                        <p className="text-xs text-fg-subtle mt-1">
                             {(grandTotal.total - grandTotal.unmatched).toLocaleString()} /{' '}
                             {grandTotal.total.toLocaleString()} matched
                         </p>
@@ -433,20 +429,22 @@ const PosterStatsPage = () => {
             {/* Poster Breakdown — mix actually applied to the library */}
             {variantBars.length > 0 && (
                 <section>
-                    <h3 className="text-lg font-semibold text-primary mb-1 flex items-center gap-2">
+                    <h3 className="text-lg font-semibold text-fg mb-1 flex items-center gap-2">
                         <span className="material-symbols-outlined text-brand-primary">
                             donut_small
                         </span>
                         Poster Breakdown
                     </h3>
-                    <p className="text-xs text-tertiary mb-3">
+                    <p className="text-xs text-fg-subtle mb-3">
                         Posters applied to your library — not the full GDrive catalog
                     </p>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="p-5 rounded-xl bg-surface border border-border">
-                            <p className="text-sm text-secondary mb-3">
+                            <p className="text-sm text-fg-muted mb-3">
                                 By variant{' '}
-                                <span className="text-tertiary">— click to list &amp; request</span>
+                                <span className="text-fg-subtle">
+                                    — click to list &amp; request
+                                </span>
                             </p>
                             <BreakdownBars
                                 bars={variantBars}
@@ -454,14 +452,14 @@ const PosterStatsPage = () => {
                             />
                         </div>
                         <div className="p-5 rounded-xl bg-surface border border-border">
-                            <p className="text-sm text-secondary mb-3">By asset type</p>
+                            <p className="text-sm text-fg-muted mb-3">By asset type</p>
                             <BreakdownBars bars={typeBars} />
                         </div>
                     </div>
                     {variantsOpen && (
                         <div className="mt-4">
                             <div className="flex items-center justify-between gap-2 mb-2">
-                                <p className="text-sm text-secondary">
+                                <p className="text-sm text-fg-muted">
                                     Pick titles to request the other variant
                                 </p>
                                 <IconButton
@@ -480,7 +478,7 @@ const PosterStatsPage = () => {
                     )}
                     {sourceBars.length > 0 && (
                         <div className="p-5 rounded-xl bg-surface border border-border mt-4">
-                            <p className="text-sm text-secondary mb-3">Top sources used</p>
+                            <p className="text-sm text-fg-muted mb-3">Top sources used</p>
                             <BreakdownBars bars={sourceBars} />
                         </div>
                     )}
@@ -490,18 +488,16 @@ const PosterStatsPage = () => {
             {/* Matched Poster Stats */}
             {Array.isArray(matchedStats) && matchedStats.length > 0 && (
                 <section>
-                    <h3 className="text-lg font-semibold text-primary mb-3">
-                        Matched Poster Stats
-                    </h3>
+                    <h3 className="text-lg font-semibold text-fg mb-3">Matched Poster Stats</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                         {matchedStats.map((stat, i) => (
                             <div key={i} className="p-4 rounded-lg bg-surface border border-border">
-                                <p className="font-medium text-primary mb-2">
+                                <p className="font-medium text-fg mb-2">
                                     {stat.owner || `Source ${i + 1}`}
                                 </p>
                                 <div className="space-y-2 text-sm">
                                     <div>
-                                        <div className="flex items-center justify-between text-secondary">
+                                        <div className="flex items-center justify-between text-fg-muted">
                                             <span>Media</span>
                                             <span>
                                                 {stat.media_matched || 0}/{stat.media_total || 0}
@@ -515,7 +511,7 @@ const PosterStatsPage = () => {
                                         </div>
                                     </div>
                                     <div>
-                                        <div className="flex items-center justify-between text-secondary">
+                                        <div className="flex items-center justify-between text-fg-muted">
                                             <span>Collections</span>
                                             <span>
                                                 {stat.collections_matched || 0}/
@@ -531,7 +527,7 @@ const PosterStatsPage = () => {
                                             />
                                         </div>
                                     </div>
-                                    <div className="flex items-center justify-between text-xs text-tertiary pt-1 border-t border-border">
+                                    <div className="flex items-center justify-between text-xs text-fg-subtle pt-1 border-t border-border">
                                         <span>Overall</span>
                                         <span className="font-medium">
                                             {stat.overall_pct?.toFixed(1) || 0}% matched
@@ -546,14 +542,14 @@ const PosterStatsPage = () => {
 
             {/* Low-resolution Posters */}
             <section>
-                <h3 className="text-lg font-semibold text-primary mb-3 flex items-center gap-2">
+                <h3 className="text-lg font-semibold text-fg mb-3 flex items-center gap-2">
                     <span className="material-symbols-outlined text-warning">
                         photo_size_select_small
                     </span>
                     Low-resolution posters
                 </h3>
                 <div className="flex flex-wrap items-center gap-3 mb-3">
-                    <label className="flex items-center gap-2 text-sm text-secondary">
+                    <label className="flex items-center gap-2 text-sm text-fg-muted">
                         Below
                         <input
                             type="number"
@@ -563,7 +559,7 @@ const PosterStatsPage = () => {
                             onChange={e =>
                                 setLowResThreshold(Math.max(100, Number(e.target.value) || 100))
                             }
-                            className="w-20 p-1.5 bg-input border border-border rounded-md text-primary text-sm"
+                            className="w-20 p-1.5 bg-input border border-border rounded-md text-fg text-sm"
                         />
                         px wide
                     </label>
@@ -577,7 +573,7 @@ const PosterStatsPage = () => {
                     </LoadingButton>
                 </div>
                 {lowResPosters.length === 0 ? (
-                    <p className="text-sm text-secondary">
+                    <p className="text-sm text-fg-muted">
                         None found at this threshold. Run &ldquo;Backfill dimensions&rdquo; if you
                         haven&apos;t already — rows without recorded width are excluded.
                     </p>
@@ -592,16 +588,16 @@ const PosterStatsPage = () => {
                                 <span className="material-symbols-outlined text-warning text-base">
                                     warning
                                 </span>
-                                <span className="flex-1 min-w-0 truncate text-primary">
+                                <span className="flex-1 min-w-0 truncate text-fg">
                                     {p.title || p.file || `#${p.id}`}
                                 </span>
-                                <span className="text-xs text-tertiary">
+                                <span className="text-xs text-fg-subtle">
                                     {p.width ? `${p.width}px` : '—'}
                                 </span>
                             </div>
                         ))}
                         {lowResPosters.length > 30 && (
-                            <p className="col-span-full text-xs text-tertiary mt-1">
+                            <p className="col-span-full text-xs text-fg-subtle mt-1">
                                 …and {lowResPosters.length - 30} more.
                             </p>
                         )}
@@ -612,7 +608,7 @@ const PosterStatsPage = () => {
             {/* GDrive Sync Status */}
             {gdriveStats.length > 0 && (
                 <section>
-                    <h3 className="text-lg font-semibold text-primary mb-3">GDrive Sync Status</h3>
+                    <h3 className="text-lg font-semibold text-fg mb-3">GDrive Sync Status</h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
                         {gdriveStats.map((stat, i) => (
                             <div
@@ -623,10 +619,10 @@ const PosterStatsPage = () => {
                                 <span className="material-symbols-outlined text-brand-primary text-base">
                                     cloud_done
                                 </span>
-                                <span className="flex-1 min-w-0 truncate text-primary">
+                                <span className="flex-1 min-w-0 truncate text-fg">
                                     {stat.folder_name || stat.owner || stat.location}
                                 </span>
-                                <span className="shrink-0 text-xs text-tertiary whitespace-nowrap">
+                                <span className="shrink-0 text-xs text-fg-subtle whitespace-nowrap">
                                     {stat.file_count || 0} files
                                     {stat.size_bytes > 0 && ` · ${formatSize(stat.size_bytes)}`}
                                     {stat.last_updated && ` · ${formatSyncDate(stat.last_updated)}`}

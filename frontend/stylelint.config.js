@@ -3,13 +3,33 @@ export default {
   plugins: ['stylelint-selector-bem-pattern'],
   overrides: [
     {
-      files: ['src/css/utilities/**/*.css'],
+      // Tailwind v4 entry: allow its at-rules, nested @utility bodies, and
+      // its bare-string @import of the engine layers.
+      files: ['src/css/tailwind.css'],
       rules: {
-        // Turn off rules you don't want enforced here
+        'at-rule-no-unknown': [
+          true,
+          {
+            ignoreAtRules: [
+              'theme',
+              'utility',
+              'source',
+              'custom-variant',
+              'variant',
+              'apply',
+              'reference',
+              'config',
+              'plugin',
+            ],
+          },
+        ],
+        'at-rule-empty-line-before': null,
+        'rule-empty-line-before': null,
+        'nesting-selector-no-missing-scoping-root': null,
+        'import-notation': null,
         'selector-class-pattern': null,
-        'max-nesting-depth': null,
-        // Disable all formatting rules that would conflict with custom single-line format
-        // Prettier is excluded via .prettierignore, Stylelint should only lint, not format
+        'custom-property-pattern': null,
+        'value-keyword-case': null,
       },
     },
   ],

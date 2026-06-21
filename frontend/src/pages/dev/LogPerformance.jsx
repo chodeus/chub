@@ -9,7 +9,7 @@ export default function LogPerformance() {
         <div className="flex flex-col" style={{ height: '100%' }}>
             <div className="p-4 border-b border-default">
                 <h1 className="text-2xl font-bold">Log Output Performance Test</h1>
-                <p className="text-secondary">
+                <p className="text-fg-muted">
                     Test Phase 2 LogOutput component rendering performance
                 </p>
             </div>

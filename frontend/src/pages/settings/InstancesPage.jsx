@@ -127,7 +127,7 @@ export const InstancesPage = () => {
             {
                 label: 'Total Instances',
                 value: allInstanceNames.length,
-                colorClass: 'text-primary',
+                colorClass: 'text-fg',
             },
             { label: 'Connected', value: connectedCount, colorClass: 'text-success' },
             { label: 'Failed', value: failedCount, colorClass: 'text-error' },
@@ -516,7 +516,7 @@ export const InstancesPage = () => {
                     icon="dns"
                 />
                 <div className="text-center py-12">
-                    <p className="text-secondary">Loading instances...</p>
+                    <p className="text-fg-muted">Loading instances...</p>
                 </div>
             </div>
         );
@@ -569,7 +569,7 @@ export const InstancesPage = () => {
                 <div key={service.type} className="mb-8">
                     {/* Service Header */}
                     <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-                        <h2 className="text-xl sm:text-2xl font-semibold text-primary flex items-center gap-2">
+                        <h2 className="text-xl sm:text-2xl font-semibold text-fg flex items-center gap-2">
                             <ServiceIcon service={service.type} size="large" />
                             {service.label} Instances
                         </h2>
@@ -606,7 +606,7 @@ export const InstancesPage = () => {
 
                     {/* Empty State */}
                     {Object.keys(instances?.[service.type] || {}).length === 0 && (
-                        <div className="text-center py-12 text-secondary">
+                        <div className="text-center py-12 text-fg-muted">
                             <p>No {service.label} instances configured</p>
                         </div>
                     )}
@@ -717,20 +717,20 @@ export const InstancesPage = () => {
                         <div className="p-4 bg-surface-alt rounded-lg border border-border">
                             <div className="flex flex-col gap-2 text-sm">
                                 <div>
-                                    <span className="text-secondary">Service:</span>{' '}
+                                    <span className="text-fg-muted">Service:</span>{' '}
                                     <span className="font-medium">
                                         {modalServiceType?.charAt(0).toUpperCase() +
                                             modalServiceType?.slice(1)}
                                     </span>
                                 </div>
                                 <div>
-                                    <span className="text-secondary">Instance:</span>{' '}
+                                    <span className="text-fg-muted">Instance:</span>{' '}
                                     <span className="font-medium">
                                         {humanize(modalInstanceData?.name)}
                                     </span>
                                 </div>
                                 <div>
-                                    <span className="text-secondary">URL:</span>{' '}
+                                    <span className="text-fg-muted">URL:</span>{' '}
                                     <span className="font-medium">{modalInstanceData?.url}</span>
                                 </div>
                             </div>

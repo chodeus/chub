@@ -12,8 +12,8 @@ import { api } from '../../utils/api/index.js';
  */
 const TestSection = React.memo(({ title, description, children }) => (
     <section className="bg-surface border border-border rounded-md p-4">
-        <h2 className="text-lg font-semibold text-primary mb-2">{title}</h2>
-        <p className="text-sm text-secondary mb-4">{description}</p>
+        <h2 className="text-lg font-semibold text-fg mb-2">{title}</h2>
+        <p className="text-sm text-fg-muted mb-4">{description}</p>
         <div className="flex flex-col gap-4">{children}</div>
     </section>
 ));
@@ -25,9 +25,9 @@ TestSection.displayName = 'TestSection';
  */
 const ApiResponseDisplay = React.memo(({ data, isLoading, error, title }) => (
     <div className="bg-surface-elevated border border-border p-3 rounded-sm">
-        <h4 className="text-sm font-medium text-primary mb-2">{title}</h4>
+        <h4 className="text-sm font-medium text-fg mb-2">{title}</h4>
         {isLoading && (
-            <div className="p-3 text-secondary flex items-center gap-2">
+            <div className="p-3 text-fg-muted flex items-center gap-2">
                 <div
                     className="w-4 h-4 border-2 border-border border-t-primary rounded-full animate-spin"
                     aria-label="Loading..."
@@ -41,7 +41,7 @@ const ApiResponseDisplay = React.memo(({ data, isLoading, error, title }) => (
             </div>
         )}
         {data && !isLoading && (
-            <pre className="bg-surface border border-border p-3 text-primary overflow-auto whitespace-pre-wrap break-words max-h-dropdown rounded-sm">
+            <pre className="bg-surface border border-border p-3 text-fg overflow-auto whitespace-pre-wrap break-words max-h-dropdown rounded-sm">
                 {JSON.stringify(data, null, 2)}
             </pre>
         )}
@@ -130,7 +130,7 @@ const ConfigTestComponent = React.memo(() => {
                 <select
                     value={section}
                     onChange={e => setSection(e.target.value)}
-                    className="min-h-input p-2 px-3 border border-border bg-surface text-primary text-sm rounded-sm w-full md:w-auto"
+                    className="min-h-input p-2 px-3 border border-border bg-surface text-fg text-sm rounded-sm w-full md:w-auto"
                 >
                     <option value="">All Configuration</option>
                     <option value="instances">Instances</option>
@@ -256,7 +256,7 @@ const ErrorTestComponent = React.memo(() => {
                 <select
                     value={errorType}
                     onChange={e => setErrorType(e.target.value)}
-                    className="min-h-input p-2 px-3 border border-border bg-surface text-primary text-sm rounded-sm w-full md:w-auto"
+                    className="min-h-input p-2 px-3 border border-border bg-surface text-fg text-sm rounded-sm w-full md:w-auto"
                 >
                     <option value="404">404 - Not Found</option>
                     <option value="400">400 - Bad Request</option>
@@ -342,7 +342,7 @@ const ToastTestComponent = React.memo(() => {
                 </button>
                 <button
                     onClick={() => toast.info('Info toast!')}
-                    className="touch-target bg-surface text-primary px-3 py-2 border border-border rounded-md cursor-pointer transition-colors hover:bg-surface-hover inline-flex items-center justify-center"
+                    className="touch-target bg-surface text-fg px-3 py-2 border border-border rounded-md cursor-pointer transition-colors hover:bg-surface-hover inline-flex items-center justify-center"
                 >
                     Info
                 </button>
@@ -360,8 +360,8 @@ const ApiTestPage = () => {
     return (
         <div className="max-w-container mx-auto p-3 md:p-4">
             <div className="text-center mb-8 pb-4 border-b border-border">
-                <h1 className="text-2xl font-bold text-primary mb-2">API Integration Testing</h1>
-                <p className="text-base text-secondary max-w-prose mx-auto">
+                <h1 className="text-2xl font-bold text-fg mb-2">API Integration Testing</h1>
+                <p className="text-base text-fg-muted max-w-prose mx-auto">
                     Real CHUB backend API testing with actual endpoints, error handling, and toast
                     notifications. This tests the live integration with localhost:8000.
                 </p>

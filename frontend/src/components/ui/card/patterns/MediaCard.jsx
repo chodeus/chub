@@ -51,7 +51,7 @@ export const MediaCard = React.memo(
                 />
                 {metadata && (
                     <Card.Body>
-                        <p className="text-secondary text-sm">{metadata}</p>
+                        <p className="text-fg-muted text-sm">{metadata}</p>
                     </Card.Body>
                 )}
             </Card>

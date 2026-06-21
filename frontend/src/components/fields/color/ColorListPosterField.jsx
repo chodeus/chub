@@ -348,10 +348,10 @@ export const ColorListPosterField = React.memo(
                     // Empty state with add button
                     <div className="flex flex-col items-center gap-4 p-6 bg-surface border border-dashed rounded text-center">
                         <div className="flex flex-col gap-2">
-                            <p className="text-base font-medium text-primary m-0">
+                            <p className="text-base font-medium text-fg m-0">
                                 {field.empty_message || 'No poster colors added yet.'}
                             </p>
-                            <p className="text-sm text-secondary m-0">
+                            <p className="text-sm text-fg-muted m-0">
                                 {field.empty_secondary_message ||
                                     'Add colors to see poster previews with custom borders.'}
                             </p>
@@ -386,7 +386,7 @@ export const ColorListPosterField = React.memo(
                                             />
                                         ) : (
                                             <div className="w-40 h-60 bg-surface border-2 border-dashed rounded flex items-center justify-center flex-col gap-2">
-                                                <span className="text-sm text-secondary text-center font-medium">
+                                                <span className="text-sm text-fg-muted text-center font-medium">
                                                     {loadingPreviews
                                                         ? 'Loading...'
                                                         : 'Preview Error'}
@@ -439,7 +439,7 @@ export const ColorListPosterField = React.memo(
 
                         {maxColors > 1 && (
                             <div className="flex flex-col items-end gap-1">
-                                <span className="text-sm text-secondary font-medium">
+                                <span className="text-sm text-fg-muted font-medium">
                                     {colorsArray.length} of {maxColors} colors
                                 </span>
                                 {colorsArray.length >= maxColors * 0.8 && (
