@@ -36,7 +36,7 @@ function PosterThumbnail({ src, alt, imageType }) {
     const [errored, setErrored] = useState(false);
     if (errored) {
         return (
-            <div className="w-full h-full flex items-center justify-center text-tertiary">
+            <div className="w-full h-full flex items-center justify-center text-fg-subtle">
                 <span className="material-symbols-outlined text-3xl">image</span>
             </div>
         );
@@ -345,11 +345,11 @@ const PosterAssetsSearchPage = () => {
             {/* Filters */}
             <div className="flex items-center gap-3 flex-wrap">
                 <div className="flex items-center gap-2">
-                    <label className="text-sm text-secondary">Owner</label>
+                    <label className="text-sm text-fg-muted">Owner</label>
                     <select
                         value={owner}
                         onChange={handleFilterChange(setOwner, 'owner')}
-                        className="px-3 py-1.5 rounded-lg bg-surface border border-border text-primary text-sm"
+                        className="px-3 py-1.5 rounded-lg bg-surface border border-border text-fg text-sm"
                     >
                         <option value="">All</option>
                         {owners.map(o => (
@@ -360,11 +360,11 @@ const PosterAssetsSearchPage = () => {
                     </select>
                 </div>
                 <div className="flex items-center gap-2">
-                    <label className="text-sm text-secondary">Type</label>
+                    <label className="text-sm text-fg-muted">Type</label>
                     <select
                         value={type}
                         onChange={handleFilterChange(setType, 'type')}
-                        className="px-3 py-1.5 rounded-lg bg-surface border border-border text-primary text-sm"
+                        className="px-3 py-1.5 rounded-lg bg-surface border border-border text-fg text-sm"
                     >
                         <option value="">All</option>
                         <option value="movie">Movies</option>
@@ -374,11 +374,11 @@ const PosterAssetsSearchPage = () => {
                     </select>
                 </div>
                 <div className="flex items-center gap-2">
-                    <label className="text-sm text-secondary">Style</label>
+                    <label className="text-sm text-fg-muted">Style</label>
                     <select
                         value={style}
                         onChange={handleFilterChange(setStyle, 'style')}
-                        className="px-3 py-1.5 rounded-lg bg-surface border border-border text-primary text-sm"
+                        className="px-3 py-1.5 rounded-lg bg-surface border border-border text-fg text-sm"
                     >
                         <option value="">All</option>
                         {styles.map(s => (
@@ -390,14 +390,14 @@ const PosterAssetsSearchPage = () => {
                     </select>
                 </div>
                 <div className="flex items-center gap-2">
-                    <label className="text-sm text-secondary">Image</label>
+                    <label className="text-sm text-fg-muted">Image</label>
                     <select
                         value={imageType}
                         onChange={e => {
                             setImageType(e.target.value);
                             setOffset(0);
                         }}
-                        className="px-3 py-1.5 rounded-lg bg-surface border border-border text-primary text-sm"
+                        className="px-3 py-1.5 rounded-lg bg-surface border border-border text-fg text-sm"
                     >
                         <option value="">Posters</option>
                         <option value="artwork">All additional artwork</option>
@@ -411,7 +411,7 @@ const PosterAssetsSearchPage = () => {
             {/* Collections */}
             {Array.isArray(collections) && collections.length > 0 && (
                 <section>
-                    <h3 className="text-lg font-semibold text-primary mb-3 flex items-center gap-2">
+                    <h3 className="text-lg font-semibold text-fg mb-3 flex items-center gap-2">
                         <span className="material-symbols-outlined text-brand-primary">
                             collections_bookmark
                         </span>
@@ -436,16 +436,16 @@ const PosterAssetsSearchPage = () => {
                                     }
                                 >
                                     <div className="flex items-center gap-2">
-                                        <span className="material-symbols-outlined text-sm text-secondary">
+                                        <span className="material-symbols-outlined text-sm text-fg-muted">
                                             {expandedCollection === col.id
                                                 ? 'expand_less'
                                                 : 'expand_more'}
                                         </span>
-                                        <span className="font-medium text-primary truncate">
+                                        <span className="font-medium text-fg truncate">
                                             {col.name || col.title}
                                         </span>
                                         {col.poster_count != null && (
-                                            <span className="text-xs text-tertiary">
+                                            <span className="text-xs text-fg-subtle">
                                                 ({col.poster_count} posters)
                                             </span>
                                         )}
@@ -487,7 +487,7 @@ const PosterAssetsSearchPage = () => {
                                                     key={poster.id}
                                                     className="flex items-center justify-between p-2 rounded bg-surface-alt text-sm"
                                                 >
-                                                    <span className="text-primary truncate">
+                                                    <span className="text-fg truncate">
                                                         {poster.title ||
                                                             poster.file ||
                                                             `#${poster.id}`}
@@ -531,7 +531,7 @@ const PosterAssetsSearchPage = () => {
             ) : items.length > 0 ? (
                 <section>
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
-                        <h3 className="text-lg font-semibold text-primary">Posters ({total})</h3>
+                        <h3 className="text-lg font-semibold text-fg">Posters ({total})</h3>
                         <Pagination
                             currentPage={currentPage}
                             totalPages={totalPages}
@@ -629,7 +629,7 @@ const PosterAssetsSearchPage = () => {
                                     >
                                         {fileBase && (
                                             <p
-                                                className="text-secondary font-mono"
+                                                className="text-fg-muted font-mono"
                                                 style={{
                                                     fontSize: '10px',
                                                     lineHeight: '1.35',
@@ -644,7 +644,7 @@ const PosterAssetsSearchPage = () => {
                                         )}
                                         {driveName && (
                                             <p
-                                                className="text-tertiary text-center truncate mt-auto pt-1"
+                                                className="text-fg-subtle text-center truncate mt-auto pt-1"
                                                 style={{ fontSize: '9px' }}
                                             >
                                                 {driveName}
@@ -663,7 +663,7 @@ const PosterAssetsSearchPage = () => {
                     />
                 </section>
             ) : (
-                <div className="text-center py-16 text-tertiary">
+                <div className="text-center py-16 text-fg-subtle">
                     <span className="material-symbols-outlined text-5xl mb-4 block opacity-40">
                         search_off
                     </span>
@@ -678,7 +678,7 @@ const PosterAssetsSearchPage = () => {
             <Modal isOpen={!!lightboxItem} onClose={() => setLightboxItem(null)} size="large">
                 <Modal.Header>
                     <span
-                        className="block text-base font-semibold text-primary break-words pr-2"
+                        className="block text-base font-semibold text-fg break-words pr-2"
                         title={[
                             lightboxItem?.title,
                             lightboxItem?.year ? `(${lightboxItem.year})` : '',
@@ -725,16 +725,16 @@ const PosterAssetsSearchPage = () => {
                             <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
                                 {lightboxItem.style && (
                                     <>
-                                        <dt className="text-secondary">Style</dt>
-                                        <dd className="text-primary font-medium">
+                                        <dt className="text-fg-muted">Style</dt>
+                                        <dd className="text-fg font-medium">
                                             {lightboxItem.style}
                                         </dd>
                                     </>
                                 )}
                                 {lightboxItem.folder && (
                                     <>
-                                        <dt className="text-secondary">Drive</dt>
-                                        <dd className="text-primary break-all">
+                                        <dt className="text-fg-muted">Drive</dt>
+                                        <dd className="text-fg break-all">
                                             {lightboxItem.folder
                                                 .replace(/\/$/, '')
                                                 .split('/')
@@ -744,8 +744,8 @@ const PosterAssetsSearchPage = () => {
                                 )}
                                 {lightboxItem.file && (
                                     <>
-                                        <dt className="text-secondary">File name</dt>
-                                        <dd className="text-primary break-all font-mono text-xs">
+                                        <dt className="text-fg-muted">File name</dt>
+                                        <dd className="text-fg break-all font-mono text-xs">
                                             {lightboxItem.file.replace(/\\/g, '/').split('/').pop()}
                                         </dd>
                                     </>
@@ -776,10 +776,10 @@ const PosterAssetsSearchPage = () => {
             <Modal isOpen={!!deleteTarget} onClose={() => setDeleteTarget(null)} size="small">
                 <Modal.Header>Delete Poster</Modal.Header>
                 <Modal.Body>
-                    <p className="text-secondary">
+                    <p className="text-fg-muted">
                         Are you sure you want to delete the poster for{' '}
-                        <span className="font-semibold text-primary">{deleteTarget?.title}</span>?
-                        This action cannot be undone.
+                        <span className="font-semibold text-fg">{deleteTarget?.title}</span>? This
+                        action cannot be undone.
                     </p>
                 </Modal.Body>
                 <Modal.Footer align="right">
@@ -802,14 +802,12 @@ const PosterAssetsSearchPage = () => {
                 <Modal.Body>
                     <div className="space-y-3">
                         <div className="flex items-center justify-between p-3 rounded-lg bg-surface-alt">
-                            <span className="text-secondary">Files Found</span>
-                            <span className="font-semibold text-primary">
-                                {analyzeModal?.fileCount}
-                            </span>
+                            <span className="text-fg-muted">Files Found</span>
+                            <span className="font-semibold text-fg">{analyzeModal?.fileCount}</span>
                         </div>
                         <div className="flex items-center justify-between p-3 rounded-lg bg-surface-alt">
-                            <span className="text-secondary">Total Size</span>
-                            <span className="font-semibold text-primary">
+                            <span className="text-fg-muted">Total Size</span>
+                            <span className="font-semibold text-fg">
                                 {analyzeModal?.totalMB} MB
                             </span>
                         </div>
@@ -833,13 +831,13 @@ const PosterAssetsSearchPage = () => {
             >
                 <Modal.Header>Create Poster Collection</Modal.Header>
                 <Modal.Body>
-                    <label className="block text-sm text-secondary mb-1">Collection Name</label>
+                    <label className="block text-sm text-fg-muted mb-1">Collection Name</label>
                     <input
                         type="text"
                         value={newCollectionName}
                         onChange={e => setNewCollectionName(e.target.value)}
                         placeholder="My Collection"
-                        className="w-full p-2 bg-input border border-border rounded-md text-primary text-sm focus:border-primary focus:outline-none"
+                        className="w-full p-2 bg-input border border-border rounded-md text-fg text-sm focus:border-primary focus:outline-none"
                     />
                 </Modal.Body>
                 <Modal.Footer align="right">
@@ -868,12 +866,12 @@ const PosterAssetsSearchPage = () => {
             >
                 <Modal.Header>Download Poster</Modal.Header>
                 <Modal.Body>
-                    <p className="text-sm text-secondary mb-3">
+                    <p className="text-sm text-fg-muted mb-3">
                         {downloadTarget?.title || 'Poster'} — configure download options
                     </p>
                     <div className="space-y-3">
                         <div>
-                            <label className="block text-xs text-secondary mb-1">
+                            <label className="block text-xs text-fg-muted mb-1">
                                 Size (width in px, blank for original)
                             </label>
                             <input
@@ -883,17 +881,17 @@ const PosterAssetsSearchPage = () => {
                                     setDownloadOpts(prev => ({ ...prev, size: e.target.value }))
                                 }
                                 placeholder="e.g. 500"
-                                className="w-full p-2 bg-input border border-border rounded-md text-primary text-sm focus:border-primary focus:outline-none"
+                                className="w-full p-2 bg-input border border-border rounded-md text-fg text-sm focus:border-primary focus:outline-none"
                             />
                         </div>
                         <div>
-                            <label className="block text-xs text-secondary mb-1">Format</label>
+                            <label className="block text-xs text-fg-muted mb-1">Format</label>
                             <select
                                 value={downloadOpts.format}
                                 onChange={e =>
                                     setDownloadOpts(prev => ({ ...prev, format: e.target.value }))
                                 }
-                                className="w-full p-2 bg-input border border-border rounded-md text-primary text-sm cursor-pointer"
+                                className="w-full p-2 bg-input border border-border rounded-md text-fg text-sm cursor-pointer"
                             >
                                 <option value="">Original</option>
                                 <option value="webp">WebP</option>
@@ -902,7 +900,7 @@ const PosterAssetsSearchPage = () => {
                             </select>
                         </div>
                         <div>
-                            <label className="block text-xs text-secondary mb-1">
+                            <label className="block text-xs text-fg-muted mb-1">
                                 Quality (1-100)
                             </label>
                             <input
@@ -913,7 +911,7 @@ const PosterAssetsSearchPage = () => {
                                 onChange={e =>
                                     setDownloadOpts(prev => ({ ...prev, quality: e.target.value }))
                                 }
-                                className="w-full p-2 bg-input border border-border rounded-md text-primary text-sm focus:border-primary focus:outline-none"
+                                className="w-full p-2 bg-input border border-border rounded-md text-fg text-sm focus:border-primary focus:outline-none"
                             />
                         </div>
                     </div>
@@ -966,13 +964,13 @@ const PosterAssetsSearchPage = () => {
             >
                 <Modal.Header>Add to Collection</Modal.Header>
                 <Modal.Body>
-                    <p className="text-sm text-secondary mb-3">
+                    <p className="text-sm text-fg-muted mb-3">
                         Add &ldquo;{addToCollectionTarget?.title || 'poster'}&rdquo; to a collection
                     </p>
                     <select
                         value={selectedCollectionId}
                         onChange={e => setSelectedCollectionId(e.target.value)}
-                        className="w-full p-2 bg-input border border-border rounded-md text-primary text-sm cursor-pointer"
+                        className="w-full p-2 bg-input border border-border rounded-md text-fg text-sm cursor-pointer"
                     >
                         <option value="">Select a collection...</option>
                         {collections.map(col => (

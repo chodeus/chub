@@ -38,7 +38,7 @@ export const StatValue = React.memo(
         };
 
         const colorClasses = {
-            primary: 'text-primary',
+            primary: 'text-fg',
             success: 'text-success',
             warning: 'text-warning',
             error: 'text-error',

@@ -17,9 +17,7 @@ import PropTypes from 'prop-types';
  */
 export const CardBody = React.memo(({ children, className = '' }) => {
     return (
-        <div className={`flex-1 p-3 sm:p-5 text-primary leading-relaxed ${className}`}>
-            {children}
-        </div>
+        <div className={`flex-1 p-3 sm:p-5 text-fg leading-relaxed ${className}`}>{children}</div>
     );
 });
 

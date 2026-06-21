@@ -54,9 +54,7 @@ const PosterAddCard = ({ wiringData, originsData, onRefresh }) => {
                             <span className="material-symbols-outlined text-brand-primary">
                                 add_photo_alternate
                             </span>
-                            <h3 className="text-lg font-semibold text-primary">
-                                Poster on Media Add
-                            </h3>
+                            <h3 className="text-lg font-semibold text-fg">Poster on Media Add</h3>
                         </div>
                         <span
                             className={`text-xs px-2 py-1 rounded-full font-medium ${
@@ -69,7 +67,7 @@ const PosterAddCard = ({ wiringData, originsData, onRefresh }) => {
                         </span>
                     </div>
 
-                    <p className="text-sm text-secondary">
+                    <p className="text-sm text-fg-muted">
                         Point Sonarr / Radarr / Tautulli at this URL to rename and push posters the
                         moment a new item lands — same pipeline a scheduled poster_renamerr run uses
                         (rename → border replacer → Plex upload), scoped to the single item in the
@@ -77,7 +75,7 @@ const PosterAddCard = ({ wiringData, originsData, onRefresh }) => {
                     </p>
 
                     <div className="flex flex-col gap-2">
-                        <span className="text-xs uppercase tracking-wide text-secondary">
+                        <span className="text-xs uppercase tracking-wide text-fg-muted">
                             Webhook URL
                         </span>
                         <div className="flex items-center gap-2 p-2 rounded bg-surface-alt font-mono text-sm break-all">
@@ -94,7 +92,7 @@ const PosterAddCard = ({ wiringData, originsData, onRefresh }) => {
                     {secretConfigured && (
                         <div className="flex flex-col gap-3 p-3 rounded border border-default bg-surface-alt">
                             <div className="flex items-center justify-between">
-                                <span className="text-xs uppercase tracking-wide text-secondary">
+                                <span className="text-xs uppercase tracking-wide text-fg-muted">
                                     Shared secret
                                 </span>
                                 <button
@@ -107,7 +105,7 @@ const PosterAddCard = ({ wiringData, originsData, onRefresh }) => {
                             </div>
 
                             <div className="flex flex-col gap-2">
-                                <span className="text-xs text-secondary">
+                                <span className="text-xs text-fg-muted">
                                     Preferred — header (Sonarr/Radarr &quot;Headers&quot; field):
                                 </span>
                                 <div className="flex items-center gap-2 p-2 rounded bg-surface font-mono text-xs break-all">
@@ -126,7 +124,7 @@ const PosterAddCard = ({ wiringData, originsData, onRefresh }) => {
                             </div>
 
                             <div className="flex flex-col gap-2">
-                                <span className="text-xs text-secondary">
+                                <span className="text-xs text-fg-muted">
                                     Fallback — URL with{' '}
                                     <code className="text-brand-primary">?secret=</code> query param
                                     (for services that can&apos;t send custom headers, e.g.
@@ -150,7 +148,7 @@ const PosterAddCard = ({ wiringData, originsData, onRefresh }) => {
                     )}
 
                     {!secretConfigured && (
-                        <div className="p-3 rounded border border-warning/30 bg-warning/10 text-sm text-primary">
+                        <div className="p-3 rounded border border-warning/30 bg-warning/10 text-sm text-fg">
                             <strong>No webhook secret configured.</strong> Any caller that can reach
                             this URL can enqueue a poster job. Fine on a trusted LAN; set{' '}
                             <code>general.webhook_secret</code> on the{' '}
@@ -165,10 +163,10 @@ const PosterAddCard = ({ wiringData, originsData, onRefresh }) => {
                     )}
 
                     <div className="flex flex-col gap-2 text-sm">
-                        <span className="text-xs uppercase tracking-wide text-secondary">
+                        <span className="text-xs uppercase tracking-wide text-fg-muted">
                             Wiring
                         </span>
-                        <ul className="list-disc list-inside text-secondary space-y-1">
+                        <ul className="list-disc list-inside text-fg-muted space-y-1">
                             <li>
                                 <strong>Sonarr:</strong> Settings → Connect → + → Webhook. Triggers:{' '}
                                 <em>On Import</em>, <em>On Upgrade</em>, <em>On Series Add</em>.
@@ -196,7 +194,7 @@ const PosterAddCard = ({ wiringData, originsData, onRefresh }) => {
 
                     <div className="flex flex-col gap-2">
                         <div className="flex items-center justify-between">
-                            <span className="text-xs uppercase tracking-wide text-secondary">
+                            <span className="text-xs uppercase tracking-wide text-fg-muted">
                                 Recent callers (last 7d)
                             </span>
                             <IconButton
@@ -208,7 +206,7 @@ const PosterAddCard = ({ wiringData, originsData, onRefresh }) => {
                             />
                         </div>
                         {!origins.by_origin || origins.by_origin.length === 0 ? (
-                            <p className="text-sm text-secondary italic">
+                            <p className="text-sm text-fg-muted italic">
                                 No webhook jobs in the last 7 days yet. Hit the test button in
                                 Sonarr/Radarr after wiring it up.
                             </p>
@@ -219,9 +217,9 @@ const PosterAddCard = ({ wiringData, originsData, onRefresh }) => {
                                         key={`${row.client_host}-${row.endpoint}-${idx}`}
                                         className="flex items-center justify-between p-2 rounded bg-surface-alt text-sm"
                                     >
-                                        <span className="font-mono text-xs text-primary">
+                                        <span className="font-mono text-xs text-fg">
                                             {row.client_host}{' '}
-                                            <span className="text-secondary">→ {row.endpoint}</span>
+                                            <span className="text-fg-muted">→ {row.endpoint}</span>
                                         </span>
                                         <span className="text-xs px-2 py-0.5 rounded-full bg-primary/15 text-brand-primary font-medium">
                                             {row.count}
@@ -229,7 +227,7 @@ const PosterAddCard = ({ wiringData, originsData, onRefresh }) => {
                                     </div>
                                 ))}
                                 {origins.by_status && (
-                                    <p className="text-xs text-secondary mt-1">
+                                    <p className="text-xs text-fg-muted mt-1">
                                         Total: {origins.total} ·{' '}
                                         {Object.entries(origins.by_status)
                                             .map(([s, c]) => `${s}: ${c}`)

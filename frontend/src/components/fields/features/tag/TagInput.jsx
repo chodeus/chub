@@ -312,7 +312,7 @@ export const TagInput = React.memo(
                             'min-h-11 border border-border rounded-lg bg-surface',
                             'flex flex-wrap gap-1 p-2',
                             'focus-within:border-primary focus-within:ring-1 focus-within:ring-primary',
-                            disabled && 'opacity-50 bg-surface-disabled cursor-not-allowed',
+                            disabled && 'opacity-50 bg-input-disabled cursor-not-allowed',
                         ]
                             .filter(Boolean)
                             .join(' ')}
@@ -356,7 +356,7 @@ export const TagInput = React.memo(
                             disabled={disabled}
                             className={[
                                 'flex-1 min-w-0 bg-transparent border-none outline-none',
-                                'text-primary placeholder-tertiary',
+                                'text-fg placeholder:text-fg-subtle',
                                 'min-h-7', // Slightly smaller than container
                             ]
                                 .filter(Boolean)
@@ -391,13 +391,13 @@ export const TagInput = React.memo(
                             aria-label="Available suggestions"
                         >
                             {isLoading && (
-                                <div className="px-3 py-2 text-sm text-tertiary" role="status">
+                                <div className="px-3 py-2 text-sm text-fg-subtle" role="status">
                                     Loading suggestions...
                                 </div>
                             )}
 
                             {!isLoading && filteredSuggestions.length === 0 && inputValue && (
-                                <div className="px-3 py-2 text-sm text-secondary" role="status">
+                                <div className="px-3 py-2 text-sm text-fg-muted" role="status">
                                     {allowCustom
                                         ? `Press Enter to add "${inputValue}"`
                                         : 'No matching suggestions'}
@@ -414,7 +414,7 @@ export const TagInput = React.memo(
                                             'px-3 py-2 cursor-pointer text-sm',
                                             index === focusedSuggestionIndex
                                                 ? 'bg-primary text-white'
-                                                : 'hover:bg-surface-hover text-primary',
+                                                : 'hover:bg-surface-hover text-fg',
                                         ]
                                             .filter(Boolean)
                                             .join(' ')}

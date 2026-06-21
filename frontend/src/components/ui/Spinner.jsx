@@ -33,7 +33,7 @@ const Spinner = ({ size = 'medium', text, className = '', center = false }) => {
             <div className="flex items-center justify-center p-4 min-h-content">
                 <div className="flex flex-col items-center gap-3">
                     {spinnerElement}
-                    {text && <p className="text-sm m-0 text-secondary">{text}</p>}
+                    {text && <p className="text-sm m-0 text-fg-muted">{text}</p>}
                 </div>
             </div>
         );
@@ -42,7 +42,7 @@ const Spinner = ({ size = 'medium', text, className = '', center = false }) => {
     return (
         <>
             {spinnerElement}
-            {text && <span className="text-sm m-0 text-secondary">{text}</span>}
+            {text && <span className="text-sm m-0 text-fg-muted">{text}</span>}
         </>
     );
 };

@@ -62,7 +62,7 @@ export const ColorPicker = React.memo(
                 value={normalizedValue}
                 onChange={handleChange}
                 disabled={disabled}
-                className={`touch-target border-2 rounded-sm cursor-pointer transition-input color-picker-webkit-reset ${invalid ? 'color-picker-invalid' : ''} ${className}`.trim()}
+                className={`touch-target border-2 rounded-sm cursor-pointer transition-input ${invalid ? 'color-picker-invalid' : ''} ${className}`.trim()}
                 aria-label={ariaLabel}
                 title={displayTitle}
                 {...domProps}

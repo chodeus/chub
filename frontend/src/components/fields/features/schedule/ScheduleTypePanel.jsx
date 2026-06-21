@@ -27,7 +27,7 @@ export const ScheduleTypePanel = React.memo(
         const renderHourlyPanel = () => (
             <div className="space-y-4">
                 <div>
-                    <label className="block text-sm font-medium text-secondary mb-2">
+                    <label className="block text-sm font-medium text-fg-muted mb-2">
                         Minute (0-59)
                     </label>
                     <input
@@ -41,7 +41,7 @@ export const ScheduleTypePanel = React.memo(
                         disabled={disabled}
                         className="w-20 px-3 py-2 border border-border rounded-lg min-h-11 bg-input"
                     />
-                    <div className="text-xs text-tertiary mt-1">
+                    <div className="text-xs text-fg-subtle mt-1">
                         Run at this minute past every hour
                     </div>
                 </div>
@@ -71,14 +71,12 @@ export const ScheduleTypePanel = React.memo(
                 <div className="space-y-4">
                     <div>
                         <div className="flex items-center justify-between mb-2">
-                            <label className="text-sm font-medium text-secondary">
-                                Daily Times
-                            </label>
+                            <label className="text-sm font-medium text-fg-muted">Daily Times</label>
                             <button
                                 type="button"
                                 onClick={addTime}
                                 disabled={disabled || times.length >= 8}
-                                className="px-3 py-1 text-sm bg-surface-elevated text-primary border border-border rounded-lg hover:bg-primary hover:text-white disabled:opacity-50 disabled:cursor-not-allowed min-h-11"
+                                className="px-3 py-1 text-sm bg-surface-elevated text-fg border border-border rounded-lg hover:bg-primary hover:text-white disabled:opacity-50 disabled:cursor-not-allowed min-h-11"
                             >
                                 Add Time
                             </button>
@@ -117,7 +115,7 @@ export const ScheduleTypePanel = React.memo(
                     disabled={disabled}
                 />
                 <div>
-                    <label className="block text-sm font-medium text-secondary mb-2">Time</label>
+                    <label className="block text-sm font-medium text-fg-muted mb-2">Time</label>
                     <TimeInput
                         value={scheduleData.time || '09:00'}
                         onChange={time => updateScheduleData({ time })}
@@ -135,7 +133,7 @@ export const ScheduleTypePanel = React.memo(
                     disabled={disabled}
                 />
                 <div>
-                    <label className="block text-sm font-medium text-secondary mb-2">Time</label>
+                    <label className="block text-sm font-medium text-fg-muted mb-2">Time</label>
                     <TimeInput
                         value={scheduleData.time || '09:00'}
                         onChange={time => updateScheduleData({ time })}
@@ -171,7 +169,7 @@ export const ScheduleTypePanel = React.memo(
                     return renderCronPanel();
                 default:
                     return (
-                        <div className="p-4 bg-surface-alt border border-border-light rounded-lg text-center text-tertiary">
+                        <div className="p-4 bg-surface-alt border border-border-light rounded-lg text-center text-fg-subtle">
                             Please select a schedule type above
                         </div>
                     );

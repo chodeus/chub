@@ -72,7 +72,7 @@ export const CardImage = React.memo(
                         className={imgClasses}
                     />
                 ) : (
-                    <div className="flex flex-col items-center justify-center h-full gap-2 text-secondary text-sm">
+                    <div className="flex flex-col items-center justify-center h-full gap-2 text-fg-muted text-sm">
                         <span className="material-symbols-outlined text-2xl">broken_image</span>
                         <span>Failed to load image</span>
                     </div>

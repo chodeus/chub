@@ -31,7 +31,7 @@ import PropTypes from 'prop-types';
  * <ButtonBase variant="secondary" hoverClass="hover:bg-warning-bg">Custom Hover</ButtonBase>
  *
  * // Precedence: utility overrides win
- * <ButtonBase variant="primary" bgClass="bg-warning" textClass="text-primary">
+ * <ButtonBase variant="primary" bgClass="bg-warning" textClass="text-fg">
  *   // Uses warning background and primary text, NOT primary variant colors
  * </ButtonBase>
  *
@@ -42,7 +42,7 @@ import PropTypes from 'prop-types';
  * @param {string} props.variant - Button variant (primary, secondary, success, danger, ghost, warning, info, muted, surface)
  * @param {string} props.size - Button size (small, medium, large) - provides guidance for common cases
  * @param {string} props.bgClass - Background utility override (e.g., 'bg-surface-elevated', 'bg-warning')
- * @param {string} props.textClass - Text color utility override (e.g., 'text-warning', 'text-primary')
+ * @param {string} props.textClass - Text color utility override (e.g., 'text-warning', 'text-fg')
  * @param {string} props.sizeClass - Size utility override (e.g., 'px-8 py-4 text-xl', 'min-h-12 px-6')
  * @param {string} props.hoverClass - Hover state utility override (e.g., 'hover:bg-warning-bg', 'hover:shadow-lg')
  * @param {boolean} props.fullWidth - Expand to full container width
@@ -94,7 +94,7 @@ export const ButtonBase = React.memo(
         // Variant background colors (overridden by bgClass)
         const variantBgClasses = {
             primary: 'bg-primary',
-            secondary: 'bg-secondary',
+            secondary: 'bg-surface-alt',
             success: 'bg-success',
             danger: 'bg-danger',
             ghost: 'bg-transparent',
@@ -106,15 +106,15 @@ export const ButtonBase = React.memo(
 
         // Variant text colors (overridden by textClass)
         const variantTextClasses = {
-            primary: 'text-primary-contrast',
-            secondary: 'text-secondary-contrast',
+            primary: 'text-on-color',
+            secondary: 'text-fg',
             success: 'text-success-contrast',
             danger: 'text-danger-contrast',
-            ghost: 'text-primary',
-            warning: 'text-primary-contrast', // White text on warning bg
-            info: 'text-primary-contrast', // White text on info bg
-            muted: 'text-primary', // Primary text on muted bg
-            surface: 'text-primary', // Primary text on surface bg
+            ghost: 'text-fg',
+            warning: 'text-on-color', // White text on warning bg
+            info: 'text-on-color', // White text on info bg
+            muted: 'text-fg', // Primary text on muted bg
+            surface: 'text-fg', // Primary text on surface bg
         };
 
         // Ghost variant needs border (not overridden by bgClass/textClass)

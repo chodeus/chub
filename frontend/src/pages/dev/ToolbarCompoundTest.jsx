@@ -30,7 +30,7 @@ const ToolbarCompoundTest = () => {
         <div className="flex flex-col gap-6 p-6 max-w-screen-xl mx-auto">
             <div className="flex flex-col gap-2">
                 <h1 className="text-3xl font-bold">ToolBar Compound Pattern Test</h1>
-                <p className="text-secondary">
+                <p className="text-fg-muted">
                     Testing compound component pattern with context-based state management,
                     responsive behavior, and Button primitive integration.
                 </p>
@@ -40,7 +40,7 @@ const ToolbarCompoundTest = () => {
                 {/* Test 1: Basic Toolbar with Compound Pattern */}
                 <section className="flex flex-col gap-3 p-4 border border-default rounded-lg bg-surface">
                     <h2 className="text-xl font-semibold">Test 1: Basic Compound Toolbar</h2>
-                    <p className="text-secondary text-sm">
+                    <p className="text-fg-muted text-sm">
                         Simple toolbar using compound pattern with ToolBar.Section, ToolBar.Button,
                         and ToolBar.Separator.
                     </p>
@@ -82,7 +82,7 @@ const ToolbarCompoundTest = () => {
                 {/* Test 2: Multi-Section Toolbar */}
                 <section className="flex flex-col gap-3 p-4 border border-default rounded-lg bg-surface">
                     <h2 className="text-xl font-semibold">Test 2: Multi-Section Layout</h2>
-                    <p className="text-secondary text-sm">
+                    <p className="text-fg-muted text-sm">
                         Toolbar with left, center, and right sections demonstrating flexible layout.
                     </p>
                     <div className="flex flex-col gap-3">
@@ -139,7 +139,7 @@ const ToolbarCompoundTest = () => {
                 {/* Test 3: Overflow Menu Behavior */}
                 <section className="flex flex-col gap-3 p-4 border border-default rounded-lg bg-surface">
                     <h2 className="text-xl font-semibold">Test 3: Overflow Menu</h2>
-                    <p className="text-secondary text-sm">
+                    <p className="text-fg-muted text-sm">
                         Toolbar with many buttons demonstrating overflow menu behavior (Section
                         handles overflow internally).
                     </p>
@@ -195,7 +195,7 @@ const ToolbarCompoundTest = () => {
                 {/* Test 4: Disabled Buttons */}
                 <section className="flex flex-col gap-3 p-4 border border-default rounded-lg bg-surface">
                     <h2 className="text-xl font-semibold">Test 4: Disabled State</h2>
-                    <p className="text-secondary text-sm">
+                    <p className="text-fg-muted text-sm">
                         Testing disabled button behavior and accessibility.
                     </p>
                     <div className="flex flex-col gap-3">
@@ -233,7 +233,7 @@ const ToolbarCompoundTest = () => {
                 {/* Test 5: Loading State */}
                 <section className="flex flex-col gap-3 p-4 border border-default rounded-lg bg-surface">
                     <h2 className="text-xl font-semibold">Test 5: Loading/Spinning State</h2>
-                    <p className="text-secondary text-sm">
+                    <p className="text-fg-muted text-sm">
                         Testing button loading spinner integration.
                     </p>
                     <div className="flex flex-col gap-3">
@@ -273,7 +273,7 @@ const ToolbarCompoundTest = () => {
                 {/* Test 6: Context Integration */}
                 <section className="flex flex-col gap-3 p-4 border border-default rounded-lg bg-surface">
                     <h2 className="text-xl font-semibold">Test 6: Context-Aware Separator</h2>
-                    <p className="text-secondary text-sm">
+                    <p className="text-fg-muted text-sm">
                         Testing Separator component&apos;s context-aware responsive behavior.
                     </p>
                     <div className="flex flex-col gap-3">
@@ -318,7 +318,7 @@ const ToolbarCompoundTest = () => {
                 {/* Test 7: ToolBar.Overflow Component */}
                 <section className="flex flex-col gap-3 p-4 border border-default rounded-lg bg-surface">
                     <h2 className="text-xl font-semibold">Test 7: ToolBar.Overflow Component</h2>
-                    <p className="text-secondary text-sm">
+                    <p className="text-fg-muted text-sm">
                         Testing dedicated Overflow component with manual overflow buttons.
                     </p>
                     <div className="flex flex-col gap-3">
@@ -383,7 +383,7 @@ const ToolbarCompoundTest = () => {
                     <h2 className="text-xl font-semibold">Action Log</h2>
                     <div className="p-4 bg-bg-secondary rounded-lg border border-default">
                         {actionLog.length === 0 ? (
-                            <p className="text-secondary text-center py-4">
+                            <p className="text-fg-muted text-center py-4">
                                 No actions yet. Click buttons above to see logs.
                             </p>
                         ) : (

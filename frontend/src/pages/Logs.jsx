@@ -99,12 +99,12 @@ export default function Logs() {
 
     const pillBase =
         'px-3 py-1.5 rounded-full text-xs font-medium capitalize cursor-pointer border transition-colors select-none';
-    const pillOff = 'bg-transparent text-tertiary border-border hover:text-primary';
+    const pillOff = 'bg-transparent text-fg-subtle border-border hover:text-fg';
     const levelOnClass = level => {
         if (level === 'critical') return 'bg-error/20 text-error border-error/40';
         if (level === 'error') return 'bg-error/15 text-error border-error/30';
         if (level === 'warning') return 'bg-warning/15 text-warning border-warning/30';
-        if (level === 'info') return 'bg-primary/15 text-primary border-primary/30';
+        if (level === 'info') return 'bg-primary/15 text-fg border-primary/30';
         // Debug — use accent so the "on" state is visually distinct from
         // pillOff (gray-on-gray previously made it impossible to tell the
         // toggle state).
@@ -137,7 +137,7 @@ export default function Logs() {
 
                 {/* Filter pill bar */}
                 <div className="flex flex-wrap items-center gap-2 px-4 py-3 border-t border-border-light bg-surface-alt">
-                    <span className="text-xs uppercase tracking-wider text-tertiary font-semibold mr-1">
+                    <span className="text-xs uppercase tracking-wider text-fg-subtle font-semibold mr-1">
                         Levels
                     </span>
                     {LOG_LEVELS.map(level => (
@@ -154,7 +154,7 @@ export default function Logs() {
                     <button
                         type="button"
                         onClick={() => setHideHeartbeat(prev => !prev)}
-                        className={`${pillBase} ${hideHeartbeat ? 'bg-primary/10 text-primary border-primary/30' : pillOff}`}
+                        className={`${pillBase} ${hideHeartbeat ? 'bg-primary/10 text-fg border-primary/30' : pillOff}`}
                         title="Hide repetitive progress / heartbeat lines (scheduler tick, rclone stats, merge progress)"
                     >
                         Hide heartbeat
@@ -162,7 +162,7 @@ export default function Logs() {
                     <button
                         type="button"
                         onClick={() => setSortNewestFirst(prev => !prev)}
-                        className={`${pillBase} ${sortNewestFirst ? 'bg-primary/10 text-primary border-primary/30' : pillOff}`}
+                        className={`${pillBase} ${sortNewestFirst ? 'bg-primary/10 text-fg border-primary/30' : pillOff}`}
                         title={sortNewestFirst ? 'Showing newest first' : 'Showing oldest first'}
                     >
                         {sortNewestFirst ? 'Newest first' : 'Oldest first'}

@@ -113,7 +113,7 @@ const SearchInterface = React.memo(
                     >
                         <div className="relative flex items-center bg-surface border rounded-lg h-input focus-within:border-primary">
                             <span
-                                className="absolute left-3 text-secondary text-lg pointer-events-none z-10 material-symbols-outlined"
+                                className="absolute left-3 text-fg-muted text-lg pointer-events-none z-10 material-symbols-outlined"
                                 aria-hidden="true"
                             >
                                 search
@@ -121,7 +121,7 @@ const SearchInterface = React.memo(
                             <input
                                 ref={inputRef}
                                 type="text"
-                                className="flex-1 py-2 pr-4 pl-10 border-none bg-transparent text-primary outline-none w-full h-full"
+                                className="flex-1 py-2 pr-4 pl-10 border-none bg-transparent text-fg outline-none w-full h-full"
                                 placeholder={getContextualPlaceholder()}
                                 value={term}
                                 onChange={handleSearchChange}
@@ -132,7 +132,7 @@ const SearchInterface = React.memo(
                             {term && (
                                 <button
                                     type="button"
-                                    className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center border-none text-secondary cursor-pointer transition-colors bg-transparent hover:text-primary"
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center border-none text-fg-muted cursor-pointer transition-colors bg-transparent hover:text-fg"
                                     onClick={handleClear}
                                     aria-label="Clear search"
                                     tabIndex={0}
@@ -153,7 +153,7 @@ const SearchInterface = React.memo(
                         role="listbox"
                         aria-label="Search suggestions"
                     >
-                        <div className="px-3 py-1.5 text-xs text-secondary border-b border-border">
+                        <div className="px-3 py-1.5 text-xs text-fg-muted border-b border-border">
                             Recent searches
                         </div>
                         {suggestions.map((suggestion, idx) => (
@@ -161,7 +161,7 @@ const SearchInterface = React.memo(
                                 key={suggestion.id || idx}
                                 type="button"
                                 role="option"
-                                className="w-full text-left px-3 py-2 text-sm text-primary hover:bg-hover cursor-pointer border-none bg-transparent flex items-center gap-2"
+                                className="w-full text-left px-3 py-2 text-sm text-fg hover:bg-hover cursor-pointer border-none bg-transparent flex items-center gap-2"
                                 onMouseDown={e => {
                                     e.preventDefault();
                                     const value = suggestion.term || suggestion;
@@ -174,7 +174,7 @@ const SearchInterface = React.memo(
                                 }}
                             >
                                 <span
-                                    className="material-symbols-outlined text-secondary text-base"
+                                    className="material-symbols-outlined text-fg-muted text-base"
                                     aria-hidden="true"
                                 >
                                     history

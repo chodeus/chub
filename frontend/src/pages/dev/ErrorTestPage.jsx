@@ -67,23 +67,23 @@ const ErrorTestPage = () => {
     return (
         <div className="p-3 md:p-4 max-w-4xl mx-auto">
             <div className="text-center mb-4">
-                <h1 className="text-2xl font-bold text-primary mb-2">
+                <h1 className="text-2xl font-bold text-fg mb-2">
                     🔬 Error Handling Demonstrations - Primitive Composition
                 </h1>
-                <p className="text-base text-secondary max-w-prose mx-auto">
+                <p className="text-base text-fg-muted max-w-prose mx-auto">
                     This page validates that the new primitive composition architecture produces
                 </p>
             </div>
 
             {/* Toast Notifications */}
             <section className="mb-6 md:mb-8 p-3 md:p-4 border border-default rounded-md bg-surface">
-                <h2 className="text-lg font-semibold text-primary mb-2">🍞 Toast Notifications</h2>
-                <p className="text-secondary mb-2">
-                    <strong className="text-primary font-medium">What it is:</strong> Small popup
+                <h2 className="text-lg font-semibold text-fg mb-2">🍞 Toast Notifications</h2>
+                <p className="text-fg-muted mb-2">
+                    <strong className="text-fg font-medium">What it is:</strong> Small popup
                     notifications that appear briefly
                 </p>
-                <p className="text-secondary mb-2">
-                    <strong className="text-primary font-medium">When to use:</strong> Success
+                <p className="text-fg-muted mb-2">
+                    <strong className="text-fg font-medium">When to use:</strong> Success
                     confirmations, alerts, quick feedback
                 </p>
                 <div className="flex gap-2 flex-wrap mt-3 md:flex-row flex-col md:items-center">
@@ -116,16 +116,14 @@ const ErrorTestPage = () => {
 
             {/* Global Error Handling */}
             <section className="mb-6 md:mb-8 p-3 md:p-4 border border-default rounded-md bg-surface">
-                <h2 className="text-lg font-semibold text-primary mb-2">
-                    🌐 Global Error Handling
-                </h2>
-                <p className="text-secondary mb-2">
-                    <strong className="text-primary font-medium">What it is:</strong> Centralized
-                    error handling for the entire app
+                <h2 className="text-lg font-semibold text-fg mb-2">🌐 Global Error Handling</h2>
+                <p className="text-fg-muted mb-2">
+                    <strong className="text-fg font-medium">What it is:</strong> Centralized error
+                    handling for the entire app
                 </p>
-                <p className="text-secondary mb-2">
-                    <strong className="text-primary font-medium">When to use:</strong> Network
-                    failures, authentication issues, server errors
+                <p className="text-fg-muted mb-2">
+                    <strong className="text-fg font-medium">When to use:</strong> Network failures,
+                    authentication issues, server errors
                 </p>
                 <button
                     onClick={showGlobalError}
@@ -138,14 +136,14 @@ const ErrorTestPage = () => {
             {/* Critical Feature Error (Full Screen Overlay) */}
             <section className="mb-6 md:mb-8 p-3 md:p-4 border rounded-md bg-surface">
                 <h2 className="text-lg font-semibold text-error mb-2">⚠️ Critical Feature Error</h2>
-                <p className="text-secondary mb-2">
-                    <strong className="text-primary font-medium">Expected output:</strong> Modal
-                    overlay with critical feature error
+                <p className="text-fg-muted mb-2">
+                    <strong className="text-fg font-medium">Expected output:</strong> Modal overlay
+                    with critical feature error
                 </p>
-                <p className="text-secondary mb-2">
-                    <strong className="text-primary font-medium">Visual behavior:</strong>
+                <p className="text-fg-muted mb-2">
+                    <strong className="text-fg font-medium">Visual behavior:</strong>
                 </p>
-                <ul className="text-sm text-secondary mb-2 pl-6">
+                <ul className="text-sm text-fg-muted mb-2 pl-6">
                     <li>Dark overlay with backdrop blur</li>
                     <li>Centered modal with red border (border-2 border-error)</li>
                     <li>Title: &quot;Critical Feature Error&quot;</li>
@@ -172,7 +170,7 @@ const ErrorTestPage = () => {
                 {crashes.critical && (
                     <button
                         onClick={() => resetCrash('critical')}
-                        className="touch-target bg-surface text-primary px-3 py-2 border border-border rounded-md cursor-pointer transition-colors hover:bg-surface-hover inline-flex items-center justify-center mt-2"
+                        className="touch-target bg-surface text-fg px-3 py-2 border border-border rounded-md cursor-pointer transition-colors hover:bg-surface-hover inline-flex items-center justify-center mt-2"
                     >
                         Reset
                     </button>
@@ -182,14 +180,14 @@ const ErrorTestPage = () => {
             {/* Page Error (Full Page Replacement) */}
             <section className="mb-6 md:mb-8 p-3 md:p-4 border rounded-md bg-surface">
                 <h2 className="text-lg font-semibold text-warning mb-2">📄 Page Error</h2>
-                <p className="text-secondary mb-2">
-                    <strong className="text-primary font-medium">Expected output:</strong> Full page
+                <p className="text-fg-muted mb-2">
+                    <strong className="text-fg font-medium">Expected output:</strong> Full page
                     error display
                 </p>
-                <p className="text-secondary mb-2">
-                    <strong className="text-primary font-medium">Visual behavior:</strong>
+                <p className="text-fg-muted mb-2">
+                    <strong className="text-fg font-medium">Visual behavior:</strong>
                 </p>
-                <ul className="text-sm text-secondary mb-2 pl-6">
+                <ul className="text-sm text-fg-muted mb-2 pl-6">
                     <li>Full page container (max-w-2xl centered)</li>
                     <li>Large build icon (text-4xl)</li>
                     <li>Error details box with retry count and timestamp</li>
@@ -212,7 +210,7 @@ const ErrorTestPage = () => {
                 {crashes.page && (
                     <button
                         onClick={() => resetCrash('page')}
-                        className="touch-target bg-surface text-primary px-3 py-2 border border-border rounded-md cursor-pointer transition-colors hover:bg-surface-hover inline-flex items-center justify-center mt-2"
+                        className="touch-target bg-surface text-fg px-3 py-2 border border-border rounded-md cursor-pointer transition-colors hover:bg-surface-hover inline-flex items-center justify-center mt-2"
                     >
                         Reset
                     </button>
@@ -222,14 +220,14 @@ const ErrorTestPage = () => {
             {/* Feature Error (Inline Replacement) */}
             <section className="mb-6 md:mb-8 p-3 md:p-4 border rounded-md bg-surface">
                 <h2 className="text-lg font-semibold text-info mb-2">🛡️ Feature Error</h2>
-                <p className="text-secondary mb-2">
-                    <strong className="text-primary font-medium">Expected output:</strong> Inline
-                    feature error display
+                <p className="text-fg-muted mb-2">
+                    <strong className="text-fg font-medium">Expected output:</strong> Inline feature
+                    error display
                 </p>
-                <p className="text-secondary mb-2">
-                    <strong className="text-primary font-medium">Visual behavior:</strong>
+                <p className="text-fg-muted mb-2">
+                    <strong className="text-fg font-medium">Visual behavior:</strong>
                 </p>
-                <ul className="text-sm text-secondary mb-2 pl-6">
+                <ul className="text-sm text-fg-muted mb-2 pl-6">
                     <li>Warning banner above error container</li>
                     <li>Inline container (border border-error rounded-md)</li>
                     <li>Warning icon (text-xl) with title</li>
@@ -257,7 +255,7 @@ const ErrorTestPage = () => {
                 {crashes.feature && (
                     <button
                         onClick={() => resetCrash('feature')}
-                        className="touch-target bg-surface text-primary px-3 py-2 border border-border rounded-md cursor-pointer transition-colors hover:bg-surface-hover inline-flex items-center justify-center mt-2"
+                        className="touch-target bg-surface text-fg px-3 py-2 border border-border rounded-md cursor-pointer transition-colors hover:bg-surface-hover inline-flex items-center justify-center mt-2"
                     >
                         Reset
                     </button>
@@ -269,10 +267,10 @@ const ErrorTestPage = () => {
                 <h2 className="text-lg font-semibold text-success mb-2">
                     ✅ Visual Validation Checklist
                 </h2>
-                <p className="text-secondary mb-2">
-                    <strong className="text-primary font-medium">Verification steps:</strong>
+                <p className="text-fg-muted mb-2">
+                    <strong className="text-fg font-medium">Verification steps:</strong>
                 </p>
-                <ol className="text-sm text-secondary pl-6 space-y-1">
+                <ol className="text-sm text-fg-muted pl-6 space-y-1">
                     <li>Trigger each error type above</li>
                     <li>Compare visual output against referenced line numbers</li>
                     <li>Verify all CSS classes match exactly</li>

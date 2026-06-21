@@ -166,7 +166,7 @@ export const DateRangeField = React.memo(
                         <div className="p-3 flex-1">
                             <div className="flex flex-col gap-1 mb-2">
                                 <span
-                                    className="text-sm font-medium text-primary"
+                                    className="text-sm font-medium text-fg"
                                     id={`${inputId}-from-label`}
                                 >
                                     From
@@ -180,7 +180,7 @@ export const DateRangeField = React.memo(
                                 {/* From Month */}
                                 <div className="flex flex-col flex-1 min-w-24">
                                     <label
-                                        className="text-xs text-secondary mb-1"
+                                        className="text-xs text-fg-muted mb-1"
                                         htmlFor={`${inputId}-from-month`}
                                     >
                                         Month
@@ -201,7 +201,7 @@ export const DateRangeField = React.memo(
                                 {/* From Day */}
                                 <div className="flex flex-col w-16">
                                     <label
-                                        className="text-xs text-secondary mb-1"
+                                        className="text-xs text-fg-muted mb-1"
                                         htmlFor={`${inputId}-from-day`}
                                     >
                                         Day
@@ -223,7 +223,7 @@ export const DateRangeField = React.memo(
 
                         {/* To Connector - De-emphasized */}
                         <div className="flex items-center justify-center py-2">
-                            <span className="text-secondary text-sm opacity-75" aria-hidden="true">
+                            <span className="text-fg-muted text-sm opacity-75" aria-hidden="true">
                                 to
                             </span>
                         </div>
@@ -232,7 +232,7 @@ export const DateRangeField = React.memo(
                         <div className="p-3 flex-1">
                             <div className="flex flex-col gap-1 mb-2">
                                 <span
-                                    className="text-sm font-medium text-primary"
+                                    className="text-sm font-medium text-fg"
                                     id={`${inputId}-to-label`}
                                 >
                                     To
@@ -246,7 +246,7 @@ export const DateRangeField = React.memo(
                                 {/* To Month */}
                                 <div className="flex flex-col flex-1 min-w-24">
                                     <label
-                                        className="text-xs text-secondary mb-1"
+                                        className="text-xs text-fg-muted mb-1"
                                         htmlFor={`${inputId}-to-month`}
                                     >
                                         Month
@@ -267,7 +267,7 @@ export const DateRangeField = React.memo(
                                 {/* To Day */}
                                 <div className="flex flex-col w-16">
                                     <label
-                                        className="text-xs text-secondary mb-1"
+                                        className="text-xs text-fg-muted mb-1"
                                         htmlFor={`${inputId}-to-day`}
                                     >
                                         Day

@@ -38,17 +38,17 @@ export const NotificationCard = ({
                     <ServiceIcon service={serviceType} size="xlarge" />
                 </div>
                 <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-primary">{labels[serviceType]}</h3>
+                    <h3 className="text-lg font-semibold text-fg">{labels[serviceType]}</h3>
                 </div>
             </div>
 
             {/* Config Preview */}
             <div className="mb-4 text-sm space-y-1">
                 {serviceType === 'discord' && (
-                    <div className="text-tertiary">Bot: {config.bot_name || 'Not set'}</div>
+                    <div className="text-fg-subtle">Bot: {config.bot_name || 'Not set'}</div>
                 )}
                 {serviceType === 'notifiarr' && (
-                    <div className="text-tertiary">Channel: {config.channel_id || 'Not set'}</div>
+                    <div className="text-fg-subtle">Channel: {config.channel_id || 'Not set'}</div>
                 )}
             </div>
 

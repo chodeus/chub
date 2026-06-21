@@ -346,8 +346,8 @@ const LiveLogModal = ({ jobId, onClose, onCompleted }) => {
             <Modal.Header>Cleanup job #{jobId}</Modal.Header>
             <Modal.Body>
                 <div className="flex flex-col gap-3">
-                    <div className="text-sm text-secondary">
-                        Status: <span className="font-medium text-primary">{status}</span>
+                    <div className="text-sm text-fg-muted">
+                        Status: <span className="font-medium text-fg">{status}</span>
                     </div>
                     <pre
                         ref={preRef}
@@ -376,7 +376,7 @@ const VariantPreviewModal = ({ target, onClose, onDelete, onSetActive }) => {
     const isPlex = source === 'plex';
     const isActive = variant.active;
     const statusLabel = isPlex ? (
-        <span className="text-tertiary">Plex default (read-only)</span>
+        <span className="text-fg-subtle">Plex default (read-only)</span>
     ) : isActive ? (
         <span className="text-success">Active</span>
     ) : (
@@ -393,7 +393,7 @@ const VariantPreviewModal = ({ target, onClose, onDelete, onSetActive }) => {
                         className="w-auto mx-auto rounded"
                         style={{ maxHeight: '60vh' }}
                     />
-                    <div className="text-xs text-secondary font-mono break-all">{variant.path}</div>
+                    <div className="text-xs text-fg-muted font-mono break-all">{variant.path}</div>
                     <div className="text-sm">
                         {formatBytes(variant.size)} · {statusLabel}
                         {variant.cls?.context ? ` · ${variant.cls.context}` : ''}
@@ -924,7 +924,7 @@ const PosterCleanarrPage = () => {
 
             {/* Global summary stats (only when a scan exists). */}
             {hasScanned && stats && (
-                <div className="text-sm text-secondary flex flex-col gap-1">
+                <div className="text-sm text-fg-muted flex flex-col gap-1">
                     <div>
                         {stats.bundle_count} items · {stats.variant_count} variants ·{' '}
                         <span className="text-error">{stats.bloat_count} bloat</span> ·{' '}
@@ -940,7 +940,7 @@ const PosterCleanarrPage = () => {
                             </>
                         )}
                     </div>
-                    <div className="flex items-center gap-3 text-xs text-tertiary mt-1">
+                    <div className="flex items-center gap-3 text-xs text-fg-subtle mt-1">
                         <span className="flex items-center gap-1">
                             <span style={bloatPill}>●</span> bloat
                         </span>
@@ -960,7 +960,7 @@ const PosterCleanarrPage = () => {
                         <div>
                             PhotoTranscoder cache: {transcoder.count.toLocaleString()} files ·{' '}
                             {formatBytes(transcoder.size_bytes)} reclaimable ·{' '}
-                            <Link to="/settings/modules" className="text-primary hover:underline">
+                            <Link to="/settings/modules" className="text-fg hover:underline">
                                 Clean from Plex Maintenance →
                             </Link>
                         </div>
@@ -986,7 +986,7 @@ const PosterCleanarrPage = () => {
                         ))}
                     </select>
                 </label>
-                <span className="text-xs text-tertiary" style={{ maxWidth: '420px' }}>
+                <span className="text-xs text-fg-subtle" style={{ maxWidth: '420px' }}>
                     {MODE_META[mode]?.description}
                 </span>
                 <div className="flex items-center gap-3 ml-3 text-sm">
@@ -1031,7 +1031,7 @@ const PosterCleanarrPage = () => {
                 </div>
                 <div className="ml-auto flex items-center gap-2">
                     {MODE_META[mode]?.scopeable && (
-                        <span className="text-xs text-secondary">
+                        <span className="text-xs text-fg-muted">
                             {selectedPaths.size > 0
                                 ? `${selectedPaths.size} selected`
                                 : 'No selection → full library'}
@@ -1056,11 +1056,11 @@ const PosterCleanarrPage = () => {
 
             {/* Scan empty / loading / loaded states */}
             {!hasScanned ? (
-                <div className="text-center py-16 px-6 rounded-lg border border-border-light bg-surface-alt text-sm text-tertiary">
+                <div className="text-center py-16 px-6 rounded-lg border border-border-light bg-surface-alt text-sm text-fg-subtle">
                     <span className="material-symbols-outlined text-3xl mb-2 block opacity-60">
                         cleaning_services
                     </span>
-                    <p className="text-primary font-medium mb-1">Ready to scan</p>
+                    <p className="text-fg font-medium mb-1">Ready to scan</p>
                     <p>
                         In Report mode, click <span className="font-semibold">Run scan</span> above
                         to scan Plex metadata. Walks every <code>.bundle</code> under{' '}
@@ -1075,7 +1075,7 @@ const PosterCleanarrPage = () => {
             ) : loading && bundles.length === 0 ? (
                 <Spinner size="medium" text="Scanning Plex metadata..." center />
             ) : bundles.length === 0 ? (
-                <div className="text-center py-16 text-tertiary">
+                <div className="text-center py-16 text-fg-subtle">
                     No poster variants found. Plex metadata looks clean.
                 </div>
             ) : (
@@ -1123,8 +1123,8 @@ const PosterCleanarrPage = () => {
                                                 onClick={() => setTab(v)}
                                                 className={`flex-1 px-2 py-1.5 text-xs rounded-md cursor-pointer border ${
                                                     tab === v
-                                                        ? 'bg-primary/20 text-primary border-primary/40'
-                                                        : 'bg-transparent text-secondary border-transparent hover:bg-surface-alt'
+                                                        ? 'bg-primary/20 text-fg border-primary/40'
+                                                        : 'bg-transparent text-fg-muted border-transparent hover:bg-surface-alt'
                                                 }`}
                                             >
                                                 {label}
@@ -1141,7 +1141,7 @@ const PosterCleanarrPage = () => {
                                     {/* Tree list */}
                                     <div className="overflow-y-auto flex-1">
                                         {filteredBundles.length === 0 ? (
-                                            <div className="text-center text-tertiary text-sm p-4">
+                                            <div className="text-center text-fg-subtle text-sm p-4">
                                                 No matches
                                             </div>
                                         ) : (
@@ -1169,7 +1169,7 @@ const PosterCleanarrPage = () => {
                             {(!isMobile || selected) && (
                                 <div className="flex flex-col min-w-0 min-h-0">
                                     {!detail ? (
-                                        <div className="p-12 text-center text-tertiary">
+                                        <div className="p-12 text-center text-fg-subtle">
                                             Select an item on the left. Shows have chevrons to drill
                                             into seasons and episodes.
                                         </div>
@@ -1180,23 +1180,23 @@ const PosterCleanarrPage = () => {
                                                     <button
                                                         type="button"
                                                         onClick={() => selectNode(null)}
-                                                        className="mb-2 text-sm text-primary cursor-pointer inline-flex items-center gap-1 hover:underline"
+                                                        className="mb-2 text-sm text-fg cursor-pointer inline-flex items-center gap-1 hover:underline"
                                                     >
                                                         ← Back to list
                                                     </button>
                                                 )}
-                                                <div className="text-xs text-secondary mb-1 flex items-center gap-2">
+                                                <div className="text-xs text-fg-muted mb-1 flex items-center gap-2">
                                                     {detail.breadcrumb.map((crumb, i) => (
                                                         <React.Fragment key={i}>
                                                             {i > 0 && (
-                                                                <span className="text-tertiary">
+                                                                <span className="text-fg-subtle">
                                                                     ›
                                                                 </span>
                                                             )}
                                                             <span
                                                                 className={
                                                                     i < detail.breadcrumb.length - 1
-                                                                        ? 'cursor-pointer hover:text-primary'
+                                                                        ? 'cursor-pointer hover:text-fg'
                                                                         : ''
                                                                 }
                                                                 onClick={() => {
@@ -1227,14 +1227,14 @@ const PosterCleanarrPage = () => {
                                                         </React.Fragment>
                                                     ))}
                                                 </div>
-                                                <h3 className="text-xl font-semibold text-primary m-0">
+                                                <h3 className="text-xl font-semibold text-fg m-0">
                                                     {
                                                         detail.breadcrumb[
                                                             detail.breadcrumb.length - 1
                                                         ]
                                                     }
                                                 </h3>
-                                                <div className="text-xs text-secondary mt-1">
+                                                <div className="text-xs text-fg-muted mt-1">
                                                     {detail.variants.length} variants ·{' '}
                                                     <span className="text-success">
                                                         {activeInDetail} active
@@ -1258,7 +1258,7 @@ const PosterCleanarrPage = () => {
                                                             <>
                                                                 {' '}
                                                                 ·{' '}
-                                                                <span className="text-tertiary">
+                                                                <span className="text-fg-subtle">
                                                                     {subtreeBloat} in subtree
                                                                 </span>
                                                             </>
@@ -1267,7 +1267,7 @@ const PosterCleanarrPage = () => {
                                                         <>
                                                             {' '}
                                                             ·{' '}
-                                                            <span className="text-tertiary">
+                                                            <span className="text-fg-subtle">
                                                                 {plexInDetail} plex
                                                             </span>
                                                         </>
@@ -1283,7 +1283,7 @@ const PosterCleanarrPage = () => {
                                             </header>
                                             <div className="flex-1 overflow-y-auto p-4">
                                                 {detail.variants.length === 0 ? (
-                                                    <div className="text-center text-tertiary py-12">
+                                                    <div className="text-center text-fg-subtle py-12">
                                                         No variants at this level.
                                                     </div>
                                                 ) : (
@@ -1308,7 +1308,7 @@ const PosterCleanarrPage = () => {
                                             {/* Per-item bulk action bar */}
                                             {detail.variants.length > 0 && (
                                                 <div className="flex flex-wrap items-center gap-2 p-3 border-t border-border bg-surface-alt">
-                                                    <span className="text-xs text-secondary mr-auto">
+                                                    <span className="text-xs text-fg-muted mr-auto">
                                                         {selectedPaths.size > 0
                                                             ? `${selectedPaths.size} selected`
                                                             : `${bloatInDetail} bloat available`}
@@ -1359,11 +1359,11 @@ const PosterCleanarrPage = () => {
                     {unmatchedStale.length > 0 && (
                         <section className="rounded-lg border border-border bg-surface mt-4 p-4">
                             <div className="flex items-center gap-2 mb-3">
-                                <h2 className="text-sm font-semibold text-primary">
+                                <h2 className="text-sm font-semibold text-fg">
                                     Stale duplicates without a Plex poster row
                                 </h2>
                                 <span style={typeBadge}>{unmatchedStale.length}</span>
-                                <span className="text-tertiary text-xs">
+                                <span className="text-fg-subtle text-xs">
                                     Renamed asset folders whose title isn&apos;t in the Plex bundle
                                     scan — still cleaned by the Stale pass
                                 </span>
@@ -1374,11 +1374,11 @@ const PosterCleanarrPage = () => {
                                         key={s.folder || s.name}
                                         className="flex items-center justify-between gap-2 py-1.5 border-b border-border text-sm"
                                     >
-                                        <span className="truncate text-secondary">
+                                        <span className="truncate text-fg-muted">
                                             <span style={stalePill}>⧉</span> {s.name}
-                                            <span className="text-tertiary"> → {s.canonical}</span>
+                                            <span className="text-fg-subtle"> → {s.canonical}</span>
                                         </span>
-                                        <span className="text-tertiary text-xs whitespace-nowrap">
+                                        <span className="text-fg-subtle text-xs whitespace-nowrap">
                                             {formatBytes(s.size)}
                                         </span>
                                     </div>
@@ -1390,11 +1390,9 @@ const PosterCleanarrPage = () => {
                     {orphans.length > 0 && (
                         <section className="rounded-lg border border-border bg-surface mt-4 p-4">
                             <div className="flex items-center gap-2 mb-3">
-                                <h2 className="text-sm font-semibold text-primary">
-                                    Orphaned assets
-                                </h2>
+                                <h2 className="text-sm font-semibold text-fg">Orphaned assets</h2>
                                 <span style={typeBadge}>{orphans.length}</span>
-                                <span className="text-tertiary text-xs">
+                                <span className="text-fg-subtle text-xs">
                                     Kometa assets with no matching media in your library
                                 </span>
                             </div>
@@ -1404,8 +1402,8 @@ const PosterCleanarrPage = () => {
                                         key={o.path}
                                         className="flex items-center justify-between gap-2 py-1.5 border-b border-border text-sm"
                                     >
-                                        <span className="truncate text-secondary">{o.path}</span>
-                                        <span className="text-tertiary text-xs whitespace-nowrap">
+                                        <span className="truncate text-fg-muted">{o.path}</span>
+                                        <span className="text-fg-subtle text-xs whitespace-nowrap">
                                             {formatBytes(o.size)}
                                         </span>
                                     </div>
@@ -1663,7 +1661,7 @@ const BundleTreeRow = ({
                     onClick={() => onToggleShow(bundle.rating_key)}
                 />
                 <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 text-sm font-medium text-primary">
+                    <div className="flex items-center gap-2 text-sm font-medium text-fg">
                         <span className="truncate">
                             {bundle.title || '(unknown)'}
                             {bundle.year ? ` (${bundle.year})` : ''}
@@ -1671,7 +1669,7 @@ const BundleTreeRow = ({
                         <span style={typeBadge}>{bundle.metadata_type_label}</span>
                     </div>
                     <div
-                        className="text-secondary flex items-center gap-2"
+                        className="text-fg-muted flex items-center gap-2"
                         style={{ fontSize: '11px' }}
                     >
                         <span className="truncate">
@@ -1723,12 +1721,12 @@ const BundleTreeRow = ({
                                             }
                                         />
                                         <div
-                                            className="flex-1 min-w-0 text-primary"
+                                            className="flex-1 min-w-0 text-fg"
                                             style={{ fontSize: '13px' }}
                                         >
                                             Season {season.n}
                                             <span
-                                                className="text-secondary ml-2"
+                                                className="text-fg-muted ml-2"
                                                 style={{ fontSize: '10px' }}
                                             >
                                                 {season.posters.length} poster
@@ -1776,12 +1774,12 @@ const BundleTreeRow = ({
                                                     >
                                                         <span className="w-6 h-6 shrink-0" />
                                                         <div
-                                                            className="flex-1 min-w-0 text-primary"
+                                                            className="flex-1 min-w-0 text-fg"
                                                             style={{ fontSize: '12px' }}
                                                         >
                                                             Episode {episode.n}
                                                             <span
-                                                                className="text-secondary ml-2"
+                                                                className="text-fg-muted ml-2"
                                                                 style={{ fontSize: '10px' }}
                                                             >
                                                                 {episode.thumbs.length} thumb

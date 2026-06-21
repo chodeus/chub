@@ -37,7 +37,7 @@ function PosterThumb({ mediaId }) {
     const src = mediaAPI.getPosterUrl(mediaId);
     if (errored || !src) {
         return (
-            <div className="rounded-md bg-surface-alt text-tertiary" style={POSTER_FALLBACK_STYLE}>
+            <div className="rounded-md bg-surface-alt text-fg-subtle" style={POSTER_FALLBACK_STYLE}>
                 <span className="material-symbols-outlined opacity-40">image</span>
             </div>
         );
@@ -153,7 +153,7 @@ const MediaSearchPage = () => {
                 actions={
                     <div className="flex flex-wrap items-center gap-2">
                         <select
-                            className="px-3 py-2 rounded-lg bg-surface border border-border text-primary text-sm"
+                            className="px-3 py-2 rounded-lg bg-surface border border-border text-fg text-sm"
                             value={filters.type}
                             onChange={e =>
                                 setFilters(prev => ({ ...prev, type: e.target.value, offset: 0 }))
@@ -164,7 +164,7 @@ const MediaSearchPage = () => {
                             <option value="show">Shows</option>
                         </select>
                         <select
-                            className="px-3 py-2 rounded-lg bg-surface border border-border text-primary text-sm"
+                            className="px-3 py-2 rounded-lg bg-surface border border-border text-fg text-sm"
                             value={filters.sort}
                             onChange={e => setFilters(prev => ({ ...prev, sort: e.target.value }))}
                         >
@@ -180,7 +180,7 @@ const MediaSearchPage = () => {
             {isSearching && <Spinner size="large" text="Searching..." center />}
 
             {!isSearching && !term && (
-                <div className="flex flex-col items-center gap-6 py-10 text-tertiary">
+                <div className="flex flex-col items-center gap-6 py-10 text-fg-subtle">
                     <div className="text-center">
                         <span className="material-symbols-outlined text-5xl mb-4 block opacity-40">
                             search
@@ -202,7 +202,7 @@ const MediaSearchPage = () => {
             )}
 
             {!isSearching && term && !hasResults && (
-                <div className="text-center py-16 text-tertiary">
+                <div className="text-center py-16 text-fg-subtle">
                     <span className="material-symbols-outlined text-5xl mb-4 block opacity-40">
                         search_off
                     </span>
@@ -212,7 +212,7 @@ const MediaSearchPage = () => {
 
             {hasResults && (
                 <>
-                    <p className="text-sm text-secondary">
+                    <p className="text-sm text-fg-muted">
                         Found {total} result{total !== 1 ? 's' : ''} for &quot;{term}&quot;
                     </p>
                     <div className="flex flex-col gap-3">
@@ -252,7 +252,7 @@ const MediaSearchPage = () => {
                                         <PosterThumb mediaId={item.id} />
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-start justify-between gap-3 mb-2">
-                                                <h3 className="font-semibold text-primary text-lg flex items-baseline gap-2 flex-wrap">
+                                                <h3 className="font-semibold text-fg text-lg flex items-baseline gap-2 flex-wrap">
                                                     <span>{item.title}</span>
                                                     {item.season_number != null && (
                                                         <span className="px-1.5 py-0.5 rounded bg-primary/15 text-brand-primary text-xs font-medium">
@@ -281,7 +281,7 @@ const MediaSearchPage = () => {
                                                     />
                                                 </div>
                                             </div>
-                                            <div className="flex flex-wrap items-center gap-2 text-sm text-secondary mb-2">
+                                            <div className="flex flex-wrap items-center gap-2 text-sm text-fg-muted mb-2">
                                                 {item.year && <span>{item.year}</span>}
                                                 {item.asset_type && (
                                                     <span className="px-1.5 py-0.5 rounded bg-surface-alt text-xs capitalize">
@@ -289,35 +289,35 @@ const MediaSearchPage = () => {
                                                     </span>
                                                 )}
                                                 {item.instance_name && (
-                                                    <span className="text-tertiary">
+                                                    <span className="text-fg-subtle">
                                                         {item.instance_name}
                                                     </span>
                                                 )}
                                                 {item.rating != null && (
-                                                    <span className="text-tertiary">
+                                                    <span className="text-fg-subtle">
                                                         ★ {item.rating}
                                                     </span>
                                                 )}
                                                 {item.runtime != null && item.runtime > 0 && (
-                                                    <span className="text-tertiary">
+                                                    <span className="text-fg-subtle">
                                                         {item.runtime >= 60
                                                             ? `${Math.floor(item.runtime / 60)}h ${item.runtime % 60}m`
                                                             : `${item.runtime}m`}
                                                     </span>
                                                 )}
                                                 {item.studio && (
-                                                    <span className="text-tertiary">
+                                                    <span className="text-fg-subtle">
                                                         {item.studio}
                                                     </span>
                                                 )}
                                                 {item.language && (
-                                                    <span className="text-tertiary uppercase">
+                                                    <span className="text-fg-subtle uppercase">
                                                         {item.language}
                                                     </span>
                                                 )}
                                             </div>
                                             {genres.length > 0 && (
-                                                <p className="text-xs text-tertiary mb-1">
+                                                <p className="text-xs text-fg-subtle mb-1">
                                                     {genres.join(', ')}
                                                 </p>
                                             )}
@@ -341,7 +341,7 @@ const MediaSearchPage = () => {
                                                     {tags.map(tag => (
                                                         <span
                                                             key={tag}
-                                                            className="px-1.5 py-0.5 rounded bg-surface-alt text-xs text-tertiary"
+                                                            className="px-1.5 py-0.5 rounded bg-surface-alt text-xs text-fg-subtle"
                                                         >
                                                             {tag}
                                                         </span>
@@ -349,17 +349,17 @@ const MediaSearchPage = () => {
                                                 </div>
                                             )}
                                             {item.media_file && (
-                                                <p className="text-xs text-tertiary break-all font-mono">
+                                                <p className="text-xs text-fg-subtle break-all font-mono">
                                                     {item.media_file}
                                                 </p>
                                             )}
                                             {item.folder && (
-                                                <p className="text-xs text-tertiary break-all">
+                                                <p className="text-xs text-fg-subtle break-all">
                                                     {item.folder}
                                                 </p>
                                             )}
                                             {item.created_at && (
-                                                <p className="text-xs text-tertiary mt-1">
+                                                <p className="text-xs text-fg-subtle mt-1">
                                                     Added {formatDate(item.created_at)}
                                                 </p>
                                             )}
@@ -387,10 +387,10 @@ const MediaSearchPage = () => {
             <Modal isOpen={!!deleteTarget} onClose={() => setDeleteTarget(null)} size="small">
                 <Modal.Header>Delete Media Item</Modal.Header>
                 <Modal.Body>
-                    <p className="text-secondary">
+                    <p className="text-fg-muted">
                         Are you sure you want to delete{' '}
-                        <span className="font-semibold text-primary">{deleteTarget?.title}</span>?
-                        This action cannot be undone.
+                        <span className="font-semibold text-fg">{deleteTarget?.title}</span>? This
+                        action cannot be undone.
                     </p>
                 </Modal.Body>
                 <Modal.Footer align="right">

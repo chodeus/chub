@@ -34,14 +34,14 @@ export const FormHeader = React.memo(({ title, description, submitStatus, classN
             {/* Title and description */}
             {(title || description) && (
                 <div className="text-center mb-4">
-                    {title && <h2 className="text-2xl font-semibold mb-2 text-primary">{title}</h2>}
-                    {description && <p className="text-base text-secondary">{description}</p>}
+                    {title && <h2 className="text-2xl font-semibold mb-2 text-fg">{title}</h2>}
+                    {description && <p className="text-base text-fg-muted">{description}</p>}
                 </div>
             )}
 
             {/* Submit status indicator */}
             {submitStatus && (
-                <div className="text-center text-sm text-secondary">{submitStatus}</div>
+                <div className="text-center text-sm text-fg-muted">{submitStatus}</div>
             )}
         </div>
     );

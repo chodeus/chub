@@ -336,7 +336,7 @@ const MediaManagePage = () => {
 
             {duplicates.length > 0 && (
                 <section className="mb-4">
-                    <h3 className="text-lg font-semibold text-primary mb-3 flex items-center gap-2">
+                    <h3 className="text-lg font-semibold text-fg mb-3 flex items-center gap-2">
                         <span className="material-symbols-outlined text-warning">content_copy</span>
                         Duplicates ({duplicates.length} groups)
                     </h3>
@@ -355,11 +355,11 @@ const MediaManagePage = () => {
                                 >
                                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                                         <div className="flex items-center gap-2 min-w-0">
-                                            <span className="font-medium text-primary truncate">
+                                            <span className="font-medium text-fg truncate">
                                                 {dup.title || dup.normalized_title}
                                             </span>
                                             {dup.year && (
-                                                <span className="text-secondary flex-shrink-0">
+                                                <span className="text-fg-muted flex-shrink-0">
                                                     ({dup.year})
                                                 </span>
                                             )}
@@ -372,7 +372,7 @@ const MediaManagePage = () => {
                                                 {uniqueInstances.map(inst => (
                                                     <span
                                                         key={inst}
-                                                        className="text-xs px-2 py-0.5 rounded-full bg-surface-alt text-secondary"
+                                                        className="text-xs px-2 py-0.5 rounded-full bg-surface-alt text-fg-muted"
                                                     >
                                                         {inst}
                                                     </span>
@@ -396,7 +396,7 @@ const MediaManagePage = () => {
                                         }
                                         if (paths.length === 0) return null;
                                         return (
-                                            <div className="flex flex-col gap-0.5 text-xs font-mono text-tertiary">
+                                            <div className="flex flex-col gap-0.5 text-xs font-mono text-fg-subtle">
                                                 {paths.map((p, idx) => (
                                                     <span
                                                         key={`${p}-${idx}`}
@@ -418,13 +418,11 @@ const MediaManagePage = () => {
 
             {folderCollisions.length > 0 && (
                 <section className="mb-4">
-                    <h3 className="text-lg font-semibold text-primary mb-1 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-secondary">
-                            folder_copy
-                        </span>
+                    <h3 className="text-lg font-semibold text-fg mb-1 flex items-center gap-2">
+                        <span className="material-symbols-outlined text-fg-muted">folder_copy</span>
                         Folder collisions ({folderCollisions.length} groups)
                     </h3>
-                    <p className="text-xs text-tertiary mb-3">
+                    <p className="text-xs text-fg-subtle mb-3">
                         Same normalized title with missing or ambiguous external IDs — can&apos;t be
                         told apart from metadata alone. Review before resolving.
                     </p>
@@ -458,24 +456,24 @@ const MediaManagePage = () => {
                                 >
                                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                                         <div className="flex items-center gap-2 min-w-0">
-                                            <span className="font-medium text-primary truncate">
+                                            <span className="font-medium text-fg truncate">
                                                 {dup.normalized_title}
                                             </span>
                                             {dup.year && (
-                                                <span className="text-secondary flex-shrink-0">
+                                                <span className="text-fg-muted flex-shrink-0">
                                                     ({dup.year})
                                                 </span>
                                             )}
                                         </div>
                                         <div className="flex items-center flex-wrap gap-2 sm:gap-3">
-                                            <span className="text-sm font-medium text-secondary">
+                                            <span className="text-sm font-medium text-fg-muted">
                                                 {dup.count} similar
                                             </span>
                                             <div className="flex items-center flex-wrap gap-1">
                                                 {uniqueInstances.map(inst => (
                                                     <span
                                                         key={inst}
-                                                        className="text-xs px-2 py-0.5 rounded-full bg-surface-alt text-secondary"
+                                                        className="text-xs px-2 py-0.5 rounded-full bg-surface-alt text-fg-muted"
                                                     >
                                                         {inst}
                                                     </span>
@@ -491,12 +489,12 @@ const MediaManagePage = () => {
                                         </div>
                                     </div>
                                     {memberTitles.length > 0 && (
-                                        <div className="flex flex-col gap-0.5 text-xs text-secondary">
+                                        <div className="flex flex-col gap-0.5 text-xs text-fg-muted">
                                             {memberTitles.map((t, idx) => (
                                                 <span key={`${t}-${idx}`} className="truncate">
                                                     {t}
                                                     {identities[idx] && (
-                                                        <span className="text-tertiary ml-2">
+                                                        <span className="text-fg-subtle ml-2">
                                                             [{identities[idx]}]
                                                         </span>
                                                     )}
@@ -505,7 +503,7 @@ const MediaManagePage = () => {
                                         </div>
                                     )}
                                     {folderPaths.length > 0 && (
-                                        <div className="flex flex-col gap-0.5 text-xs font-mono text-tertiary">
+                                        <div className="flex flex-col gap-0.5 text-xs font-mono text-fg-subtle">
                                             {folderPaths.map((p, idx) => (
                                                 <span
                                                     key={`${p}-${idx}`}
@@ -526,7 +524,7 @@ const MediaManagePage = () => {
 
             {/* Nestarr — Unmatched & Nested Media */}
             <section className="mb-4">
-                <h3 className="text-lg font-semibold text-primary mb-3 flex items-center flex-wrap gap-2">
+                <h3 className="text-lg font-semibold text-fg mb-3 flex items-center flex-wrap gap-2">
                     <span className="material-symbols-outlined text-warning">account_tree</span>
                     Unmatched & Nested Media
                     {nestedIssues.length > 0 && (
@@ -545,13 +543,13 @@ const MediaManagePage = () => {
                         Scan
                     </LoadingButton>
                     {lastScanTime && (
-                        <span className="text-xs font-normal text-tertiary sm:ml-auto">
+                        <span className="text-xs font-normal text-fg-subtle sm:ml-auto">
                             Last scan: {formatDateTime(lastScanTime)}
                         </span>
                     )}
                 </h3>
                 {!unmatchedEnabled && (
-                    <div className="mb-3 p-3 rounded-lg bg-info/10 border border-info/20 text-sm text-secondary">
+                    <div className="mb-3 p-3 rounded-lg bg-info/10 border border-info/20 text-sm text-fg-muted">
                         <span className="material-symbols-outlined text-info align-middle mr-1 text-base">
                             info
                         </span>
@@ -621,21 +619,21 @@ const MediaManagePage = () => {
                                                 >
                                                     {badgeLabel}
                                                 </span>
-                                                <span className="text-xs text-secondary">
+                                                <span className="text-xs text-fg-muted">
                                                     {issue.instance}
                                                 </span>
                                                 {isPlexNotArr && issue.library_name && (
-                                                    <span className="text-xs text-tertiary">
+                                                    <span className="text-xs text-fg-subtle">
                                                         {issue.library_name}
                                                     </span>
                                                 )}
                                             </div>
                                             {isUnmatched ? (
                                                 <>
-                                                    <div className="text-sm text-primary font-medium">
+                                                    <div className="text-sm text-fg font-medium">
                                                         {issue.name}
                                                         {issue.year && (
-                                                            <span className="text-secondary font-normal">
+                                                            <span className="text-fg-muted font-normal">
                                                                 {' '}
                                                                 ({issue.year})
                                                             </span>
@@ -643,7 +641,7 @@ const MediaManagePage = () => {
                                                     </div>
                                                     {issue.path && (
                                                         <div
-                                                            className="text-xs text-tertiary mt-1 font-mono truncate truncate-start"
+                                                            className="text-xs text-fg-subtle mt-1 font-mono truncate truncate-start"
                                                             title={issue.path}
                                                         >
                                                             {issue.path}
@@ -652,17 +650,17 @@ const MediaManagePage = () => {
                                                 </>
                                             ) : isFilesystem ? (
                                                 <>
-                                                    <div className="text-sm text-primary font-medium">
+                                                    <div className="text-sm text-fg font-medium">
                                                         {issue.name}
                                                         {issue.year && (
-                                                            <span className="text-secondary font-normal">
+                                                            <span className="text-fg-muted font-normal">
                                                                 {' '}
                                                                 ({issue.year})
                                                             </span>
                                                         )}
                                                     </div>
                                                     <div
-                                                        className="text-xs text-tertiary mt-1 font-mono truncate truncate-start"
+                                                        className="text-xs text-fg-subtle mt-1 font-mono truncate truncate-start"
                                                         title={issue.path}
                                                     >
                                                         {issue.path}
@@ -678,25 +676,25 @@ const MediaManagePage = () => {
                                                 </>
                                             ) : (
                                                 <>
-                                                    <div className="text-sm text-secondary">
-                                                        <span className="text-primary font-medium">
+                                                    <div className="text-sm text-fg-muted">
+                                                        <span className="text-fg font-medium">
                                                             {issue.nested?.title}
                                                         </span>
                                                         {issue.nested?.year && (
                                                             <span> ({issue.nested.year})</span>
                                                         )}
-                                                        <span className="text-tertiary">
+                                                        <span className="text-fg-subtle">
                                                             {' '}
                                                             is nested inside{' '}
                                                         </span>
-                                                        <span className="text-primary font-medium">
+                                                        <span className="text-fg font-medium">
                                                             {issue.parent?.title}
                                                         </span>
                                                         {issue.parent?.year && (
                                                             <span> ({issue.parent.year})</span>
                                                         )}
                                                     </div>
-                                                    <div className="text-xs text-tertiary mt-1 font-mono truncate">
+                                                    <div className="text-xs text-fg-subtle mt-1 font-mono truncate">
                                                         {issue.path}
                                                     </div>
                                                 </>
@@ -717,7 +715,7 @@ const MediaManagePage = () => {
                         })}
                     </div>
                 ) : (
-                    <p className="text-sm text-secondary">
+                    <p className="text-sm text-fg-muted">
                         Click Scan to compare ARR media against Plex and detect nested media paths.
                     </p>
                 )}
@@ -726,7 +724,7 @@ const MediaManagePage = () => {
             {/* Collections */}
             {Array.isArray(collections) && collections.length > 0 && (
                 <section className="mb-4">
-                    <h3 className="text-lg font-semibold text-primary mb-3 flex items-center gap-2">
+                    <h3 className="text-lg font-semibold text-fg mb-3 flex items-center gap-2">
                         <span className="material-symbols-outlined text-brand-primary">
                             collections_bookmark
                         </span>
@@ -746,11 +744,11 @@ const MediaManagePage = () => {
                                 className="p-3 rounded-lg bg-surface border border-border group flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2"
                             >
                                 <div className="flex items-center gap-2 min-w-0">
-                                    <span className="font-medium text-primary truncate">
+                                    <span className="font-medium text-fg truncate">
                                         {col.title || col.name}
                                     </span>
                                     {col.year && (
-                                        <span className="text-secondary flex-shrink-0">
+                                        <span className="text-fg-muted flex-shrink-0">
                                             ({col.year})
                                         </span>
                                     )}
@@ -794,10 +792,10 @@ const MediaManagePage = () => {
             >
                 <Modal.Header>Delete Media Item</Modal.Header>
                 <Modal.Body>
-                    <p className="text-secondary">
+                    <p className="text-fg-muted">
                         Are you sure you want to delete{' '}
-                        <span className="font-semibold text-primary">{deleteTarget?.title}</span>?
-                        This action cannot be undone.
+                        <span className="font-semibold text-fg">{deleteTarget?.title}</span>? This
+                        action cannot be undone.
                     </p>
                     <label className="flex items-center gap-2 mt-3 cursor-pointer">
                         <input
@@ -806,7 +804,7 @@ const MediaManagePage = () => {
                             onChange={e => setDeleteFiles(e.target.checked)}
                             className="rounded border-border"
                         />
-                        <span className="text-sm text-secondary">Also delete files from disk</span>
+                        <span className="text-sm text-fg-muted">Also delete files from disk</span>
                     </label>
                     {deleteFiles && (
                         <p className="text-xs text-warning mt-1">
@@ -842,9 +840,9 @@ const MediaManagePage = () => {
             >
                 <Modal.Header>Resolve Duplicates</Modal.Header>
                 <Modal.Body>
-                    <p className="text-secondary mb-3">
+                    <p className="text-fg-muted mb-3">
                         Select which copy of{' '}
-                        <span className="font-semibold text-primary">
+                        <span className="font-semibold text-fg">
                             {resolveTarget?.title || resolveTarget?.normalized_title}
                         </span>{' '}
                         to keep. The others will be removed.
@@ -877,7 +875,7 @@ const MediaManagePage = () => {
                                         />
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center flex-wrap gap-2">
-                                                <span className="font-medium text-primary truncate">
+                                                <span className="font-medium text-fg truncate">
                                                     {displayTitle}
                                                 </span>
                                                 {live.monitored === false && (
@@ -891,17 +889,17 @@ const MediaManagePage = () => {
                                                     </span>
                                                 )}
                                             </div>
-                                            <div className="flex items-center flex-wrap gap-2 text-xs text-secondary mt-1">
+                                            <div className="flex items-center flex-wrap gap-2 text-xs text-fg-muted mt-1">
                                                 <span className="px-1.5 py-0.5 rounded bg-surface-alt">
                                                     {m.instance_name || 'unknown'}
                                                 </span>
                                                 <span className="capitalize">{m.asset_type}</span>
                                                 {m.year && <span>{m.year}</span>}
-                                                <span className="font-mono text-tertiary">
+                                                <span className="font-mono text-fg-subtle">
                                                     arr_id {m.arr_id ?? '—'}
                                                 </span>
                                                 {live.size_human && (
-                                                    <span className="font-medium text-primary">
+                                                    <span className="font-medium text-fg">
                                                         {live.size_human}
                                                     </span>
                                                 )}
@@ -925,7 +923,7 @@ const MediaManagePage = () => {
                                                 )}
                                                 {live.added && (
                                                     <span
-                                                        className="text-tertiary"
+                                                        className="text-fg-subtle"
                                                         title={live.added}
                                                     >
                                                         added {formatDate(live.added)}
@@ -934,7 +932,7 @@ const MediaManagePage = () => {
                                             </div>
                                             {path && (
                                                 <div
-                                                    className="text-xs font-mono text-tertiary mt-1 truncate"
+                                                    className="text-xs font-mono text-fg-subtle mt-1 truncate"
                                                     title={path}
                                                 >
                                                     {path}
@@ -958,7 +956,7 @@ const MediaManagePage = () => {
                             onChange={e => setResolveDeleteFiles(e.target.checked)}
                             className="rounded border-border"
                         />
-                        <span className="text-sm text-secondary">
+                        <span className="text-sm text-fg-muted">
                             Delete files from disk for removed copies
                         </span>
                     </label>
@@ -1003,13 +1001,13 @@ const MediaManagePage = () => {
             >
                 <Modal.Header>Create Collection</Modal.Header>
                 <Modal.Body>
-                    <label className="block text-sm text-secondary mb-1">Collection Name</label>
+                    <label className="block text-sm text-fg-muted mb-1">Collection Name</label>
                     <input
                         type="text"
                         value={newCollectionName}
                         onChange={e => setNewCollectionName(e.target.value)}
                         placeholder="My Collection"
-                        className="w-full p-2 bg-input border border-border rounded-md text-primary text-sm focus:border-primary focus:outline-none"
+                        className="w-full p-2 bg-input border border-border rounded-md text-fg text-sm focus:border-primary focus:outline-none"
                     />
                 </Modal.Body>
                 <Modal.Footer align="right">
@@ -1037,12 +1035,12 @@ const MediaManagePage = () => {
             >
                 <Modal.Header>Edit Collection</Modal.Header>
                 <Modal.Body>
-                    <label className="block text-sm text-secondary mb-1">Collection Name</label>
+                    <label className="block text-sm text-fg-muted mb-1">Collection Name</label>
                     <input
                         type="text"
                         value={editCollectionName}
                         onChange={e => setEditCollectionName(e.target.value)}
-                        className="w-full p-2 bg-input border border-border rounded-md text-primary text-sm focus:border-primary focus:outline-none"
+                        className="w-full p-2 bg-input border border-border rounded-md text-fg text-sm focus:border-primary focus:outline-none"
                     />
                 </Modal.Body>
                 <Modal.Footer align="right">
@@ -1077,37 +1075,37 @@ const MediaManagePage = () => {
                     {previewLoading ? (
                         <Spinner size="medium" text="Loading preview..." center />
                     ) : fixPreview?.already_correct ? (
-                        <p className="text-secondary">
+                        <p className="text-fg-muted">
                             This item is already at the correct path — no action needed.
                         </p>
                     ) : (
                         <>
-                            <p className="text-secondary">
+                            <p className="text-fg-muted">
                                 Move{' '}
-                                <span className="font-semibold text-primary">
+                                <span className="font-semibold text-fg">
                                     {fixPreview?.title || fixTarget?.nested?.title}
                                 </span>
                                 {fixPreview?.year && ` (${fixPreview.year})`} out of{' '}
-                                <span className="font-semibold text-primary">
+                                <span className="font-semibold text-fg">
                                     {fixTarget?.parent?.title}
                                 </span>
                                 &apos;s folder?
                             </p>
                             <div className="mt-3 p-2 rounded bg-surface-alt">
-                                <span className="text-xs text-secondary block">Current path</span>
-                                <span className="text-sm font-mono text-primary break-all">
+                                <span className="text-xs text-fg-muted block">Current path</span>
+                                <span className="text-sm font-mono text-fg break-all">
                                     {fixPreview?.current_path || fixTarget?.nested?.path}
                                 </span>
                             </div>
                             <div className="mt-2 p-2 rounded bg-surface-alt">
-                                <span className="text-xs text-secondary block">Move to</span>
+                                <span className="text-xs text-fg-muted block">Move to</span>
                                 <span className="text-sm font-mono text-success break-all">
                                     {fixPreview?.target_path || fixTarget?.suggested_path}
                                 </span>
                             </div>
                             {fixPreview?.rename_preview?.length > 0 && (
                                 <div className="mt-3">
-                                    <span className="text-xs text-secondary block mb-1">
+                                    <span className="text-xs text-fg-muted block mb-1">
                                         Pending file renames (from {fixTarget?.nested?.instance}{' '}
                                         naming format)
                                     </span>
@@ -1117,7 +1115,7 @@ const MediaManagePage = () => {
                                                 key={idx}
                                                 className="p-2 rounded bg-surface-alt text-xs font-mono"
                                             >
-                                                <div className="text-secondary truncate">
+                                                <div className="text-fg-muted truncate">
                                                     {r.existing_path}
                                                 </div>
                                                 <div className="text-success truncate">
@@ -1129,7 +1127,7 @@ const MediaManagePage = () => {
                                 </div>
                             )}
                             {fixPreview && fixPreview.rename_preview?.length === 0 && (
-                                <p className="text-xs text-secondary mt-2">
+                                <p className="text-xs text-fg-muted mt-2">
                                     No file renames pending — names already match the naming format.
                                 </p>
                             )}

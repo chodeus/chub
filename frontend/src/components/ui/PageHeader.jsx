@@ -32,10 +32,10 @@ export const PageHeader = ({ title, description, badge, icon, actions }) => {
                     </span>
                 )}
                 <div className="flex flex-col gap-1 min-w-0">
-                    <h1 className="font-display text-3xl font-bold text-primary m-0 leading-tight">
+                    <h1 className="font-display text-3xl font-bold text-fg m-0 leading-tight">
                         {title}
                     </h1>
-                    {description && <p className="text-base text-secondary m-0">{description}</p>}
+                    {description && <p className="text-base text-fg-muted m-0">{description}</p>}
                 </div>
             </div>
             {actions && <div className="flex items-center gap-2 shrink-0">{actions}</div>}

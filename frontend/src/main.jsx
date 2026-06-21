@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import App from './App.jsx';
 
 // Import CHUB Design System CSS
+import './css/tailwind.css';
 import './css/index.css';
 
 /**
