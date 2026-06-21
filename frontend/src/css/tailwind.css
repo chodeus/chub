@@ -1,0 +1,250 @@
+/**
+ * Tailwind v4 — wired to CHUB design tokens.
+ *
+ * MUST be imported as a JS entry (main.jsx), NOT via a nested CSS `@import url()`:
+ * @tailwindcss/vite only runs @source/@theme/@utility for a directly-imported root.
+ *
+ * Preflight (Tailwind's reset) is intentionally EXCLUDED: base.css owns resets.
+ * We import only the theme + utilities layers. Legacy utilities (src/css/utilities)
+ * also live in @layer utilities, so during the migration both coexist; only NEW
+ * class names (text-fg*, bg-error/10, z-*, …) resolve solely from Tailwind.
+ *
+ * Layer order MUST match base.css's `@layer reset, base, components, utilities, pages`
+ * and be declared here (this file loads first) — otherwise `reset` gets appended AFTER
+ * `utilities` and the img/element resets out-prioritize every utility class.
+ */
+@layer reset, theme, base, components, utilities, pages;
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities);
+
+/* Explicit content source: auto-detection misses src/ here (the git root sits a
+   level above frontend/, and this file is reached via an @import chain). Paths
+   are relative to this file (src/css/ -> ../ = src/). */
+@source '../**/*.{jsx,js}';
+
+/* Project themes via the data-theme attribute, not a .dark class. */
+@custom-variant dark ([data-theme='dark'] &);
+
+/**
+ * Map design tokens (theme/light.css + dark.css) into Tailwind's color
+ * namespace. `inline` so the values are substituted directly into utilities
+ * (background: var(--surface-alt)) and keep switching per [data-theme] — and so
+ * these keys are NOT re-emitted to :root (avoids clobbering the runtime tokens).
+ * Each key is the class SUFFIX: --color-surface-alt -> bg-surface-alt / etc.
+ */
+@theme {
+    /* brand + semantic */
+    --color-primary: var(--primary);
+    --color-accent: var(--accent);
+    --color-accent-2: var(--accent-2);
+    --color-success: var(--success);
+    --color-warning: var(--warning);
+    --color-error: var(--error);
+    --color-danger: var(--error); /* legacy alias (.bg-danger) */
+    --color-info: var(--info);
+    --color-focus: var(--focus);
+
+    /* surfaces */
+    --color-bg: var(--bg);
+    --color-surface: var(--surface);
+    --color-surface-alt: var(--surface-alt);
+    --color-surface-elevated: var(--surface-elevated);
+    --color-surface-hover: var(--surface-alt); /* legacy alias */
+
+    /* borders */
+    --color-border: var(--border);
+    --color-border-light: var(--border-light);
+    --color-border-subtle: var(--border-light); /* legacy alias */
+
+    /* body text — renamed from text-primary/secondary/tertiary so `primary`
+       can mean the brand colour in Tailwind's shared color namespace */
+    --color-fg: var(--text-primary);
+    --color-fg-muted: var(--text-secondary);
+    --color-fg-subtle: var(--text-tertiary);
+    --color-on-color: var(--on-color-text);
+    --color-primary-text: var(--primary-text);
+    --color-link: var(--accent); /* legacy alias (.text-link) */
+    --color-brand-primary: var(--primary); /* legacy alias (.*-brand-primary) */
+    --color-default: var(--border); /* legacy alias (.border-default) */
+    --color-input-error: var(--error); /* legacy alias (.border-input-error) */
+
+    /* form controls */
+    --color-input: var(--input-bg);
+    --color-input-hover: var(--input-bg-hover);
+    --color-input-disabled: var(--input-bg-disabled);
+    --color-input-readonly: var(--input-bg-readonly);
+    --color-input-border-disabled: var(--input-border-disabled);
+    --color-checkbox-indicator: var(--checkbox-indicator-bg);
+
+    /* layout chrome */
+    --color-sidebar-bg: var(--sidebar-bg);
+    --color-sidebar-surface: var(--sidebar-surface);
+    --color-sidebar-hover: var(--sidebar-hover);
+    --color-sidebar-border: var(--sidebar-border);
+    --color-sidebar-text: var(--sidebar-text);
+    --color-sidebar-text-secondary: var(--sidebar-text-secondary);
+    --color-header-bg: var(--header-bg);
+    --color-overlay: var(--overlay);
+    --color-overlay-strong: var(--overlay-strong);
+
+    /* link / accent states */
+    --color-link-hover: var(--link-hover);
+    --color-link-visited: var(--link-visited);
+    --color-accent-hover: var(--accent-hover);
+    --color-accent-visited: var(--accent-visited);
+
+    /* dashboard badge palette */
+    --color-badge-1: var(--badge-1-bg);
+    --color-badge-1-fg: var(--badge-1-fg);
+    --color-badge-2: var(--badge-2-bg);
+    --color-badge-2-fg: var(--badge-2-fg);
+    --color-badge-3: var(--badge-3-bg);
+    --color-badge-3-fg: var(--badge-3-fg);
+    --color-badge-4: var(--badge-4-bg);
+    --color-badge-4-fg: var(--badge-4-fg);
+    --color-badge-5: var(--badge-5-bg);
+    --color-badge-5-fg: var(--badge-5-fg);
+
+    /* Font stacks — exact values from utilities/typography.css (override
+       Tailwind's defaults). font-display is an @utility below (its value
+       references --font-display, which would self-reference here). */
+    --font-sans: 'Roboto', 'Open Sans', 'Helvetica Neue', 'Helvetica', 'Arial', sans-serif;
+    --font-serif: georgia, 'Times New Roman', serif;
+    --font-mono: 'SF Mono', monaco, 'Cascadia Code', 'Roboto Mono', consolas, monospace;
+
+    /* Clear Tailwind's default radius namespace: tokens.css already owns
+       --radius-* (8/12/16/24px) for components, and the legacy `rounded-*`
+       utilities use DIFFERENT literal values (.25/.5/.75/1rem). Both are ported
+       explicitly as @utility below so neither collides with the other. */
+    --radius-*: initial;
+}
+
+/* Border radius — literal values mirroring utilities/borders.css (Tailwind's
+   --radius-* namespace was cleared in @theme to avoid colliding with tokens.css's
+   --radius-* component vars). */
+@utility rounded {
+    border-radius: 0.5rem;
+}
+@utility rounded-xs {
+    border-radius: 0.125rem;
+}
+@utility rounded-sm {
+    border-radius: 0.25rem;
+}
+@utility rounded-md {
+    border-radius: 0.5rem;
+}
+@utility rounded-lg {
+    border-radius: 0.75rem;
+}
+@utility rounded-xl {
+    border-radius: 1rem;
+}
+@utility rounded-2xl {
+    border-radius: 1.25rem;
+}
+@utility rounded-3xl {
+    border-radius: 1.5rem;
+}
+@utility rounded-full {
+    border-radius: 9999px;
+}
+
+/* Named component sizes (utilities/sizing.css). */
+@utility max-w-dropdown {
+    max-width: 160px;
+}
+@utility min-w-sidebar {
+    min-width: 210px;
+}
+@utility max-h-dropdown {
+    max-height: 300px;
+}
+@utility transition-input {
+    transition: all 150ms ease-in-out;
+}
+@utility font-display {
+    font-family: var(--font-display);
+}
+
+/* Box-shadow ring utilities — legacy used a box-shadow ring, NOT Tailwind's
+   --tw-ring-* system (whose `ring-primary` only sets a colour var and renders
+   nothing without a width). Ported exactly; in @layer utilities (after the
+   Tailwind import) so they win over the same-named color-only ring utilities. */
+@layer utilities {
+    .ring-1 {
+        box-shadow: 0 0 0 1px rgb(0 0 0 / 10%);
+    }
+    .ring-primary {
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 20%, transparent);
+    }
+    .focus\:ring-primary:focus {
+        outline: none;
+        border-color: var(--primary);
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 20%, transparent);
+    }
+    .focus-within\:ring-primary:focus-within {
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 20%, transparent);
+    }
+    .focus-within\:ring-1:focus-within {
+        box-shadow: 0 0 0 1px rgb(0 0 0 / 10%);
+    }
+}
+
+/* Semantic z-index scale — mirrors utilities/zindex.css exactly. */
+@utility z-negative {
+    z-index: -1;
+}
+@utility z-dropdown {
+    z-index: 100;
+}
+@utility z-banner {
+    z-index: 150;
+}
+@utility z-sticky {
+    z-index: 200;
+}
+@utility z-fixed {
+    z-index: 300;
+}
+@utility z-sidebar {
+    z-index: 350;
+}
+@utility z-modal-backdrop {
+    z-index: 400;
+}
+@utility z-drawer {
+    z-index: 450;
+}
+@utility z-modal {
+    z-index: 500;
+}
+@utility z-popover {
+    z-index: 600;
+}
+@utility z-notification {
+    z-index: 700;
+}
+@utility z-tooltip {
+    z-index: 800;
+}
+@utility z-overlay {
+    z-index: 900;
+}
+@utility z-max {
+    z-index: 999;
+}
+
+/* Bespoke utilities with no Tailwind equivalent. */
+@utility touch-target {
+    min-width: 44px;
+    min-height: 44px;
+    touch-action: manipulation;
+}
+@utility scrollbar-hidden {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    &::-webkit-scrollbar {
+        display: none;
+    }
+}

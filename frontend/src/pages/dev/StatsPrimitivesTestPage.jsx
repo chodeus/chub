@@ -34,7 +34,7 @@ export const StatsPrimitivesTestPage = () => {
                 <Card.Body>
                     <div className="flex flex-wrap gap-4">
                         <label className="flex flex-col gap-1">
-                            <span className="text-sm text-secondary">Grid Columns</span>
+                            <span className="text-sm text-fg-muted">Grid Columns</span>
                             <select
                                 value={columns}
                                 onChange={e => setColumns(Number(e.target.value))}
@@ -47,7 +47,7 @@ export const StatsPrimitivesTestPage = () => {
                         </label>
 
                         <label className="flex flex-col gap-1">
-                            <span className="text-sm text-secondary">Gap Size</span>
+                            <span className="text-sm text-fg-muted">Gap Size</span>
                             <select
                                 value={gap}
                                 onChange={e => setGap(e.target.value)}
@@ -61,7 +61,7 @@ export const StatsPrimitivesTestPage = () => {
                         </label>
 
                         <label className="flex flex-col gap-1">
-                            <span className="text-sm text-secondary">Card Variant</span>
+                            <span className="text-sm text-fg-muted">Card Variant</span>
                             <select
                                 value={variant}
                                 onChange={e => setVariant(e.target.value)}
@@ -79,7 +79,7 @@ export const StatsPrimitivesTestPage = () => {
 
             {/* StatGrid Layout - Basic Usage */}
             <section className="flex flex-col gap-3">
-                <h2 className="text-xl font-semibold text-primary">StatGrid Layout (Basic)</h2>
+                <h2 className="text-xl font-semibold text-fg">StatGrid Layout (Basic)</h2>
                 <StatGrid columns={columns} gap={gap}>
                     <StatCard label="Total Users" value={1234} icon="👥" variant={variant} />
                     <StatCard
@@ -96,9 +96,7 @@ export const StatsPrimitivesTestPage = () => {
 
             {/* StatGrid with Change Indicators */}
             <section className="flex flex-col gap-3">
-                <h2 className="text-xl font-semibold text-primary">
-                    StatGrid with Trend Indicators
-                </h2>
+                <h2 className="text-xl font-semibold text-fg">StatGrid with Trend Indicators</h2>
                 <StatGrid columns={columns} gap={gap}>
                     <StatCard
                         label="Active Users"
@@ -138,7 +136,7 @@ export const StatsPrimitivesTestPage = () => {
 
             {/* StatList Layout */}
             <section className="flex flex-col gap-3">
-                <h2 className="text-xl font-semibold text-primary">StatList Layout (Vertical)</h2>
+                <h2 className="text-xl font-semibold text-fg">StatList Layout (Vertical)</h2>
                 <StatList gap="3">
                     <StatCard
                         label="Total Revenue"
@@ -170,9 +168,7 @@ export const StatsPrimitivesTestPage = () => {
 
             {/* StatInline Layout */}
             <section className="flex flex-col gap-3">
-                <h2 className="text-xl font-semibold text-primary">
-                    StatInline Layout (Horizontal)
-                </h2>
+                <h2 className="text-xl font-semibold text-fg">StatInline Layout (Horizontal)</h2>
                 <StatInline gap="4" wrap={true}>
                     <StatCard label="Views" value={15234} variant="minimal" valueColor="primary" />
                     <StatCard label="Clicks" value={2341} variant="minimal" valueColor="success" />
@@ -183,7 +179,7 @@ export const StatsPrimitivesTestPage = () => {
 
             {/* All Card Variants Side-by-Side */}
             <section className="flex flex-col gap-3">
-                <h2 className="text-xl font-semibold text-primary">All Card Variants</h2>
+                <h2 className="text-xl font-semibold text-fg">All Card Variants</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <StatCard
                         label="Standard"
@@ -218,7 +214,7 @@ export const StatsPrimitivesTestPage = () => {
 
             {/* All Value Colors */}
             <section className="flex flex-col gap-3">
-                <h2 className="text-xl font-semibold text-primary">All Value Color Variants</h2>
+                <h2 className="text-xl font-semibold text-fg">All Value Color Variants</h2>
                 <StatGrid columns={4} gap="4">
                     <StatCard label="Default" value={1000} variant="compact" />
                     <StatCard label="Primary" value={2000} valueColor="primary" variant="compact" />
@@ -230,7 +226,7 @@ export const StatsPrimitivesTestPage = () => {
 
             {/* Complex Example: Dashboard Summary */}
             <section className="flex flex-col gap-3">
-                <h2 className="text-xl font-semibold text-primary">
+                <h2 className="text-xl font-semibold text-fg">
                     Complex Example: Dashboard Summary
                 </h2>
                 <Card variant="bordered">
@@ -279,7 +275,7 @@ export const StatsPrimitivesTestPage = () => {
             <Card>
                 <Card.Header title="Architecture Documentation" />
                 <Card.Body>
-                    <div className="text-sm text-secondary space-y-2">
+                    <div className="text-sm text-fg-muted space-y-2">
                         <p>
                             <strong>Primitive Composition:</strong> Every StatCard is built by
                             composing:

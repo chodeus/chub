@@ -36,25 +36,23 @@ export const FormSection = React.memo(
                             (collapsible ? (
                                 <button
                                     type="button"
-                                    className="flex items-center w-full bg-transparent border-none p-0 text-left cursor-pointer hover:text-primary transition-colors"
+                                    className="flex items-center w-full bg-transparent border-none p-0 text-left cursor-pointer hover:text-fg transition-colors"
                                     onClick={toggleCollapsed}
                                     aria-expanded={!isCollapsed}
                                 >
                                     <span
-                                        className={`mr-2 text-sm text-secondary transition-transform ${isCollapsed ? '-rotate-90' : 'rotate-0'}`}
+                                        className={`mr-2 text-sm text-fg-muted transition-transform ${isCollapsed ? '-rotate-90' : 'rotate-0'}`}
                                     >
                                         ▼
                                     </span>
-                                    <h3 className="m-0 text-lg font-medium text-primary">
-                                        {title}
-                                    </h3>
+                                    <h3 className="m-0 text-lg font-medium text-fg">{title}</h3>
                                 </button>
                             ) : (
-                                <h3 className="m-0 text-lg font-medium text-primary">{title}</h3>
+                                <h3 className="m-0 text-lg font-medium text-fg">{title}</h3>
                             ))}
 
                         {description && (
-                            <p className="mt-2 mb-0 text-sm text-secondary">{description}</p>
+                            <p className="mt-2 mb-0 text-sm text-fg-muted">{description}</p>
                         )}
                     </div>
                 )}

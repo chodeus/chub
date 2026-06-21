@@ -246,7 +246,7 @@ export const GeneralSettingsPage = () => {
     if (isLoading) {
         return (
             <div className="flex justify-center items-center min-h-64">
-                <div className="text-primary text-lg">Loading general settings...</div>
+                <div className="text-fg text-lg">Loading general settings...</div>
             </div>
         );
     }
@@ -287,7 +287,7 @@ export const GeneralSettingsPage = () => {
                     key={`module-${module.key}-${moduleIndex}`}
                     className="bg-surface border border-border-subtle rounded-lg p-4 md:p-6"
                 >
-                    <h2 className="text-lg md:text-xl font-semibold mb-4 text-primary">
+                    <h2 className="text-lg md:text-xl font-semibold mb-4 text-fg">
                         {module.label}
                     </h2>
 
@@ -368,7 +368,7 @@ export const GeneralSettingsPage = () => {
                             })}
                         </form>
                     ) : (
-                        <div className="text-center py-8 text-tertiary">
+                        <div className="text-center py-8 text-fg-subtle">
                             <span className="material-symbols-outlined text-4xl mb-2 block">
                                 inbox
                             </span>

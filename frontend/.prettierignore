@@ -1,2 +1,0 @@
-# Exclude utility CSS from Prettier - custom formatter handles these
-src/css/utilities/**/*.css

@@ -6,7 +6,7 @@ const LEVEL_COLORS = {
     ERROR: 'text-error',
     WARNING: 'text-warning',
     INFO: 'text-info',
-    DEBUG: 'text-secondary',
+    DEBUG: 'text-fg-muted',
 };
 
 /**
@@ -17,7 +17,7 @@ const LEVEL_COLORS = {
  * @returns {JSX.Element} Styled log level span
  */
 export const LogLevel = React.memo(({ level, children }) => {
-    const colorClass = LEVEL_COLORS[level] || 'text-primary';
+    const colorClass = LEVEL_COLORS[level] || 'text-fg';
     return <span className={colorClass}>{children}</span>;
 });
 

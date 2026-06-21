@@ -35,9 +35,9 @@ const ProgressBar = ({
         <div className={`w-full ${className}`.trim()}>
             {(label || showPercent) && (
                 <div className="flex items-center justify-between mb-1">
-                    {label && <span className="text-xs text-secondary truncate">{label}</span>}
+                    {label && <span className="text-xs text-fg-muted truncate">{label}</span>}
                     {showPercent && (
-                        <span className="text-xs text-secondary ml-2 tabular-nums">
+                        <span className="text-xs text-fg-muted ml-2 tabular-nums">
                             {Math.round(clampedValue)}%
                         </span>
                     )}

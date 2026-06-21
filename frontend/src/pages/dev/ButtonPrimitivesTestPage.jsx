@@ -42,7 +42,7 @@ export const ButtonPrimitivesTestPage = () => {
                 <Card.Body>
                     <div className="flex flex-wrap gap-4">
                         <label className="flex flex-col gap-1">
-                            <span className="text-sm text-secondary">Button Variant</span>
+                            <span className="text-sm text-fg-muted">Button Variant</span>
                             <select
                                 value={variant}
                                 onChange={e => setVariant(e.target.value)}
@@ -57,7 +57,7 @@ export const ButtonPrimitivesTestPage = () => {
                         </label>
 
                         <label className="flex flex-col gap-1">
-                            <span className="text-sm text-secondary">Button Size</span>
+                            <span className="text-sm text-fg-muted">Button Size</span>
                             <select
                                 value={size}
                                 onChange={e => setSize(e.target.value)}
@@ -74,12 +74,10 @@ export const ButtonPrimitivesTestPage = () => {
 
             {/* Primitive Demonstrations */}
             <section className="flex flex-col gap-3">
-                <h2 className="text-xl font-semibold text-primary">
-                    Primitive Composition Pattern
-                </h2>
+                <h2 className="text-xl font-semibold text-fg">Primitive Composition Pattern</h2>
                 <Card>
                     <Card.Body>
-                        <div className="text-sm text-secondary space-y-2">
+                        <div className="text-sm text-fg-muted space-y-2">
                             <p>
                                 <strong>4 Atomic Primitives:</strong>
                             </p>
@@ -110,7 +108,7 @@ export const ButtonPrimitivesTestPage = () => {
 
             {/* Button Composer - Standard Button */}
             <section className="flex flex-col gap-3">
-                <h2 className="text-xl font-semibold text-primary">
+                <h2 className="text-xl font-semibold text-fg">
                     Button Composer (Base + Icon + Text)
                 </h2>
                 <Card>
@@ -143,7 +141,7 @@ export const ButtonPrimitivesTestPage = () => {
 
             {/* All Variants Demonstration */}
             <section className="flex flex-col gap-3">
-                <h2 className="text-xl font-semibold text-primary">All Button Variants</h2>
+                <h2 className="text-xl font-semibold text-fg">All Button Variants</h2>
                 <Card>
                     <Card.Body>
                         <div className="flex flex-wrap gap-3">
@@ -169,7 +167,7 @@ export const ButtonPrimitivesTestPage = () => {
 
             {/* All Sizes Demonstration */}
             <section className="flex flex-col gap-3">
-                <h2 className="text-xl font-semibold text-primary">All Button Sizes</h2>
+                <h2 className="text-xl font-semibold text-fg">All Button Sizes</h2>
                 <Card>
                     <Card.Body>
                         <div className="flex flex-wrap items-end gap-3">
@@ -189,9 +187,7 @@ export const ButtonPrimitivesTestPage = () => {
 
             {/* IconButton Composer */}
             <section className="flex flex-col gap-3">
-                <h2 className="text-xl font-semibold text-primary">
-                    IconButton Composer (Base + Icon)
-                </h2>
+                <h2 className="text-xl font-semibold text-fg">IconButton Composer (Base + Icon)</h2>
                 <Card>
                     <Card.Body>
                         <div className="flex flex-wrap gap-3">
@@ -233,7 +229,7 @@ export const ButtonPrimitivesTestPage = () => {
 
             {/* LoadingButton Composer */}
             <section className="flex flex-col gap-3">
-                <h2 className="text-xl font-semibold text-primary">
+                <h2 className="text-xl font-semibold text-fg">
                     LoadingButton Composer (Base + Text + Spinner)
                 </h2>
                 <Card>
@@ -266,7 +262,7 @@ export const ButtonPrimitivesTestPage = () => {
                                 Delete Item
                             </LoadingButton>
                         </div>
-                        <p className="text-sm text-secondary">
+                        <p className="text-sm text-fg-muted">
                             Click &ldquo;Click to Load&rdquo; to see loading state demonstration (2
                             second delay)
                         </p>
@@ -276,13 +272,13 @@ export const ButtonPrimitivesTestPage = () => {
 
             {/* ButtonGroup Composer */}
             <section className="flex flex-col gap-3">
-                <h2 className="text-xl font-semibold text-primary">
+                <h2 className="text-xl font-semibold text-fg">
                     ButtonGroup Composer (Horizontal Layout)
                 </h2>
                 <Card>
                     <Card.Body>
                         <div>
-                            <p className="text-sm text-secondary mb-3">Horizontal Group</p>
+                            <p className="text-sm text-fg-muted mb-3">Horizontal Group</p>
                             <ButtonGroup orientation="horizontal" spacing="medium">
                                 <Button variant="secondary" size={size}>
                                     Cancel
@@ -293,7 +289,7 @@ export const ButtonPrimitivesTestPage = () => {
                             </ButtonGroup>
                         </div>
                         <div>
-                            <p className="text-sm text-secondary mb-3">Vertical Group</p>
+                            <p className="text-sm text-fg-muted mb-3">Vertical Group</p>
                             <ButtonGroup orientation="vertical" spacing="small">
                                 <Button variant={variant} size={size} icon="edit">
                                     Edit
@@ -307,7 +303,7 @@ export const ButtonPrimitivesTestPage = () => {
                             </ButtonGroup>
                         </div>
                         <div>
-                            <p className="text-sm text-secondary mb-3">Large Spacing</p>
+                            <p className="text-sm text-fg-muted mb-3">Large Spacing</p>
                             <ButtonGroup orientation="horizontal" spacing="large">
                                 <Button variant={variant} size={size} icon="arrow_back">
                                     Previous
@@ -328,7 +324,7 @@ export const ButtonPrimitivesTestPage = () => {
 
             {/* SplitButton Composer */}
             <section className="flex flex-col gap-3">
-                <h2 className="text-xl font-semibold text-primary">
+                <h2 className="text-xl font-semibold text-fg">
                     SplitButton Composer (Button + IconButton + Dropdown)
                 </h2>
                 <Card>
@@ -380,13 +376,11 @@ export const ButtonPrimitivesTestPage = () => {
 
             {/* State Demonstrations */}
             <section className="flex flex-col gap-3">
-                <h2 className="text-xl font-semibold text-primary">
-                    Interactive State Demonstrations
-                </h2>
+                <h2 className="text-xl font-semibold text-fg">Interactive State Demonstrations</h2>
                 <Card>
                     <Card.Body>
                         <div>
-                            <p className="text-sm text-secondary mb-3">Hover States</p>
+                            <p className="text-sm text-fg-muted mb-3">Hover States</p>
                             <div className="flex flex-wrap gap-3">
                                 <Button variant="primary" size={size}>
                                     Hover Me
@@ -397,7 +391,7 @@ export const ButtonPrimitivesTestPage = () => {
                             </div>
                         </div>
                         <div>
-                            <p className="text-sm text-secondary mb-3">
+                            <p className="text-sm text-fg-muted mb-3">
                                 Focus States (Tab Navigation)
                             </p>
                             <div className="flex flex-wrap gap-3">
@@ -413,7 +407,7 @@ export const ButtonPrimitivesTestPage = () => {
                             </div>
                         </div>
                         <div>
-                            <p className="text-sm text-secondary mb-3">Disabled States</p>
+                            <p className="text-sm text-fg-muted mb-3">Disabled States</p>
                             <div className="flex flex-wrap gap-3">
                                 <Button variant="primary" size={size} disabled>
                                     Disabled Button
@@ -436,12 +430,12 @@ export const ButtonPrimitivesTestPage = () => {
 
             {/* Migration Examples */}
             <section className="flex flex-col gap-3">
-                <h2 className="text-xl font-semibold text-primary">Migration Guide</h2>
+                <h2 className="text-xl font-semibold text-fg">Migration Guide</h2>
                 <Card>
                     <Card.Body>
-                        <div className="text-sm text-secondary space-y-3">
+                        <div className="text-sm text-fg-muted space-y-3">
                             <div>
-                                <p className="font-semibold text-primary mb-2">
+                                <p className="font-semibold text-fg mb-2">
                                     Old Button API (Deprecated):
                                 </p>
                                 <pre className="bg-surface-alt p-3 rounded-md overflow-x-auto">
@@ -449,7 +443,7 @@ export const ButtonPrimitivesTestPage = () => {
                                 </pre>
                             </div>
                             <div>
-                                <p className="font-semibold text-primary mb-2">
+                                <p className="font-semibold text-fg mb-2">
                                     New Button API (Primitive Composition):
                                 </p>
                                 <pre className="bg-surface-alt p-3 rounded-md overflow-x-auto">
@@ -457,7 +451,7 @@ export const ButtonPrimitivesTestPage = () => {
                                 </pre>
                             </div>
                             <div className="pt-2">
-                                <p className="font-semibold text-primary mb-2">Key Changes:</p>
+                                <p className="font-semibold text-fg mb-2">Key Changes:</p>
                                 <ul className="list-disc pl-6 space-y-1">
                                     <li>
                                         <code className="text-accent">color</code> prop renamed to{' '}
@@ -479,7 +473,7 @@ export const ButtonPrimitivesTestPage = () => {
             <Card>
                 <Card.Header title="Architecture Documentation" />
                 <Card.Body>
-                    <div className="text-sm text-secondary space-y-2">
+                    <div className="text-sm text-fg-muted space-y-2">
                         <p>
                             <strong>Primitive Composition:</strong> Every button is built by
                             composing:

@@ -11,19 +11,19 @@ import React from 'react';
 const UnavailableField = ({ field }) => {
     return (
         <div className="flex flex-col gap-2 mb-4 w-full">
-            <label className="text-sm font-medium text-secondary">
+            <label className="text-sm font-medium text-fg-muted">
                 {field.label}
                 {field.required && <span className="text-error ml-1">*</span>}
             </label>
 
-            <div className="p-4 bg-surface-elevated border border-border rounded-lg text-center text-tertiary text-sm">
+            <div className="p-4 bg-surface-elevated border border-border rounded-lg text-center text-fg-subtle text-sm">
                 <strong>Field type &quot;{field.type}&quot; not implemented</strong>
                 <br />
                 <small>This field type is not available in the current version</small>
             </div>
 
             {field.description && (
-                <div className="text-sm text-tertiary mt-1">{field.description}</div>
+                <div className="text-sm text-fg-subtle mt-1">{field.description}</div>
             )}
         </div>
     );

@@ -14,20 +14,20 @@ const STATUS_FILTERS = ['all', 'pending', 'running', 'completed', 'error'];
 
 const STATUS_COLORS = {
     pending: 'bg-warning/20 text-warning',
-    running: 'bg-primary/20 text-primary',
+    running: 'bg-primary/20 text-fg',
     completed: 'bg-success/20 text-success',
     success: 'bg-success/20 text-success',
     error: 'bg-error/20 text-error',
-    cancelled: 'bg-secondary/20 text-secondary',
+    cancelled: 'bg-surface-alt/20 text-fg-muted',
 };
 
 // Icon + colour per phase status for the per-job phase timeline.
 const PHASE_META = {
     success: { icon: 'check_circle', cls: 'text-success' },
-    running: { icon: 'progress_activity', cls: 'text-primary animate-spin' },
+    running: { icon: 'progress_activity', cls: 'text-fg animate-spin' },
     error: { icon: 'error', cls: 'text-error' },
-    skipped: { icon: 'do_not_disturb_on', cls: 'text-secondary' },
-    pending: { icon: 'schedule', cls: 'text-tertiary' },
+    skipped: { icon: 'do_not_disturb_on', cls: 'text-fg-muted' },
+    pending: { icon: 'schedule', cls: 'text-fg-subtle' },
 };
 
 export const JobsPage = () => {
@@ -248,7 +248,7 @@ export const JobsPage = () => {
         if (!Array.isArray(phases) || phases.length === 0) return null;
         return (
             <div className="col-span-full">
-                <span className="text-tertiary capitalize block mb-1">Phases</span>
+                <span className="text-fg-subtle capitalize block mb-1">Phases</span>
                 <div className="flex flex-col gap-1">
                     {phases.map((p, i) => {
                         const meta = PHASE_META[p.status] || PHASE_META.pending;
@@ -269,9 +269,9 @@ export const JobsPage = () => {
                                     >
                                         {meta.icon}
                                     </span>
-                                    <span className="text-primary truncate">{p.name}</span>
+                                    <span className="text-fg truncate">{p.name}</span>
                                 </span>
-                                <span className="text-secondary shrink-0 tabular-nums">{dur}</span>
+                                <span className="text-fg-muted shrink-0 tabular-nums">{dur}</span>
                             </div>
                         );
                     })}
@@ -329,8 +329,8 @@ export const JobsPage = () => {
                         onClick={() => setActiveFilter(filter)}
                         className={`px-3 py-1.5 rounded-lg text-sm font-medium capitalize cursor-pointer border transition-colors ${
                             activeFilter === filter
-                                ? 'bg-primary/15 text-primary border-primary/30'
-                                : 'bg-transparent text-secondary border-border hover:text-primary'
+                                ? 'bg-primary/15 text-fg border-primary/30'
+                                : 'bg-transparent text-fg-muted border-border hover:text-fg'
                         }`}
                     >
                         {filter}
@@ -342,7 +342,7 @@ export const JobsPage = () => {
             {jobsLoading ? (
                 <Spinner size="medium" text="Loading jobs..." center />
             ) : jobs.length === 0 ? (
-                <div className="text-center py-12 text-secondary">
+                <div className="text-center py-12 text-fg-muted">
                     <span className="material-symbols-outlined text-4xl mb-2 block">inbox</span>
                     No jobs found{activeFilter !== 'all' ? ` with status "${activeFilter}"` : ''}
                 </div>
@@ -357,18 +357,18 @@ export const JobsPage = () => {
                                 className="border border-border rounded-lg bg-surface p-3 flex flex-col gap-2"
                             >
                                 <div className="flex items-start justify-between gap-2">
-                                    <span className="inline-block px-2 py-0.5 rounded bg-surface-alt text-primary text-xs font-medium break-words min-w-0">
+                                    <span className="inline-block px-2 py-0.5 rounded bg-surface-alt text-fg text-xs font-medium break-words min-w-0">
                                         {typeLabel}
                                     </span>
                                     <span
-                                        className={`shrink-0 px-2 py-0.5 rounded-full text-xs font-medium capitalize ${STATUS_COLORS[job.status] || 'bg-surface text-secondary'}`}
+                                        className={`shrink-0 px-2 py-0.5 rounded-full text-xs font-medium capitalize ${STATUS_COLORS[job.status] || 'bg-surface text-fg-muted'}`}
                                     >
                                         {job.status}
                                     </span>
                                 </div>
-                                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-secondary">
+                                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-fg-muted">
                                     <span>
-                                        <span className="text-tertiary">#</span>
+                                        <span className="text-fg-subtle">#</span>
                                         {job.id}
                                     </span>
                                     <span>{formatTime(job.received_at || job.created_at)}</span>
@@ -396,7 +396,7 @@ export const JobsPage = () => {
                                 {isOpen && (
                                     <div className="border-t border-border pt-2">
                                         {detailLoading ? (
-                                            <span className="text-xs text-secondary">
+                                            <span className="text-xs text-fg-muted">
                                                 Loading...
                                             </span>
                                         ) : jobDetail ? (
@@ -413,10 +413,10 @@ export const JobsPage = () => {
                                                             key={k}
                                                             className="flex flex-col justify-center gap-1 px-3 py-2 rounded-lg bg-surface-alt"
                                                         >
-                                                            <span className="text-tertiary capitalize block">
+                                                            <span className="text-fg-subtle capitalize block">
                                                                 {k.replace(/_/g, ' ')}
                                                             </span>
-                                                            <span className="text-primary break-words">
+                                                            <span className="text-fg break-words">
                                                                 {String(v)}
                                                             </span>
                                                         </div>
@@ -429,7 +429,7 @@ export const JobsPage = () => {
                                                 )}
                                             </div>
                                         ) : (
-                                            <span className="text-xs text-tertiary">
+                                            <span className="text-xs text-fg-subtle">
                                                 No detail available
                                             </span>
                                         )}
@@ -444,22 +444,22 @@ export const JobsPage = () => {
                     <table className="w-full text-sm table-fixed sm:table-auto">
                         <thead>
                             <tr className="bg-surface-alt border-b border-border">
-                                <th className="hidden sm:table-cell text-left px-4 py-3 font-medium text-secondary">
+                                <th className="hidden sm:table-cell text-left px-4 py-3 font-medium text-fg-muted">
                                     ID
                                 </th>
-                                <th className="text-left px-2 sm:px-4 py-3 font-medium text-secondary">
+                                <th className="text-left px-2 sm:px-4 py-3 font-medium text-fg-muted">
                                     Type
                                 </th>
-                                <th className="text-left px-2 sm:px-4 py-3 font-medium text-secondary">
+                                <th className="text-left px-2 sm:px-4 py-3 font-medium text-fg-muted">
                                     Status
                                 </th>
-                                <th className="text-left px-2 sm:px-4 py-3 font-medium text-secondary">
+                                <th className="text-left px-2 sm:px-4 py-3 font-medium text-fg-muted">
                                     Created
                                 </th>
-                                <th className="hidden sm:table-cell text-left px-4 py-3 font-medium text-secondary">
+                                <th className="hidden sm:table-cell text-left px-4 py-3 font-medium text-fg-muted">
                                     Duration
                                 </th>
-                                <th className="text-right px-2 sm:px-4 py-3 font-medium text-secondary">
+                                <th className="text-right px-2 sm:px-4 py-3 font-medium text-fg-muted">
                                     Actions
                                 </th>
                             </tr>
@@ -468,25 +468,25 @@ export const JobsPage = () => {
                             {jobs.map(job => (
                                 <React.Fragment key={job.id}>
                                     <tr className="border-b border-border last:border-b-0 hover:bg-surface-alt/50">
-                                        <td className="hidden sm:table-cell px-4 py-3 font-mono text-xs text-tertiary">
+                                        <td className="hidden sm:table-cell px-4 py-3 font-mono text-xs text-fg-subtle">
                                             #{job.id}
                                         </td>
                                         <td className="px-2 sm:px-4 py-3">
-                                            <span className="inline-block px-2 py-0.5 rounded bg-surface-alt text-primary text-xs font-medium break-all">
+                                            <span className="inline-block px-2 py-0.5 rounded bg-surface-alt text-fg text-xs font-medium break-all">
                                                 {job.module_name || job.job_type || job.type || '-'}
                                             </span>
                                         </td>
                                         <td className="px-2 sm:px-4 py-3">
                                             <span
-                                                className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${STATUS_COLORS[job.status] || 'bg-surface text-secondary'}`}
+                                                className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${STATUS_COLORS[job.status] || 'bg-surface text-fg-muted'}`}
                                             >
                                                 {job.status}
                                             </span>
                                         </td>
-                                        <td className="px-2 sm:px-4 py-3 text-secondary text-xs">
+                                        <td className="px-2 sm:px-4 py-3 text-fg-muted text-xs">
                                             {formatTime(job.received_at || job.created_at)}
                                         </td>
-                                        <td className="hidden sm:table-cell px-4 py-3 text-secondary text-xs">
+                                        <td className="hidden sm:table-cell px-4 py-3 text-fg-muted text-xs">
                                             {jobDuration(job)}
                                         </td>
                                         <td className="px-2 sm:px-4 py-3 text-right">
@@ -520,7 +520,7 @@ export const JobsPage = () => {
                                         <tr className="bg-surface-alt/30">
                                             <td colSpan={6} className="px-4 py-3">
                                                 {detailLoading ? (
-                                                    <span className="text-xs text-secondary">
+                                                    <span className="text-xs text-fg-muted">
                                                         Loading...
                                                     </span>
                                                 ) : jobDetail ? (
@@ -537,10 +537,10 @@ export const JobsPage = () => {
                                                                     key={k}
                                                                     className="flex flex-col justify-center gap-1 px-3 py-2 rounded-lg bg-surface-alt"
                                                                 >
-                                                                    <span className="text-tertiary capitalize block">
+                                                                    <span className="text-fg-subtle capitalize block">
                                                                         {k.replace(/_/g, ' ')}
                                                                     </span>
-                                                                    <span className="text-primary break-words">
+                                                                    <span className="text-fg break-words">
                                                                         {String(v)}
                                                                     </span>
                                                                 </div>
@@ -553,7 +553,7 @@ export const JobsPage = () => {
                                                         )}
                                                     </div>
                                                 ) : (
-                                                    <span className="text-xs text-tertiary">
+                                                    <span className="text-xs text-fg-subtle">
                                                         No detail available
                                                     </span>
                                                 )}
@@ -570,9 +570,7 @@ export const JobsPage = () => {
             {/* Module Execution History */}
             {Array.isArray(executionHistory) && executionHistory.length > 0 && (
                 <section>
-                    <h3 className="text-lg font-semibold text-primary mb-3">
-                        Recent Module Executions
-                    </h3>
+                    <h3 className="text-lg font-semibold text-fg mb-3">Recent Module Executions</h3>
                     <div className="space-y-1">
                         {executionHistory.map((entry, i) => (
                             <div
@@ -586,10 +584,10 @@ export const JobsPage = () => {
                                                 ? 'bg-success'
                                                 : entry.status === 'error'
                                                   ? 'bg-error'
-                                                  : 'bg-secondary'
+                                                  : 'bg-surface-alt'
                                         }`}
                                     />
-                                    <span className="text-primary font-medium">
+                                    <span className="text-fg font-medium">
                                         {entry.module_name ||
                                             entry.module ||
                                             entry.name ||
@@ -597,7 +595,7 @@ export const JobsPage = () => {
                                             '-'}
                                     </span>
                                 </div>
-                                <div className="flex items-center gap-3 text-xs text-secondary">
+                                <div className="flex items-center gap-3 text-xs text-fg-muted">
                                     <span className="capitalize">{entry.status}</span>
                                     {entry.duration != null && <span>{entry.duration}s</span>}
                                     {entry.completed_at && (

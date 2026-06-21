@@ -62,7 +62,7 @@ export const InstanceCard = ({
                                 <span className="font-semibold text-brand-primary shrink-0 sm:min-w-24 text-sm">
                                     {key.charAt(0).toUpperCase() + key.slice(1)}:
                                 </span>
-                                <span className="text-secondary flex-1 break-words text-base leading-relaxed">
+                                <span className="text-fg-muted flex-1 break-words text-base leading-relaxed">
                                     {React.isValidElement(value) ? value : String(value)}
                                 </span>
                             </div>
@@ -74,7 +74,7 @@ export const InstanceCard = ({
                             <span className="font-semibold text-brand-primary shrink-0 sm:min-w-24 text-sm">
                                 Health:
                             </span>
-                            <span className="text-secondary flex-1 flex items-center gap-2">
+                            <span className="text-fg-muted flex-1 flex items-center gap-2">
                                 <span
                                     className={`w-2.5 h-2.5 rounded-full ${
                                         healthStatus.status === 'healthy'
@@ -86,7 +86,7 @@ export const InstanceCard = ({
                                 />
                                 <span className="capitalize">{healthStatus.status}</span>
                                 {healthStatus.response_time_ms != null && (
-                                    <span className="text-xs text-tertiary">
+                                    <span className="text-xs text-fg-subtle">
                                         ({healthStatus.response_time_ms}ms)
                                     </span>
                                 )}
@@ -101,7 +101,7 @@ export const InstanceCard = ({
                                 Media:
                             </span>
                             {serviceType === 'plex' ? (
-                                <span className="text-secondary flex-1 text-sm">
+                                <span className="text-fg-muted flex-1 text-sm">
                                     {instanceStats.total_media} total
                                     {instanceStats.libraries &&
                                         Object.keys(instanceStats.libraries).length > 0 && (
@@ -114,7 +114,7 @@ export const InstanceCard = ({
                                                             <span className="text-success">
                                                                 {count}
                                                             </span>{' '}
-                                                            <span className="text-tertiary">
+                                                            <span className="text-fg-subtle">
                                                                 {lib}
                                                             </span>
                                                             {i < arr.length - 1 && ' \u00b7 '}
@@ -126,7 +126,7 @@ export const InstanceCard = ({
                                 </span>
                             ) : (
                                 <span
-                                    className="text-secondary flex-1 text-sm"
+                                    className="text-fg-muted flex-1 text-sm"
                                     title="Missing = monitored items wanted by this service (released/aired) with no file yet, straight from its Wanted list."
                                 >
                                     {instanceStats.total_media} total
@@ -159,7 +159,7 @@ export const InstanceCard = ({
                             <span className="font-semibold text-brand-primary shrink-0 sm:min-w-24 text-sm">
                                 Synced:
                             </span>
-                            <span className="text-secondary flex-1 text-sm">
+                            <span className="text-fg-muted flex-1 text-sm">
                                 {formatSecondsAgo(instanceStats.snapshot_age_seconds)}
                             </span>
                         </div>

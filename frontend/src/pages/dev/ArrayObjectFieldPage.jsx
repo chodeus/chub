@@ -238,10 +238,10 @@ export default function ArrayObjectFieldPage() {
         <div className="w-full">
             <div className="p-6">
                 <header className="mb-6">
-                    <h1 className="text-2xl font-semibold text-primary mb-3">
+                    <h1 className="text-2xl font-semibold text-fg mb-3">
                         Unified ArrayObjectField Mockup
                     </h1>
-                    <p className="text-secondary text-base leading-relaxed">
+                    <p className="text-fg-muted text-base leading-relaxed">
                         This page demonstrates the unified ArrayObjectField component for complex
                         field configurations. The accordion-style interface eliminates modal
                         dependencies while providing a mobile-first experience.
@@ -252,10 +252,10 @@ export default function ArrayObjectFieldPage() {
                     {/* GDrive Custom Replacement */}
                     <section>
                         <div className="mb-4">
-                            <h2 className="text-lg font-medium text-primary">
+                            <h2 className="text-lg font-medium text-fg">
                                 Google Drive Configuration
                             </h2>
-                            <p className="text-sm text-secondary mt-1">
+                            <p className="text-sm text-fg-muted mt-1">
                                 Schema:{' '}
                                 <code className="bg-surface-alt px-2 py-1 rounded text-xs font-mono">
                                     object_array
@@ -275,10 +275,10 @@ export default function ArrayObjectFieldPage() {
                     {/* Replacerr Custom Replacement */}
                     <section>
                         <div className="mb-4">
-                            <h2 className="text-lg font-medium text-primary">
+                            <h2 className="text-lg font-medium text-fg">
                                 Holiday Border Configuration
                             </h2>
-                            <p className="text-sm text-secondary mt-1">
+                            <p className="text-sm text-fg-muted mt-1">
                                 Schema:{' '}
                                 <code className="bg-surface-alt px-2 py-1 rounded text-xs font-mono">
                                     object_array
@@ -298,10 +298,10 @@ export default function ArrayObjectFieldPage() {
                     {/* Upgradinatorr Custom Replacement */}
                     <section>
                         <div className="mb-4">
-                            <h2 className="text-lg font-medium text-primary">
+                            <h2 className="text-lg font-medium text-fg">
                                 Instance Upgrade Mappings
                             </h2>
-                            <p className="text-sm text-secondary mt-1">
+                            <p className="text-sm text-fg-muted mt-1">
                                 Schema:{' '}
                                 <code className="bg-surface-alt px-2 py-1 rounded text-xs font-mono">
                                     object_array
@@ -321,10 +321,10 @@ export default function ArrayObjectFieldPage() {
                     {/* Labelarr Custom Replacement */}
                     <section>
                         <div className="mb-4">
-                            <h2 className="text-lg font-medium text-primary">
+                            <h2 className="text-lg font-medium text-fg">
                                 Tag Synchronization Mappings
                             </h2>
-                            <p className="text-sm text-secondary mt-1">
+                            <p className="text-sm text-fg-muted mt-1">
                                 Schema:{' '}
                                 <code className="bg-surface-alt px-2 py-1 rounded text-xs font-mono">
                                     object_array
@@ -344,40 +344,34 @@ export default function ArrayObjectFieldPage() {
 
                 {/* Benefits Section */}
                 <section className="mt-12 p-6 bg-surface-alt rounded-lg border border-border">
-                    <h3 className="text-lg font-medium text-primary mb-4">
+                    <h3 className="text-lg font-medium text-fg mb-4">
                         Benefits of Unified Solution
                     </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <h4 className="font-medium text-primary mb-2">
-                                🚫 No Modal Dependencies
-                            </h4>
-                            <p className="text-sm text-secondary">
+                            <h4 className="font-medium text-fg mb-2">🚫 No Modal Dependencies</h4>
+                            <p className="text-sm text-fg-muted">
                                 Accordion-style interface eliminates the need for modal systems,
                                 perfect for test-ui environment.
                             </p>
                         </div>
                         <div>
-                            <h4 className="font-medium text-primary mb-2">
-                                📱 Mobile-First Design
-                            </h4>
-                            <p className="text-sm text-secondary">
+                            <h4 className="font-medium text-fg mb-2">📱 Mobile-First Design</h4>
+                            <p className="text-sm text-fg-muted">
                                 Touch-optimized with 44px minimum targets, works seamlessly on all
                                 device sizes.
                             </p>
                         </div>
                         <div>
-                            <h4 className="font-medium text-primary mb-2">🎯 Single Component</h4>
-                            <p className="text-sm text-secondary">
+                            <h4 className="font-medium text-fg mb-2">🎯 Single Component</h4>
+                            <p className="text-sm text-fg-muted">
                                 One unified component handles all array-of-objects field types,
                                 reducing maintenance overhead.
                             </p>
                         </div>
                         <div>
-                            <h4 className="font-medium text-primary mb-2">
-                                🔧 Configurable Display
-                            </h4>
-                            <p className="text-sm text-secondary">
+                            <h4 className="font-medium text-fg mb-2">🔧 Configurable Display</h4>
+                            <p className="text-sm text-fg-muted">
                                 Display templates adapt to different data types while maintaining
                                 consistent interaction patterns.
                             </p>
@@ -387,14 +381,12 @@ export default function ArrayObjectFieldPage() {
 
                 {/* Schema Transformation Section */}
                 <section className="mt-8 p-6 bg-surface rounded-lg border border-border">
-                    <h3 className="text-lg font-medium text-primary mb-4">
+                    <h3 className="text-lg font-medium text-fg mb-4">
                         Proposed Schema Transformation
                     </h3>
                     <div className="flex flex-col gap-4">
                         <div>
-                            <h4 className="font-medium text-primary mb-2">
-                                Current Schema (Legacy)
-                            </h4>
+                            <h4 className="font-medium text-fg mb-2">Current Schema (Legacy)</h4>
                             <pre className="text-xs p-3 bg-surface-alt rounded border overflow-auto">
                                 {`{
   key: 'gdrive_list',
@@ -404,7 +396,7 @@ export default function ArrayObjectFieldPage() {
                             </pre>
                         </div>
                         <div>
-                            <h4 className="font-medium text-primary mb-2">New Schema (Unified)</h4>
+                            <h4 className="font-medium text-fg mb-2">New Schema (Unified)</h4>
                             <pre className="text-xs p-3 bg-primary/15 rounded border overflow-auto">
                                 {`{
   key: 'gdrive_list',

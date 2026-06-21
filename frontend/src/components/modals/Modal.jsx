@@ -208,7 +208,7 @@ const ModalHeader = ({ children, className = '' }) => {
             {closable && (
                 <button
                     onClick={handleClose}
-                    className="flex items-center justify-center min-w-11 min-h-11 ml-3 rounded hover:bg-surface-hover text-secondary transition-colors"
+                    className="flex items-center justify-center min-w-11 min-h-11 ml-3 rounded hover:bg-surface-hover text-fg-muted transition-colors"
                     aria-label="Close modal"
                     type="button"
                 >

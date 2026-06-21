@@ -26,12 +26,10 @@ export const CardHeader = React.memo(
             >
                 <div className="flex-1 min-w-0">
                     {title && (
-                        <h3 className="m-0 text-lg font-semibold text-primary leading-snug">
-                            {title}
-                        </h3>
+                        <h3 className="m-0 text-lg font-semibold text-fg leading-snug">{title}</h3>
                     )}
                     {subtitle && (
-                        <p className="mt-1 m-0 text-sm text-secondary leading-normal">{subtitle}</p>
+                        <p className="mt-1 m-0 text-sm text-fg-muted leading-normal">{subtitle}</p>
                     )}
                 </div>
                 {action && <div className="flex-none">{action}</div>}

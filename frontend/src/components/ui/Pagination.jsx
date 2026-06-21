@@ -29,13 +29,13 @@ const Pagination = ({ currentPage, totalPages, onPageChange, className = '' }) =
             >
                 Previous
             </Button>
-            <span className="text-sm text-secondary">Page</span>
+            <span className="text-sm text-fg-muted">Page</span>
             <div className="relative">
                 <select
                     value={currentPage}
                     onChange={handleSelect}
                     aria-label="Jump to page"
-                    className="appearance-none bg-input border border-border rounded-md text-sm text-primary pl-2 pr-7 py-1 cursor-pointer hover:border-primary hover:bg-input-hover focus:ring-primary transition-colors"
+                    className="appearance-none bg-input border border-border rounded-md text-sm text-fg pl-2 pr-7 py-1 cursor-pointer hover:border-primary hover:bg-input-hover focus:ring-primary transition-colors"
                 >
                     {Array.from({ length: totalPages }, (_, i) => i + 1).map(n => (
                         <option key={n} value={n}>
@@ -44,13 +44,13 @@ const Pagination = ({ currentPage, totalPages, onPageChange, className = '' }) =
                     ))}
                 </select>
                 <span
-                    className="material-symbols-outlined absolute top-1/2 right-1 -translate-y-1/2 pointer-events-none text-secondary text-base leading-none"
+                    className="material-symbols-outlined absolute top-1/2 right-1 -translate-y-1/2 pointer-events-none text-fg-muted text-base leading-none"
                     aria-hidden="true"
                 >
                     keyboard_arrow_down
                 </span>
             </div>
-            <span className="text-sm text-secondary">of {totalPages}</span>
+            <span className="text-sm text-fg-muted">of {totalPages}</span>
             <Button
                 variant="ghost"
                 size="small"

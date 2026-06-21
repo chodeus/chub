@@ -91,18 +91,18 @@ const ModalsTestPage = () => {
 
     return (
         <div className="p-6 max-w-6xl mx-auto">
-            <h1 className="text-3xl font-bold mb-6 text-primary">Modal System Test Page</h1>
-            <p className="text-secondary mb-8">
+            <h1 className="text-3xl font-bold mb-6 text-fg">Modal System Test Page</h1>
+            <p className="text-fg-muted mb-8">
                 Comprehensive testing interface for all Modal features with real-world examples
             </p>
 
             <div className="space-y-8">
                 {/* Section A: Size Variants */}
                 <section className="border border-border rounded-lg p-6 bg-surface">
-                    <h2 className="text-2xl font-semibold mb-4 text-primary">
+                    <h2 className="text-2xl font-semibold mb-4 text-fg">
                         Section A: Size Variants Demo
                     </h2>
-                    <p className="text-secondary mb-4">
+                    <p className="text-fg-muted mb-4">
                         Four size variants: small (448px), medium (672px), large (896px), full
                         (1280px). Automatically full-width on mobile.
                     </p>
@@ -125,14 +125,14 @@ const ModalsTestPage = () => {
                                 Modal
                             </Modal.Header>
                             <Modal.Body>
-                                <p className="text-primary mb-4">
+                                <p className="text-fg mb-4">
                                     This is a <strong>{sizeModalOpen}</strong> modal variant.
                                 </p>
                                 <div className="bg-surface-elevated p-4 rounded border border-border">
-                                    <p className="text-sm text-secondary">
+                                    <p className="text-sm text-fg-muted">
                                         <strong>Size Details:</strong>
                                     </p>
-                                    <ul className="text-sm text-secondary mt-2 space-y-1">
+                                    <ul className="text-sm text-fg-muted mt-2 space-y-1">
                                         <li>
                                             • <strong>small</strong>: max-width 28rem (448px)
                                         </li>
@@ -159,10 +159,10 @@ const ModalsTestPage = () => {
 
                 {/* Section B: Controlled vs Uncontrolled */}
                 <section className="border border-border rounded-lg p-6 bg-surface">
-                    <h2 className="text-2xl font-semibold mb-4 text-primary">
+                    <h2 className="text-2xl font-semibold mb-4 text-fg">
                         Section B: Controlled vs Uncontrolled Demo
                     </h2>
-                    <p className="text-secondary mb-4">
+                    <p className="text-fg-muted mb-4">
                         Controlled mode uses <code>isOpen</code> and <code>onClose</code> props.
                         Uncontrolled mode uses <code>defaultOpen</code> prop with internal state.
                     </p>
@@ -170,17 +170,15 @@ const ModalsTestPage = () => {
                     <div className="grid md:grid-cols-2 gap-6">
                         {/* Controlled Example */}
                         <div className="border border-border-subtle rounded p-4">
-                            <h3 className="text-lg font-medium mb-3 text-primary">
-                                Controlled Mode
-                            </h3>
-                            <p className="text-sm text-secondary mb-3">
+                            <h3 className="text-lg font-medium mb-3 text-fg">Controlled Mode</h3>
+                            <p className="text-sm text-fg-muted mb-3">
                                 Parent component controls state. Modal opens/closes based on parent
                                 state changes.
                             </p>
                             <Button onClick={() => setControlledOpen(true)}>
                                 Open Controlled Modal
                             </Button>
-                            <p className="text-xs text-tertiary mt-2">
+                            <p className="text-xs text-fg-subtle mt-2">
                                 Current state: <strong>{controlledOpen ? 'Open' : 'Closed'}</strong>
                             </p>
 
@@ -191,11 +189,11 @@ const ModalsTestPage = () => {
                             >
                                 <Modal.Header>Controlled Modal</Modal.Header>
                                 <Modal.Body>
-                                    <p className="text-primary">
+                                    <p className="text-fg">
                                         This modal&apos;s state is managed by the parent component.
                                     </p>
                                     <div className="mt-4 p-3 bg-surface-elevated rounded border border-border-subtle">
-                                        <code className="text-xs text-secondary">
+                                        <code className="text-xs text-fg-muted">
                                             {`const [open, setOpen] = useState(false);`}
                                             <br />
                                             {`<Modal isOpen={open} onClose={() => setOpen(false)}>`}
@@ -215,10 +213,8 @@ const ModalsTestPage = () => {
 
                         {/* Uncontrolled Example */}
                         <div className="border border-border-subtle rounded p-4">
-                            <h3 className="text-lg font-medium mb-3 text-primary">
-                                Uncontrolled Mode
-                            </h3>
-                            <p className="text-sm text-secondary mb-3">
+                            <h3 className="text-lg font-medium mb-3 text-fg">Uncontrolled Mode</h3>
+                            <p className="text-sm text-fg-muted mb-3">
                                 Modal manages its own state internally. Use <code>defaultOpen</code>{' '}
                                 to set initial state.
                             </p>
@@ -232,10 +228,10 @@ const ModalsTestPage = () => {
 
                 {/* Section C: Close Behavior */}
                 <section className="border border-border rounded-lg p-6 bg-surface">
-                    <h2 className="text-2xl font-semibold mb-4 text-primary">
+                    <h2 className="text-2xl font-semibold mb-4 text-fg">
                         Section C: Close Behavior Demo
                     </h2>
-                    <p className="text-secondary mb-4">
+                    <p className="text-fg-muted mb-4">
                         Test different close behaviors: closable (all methods) vs non-closable
                         (backdrop and ESC disabled).
                     </p>
@@ -245,7 +241,7 @@ const ModalsTestPage = () => {
                             <Button onClick={() => setClosableOpen(true)}>
                                 Closable Modal (Default)
                             </Button>
-                            <ul className="text-sm text-secondary mt-2 space-y-1">
+                            <ul className="text-sm text-fg-muted mt-2 space-y-1">
                                 <li>✓ Click backdrop to close</li>
                                 <li>✓ Press ESC key to close</li>
                                 <li>✓ Click close button (X) to close</li>
@@ -256,7 +252,7 @@ const ModalsTestPage = () => {
                             <Button variant="danger" onClick={() => setNonClosableOpen(true)}>
                                 Non-Closable Modal
                             </Button>
-                            <ul className="text-sm text-secondary mt-2 space-y-1">
+                            <ul className="text-sm text-fg-muted mt-2 space-y-1">
                                 <li>✗ Backdrop click disabled</li>
                                 <li>✗ ESC key disabled</li>
                                 <li>✗ No close button (X)</li>
@@ -269,10 +265,8 @@ const ModalsTestPage = () => {
                     <Modal isOpen={closableOpen} onClose={() => setClosableOpen(false)}>
                         <Modal.Header>Closable Modal</Modal.Header>
                         <Modal.Body>
-                            <p className="text-primary mb-3">
-                                This modal can be closed in three ways:
-                            </p>
-                            <ol className="list-decimal list-inside text-secondary space-y-2">
+                            <p className="text-fg mb-3">This modal can be closed in three ways:</p>
+                            <ol className="list-decimal list-inside text-fg-muted space-y-2">
                                 <li>Click the backdrop (dark area outside modal)</li>
                                 <li>Press the ESC key on your keyboard</li>
                                 <li>Click the close button (X) in the header</li>
@@ -293,10 +287,10 @@ const ModalsTestPage = () => {
                     >
                         <Modal.Header>Non-Closable Modal</Modal.Header>
                         <Modal.Body>
-                            <p className="text-primary mb-3">
+                            <p className="text-fg mb-3">
                                 This modal has <code>closable=false</code>:
                             </p>
-                            <ul className="list-disc list-inside text-secondary space-y-2">
+                            <ul className="list-disc list-inside text-fg-muted space-y-2">
                                 <li>No close button (X) in header</li>
                                 <li>Backdrop click does nothing</li>
                                 <li>ESC key does nothing</li>
@@ -319,10 +313,10 @@ const ModalsTestPage = () => {
 
                 {/* Section D: Content Examples */}
                 <section className="border border-border rounded-lg p-6 bg-surface">
-                    <h2 className="text-2xl font-semibold mb-4 text-primary">
+                    <h2 className="text-2xl font-semibold mb-4 text-fg">
                         Section D: Content Examples
                     </h2>
-                    <p className="text-secondary mb-6">
+                    <p className="text-fg-muted mb-6">
                         Real-world modal content patterns: confirmation, forms, long content, footer
                         alignments, and complex content.
                     </p>
@@ -330,10 +324,10 @@ const ModalsTestPage = () => {
                     <div className="space-y-6">
                         {/* D1: Simple Confirmation */}
                         <div className="border border-border-subtle rounded p-4">
-                            <h3 className="text-lg font-medium mb-2 text-primary">
+                            <h3 className="text-lg font-medium mb-2 text-fg">
                                 D1: Simple Confirmation
                             </h3>
-                            <p className="text-sm text-secondary mb-3">
+                            <p className="text-sm text-fg-muted mb-3">
                                 Small modal with confirm/cancel buttons for destructive actions.
                             </p>
                             <Button variant="danger" onClick={() => setConfirmOpen(true)}>
@@ -347,10 +341,10 @@ const ModalsTestPage = () => {
                             >
                                 <Modal.Header>Confirm Action</Modal.Header>
                                 <Modal.Body>
-                                    <p className="text-primary mb-3">
+                                    <p className="text-fg mb-3">
                                         Are you sure you want to delete this item?
                                     </p>
-                                    <p className="text-sm text-secondary">
+                                    <p className="text-sm text-fg-muted">
                                         This action cannot be undone.
                                     </p>
                                 </Modal.Body>
@@ -370,10 +364,10 @@ const ModalsTestPage = () => {
 
                         {/* D2: Form Modal */}
                         <div className="border border-border-subtle rounded p-4">
-                            <h3 className="text-lg font-medium mb-2 text-primary">
+                            <h3 className="text-lg font-medium mb-2 text-fg">
                                 D2: Form Modal with Field Registry
                             </h3>
-                            <p className="text-sm text-secondary mb-3">
+                            <p className="text-sm text-fg-muted mb-3">
                                 Medium modal with Field Registry integration (3 fields).
                             </p>
                             <Button onClick={() => setFormOpen(true)}>Edit User</Button>
@@ -417,10 +411,10 @@ const ModalsTestPage = () => {
 
                         {/* D3: Long Content Scrolling */}
                         <div className="border border-border-subtle rounded p-4">
-                            <h3 className="text-lg font-medium mb-2 text-primary">
+                            <h3 className="text-lg font-medium mb-2 text-fg">
                                 D3: Long Content Scrolling
                             </h3>
-                            <p className="text-sm text-secondary mb-3">
+                            <p className="text-sm text-fg-muted mb-3">
                                 Modal with 50+ paragraphs to test scrolling behavior and focus trap.
                             </p>
                             <Button onClick={() => setLongContentOpen(true)}>
@@ -435,7 +429,7 @@ const ModalsTestPage = () => {
                                 <Modal.Header>Terms and Conditions</Modal.Header>
                                 <Modal.Body>
                                     {Array.from({ length: 50 }, (_, i) => (
-                                        <p key={i} className="text-secondary mb-3">
+                                        <p key={i} className="text-fg-muted mb-3">
                                             <strong>Section {i + 1}:</strong> Lorem ipsum dolor sit
                                             amet, consectetur adipiscing elit. Sed do eiusmod tempor
                                             incididunt ut labore et dolore magna aliqua. Ut enim ad
@@ -460,10 +454,10 @@ const ModalsTestPage = () => {
 
                         {/* D4: Footer Alignment Variations */}
                         <div className="border border-border-subtle rounded p-4">
-                            <h3 className="text-lg font-medium mb-2 text-primary">
+                            <h3 className="text-lg font-medium mb-2 text-fg">
                                 D4: Footer Alignment Variations
                             </h3>
-                            <p className="text-sm text-secondary mb-3">
+                            <p className="text-sm text-fg-muted mb-3">
                                 Examples with align=&quot;left&quot;, &quot;center&quot;,
                                 &quot;right&quot;, &quot;space-between&quot;.
                             </p>
@@ -490,7 +484,7 @@ const ModalsTestPage = () => {
                                 >
                                     <Modal.Header>Footer Alignment: {footerAlignOpen}</Modal.Header>
                                     <Modal.Body>
-                                        <p className="text-primary">
+                                        <p className="text-fg">
                                             This modal demonstrates{' '}
                                             <code>align=&quot;{footerAlignOpen}&quot;</code> footer
                                             alignment.
@@ -513,10 +507,10 @@ const ModalsTestPage = () => {
 
                         {/* D5: No Footer Modal */}
                         <div className="border border-border-subtle rounded p-4">
-                            <h3 className="text-lg font-medium mb-2 text-primary">
+                            <h3 className="text-lg font-medium mb-2 text-fg">
                                 D5: No Footer Modal
                             </h3>
-                            <p className="text-sm text-secondary mb-3">
+                            <p className="text-sm text-fg-muted mb-3">
                                 Modal without Modal.Footer - content only with close button.
                             </p>
                             <Button onClick={() => setNoFooterOpen(true)}>
@@ -530,15 +524,15 @@ const ModalsTestPage = () => {
                             >
                                 <Modal.Header>Information</Modal.Header>
                                 <Modal.Body>
-                                    <p className="text-primary mb-4">
+                                    <p className="text-fg mb-4">
                                         This modal has no footer section. It uses only the close
                                         button (X) in the header for dismissal.
                                     </p>
                                     <div className="bg-surface-elevated p-4 rounded border border-border">
-                                        <p className="text-sm text-secondary">
+                                        <p className="text-sm text-fg-muted">
                                             <strong>Use cases for no-footer modals:</strong>
                                         </p>
-                                        <ul className="text-sm text-secondary mt-2 space-y-1 list-disc list-inside">
+                                        <ul className="text-sm text-fg-muted mt-2 space-y-1 list-disc list-inside">
                                             <li>Information displays</li>
                                             <li>Image galleries</li>
                                             <li>Read-only content</li>
@@ -551,10 +545,10 @@ const ModalsTestPage = () => {
 
                         {/* D6: Complex Content */}
                         <div className="border border-border-subtle rounded p-4">
-                            <h3 className="text-lg font-medium mb-2 text-primary">
+                            <h3 className="text-lg font-medium mb-2 text-fg">
                                 D6: Complex Content (Accordion Inside)
                             </h3>
-                            <p className="text-sm text-secondary mb-3">
+                            <p className="text-sm text-fg-muted mb-3">
                                 Modal with nested accordion components for complex content
                                 organization.
                             </p>
@@ -571,7 +565,7 @@ const ModalsTestPage = () => {
                                         <AccordionItem defaultExpanded={true}>
                                             <AccordionItem.Header className="list-none">
                                                 <div className="w-full px-4 py-3 bg-surface hover:bg-surface-hover flex items-center justify-between min-h-11">
-                                                    <span className="font-medium text-primary">
+                                                    <span className="font-medium text-fg">
                                                         General Settings
                                                     </span>
                                                     <span className="material-symbols-outlined transition-transform duration-200">
@@ -581,7 +575,7 @@ const ModalsTestPage = () => {
                                             </AccordionItem.Header>
                                             <AccordionItem.Body>
                                                 <div className="bg-surface-elevated border-t border-border-subtle p-4">
-                                                    <p className="text-secondary">
+                                                    <p className="text-fg-muted">
                                                         General configuration options go here.
                                                     </p>
                                                 </div>
@@ -591,7 +585,7 @@ const ModalsTestPage = () => {
                                         <AccordionItem>
                                             <AccordionItem.Header className="list-none">
                                                 <div className="w-full px-4 py-3 bg-surface hover:bg-surface-hover flex items-center justify-between min-h-11">
-                                                    <span className="font-medium text-primary">
+                                                    <span className="font-medium text-fg">
                                                         Advanced Settings
                                                     </span>
                                                     <span className="material-symbols-outlined transition-transform duration-200">
@@ -601,7 +595,7 @@ const ModalsTestPage = () => {
                                             </AccordionItem.Header>
                                             <AccordionItem.Body>
                                                 <div className="bg-surface-elevated border-t border-border-subtle p-4">
-                                                    <p className="text-secondary">
+                                                    <p className="text-fg-muted">
                                                         Advanced configuration options go here.
                                                     </p>
                                                 </div>
@@ -611,7 +605,7 @@ const ModalsTestPage = () => {
                                         <AccordionItem>
                                             <AccordionItem.Header className="list-none">
                                                 <div className="w-full px-4 py-3 bg-surface hover:bg-surface-hover flex items-center justify-between min-h-11">
-                                                    <span className="font-medium text-primary">
+                                                    <span className="font-medium text-fg">
                                                         Notifications
                                                     </span>
                                                     <span className="material-symbols-outlined transition-transform duration-200">
@@ -621,7 +615,7 @@ const ModalsTestPage = () => {
                                             </AccordionItem.Header>
                                             <AccordionItem.Body>
                                                 <div className="bg-surface-elevated border-t border-border-subtle p-4">
-                                                    <p className="text-secondary">
+                                                    <p className="text-fg-muted">
                                                         Notification preferences go here.
                                                     </p>
                                                 </div>
@@ -647,16 +641,16 @@ const ModalsTestPage = () => {
 
                 {/* Section E: Accessibility */}
                 <section className="border border-border rounded-lg p-6 bg-surface">
-                    <h2 className="text-2xl font-semibold mb-4 text-primary">
+                    <h2 className="text-2xl font-semibold mb-4 text-fg">
                         Section E: Accessibility Demonstration
                     </h2>
 
                     <div className="space-y-4">
                         <div className="bg-surface-elevated p-4 rounded border border-border">
-                            <h3 className="text-lg font-medium mb-3 text-primary">
+                            <h3 className="text-lg font-medium mb-3 text-fg">
                                 Keyboard Navigation
                             </h3>
-                            <ul className="text-sm text-secondary space-y-2">
+                            <ul className="text-sm text-fg-muted space-y-2">
                                 <li>
                                     <strong>Tab</strong>: Navigate through focusable elements
                                     (buttons, inputs)
@@ -674,22 +668,22 @@ const ModalsTestPage = () => {
                         </div>
 
                         <div className="bg-surface-elevated p-4 rounded border border-border">
-                            <h3 className="text-lg font-medium mb-3 text-primary">Focus Trap</h3>
-                            <p className="text-sm text-secondary mb-2">
+                            <h3 className="text-lg font-medium mb-3 text-fg">Focus Trap</h3>
+                            <p className="text-sm text-fg-muted mb-2">
                                 When a modal is open, keyboard focus is trapped inside the modal.
                                 You cannot tab to elements outside the modal until it is closed.
                             </p>
-                            <p className="text-sm text-secondary">
+                            <p className="text-sm text-fg-muted">
                                 <strong>Test:</strong> Open any modal above and try tabbing through
                                 elements. Focus should cycle within the modal only.
                             </p>
                         </div>
 
                         <div className="bg-surface-elevated p-4 rounded border border-border">
-                            <h3 className="text-lg font-medium mb-3 text-primary">
+                            <h3 className="text-lg font-medium mb-3 text-fg">
                                 Screen Reader Support
                             </h3>
-                            <ul className="text-sm text-secondary space-y-2">
+                            <ul className="text-sm text-fg-muted space-y-2">
                                 <li>
                                     <strong>role=&quot;dialog&quot;</strong>: Announces modal as
                                     dialog
@@ -709,11 +703,9 @@ const ModalsTestPage = () => {
                         </div>
 
                         <div className="bg-surface-elevated p-4 rounded border border-border">
-                            <h3 className="text-lg font-medium mb-3 text-primary">
-                                ARIA Attributes
-                            </h3>
+                            <h3 className="text-lg font-medium mb-3 text-fg">ARIA Attributes</h3>
                             <div className="text-xs font-mono bg-bg/50 p-3 rounded border border-border-subtle">
-                                <code className="text-secondary">
+                                <code className="text-fg-muted">
                                     {`<div role="dialog" aria-modal="true" aria-labelledby="modal-title">`}
                                     <br />
                                     {`  <div id="modal-title">Modal Title</div>`}
@@ -729,19 +721,19 @@ const ModalsTestPage = () => {
 
                 {/* Section F: Performance */}
                 <section className="border border-border rounded-lg p-6 bg-surface">
-                    <h2 className="text-2xl font-semibold mb-4 text-primary">
+                    <h2 className="text-2xl font-semibold mb-4 text-fg">
                         Section F: Performance Notes
                     </h2>
 
                     <div className="space-y-4">
                         <div className="bg-surface-elevated p-4 rounded border border-border">
-                            <h3 className="text-lg font-medium mb-3 text-primary">
+                            <h3 className="text-lg font-medium mb-3 text-fg">
                                 Animation Smoothness
                             </h3>
-                            <p className="text-sm text-secondary mb-2">
+                            <p className="text-sm text-fg-muted mb-2">
                                 Modal uses CSS transitions for smooth open/close animations:
                             </p>
-                            <ul className="text-sm text-secondary space-y-1 list-disc list-inside">
+                            <ul className="text-sm text-fg-muted space-y-1 list-disc list-inside">
                                 <li>200ms duration for modal container transform</li>
                                 <li>200ms duration for backdrop opacity</li>
                                 <li>Hardware-accelerated transforms for 60fps performance</li>
@@ -749,8 +741,8 @@ const ModalsTestPage = () => {
                         </div>
 
                         <div className="bg-surface-elevated p-4 rounded border border-border">
-                            <h3 className="text-lg font-medium mb-3 text-primary">Stress Test</h3>
-                            <p className="text-sm text-secondary mb-3">
+                            <h3 className="text-lg font-medium mb-3 text-fg">Stress Test</h3>
+                            <p className="text-sm text-fg-muted mb-3">
                                 Open and close a modal 10 times rapidly to test animation
                                 performance and memory handling.
                             </p>
@@ -763,7 +755,7 @@ const ModalsTestPage = () => {
                                     {stressTestRunning ? 'Running...' : 'Run Stress Test'}
                                 </Button>
                                 {stressTestCount > 0 && (
-                                    <span className="text-sm text-secondary">
+                                    <span className="text-sm text-fg-muted">
                                         Completed: {stressTestCount}/10
                                     </span>
                                 )}
@@ -771,10 +763,10 @@ const ModalsTestPage = () => {
                         </div>
 
                         <div className="bg-surface-elevated p-4 rounded border border-border">
-                            <h3 className="text-lg font-medium mb-3 text-primary">
+                            <h3 className="text-lg font-medium mb-3 text-fg">
                                 Performance Metrics
                             </h3>
-                            <ul className="text-sm text-secondary space-y-2">
+                            <ul className="text-sm text-fg-muted space-y-2">
                                 <li>
                                     <strong>Portal Rendering:</strong> Modal rendered via React
                                     Portal to #modal-root

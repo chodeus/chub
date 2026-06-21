@@ -86,7 +86,7 @@ export const BulkSelectList = React.memo(
             <div className="border border-border rounded-lg bg-surface-alt overflow-hidden">
                 <button
                     type="button"
-                    className="w-full flex items-center justify-between p-3 min-h-11 cursor-pointer text-sm font-medium text-primary hover:bg-surface-hover transition-colors"
+                    className="w-full flex items-center justify-between p-3 min-h-11 cursor-pointer text-sm font-medium text-fg hover:bg-surface-hover transition-colors"
                     onClick={() => setOpen(o => !o)}
                     aria-expanded={open}
                 >
@@ -101,9 +101,9 @@ export const BulkSelectList = React.memo(
                         {headerSlot}
 
                         {loading ? (
-                            <div className="text-sm text-secondary">Loading…</div>
+                            <div className="text-sm text-fg-muted">Loading…</div>
                         ) : !hasItems ? (
-                            <div className="text-sm text-secondary">{emptyMessage}</div>
+                            <div className="text-sm text-fg-muted">{emptyMessage}</div>
                         ) : (
                             groups
                                 .filter(g => (g.items || []).length > 0)
@@ -114,7 +114,7 @@ export const BulkSelectList = React.memo(
                                     return (
                                         <div key={group.key} className="flex flex-col gap-2">
                                             {group.label && (
-                                                <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-secondary uppercase">
+                                                <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-fg-muted uppercase">
                                                     <CheckboxBase
                                                         id={`bulk-group-${group.key}`}
                                                         name={`bulk-group-${group.key}`}
@@ -146,17 +146,17 @@ export const BulkSelectList = React.memo(
                                                             onChange={() => toggleItem(item.value)}
                                                         />
                                                         <span className="flex flex-col min-w-0">
-                                                            <span className="text-sm text-primary truncate">
+                                                            <span className="text-sm text-fg truncate">
                                                                 {item.label}
                                                                 {item.disabled && (
-                                                                    <span className="text-secondary">
+                                                                    <span className="text-fg-muted">
                                                                         {' '}
                                                                         (Already added)
                                                                     </span>
                                                                 )}
                                                             </span>
                                                             {item.sublabel && (
-                                                                <span className="text-xs text-secondary truncate">
+                                                                <span className="text-xs text-fg-muted truncate">
                                                                     {item.sublabel}
                                                                 </span>
                                                             )}
@@ -170,7 +170,7 @@ export const BulkSelectList = React.memo(
                         )}
 
                         {addDisabledReason && !canAdd && (
-                            <div className="text-xs text-secondary">{addDisabledReason}</div>
+                            <div className="text-xs text-fg-muted">{addDisabledReason}</div>
                         )}
 
                         <div className="flex justify-end">
