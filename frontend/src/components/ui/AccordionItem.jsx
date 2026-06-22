@@ -125,10 +125,7 @@ const AccordionBody = ({ children, className = '' }) => {
     const { isExpanded } = context;
 
     return (
-        <div
-            className={className}
-            aria-hidden={!isExpanded}
-        >
+        <div className={className} aria-hidden={!isExpanded}>
             {children}
         </div>
     );

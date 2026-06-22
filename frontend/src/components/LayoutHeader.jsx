@@ -207,15 +207,10 @@ const LayoutHeader = React.memo(() => {
                         aria-label={`Switch to ${isDarkTheme ? 'light' : 'dark'} theme`}
                         title={`Current: ${getThemeDisplayText()}. Click to toggle theme.`}
                     >
-                        <span
-                            className="material-symbols-outlined"
-                            aria-hidden="true"
-                        >
+                        <span className="material-symbols-outlined" aria-hidden="true">
                             {getThemeIconName()}
                         </span>
-                        <span className="max-sm:hidden">
-                            {getThemeDisplayText()}
-                        </span>
+                        <span className="max-sm:hidden">{getThemeDisplayText()}</span>
                     </button>
                 </div>
             </div>

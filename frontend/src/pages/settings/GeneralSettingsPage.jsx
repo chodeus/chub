@@ -331,9 +331,7 @@ export const GeneralSettingsPage = () => {
                                     }
 
                                     return (
-                                        <div
-                                            key={`field-${module.key}-${field.key}-${fieldIndex}`}
-                                        >
+                                        <div key={`field-${module.key}-${field.key}-${fieldIndex}`}>
                                             <MemoizedFieldComponent
                                                 field={{
                                                     ...field,
