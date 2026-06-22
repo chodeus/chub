@@ -204,7 +204,7 @@ export const LogLine = React.memo(
             });
         }, [segments, searchTerm]);
 
-        return <div className="log-line">{renderedSegments}</div>;
+        return <div>{renderedSegments}</div>;
     },
     // Custom comparison: only re-render if line or searchTerm changed
     (prevProps, nextProps) => {

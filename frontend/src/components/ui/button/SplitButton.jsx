@@ -41,15 +41,15 @@ export const SplitButton = React.memo(
         }, []);
 
         return (
-            <div className="split-button" ref={dropdownRef}>
-                <div className="split-button__group">
+            <div className="relative inline-block" ref={dropdownRef}>
+                <div className="inline-flex items-center">
                     <Button
                         onClick={onClick}
                         variant={variant}
                         size={size}
                         disabled={disabled}
                         icon={icon}
-                        className="split-button__primary"
+                        className="rounded-r-none"
                     >
                         {children}
                     </Button>
@@ -62,16 +62,16 @@ export const SplitButton = React.memo(
                         aria-label="Show more options"
                         aria-expanded={isOpen}
                         aria-haspopup="true"
-                        className="split-button__toggle"
+                        className="rounded-l-none -ml-px"
                     />
                 </div>
 
                 {isOpen && options.length > 0 && (
-                    <div className="split-button__dropdown" role="menu">
+                    <div className="absolute right-0 mt-1 min-w-[12rem] bg-surface-elevated border border-border rounded-lg shadow-lg z-dropdown py-1" role="menu">
                         {options.map((option, index) => (
                             <button
                                 key={index}
-                                className="split-button__option"
+                                className="flex w-full items-center gap-2 px-3 py-2 text-sm text-fg text-left hover:bg-surface-hover"
                                 onClick={() => handleOptionClick(option.onClick)}
                                 role="menuitem"
                             >
