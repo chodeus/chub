@@ -68,6 +68,15 @@
     --color-default: var(--border); /* legacy alias (.border-default) */
     --color-input-error: var(--error); /* legacy alias (.border-input-error) */
 
+    /* legacy aliases for develop-only/missed classes the migration dropped:
+       .bg-error-bg, .bg-warning-bg, .border-error-border,
+       .text-sidebar-secondary, .bg-primary-hover (mirrors old colors.css) */
+    --color-error-bg: color-mix(in srgb, var(--error) 10%, transparent);
+    --color-warning-bg: color-mix(in srgb, var(--warning) 10%, transparent);
+    --color-error-border: var(--error);
+    --color-sidebar-secondary: var(--sidebar-text-secondary);
+    --color-primary-hover: var(--focus);
+
     /* form controls */
     --color-input: var(--input-bg);
     --color-input-hover: var(--input-bg-hover);
@@ -149,6 +158,10 @@
 @utility rounded-full {
     border-radius: 9999px;
 }
+@utility rounded-l-lg {
+    border-top-left-radius: 0.75rem;
+    border-bottom-left-radius: 0.75rem;
+}
 
 /* Named component sizes (utilities/sizing.css). */
 @utility max-w-dropdown {
@@ -163,8 +176,49 @@
 @utility transition-input {
     transition: all 150ms ease-in-out;
 }
+@utility transition-fast {
+    transition: all 150ms ease-in-out;
+}
 @utility font-display {
     font-family: var(--font-display);
+}
+
+/* Named sizes + grid templates (utilities/sizing.css, utilities/layout.css). */
+@utility h-input {
+    height: 44px;
+}
+@utility min-h-input {
+    min-height: 44px;
+}
+@utility min-h-content {
+    min-height: 400px;
+}
+@utility icon-md {
+    width: 20px;
+    height: 20px;
+}
+@utility truncate-start {
+    direction: rtl;
+    text-align: left;
+    unicode-bidi: plaintext;
+}
+@utility grid-cols-auto {
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+@utility grid-cols-auto-fit-xs {
+    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+}
+@utility grid-cols-auto-fit-sm {
+    grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+}
+@utility grid-cols-auto-fit-md {
+    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+}
+@utility grid-cols-auto-fit-lg {
+    grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+}
+@utility grid-cols-auto-fit-xl {
+    grid-template-columns: repeat(auto-fit, minmax(24rem, 1fr));
 }
 
 /* Box-shadow ring utilities — legacy used a box-shadow ring, NOT Tailwind's
@@ -188,6 +242,32 @@
     }
     .focus-within\:ring-1:focus-within {
         box-shadow: 0 0 0 1px rgb(0 0 0 / 10%);
+    }
+
+    /* Skip link (utilities/accessibility.css) — off-screen until focused.
+       Without this the link in Layout.jsx renders visibly on every page. */
+    .skip-link {
+        position: absolute;
+        top: -100px;
+        left: 1rem;
+        z-index: 800; /* .z-tooltip level */
+        padding: 0.75rem 1rem;
+        background: var(--primary);
+        color: var(--primary-text);
+        text-decoration: none;
+        border-radius: 0.25rem;
+        font-weight: 500;
+        font-size: 1rem;
+        line-height: 1.5;
+        white-space: nowrap;
+        transform: translateY(-100%);
+        transition: transform 150ms cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .skip-link:focus {
+        top: 1rem;
+        transform: translateY(0);
+        outline: 2px solid var(--focus);
+        outline-offset: 2px;
     }
 }
 
@@ -246,5 +326,27 @@
     -ms-overflow-style: none;
     &::-webkit-scrollbar {
         display: none;
+    }
+}
+
+/* Animations (utilities/animations.css). */
+@keyframes slide-down {
+    from {
+        opacity: 0;
+        transform: translateY(-0.5rem);
+        max-height: 0;
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+        max-height: 500px;
+    }
+}
+@utility animate-slide-down {
+    animation: slide-down 240ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+    .animate-slide-down {
+        animation: none !important;
     }
 }
