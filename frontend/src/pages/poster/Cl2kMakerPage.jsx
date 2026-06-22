@@ -107,7 +107,7 @@ const SourceSelector = ({ value, onChange, sources = ART_SOURCES }) => (
                 className={`inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md border ${
                     value === s.key
                         ? 'bg-primary text-white border-primary'
-                        : 'bg-surface text-secondary border-border hover:border-border-strong'
+                        : 'bg-surface text-fg-muted border-border hover:border-border-strong'
                 }`}
                 title={s.label}
             >
@@ -476,26 +476,26 @@ const ConfigBanner = ({ config, uploadStatus }) => {
     const uploadNoToken = uploadStatus?.upload_to_gdrive && uploadStatus?.token_ok === false;
     return (
         <section className="mt-4 p-3 bg-surface border border-border rounded-lg text-sm">
-            <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-secondary">
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-fg-muted">
                 <span>
-                    <span className="text-tertiary">Output dir: </span>
+                    <span className="text-fg-subtle">Output dir: </span>
                     {config.output_dir ? (
-                        <span className="font-mono text-primary">{config.output_dir}</span>
+                        <span className="font-mono text-fg">{config.output_dir}</span>
                     ) : (
                         <span className="text-error">not configured</span>
                     )}
                 </span>
                 <span>
-                    <span className="text-tertiary">Whiten logo: </span>
-                    <span className="text-primary">{config.whiten_logo ? 'yes' : 'no'}</span>
+                    <span className="text-fg-subtle">Whiten logo: </span>
+                    <span className="text-fg">{config.whiten_logo ? 'yes' : 'no'}</span>
                 </span>
                 <span>
-                    <span className="text-tertiary">AI provider: </span>
-                    <span className="text-primary">{config.ai_provider || 'none'}</span>
+                    <span className="text-fg-subtle">AI provider: </span>
+                    <span className="text-fg">{config.ai_provider || 'none'}</span>
                 </span>
                 <Link
                     to="/settings/modules"
-                    className="text-primary underline hover:no-underline ml-auto"
+                    className="text-fg underline hover:no-underline ml-auto"
                 >
                     Edit in Module Settings →
                 </Link>
@@ -509,10 +509,7 @@ const ConfigBanner = ({ config, uploadStatus }) => {
                 <div className="mt-2 text-xs text-warning">
                     Google Drive upload is enabled, but no usable Sync GDrive OAuth token is set —
                     uploads will fail. Add a token under{' '}
-                    <Link
-                        to="/settings/modules"
-                        className="text-primary underline hover:no-underline"
-                    >
+                    <Link to="/settings/modules" className="text-fg underline hover:no-underline">
                         Sync GDrive
                     </Link>{' '}
                     (a service account can’t own files in a personal Drive). Generation still
@@ -564,9 +561,9 @@ const SaveTargets = ({ targets }) => {
     const tokenOk = uploadStatus?.token_ok !== false;
     return (
         <div className="border-t border-border-subtle pt-2 mt-1 flex flex-col gap-1">
-            <span className="text-xs font-medium text-secondary">Save to</span>
+            <span className="text-xs font-medium text-fg-muted">Save to</span>
             <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
-                <label className="flex items-center gap-2 text-sm text-primary">
+                <label className="flex items-center gap-2 text-sm text-fg">
                     <input
                         type="checkbox"
                         checked={saveLocal}
@@ -575,7 +572,7 @@ const SaveTargets = ({ targets }) => {
                     Output directory
                 </label>
                 <label
-                    className={`flex items-center gap-2 text-sm text-primary ${
+                    className={`flex items-center gap-2 text-sm text-fg ${
                         folderSet ? '' : 'opacity-60'
                     }`}
                 >
@@ -589,9 +586,9 @@ const SaveTargets = ({ targets }) => {
                 </label>
             </div>
             {!folderSet && (
-                <p className="text-xs text-tertiary">
+                <p className="text-xs text-fg-subtle">
                     Set a Drive folder under{' '}
-                    <Link to="/settings/modules" className="text-primary underline">
+                    <Link to="/settings/modules" className="text-fg underline">
                         Module Settings
                     </Link>{' '}
                     to enable Drive upload.
@@ -699,14 +696,14 @@ const TitlePicker = ({ onPick, toast }) => {
 
     return (
         <section className="mt-6 p-4 bg-surface border border-border rounded-lg">
-            <h2 className="text-lg font-semibold text-primary mb-3">Pick a title</h2>
+            <h2 className="text-lg font-semibold text-fg mb-3">Pick a title</h2>
 
             <div className="flex items-center gap-2 mb-3">
-                <span className="text-sm text-secondary">Type</span>
+                <span className="text-sm text-fg-muted">Type</span>
                 <select
                     value={kind}
                     onChange={e => setKind(e.target.value)}
-                    className="bg-surface border border-border rounded px-2 py-1 text-sm text-primary"
+                    className="bg-surface border border-border rounded px-2 py-1 text-sm text-fg"
                 >
                     {KIND_OPTIONS.map(o => (
                         <option key={o.value} value={o.value}>
@@ -722,7 +719,7 @@ const TitlePicker = ({ onPick, toast }) => {
                     value={query}
                     onChange={e => setQuery(e.target.value)}
                     placeholder="Search TMDB by title…"
-                    className="flex-1 bg-surface border border-border rounded px-3 py-2 text-sm text-primary"
+                    className="flex-1 bg-surface border border-border rounded px-3 py-2 text-sm text-fg"
                 />
                 <LoadingButton type="submit" loading={searching} icon="search">
                     Search
@@ -744,8 +741,8 @@ const TitlePicker = ({ onPick, toast }) => {
                                         picking ? 'opacity-60 cursor-wait' : ''
                                     }`}
                                 >
-                                    <span className="text-primary truncate">{title}</span>
-                                    <span className="text-xs text-tertiary shrink-0">
+                                    <span className="text-fg truncate">{title}</span>
+                                    <span className="text-xs text-fg-subtle shrink-0">
                                         {date ? date.slice(0, 4) : '—'} · #{r.id}
                                     </span>
                                 </button>
@@ -756,7 +753,7 @@ const TitlePicker = ({ onPick, toast }) => {
             )}
 
             <div className="border-t border-border-subtle pt-3">
-                <div className="text-sm text-secondary mb-2">
+                <div className="text-sm text-fg-muted mb-2">
                     …or paste a TMDB / TVDB / IMDB ID or URL
                 </div>
                 <div className="flex gap-2">
@@ -765,7 +762,7 @@ const TitlePicker = ({ onPick, toast }) => {
                         value={paste}
                         onChange={e => setPaste(e.target.value)}
                         placeholder="e.g. 603, tt0133093, or a themoviedb.org URL"
-                        className="flex-1 bg-surface border border-border rounded px-3 py-2 text-sm text-primary"
+                        className="flex-1 bg-surface border border-border rounded px-3 py-2 text-sm text-fg"
                     />
                     <LoadingButton
                         onClick={runPaste}
@@ -788,17 +785,16 @@ const TitlePicker = ({ onPick, toast }) => {
 const IdEditor = ({ item, onItemChange }) => {
     const numOrNull = v => (String(v).trim() === '' ? null : Number(v));
     const strOrNull = v => (String(v).trim() === '' ? null : String(v).trim());
-    const inputCls =
-        'flex-1 bg-surface border border-border rounded px-2 py-1 text-sm text-primary';
+    const inputCls = 'flex-1 bg-surface border border-border rounded px-2 py-1 text-sm text-fg';
     const row = (lbl, el) => (
-        <label className="flex items-center gap-2 text-sm text-secondary">
+        <label className="flex items-center gap-2 text-sm text-fg-muted">
             <span className="w-16 shrink-0">{lbl}</span>
             {el}
         </label>
     );
     return (
         <div className="mt-3 pt-3 border-t border-border-subtle flex flex-col gap-2">
-            <p className="text-xs text-tertiary">
+            <p className="text-xs text-fg-subtle">
                 Set the ids that match your library — only the ids you fill get written to the
                 filename. For a TVDB-only title (no TMDB entry), clear TMDB and add TVDB/IMDB.
             </p>
@@ -1488,13 +1484,13 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             <section className="mt-6 p-4 bg-surface border border-border rounded-lg">
                 <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
-                        <div className="text-lg font-semibold text-primary truncate">
+                        <div className="text-lg font-semibold text-fg truncate">
                             {item.title || `TMDB #${item.tmdb_id}`}
                             {item.year ? (
-                                <span className="text-tertiary font-normal"> ({item.year})</span>
+                                <span className="text-fg-subtle font-normal"> ({item.year})</span>
                             ) : null}
                         </div>
-                        <div className="text-xs text-tertiary mt-0.5">
+                        <div className="text-xs text-fg-subtle mt-0.5">
                             {item.kind}
                             {item.tmdb_id ? ` · TMDB ${item.tmdb_id}` : ''}
                             {item.tvdb_id ? ` · TVDB ${item.tvdb_id}` : ''}
@@ -1527,7 +1523,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                         `inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm border transition-colors ${
                             on
                                 ? 'bg-primary text-white border-primary'
-                                : 'bg-surface text-secondary border-border hover:border-border-strong'
+                                : 'bg-surface text-fg-muted border-border hover:border-border-strong'
                         }`;
                     return (
                         <button
@@ -2169,7 +2165,7 @@ const RenderPanel = ({
             {/* Output mode — full CL2K render vs. file the image as-is. */}
             <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-2">
                 <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-primary">Output</span>
+                    <span className="text-sm font-medium text-fg">Output</span>
                     <Button
                         variant={outputMode === 'cl2k' ? 'primary' : 'secondary'}
                         size="small"
@@ -2193,7 +2189,7 @@ const RenderPanel = ({
                         File as-is
                     </Button>
                 </div>
-                <p className="text-xs text-tertiary">
+                <p className="text-xs text-fg-subtle">
                     {isAsis
                         ? 'Upload a finished poster built outside CHUB and file it unchanged (the optional CL2K border is the only edit). Saves to your output dir and/or GDrive.'
                         : 'The full CL2K treatment: framing + clear logo + gradient + season band + border.'}
@@ -2210,7 +2206,7 @@ const RenderPanel = ({
                             loading={false}
                             selected={backdrop}
                             onSelect={setBackdrop}
-                            aspect="aspect-poster"
+                            aspect="aspect-[2/3]"
                             emptyText="No TMDB season posters."
                         />
                     )}
@@ -2236,7 +2232,7 @@ const RenderPanel = ({
                     ) : backdropSource === 'gdrive' ? (
                         <div className="bg-surface border border-border rounded-lg p-3">
                             <div className="flex items-center justify-between gap-2 mb-2">
-                                <h3 className="text-sm font-medium text-primary">{bdLabel}</h3>
+                                <h3 className="text-sm font-medium text-fg">{bdLabel}</h3>
                                 {bdSel}
                             </div>
                             {customBackdrop ? (
@@ -2246,7 +2242,7 @@ const RenderPanel = ({
                                         alt="Grabbed"
                                         className="h-16 w-auto max-w-[60%] object-contain rounded"
                                     />
-                                    <span className="flex-1 truncate text-xs text-secondary">
+                                    <span className="flex-1 truncate text-xs text-fg-muted">
                                         {customBackdrop.name}
                                     </span>
                                     <Button
@@ -2259,9 +2255,9 @@ const RenderPanel = ({
                                     </Button>
                                 </div>
                             ) : gdriveLoading || gdrivePosters === null ? (
-                                <div className="text-xs text-tertiary py-4">Searching…</div>
+                                <div className="text-xs text-fg-subtle py-4">Searching…</div>
                             ) : gdrivePosters.length === 0 ? (
-                                <div className="text-xs text-tertiary py-2">
+                                <div className="text-xs text-fg-subtle py-2">
                                     No synced posters match this title. Only images already pulled
                                     by Sync GDrive appear here.
                                 </div>
@@ -2305,7 +2301,7 @@ const RenderPanel = ({
                                 </div>
                             )}
                             {importing && (
-                                <div className="text-xs text-tertiary mt-2">
+                                <div className="text-xs text-fg-subtle mt-2">
                                     Importing full-resolution poster…
                                 </div>
                             )}
@@ -2333,7 +2329,7 @@ const RenderPanel = ({
                                     loading={loadingArt}
                                     selected={backdrop}
                                     onSelect={setBackdrop}
-                                    aspect="aspect-poster"
+                                    aspect="aspect-[2/3]"
                                     emptyText="No posters from this source."
                                 />
                             )}
@@ -2413,12 +2409,12 @@ const RenderPanel = ({
 
                     {!isAsis && item.kind !== 'collection' && (
                         <div className="bg-surface border border-border rounded-lg p-3">
-                            <label className="flex items-center gap-2 text-sm text-secondary">
-                                <span className="w-28 text-primary font-medium">Banner</span>
+                            <label className="flex items-center gap-2 text-sm text-fg-muted">
+                                <span className="w-28 text-fg font-medium">Banner</span>
                                 <select
                                     value={bandLabel}
                                     onChange={e => setBandLabel(e.target.value)}
-                                    className="flex-1 bg-surface border border-border rounded px-2 py-1 text-sm text-primary"
+                                    className="flex-1 bg-surface border border-border rounded px-2 py-1 text-sm text-fg"
                                 >
                                     {BAND_LABEL_OPTIONS.map(o => (
                                         <option key={o.value} value={o.value}>
@@ -2427,7 +2423,7 @@ const RenderPanel = ({
                                     ))}
                                 </select>
                             </label>
-                            <p className="text-xs text-tertiary mt-2">
+                            <p className="text-xs text-fg-subtle mt-2">
                                 Optional bottom banner in the CL2K label band (e.g. a limited
                                 series). On a season poster it replaces the SEASON N text — the file
                                 is still saved as the season poster.
@@ -2456,7 +2452,7 @@ const RenderPanel = ({
                 <div className="flex flex-col gap-3 self-start sticky top-4 max-h-screen overflow-y-auto">
                     <div className="bg-surface border border-border rounded-lg p-3">
                         <div className="flex items-center justify-between mb-2">
-                            <h3 className="text-sm font-medium text-primary">Preview</h3>
+                            <h3 className="text-sm font-medium text-fg">Preview</h3>
                             <div className="flex items-center gap-3">
                                 {!isAsis && (
                                     <GuidesToggle show={showGuides} onChange={setShowGuides} />
@@ -2493,7 +2489,7 @@ const RenderPanel = ({
                                         className="w-full h-full object-contain"
                                     />
                                 ) : (
-                                    <span className="text-xs text-tertiary px-4 text-center">
+                                    <span className="text-xs text-fg-subtle px-4 text-center">
                                         Upload a finished poster to start.
                                     </span>
                                 )
@@ -2516,7 +2512,7 @@ const RenderPanel = ({
                                     <PreviewRefreshing active={previewing} />
                                 </>
                             ) : (
-                                <span className="text-xs text-tertiary px-4 text-center">
+                                <span className="text-xs text-fg-subtle px-4 text-center">
                                     {!hasBackdrop
                                         ? 'Select a backdrop to start.'
                                         : previewing
@@ -2529,9 +2525,9 @@ const RenderPanel = ({
 
                     {isAsis ? (
                         <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-2">
-                            <h3 className="text-sm font-medium text-primary">Output</h3>
+                            <h3 className="text-sm font-medium text-fg">Output</h3>
                             {item.kind === 'show' && (
-                                <label className="flex items-center gap-2 text-sm text-secondary">
+                                <label className="flex items-center gap-2 text-sm text-fg-muted">
                                     <span className="w-28">Season number</span>
                                     <input
                                         type="number"
@@ -2539,14 +2535,14 @@ const RenderPanel = ({
                                         value={seasonNumber}
                                         onChange={e => setSeasonNumber(e.target.value)}
                                         placeholder="blank = none, 0 = Specials"
-                                        className="flex-1 bg-surface border border-border rounded px-2 py-1 text-sm text-primary"
+                                        className="flex-1 bg-surface border border-border rounded px-2 py-1 text-sm text-fg"
                                     />
                                 </label>
                             )}
                             {item.kind === 'show' && (
                                 <div className="flex flex-col gap-1">
                                     <div className="flex items-center gap-2">
-                                        <span className="w-28 text-sm text-secondary">
+                                        <span className="w-28 text-sm text-fg-muted">
                                             All seasons
                                         </span>
                                         <input
@@ -2554,7 +2550,7 @@ const RenderPanel = ({
                                             value={bulkSeasons}
                                             onChange={e => setBulkSeasons(e.target.value)}
                                             placeholder="Generate all: 1,2,3"
-                                            className="flex-1 bg-surface border border-border rounded px-2 py-1 text-sm text-primary"
+                                            className="flex-1 bg-surface border border-border rounded px-2 py-1 text-sm text-fg"
                                         />
                                         <LoadingButton
                                             onClick={runAsisBulkSeasons}
@@ -2567,12 +2563,12 @@ const RenderPanel = ({
                                             Generate seasons
                                         </LoadingButton>
                                         {asisBulkBusy && asisBulkProgress && (
-                                            <span className="text-xs text-secondary tabular-nums whitespace-nowrap">
+                                            <span className="text-xs text-fg-muted tabular-nums whitespace-nowrap">
                                                 {asisBulkProgress}
                                             </span>
                                         )}
                                     </div>
-                                    <p className="text-xs text-tertiary">
+                                    <p className="text-xs text-fg-subtle">
                                         Files this poster once per season with its own SEASON N band
                                         (Season 0 = Specials). Runs in the background — the count
                                         updates as each season is saved.
@@ -2580,12 +2576,12 @@ const RenderPanel = ({
                                 </div>
                             )}
                             {item.kind !== 'collection' && (
-                                <label className="flex items-center gap-2 text-sm text-secondary">
+                                <label className="flex items-center gap-2 text-sm text-fg-muted">
                                     <span className="w-28">Banner</span>
                                     <select
                                         value={bandLabel}
                                         onChange={e => setBandLabel(e.target.value)}
-                                        className="flex-1 bg-surface border border-border rounded px-2 py-1 text-sm text-primary"
+                                        className="flex-1 bg-surface border border-border rounded px-2 py-1 text-sm text-fg"
                                     >
                                         {BAND_LABEL_OPTIONS.map(o => (
                                             <option key={o.value} value={o.value}>
@@ -2595,7 +2591,7 @@ const RenderPanel = ({
                                     </select>
                                 </label>
                             )}
-                            <label className="flex flex-col gap-1 text-sm text-secondary">
+                            <label className="flex flex-col gap-1 text-sm text-fg-muted">
                                 <span>
                                     New title (fallback — used when no season or banner is set)
                                 </span>
@@ -2605,10 +2601,10 @@ const RenderPanel = ({
                                     onChange={e => setAsisLabel(e.target.value)}
                                     disabled={isSeasonPoster || !!bandLabel}
                                     placeholder="leave blank to keep the poster as-is"
-                                    className="bg-surface border border-border rounded px-2 py-1 text-sm text-primary disabled:opacity-50"
+                                    className="bg-surface border border-border rounded px-2 py-1 text-sm text-fg disabled:opacity-50"
                                 />
                             </label>
-                            <label className="flex items-center gap-2 text-sm text-secondary">
+                            <label className="flex items-center gap-2 text-sm text-fg-muted">
                                 <span className="w-20">Position</span>
                                 <input
                                     type="range"
@@ -2622,15 +2618,15 @@ const RenderPanel = ({
                                     {Math.round(asisTextY * 100)}%
                                 </span>
                             </label>
-                            <p className="text-xs text-tertiary">
+                            <p className="text-xs text-fg-subtle">
                                 Drawn in the CL2K font at 96% — the locked CL2K band position (the
                                 season/specials line). Set a Season number (draws SEASON N /
                                 SPECIALS); a Banner overrides it (e.g. COMPLETE LIMITED SERIES). The
                                 New title box is the fallback when neither is set. Brush over the
-                                old text and <span className="text-secondary">Send to AI</span>{' '}
-                                first to remove it.
+                                old text and <span className="text-fg-muted">Send to AI</span> first
+                                to remove it.
                             </p>
-                            <label className="flex items-center gap-2 text-sm text-primary font-medium">
+                            <label className="flex items-center gap-2 text-sm text-fg font-medium">
                                 <input
                                     type="checkbox"
                                     checked={asisBorder}
@@ -2638,7 +2634,7 @@ const RenderPanel = ({
                                 />
                                 Add CL2K white border
                             </label>
-                            <p className="text-xs text-tertiary">
+                            <p className="text-xs text-fg-subtle">
                                 The DAPS default 26px white frame (per the CL2K PSD). Uncheck only
                                 if this poster already has the required border.
                             </p>
@@ -2651,14 +2647,14 @@ const RenderPanel = ({
                             >
                                 Save poster
                             </LoadingButton>
-                            <p className="text-xs text-tertiary">
+                            <p className="text-xs text-fg-subtle">
                                 Files the poster (new title + optional border, DAPS-named) — no
                                 logo, gradient, or reframe. Drawing the label costs no AI.
                             </p>
                         </div>
                     ) : (
                         <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-2">
-                            <h3 className="text-sm font-medium text-primary">Output</h3>
+                            <h3 className="text-sm font-medium text-fg">Output</h3>
                             <SaveTargets targets={saveTargets} />
                             <LoadingButton
                                 onClick={onGenerate}
@@ -2682,7 +2678,7 @@ const RenderPanel = ({
                                     <a
                                         href={backdropUrl}
                                         download
-                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm border border-border text-secondary hover:border-border-strong"
+                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm border border-border text-fg-muted hover:border-border-strong"
                                         title="Download the backdrop to clean externally (Firefly/Photoshop), then re-import via the backdrop Upload source"
                                     >
                                         <span className="material-symbols-outlined text-base">
@@ -2692,10 +2688,10 @@ const RenderPanel = ({
                                     </a>
                                 )}
                             </div>
-                            <p className="text-xs text-tertiary">
+                            <p className="text-xs text-fg-subtle">
                                 Handoff: download the backdrop, clean it in Firefly/Photoshop, then
                                 bring it back via the backdrop{' '}
-                                <span className="text-secondary">Upload</span> source.
+                                <span className="text-fg-muted">Upload</span> source.
                             </p>
                         </div>
                     )}
@@ -2715,8 +2711,8 @@ const SeasonControls = ({
     busy,
 }) => (
     <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-3">
-        <h3 className="text-sm font-medium text-primary">Season variant</h3>
-        <label className="flex items-center gap-2 text-sm text-secondary">
+        <h3 className="text-sm font-medium text-fg">Season variant</h3>
+        <label className="flex items-center gap-2 text-sm text-fg-muted">
             <span className="w-28">Season number</span>
             <input
                 type="number"
@@ -2724,7 +2720,7 @@ const SeasonControls = ({
                 value={seasonNumber}
                 onChange={e => setSeasonNumber(e.target.value)}
                 placeholder="blank = show poster, 0 = Specials"
-                className="flex-1 bg-surface border border-border rounded px-2 py-1 text-sm text-primary"
+                className="flex-1 bg-surface border border-border rounded px-2 py-1 text-sm text-fg"
             />
         </label>
         <div className="flex items-center gap-2">
@@ -2733,7 +2729,7 @@ const SeasonControls = ({
                 value={bulkSeasons}
                 onChange={e => setBulkSeasons(e.target.value)}
                 placeholder="Generate all: 1,2,3"
-                className="flex-1 bg-surface border border-border rounded px-2 py-1 text-sm text-primary"
+                className="flex-1 bg-surface border border-border rounded px-2 py-1 text-sm text-fg"
             />
             <LoadingButton
                 onClick={onBulkSeasons}
@@ -2745,12 +2741,12 @@ const SeasonControls = ({
                 Generate seasons
             </LoadingButton>
             {busy && bulkProgress && (
-                <span className="text-xs text-secondary tabular-nums whitespace-nowrap">
+                <span className="text-xs text-fg-muted tabular-nums whitespace-nowrap">
                     {bulkProgress}
                 </span>
             )}
         </div>
-        <p className="text-xs text-tertiary">
+        <p className="text-xs text-fg-subtle">
             Each season reuses the backdrop &amp; logo from the poster you built above; only the
             season number changes. Runs in the background — the count updates as each season is
             saved.
@@ -2788,7 +2784,7 @@ const AiPanel = ({
                 : null;
     return (
         <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-3">
-            <label className="flex items-center gap-2 text-sm text-primary font-medium">
+            <label className="flex items-center gap-2 text-sm text-fg font-medium">
                 <input
                     type="checkbox"
                     checked={removeText}
@@ -2796,11 +2792,11 @@ const AiPanel = ({
                 />
                 Remove text with AI
             </label>
-            <p className="text-xs text-tertiary">
-                Provider: <span className="text-secondary">{provider}</span>. OpenAI re-imagines the
+            <p className="text-xs text-fg-subtle">
+                Provider: <span className="text-fg-muted">{provider}</span>. OpenAI re-imagines the
                 whole image — brush a mask over just the text to keep faces/art intact. Set the
                 provider/key in{' '}
-                <Link to="/settings/modules" className="text-primary underline hover:no-underline">
+                <Link to="/settings/modules" className="text-fg underline hover:no-underline">
                     Module Settings
                 </Link>
                 .
@@ -2808,7 +2804,7 @@ const AiPanel = ({
             {removeText && aiBlock && <div className="text-xs text-warning">{aiBlock}</div>}
             {removeText && (
                 <>
-                    <label className="flex items-center gap-2 text-sm text-secondary">
+                    <label className="flex items-center gap-2 text-sm text-fg-muted">
                         <span className="w-20">Brush</span>
                         <input
                             type="range"
@@ -2827,19 +2823,19 @@ const AiPanel = ({
                             onMaskChange={onMaskChange}
                         />
                     ) : (
-                        <div className="text-xs text-tertiary">
+                        <div className="text-xs text-fg-subtle">
                             Select a backdrop to brush a mask over.
                         </div>
                     )}
                     {backdropUrl && (
                         <>
-                            <label className="flex flex-col gap-1 text-sm text-secondary">
+                            <label className="flex flex-col gap-1 text-sm text-fg-muted">
                                 <span>AI prompt (defaults to module settings)</span>
                                 <textarea
                                     value={aiPrompt}
                                     onChange={e => setAiPrompt(e.target.value)}
                                     rows={2}
-                                    className="bg-surface border border-border rounded px-2 py-1 text-sm text-primary"
+                                    className="bg-surface border border-border rounded px-2 py-1 text-sm text-fg"
                                 />
                             </label>
                             <LoadingButton
@@ -2850,7 +2846,7 @@ const AiPanel = ({
                             >
                                 Send to AI — erase masked text
                             </LoadingButton>
-                            <p className="text-xs text-tertiary">
+                            <p className="text-xs text-fg-subtle">
                                 Erases the brushed text and updates the preview, so you see the
                                 result before you Generate &amp; save. This is the only step that
                                 uses AI credits.
@@ -3113,7 +3109,7 @@ const FitMock = ({ imageUrl, ratio, crop, vPos, label, labelYFrac }) => {
                     </div>
                 ) : null}
             </div>
-            <p className="text-xs text-tertiary mt-1 text-center" style={{ width: 150 }}>
+            <p className="text-xs text-fg-subtle mt-1 text-center" style={{ width: 150 }}>
                 Live mock (approx.)
             </p>
         </div>
@@ -3283,7 +3279,7 @@ const CropFramer = ({
     return (
         <div className="bg-surface border border-border rounded-lg p-3">
             <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-medium text-primary">Crop framing</h3>
+                <h3 className="text-sm font-medium text-fg">Crop framing</h3>
                 <div className="flex items-center gap-1">
                     <Button
                         onClick={() => setFitMode('cover')}
@@ -3321,10 +3317,10 @@ const CropFramer = ({
                     </span>
                 </div>
             </div>
-            <p className="text-xs text-tertiary mb-2">
+            <p className="text-xs text-fg-subtle mb-2">
                 {FRAMING_HELP[fitMode] || FRAMING_HELP.cover}
             </p>
-            <label className="flex items-center gap-2 text-xs text-secondary mb-2">
+            <label className="flex items-center gap-2 text-xs text-fg-muted mb-2">
                 <span className="shrink-0 w-24">Vertical position</span>
                 <input
                     type="range"
@@ -3335,7 +3331,7 @@ const CropFramer = ({
                     onChange={e => setVPos(Number(e.target.value))}
                     className="flex-1"
                 />
-                <span className="w-16 shrink-0 text-tertiary">
+                <span className="w-16 shrink-0 text-fg-subtle">
                     {vPos < 0.02
                         ? isBox
                             ? 'top'
@@ -3346,7 +3342,7 @@ const CropFramer = ({
                 </span>
             </label>
             {(isBox || fitMode === 'cover') && (
-                <label className="flex items-center gap-2 text-xs text-secondary mb-2">
+                <label className="flex items-center gap-2 text-xs text-fg-muted mb-2">
                     <span className="shrink-0 w-24">Zoom</span>
                     <input
                         type="range"
@@ -3357,7 +3353,7 @@ const CropFramer = ({
                         onChange={e => setZoom(Number(e.target.value))}
                         className="flex-1"
                     />
-                    <span className="w-16 shrink-0 text-tertiary">{(zoom ?? 1).toFixed(2)}×</span>
+                    <span className="w-16 shrink-0 text-fg-subtle">{(zoom ?? 1).toFixed(2)}×</span>
                 </label>
             )}
             <div className="flex gap-3 items-start">
@@ -3420,7 +3416,7 @@ const CropFramer = ({
 const UploadArtCard = ({ label, headerRight, custom, onFile, onClear }) => (
     <div className="bg-surface border border-border rounded-lg p-3">
         <div className="flex items-center justify-between gap-2 mb-2">
-            <h3 className="text-sm font-medium text-primary">{label}</h3>
+            <h3 className="text-sm font-medium text-fg">{label}</h3>
             {headerRight}
         </div>
         {custom ? (
@@ -3430,13 +3426,13 @@ const UploadArtCard = ({ label, headerRight, custom, onFile, onClear }) => (
                     alt="Uploaded"
                     className="h-16 w-auto max-w-[60%] object-contain rounded"
                 />
-                <span className="flex-1 truncate text-xs text-secondary">{custom.name}</span>
+                <span className="flex-1 truncate text-xs text-fg-muted">{custom.name}</span>
                 <Button onClick={onClear} variant="secondary" icon="close" size="small">
                     Remove
                 </Button>
             </div>
         ) : (
-            <label className="flex flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed border-border text-tertiary text-xs py-6 cursor-pointer hover:border-border-strong">
+            <label className="flex flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed border-border text-fg-subtle text-xs py-6 cursor-pointer hover:border-border-strong">
                 <span className="material-symbols-outlined">upload</span>
                 Upload an image
                 <input type="file" accept="image/*" className="hidden" onChange={onFile} />
@@ -3466,13 +3462,13 @@ const Picker = ({
     return (
         <div className="bg-surface border border-border rounded-lg p-3">
             <div className="flex items-center justify-between gap-2 mb-2">
-                <h3 className="text-sm font-medium text-primary">{label}</h3>
+                <h3 className="text-sm font-medium text-fg">{label}</h3>
                 {headerRight}
             </div>
             {loading ? (
-                <div className="text-xs text-tertiary py-4">Loading…</div>
+                <div className="text-xs text-fg-subtle py-4">Loading…</div>
             ) : items.length === 0 ? (
-                <div className="text-xs text-tertiary py-2">{emptyText}</div>
+                <div className="text-xs text-fg-subtle py-2">{emptyText}</div>
             ) : (
                 <div className={gridCls}>
                     {items.map((it, idx) => {
@@ -3638,7 +3634,7 @@ const GuideOverlay = () => (
 
 // Small "Show CL2K guides" checkbox used next to every poster preview.
 const GuidesToggle = ({ show, onChange }) => (
-    <label className="flex items-center gap-1.5 text-xs text-secondary cursor-pointer">
+    <label className="flex items-center gap-1.5 text-xs text-fg-muted cursor-pointer">
         <input type="checkbox" checked={show} onChange={e => onChange(e.target.checked)} />
         CL2K guides
     </label>
@@ -3695,7 +3691,7 @@ const LogoSelector = ({
     return (
         <div className="bg-surface border border-border rounded-lg p-3">
             <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-medium text-primary">{label}</h3>
+                <h3 className="text-sm font-medium text-fg">{label}</h3>
                 <div className="flex items-center gap-1.5">
                     {onWhiten && (
                         <>
@@ -3704,7 +3700,7 @@ const LogoSelector = ({
                                 className={`px-2.5 py-1 text-xs rounded-md border ${
                                     whiten
                                         ? 'bg-primary text-white border-primary'
-                                        : 'bg-surface text-secondary border-border hover:border-border-strong'
+                                        : 'bg-surface text-fg-muted border-border hover:border-border-strong'
                                 }`}
                                 onClick={() => onWhiten(true)}
                                 title="CL2K two-tone: white fills, black keylines"
@@ -3716,7 +3712,7 @@ const LogoSelector = ({
                                 className={`px-2.5 py-1 text-xs rounded-md border ${
                                     !whiten
                                         ? 'bg-primary text-white border-primary'
-                                        : 'bg-surface text-secondary border-border hover:border-border-strong'
+                                        : 'bg-surface text-fg-muted border-border hover:border-border-strong'
                                 }`}
                                 onClick={() => onWhiten(false)}
                                 title="Keep the logo's original colors"
@@ -3728,7 +3724,7 @@ const LogoSelector = ({
                     {onSource ? (
                         <SourceSelector value={source} onChange={onSource} />
                     ) : (
-                        <label className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs border border-border text-secondary hover:border-border-strong cursor-pointer">
+                        <label className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs border border-border text-fg-muted hover:border-border-strong cursor-pointer">
                             <span className="material-symbols-outlined text-sm">upload</span>
                             Upload custom
                             <input
@@ -3744,7 +3740,7 @@ const LogoSelector = ({
             {/* 'Upload' source with nothing uploaded yet → a dropzone (the chosen
                 file then shows in the customLogo card below). */}
             {onSource && source === 'upload' && !customLogo ? (
-                <label className="flex flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed border-border text-tertiary text-xs py-6 cursor-pointer hover:border-border-strong">
+                <label className="flex flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed border-border text-fg-subtle text-xs py-6 cursor-pointer hover:border-border-strong">
                     <span className="material-symbols-outlined">upload</span>
                     Upload a logo (PNG, transparent)
                     <input type="file" accept="image/*" className="hidden" onChange={onFile} />
@@ -3756,9 +3752,7 @@ const LogoSelector = ({
                         alt="Custom logo"
                         className="h-14 w-auto max-w-[60%] object-contain"
                     />
-                    <span className="flex-1 truncate text-xs text-secondary">
-                        {customLogo.name}
-                    </span>
+                    <span className="flex-1 truncate text-xs text-fg-muted">{customLogo.name}</span>
                     <Button
                         onClick={() => onCustomChange(null)}
                         variant="secondary"
@@ -3769,9 +3763,9 @@ const LogoSelector = ({
                     </Button>
                 </div>
             ) : loading ? (
-                <div className="text-xs text-tertiary py-4">Loading…</div>
+                <div className="text-xs text-fg-subtle py-4">Loading…</div>
             ) : logos.length === 0 ? (
-                <div className="text-xs text-tertiary py-2">{emptyText}</div>
+                <div className="text-xs text-fg-subtle py-2">{emptyText}</div>
             ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-72 overflow-auto">
                     {logos.map((it, idx) => {
@@ -3809,7 +3803,7 @@ const LogoSelector = ({
                 </div>
             )}
             {onScale && (
-                <label className="mt-2 flex items-center gap-2 text-xs text-secondary">
+                <label className="mt-2 flex items-center gap-2 text-xs text-fg-muted">
                     <span className="w-24">Logo size</span>
                     <input
                         type="range"
@@ -3824,7 +3818,7 @@ const LogoSelector = ({
                 </label>
             )}
             {onYOffset && (
-                <label className="mt-2 flex items-center gap-2 text-xs text-secondary">
+                <label className="mt-2 flex items-center gap-2 text-xs text-fg-muted">
                     <span className="w-24">Logo position</span>
                     <input
                         type="range"
@@ -3845,14 +3839,14 @@ const LogoSelector = ({
                 makes darkness the opacity: black text -> solid white, the plate ->
                 transparent. Only meaningful on the CL2K-white two-tone. */}
             {onInvert && whiten && (
-                <label className="mt-2 flex items-center gap-2 text-xs text-secondary cursor-pointer">
+                <label className="mt-2 flex items-center gap-2 text-xs text-fg-muted cursor-pointer">
                     <input
                         type="checkbox"
                         checked={!!invert}
                         onChange={e => onInvert(e.target.checked)}
                     />
                     Invert logo
-                    <span className="text-tertiary">
+                    <span className="text-fg-subtle">
                         — white becomes transparent, black becomes white (for plate/sticker logos)
                     </span>
                 </label>
@@ -3867,14 +3861,14 @@ const LogoSelector = ({
                     <button
                         type="button"
                         onClick={() => setShowTouchUp(s => !s)}
-                        className="px-2.5 py-1 text-xs rounded-md border bg-surface text-secondary border-border hover:border-border-strong"
+                        className="px-2.5 py-1 text-xs rounded-md border bg-surface text-fg-muted border-border hover:border-border-strong"
                     >
                         {showTouchUp ? 'Hide colour fix' : 'Fix a mis-coloured area (optional)'}
                     </button>
                     {showTouchUp && (
                         <div className="mt-2">
-                            <p className="text-xs text-tertiary mb-1">
-                                <span className="text-secondary">
+                            <p className="text-xs text-fg-subtle mb-1">
+                                <span className="text-fg-muted">
                                     Most logos whiten correctly — you can skip this.
                                 </span>{' '}
                                 Only if a part came out the wrong shade (a black area that should be
@@ -3893,7 +3887,7 @@ const LogoSelector = ({
                     )}
                 </div>
             )}
-            <p className="mt-2 text-xs text-tertiary">
+            <p className="mt-2 text-xs text-fg-subtle">
                 Whitened, trimmed and placed on the CL2K guides automatically — it moves live in the
                 preview as you drag.
                 {onScale && (
@@ -3918,7 +3912,7 @@ const LogoSelector = ({
                             if (onScale) onScale(1);
                             if (onYOffset) onYOffset(0);
                         }}
-                        className="text-primary underline hover:no-underline"
+                        className="text-fg underline hover:no-underline"
                     >
                         Reset to CL2K defaults
                     </button>
@@ -3970,7 +3964,7 @@ const SquareFramer = ({
         `px-2.5 py-1 text-sm rounded-md border ${
             on
                 ? 'bg-primary text-white border-primary'
-                : 'bg-surface text-secondary border-border hover:border-border-strong'
+                : 'bg-surface text-fg-muted border-border hover:border-border-strong'
         }`;
     const point = useCallback(e => {
         const el = wrapRef.current;
@@ -4004,7 +3998,7 @@ const SquareFramer = ({
     return (
         <div className="bg-surface border border-border rounded-lg p-3">
             <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-medium text-primary">{title}</h3>
+                <h3 className="text-sm font-medium text-fg">{title}</h3>
                 <div className="flex items-center gap-1">
                     <button
                         type="button"
@@ -4033,12 +4027,12 @@ const SquareFramer = ({
                     </Button>
                 </div>
             </div>
-            <p className="text-xs text-tertiary mb-2">
+            <p className="text-xs text-fg-subtle mb-2">
                 {fitMode === 'fit'
                     ? 'Fit shows the whole image on black. Zoom in to fill more; drag to pan when zoomed.'
                     : `Fill crops to the ${frameName} — drag to choose what stays. Zoom to punch in tighter.`}
             </p>
-            <label className="flex items-center gap-2 text-xs text-secondary mb-2">
+            <label className="flex items-center gap-2 text-xs text-fg-muted mb-2">
                 <span className="w-12 shrink-0">Zoom</span>
                 <input
                     type="range"
@@ -4049,7 +4043,7 @@ const SquareFramer = ({
                     onChange={e => setZoom(Number(e.target.value))}
                     className="flex-1"
                 />
-                <span className="w-12 shrink-0 text-right text-tertiary">
+                <span className="w-12 shrink-0 text-right text-fg-subtle">
                     {(zoom ?? 1).toFixed(2)}×
                 </span>
             </label>
@@ -4102,7 +4096,7 @@ const SquareFramer = ({
 const AssetSeasonField = ({ show, value, onChange }) => {
     if (!show) return null;
     return (
-        <label className="flex items-center gap-2 text-sm text-secondary">
+        <label className="flex items-center gap-2 text-sm text-fg-muted">
             <span className="w-28">Season</span>
             <input
                 type="number"
@@ -4111,7 +4105,7 @@ const AssetSeasonField = ({ show, value, onChange }) => {
                 value={value}
                 onChange={e => onChange(e.target.value)}
                 placeholder="blank = the show itself"
-                className="flex-1 bg-surface border border-border rounded px-2 py-1 text-sm text-primary"
+                className="flex-1 bg-surface border border-border rounded px-2 py-1 text-sm text-fg"
             />
         </label>
     );
@@ -4128,7 +4122,7 @@ const seasonSuffix = seasonNum =>
 // file only reaches Plex/Kometa once Asset Renamerr runs over it, and it can only
 // see the file if the maker's output_dir is one of Poster Renamerr's source_dirs.
 const AssetWorkflowHint = () => (
-    <p className="text-xs text-tertiary">
+    <p className="text-xs text-fg-subtle">
         Applies on the next Asset Renamerr run — the CL2K output directory must be one of Poster
         Renamerr&apos;s source dirs for the file to be scanned.
     </p>
@@ -4299,7 +4293,7 @@ const SquareArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                         loading={loadingArt}
                         selected={backdrop}
                         onSelect={pickBackdrop}
-                        aspect="aspect-poster"
+                        aspect="aspect-[2/3]"
                         emptyText="No posters from this source."
                     />
                 )}
@@ -4323,7 +4317,7 @@ const SquareArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
 
             <div className="flex flex-col gap-3 self-start sticky top-4 max-h-screen overflow-y-auto">
                 <div className="bg-surface border border-border rounded-lg p-3">
-                    <h3 className="text-sm font-medium text-primary mb-2">Preview (1000×1000)</h3>
+                    <h3 className="text-sm font-medium text-fg mb-2">Preview (1000×1000)</h3>
                     <div className="relative aspect-square bg-black rounded overflow-hidden flex items-center justify-center">
                         {hasSrc && previewUrl ? (
                             <>
@@ -4335,22 +4329,22 @@ const SquareArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                                 <PreviewRefreshing active={previewing} />
                             </>
                         ) : (
-                            <span className="text-xs text-tertiary px-4 text-center">
+                            <span className="text-xs text-fg-subtle px-4 text-center">
                                 {hasSrc ? 'Rendering preview…' : 'Pick or upload source art.'}
                             </span>
                         )}
                     </div>
                 </div>
                 <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-2">
-                    <h3 className="text-sm font-medium text-primary">Output</h3>
+                    <h3 className="text-sm font-medium text-fg">Output</h3>
                     <AssetSeasonField
                         show={item.kind === 'show'}
                         value={seasonNumber}
                         onChange={setSeasonNumber}
                     />
-                    <p className="text-xs text-tertiary">
+                    <p className="text-xs text-fg-subtle">
                         Saved as{' '}
-                        <span className="text-secondary">
+                        <span className="text-fg-muted">
                             Title (Year) {'{ids}'}
                             {seasonSuffix(seasonNum)} - SquareArt.jpg
                         </span>{' '}
@@ -4506,7 +4500,7 @@ const BackgroundArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast 
         `px-2.5 py-1 text-sm rounded-md border ${
             on
                 ? 'bg-primary text-white border-primary'
-                : 'bg-surface text-secondary border-border hover:border-border-strong'
+                : 'bg-surface text-fg-muted border-border hover:border-border-strong'
         }`;
 
     return (
@@ -4549,7 +4543,7 @@ const BackgroundArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast 
                         loading={loadingArt}
                         selected={backdrop}
                         onSelect={pickBackdrop}
-                        aspect="aspect-poster"
+                        aspect="aspect-[2/3]"
                         emptyText="No posters from this source."
                     />
                 )}
@@ -4577,7 +4571,7 @@ const BackgroundArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast 
             <div className="flex flex-col gap-3 self-start sticky top-4 max-h-screen overflow-y-auto">
                 <div className="bg-surface border border-border rounded-lg p-3">
                     <div className="flex items-center justify-between mb-2">
-                        <h3 className="text-sm font-medium text-primary">
+                        <h3 className="text-sm font-medium text-fg">
                             Preview ({resolution === '4k' ? '3840×2160' : '1920×1080'})
                         </h3>
                         <div className="flex items-center gap-1">
@@ -4608,22 +4602,22 @@ const BackgroundArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast 
                                 <PreviewRefreshing active={previewing} />
                             </>
                         ) : (
-                            <span className="text-xs text-tertiary px-4 text-center">
+                            <span className="text-xs text-fg-subtle px-4 text-center">
                                 {hasSrc ? 'Rendering preview…' : 'Pick or upload source art.'}
                             </span>
                         )}
                     </div>
                 </div>
                 <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-2">
-                    <h3 className="text-sm font-medium text-primary">Output</h3>
+                    <h3 className="text-sm font-medium text-fg">Output</h3>
                     <AssetSeasonField
                         show={item.kind === 'show'}
                         value={seasonNumber}
                         onChange={setSeasonNumber}
                     />
-                    <p className="text-xs text-tertiary">
+                    <p className="text-xs text-fg-subtle">
                         Saved as{' '}
-                        <span className="text-secondary">
+                        <span className="text-fg-muted">
                             Title (Year) {'{ids}'}
                             {seasonSuffix(seasonNum)} - Background.jpg
                         </span>{' '}
@@ -4866,7 +4860,7 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
         `px-3 py-1 text-sm rounded-md border ${
             on
                 ? 'bg-primary text-white border-primary'
-                : 'bg-surface text-secondary border-border hover:border-border-strong'
+                : 'bg-surface text-fg-muted border-border hover:border-border-strong'
         }`;
 
     return (
@@ -4894,17 +4888,17 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                         onClick={() => setExtractOpen(o => !o)}
                         className="w-full flex items-center justify-between text-left"
                     >
-                        <span className="text-sm font-medium text-primary">
+                        <span className="text-sm font-medium text-fg">
                             Extract logo from a poster{' '}
-                            <span className="text-tertiary font-normal">— no AI</span>
+                            <span className="text-fg-subtle font-normal">— no AI</span>
                         </span>
-                        <span className="text-xs text-secondary">
+                        <span className="text-xs text-fg-muted">
                             {extractOpen ? 'Hide' : 'Open'}
                         </span>
                     </button>
                     {extractOpen && (
                         <div className="mt-3 flex flex-col gap-3">
-                            <p className="text-xs text-tertiary">
+                            <p className="text-xs text-fg-subtle">
                                 Pull a white title straight off a poster — no OpenAI. Pick a poster,
                                 brush over the title (a loose scribble is fine; keep off bright
                                 areas), then Extract. The result becomes your logo below.
@@ -4935,7 +4929,7 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                                     loading={loadingArt}
                                     selected={posterPath}
                                     onSelect={pickPoster}
-                                    aspect="aspect-poster"
+                                    aspect="aspect-[2/3]"
                                     emptyText={
                                         posterSource === 'plex' &&
                                         artBySource.plex?.reason &&
@@ -4963,7 +4957,7 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                                             Coloured title
                                         </button>
                                     </div>
-                                    <p className="text-xs text-tertiary mb-1">
+                                    <p className="text-xs text-fg-subtle mb-1">
                                         {extractMode === 'subject'
                                             ? 'Brush over the coloured title (keep close to it):'
                                             : 'Brush over the white title:'}
@@ -4989,7 +4983,7 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                     )}
                 </div>
                 <div className="bg-surface border border-border rounded-lg p-3">
-                    <h3 className="text-sm font-medium text-primary mb-2">Colour</h3>
+                    <h3 className="text-sm font-medium text-fg mb-2">Colour</h3>
                     <div className="flex items-center gap-2">
                         <button
                             type="button"
@@ -5006,20 +5000,20 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                             CL2K white
                         </button>
                     </div>
-                    <p className="text-xs text-tertiary mt-2">
+                    <p className="text-xs text-fg-subtle mt-2">
                         Original keeps the clear logo&apos;s colours (the usual Plex/Kometa logo
                         asset). CL2K white recolours it to the CL2K two-tone — white fills, black
                         keylines — like a CL2K poster logo.
                     </p>
                     {whiten && (
-                        <label className="mt-2 flex items-center gap-2 text-xs text-secondary cursor-pointer">
+                        <label className="mt-2 flex items-center gap-2 text-xs text-fg-muted cursor-pointer">
                             <input
                                 type="checkbox"
                                 checked={invert}
                                 onChange={e => setInvert(e.target.checked)}
                             />
                             Invert logo
-                            <span className="text-tertiary">
+                            <span className="text-fg-subtle">
                                 — white becomes transparent, black becomes white (for plate/sticker
                                 logos)
                             </span>
@@ -5032,7 +5026,7 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                             <button
                                 type="button"
                                 onClick={() => setShowTouchUp(s => !s)}
-                                className="px-2.5 py-1 text-xs rounded-md border bg-surface text-secondary border-border hover:border-border-strong"
+                                className="px-2.5 py-1 text-xs rounded-md border bg-surface text-fg-muted border-border hover:border-border-strong"
                             >
                                 {showTouchUp
                                     ? 'Hide colour fix'
@@ -5040,8 +5034,8 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                             </button>
                             {showTouchUp && (
                                 <div className="mt-2">
-                                    <p className="text-xs text-tertiary mb-1">
-                                        <span className="text-secondary">
+                                    <p className="text-xs text-fg-subtle mb-1">
+                                        <span className="text-fg-muted">
                                             Most logos whiten correctly — you can skip this.
                                         </span>{' '}
                                         Only if a part came out the wrong shade, brush over just
@@ -5064,7 +5058,7 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
 
             <div className="flex flex-col gap-3 self-start sticky top-4 max-h-screen overflow-y-auto">
                 <div className="bg-surface border border-border rounded-lg p-3">
-                    <h3 className="text-sm font-medium text-primary mb-2">Preview</h3>
+                    <h3 className="text-sm font-medium text-fg mb-2">Preview</h3>
                     <div
                         className="relative aspect-video rounded overflow-hidden flex items-center justify-center"
                         style={{
@@ -5080,19 +5074,18 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                                 className="max-w-[90%] max-h-[90%] object-contain"
                             />
                         ) : (
-                            <span className="text-xs text-tertiary px-4 text-center bg-black/40 rounded px-2 py-1">
+                            <span className="text-xs text-fg-subtle px-4 text-center bg-black/40 rounded px-2 py-1">
                                 {hasLogo ? 'Rendering preview…' : 'Pick or upload a logo.'}
                             </span>
                         )}
                     </div>
                 </div>
                 <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-2">
-                    <h3 className="text-sm font-medium text-primary">Output</h3>
-                    <p className="text-xs text-tertiary">
+                    <h3 className="text-sm font-medium text-fg">Output</h3>
+                    <p className="text-xs text-fg-subtle">
                         Filed as{' '}
-                        <span className="text-secondary">Title (Year) {'{ids}'} - Logo.png</span>{' '}
-                        and applied to Plex/Kometa via Asset Renamerr — separate from any square
-                        art.
+                        <span className="text-fg-muted">Title (Year) {'{ids}'} - Logo.png</span> and
+                        applied to Plex/Kometa via Asset Renamerr — separate from any square art.
                     </p>
                     <AssetWorkflowHint />
                     <SaveTargets targets={saveTargets} />
@@ -5108,7 +5101,7 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                         type="button"
                         onClick={onDownload}
                         disabled={!hasLogo || busy || previewing}
-                        className="px-3 py-1.5 text-sm rounded-md border bg-surface text-secondary border-border hover:border-border-strong disabled:opacity-50"
+                        className="px-3 py-1.5 text-sm rounded-md border bg-surface text-fg-muted border-border hover:border-border-strong disabled:opacity-50"
                     >
                         Download to PC
                     </button>
@@ -5154,8 +5147,8 @@ const HistorySection = ({ toast }) => {
                 onClick={toggle}
                 className="w-full flex items-center justify-between p-3 hover:bg-surface-alt"
             >
-                <span className="text-sm font-medium text-primary">Recently generated</span>
-                <span className="material-symbols-outlined text-tertiary">
+                <span className="text-sm font-medium text-fg">Recently generated</span>
+                <span className="material-symbols-outlined text-fg-subtle">
                     {open ? 'expand_less' : 'expand_more'}
                 </span>
             </button>
@@ -5164,7 +5157,7 @@ const HistorySection = ({ toast }) => {
                     {loading ? (
                         <Spinner size="small" text="Loading…" />
                     ) : !items || items.length === 0 ? (
-                        <div className="text-xs text-tertiary">Nothing generated yet.</div>
+                        <div className="text-xs text-fg-subtle">Nothing generated yet.</div>
                     ) : (
                         <ul className="divide-y divide-border text-sm">
                             {items.map((it, idx) => (
@@ -5172,16 +5165,16 @@ const HistorySection = ({ toast }) => {
                                     key={`${it.file || idx}`}
                                     className="py-2 flex items-center justify-between gap-3"
                                 >
-                                    <span className="text-primary truncate">
+                                    <span className="text-fg truncate">
                                         {it.title || it.file}
                                         {it.season_number != null && (
-                                            <span className="text-tertiary">
+                                            <span className="text-fg-subtle">
                                                 {' '}
                                                 · S{it.season_number}
                                             </span>
                                         )}
                                     </span>
-                                    <span className="text-xs text-tertiary shrink-0">
+                                    <span className="text-xs text-fg-subtle shrink-0">
                                         {it.kind} · logo: {it.logo_source || '—'}
                                     </span>
                                 </li>
