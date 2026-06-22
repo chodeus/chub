@@ -161,7 +161,7 @@ const SearchInterface = React.memo(
                                 key={suggestion.id || idx}
                                 type="button"
                                 role="option"
-                                className="w-full text-left px-3 py-2 text-sm text-fg hover:bg-hover cursor-pointer border-none bg-transparent flex items-center gap-2"
+                                className="w-full text-left px-3 py-2 text-sm text-fg hover:bg-surface-hover cursor-pointer border-none bg-transparent flex items-center gap-2"
                                 onMouseDown={e => {
                                     e.preventDefault();
                                     const value = suggestion.term || suggestion;
