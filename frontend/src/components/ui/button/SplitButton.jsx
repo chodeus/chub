@@ -67,7 +67,10 @@ export const SplitButton = React.memo(
                 </div>
 
                 {isOpen && options.length > 0 && (
-                    <div className="absolute right-0 mt-1 min-w-[12rem] bg-surface-elevated border border-border rounded-lg shadow-lg z-dropdown py-1" role="menu">
+                    <div
+                        className="absolute right-0 mt-1 min-w-[12rem] bg-surface-elevated border border-border rounded-lg shadow-lg z-dropdown py-1"
+                        role="menu"
+                    >
                         {options.map((option, index) => (
                             <button
                                 key={index}
