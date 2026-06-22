@@ -364,7 +364,7 @@ const ModuleSettingsContent = () => {
                                                     >
                                                         {showSectionHeader && (
                                                             <div
-                                                                className="settings-section-header pt-2 pb-1 mt-2 first:mt-0 border-b border-border-subtle"
+                                                                className="pt-2 pb-1 mt-2 first:mt-0 border-b border-border-subtle"
                                                                 role="heading"
                                                                 aria-level={3}
                                                             >
@@ -373,7 +373,7 @@ const ModuleSettingsContent = () => {
                                                                 </span>
                                                             </div>
                                                         )}
-                                                        <div className="settings-field-row">
+                                                        <div>
                                                             <MemoizedFieldComponent
                                                                 field={{
                                                                     ...field,

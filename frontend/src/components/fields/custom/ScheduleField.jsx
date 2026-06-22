@@ -304,7 +304,7 @@ export const ScheduleField = React.memo(
             <FieldWrapper invalid={highlightInvalid}>
                 <FieldLabel label={field.label} required={field.required} />
 
-                <div className="schedule-field space-y-4">
+                <div className="space-y-4">
                     {/* Schedule type selector */}
                     <PillSelector
                         options={SCHEDULE_TYPES}

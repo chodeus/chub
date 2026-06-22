@@ -333,7 +333,6 @@ export const GeneralSettingsPage = () => {
                                     return (
                                         <div
                                             key={`field-${module.key}-${field.key}-${fieldIndex}`}
-                                            className="settings-field-row"
                                         >
                                             <MemoizedFieldComponent
                                                 field={{

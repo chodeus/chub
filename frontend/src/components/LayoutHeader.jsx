@@ -208,12 +208,12 @@ const LayoutHeader = React.memo(() => {
                         title={`Current: ${getThemeDisplayText()}. Click to toggle theme.`}
                     >
                         <span
-                            className="theme-toggle-icon material-symbols-outlined"
+                            className="material-symbols-outlined"
                             aria-hidden="true"
                         >
                             {getThemeIconName()}
                         </span>
-                        <span className="theme-toggle-text max-sm:hidden">
+                        <span className="max-sm:hidden">
                             {getThemeDisplayText()}
                         </span>
                     </button>
