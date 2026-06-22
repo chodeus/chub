@@ -126,7 +126,7 @@ const AccordionBody = ({ children, className = '' }) => {
 
     return (
         <div
-            className={`accordion-body ${isExpanded ? 'accordion-body--expanded' : 'accordion-body--collapsed'} ${className}`}
+            className={className}
             aria-hidden={!isExpanded}
         >
             {children}
