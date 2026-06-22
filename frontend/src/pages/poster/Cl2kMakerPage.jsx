@@ -107,7 +107,7 @@ const SourceSelector = ({ value, onChange, sources = ART_SOURCES }) => (
                 className={`inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md border ${
                     value === s.key
                         ? 'bg-primary text-white border-primary'
-                        : 'bg-surface text-fg-muted border-border hover:border-border-strong'
+                        : 'bg-surface text-fg-muted border-border hover:border-primary'
                 }`}
                 title={s.label}
             >
@@ -1523,7 +1523,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                         `inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm border transition-colors ${
                             on
                                 ? 'bg-primary text-white border-primary'
-                                : 'bg-surface text-fg-muted border-border hover:border-border-strong'
+                                : 'bg-surface text-fg-muted border-border hover:border-primary'
                         }`;
                     return (
                         <button
@@ -2678,7 +2678,7 @@ const RenderPanel = ({
                                     <a
                                         href={backdropUrl}
                                         download
-                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm border border-border text-fg-muted hover:border-border-strong"
+                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm border border-border text-fg-muted hover:border-primary"
                                         title="Download the backdrop to clean externally (Firefly/Photoshop), then re-import via the backdrop Upload source"
                                     >
                                         <span className="material-symbols-outlined text-base">
@@ -3432,7 +3432,7 @@ const UploadArtCard = ({ label, headerRight, custom, onFile, onClear }) => (
                 </Button>
             </div>
         ) : (
-            <label className="flex flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed border-border text-fg-subtle text-xs py-6 cursor-pointer hover:border-border-strong">
+            <label className="flex flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed border-border text-fg-subtle text-xs py-6 cursor-pointer hover:border-primary">
                 <span className="material-symbols-outlined">upload</span>
                 Upload an image
                 <input type="file" accept="image/*" className="hidden" onChange={onFile} />
@@ -3483,7 +3483,7 @@ const Picker = ({
                                 className={`relative ${aspect} rounded-md overflow-hidden border-2 transition-all ${
                                     isSel
                                         ? 'border-primary ring-2 ring-primary/40'
-                                        : 'border-border hover:border-border-strong'
+                                        : 'border-border hover:border-primary'
                                 } ${onBlack ? 'bg-black' : 'bg-surface-alt'}`}
                                 title={
                                     it.width
@@ -3700,7 +3700,7 @@ const LogoSelector = ({
                                 className={`px-2.5 py-1 text-xs rounded-md border ${
                                     whiten
                                         ? 'bg-primary text-white border-primary'
-                                        : 'bg-surface text-fg-muted border-border hover:border-border-strong'
+                                        : 'bg-surface text-fg-muted border-border hover:border-primary'
                                 }`}
                                 onClick={() => onWhiten(true)}
                                 title="CL2K two-tone: white fills, black keylines"
@@ -3712,7 +3712,7 @@ const LogoSelector = ({
                                 className={`px-2.5 py-1 text-xs rounded-md border ${
                                     !whiten
                                         ? 'bg-primary text-white border-primary'
-                                        : 'bg-surface text-fg-muted border-border hover:border-border-strong'
+                                        : 'bg-surface text-fg-muted border-border hover:border-primary'
                                 }`}
                                 onClick={() => onWhiten(false)}
                                 title="Keep the logo's original colors"
@@ -3724,7 +3724,7 @@ const LogoSelector = ({
                     {onSource ? (
                         <SourceSelector value={source} onChange={onSource} />
                     ) : (
-                        <label className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs border border-border text-fg-muted hover:border-border-strong cursor-pointer">
+                        <label className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs border border-border text-fg-muted hover:border-primary cursor-pointer">
                             <span className="material-symbols-outlined text-sm">upload</span>
                             Upload custom
                             <input
@@ -3740,7 +3740,7 @@ const LogoSelector = ({
             {/* 'Upload' source with nothing uploaded yet → a dropzone (the chosen
                 file then shows in the customLogo card below). */}
             {onSource && source === 'upload' && !customLogo ? (
-                <label className="flex flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed border-border text-fg-subtle text-xs py-6 cursor-pointer hover:border-border-strong">
+                <label className="flex flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed border-border text-fg-subtle text-xs py-6 cursor-pointer hover:border-primary">
                     <span className="material-symbols-outlined">upload</span>
                     Upload a logo (PNG, transparent)
                     <input type="file" accept="image/*" className="hidden" onChange={onFile} />
@@ -3780,7 +3780,7 @@ const LogoSelector = ({
                                 className={`relative aspect-video rounded-md overflow-hidden border-2 bg-black transition-all ${
                                     isSel
                                         ? 'border-primary ring-2 ring-primary/40'
-                                        : 'border-border hover:border-border-strong'
+                                        : 'border-border hover:border-primary'
                                 }`}
                                 title={it.width ? `${it.width}×${it.height}` : path}
                             >
@@ -3861,7 +3861,7 @@ const LogoSelector = ({
                     <button
                         type="button"
                         onClick={() => setShowTouchUp(s => !s)}
-                        className="px-2.5 py-1 text-xs rounded-md border bg-surface text-fg-muted border-border hover:border-border-strong"
+                        className="px-2.5 py-1 text-xs rounded-md border bg-surface text-fg-muted border-border hover:border-primary"
                     >
                         {showTouchUp ? 'Hide colour fix' : 'Fix a mis-coloured area (optional)'}
                     </button>
@@ -3964,7 +3964,7 @@ const SquareFramer = ({
         `px-2.5 py-1 text-sm rounded-md border ${
             on
                 ? 'bg-primary text-white border-primary'
-                : 'bg-surface text-fg-muted border-border hover:border-border-strong'
+                : 'bg-surface text-fg-muted border-border hover:border-primary'
         }`;
     const point = useCallback(e => {
         const el = wrapRef.current;
@@ -4500,7 +4500,7 @@ const BackgroundArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast 
         `px-2.5 py-1 text-sm rounded-md border ${
             on
                 ? 'bg-primary text-white border-primary'
-                : 'bg-surface text-fg-muted border-border hover:border-border-strong'
+                : 'bg-surface text-fg-muted border-border hover:border-primary'
         }`;
 
     return (
@@ -4860,7 +4860,7 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
         `px-3 py-1 text-sm rounded-md border ${
             on
                 ? 'bg-primary text-white border-primary'
-                : 'bg-surface text-fg-muted border-border hover:border-border-strong'
+                : 'bg-surface text-fg-muted border-border hover:border-primary'
         }`;
 
     return (
@@ -5026,7 +5026,7 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                             <button
                                 type="button"
                                 onClick={() => setShowTouchUp(s => !s)}
-                                className="px-2.5 py-1 text-xs rounded-md border bg-surface text-fg-muted border-border hover:border-border-strong"
+                                className="px-2.5 py-1 text-xs rounded-md border bg-surface text-fg-muted border-border hover:border-primary"
                             >
                                 {showTouchUp
                                     ? 'Hide colour fix'
@@ -5101,7 +5101,7 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                         type="button"
                         onClick={onDownload}
                         disabled={!hasLogo || busy || previewing}
-                        className="px-3 py-1.5 text-sm rounded-md border bg-surface text-fg-muted border-border hover:border-border-strong disabled:opacity-50"
+                        className="px-3 py-1.5 text-sm rounded-md border bg-surface text-fg-muted border-border hover:border-primary disabled:opacity-50"
                     >
                         Download to PC
                     </button>
