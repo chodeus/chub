@@ -114,12 +114,12 @@ def test_detection_holidays_list_is_chub_native():
     assert is_legacy_config({"border_replacerr": {"holidays": []}}) is False
 
 
-def test_detection_unmatched_instances_dict_entry_is_chub_native():
-    # The {plex_name: {library_names}} dict form is a supported native shape,
-    # not a legacy signal — it must NOT trigger migration on its own.
+def test_detection_unmatched_instances_dict_entry_triggers_split():
+    # A dict entry in instances is the legacy shape — it must trigger migration
+    # so the split rule converts it into plex_scope.
     assert (
         is_legacy_config({"unmatched_assets": {"instances": ["radarr", {"Plex": {}}]}})
-        is False
+        is True
     )
 
 
@@ -230,26 +230,118 @@ def test_rule_cleanarr_existing_mode_wins():
     assert "dry_run" not in out["poster_cleanarr"]
 
 
-def test_unmatched_instances_dict_form_is_preserved():
-    # The {plex_name: {library_names}} dict form is a supported native shape;
-    # migration must pass it through untouched (no flattening, no warning).
+def test_split_poster_renamerr_instances_to_plex_scope():
     raw = {
-        "main": {"theme": "dark"},  # forces migration via a real legacy signal
-        "unmatched_assets": {
+        "main": {"theme": "dark"},  # forces migration via an existing legacy signal
+        "poster_renamerr": {
             "instances": [
-                "radarr",
-                "sonarr",
-                {"Plex": {"library_names": ["Movies"]}},
+                "Radarr",
+                {"Plex": {"library_names": ["Movies"], "add_posters": True}},
             ]
         },
     }
     out, notes = migrate(raw)
-    assert out["unmatched_assets"]["instances"] == [
-        "radarr",
-        "sonarr",
-        {"Plex": {"library_names": ["Movies"]}},
+    assert out["poster_renamerr"]["instances"] == ["Radarr"]
+    assert out["poster_renamerr"]["plex_scope"] == [
+        {
+            "instance": "Plex",
+            "library_names": ["Movies"],
+            "add_posters": True,
+            "match_collections": True,
+        }
     ]
-    assert not any("unmatched_assets.instances" in n.rule for n in notes)
+    assert any("plex_scope" in n.rule for n in notes)
+
+
+def test_split_asset_renamerr_instances_to_plex_scope():
+    raw = {
+        "main": {"theme": "dark"},
+        "asset_renamerr": {
+            "instances": [
+                "Radarr",
+                {"Plex": {"library_names": ["Movies"], "add_posters": True}},
+            ]
+        },
+    }
+    out, notes = migrate(raw)
+    assert out["asset_renamerr"]["instances"] == ["Radarr"]
+    assert out["asset_renamerr"]["plex_scope"] == [
+        {
+            "instance": "Plex",
+            "library_names": ["Movies"],
+            "add_posters": True,
+            "match_collections": True,
+        }
+    ]
+    assert any("plex_scope" in n.rule for n in notes)
+
+
+def test_split_poster_renamerr_empty_libs_preserves_no_collections():
+    raw = {
+        "main": {"theme": "dark"},
+        "poster_renamerr": {
+            "instances": [
+                "Radarr",
+                {"Plex": {"library_names": [], "add_posters": True}},
+            ]
+        },
+    }
+    out, _ = migrate(raw)
+    scope = out["poster_renamerr"]["plex_scope"][0]
+    assert scope["match_collections"] is False
+    assert scope["add_posters"] is True
+
+
+def test_split_unmatched_instances_to_plex_scope():
+    raw = {
+        "main": {"theme": "dark"},
+        "unmatched_assets": {
+            "instances": ["Radarr", {"Plex": {"library_names": ["Movies", "Anime"]}}]
+        },
+    }
+    out, _ = migrate(raw)
+    assert out["unmatched_assets"]["instances"] == ["Radarr"]
+    assert out["unmatched_assets"]["plex_scope"] == [
+        {
+            "instance": "Plex",
+            "library_names": ["Movies", "Anime"],
+            "add_posters": False,
+            "match_collections": True,
+        }
+    ]
+
+
+def test_split_is_idempotent_on_new_shape():
+    raw = {
+        "poster_renamerr": {
+            "instances": ["Radarr"],
+            "plex_scope": [
+                {
+                    "instance": "Plex",
+                    "library_names": ["Movies"],
+                    "add_posters": True,
+                    "match_collections": True,
+                }
+            ],
+        }
+    }
+    assert is_legacy_config(raw) is False
+    out, notes = migrate(raw)
+    assert out["poster_renamerr"]["plex_scope"] == raw["poster_renamerr"]["plex_scope"]
+    assert not any("plex_scope" in n.rule for n in notes)
+
+
+def test_unmatched_dict_form_migrates_into_plex_scope():
+    raw = {
+        "main": {"theme": "dark"},
+        "unmatched_assets": {
+            "instances": ["radarr", "sonarr", {"Plex": {"library_names": ["Movies"]}}]
+        },
+    }
+    out, notes = migrate(raw)
+    assert out["unmatched_assets"]["instances"] == ["radarr", "sonarr"]
+    assert out["unmatched_assets"]["plex_scope"][0]["instance"] == "Plex"
+    assert any("plex_scope" in n.rule for n in notes)
 
 
 def test_rule_holidays_dict_to_list_single_string_color():
@@ -296,11 +388,12 @@ def test_end_to_end_legacy_blob_migrates_cleanly():
     assert out["general"]["log_level"] == "info"
     assert out["user_interface"]["theme"] == "dark"
     assert out["unmatched_assets"]["ignore_folders"] == ["/mnt/junk"]
-    # Plex dict form is preserved (supported native shape), not flattened.
-    assert out["unmatched_assets"]["instances"] == [
-        "radarr",
-        "sonarr",
-        {"Plex": {"library_names": ["Movies", "TV Shows"]}},
+    # Plex dict entry split into plex_scope; only ARR names remain in instances.
+    assert out["unmatched_assets"]["instances"] == ["radarr", "sonarr"]
+    assert out["unmatched_assets"]["plex_scope"][0]["instance"] == "Plex"
+    assert out["unmatched_assets"]["plex_scope"][0]["library_names"] == [
+        "Movies",
+        "TV Shows",
     ]
     assert out["renameinatorr"]["ignore_tags"] == "do-not-touch"
     assert out["poster_cleanarr"]["asset_dirs"] == ["/posters"]

@@ -17,6 +17,8 @@ import copy
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Tuple
 
+from backend.util.config import _split_legacy_instances
+
 
 @dataclass
 class MigrationNote:
@@ -94,12 +96,15 @@ def is_legacy_config(raw: Dict[str, Any]) -> bool:
     if isinstance(raw.get("border_replacerr", {}).get("holidays"), dict):
         return True
 
-    # NOTE: `unmatched_assets.instances` is deliberately NOT a legacy signal.
-    # The `{plex_name: {library_names: [...]}}` dict form is a supported native
-    # shape (config.UnmatchedAssetsConfig.instances is `List[Union[str, Dict]]`;
-    # unmatched_assets.compute_instance_filters reads `library_names` to narrow a
-    # Plex instance to specific libraries). Flagging it here previously caused
-    # valid native configs to be misclassified as legacy and flattened on load.
+    # poster_renamerr / asset_renamerr / unmatched_assets: any non-string entry
+    # in `instances` is the legacy `{plex_name: {library_names, add_posters}}`
+    # shape that the split rule converts into a `plex_scope` list. Detection
+    # supersedes the old "deliberately NOT a legacy signal" note — the dict form
+    # is now always migrated to plex_scope on load.
+    for _mod in ("poster_renamerr", "asset_renamerr", "unmatched_assets"):
+        _inst = raw.get(_mod, {}).get("instances")
+        if isinstance(_inst, list) and any(not isinstance(i, str) for i in _inst):
+            return True
 
     # `poster_cleanarr.instances` likewise accepted `{plex_name: {...}}` dict
     # entries in the legacy schema (same shape as poster_renamerr). The current
@@ -374,6 +379,37 @@ def _rule_flatten_cleanarr_instances(
         )
 
 
+def _rule_split_module_instances_to_plex_scope(
+    raw: Dict[str, Any], notes: List[MigrationNote]
+) -> None:
+    """Split legacy `{plex_name: {library_names, add_posters}}` dict entries
+    in `instances` into a `plex_scope` list for each of the three modules that
+    support it. Reuses `_split_legacy_instances` from config.py (single source
+    of truth). Idempotent: modules whose `instances` are already all-strings
+    are skipped with no note.
+    """
+    for module in ("poster_renamerr", "asset_renamerr", "unmatched_assets"):
+        sec = raw.get(module)
+        if not isinstance(sec, dict):
+            continue
+        split = _split_legacy_instances(sec)
+        # _split_legacy_instances returns the SAME object iff nothing changed;
+        # value-equality would always be True here and append a spurious note.
+        if split is sec:
+            continue  # all-string instances — no change
+        raw[module] = split
+        notes.append(
+            MigrationNote(
+                rule=f"split:{module}.instances->plex_scope",
+                message=(
+                    f"Split legacy Plex dict entries out of `{module}.instances` "
+                    f"into `{module}.plex_scope`. ARR instance names remain in "
+                    f"`instances`."
+                ),
+            )
+        )
+
+
 def _rule_border_holidays_dict_to_list(
     raw: Dict[str, Any], notes: List[MigrationNote]
 ) -> None:
@@ -487,8 +523,7 @@ def migrate(raw: Dict[str, Any]) -> Tuple[Dict[str, Any], List[MigrationNote]]:
     )
 
     # Shape conversions
-    # NOTE: unmatched_assets.instances is intentionally left untouched — its
-    # `{plex_name: {library_names}}` dict form is a supported native shape.
+    _rule_split_module_instances_to_plex_scope(out, notes)
     _rule_flatten_cleanarr_instances(out, notes)
     _rule_split_cleanarr_instances(out, notes)
 
