@@ -67,6 +67,7 @@ def make_module(**config_overrides):
         "sync_assets": False,
         "tmdb_language": "en",
         "instances": [],
+        "plex_scope": [],
     }
     cfg.update(config_overrides)
     m.config = SimpleNamespace(**cfg)
@@ -309,7 +310,11 @@ def test_direct_banner_skipped():
 def test_direct_logo_calls_upload_logo(monkeypatch):
     m = make_module(
         apply_method="plex",
-        instances=[{"plex1": SimpleNamespace(library_names=["Movies"], add_posters=True)}],
+        plex_scope=[
+            SimpleNamespace(
+                instance="plex1", library_names=["Movies"], add_posters=True
+            )
+        ],
     )
     calls = []
 
@@ -330,7 +335,11 @@ def test_direct_logo_calls_upload_logo(monkeypatch):
 def test_direct_squareart_and_background_methods(monkeypatch):
     m = make_module(
         apply_method="plex",
-        instances=[{"plex1": SimpleNamespace(library_names=["Movies"], add_posters=True)}],
+        plex_scope=[
+            SimpleNamespace(
+                instance="plex1", library_names=["Movies"], add_posters=True
+            )
+        ],
     )
     used = []
 
@@ -344,10 +353,8 @@ def test_direct_squareart_and_background_methods(monkeypatch):
             return True
 
     m._plex_clients = {"plex1": FakeClient()}
-    m._apply_direct(
-        _empty_index_db(), _media(), "squareart", "/x/s.png", None, False)
-    m._apply_direct(
-        _empty_index_db(), _media(), "background", "/x/b.png", None, False)
+    m._apply_direct(_empty_index_db(), _media(), "squareart", "/x/s.png", None, False)
+    m._apply_direct(_empty_index_db(), _media(), "background", "/x/b.png", None, False)
     assert used == ["squareart", "background"]
 
 
@@ -593,14 +600,26 @@ def test_already_applied_skips_unchanged_fanart(db):
     # same url + applied + same method -> skip
     assert (
         m._already_applied(
-            db, db.media_asset_matches.get_one("media", 1, "logo"), "plex", "fanart", None, "http://x/l.png", None
+            db,
+            db.media_asset_matches.get_one("media", 1, "logo"),
+            "plex",
+            "fanart",
+            None,
+            "http://x/l.png",
+            None,
         )
         is True
     )
     # different url -> don't skip
     assert (
         m._already_applied(
-            db, db.media_asset_matches.get_one("media", 1, "logo"), "plex", "fanart", None, "http://x/OTHER.png", None
+            db,
+            db.media_asset_matches.get_one("media", 1, "logo"),
+            "plex",
+            "fanart",
+            None,
+            "http://x/OTHER.png",
+            None,
         )
         is False
     )
@@ -630,13 +649,27 @@ def test_already_applied_local_mtime(db, tmp_path):
     )
     # unchanged mtime + applied_path exists -> skip
     assert (
-        m._already_applied(db, db.media_asset_matches.get_one("media", 2, "logo"), "kometa", "local", f, None, mtime)
+        m._already_applied(
+            db,
+            db.media_asset_matches.get_one("media", 2, "logo"),
+            "kometa",
+            "local",
+            f,
+            None,
+            mtime,
+        )
         is True
     )
     # changed mtime -> don't skip
     assert (
         m._already_applied(
-            db, db.media_asset_matches.get_one("media", 2, "logo"), "kometa", "local", f, None, mtime + 5
+            db,
+            db.media_asset_matches.get_one("media", 2, "logo"),
+            "kometa",
+            "local",
+            f,
+            None,
+            mtime + 5,
         )
         is False
     )
@@ -649,7 +682,13 @@ def test_already_applied_direct_backfills_new_library(db):
     m = make_module(
         sources=["fanart"],
         apply_method="plex",
-        instances=[{"plex1": SimpleNamespace(library_names=["Movies", "Movies 4K"], add_posters=True)}],
+        plex_scope=[
+            SimpleNamespace(
+                instance="plex1",
+                library_names=["Movies", "Movies 4K"],
+                add_posters=True,
+            )
+        ],
     )
     db.media_asset_matches.upsert(
         target_kind="media",
@@ -716,7 +755,13 @@ def test_already_applied_never_skips_in_dry_run(db):
     )
     assert (
         m._already_applied(
-            db, db.media_asset_matches.get_one("media", 3, "logo"), "plex", "fanart", None, "http://x/l.png", None
+            db,
+            db.media_asset_matches.get_one("media", 3, "logo"),
+            "plex",
+            "fanart",
+            None,
+            "http://x/l.png",
+            None,
         )
         is False
     )
@@ -731,8 +776,10 @@ def test_dry_run_does_not_persist_match_state(db, monkeypatch):
         sources=["fanart"],
         apply_method="plex",
         asset_types=["logo"],
-        instances=[
-            {"plex1": SimpleNamespace(library_names=["Movies"], add_posters=True)}
+        plex_scope=[
+            SimpleNamespace(
+                instance="plex1", library_names=["Movies"], add_posters=True
+            )
         ],
     )
 
@@ -771,7 +818,13 @@ def test_dry_run_does_not_persist_match_state(db, monkeypatch):
 def test_apply_direct_uploads_to_all_matching_libraries():
     m = make_module(
         apply_method="plex",
-        instances=[{"plex1": SimpleNamespace(library_names=["Movies", "Movies 4K"], add_posters=True)}],
+        plex_scope=[
+            SimpleNamespace(
+                instance="plex1",
+                library_names=["Movies", "Movies 4K"],
+                add_posters=True,
+            )
+        ],
     )
 
     class FakeClient:
@@ -793,12 +846,12 @@ def test_apply_direct_skips_type_mismatched_libraries():
     are guaranteed misses (the old source of noisy 'not found' errors)."""
     m = make_module(
         apply_method="plex",
-        instances=[
-            {
-                "plex1": SimpleNamespace(
-                    library_names=["Films", "TV Programmes"], add_posters=True
-                )
-            }
+        plex_scope=[
+            SimpleNamespace(
+                instance="plex1",
+                library_names=["Films", "TV Programmes"],
+                add_posters=True,
+            )
         ],
     )
 
@@ -821,7 +874,9 @@ def test_apply_direct_skips_type_mismatched_libraries():
     assert uploaded_to == ["Films"]
     assert set(applied_libs) == {"plex1/Films"}
     # the type-filtered key set (used for idempotency) matches what was applied
-    assert m._direct_target_lib_keys(_empty_index_db(), _media(), False) == {"plex1/Films"}
+    assert m._direct_target_lib_keys(_empty_index_db(), _media(), False) == {
+        "plex1/Films"
+    }
 
 
 def test_apply_direct_uses_index_resolved_libraries():
@@ -830,12 +885,10 @@ def test_apply_direct_uses_index_resolved_libraries():
     search, and intersected with the opted-in libraries."""
     m = make_module(
         apply_method="plex",
-        instances=[
-            {
-                "plex1": SimpleNamespace(
-                    library_names=["Films", "Films 4K"], add_posters=True
-                )
-            }
+        plex_scope=[
+            SimpleNamespace(
+                instance="plex1", library_names=["Films", "Films 4K"], add_posters=True
+            )
         ],
     )
 
@@ -884,15 +937,15 @@ def test_apply_direct_uses_plex_title_and_rating_key():
     'AVPR: Aliens vs Predator - Requiem')."""
     m = make_module(
         apply_method="plex",
-        instances=[{"plex1": SimpleNamespace(library_names=["Films"], add_posters=True)}],
+        plex_scope=[
+            SimpleNamespace(instance="plex1", library_names=["Films"], add_posters=True)
+        ],
     )
     calls = []
 
     class FakeClient:
         def upload_logo(self, library_name, item_title, **kw):
-            calls.append(
-                (library_name, item_title, kw.get("year"), kw.get("plex_id"))
-            )
+            calls.append((library_name, item_title, kw.get("year"), kw.get("plex_id")))
             return True
 
     m._plex_clients = {"plex1": FakeClient()}
@@ -916,9 +969,7 @@ def test_apply_direct_uses_plex_title_and_rating_key():
     )
     assert applied is True
     # Plex title + Plex year + cached ratingKey — not the *arr "8 A.M. Metro"/2023.
-    assert calls == [
-        ("Films", "AVPR: Aliens vs Predator - Requiem", 2007, "218095")
-    ]
+    assert calls == [("Films", "AVPR: Aliens vs Predator - Requiem", 2007, "218095")]
     assert set(applied_libs) == {"plex1/Films"}
 
 
@@ -982,16 +1033,26 @@ def _gate_resolved_titles(db, apply_method):
     """Run match_and_apply_assets over one unreleased + one released item and
     return the titles that reached source resolution (i.e. were NOT gated)."""
     unreleased = {
-        "id": 1, "asset_type": "movie", "title": "Avatar 4",
-        "year": 2029, "status": "announced", "has_content": 0,
+        "id": 1,
+        "asset_type": "movie",
+        "title": "Avatar 4",
+        "year": 2029,
+        "status": "announced",
+        "has_content": 0,
     }
     released = {
-        "id": 2, "asset_type": "movie", "title": "Dune",
-        "year": 2021, "status": "released", "has_content": 1,
+        "id": 2,
+        "asset_type": "movie",
+        "title": "Dune",
+        "year": 2021,
+        "status": "released",
+        "has_content": 1,
     }
     m = make_module(
-        sources=["local"], asset_types=["logo"],
-        apply_method=apply_method, dry_run=True,
+        sources=["local"],
+        asset_types=["logo"],
+        apply_method=apply_method,
+        dry_run=True,
     )
     m._report_progress = lambda *a, **k: None
     m.is_cancelled = lambda: False
@@ -1029,8 +1090,12 @@ def _run_no_source(db, media_id=7, **overrides):
     """Drive match_and_apply_assets over one released item whose source never
     resolves (no artwork anywhere). Returns the item id."""
     media = {
-        "id": media_id, "asset_type": "movie", "title": "No Art",
-        "year": 2021, "status": "released", "has_content": 1,
+        "id": media_id,
+        "asset_type": "movie",
+        "title": "No Art",
+        "year": 2021,
+        "status": "released",
+        "has_content": 1,
     }
     cfg = dict(sources=["local"], asset_types=["logo"], apply_method="kometa")
     cfg.update(overrides)
@@ -1059,8 +1124,11 @@ def test_missing_row_not_written_on_dry_run(db):
 def test_missing_does_not_downgrade_applied(db):
     mid = 7
     db.media_asset_matches.upsert(
-        target_kind="media", target_id=mid, image_type="logo",
-        source="tmdb", match_status="applied",
+        target_kind="media",
+        target_id=mid,
+        image_type="logo",
+        source="tmdb",
+        match_status="applied",
     )
     _run_no_source(db, media_id=mid)
     row = db.media_asset_matches.get_one("media", mid, "logo")
@@ -1147,14 +1215,30 @@ def test_purge_season_logos_removes_only_season_logo_rows(db):
     season_id = _insert_media(db, "Show X", "show", season_number=1)
     movie_id = _insert_media(db, "Movie Y", "movie")
     m = db.media_asset_matches
-    m.upsert(target_kind="media", target_id=show_id, image_type="logo",
-             match_status="missing")
-    m.upsert(target_kind="media", target_id=season_id, image_type="logo",
-             match_status="missing")
-    m.upsert(target_kind="media", target_id=season_id, image_type="background",
-             match_status="missing")
-    m.upsert(target_kind="media", target_id=movie_id, image_type="logo",
-             match_status="applied")
+    m.upsert(
+        target_kind="media",
+        target_id=show_id,
+        image_type="logo",
+        match_status="missing",
+    )
+    m.upsert(
+        target_kind="media",
+        target_id=season_id,
+        image_type="logo",
+        match_status="missing",
+    )
+    m.upsert(
+        target_kind="media",
+        target_id=season_id,
+        image_type="background",
+        match_status="missing",
+    )
+    m.upsert(
+        target_kind="media",
+        target_id=movie_id,
+        image_type="logo",
+        match_status="applied",
+    )
 
     assert m.purge_season_logos() == 1
     kept = {(r["target_id"], r["image_type"]) for r in m.get_all()}
