@@ -17,8 +17,6 @@ import copy
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Tuple
 
-from backend.util.config import _split_legacy_instances
-
 
 @dataclass
 class MigrationNote:
@@ -418,6 +416,10 @@ def _rule_split_module_instances_to_plex_scope(
     # `instances` — the old runtime treated a bare string as ARR, so leaving it
     # preserves behaviour. Detection (is_legacy_config) uses the same plex-only
     # rule, so the two never disagree (which would otherwise loop re-detecting).
+    # Deferred to break the config ↔ config_migrator import cycle: config.py
+    # imports this module (also deferred) from inside load_config().
+    from backend.util.config import _split_legacy_instances
+
     plex_names, arr_names = _instance_names_by_type(raw)
     plex_only = plex_names - arr_names
     for module in ("poster_renamerr", "asset_renamerr", "unmatched_assets"):
