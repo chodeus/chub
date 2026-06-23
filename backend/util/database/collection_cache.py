@@ -108,6 +108,15 @@ class CollectionCache(DatabaseBase):
             or []
         )
 
+    def get_library_names_for_instance(self, instance_name: str) -> list:
+        """Distinct library names present in the cache for an instance."""
+        rows = self.execute_query(
+            "SELECT DISTINCT library_name FROM collections_cache WHERE instance_name=?",
+            (instance_name,),
+            fetch_all=True,
+        )
+        return [r["library_name"] for r in (rows or []) if r["library_name"]]
+
     def get_by_id(self, id: int) -> Optional[dict]:
         """Return a single collection row by its unique integer ID."""
         return self.execute_query(
