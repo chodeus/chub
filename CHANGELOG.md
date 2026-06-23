@@ -2,6 +2,46 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.34.0](https://github.com/chodeus/chub/compare/v2.33.0...v2.34.0) (2026-06-23)
+
+
+### Features
+
+* **api:** cached Plex library catalog endpoint ([5e8c00a](https://github.com/chodeus/chub/commit/5e8c00ae32e56d8013a35cbe0e17870db2584648))
+* **config:** add PlexScope model + plex_scope split with legacy coercion ([655c95a](https://github.com/chodeus/chub/commit/655c95a187caff0b49661267dbfecd92e810e8c5))
+* **config:** migrator splits module instances into instances + plex_scope ([8cf86e9](https://github.com/chodeus/chub/commit/8cf86e9650ccec7ad47f2becd6a747b9348a44b5))
+* **connector:** consume plex_scope + match_collections for media/collections ([539cc1c](https://github.com/chodeus/chub/commit/539cc1c6d1e27be1c6e6a91cd4c7dc244bfbb8ff))
+* **modules:** migrate poster/asset/upload consumers to plex_scope ([28ec94c](https://github.com/chodeus/chub/commit/28ec94ca70c667f3c65ffc017fe3a025749738ab))
+* **ui:** explicit Libraries catalog section on Plex instance card ([a96c5e6](https://github.com/chodeus/chub/commit/a96c5e639564d7ddf89ca2a25ca068e050ef09d4))
+* **ui:** plex_scope field (catalog picker + match_collections) ([642c305](https://github.com/chodeus/chub/commit/642c305e49a4ccc4545558aa3296e34adbf4153c))
+* **ui:** split instances/plex_scope in poster/asset/unmatched schema ([fea06d5](https://github.com/chodeus/chub/commit/fea06d54a6cd86f2bcac2f765bbdbc77f5fbde53))
+* **unmatched:** read plex_scope for instance/library filtering ([ca924c7](https://github.com/chodeus/chub/commit/ca924c715a2e7ae6c720ff053cebf444715251c8))
+
+
+### Bug Fixes
+
+* **api:** include plex_scope instances in module test endpoint ([0004eda](https://github.com/chodeus/chub/commit/0004eda71b734162108e7c34e41eeaf5ea2af5b7))
+* **api:** SSRF-guard Plex library fetch (single + catalog endpoints) ([e2573ef](https://github.com/chodeus/chub/commit/e2573efc3c18569a68a11402c7f4a6aa5b5d364c))
+* **config:** dedup/idempotency + ambiguous-name safety in plex_scope relocation ([71b8ff8](https://github.com/chodeus/chub/commit/71b8ff86d9d8e9d4ca942995bd268afffc4ff0fe))
+* **config:** relocate bare Plex-name strings in instances into plex_scope ([d46cbc2](https://github.com/chodeus/chub/commit/d46cbc2689f5136e703663d468ea1ad38914ca87))
+* **config:** stop migrator flattening supported unmatched_assets Plex scope ([06f33e0](https://github.com/chodeus/chub/commit/06f33e006bc0fa727c8c6ad16dc7da91b489db23))
+* **css:** restore utilities and colour aliases dropped by the Tailwind migration ([f4b13e3](https://github.com/chodeus/chub/commit/f4b13e37a55540512313619eb2085587d5efcf1b))
+* **ui:** preserve unrecognized instance strings on save in InstancesField ([381314e](https://github.com/chodeus/chub/commit/381314ef16e4cf67a86566429efdbf49c8124d2a))
+
+
+### Refactoring
+
+* **config:** drop transitional plex_scope legacy validator ([621a2f3](https://github.com/chodeus/chub/commit/621a2f3c7c0d635306ec249374ba15356f3685f5))
+* **css:** remove vestigial class labels and fix invented hover classes ([bec60f2](https://github.com/chodeus/chub/commit/bec60f2f29620927cae454ad2c74df8f3596e05d))
+
+
+### Documentation
+
+* **plan:** backend plan (1/3) for plex_scope + lock match_collections encoding ([0c697d3](https://github.com/chodeus/chub/commit/0c697d376ed124b18f11070425bcda79345e1449))
+* **plan:** expand runtime consumer coverage (Task 3b) after Task 1 review ([00c40fe](https://github.com/chodeus/chub/commit/00c40feab369e044525bfd2480f7aa995e457779))
+* **plan:** frontend (2/3) + cleanup (3/3) plan for plex_scope ([bf415ef](https://github.com/chodeus/chub/commit/bf415efb33b0ca024be821a583a78232e33ebf98))
+* **spec:** central Plex instance + library catalog with per-module plex_scope ([a47a165](https://github.com/chodeus/chub/commit/a47a165ab1b5988f9f381aa18691caadbbabd43a))
+
 ## [2.33.0](https://github.com/chodeus/chub/compare/v2.32.0...v2.33.0) (2026-06-21)
 
 
