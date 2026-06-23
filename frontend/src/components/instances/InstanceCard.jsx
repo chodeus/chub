@@ -30,6 +30,7 @@ export const InstanceCard = ({
     connectionStatus,
     healthStatus,
     instanceStats,
+    plexLibraries,
     isTesting,
     isSyncing,
     onTest,
@@ -37,6 +38,7 @@ export const InstanceCard = ({
     onEdit,
     onDelete,
     onToggle,
+    onFetchLibraries,
 }) => {
     const cardData = {
         name: humanize(instance.name),
@@ -162,6 +164,59 @@ export const InstanceCard = ({
                             <span className="text-fg-muted flex-1 text-sm">
                                 {formatSecondsAgo(instanceStats.snapshot_age_seconds)}
                             </span>
+                        </div>
+                    )}
+
+                    {/* Libraries catalog — Plex only */}
+                    {serviceType === 'plex' && (
+                        <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:gap-4">
+                            <div className="flex items-center gap-1 shrink-0 sm:min-w-24">
+                                <span className="font-semibold text-brand-primary text-sm">
+                                    Libraries:
+                                </span>
+                                {onFetchLibraries && (
+                                    <button
+                                        type="button"
+                                        onClick={() => onFetchLibraries(instance.name)}
+                                        className="text-fg-subtle hover:text-fg-muted text-xs leading-none"
+                                        title="Refresh libraries"
+                                        aria-label="Refresh libraries"
+                                    >
+                                        ↺
+                                    </button>
+                                )}
+                            </div>
+                            {plexLibraries && plexLibraries.length > 0 ? (
+                                <div className="flex flex-wrap gap-1 flex-1">
+                                    {plexLibraries.map((lib, i) => {
+                                        const title = typeof lib === 'string' ? lib : lib.title;
+                                        const type = typeof lib === 'string' ? null : lib.type;
+                                        return (
+                                            <span
+                                                key={i}
+                                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-surface-alt text-fg-muted"
+                                            >
+                                                <span>{title}</span>
+                                                {type && (
+                                                    <span className="text-fg-subtle">{type}</span>
+                                                )}
+                                            </span>
+                                        );
+                                    })}
+                                </div>
+                            ) : (
+                                <div className="flex-1">
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            onFetchLibraries && onFetchLibraries(instance.name)
+                                        }
+                                        className="text-xs text-fg-subtle hover:text-fg-muted underline underline-offset-2"
+                                    >
+                                        Load libraries
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
