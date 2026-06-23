@@ -1478,9 +1478,19 @@ export const InstancesField = React.memo(
                     .filter(type => type !== serviceType)
                     .flatMap(type => serviceSelections[type] || []);
 
-                onChange([...otherSelections, ...newSelection]);
+                // Preserve saved instance-name strings not recognized by any
+                // configured service (e.g. an instance renamed/removed in
+                // Settings→Instances). Rebuilding purely from recognized
+                // selections would silently drop them on an unrelated toggle.
+                const recognized = instanceTypes.flatMap(type => serviceSelections[type] || []);
+                const safeValue = Array.isArray(value) ? value : [];
+                const unrecognized = safeValue.filter(
+                    item => typeof item === 'string' && !recognized.includes(item)
+                );
+
+                onChange([...otherSelections, ...newSelection, ...unrecognized]);
             },
-            [instanceTypes, serviceSelections, onChange]
+            [instanceTypes, serviceSelections, onChange, value]
         );
 
         const inputId = `field-${field.key}`;
