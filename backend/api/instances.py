@@ -24,6 +24,7 @@ from backend.util.config import (
     redact_secrets,
     save_config,
 )
+from backend.util import plex_library_cache
 from backend.util.database import ChubDB
 
 if os.environ.get("DOCKER_ENV"):
@@ -39,6 +40,8 @@ router = APIRouter(
         502: {"description": "External service connection failed"},
     },
 )
+
+_PLEX_CATALOG_TTL = 300.0
 
 
 class TestInstanceRequest(BaseModel):
@@ -503,6 +506,97 @@ async def get_instances(
         )
 
 
+class _PlexFetchError(Exception):
+    """Carries the API error code/status the libraries endpoints surface."""
+
+    def __init__(self, message: str, code: str, status_code: int) -> None:
+        super().__init__(message)
+        self.message = message
+        self.code = code
+        self.status_code = status_code
+
+
+def _fetch_plex_libraries(plex_data: Any) -> list:
+    """Fetch library sections ``[{title, type}]`` from one Plex instance.
+
+    Raises ``_PlexFetchError`` (with the same code/status the single-instance
+    endpoint reports) on missing credentials, connection failure, a non-OK Plex
+    response, or unparseable XML. Shared by the single-instance endpoint and the
+    cached catalog endpoint so the fetch/parse logic lives in one place.
+    """
+    base_url = getattr(plex_data, "url", None)
+    token = getattr(plex_data, "api", None)
+    if not base_url or not token:
+        raise _PlexFetchError(
+            "Missing Plex API credentials for instance",
+            "PLEX_CREDENTIALS_MISSING",
+            400,
+        )
+    headers = {"X-Plex-Token": token}
+    url = f"{base_url}/library/sections"
+    try:
+        res = requests.get(url, headers=headers, timeout=5)
+    except requests.exceptions.RequestException as req_exc:
+        raise _PlexFetchError(
+            f"Failed to connect to Plex server: {req_exc}",
+            "PLEX_CONNECTION_FAILED",
+            502,
+        ) from req_exc
+    if not res.ok:
+        raise _PlexFetchError(
+            f"Plex server error: {res.text}", "PLEX_SERVER_ERROR", res.status_code
+        )
+
+    import xml.etree.ElementTree as ET
+
+    # Plex returns each library section as a <Directory> carrying both a
+    # human-readable `title` and an authoritative `type` (movie/show/artist/
+    # photo) — surfacing `type` lets the UI categorize without title matching.
+    root = ET.fromstring(res.text)
+    return [
+        {"title": el.attrib["title"], "type": el.attrib.get("type", "")}
+        for el in root.findall(".//Directory")
+        if "title" in el.attrib
+    ]
+
+
+@router.get(
+    "/plex/libraries",
+    summary="Get all Plex libraries (catalog)",
+    description=(
+        "Cached map of every configured Plex instance to its libraries. Backs "
+        "the Settings→Instances catalog and the module library pickers."
+    ),
+)
+def get_plex_libraries_catalog(
+    config: ChubConfig = Depends(get_config),
+    logger: Any = Depends(get_logger),
+) -> JSONResponse:
+    """Return ``{instance_name: [{title, type}, ...]}`` for all Plex instances.
+
+    Each instance is served through a short TTL cache so the page/pickers don't
+    re-hit Plex on every render. A per-instance fetch failure yields ``[]`` for
+    that instance and a warning rather than failing the whole response."""
+    catalog: dict = {}
+    for name in config.instances.plex or {}:
+        try:
+            catalog[name] = plex_library_cache.get_cached_libraries(
+                name,
+                fetch=lambda n: _fetch_plex_libraries(config.instances.plex[n]),
+                ttl_seconds=_PLEX_CATALOG_TTL,
+                now=time.monotonic(),
+            )
+        except Exception as exc:
+            logger.warning(
+                "Catalog: failed to fetch libraries for Plex '%s': %s", name, exc
+            )
+            catalog[name] = []
+    return ok(
+        f"Retrieved libraries for {len(catalog)} Plex instance(s)",
+        {"libraries": catalog},
+    )
+
+
 @router.get(
     "/plex/{instance}/libraries",
     summary="Get Plex libraries",
@@ -559,48 +653,11 @@ def get_plex_libraries(
                 status_code=404,
             )
 
-        base_url = plex_data.url
-        token = plex_data.api
-        if not base_url or not token:
-            return error(
-                "Missing Plex API credentials for instance",
-                code="PLEX_CREDENTIALS_MISSING",
-                status_code=400,
-            )
-
-        headers = {"X-Plex-Token": token}
-        url = f"{base_url}/library/sections"
-
         try:
-            res = requests.get(url, headers=headers, timeout=5)
-        except requests.exceptions.RequestException as req_exc:
-            logger.error(f"Plex request failed: {req_exc}")
-            return error(
-                f"Failed to connect to Plex server: {str(req_exc)}",
-                code="PLEX_CONNECTION_FAILED",
-                status_code=502,
-            )
-
-        if not res.ok:
-            return error(
-                f"Plex server error: {res.text}",
-                code="PLEX_SERVER_ERROR",
-                status_code=res.status_code,
-            )
-
-        import xml.etree.ElementTree as ET
-
-        root = ET.fromstring(res.text)
-        # Plex returns each library section as a <Directory> with both a
-        # human-readable `title` and an authoritative `type` attribute
-        # (movie / show / artist / photo). Surfacing `type` lets the UI
-        # categorize libraries without substring-matching the title — which
-        # was unreliable when users renamed e.g. "Movies" to "Cinema".
-        libraries = [
-            {"title": el.attrib["title"], "type": el.attrib.get("type", "")}
-            for el in root.findall(".//Directory")
-            if "title" in el.attrib
-        ]
+            libraries = _fetch_plex_libraries(plex_data)
+        except _PlexFetchError as fe:
+            logger.error("Plex libraries fetch failed: %s", fe.message)
+            return error(fe.message, code=fe.code, status_code=fe.status_code)
 
         return ok(
             f"Retrieved {len(libraries)} libraries for Plex instance '{instance}'",
@@ -827,6 +884,7 @@ async def create_instance(
 
         # Save updated configuration
         save_config(config)
+        plex_library_cache.invalidate()
 
         logger.info(f"Successfully created {service} instance: {name}")
         return ok(
@@ -935,6 +993,7 @@ async def update_instance(
 
         # Save updated configuration
         save_config(config)
+        plex_library_cache.invalidate()
 
         logger.info(f"Successfully updated {service} instance: {new_name}")
         return ok(
@@ -1021,6 +1080,7 @@ async def delete_instance(
 
         # Save updated configuration
         save_config(config)
+        plex_library_cache.invalidate()
 
         logger.info(f"Successfully deleted {service} instance: {instance_id}")
         return ok(
