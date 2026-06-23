@@ -166,11 +166,6 @@ class PosterRenamerrConfig(BaseModel):
     instances: List[str] = Field(default_factory=list)
     plex_scope: List[PlexScope] = Field(default_factory=list)
 
-    @model_validator(mode="before")
-    @classmethod
-    def _coerce_legacy_instances(cls, value: Any) -> Any:
-        return _split_legacy_instances(value)
-
     # --- Music (Lidarr) artwork options ---
     # Only meaningful when a Lidarr instance is configured; the frontend gates
     # them on that. All are image-only / Plex-metadata operations — none ever
@@ -286,11 +281,6 @@ class AssetRenamerrConfig(BaseModel):
     tmdb_language: List[str] = Field(default_factory=lambda: ["en"])
     instances: List[str] = Field(default_factory=list)
     plex_scope: List[PlexScope] = Field(default_factory=list)
-
-    @model_validator(mode="before")
-    @classmethod
-    def _coerce_legacy_instances(cls, value: Any) -> Any:
-        return _split_legacy_instances(value)
 
     @field_validator("apply_method", mode="before")
     @classmethod
@@ -676,11 +666,6 @@ class UnmatchedAssetsConfig(BaseModel):
     ignore_unmonitored: bool = False
     instances: List[str] = Field(default_factory=list)
     plex_scope: List[PlexScope] = Field(default_factory=list)
-
-    @model_validator(mode="before")
-    @classmethod
-    def _coerce_legacy_instances(cls, value: Any) -> Any:
-        return _split_legacy_instances(value)
 
 
 class TMDBConfig(BaseModel):

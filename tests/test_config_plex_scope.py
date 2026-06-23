@@ -1,4 +1,8 @@
+import pytest
+from pydantic import ValidationError
+
 from backend.util.config import (
+    AssetRenamerrConfig,
     PlexScope,
     PosterRenamerrConfig,
     UnmatchedAssetsConfig,
@@ -30,36 +34,35 @@ def test_new_split_shape_validates():
     assert c.plex_scope[0].match_collections is True
 
 
-def test_legacy_union_shape_is_coerced_poster():
-    c = PosterRenamerrConfig(
-        instances=[
-            "Radarr",
-            {"Plex": {"library_names": ["Movies"], "add_posters": True}},
-        ]
-    )
-    assert c.instances == ["Radarr"]
-    assert len(c.plex_scope) == 1
-    assert c.plex_scope[0].instance == "Plex"
-    assert c.plex_scope[0].library_names == ["Movies"]
-    assert c.plex_scope[0].add_posters is True
-    assert c.plex_scope[0].match_collections is True
+def test_poster_config_rejects_legacy_union_shape():
+    with pytest.raises(ValidationError):
+        PosterRenamerrConfig(
+            instances=["Radarr", {"Plex": {"library_names": ["Movies"]}}]
+        )
 
 
-def test_legacy_union_empty_libraries_sets_match_collections_false():
-    c = PosterRenamerrConfig(
-        instances=["Radarr", {"Plex": {"library_names": [], "add_posters": True}}]
-    )
-    assert c.plex_scope[0].match_collections is False
-    assert c.plex_scope[0].add_posters is True
+def test_poster_config_rejects_legacy_empty_libraries():
+    with pytest.raises(ValidationError):
+        PosterRenamerrConfig(
+            instances=["Radarr", {"Plex": {"library_names": [], "add_posters": True}}]
+        )
 
 
-def test_legacy_union_shape_is_coerced_unmatched():
-    c = UnmatchedAssetsConfig(
-        instances=["Radarr", {"Plex": {"library_names": ["Movies"]}}]
-    )
-    assert c.instances == ["Radarr"]
-    assert c.plex_scope[0].instance == "Plex"
-    assert c.plex_scope[0].library_names == ["Movies"]
+def test_unmatched_config_rejects_legacy_union_shape():
+    with pytest.raises(ValidationError):
+        UnmatchedAssetsConfig(
+            instances=["Radarr", {"Plex": {"library_names": ["Movies"]}}]
+        )
+
+
+def test_asset_config_rejects_legacy_union_shape():
+    with pytest.raises(ValidationError):
+        AssetRenamerrConfig(
+            instances=[
+                "Radarr",
+                {"Plex": {"library_names": ["Movies"], "add_posters": True}},
+            ]
+        )
 
 
 def test_split_legacy_idempotent_on_already_split():
@@ -96,17 +99,3 @@ def test_split_legacy_merges_preexisting_plex_scope():
     out = _split_legacy_instances(payload)
     names = [s["instance"] for s in out["plex_scope"]]
     assert "Plex1" in names and "Plex2" in names
-
-
-def test_asset_renamerr_legacy_coercion():
-    from backend.util.config import AssetRenamerrConfig
-
-    c = AssetRenamerrConfig(
-        instances=[
-            "Radarr",
-            {"Plex": {"library_names": ["Movies"], "add_posters": True}},
-        ]
-    )
-    assert c.instances == ["Radarr"]
-    assert c.plex_scope[0].instance == "Plex"
-    assert c.plex_scope[0].add_posters is True
