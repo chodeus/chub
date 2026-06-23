@@ -106,6 +106,18 @@ def is_legacy_config(raw: Dict[str, Any]) -> bool:
         if isinstance(_inst, list) and any(not isinstance(i, str) for i in _inst):
             return True
 
+    # ...and a bare Plex-instance-name string left in a converted module's
+    # `instances` (e.g. flatten-bug residue) must also migrate into plex_scope,
+    # even when it is the only legacy quirk. Classified via the registry.
+    _plex_names, _ = _instance_names_by_type(raw)
+    if _plex_names:
+        for _mod in ("poster_renamerr", "asset_renamerr", "unmatched_assets"):
+            _inst = raw.get(_mod, {}).get("instances")
+            if isinstance(_inst, list) and any(
+                isinstance(i, str) and i in _plex_names for i in _inst
+            ):
+                return True
+
     # `poster_cleanarr.instances` likewise accepted `{plex_name: {...}}` dict
     # entries in the legacy schema (same shape as poster_renamerr). The current
     # schema is `List[str]`, so any non-string element is a legacy shape signal.
@@ -382,31 +394,74 @@ def _rule_flatten_cleanarr_instances(
 def _rule_split_module_instances_to_plex_scope(
     raw: Dict[str, Any], notes: List[MigrationNote]
 ) -> None:
-    """Split legacy `{plex_name: {library_names, add_posters}}` dict entries
-    in `instances` into a `plex_scope` list for each of the three modules that
-    support it. Reuses `_split_legacy_instances` from config.py (single source
-    of truth). Idempotent: modules whose `instances` are already all-strings
-    are skipped with no note.
+    """Move Plex selection out of `instances` into `plex_scope` for the three
+    converted modules.
+
+    Two cases are handled:
+    1. Legacy `{plex_name: {library_names, add_posters}}` dict entries — split
+       via `_split_legacy_instances` (shape-based, shared with nothing else now).
+       `match_collections` is derived from whether libraries were listed.
+    2. A bare Plex-instance-name string left in `instances` (e.g. residue of the
+       old unmatched flatten bug, or a string-form Plex entry). These can't be
+       told from ARR names by shape, so they're relocated using the `instances`
+       registry. They become `{instance, library_names: [], add_posters: False,
+       match_collections: False}` — preserving behaviour: unmatched ignores both
+       flags (reports all of that instance's collections), and poster/asset did
+       nothing for collections with a bare string (media_cache is ARR-only).
+
+    Idempotent: a module already in the split shape (ARR-only `instances`, no
+    Plex names) produces no change and no note.
     """
+    plex_names, _ = _instance_names_by_type(raw)
     for module in ("poster_renamerr", "asset_renamerr", "unmatched_assets"):
         sec = raw.get(module)
         if not isinstance(sec, dict):
             continue
+        # Case 1: shape-based dict split (returns the SAME object if no dicts).
         split = _split_legacy_instances(sec)
-        # _split_legacy_instances returns the SAME object iff nothing changed;
-        # value-equality would always be True here and append a spurious note.
+        changed = split is not sec
+
+        # Case 2: relocate bare Plex-name strings from the ARR list.
+        instances = list(split.get("instances") or [])
+        scope = list(split.get("plex_scope") or [])
+        scoped = {e.get("instance") for e in scope if isinstance(e, dict)}
+        kept: List[Any] = []
+        moved: List[str] = []
+        for name in instances:
+            if isinstance(name, str) and name in plex_names and name not in scoped:
+                scope.append(
+                    {
+                        "instance": name,
+                        "library_names": [],
+                        "add_posters": False,
+                        "match_collections": False,
+                    }
+                )
+                moved.append(name)
+            else:
+                kept.append(name)
+
+        if not changed and not moved:
+            continue  # already split, nothing to relocate
+        # `_split_legacy_instances` aliases `sec` when it made no dict change;
+        # copy before mutating so we never mutate the original in place.
         if split is sec:
-            continue  # all-string instances — no change
+            split = dict(sec)
+        split["instances"] = kept
+        split["plex_scope"] = scope
         raw[module] = split
-        notes.append(
-            MigrationNote(
-                rule=f"split:{module}.instances->plex_scope",
-                message=(
-                    f"Split legacy Plex dict entries out of `{module}.instances` "
-                    f"into `{module}.plex_scope`. ARR instance names remain in "
-                    f"`instances`."
-                ),
+
+        msg = (
+            f"Split Plex selection out of `{module}.instances` into "
+            f"`{module}.plex_scope`. ARR instance names remain in `instances`."
+        )
+        if moved:
+            msg += (
+                f" Relocated bare Plex instance name(s) {moved} from the ARR "
+                f"list into `plex_scope`."
             )
+        notes.append(
+            MigrationNote(rule=f"split:{module}.instances->plex_scope", message=msg)
         )
 
 
