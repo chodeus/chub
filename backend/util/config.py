@@ -69,9 +69,61 @@ class InstancesConfig(BaseModel):
     plex: Dict[str, InstanceDetail] = Field(default_factory=dict)
 
 
-class PosterRenamerrPlexInstance(BaseModel):
+class PlexScope(BaseModel):
+    """A module's opt-in selection of a Plex instance + libraries.
+
+    `library_names` empty == all libraries (only meaningful when collections
+    are matched). `add_posters` and `match_collections` are honored only by
+    uploader modules (poster_renamerr / asset_renamerr); unmatched_assets
+    ignores both — it always reports collections for a selected instance.
+    """
+
+    instance: str
     library_names: List[str] = Field(default_factory=list)
-    add_posters: Optional[bool] = False
+    add_posters: bool = False
+    match_collections: bool = False
+
+
+def _split_legacy_instances(value: Any) -> Any:
+    """Coerce the legacy `instances: List[Union[str, Dict]]` shape into the
+    split {instances, plex_scope} shape, in a Pydantic `before` validator.
+
+    Shape-based (no registry needed): string entries -> ARR `instances`;
+    dict entries `{name: {library_names, add_posters}}` -> `plex_scope`.
+    `match_collections` is derived from whether libraries were listed
+    (non-empty old libraries == collections were matched). Idempotent: a
+    payload already in the new shape (instances all strings) is returned
+    unchanged.
+    """
+    if not isinstance(value, dict):
+        return value
+    instances = value.get("instances")
+    if not isinstance(instances, list):
+        return value
+    if all(isinstance(i, str) for i in instances):
+        return value
+
+    arr: List[str] = []
+    scopes: List[dict] = list(value.get("plex_scope") or [])
+    for item in instances:
+        if isinstance(item, str):
+            arr.append(item)
+        elif isinstance(item, dict) and item:
+            name = next(iter(item))
+            body = item[name] if isinstance(item[name], dict) else {}
+            libs = body.get("library_names") or []
+            scopes.append(
+                {
+                    "instance": name,
+                    "library_names": libs,
+                    "add_posters": bool(body.get("add_posters", False)),
+                    "match_collections": bool(libs),
+                }
+            )
+    new = dict(value)
+    new["instances"] = arr
+    new["plex_scope"] = scopes
+    return new
 
 
 class PosterRenamerrConfig(BaseModel):
@@ -111,9 +163,14 @@ class PosterRenamerrConfig(BaseModel):
     # mistaken for a movie poster.
     music_source_dirs: List[str] = Field(default_factory=list)
     destination_dir: str = ""
-    instances: List[Union[str, Dict[str, PosterRenamerrPlexInstance]]] = Field(
-        default_factory=list
-    )
+    instances: List[str] = Field(default_factory=list)
+    plex_scope: List[PlexScope] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce_legacy_instances(cls, value: Any) -> Any:
+        return _split_legacy_instances(value)
+
     # --- Music (Lidarr) artwork options ---
     # Only meaningful when a Lidarr instance is configured; the frontend gates
     # them on that. All are image-only / Plex-metadata operations — none ever
@@ -161,13 +218,6 @@ class PosterRenamerrConfig(BaseModel):
                 f"apply_method must be one of {sorted(allowed)}, got {value!r}"
             )
         return v
-
-
-class AssetRenamerrPlexInstance(BaseModel):
-    library_names: List[str] = Field(default_factory=list)
-    # Per-instance opt-in for the "plex" apply path: only Plex instances with
-    # add_posters=True receive direct uploads (mirrors PosterRenamerrPlexInstance).
-    add_posters: Optional[bool] = False
 
 
 class AssetRenamerrConfig(BaseModel):
@@ -234,9 +284,13 @@ class AssetRenamerrConfig(BaseModel):
     # matching language wins (language-neutral / textless art is always allowed
     # as a fallback). A legacy single string (e.g. "en") is coerced to ["en"].
     tmdb_language: List[str] = Field(default_factory=lambda: ["en"])
-    instances: List[Union[str, Dict[str, AssetRenamerrPlexInstance]]] = Field(
-        default_factory=list
-    )
+    instances: List[str] = Field(default_factory=list)
+    plex_scope: List[PlexScope] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce_legacy_instances(cls, value: Any) -> Any:
+        return _split_legacy_instances(value)
 
     @field_validator("apply_method", mode="before")
     @classmethod
@@ -620,10 +674,13 @@ class UnmatchedAssetsConfig(BaseModel):
     ignore_tags: List[str] = Field(default_factory=list)
     ignore_collections: List[str] = Field(default_factory=list)
     ignore_unmonitored: bool = False
-    # str = whole instance; dict form {name: {library_names: [...]}} narrows a
-    # Plex instance to specific libraries (compute_instance_filters reads the
-    # inner value with .get, so it stays a plain dict, not a nested model).
-    instances: List[Union[str, Dict[str, Any]]] = Field(default_factory=list)
+    instances: List[str] = Field(default_factory=list)
+    plex_scope: List[PlexScope] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce_legacy_instances(cls, value: Any) -> Any:
+        return _split_legacy_instances(value)
 
 
 class TMDBConfig(BaseModel):
