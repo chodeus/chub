@@ -211,4 +211,17 @@ export const instancesAPI = {
             ...options,
         });
     },
+
+    /**
+     * Fetch catalogued libraries for all Plex instances
+     * @param {Object} options - Request options
+     * @returns {Promise<Object>} Map of instance name → library list
+     */
+    fetchPlexCatalog: (options = {}) => {
+        return apiCore.get('/plex/libraries', {
+            useCache: true,
+            cacheTTL: 10 * 60 * 1000,
+            ...options,
+        });
+    },
 };

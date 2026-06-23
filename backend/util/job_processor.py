@@ -589,14 +589,9 @@ def _check_plex_upload_enabled(config) -> bool:
         bool: True if upload is enabled for any Plex instance
     """
     try:
-        if not hasattr(config, "instances"):
-            return False
-
-        for inst in config.instances:
-            if isinstance(inst, dict):
-                for instance_name, params in inst.items():
-                    if getattr(params, "add_posters", False):
-                        return True
+        for scope in getattr(config, "plex_scope", []) or []:
+            if getattr(scope, "add_posters", False):
+                return True
         return False
     except Exception:
         return False

@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 
 from backend.modules.unmatched_assets import UnmatchedAssets
+from backend.util.config import UnmatchedAssetsConfig
 
 
 def make_module():
@@ -38,11 +39,13 @@ def test_compute_instance_filters_string_list():
     assert m.plex_libraries == {}
 
 
-def test_compute_instance_filters_plex_dict_form():
+def test_compute_instance_filters_plex_scope_with_libraries():
     m = make_module()
-    m.config.instances = [
-        {"plex_main": {"library_names": ["Movies", "Shows"]}},
-        "radarr_main",
+    m.config.instances = ["radarr_main"]
+    from backend.util.config import PlexScope
+
+    m.config.plex_scope = [
+        PlexScope(instance="plex_main", library_names=["Movies", "Shows"])
     ]
     m.compute_instance_filters()
     assert m.allowed_instances == {"plex_main", "radarr_main"}
@@ -325,3 +328,28 @@ def test_get_review_and_ignored_returns_locked():
     assert [r["id"] for r in review] == [1]
     assert [r["id"] for r in ignored] == [2]
     assert [r["id"] for r in locked] == [3]
+
+
+# --- plex_scope shape (new instances + plex_scope split) ---
+
+
+def test_compute_instance_filters_reads_plex_scope():
+    mod = UnmatchedAssets()
+    mod.config = UnmatchedAssetsConfig(
+        instances=["Radarr"],
+        plex_scope=[{"instance": "Plex", "library_names": ["Movies"]}],
+    )
+    mod.compute_instance_filters()
+    assert "Radarr" in mod.allowed_instances
+    assert "Plex" in mod.allowed_instances
+    assert mod.plex_libraries["Plex"] == {"Movies"}
+
+
+def test_compute_instance_filters_empty_libraries_means_all():
+    mod = UnmatchedAssets()
+    mod.config = UnmatchedAssetsConfig(
+        instances=[], plex_scope=[{"instance": "Plex", "library_names": []}]
+    )
+    mod.compute_instance_filters()
+    assert "Plex" in mod.allowed_instances
+    assert "Plex" not in mod.plex_libraries  # empty == all => no narrowing recorded

@@ -1309,10 +1309,15 @@ def test_module(
         if not module_config:
             return ok(f"Module '{name}' has no testable configuration", {"results": []})
 
-        # Get instances from module config
+        # Get instances from module config. For modules using the split shape
+        # (poster_renamerr / asset_renamerr / unmatched_assets), Plex instances
+        # live in `plex_scope`, not `instances` — include them so the test
+        # button still covers Plex connectivity.
         instances_list = getattr(module_config, "instances", None) or getattr(
             module_config, "instances_list", None
         )
+        plex_scope = getattr(module_config, "plex_scope", None) or []
+        instances_list = list(instances_list or []) + [s.instance for s in plex_scope]
         if not instances_list:
             return ok(
                 f"Module '{name}' has no configured instances to test",

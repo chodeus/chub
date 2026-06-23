@@ -884,6 +884,466 @@ const PlexInstanceSelector = React.memo(
 PlexInstanceSelector.displayName = 'PlexInstanceSelector';
 
 /**
+ * PlexScopeLibrarySelector - Library picker driven by the catalog endpoint.
+ * Falls back to per-instance fetchPlexLibraries if catalog data is absent.
+ */
+const PlexScopeLibrarySelector = React.memo(
+    ({
+        instanceName,
+        catalogLibraries,
+        selectedLibraries = [],
+        onLibrariesChange,
+        disabled,
+        scopeId = '',
+    }) => {
+        const hasCatalogData =
+            catalogLibraries !== null &&
+            catalogLibraries !== undefined &&
+            Array.isArray(catalogLibraries);
+
+        const {
+            data: perInstanceResponse,
+            isLoading: perInstanceLoading,
+            error: perInstanceError,
+        } = useApiData({
+            apiFunction: () => instancesAPI.fetchPlexLibraries(instanceName),
+            dependencies: [instanceName],
+            options: {
+                immediate: !hasCatalogData,
+                showErrorToast: false,
+            },
+        });
+
+        const allLibraries = useMemo(() => {
+            if (hasCatalogData) {
+                return catalogLibraries
+                    .map(lib => (typeof lib === 'string' ? lib : lib.title || ''))
+                    .filter(Boolean);
+            }
+            const raw = perInstanceResponse?.data?.libraries;
+            if (!raw || !Array.isArray(raw)) return [];
+            return raw
+                .map(lib => (typeof lib === 'string' ? lib : lib.title || ''))
+                .filter(Boolean);
+        }, [hasCatalogData, catalogLibraries, perInstanceResponse]);
+
+        const handleToggle = useCallback(
+            (libraryName, checked) => {
+                const current = selectedLibraries || [];
+                const updated = checked
+                    ? [...current, libraryName]
+                    : current.filter(l => l !== libraryName);
+                onLibrariesChange(updated);
+            },
+            [selectedLibraries, onLibrariesChange]
+        );
+
+        if (!hasCatalogData && perInstanceLoading) {
+            return (
+                <div className="flex items-center gap-3 p-4 text-sm text-fg-muted bg-surface-alt border border-border-subtle rounded-lg">
+                    <div className="w-4 h-4 border-2 border-border border-t-primary rounded-full animate-spin" />
+                    <span>Loading libraries...</span>
+                </div>
+            );
+        }
+
+        if (!hasCatalogData && perInstanceError) {
+            return (
+                <div className="flex items-center gap-3 p-4 text-sm text-error bg-surface border border-error rounded-lg">
+                    <span className="text-base">⚠️</span>
+                    <span>Failed to load libraries</span>
+                </div>
+            );
+        }
+
+        if (allLibraries.length === 0) {
+            return (
+                <div className="flex items-center gap-3 p-4 text-sm text-fg-muted bg-surface-alt border border-border-subtle rounded-lg">
+                    <span className="text-base">ℹ️</span>
+                    <span>No libraries found — leaving empty selects all libraries</span>
+                </div>
+            );
+        }
+
+        return (
+            <div>
+                <div className="text-sm font-semibold text-fg mb-2 pb-1 border-b border-border-subtle">
+                    Libraries{' '}
+                    <span className="text-xs font-normal text-fg-subtle">(empty = all)</span>
+                </div>
+                <div className="grid gap-2 grid-cols-1 md:grid-cols-2">
+                    {allLibraries.map(library => {
+                        const isSelected = selectedLibraries.includes(library);
+                        const libraryId = `${scopeId}scope-lib-${instanceName}-${library}`;
+                        return (
+                            <div key={library}>
+                                <div
+                                    className="flex items-center gap-3 py-3 px-4 bg-surface border border-border rounded-lg hover:bg-surface-hover hover:border-primary hover:shadow-sm cursor-pointer transition-all duration-200 ease-in-out"
+                                    onClick={e => {
+                                        if (disabled) return;
+                                        if (
+                                            e.target.tagName === 'LABEL' ||
+                                            e.target.tagName === 'INPUT'
+                                        )
+                                            return;
+                                        handleToggle(library, !isSelected);
+                                    }}
+                                    role="button"
+                                    tabIndex={disabled ? -1 : 0}
+                                    onKeyDown={e => {
+                                        if ((e.key === ' ' || e.key === 'Enter') && !disabled) {
+                                            e.preventDefault();
+                                            handleToggle(library, !isSelected);
+                                        }
+                                    }}
+                                    aria-pressed={isSelected}
+                                    aria-disabled={disabled}
+                                >
+                                    <CheckboxBase
+                                        id={libraryId}
+                                        name={`${instanceName}-scope-libraries`}
+                                        checked={isSelected}
+                                        onChange={e => handleToggle(library, e.target.checked)}
+                                        disabled={disabled}
+                                    />
+                                    <div className="flex flex-col flex-1 min-w-0">
+                                        <FieldLabel
+                                            htmlFor={libraryId}
+                                            label={library}
+                                            className="text-sm font-medium leading-normal text-fg cursor-pointer select-none truncate"
+                                            title={library}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+        );
+    }
+);
+
+PlexScopeLibrarySelector.displayName = 'PlexScopeLibrarySelector';
+
+/**
+ * buildPlexScopeItem - Creates a flat plex_scope entry.
+ */
+const buildPlexScopeItem = (instanceName, libraries, addPosters, matchCollections) => ({
+    instance: instanceName,
+    library_names: libraries,
+    add_posters: addPosters,
+    match_collections: matchCollections,
+});
+
+/**
+ * parsePlexScopeValue - Normalises incoming value to flat plex_scope shape.
+ * Tolerates:
+ *   - Array<{instance, library_names, add_posters, match_collections}>  (canonical)
+ *   - Array<{name:{library_names, add_posters, ...}}>                   (legacy dict)
+ *   - Array<string>                                                       (bare names)
+ */
+const parsePlexScopeValue = items => {
+    if (!Array.isArray(items)) return [];
+    return items
+        .map(item => {
+            if (typeof item === 'string') {
+                return buildPlexScopeItem(item, [], false, false);
+            }
+            if (typeof item === 'object' && item !== null) {
+                if (item.instance) {
+                    return buildPlexScopeItem(
+                        item.instance,
+                        item.library_names || [],
+                        item.add_posters || false,
+                        item.match_collections || false
+                    );
+                }
+                if (item.name) {
+                    return buildPlexScopeItem(
+                        item.name,
+                        item.library_names || item.libraries || [],
+                        item.add_posters || item.upload_posters || false,
+                        item.match_collections || false
+                    );
+                }
+                // Legacy dict shape: {plex_1: {library_names, add_posters}}
+                const keys = Object.keys(item);
+                if (keys.length === 1) {
+                    const cfg = item[keys[0]] || {};
+                    return buildPlexScopeItem(
+                        keys[0],
+                        cfg.library_names || [],
+                        cfg.add_posters || false,
+                        cfg.match_collections || false
+                    );
+                }
+            }
+            return null;
+        })
+        .filter(Boolean);
+};
+
+/**
+ * PlexScopeSelector - Renders plex_scope field.
+ * Emits Array<{instance, library_names, add_posters, match_collections}>.
+ * Library data comes from the catalog endpoint; falls back per-instance.
+ */
+const PlexScopeSelector = React.memo(
+    ({
+        instances,
+        value,
+        onChange,
+        showAddPosters,
+        showMatchCollections,
+        disabled,
+        scopeId = '',
+    }) => {
+        const plexInstances = useMemo(
+            () => (instances || []).filter(inst => inst.type === 'plex'),
+            [instances]
+        );
+
+        const { data: catalogResponse, isLoading: catalogLoading } = useApiData({
+            apiFunction: instancesAPI.fetchPlexCatalog,
+            options: { immediate: true, showErrorToast: false },
+        });
+
+        // catalog.data.libraries = { instanceName: [{title, type}] }
+        const catalogByInstance = useMemo(() => {
+            const libs = catalogResponse?.data?.libraries;
+            if (!libs || typeof libs !== 'object') return {};
+            const result = {};
+            Object.entries(libs).forEach(([name, list]) => {
+                result[name] = Array.isArray(list) ? list : [];
+            });
+            return result;
+        }, [catalogResponse]);
+
+        const parsedValue = useMemo(() => parsePlexScopeValue(value), [value]);
+
+        const getEntry = useCallback(
+            instanceName => parsedValue.find(e => e.instance === instanceName) || null,
+            [parsedValue]
+        );
+
+        const handleInstanceToggle = useCallback(
+            (instanceName, checked) => {
+                if (checked) {
+                    onChange([...parsedValue, buildPlexScopeItem(instanceName, [], false, false)]);
+                } else {
+                    onChange(parsedValue.filter(e => e.instance !== instanceName));
+                }
+            },
+            [parsedValue, onChange]
+        );
+
+        const updateEntry = useCallback(
+            (instanceName, patch) => {
+                onChange(
+                    parsedValue.map(e => (e.instance === instanceName ? { ...e, ...patch } : e))
+                );
+            },
+            [parsedValue, onChange]
+        );
+
+        if (plexInstances.length === 0) {
+            return (
+                <div className="flex flex-col items-center gap-3 p-6 text-center bg-surface border border-dashed rounded-lg text-fg-muted">
+                    <div className="font-medium text-fg">No Plex instances configured</div>
+                    <div className="text-sm text-fg-subtle">
+                        Configure instances in Settings → Instances
+                    </div>
+                </div>
+            );
+        }
+
+        return (
+            <div className="flex flex-col gap-2">
+                {plexInstances.map(instance => {
+                    const entry = getEntry(instance.name);
+                    const isSelected = Boolean(entry);
+                    const instanceId = `${scopeId}scope-inst-${instance.name}`;
+                    const addPostersId = `${scopeId}scope-ap-${instance.name}`;
+                    const matchCollId = `${scopeId}scope-mc-${instance.name}`;
+
+                    // Catalog libraries for this instance (null while loading = fallback)
+                    const catalogLibs = catalogLoading
+                        ? null
+                        : (catalogByInstance[instance.name] ?? null);
+
+                    return (
+                        <div key={instance.name}>
+                            <div
+                                className="flex items-center gap-3 py-3 px-4 bg-surface border border-border rounded-lg hover:bg-surface-hover hover:border-primary hover:shadow-sm cursor-pointer transition-all duration-200 ease-in-out"
+                                onClick={e => {
+                                    if (disabled) return;
+                                    if (
+                                        e.target.tagName === 'LABEL' ||
+                                        e.target.tagName === 'INPUT'
+                                    )
+                                        return;
+                                    handleInstanceToggle(instance.name, !isSelected);
+                                }}
+                                role="button"
+                                tabIndex={disabled ? -1 : 0}
+                                onKeyDown={e => {
+                                    if ((e.key === ' ' || e.key === 'Enter') && !disabled) {
+                                        e.preventDefault();
+                                        handleInstanceToggle(instance.name, !isSelected);
+                                    }
+                                }}
+                                aria-pressed={isSelected}
+                                aria-disabled={disabled}
+                            >
+                                <CheckboxBase
+                                    id={instanceId}
+                                    name="plex-scope-instances"
+                                    checked={isSelected}
+                                    onChange={e =>
+                                        handleInstanceToggle(instance.name, e.target.checked)
+                                    }
+                                    disabled={disabled}
+                                />
+                                <div className="flex flex-col">
+                                    <FieldLabel
+                                        htmlFor={instanceId}
+                                        label={humanize(instance.name)}
+                                        className="text-sm font-normal leading-normal text-fg cursor-pointer select-none"
+                                    />
+                                    {instance.url && (
+                                        <div className="text-xs text-fg-muted">{instance.url}</div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {isSelected && (
+                                <div className="flex flex-col gap-4 border-l-2 border-border-subtle pl-4 mt-2 mb-2">
+                                    {showAddPosters && (
+                                        <div
+                                            className="flex items-center gap-3 py-3 px-4 bg-surface border border-border rounded-lg hover:bg-surface-hover hover:border-primary hover:shadow-sm cursor-pointer transition-all duration-200 ease-in-out"
+                                            onClick={e => {
+                                                if (disabled) return;
+                                                if (
+                                                    e.target.tagName === 'LABEL' ||
+                                                    e.target.tagName === 'INPUT'
+                                                )
+                                                    return;
+                                                updateEntry(instance.name, {
+                                                    add_posters: !entry.add_posters,
+                                                });
+                                            }}
+                                            role="button"
+                                            tabIndex={disabled ? -1 : 0}
+                                            onKeyDown={e => {
+                                                if (
+                                                    (e.key === ' ' || e.key === 'Enter') &&
+                                                    !disabled
+                                                ) {
+                                                    e.preventDefault();
+                                                    updateEntry(instance.name, {
+                                                        add_posters: !entry.add_posters,
+                                                    });
+                                                }
+                                            }}
+                                            aria-pressed={entry.add_posters}
+                                            aria-disabled={disabled}
+                                        >
+                                            <CheckboxBase
+                                                id={addPostersId}
+                                                name={`scope-ap-${instance.name}`}
+                                                checked={entry.add_posters}
+                                                onChange={e =>
+                                                    updateEntry(instance.name, {
+                                                        add_posters: e.target.checked,
+                                                    })
+                                                }
+                                                disabled={disabled}
+                                            />
+                                            <div className="flex flex-col">
+                                                <FieldLabel
+                                                    htmlFor={addPostersId}
+                                                    label="Upload posters to this Plex instance"
+                                                    className="text-sm font-medium leading-normal text-fg cursor-pointer select-none"
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {showMatchCollections && (
+                                        <div
+                                            className="flex items-center gap-3 py-3 px-4 bg-surface border border-border rounded-lg hover:bg-surface-hover hover:border-primary hover:shadow-sm cursor-pointer transition-all duration-200 ease-in-out"
+                                            onClick={e => {
+                                                if (disabled) return;
+                                                if (
+                                                    e.target.tagName === 'LABEL' ||
+                                                    e.target.tagName === 'INPUT'
+                                                )
+                                                    return;
+                                                updateEntry(instance.name, {
+                                                    match_collections: !entry.match_collections,
+                                                });
+                                            }}
+                                            role="button"
+                                            tabIndex={disabled ? -1 : 0}
+                                            onKeyDown={e => {
+                                                if (
+                                                    (e.key === ' ' || e.key === 'Enter') &&
+                                                    !disabled
+                                                ) {
+                                                    e.preventDefault();
+                                                    updateEntry(instance.name, {
+                                                        match_collections: !entry.match_collections,
+                                                    });
+                                                }
+                                            }}
+                                            aria-pressed={entry.match_collections}
+                                            aria-disabled={disabled}
+                                        >
+                                            <CheckboxBase
+                                                id={matchCollId}
+                                                name={`scope-mc-${instance.name}`}
+                                                checked={entry.match_collections}
+                                                onChange={e =>
+                                                    updateEntry(instance.name, {
+                                                        match_collections: e.target.checked,
+                                                    })
+                                                }
+                                                disabled={disabled}
+                                            />
+                                            <div className="flex flex-col">
+                                                <FieldLabel
+                                                    htmlFor={matchCollId}
+                                                    label="Match collections in selected libraries"
+                                                    className="text-sm font-medium leading-normal text-fg cursor-pointer select-none"
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <PlexScopeLibrarySelector
+                                        instanceName={instance.name}
+                                        catalogLibraries={catalogLibs}
+                                        selectedLibraries={entry.library_names}
+                                        onLibrariesChange={libs =>
+                                            updateEntry(instance.name, { library_names: libs })
+                                        }
+                                        disabled={disabled}
+                                        scopeId={scopeId}
+                                    />
+                                </div>
+                            )}
+                        </div>
+                    );
+                })}
+            </div>
+        );
+    }
+);
+
+PlexScopeSelector.displayName = 'PlexScopeSelector';
+
+/**
  * InstancesField component - Schema-driven instances selection
  *
  * @param {Object} props - Component props
@@ -1018,9 +1478,19 @@ export const InstancesField = React.memo(
                     .filter(type => type !== serviceType)
                     .flatMap(type => serviceSelections[type] || []);
 
-                onChange([...otherSelections, ...newSelection]);
+                // Preserve saved instance-name strings not recognized by any
+                // configured service (e.g. an instance renamed/removed in
+                // Settings→Instances). Rebuilding purely from recognized
+                // selections would silently drop them on an unrelated toggle.
+                const recognized = instanceTypes.flatMap(type => serviceSelections[type] || []);
+                const safeValue = Array.isArray(value) ? value : [];
+                const unrecognized = safeValue.filter(
+                    item => typeof item === 'string' && !recognized.includes(item)
+                );
+
+                onChange([...otherSelections, ...newSelection, ...unrecognized]);
             },
-            [instanceTypes, serviceSelections, onChange]
+            [instanceTypes, serviceSelections, onChange, value]
         );
 
         const inputId = `field-${field.key}`;
@@ -1058,6 +1528,33 @@ export const InstancesField = React.memo(
                     {field.description && (
                         <FieldDescription id={`${inputId}-desc`} description={field.description} />
                     )}
+                </FieldWrapper>
+            );
+        }
+
+        // plex_scope type — entirely separate render path, existing behavior untouched
+        if (field.type === 'plex_scope') {
+            return (
+                <FieldWrapper invalid={highlightInvalid}>
+                    <FieldLabel label={field.label} required={isRequired} />
+                    <div id={inputId} className="flex flex-col gap-4">
+                        <h4 className="text-lg font-bold text-fg mb-2 border-b border-border pb-2">
+                            Plex
+                        </h4>
+                        <PlexScopeSelector
+                            instances={instances}
+                            value={value}
+                            onChange={onChange}
+                            showAddPosters={field.add_posters_option === true}
+                            showMatchCollections={field.match_collections_option === true}
+                            disabled={disabled}
+                            scopeId={scopeId}
+                        />
+                    </div>
+                    {field.description && (
+                        <FieldDescription id={`${inputId}-desc`} description={field.description} />
+                    )}
+                    {errorMessage && <FieldError id={`${inputId}-error`} message={errorMessage} />}
                 </FieldWrapper>
             );
         }

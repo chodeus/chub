@@ -1026,22 +1026,24 @@ class PosterRenamerr(ChubModule):
 
     def get_matched_assets(self, db: ChubDB) -> list:
         matched_assets = []
-        for inst in self.config.instances:
-            if isinstance(inst, str):
-                instance_name = inst
-                for row in db.media.get_by_instance(instance_name):
+        for instance_name in self.config.instances:
+            if not isinstance(instance_name, str):
+                continue
+            for row in db.media.get_by_instance(instance_name):
+                if row.get("matched") and self._needs_staging(row):
+                    matched_assets.append(row)
+        for scope in self.config.plex_scope or []:
+            if not scope.match_collections:
+                continue
+            libs = list(
+                scope.library_names or []
+            ) or db.collection.get_library_names_for_instance(scope.instance)
+            for library_name in libs:
+                for row in db.collection.get_by_instance_and_library(
+                    scope.instance, library_name
+                ):
                     if row.get("matched") and self._needs_staging(row):
                         matched_assets.append(row)
-            elif isinstance(inst, dict):
-                for instance_name, params in inst.items():
-                    library_names = params.library_names
-                    if library_names:
-                        for library_name in library_names:
-                            for row in db.collection.get_by_instance_and_library(
-                                instance_name, library_name
-                            ):
-                                if row.get("matched") and self._needs_staging(row):
-                                    matched_assets.append(row)
         return matched_assets
 
     def _run_match_quality_pass(self, db: ChubDB) -> None:
@@ -1736,14 +1738,8 @@ class PosterRenamerr(ChubModule):
                                 or "report"
                             )
                         )
-                        instance_names = [
-                            name
-                            for entry in (self.config.instances or [])
-                            for name in (
-                                [entry]
-                                if isinstance(entry, str)
-                                else list(entry.keys())
-                            )
+                        instance_names = list(self.config.instances) + [
+                            s.instance for s in (self.config.plex_scope or [])
                         ]
                         run_orphan_assets_pass(
                             db=db,

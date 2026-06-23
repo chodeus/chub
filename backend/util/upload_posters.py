@@ -135,17 +135,11 @@ class PosterUploader:
         enabled_instances = {}
         disabled_instances = []
 
-        for instance_config in self.config.instances:
-            if isinstance(instance_config, dict):
-                for instance_name, instance_data in instance_config.items():
-                    if (
-                        hasattr(instance_data, "add_posters")
-                        and instance_data.add_posters
-                    ):
-                        library_names = getattr(instance_data, "library_names", [])
-                        enabled_instances[instance_name] = library_names
-                    else:
-                        disabled_instances.append(instance_name)
+        for scope in self.config.plex_scope or []:
+            if scope.add_posters:
+                enabled_instances[scope.instance] = list(scope.library_names or [])
+            else:
+                disabled_instances.append(scope.instance)
 
         # Log disabled instances once, concisely
         if disabled_instances:
@@ -868,9 +862,7 @@ class PosterUploader:
                 if asset_type in ("artist", "album") and getattr(
                     self.config, "music_lma_sidecars", False
                 ):
-                    self._write_music_sidecar(
-                        asset_type, poster_path, entry, dry_run
-                    )
+                    self._write_music_sidecar(asset_type, poster_path, entry, dry_run)
                 # Remove overlay label if present (per-library item).
                 if self._has_overlay(entry):
                     plex_client.remove_label(entry, "Overlay", dry_run)
@@ -955,7 +947,10 @@ class PosterUploader:
             return
         for entry in matched_entries:
             plex_year = _coerce_year(entry.get("year"))
-            if plex_year is None or abs(plex_year - folder_year) <= YEAR_MATCH_TOLERANCE:
+            if (
+                plex_year is None
+                or abs(plex_year - folder_year) <= YEAR_MATCH_TOLERANCE
+            ):
                 continue
             title = str(asset.get("title") or "Unknown")
             descriptor = {
