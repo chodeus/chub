@@ -35,15 +35,14 @@ class UnmatchedAssets(ChubModule):
         self.all_collections = db.collection.get_all()
 
     def compute_instance_filters(self) -> None:
-        for inst in getattr(self.config, "instances", []):
-            if isinstance(inst, str):
-                self.allowed_instances.add(inst)
-            elif isinstance(inst, dict):
-                for instance_name, params in inst.items():
-                    self.allowed_instances.add(instance_name)
-                    libs = set(params.get("library_names", []))
-                    if libs:
-                        self.plex_libraries[instance_name] = libs
+        for name in getattr(self.config, "instances", []):
+            if isinstance(name, str):
+                self.allowed_instances.add(name)
+        for scope in getattr(self.config, "plex_scope", []) or []:
+            self.allowed_instances.add(scope.instance)
+            libs = set(scope.library_names or [])
+            if libs:  # empty == all libraries -> no narrowing
+                self.plex_libraries[scope.instance] = libs
 
     def allowed_media(self, asset: Dict[str, Any]) -> bool:
         inst = asset.get("instance_name")
@@ -624,7 +623,9 @@ class UnmatchedAssets(ChubModule):
         }
 
     @staticmethod
-    def _serialize_match_row(row: Dict[str, Any], is_collection: bool) -> Dict[str, Any]:
+    def _serialize_match_row(
+        row: Dict[str, Any], is_collection: bool
+    ) -> Dict[str, Any]:
         """Flatten a media/collection row to the fields the Needs-Review /
         Ignored tabs render (status, confidence, reason, conflicts)."""
         import json as _json

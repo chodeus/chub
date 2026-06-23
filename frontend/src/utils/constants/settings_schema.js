@@ -318,10 +318,22 @@ const CORE_SETTINGS_SCHEMA = [
                 type: 'instances',
                 section: 'Targets',
                 required: true,
-                add_posters_option: true,
-                instance_types: ['plex', 'radarr', 'sonarr', 'lidarr'],
+                instance_types: ['radarr', 'sonarr', 'lidarr'],
+                valueFormat: 'string',
                 description:
-                    'Radarr/Sonarr/Lidarr instances supply the media list to match against. Plex instances additionally receive uploaded posters when "Upload posters to this Plex instance" is enabled per-instance.',
+                    'Radarr/Sonarr/Lidarr instances supply the media list to match posters against.',
+            },
+            {
+                key: 'plex_scope',
+                label: 'Plex Libraries',
+                type: 'plex_scope',
+                section: 'Targets',
+                add_posters_option: true,
+                match_collections_option: true,
+                description:
+                    'Plex instances to upload posters to and/or match collections from. ' +
+                    'Pick libraries to scope collection matching (empty = all libraries). ' +
+                    'Enable "Upload posters" per instance for the Plex apply method.',
             },
             // ─── Music (only shown when a Lidarr instance is configured) ──
             {
@@ -521,10 +533,22 @@ const CORE_SETTINGS_SCHEMA = [
                 type: 'instances',
                 section: 'Targets',
                 required: true,
-                add_posters_option: true,
-                instance_types: ['plex', 'radarr', 'sonarr'],
+                instance_types: ['radarr', 'sonarr'],
+                valueFormat: 'string',
                 description:
-                    'Radarr/Sonarr instances supply the media list to match against. On the "Plex" apply method, assets are uploaded only to Plex instances whose "Upload to this Plex instance" box is ticked; Plex instances also supply collections.',
+                    'Radarr/Sonarr instances supply the media list to match assets against.',
+            },
+            {
+                key: 'plex_scope',
+                label: 'Plex Libraries',
+                type: 'plex_scope',
+                section: 'Targets',
+                add_posters_option: true,
+                match_collections_option: true,
+                description:
+                    'Plex instances to upload assets (logo/background/squareart) to and/or match collections from. ' +
+                    'Pick libraries to scope collection matching (empty = all libraries). ' +
+                    'Enable "Upload posters" per instance for the Plex apply method.',
             },
         ],
     },
@@ -1421,6 +1445,16 @@ const CORE_SETTINGS_SCHEMA = [
                 // Backend: UnmatchedAssetsConfig.instances is List[str].
                 valueFormat: 'string',
                 description: 'Instances to scan for unmatched assets.',
+            },
+            {
+                key: 'plex_scope',
+                label: 'Plex Libraries (collections)',
+                type: 'plex_scope',
+                add_posters_option: false,
+                match_collections_option: false,
+                description:
+                    'Report unmatched Plex collections from these libraries (empty = all ' +
+                    'libraries of the instance). Leave unset to skip collection reporting.',
             },
             {
                 key: 'ignore_folders',

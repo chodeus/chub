@@ -118,13 +118,9 @@ class AssetRenamerr(ChubModule):
         uploading — surfaced in the module's settings UI.)
         """
         out: List[Tuple[str, List[str]]] = []
-        for inst in self.config.instances:
-            if isinstance(inst, dict):
-                for name, opts in inst.items():
-                    if getattr(opts, "add_posters", False):
-                        out.append(
-                            (name, list(getattr(opts, "library_names", []) or []))
-                        )
+        for scope in self.config.plex_scope or []:
+            if scope.add_posters:
+                out.append((scope.instance, list(scope.library_names or [])))
         return out
 
     # media asset_type -> the Plex library type that can actually hold it.
@@ -383,9 +379,7 @@ class AssetRenamerr(ChubModule):
                 continue
             # Drop stale asset rows for this source_dir before re-inserting.
             deleted = db.poster.delete_asset_rows_by_path_prefix(source_dir)
-            self.logger.debug(
-                f"Cleared {deleted} stale asset rows for '{source_dir}'"
-            )
+            self.logger.debug(f"Cleared {deleted} stale asset rows for '{source_dir}'")
             records = []
             for root, dirs, files in os.walk(source_dir):
                 dirs.sort(key=str.lower)
@@ -665,9 +659,7 @@ class AssetRenamerr(ChubModule):
                 db, media, image_type, file, None, is_collection
             )
         else:
-            applied, detail = self._apply_kometa(
-                media, image_type, "local", file, None
-            )
+            applied, detail = self._apply_kometa(media, image_type, "local", file, None)
 
         target_id = media.get("id")
         if target_id is not None:
@@ -779,12 +771,8 @@ class AssetRenamerr(ChubModule):
             try:
                 from backend.util.plex_refresh import refresh_plex_cache_if_stale
 
-                enabled = {
-                    name: libs for name, libs in self._enabled_plex_instances()
-                }
-                refresh_plex_cache_if_stale(
-                    db, self.full_config, self.logger, enabled
-                )
+                enabled = {name: libs for name, libs in self._enabled_plex_instances()}
+                refresh_plex_cache_if_stale(db, self.full_config, self.logger, enabled)
             except Exception as exc:
                 # Never fail the run on a refresh hiccup — the index falls back
                 # to whatever snapshot exists, and per-item lazy search covers
