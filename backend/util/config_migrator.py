@@ -109,12 +109,13 @@ def is_legacy_config(raw: Dict[str, Any]) -> bool:
     # ...and a bare Plex-instance-name string left in a converted module's
     # `instances` (e.g. flatten-bug residue) must also migrate into plex_scope,
     # even when it is the only legacy quirk. Classified via the registry.
-    _plex_names, _ = _instance_names_by_type(raw)
-    if _plex_names:
+    _plex_names, _arr_names = _instance_names_by_type(raw)
+    _plex_only = _plex_names - _arr_names
+    if _plex_only:
         for _mod in ("poster_renamerr", "asset_renamerr", "unmatched_assets"):
             _inst = raw.get(_mod, {}).get("instances")
             if isinstance(_inst, list) and any(
-                isinstance(i, str) and i in _plex_names for i in _inst
+                isinstance(i, str) and i in _plex_only for i in _inst
             ):
                 return True
 
@@ -412,7 +413,13 @@ def _rule_split_module_instances_to_plex_scope(
     Idempotent: a module already in the split shape (ARR-only `instances`, no
     Plex names) produces no change and no note.
     """
-    plex_names, _ = _instance_names_by_type(raw)
+    # Only an UNAMBIGUOUS Plex name (in the plex registry, not also an ARR
+    # registry name) is relocated. A name in both registries is left in
+    # `instances` — the old runtime treated a bare string as ARR, so leaving it
+    # preserves behaviour. Detection (is_legacy_config) uses the same plex-only
+    # rule, so the two never disagree (which would otherwise loop re-detecting).
+    plex_names, arr_names = _instance_names_by_type(raw)
+    plex_only = plex_names - arr_names
     for module in ("poster_renamerr", "asset_renamerr", "unmatched_assets"):
         sec = raw.get(module)
         if not isinstance(sec, dict):
@@ -421,27 +428,34 @@ def _rule_split_module_instances_to_plex_scope(
         split = _split_legacy_instances(sec)
         changed = split is not sec
 
-        # Case 2: relocate bare Plex-name strings from the ARR list.
+        # Case 2: relocate bare Plex-name strings from the ARR list. A name
+        # already represented in plex_scope (listed as both a dict and a bare
+        # string) is dropped as a duplicate — leaving it would keep tripping
+        # detection forever (infinite rewrite on every boot).
         instances = list(split.get("instances") or [])
         scope = list(split.get("plex_scope") or [])
         scoped = {e.get("instance") for e in scope if isinstance(e, dict)}
         kept: List[Any] = []
         moved: List[str] = []
+        dropped: List[str] = []
         for name in instances:
-            if isinstance(name, str) and name in plex_names and name not in scoped:
-                scope.append(
-                    {
-                        "instance": name,
-                        "library_names": [],
-                        "add_posters": False,
-                        "match_collections": False,
-                    }
-                )
-                moved.append(name)
+            if isinstance(name, str) and name in plex_only:
+                if name in scoped:
+                    dropped.append(name)  # dedup: already in plex_scope
+                else:
+                    scope.append(
+                        {
+                            "instance": name,
+                            "library_names": [],
+                            "add_posters": False,
+                            "match_collections": False,
+                        }
+                    )
+                    moved.append(name)
             else:
                 kept.append(name)
 
-        if not changed and not moved:
+        if not changed and not moved and not dropped:
             continue  # already split, nothing to relocate
         # `_split_legacy_instances` aliases `sec` when it made no dict change;
         # copy before mutating so we never mutate the original in place.
@@ -459,6 +473,11 @@ def _rule_split_module_instances_to_plex_scope(
             msg += (
                 f" Relocated bare Plex instance name(s) {moved} from the ARR "
                 f"list into `plex_scope`."
+            )
+        if dropped:
+            msg += (
+                f" Removed duplicate bare Plex name(s) {dropped} already in "
+                f"`plex_scope`."
             )
         notes.append(
             MigrationNote(rule=f"split:{module}.instances->plex_scope", message=msg)

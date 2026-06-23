@@ -1630,6 +1630,7 @@ async def toggle_instance(
 
         # Save updated configuration
         save_config(config)
+        plex_library_cache.invalidate()
 
         logger.info(
             f"Instance '{instance_id}' ({service}) {'enabled' if enabled else 'disabled'}"
