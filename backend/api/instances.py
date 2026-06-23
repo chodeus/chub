@@ -553,7 +553,7 @@ def _fetch_plex_libraries(plex_data: Any) -> list:
             f"Plex server error: {res.text}", "PLEX_SERVER_ERROR", res.status_code
         )
 
-    import xml.etree.ElementTree as ET
+    import defusedxml.ElementTree as ET
 
     # Plex returns each library section as a <Directory> carrying both a
     # human-readable `title` and an authoritative `type` (movie/show/artist/
