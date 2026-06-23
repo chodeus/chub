@@ -381,6 +381,25 @@ git commit -m "feat(config): migrator splits module instances into instances + p
 
 ---
 
+## Runtime consumer inventory (complete)
+
+The legacy `instances` union was read at **7 sites**. Task 1's `before` validator
+moves Plex data into `plex_scope`, so all 7 must migrate or they silently go dead:
+
+| Site | Function | Task |
+|---|---|---|
+| `connector.py:1231` | `build_instance_map` | 3 |
+| `connector.py:1206` | `gather_media_and_collections` | 3 |
+| `poster_renamerr.py:1027` | `get_matched_assets` | 3b |
+| `poster_renamerr.py:1738` | orphan-pass `instance_names` | 3b |
+| `asset_renamerr.py:112` | `_enabled_plex_instances` | 3b |
+| `upload_posters.py:133` | `_get_enabled_instances` | 3b |
+| `job_processor.py:592` | Plex-upload-enabled check | 3b |
+| `unmatched_assets.py:37` | `compute_instance_filters` | 4 |
+
+(`nohl.py` reads `NohlConfig.instances: List[str]` with an unrelated legacy
+per-instance shape — out of scope, do not touch.)
+
 ## Task 3: Runtime — `build_instance_map` + `gather_media_and_collections`
 
 **Files:**
@@ -501,6 +520,147 @@ git commit -m "feat(connector): consume plex_scope + match_collections for media
 ```
 
 ---
+
+## Task 3b: Migrate the module/util consumers to `plex_scope`
+
+**Files:**
+- Modify: `backend/modules/poster_renamerr.py` (`get_matched_assets` ~L1027; orphan `instance_names` ~L1738)
+- Modify: `backend/modules/asset_renamerr.py` (`_enabled_plex_instances` ~L112)
+- Modify: `backend/util/upload_posters.py` (`_get_enabled_instances` ~L133)
+- Modify: `backend/util/job_processor.py` (Plex-upload-enabled check ~L592)
+- Test: `tests/test_plex_scope_consumers.py` (create)
+
+- [ ] **Step 1: Write the failing tests**
+
+```python
+# tests/test_plex_scope_consumers.py
+from backend.util.config import PosterRenamerrConfig, AssetRenamerrConfig
+from backend.modules.asset_renamerr import AssetRenamerr
+from backend.util.job_processor import _plex_upload_enabled  # rename target; see Step 6
+
+
+def test_asset_enabled_plex_instances_from_plex_scope():
+    mod = AssetRenamerr()
+    mod.config = AssetRenamerrConfig(
+        instances=["Radarr"],
+        plex_scope=[
+            {"instance": "Plex", "library_names": ["Movies"], "add_posters": True},
+            {"instance": "Plex2", "library_names": [], "add_posters": False},
+        ],
+    )
+    assert mod._enabled_plex_instances() == [("Plex", ["Movies"])]
+
+
+def test_plex_upload_enabled_reads_plex_scope():
+    cfg = PosterRenamerrConfig(
+        instances=["Radarr"], plex_scope=[{"instance": "Plex", "add_posters": True}]
+    )
+    assert _plex_upload_enabled(cfg) is True
+    cfg2 = PosterRenamerrConfig(
+        instances=["Radarr"], plex_scope=[{"instance": "Plex", "add_posters": False}]
+    )
+    assert _plex_upload_enabled(cfg2) is False
+```
+
+(If `AssetRenamerr()` requires constructor args, construct it the way existing
+`tests/test_asset_renamerr.py` does; adjust the test accordingly.)
+
+- [ ] **Step 2: Run to verify they fail**
+
+Run: `python3 -m pytest tests/test_plex_scope_consumers.py -q`
+Expected: FAIL.
+
+- [ ] **Step 3: `poster_renamerr.get_matched_assets`**
+
+Replace the loop body so ARR media come from `instances` and collections from
+`plex_scope` (gated by `match_collections`; empty libraries = all):
+
+```python
+    def get_matched_assets(self, db: ChubDB) -> list:
+        matched_assets = []
+        for instance_name in self.config.instances:
+            if not isinstance(instance_name, str):
+                continue
+            for row in db.media.get_by_instance(instance_name):
+                if row.get("matched") and self._needs_staging(row):
+                    matched_assets.append(row)
+        for scope in self.config.plex_scope or []:
+            if not scope.match_collections:
+                continue
+            libs = list(scope.library_names or []) or \
+                db.collection.get_library_names_for_instance(scope.instance)
+            for library_name in libs:
+                for row in db.collection.get_by_instance_and_library(
+                    scope.instance, library_name
+                ):
+                    if row.get("matched") and self._needs_staging(row):
+                        matched_assets.append(row)
+        return matched_assets
+```
+
+- [ ] **Step 4: `poster_renamerr` orphan-pass `instance_names`**
+
+Replace the comprehension (~L1738) with:
+
+```python
+                        instance_names = list(self.config.instances) + [
+                            s.instance for s in (self.config.plex_scope or [])
+                        ]
+```
+
+- [ ] **Step 5: `asset_renamerr._enabled_plex_instances`**
+
+Replace the loop:
+
+```python
+        out: List[Tuple[str, List[str]]] = []
+        for scope in self.config.plex_scope or []:
+            if scope.add_posters:
+                out.append((scope.instance, list(scope.library_names or [])))
+        return out
+```
+
+- [ ] **Step 6: `upload_posters._get_enabled_instances` + `job_processor` check**
+
+`upload_posters.py` — replace the `for instance_config in self.config.instances:` block:
+
+```python
+        for scope in self.config.plex_scope or []:
+            if scope.add_posters:
+                enabled_instances[scope.instance] = list(scope.library_names or [])
+            else:
+                disabled_instances.append(scope.instance)
+```
+
+`job_processor.py` — the helper currently iterating `config.instances` for dict
+entries with `add_posters`. Rename it to `_plex_upload_enabled` (update its one
+call site — grep for the old name) and rewrite the body:
+
+```python
+        for scope in getattr(config, "plex_scope", []) or []:
+            if getattr(scope, "add_posters", False):
+                return True
+        return False
+```
+
+(If the existing function name is already imported elsewhere, keep the name and
+only rewrite the body; the test import in Step 1 must match the real name.)
+
+- [ ] **Step 7: Run tests + full suite**
+
+Run: `python3 -m pytest tests/test_plex_scope_consumers.py -q` then
+`cd backend && ruff check . && cd .. && python3 -m pytest -q`
+Expected: PASS (existing poster/asset/upload tests must still pass — update any
+that construct the old union shape to use `plex_scope`, or rely on the legacy
+`before` validator).
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add backend/modules/poster_renamerr.py backend/modules/asset_renamerr.py \
+  backend/util/upload_posters.py backend/util/job_processor.py tests/test_plex_scope_consumers.py
+git commit -m "feat(modules): migrate poster/asset/upload consumers to plex_scope"
+```
 
 ## Task 4: `unmatched_assets.compute_instance_filters` reads `plex_scope`
 
@@ -735,7 +895,8 @@ git push origin develop && git checkout main
 
 ## Self-review notes
 
-- **Spec coverage:** PlexScope (Task 1), split fields (1), migrate+persist (2), runtime empty=all + match_collections (3,4), catalog cache (5), parity (6). Frontend widget + Instances "Libraries (catalog)" section + relational-module wiring are **Plan 2**; transitional-validator removal is **Plan 3**.
+- **Spec coverage:** PlexScope (Task 1), split fields (1), migrate+persist (2), runtime empty=all + match_collections across all 7 consumer sites (3 connector + 3b modules/util + 4 unmatched), catalog cache (5), parity (6). Frontend widget + Instances "Libraries (catalog)" section + relational-module wiring are **Plan 2**; transitional-validator removal is **Plan 3**.
+- **Consumer completeness (added after Task 1 review):** Task 3b covers the module/util consumers the original plan missed — `poster_renamerr.get_matched_assets`, the orphan-pass instance list, `asset_renamerr._enabled_plex_instances`, `upload_posters._get_enabled_instances`, and the `job_processor` upload-enabled check. Without 3b the branch is not shippable (Plex uploads + collection matching would go dead).
 - **Transition:** the `before` validator (Task 1) keeps the current frontend's Union payloads valid through Plan 1; removed in Plan 3.
 - **Type consistency:** `PlexScope.{instance, library_names, add_posters, match_collections}` used identically in config, migrator output dicts, connector, and unmatched.
 - **Out of scope here:** `nestarr` / `labelarr` (unchanged shape), `poster_cleanarr` / `plex_maintenance` (instance-only) — they only change in Plan 2 (shared widget), no backend change.
