@@ -311,6 +311,44 @@ def test_split_unmatched_instances_to_plex_scope():
     ]
 
 
+def test_split_relocates_bare_plex_name_string():
+    # A bare Plex-instance-name string in a converted module's `instances`
+    # (flatten-bug residue) must move to plex_scope, not stay in the ARR list.
+    raw = {
+        "instances": {
+            "radarr": {"r1": {"url": "x", "api": "y"}},
+            "plex": {"Chodeus": {"url": "x", "api": "y"}},
+        },
+        "unmatched_assets": {"instances": ["r1", "Chodeus"]},
+    }
+    assert is_legacy_config(raw) is True
+    out, notes = migrate(raw)
+    assert out["unmatched_assets"]["instances"] == ["r1"]
+    assert out["unmatched_assets"]["plex_scope"] == [
+        {
+            "instance": "Chodeus",
+            "library_names": [],
+            "add_posters": False,
+            "match_collections": False,
+        }
+    ]
+    assert any("Relocated bare Plex" in n.message for n in notes)
+
+
+def test_split_does_not_relocate_arr_name_strings():
+    # ARR names must stay in `instances`; only registry Plex names relocate.
+    raw = {
+        "instances": {"radarr": {"r1": {}}, "plex": {"Chodeus": {}}},
+        "poster_renamerr": {
+            "instances": ["r1", {"Chodeus": {"library_names": ["Films"]}}]
+        },
+    }
+    out, _ = migrate(raw)
+    assert out["poster_renamerr"]["instances"] == ["r1"]
+    names = [e["instance"] for e in out["poster_renamerr"]["plex_scope"]]
+    assert names == ["Chodeus"]
+
+
 def test_split_is_idempotent_on_new_shape():
     raw = {
         "poster_renamerr": {
