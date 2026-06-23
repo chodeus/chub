@@ -72,9 +72,20 @@ New shared Pydantic model (in `backend/util/config.py`):
 ```python
 class PlexScope(BaseModel):
     instance: str
-    library_names: List[str] = []   # [] = all libraries of this instance
-    add_posters: bool = False       # honored only by uploader modules
+    library_names: List[str] = []    # [] = all libraries (when collections are matched)
+    add_posters: bool = False        # uploader modules only (poster/asset)
+    match_collections: bool = False  # uploader modules only; see below
 ```
+
+`match_collections` resolves the poster/asset empty-library edge (option 1):
+
+- **Uploader modules (poster_renamerr, asset_renamerr):** collections are matched
+  only when `match_collections=True`; then `library_names` applies (empty = all).
+  When `False`, no collections are matched regardless of `library_names`. Default
+  `False` matches today's "tick a Plex instance → empty libraries → no
+  collections" behaviour, so neither migrated nor new configs are surprised.
+- **Reporting module (unmatched_assets):** ignores `match_collections` — it always
+  reports collections for a selected Plex instance, with `empty = all`.
 
 Converted modules replace their `instances: List[Union[str, Dict]]` with:
 
@@ -164,10 +175,10 @@ libraries.
 
 A uniform `empty = all` would silently start matching/applying collection posters
 across every library for these users. **Decision: option 1 — preserve current
-effective behaviour.** The migrator must encode the old "selected for upload, no
-collections" intent rather than letting empty become all-collections. The exact
-encoding (per-entry collection toggle vs explicit no-collections marker) is an
-implementation-plan item.
+effective behaviour** via the `match_collections` flag on `PlexScope` (default
+`False`). The migrator sets `match_collections=True` only for entries that had
+non-empty `library_names` today; old empty-library entries migrate with
+`match_collections=False`, so their runs are unchanged.
 
 **Scope of impact:** this only affects users who (a) have Plex collections **and**
 (b) have an empty-library Plex entry. Users with no Plex collections are
@@ -185,10 +196,10 @@ converted module, building on the existing infrastructure:
   - bare Plex **string** → `PlexScope(instance=name, library_names=[])`
     (= all libraries — matches old bare-string behaviour).
   - **poster/asset only — empty `library_names` preservation (option 1):** an old
-    Plex entry with empty `library_names` currently pulls **no** collections. The
-    migrator must NOT convert this to all-collections; it preserves the
-    no-collections intent (encoding TBD in the plan). `add_posters` carries over
-    unchanged so upload behaviour is identical.
+    Plex entry with empty `library_names` pulls **no** collections today, so it
+    migrates to `match_collections=False` (libraries irrelevant). A non-empty old
+    entry migrates to `match_collections=True` with `library_names` preserved.
+    `add_posters` carries over unchanged in both cases.
 - Detection: the old Plex-in-`instances` shape becomes a migration trigger (it
   is now legacy relative to the new schema).
 - Idempotent; backs up to `config.yml.legacy-<timestamp>.yml` and rewrites
@@ -239,8 +250,10 @@ involved.
 - Exact shared-helper location for the "empty = all libraries" resolution.
 - No Plex entry previously configured → unchanged (module ignores Plex); the
   migrator never invents a Plex entry.
-- **Encoding for "selected for upload, no collections" (option 1):** how
-  poster/asset `PlexScope` represents an entry that uploads (`add_posters`) but
-  matches no collections, given `empty library_names = all`. Candidates: a
-  per-entry `match_collections: bool`, or a distinct empty-vs-explicit marker.
-  Must round-trip through the shared widget and survive re-save.
+- **Transition strategy (backend vs frontend lockstep):** the API config endpoint
+  must accept the new `instances` (`List[str]`) + `plex_scope` shape. Because the
+  old frontend still emits the Union shape until Phase 2 lands, the backend keeps
+  a transitional coercion on the API boundary (old Union in `instances` → split
+  into `instances` + `plex_scope`) until the frontend is converted, then it is
+  removed in the cleanup phase. (Resolved: `match_collections` encoding is locked
+  above.)
