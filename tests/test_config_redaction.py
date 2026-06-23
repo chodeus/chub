@@ -193,10 +193,10 @@ def test_format_validation_errors_emits_one_line_per_field(tmp_path):
         raise AssertionError("expected ConfigValidationError")
 
 
-def test_format_validation_errors_mirrors_real_daps_failure_shape(tmp_path):
-    """The legacy DAPS shape (unmatched_assets.instances containing a dict)
-    must be migrated cleanly; this test exists so the formatter contract is
-    exercised against a realistic structure the migrator now handles."""
+def test_unmatched_instances_plex_dict_form_loads_and_is_preserved(tmp_path):
+    """The `{plex_name: {library_names}}` form on unmatched_assets.instances is
+    a supported native shape — it must load cleanly AND keep its library scope
+    (it is not a legacy signal, so it isn't migrated/flattened away)."""
     path = tmp_path / "config.yml"
     path.write_text(
         "unmatched_assets:\n"
@@ -206,9 +206,12 @@ def test_format_validation_errors_mirrors_real_daps_failure_shape(tmp_path):
         "    - Plex:\n"
         "        library_names: [Movies]\n"
     )
-    # Should now load cleanly because the migrator flattens the dict entry
     cfg = load_config(str(path))
-    assert cfg.unmatched_assets.instances == ["radarr", "sonarr", "Plex"]
+    assert cfg.unmatched_assets.instances == [
+        "radarr",
+        "sonarr",
+        {"Plex": {"library_names": ["Movies"]}},
+    ]
 
 
 def test_general_config_normalizes_uppercase_log_level(tmp_path):

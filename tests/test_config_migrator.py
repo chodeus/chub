@@ -114,10 +114,12 @@ def test_detection_holidays_list_is_chub_native():
     assert is_legacy_config({"border_replacerr": {"holidays": []}}) is False
 
 
-def test_detection_unmatched_instances_dict_entry_triggers():
+def test_detection_unmatched_instances_dict_entry_is_chub_native():
+    # The {plex_name: {library_names}} dict form is a supported native shape,
+    # not a legacy signal — it must NOT trigger migration on its own.
     assert (
         is_legacy_config({"unmatched_assets": {"instances": ["radarr", {"Plex": {}}]}})
-        is True
+        is False
     )
 
 
@@ -228,29 +230,26 @@ def test_rule_cleanarr_existing_mode_wins():
     assert "dry_run" not in out["poster_cleanarr"]
 
 
-def test_rule_flatten_unmatched_instances_dict_entry():
-    out, notes = migrate(
-        {
-            "unmatched_assets": {
-                "instances": [
-                    "radarr",
-                    "sonarr",
-                    {"Plex": {"library_names": ["Movies"]}},
-                ]
-            }
-        }
-    )
-    assert out["unmatched_assets"]["instances"] == ["radarr", "sonarr", "Plex"]
-    assert any(
-        n.rule == "flatten:unmatched_assets.instances" and n.level == "warning"
-        for n in notes
-    )
-
-
-def test_rule_flatten_unmatched_instances_all_strings_is_noop():
-    out, notes = migrate({"unmatched_assets": {"instances": ["radarr", "sonarr"]}})
-    assert out["unmatched_assets"]["instances"] == ["radarr", "sonarr"]
-    assert not any(n.rule == "flatten:unmatched_assets.instances" for n in notes)
+def test_unmatched_instances_dict_form_is_preserved():
+    # The {plex_name: {library_names}} dict form is a supported native shape;
+    # migration must pass it through untouched (no flattening, no warning).
+    raw = {
+        "main": {"theme": "dark"},  # forces migration via a real legacy signal
+        "unmatched_assets": {
+            "instances": [
+                "radarr",
+                "sonarr",
+                {"Plex": {"library_names": ["Movies"]}},
+            ]
+        },
+    }
+    out, notes = migrate(raw)
+    assert out["unmatched_assets"]["instances"] == [
+        "radarr",
+        "sonarr",
+        {"Plex": {"library_names": ["Movies"]}},
+    ]
+    assert not any("unmatched_assets.instances" in n.rule for n in notes)
 
 
 def test_rule_holidays_dict_to_list_single_string_color():
@@ -297,7 +296,12 @@ def test_end_to_end_legacy_blob_migrates_cleanly():
     assert out["general"]["log_level"] == "info"
     assert out["user_interface"]["theme"] == "dark"
     assert out["unmatched_assets"]["ignore_folders"] == ["/mnt/junk"]
-    assert out["unmatched_assets"]["instances"] == ["radarr", "sonarr", "Plex"]
+    # Plex dict form is preserved (supported native shape), not flattened.
+    assert out["unmatched_assets"]["instances"] == [
+        "radarr",
+        "sonarr",
+        {"Plex": {"library_names": ["Movies", "TV Shows"]}},
+    ]
     assert out["renameinatorr"]["ignore_tags"] == "do-not-touch"
     assert out["poster_cleanarr"]["asset_dirs"] == ["/posters"]
     assert out["poster_cleanarr"]["mode"] == "report"
