@@ -60,3 +60,53 @@ def test_legacy_union_shape_is_coerced_unmatched():
     assert c.instances == ["Radarr"]
     assert c.plex_scope[0].instance == "Plex"
     assert c.plex_scope[0].library_names == ["Movies"]
+
+
+def test_split_legacy_idempotent_on_already_split():
+    from backend.util.config import _split_legacy_instances
+
+    payload = {
+        "instances": ["Radarr"],
+        "plex_scope": [
+            {
+                "instance": "Plex",
+                "library_names": ["Movies"],
+                "add_posters": True,
+                "match_collections": True,
+            }
+        ],
+    }
+    assert _split_legacy_instances(payload) == payload
+
+
+def test_split_legacy_merges_preexisting_plex_scope():
+    from backend.util.config import _split_legacy_instances
+
+    payload = {
+        "instances": ["Radarr", {"Plex2": {"library_names": ["TV"]}}],
+        "plex_scope": [
+            {
+                "instance": "Plex1",
+                "library_names": [],
+                "add_posters": True,
+                "match_collections": False,
+            }
+        ],
+    }
+    out = _split_legacy_instances(payload)
+    names = [s["instance"] for s in out["plex_scope"]]
+    assert "Plex1" in names and "Plex2" in names
+
+
+def test_asset_renamerr_legacy_coercion():
+    from backend.util.config import AssetRenamerrConfig
+
+    c = AssetRenamerrConfig(
+        instances=[
+            "Radarr",
+            {"Plex": {"library_names": ["Movies"], "add_posters": True}},
+        ]
+    )
+    assert c.instances == ["Radarr"]
+    assert c.plex_scope[0].instance == "Plex"
+    assert c.plex_scope[0].add_posters is True
