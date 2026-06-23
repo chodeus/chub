@@ -194,9 +194,9 @@ def test_format_validation_errors_emits_one_line_per_field(tmp_path):
 
 
 def test_unmatched_instances_plex_dict_form_loads_and_is_preserved(tmp_path):
-    """The `{plex_name: {library_names}}` form on unmatched_assets.instances is
-    a supported native shape — it must load cleanly AND keep its library scope
-    (it is not a legacy signal, so it isn't migrated/flattened away)."""
+    """The legacy `{plex_name: {library_names}}` form on unmatched_assets.instances
+    is coerced into the new split shape: ARR strings stay in `instances`, the Plex
+    dict entry moves to `plex_scope`."""
     path = tmp_path / "config.yml"
     path.write_text(
         "unmatched_assets:\n"
@@ -207,11 +207,10 @@ def test_unmatched_instances_plex_dict_form_loads_and_is_preserved(tmp_path):
         "        library_names: [Movies]\n"
     )
     cfg = load_config(str(path))
-    assert cfg.unmatched_assets.instances == [
-        "radarr",
-        "sonarr",
-        {"Plex": {"library_names": ["Movies"]}},
-    ]
+    assert cfg.unmatched_assets.instances == ["radarr", "sonarr"]
+    assert len(cfg.unmatched_assets.plex_scope) == 1
+    assert cfg.unmatched_assets.plex_scope[0].instance == "Plex"
+    assert cfg.unmatched_assets.plex_scope[0].library_names == ["Movies"]
 
 
 def test_general_config_normalizes_uppercase_log_level(tmp_path):
