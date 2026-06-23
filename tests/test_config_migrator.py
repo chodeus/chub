@@ -349,6 +349,47 @@ def test_split_does_not_relocate_arr_name_strings():
     assert names == ["Chodeus"]
 
 
+def test_split_dedups_plex_name_listed_as_both_dict_and_string():
+    # A Plex name as BOTH a dict entry and a bare string: the bare string must
+    # be dropped (not kept in `instances`), and the migrated output must NOT
+    # re-trigger detection (otherwise: infinite rewrite on every boot).
+    raw = {
+        "instances": {"plex": {"MyPlex": {}}, "radarr": {"r1": {}}},
+        "poster_renamerr": {
+            "instances": [
+                "MyPlex",
+                {"MyPlex": {"library_names": ["Movies"], "add_posters": True}},
+                "r1",
+            ]
+        },
+    }
+    out, _ = migrate(raw)
+    assert out["poster_renamerr"]["instances"] == ["r1"]
+    scope = out["poster_renamerr"]["plex_scope"]
+    assert [e["instance"] for e in scope] == ["MyPlex"]  # no duplicate
+    assert scope[0]["library_names"] == ["Movies"]
+    assert scope[0]["match_collections"] is True
+    # crux: migrated output is no longer legacy, and re-migrating is a no-op
+    assert is_legacy_config(out) is False
+    again, notes2 = migrate(out)
+    assert again["poster_renamerr"] == out["poster_renamerr"]
+    assert not any("plex_scope" in n.rule for n in notes2)
+
+
+def test_split_leaves_ambiguous_name_in_both_registries_as_arr():
+    # A name present in BOTH the plex and ARR registries is ambiguous; leave it
+    # in `instances` (preserves old bare-string-as-ARR behaviour), and it must
+    # not trip detection.
+    raw = {
+        "instances": {"plex": {"Shared": {}}, "radarr": {"Shared": {}}},
+        "poster_renamerr": {"instances": ["Shared"]},
+    }
+    assert is_legacy_config(raw) is False
+    out, notes = migrate(raw)
+    assert out["poster_renamerr"]["instances"] == ["Shared"]
+    assert not any("plex_scope" in n.rule for n in notes)
+
+
 def test_split_is_idempotent_on_new_shape():
     raw = {
         "poster_renamerr": {
