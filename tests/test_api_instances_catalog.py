@@ -1,4 +1,24 @@
+from types import SimpleNamespace
+
+import pytest
+
+from backend.api.instances import _PlexFetchError, _fetch_plex_libraries
 from backend.util.plex_library_cache import get_cached_libraries, invalidate, _CACHE
+
+
+def test_fetch_plex_libraries_blocks_ssrf_url():
+    # Link-local metadata address must be refused before any network call.
+    plex = SimpleNamespace(url="http://169.254.169.254", api="token")
+    with pytest.raises(_PlexFetchError) as exc:
+        _fetch_plex_libraries(plex)
+    assert exc.value.code == "URL_BLOCKED"
+    assert exc.value.status_code == 400
+
+
+def test_fetch_plex_libraries_missing_credentials():
+    with pytest.raises(_PlexFetchError) as exc:
+        _fetch_plex_libraries(SimpleNamespace(url="", api=""))
+    assert exc.value.code == "PLEX_CREDENTIALS_MISSING"
 
 
 def test_cache_returns_fetched_value_and_memoizes():

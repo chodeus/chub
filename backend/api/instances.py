@@ -534,6 +534,12 @@ def _fetch_plex_libraries(plex_data: Any) -> list:
         )
     headers = {"X-Plex-Token": token}
     url = f"{base_url}/library/sections"
+
+    from backend.util.ssrf_guard import is_safe_url
+
+    safe, reason = is_safe_url(url)
+    if not safe:
+        raise _PlexFetchError(f"URL refused: {reason}", "URL_BLOCKED", 400)
     try:
         res = requests.get(url, headers=headers, timeout=5)
     except requests.exceptions.RequestException as req_exc:
