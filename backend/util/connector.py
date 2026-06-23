@@ -1204,40 +1204,41 @@ class Connector:
 
 
 def gather_media_and_collections(config: Any, db: ChubDB) -> List[dict]:
-    """Collect the media + collection rows a poster/asset run matches against.
+    """Collect media (ARR, from media_cache) + collections (Plex, from
+    collections_cache) a poster/asset run matches against.
 
-    Walks ``config.instances``: a bare string is an ARR instance (movies/shows
-    from media_cache); a dict is a Plex instance whose collections are pulled
-    per configured library. Shared by poster_renamerr and asset_renamerr so the
-    instance-iteration rule lives in exactly one place.
+    - ARR instances -> all their media_cache rows.
+    - plex_scope entries with match_collections -> their collections;
+      empty library_names == all libraries of that instance.
     """
     all_media: List[dict] = []
-    for inst in config.instances:
-        if isinstance(inst, str):
-            media = db.media.get_by_instance(inst)
+    for name in getattr(config, "instances", []):
+        if isinstance(name, str):
+            media = db.media.get_by_instance(name)
             if media:
                 all_media.extend(media)
-        elif isinstance(inst, dict):
-            for instance_name, params in inst.items():
-                for library_name in getattr(params, "library_names", None) or []:
-                    collections = db.collection.get_by_instance_and_library(
-                        instance_name, library_name
-                    )
-                    if collections:
-                        all_media.extend(collections)
+    for scope in getattr(config, "plex_scope", []) or []:
+        if not getattr(scope, "match_collections", False):
+            continue
+        libs = list(scope.library_names or [])
+        if not libs:
+            libs = db.collection.get_library_names_for_instance(scope.instance)
+        for library_name in libs:
+            collections = db.collection.get_by_instance_and_library(
+                scope.instance, library_name
+            )
+            if collections:
+                all_media.extend(collections)
     return all_media
 
 
 def build_instance_map(config: Any) -> Dict[str, Any]:
-    """Build the ``{"arrs": [...], "plex": {name: [libraries]}}`` map a Connector
-    is constructed with, from ``config.instances``. Shared by the modules' run()
-    methods (previously duplicated verbatim)."""
-    return {
-        "arrs": [i for i in config.instances if isinstance(i, str)],
-        "plex": {
-            name: (opts.library_names or [])
-            for i in config.instances
-            if isinstance(i, dict)
-            for name, opts in i.items()
-        },
-    }
+    """Build {"arrs": [...], "plex": {name: [libraries]}} from the split
+    `instances` (ARR strings) + `plex_scope` (Plex) fields. An empty
+    `library_names` means all libraries (downstream `_determine_target_libraries`
+    treats an empty selection as all)."""
+    arrs = [i for i in getattr(config, "instances", []) if isinstance(i, str)]
+    plex: Dict[str, list] = {}
+    for scope in getattr(config, "plex_scope", []) or []:
+        plex[scope.instance] = list(scope.library_names or [])
+    return {"arrs": arrs, "plex": plex}

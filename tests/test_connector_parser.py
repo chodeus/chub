@@ -137,11 +137,10 @@ def test_parse_instance_map_empty():
 
 def test_build_instance_map_splits_arrs_and_plex():
     cfg = SimpleNamespace(
-        instances=[
-            "radarr_main",
-            "sonarr_main",
-            {"plex_main": SimpleNamespace(library_names=["Movies", "TV"])},
-        ]
+        instances=["radarr_main", "sonarr_main"],
+        plex_scope=[
+            SimpleNamespace(instance="plex_main", library_names=["Movies", "TV"]),
+        ],
     )
     m = build_instance_map(cfg)
     assert m["arrs"] == ["radarr_main", "sonarr_main"]
@@ -150,10 +149,14 @@ def test_build_instance_map_splits_arrs_and_plex():
 
 def test_gather_media_and_collections_merges_media_and_collections():
     cfg = SimpleNamespace(
-        instances=[
-            "radarr_main",
-            {"plex_main": SimpleNamespace(library_names=["Movies"])},
-        ]
+        instances=["radarr_main"],
+        plex_scope=[
+            SimpleNamespace(
+                instance="plex_main",
+                library_names=["Movies"],
+                match_collections=True,
+            ),
+        ],
     )
 
     class FakeMedia:
@@ -163,6 +166,9 @@ def test_gather_media_and_collections_merges_media_and_collections():
     class FakeColl:
         def get_by_instance_and_library(self, inst, lib):
             return [{"id": 2}]
+
+        def get_library_names_for_instance(self, inst):
+            return []
 
     db = SimpleNamespace(media=FakeMedia(), collection=FakeColl())
     rows = gather_media_and_collections(cfg, db)
