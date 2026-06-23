@@ -518,6 +518,45 @@ def test_rule_flatten_cleanarr_instances_all_strings_is_noop():
     assert not any(n.rule == "flatten:poster_cleanarr.instances" for n in notes)
 
 
+def test_real_config_split_preserves_effective_scope():
+    raw = {
+        "main": {"theme": "dark"},
+        "poster_renamerr": {
+            "instances": [
+                "Movies",
+                "Shows",
+                {
+                    "Plex": {
+                        "library_names": ["Movies", "Anime", "Shows"],
+                        "add_posters": True,
+                    }
+                },
+            ]
+        },
+        "unmatched_assets": {
+            "instances": [
+                "Movies",
+                "Shows",
+                {"Plex": {"library_names": ["Movies", "Anime", "Shows", "Music"]}},
+            ]
+        },
+    }
+    out, _ = migrate(raw)
+    pr = out["poster_renamerr"]
+    assert pr["instances"] == ["Movies", "Shows"]
+    assert pr["plex_scope"][0] == {
+        "instance": "Plex",
+        "library_names": ["Movies", "Anime", "Shows"],
+        "add_posters": True,
+        "match_collections": True,
+    }
+    ua = out["unmatched_assets"]
+    assert ua["plex_scope"][0]["library_names"] == ["Movies", "Anime", "Shows", "Music"]
+    from backend.util.config import ChubConfig
+
+    ChubConfig.model_validate(out)
+
+
 def test_cleanarr_flatten_then_split_real_daps_shape():
     """The real-world DAPS shape: a plain ARR name + a plex dict entry.
 
