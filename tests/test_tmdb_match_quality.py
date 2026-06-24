@@ -23,6 +23,8 @@ class _FakeClient:
 
     def __init__(self, table):
         self.table = table
+        self.breaker_tripped = False
+        self.breaker_reason = ""
 
     def get_details(self, tmdb_id, media_type):
         return self.table.get(int(tmdb_id))
@@ -226,5 +228,81 @@ def test_verify_flags_genuine_not_found(tmp_path):
             "SELECT match_status FROM media_cache WHERE tmdb_id=99999999", fetch_one=True
         )
         assert row["match_status"] == "needs_review"
+    finally:
+        db.__exit__(None, None, None)
+
+
+class _BoomSession:
+    """Fake requests.Session whose .get always fails like a TMDB outage."""
+
+    def __init__(self):
+        self.calls = 0
+
+    def get(self, *_a, **_k):
+        self.calls += 1
+        raise tmdb.requests.ConnectionError("TMDB unreachable")
+
+
+def test_circuit_breaker_trips_and_short_circuits(tmp_path, monkeypatch):
+    """After BREAKER_THRESHOLD consecutive outages the client stops calling TMDB
+    for the rest of the run, logs the outage exactly once, and fails fast."""
+    monkeypatch.setattr(tmdb.time, "sleep", lambda *_a, **_k: None)  # no real backoff
+    db = _db(tmp_path)
+    logger = StubLogger()
+    try:
+        client = tmdb.TMDBClient(TMDBConfig(apikey="key"), db, logger)
+        boom = _BoomSession()
+        client._local.session = boom
+
+        for _ in range(client.BREAKER_THRESHOLD):
+            assert client._request_with_retry("http://x", {}, what="row") is None
+
+        assert client.breaker_tripped is True
+        outage_logs = [m for m in logger.messages["error"] if "appears to be down" in m]
+        assert len(outage_logs) == 1  # logged once, not per remaining row
+
+        calls_before = boom.calls
+        assert client._request_with_retry("http://x", {}, what="next") is None
+        assert boom.calls == calls_before  # short-circuited — no new HTTP attempts
+    finally:
+        db.__exit__(None, None, None)
+
+
+def test_circuit_breaker_resets_on_success(tmp_path, monkeypatch):
+    """A real TMDB response resets the consecutive-failure count, so isolated
+    blips never trip the breaker."""
+    monkeypatch.setattr(tmdb.time, "sleep", lambda *_a, **_k: None)
+    db = _db(tmp_path)
+    try:
+        client = tmdb.TMDBClient(TMDBConfig(apikey="key"), db, StubLogger())
+
+        class _Resp:
+            status_code = 200
+
+            def json(self):
+                return {}
+
+        class _Flaky:
+            fail = True
+
+            def get(self, *_a, **_k):
+                if self.fail:
+                    raise tmdb.requests.ConnectionError("blip")
+                return _Resp()
+
+        flaky = _Flaky()
+        client._local.session = flaky
+
+        for _ in range(client.BREAKER_THRESHOLD - 1):
+            client._request_with_retry("http://x", {}, what="row")
+        assert client.breaker_tripped is False
+
+        flaky.fail = False
+        assert client._request_with_retry("http://x", {}, what="ok") is not None
+
+        flaky.fail = True
+        for _ in range(client.BREAKER_THRESHOLD - 1):
+            client._request_with_retry("http://x", {}, what="row")
+        assert client.breaker_tripped is False  # reset means it takes a full run to trip
     finally:
         db.__exit__(None, None, None)
