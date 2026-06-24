@@ -55,6 +55,13 @@ class TMDBClient:
     HTTP_TIMEOUT = 10
     MAX_RETRIES = 3
     BACKOFF_SECONDS = (1, 2)  # waits between attempts 1→2 and 2→3
+    # Circuit breaker: after this many consecutive "TMDB looks down" failures
+    # (transport error / persistent 5xx / exhausted 429) the client stops calling
+    # TMDB for the rest of the run, so an outage aborts fast instead of doing 3
+    # retries × every remaining row. Any real HTTP response resets it. State is
+    # per-instance, and a fresh client is built per run (backfill / match-quality),
+    # so the breaker is effectively per-run.
+    BREAKER_THRESHOLD = 8
 
     def __init__(self, cfg: TMDBConfig, db: ChubDB, logger) -> None:
         self.cfg = cfg
@@ -67,6 +74,12 @@ class TMDBClient:
         self._memo: dict = {}
         self._memo_lock = threading.Lock()
         self._auth_failed = False
+        # Circuit-breaker state (see BREAKER_THRESHOLD). Its own lock because
+        # backfill_missing_tmdb_ids drives this client from a ThreadPoolExecutor.
+        self._breaker_lock = threading.Lock()
+        self._breaker_consecutive = 0
+        self._breaker_open = False
+        self._breaker_last_reason = ""
 
     @property
     def session(self) -> requests.Session:
@@ -115,6 +128,43 @@ class TMDBClient:
             self._memo[key] = tmdb_id
         return tmdb_id
 
+    @property
+    def breaker_tripped(self) -> bool:
+        """True once the run has hit BREAKER_THRESHOLD consecutive TMDB outages."""
+        with self._breaker_lock:
+            return self._breaker_open
+
+    @property
+    def breaker_reason(self) -> str:
+        with self._breaker_lock:
+            return self._breaker_last_reason
+
+    def _breaker_record_success(self) -> None:
+        with self._breaker_lock:
+            self._breaker_consecutive = 0
+
+    def _note_failure(self, reason: str, what: str) -> None:
+        """Count one 'TMDB unreachable/unhealthy' failure toward the breaker and,
+        the moment it trips, log a single clear outage line for the user. Per-call
+        warnings are still emitted at the failure sites; this is the run-level
+        'we're giving up on TMDB' notice."""
+        with self._breaker_lock:
+            self._breaker_consecutive += 1
+            self._breaker_last_reason = reason
+            just_tripped = (
+                self._breaker_consecutive >= self.BREAKER_THRESHOLD
+                and not self._breaker_open
+            )
+            if just_tripped:
+                self._breaker_open = True
+        if just_tripped:
+            self.logger.error(
+                f"TMDB appears to be down — {self.BREAKER_THRESHOLD} requests failed "
+                f"in a row ({reason}). Skipping further TMDB lookups for the rest of "
+                f"this run; cached data is unaffected and unresolved rows retry next "
+                f"run. Last call: {what}."
+            )
+
     def _request_with_retry(self, url: str, params: dict, *, what: str):
         """Single GET-with-retry used by every TMDB call.
 
@@ -126,12 +176,18 @@ class TMDBClient:
         logic (404 semantics, JSON parsing) and the not-ok warning. `what` is a
         short label for log messages (e.g. "tvdb_id=123", "movie/55/images").
         """
+        # Outage already declared this run — fail fast instead of burning the
+        # full retry ladder on every remaining row.
+        if self.breaker_tripped:
+            return None
+
         for attempt in range(self.MAX_RETRIES):
             try:
                 resp = self.session.get(url, params=params, timeout=self.HTTP_TIMEOUT)
             except requests.RequestException as exc:
                 if attempt == self.MAX_RETRIES - 1:
                     self.logger.warning(f"TMDB request failed for {what}: {exc}")
+                    self._note_failure(f"couldn't reach TMDB ({type(exc).__name__})", what)
                     return None
                 time.sleep(self.BACKOFF_SECONDS[attempt])
                 continue
@@ -159,11 +215,19 @@ class TMDBClient:
                     time.sleep(retry_after)
                     continue
                 self.logger.warning("TMDB rate-limited; giving up after retries")
+                self._note_failure("TMDB rate-limited (HTTP 429)", what)
                 return None
             if resp.status_code >= 500 and attempt < self.MAX_RETRIES - 1:
                 time.sleep(self.BACKOFF_SECONDS[attempt])
                 continue
-            # Terminal status (2xx / 404 / other 4xx) — hand back to the caller.
+            # Terminal status — hand back to the caller. A 5xx that outlived every
+            # retry means TMDB is unhealthy (count it toward the breaker); any other
+            # status (2xx / 404 / other 4xx) is a real answer, so the service is up
+            # and the breaker resets.
+            if resp.status_code >= 500:
+                self._note_failure(f"TMDB unavailable (HTTP {resp.status_code})", what)
+            else:
+                self._breaker_record_success()
             return resp
 
         return None
@@ -535,6 +599,13 @@ def backfill_missing_tmdb_ids(
                     f"Failed to persist tmdb_id={tmdb_id} for row {row_id}: {exc}"
                 )
 
+    if client.breaker_tripped:
+        logger.warning(
+            f"TMDB id backfill stopped early after a suspected TMDB outage "
+            f"({client.breaker_reason}). Resolved {resolved} id(s) before aborting; "
+            f"the rest will retry on the next sync."
+        )
+
     return resolved
 
 
@@ -669,6 +740,12 @@ def _verify_and_hydrate(
         if details.get("verified"):
             if _merge_akas(db, row, details.get("alternative_titles") or []):
                 counts["akas_hydrated"] += 1
+
+    if client.breaker_tripped:
+        logger.warning(
+            f"TMDB match-quality verify stopped early after a suspected TMDB outage "
+            f"({client.breaker_reason}). Counts reflect the rows checked before aborting."
+        )
 
     return counts
 
