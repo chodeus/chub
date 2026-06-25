@@ -91,6 +91,32 @@ const formatBytes = bytes => {
 // Module-level so reference is stable across renders (fixes exhaustive-deps warning).
 const TERMINAL_STATUSES = ['success', 'error', 'cancelled'];
 
+// Poll a background job's log-tail until it reaches a terminal status. Resolves
+// with the final status (or undefined once `token.cancelled` flips, e.g. on
+// unmount or a superseding scan). Shared by the metadata-scan and kometa-scan
+// flows so neither walks the filesystem on the server's event loop.
+function pollJobUntilDone(jobId, token) {
+    return new Promise(resolve => {
+        let offset = 0;
+        const poll = () => {
+            if (token.cancelled) return resolve();
+            postersAPI
+                .tailJobLog(jobId, offset)
+                .then(res => {
+                    if (token.cancelled) return resolve();
+                    const data = res?.data || {};
+                    if (typeof data.next_offset === 'number') offset = data.next_offset;
+                    if (TERMINAL_STATUSES.includes(data.status)) return resolve(data.status);
+                    setTimeout(poll, 1500);
+                })
+                .catch(() => {
+                    if (!token.cancelled) setTimeout(poll, 3000);
+                });
+        };
+        poll();
+    });
+}
+
 // ---------------------------------------------------------------------------
 // Stale-duplicate → bundle matching helpers
 // ---------------------------------------------------------------------------
@@ -444,23 +470,34 @@ const PosterCleanarrPage = () => {
     const [orphans, setOrphans] = useState([]);
 
     useEffect(() => {
-        let cancelled = false;
-        postersAPI
-            .scanKometaAssets()
-            .then(res => {
-                if (cancelled) return;
-                const data = res?.data || {};
+        const token = { cancelled: false };
+        const load = async () => {
+            try {
+                let res = await postersAPI.scanKometaAssets();
+                let data = res?.data || {};
+                // Cold cache → the walk runs in a background job, not on the
+                // server's event loop. Enqueue it, wait, then re-read.
+                if (data.scan_required) {
+                    const enq = await postersAPI.enqueueKometaAssetsScan();
+                    const jobId = enq?.data?.job_id;
+                    if (jobId) await pollJobUntilDone(jobId, token);
+                    if (token.cancelled) return;
+                    res = await postersAPI.scanKometaAssets();
+                    data = res?.data || {};
+                }
+                if (token.cancelled) return;
                 setStaleItems(data.stale || []);
                 setOrphans(data.orphans || []);
-            })
-            .catch(() => {
-                if (!cancelled) {
+            } catch {
+                if (!token.cancelled) {
                     setStaleItems([]);
                     setOrphans([]);
                 }
-            });
+            }
+        };
+        load();
         return () => {
-            cancelled = true;
+            token.cancelled = true;
         };
     }, []);
 
@@ -495,6 +532,9 @@ const PosterCleanarrPage = () => {
     const [confirmRemove, setConfirmRemove] = useState(false);
     const [liveJobId, setLiveJobId] = useState(null);
     const [isEnqueuing, setIsEnqueuing] = useState(false);
+    // True while a background scan job is enqueued + polling (drives the
+    // "Scanning…" spinner now that the walk no longer blocks the request).
+    const [scanning, setScanning] = useState(false);
 
     // Locally-deleted variant paths since the last scan. Added to on successful
     // single/bulk delete so the UI prunes them immediately without a full
@@ -624,10 +664,36 @@ const PosterCleanarrPage = () => {
         }
     }, [tab, expandedShows, expandedSeasons, selected]);
 
-    const refreshScan = useCallback(() => {
+    // A scan now enqueues a background `plex_metadata_scan` job (the ~140k-file
+    // walk runs off the server's event loop), polls it to completion, then
+    // reads the freshly-warmed cache via byMedia.refresh(). `scanning` drives
+    // the spinner while the job runs; the activeScanRef token cancels an
+    // in-flight poll if a new scan starts or the page unmounts.
+    const activeScanRef = useRef(null);
+    useEffect(
+        () => () => {
+            if (activeScanRef.current) activeScanRef.current.cancelled = true;
+        },
+        []
+    );
+
+    const refreshScan = useCallback(async () => {
         if (!hasScanned) setHasScanned(true);
         setDeletedPaths(new Set());
-        byMedia.refresh();
+        if (activeScanRef.current) activeScanRef.current.cancelled = true;
+        const token = { cancelled: false };
+        activeScanRef.current = token;
+        setScanning(true);
+        try {
+            const res = await postersAPI.enqueuePlexMetadataScan();
+            const jobId = res?.data?.job_id;
+            if (jobId) await pollJobUntilDone(jobId, token);
+        } catch {
+            // Enqueue/poll failed — fall through and read whatever is cached.
+        } finally {
+            if (!token.cancelled) setScanning(false);
+        }
+        if (!token.cancelled) byMedia.refresh();
     }, [byMedia, hasScanned]);
 
     // ---- Tab filtering ----
@@ -1043,7 +1109,7 @@ const PosterCleanarrPage = () => {
                         </Button>
                     )}
                     <LoadingButton
-                        loading={mode === 'report' ? loading : isEnqueuing}
+                        loading={mode === 'report' ? scanning || loading : isEnqueuing}
                         loadingText={mode === 'report' ? 'Scanning…' : 'Starting…'}
                         variant={MODE_META[mode]?.variant || 'primary'}
                         onClick={runCleanup}
@@ -1072,7 +1138,7 @@ const PosterCleanarrPage = () => {
                     Couldn&apos;t read Plex metadata:{' '}
                     {byMedia.error?.message || String(byMedia.error)}.
                 </div>
-            ) : loading && bundles.length === 0 ? (
+            ) : (scanning || loading) && bundles.length === 0 ? (
                 <Spinner size="medium" text="Scanning Plex metadata..." center />
             ) : bundles.length === 0 ? (
                 <div className="text-center py-16 text-fg-subtle">
