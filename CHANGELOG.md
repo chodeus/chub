@@ -2,6 +2,26 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.35.0](https://github.com/chodeus/chub/compare/v2.34.0...v2.35.0) (2026-06-25)
+
+
+### Features
+
+* **tmdb:** add circuit breaker to abort runs on sustained TMDB outage ([7fa6fd0](https://github.com/chodeus/chub/commit/7fa6fd0ac674bfed1bf869d5f871a2079f1623be))
+
+
+### Bug Fixes
+
+* **poster_cleanarr:** run metadata scans off the event loop via background jobs ([cae5baf](https://github.com/chodeus/chub/commit/cae5baf963a03616643961215302ceb15277cec5))
+* **security:** harden Plex XML parsing and break config import cycle ([0068389](https://github.com/chodeus/chub/commit/00683896f1b37efa3e11fefd4312c735f20ae729))
+
+
+### Documentation
+
+* **readme:** condense security section and trim WHY-heavy prose ([31e5341](https://github.com/chodeus/chub/commit/31e534136b1c3e66a91a3a8cd00923b3640ef954))
+* **readme:** drop security section + alpha tag, add DAPS-differences section ([6c686a0](https://github.com/chodeus/chub/commit/6c686a0859b4088cfe30f02c596374719ea8cbed))
+* **readme:** reframe DAPS section as improvements, broaden coverage ([1eda047](https://github.com/chodeus/chub/commit/1eda04728e756abc67a514ec18f4d2d990951ccd))
+
 ## [2.34.0](https://github.com/chodeus/chub/compare/v2.33.0...v2.34.0) (2026-06-23)
 
 
