@@ -14,7 +14,7 @@ def _logger():
 
 
 def test_resolve_plex_match_via_plex_mapping(tmp_path):
-    from backend.api.posters import _stale_plex_match_map
+    from backend.modules.poster_cleanarr import _stale_plex_match_map
 
     with ChubDB(_logger(), db_path=str(tmp_path / "chub.db")) as db:
         db.media.execute_query(

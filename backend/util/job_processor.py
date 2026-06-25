@@ -89,6 +89,10 @@ def process_job(job: Dict[str, Any], logger, db: ChubDB = None) -> Dict[str, Any
             return _process_module_run_job(payload, logger, job_id, db)
         elif job_type == "cache_refresh":
             return _process_cache_refresh_job(payload, logger, job_id, db)
+        elif job_type == "plex_metadata_scan":
+            return _process_plex_metadata_scan_job(payload, logger, job_id, db)
+        elif job_type == "kometa_assets_scan":
+            return _process_kometa_assets_scan_job(payload, logger, job_id, db)
         elif job_type == "labelarr_bulk_sync":
             return _process_labelarr_bulk_sync_job(payload, logger, job_id, db)
         else:
@@ -918,6 +922,74 @@ def _process_labelarr_bulk_sync_job(
             "message": f"Bulk labelarr sync failed: {str(e)}",
             "error_code": "LABELARR_BULK_SYNC_FAILED",
         }
+
+
+def _process_plex_metadata_scan_job(
+    payload: Dict[str, Any], logger, job_id: int, db: ChubDB = None
+) -> Dict[str, Any]:
+    """Warm the Poster Cleanarr scan cache on a worker thread.
+
+    Walks the Plex Metadata tree + PhotoTranscoder cache (a ~140k-file scan on
+    large libraries) and stores the result in the in-memory TTL cache that the
+    GET /plex-metadata/by-media + /bloat endpoints read. Runs here, off the
+    FastAPI event loop, so the scan never blocks the API or trips the client's
+    request timeout.
+    """
+    log = logger.get_adapter("PLEX_METADATA_SCAN")
+    plex_path = payload.get("plex_path")
+    if not plex_path:
+        return {
+            "status": 400,
+            "success": False,
+            "message": "plex_path missing from scan payload",
+            "error_code": "PLEX_PATH_UNSET",
+        }
+
+    from backend.util.plex_metadata import scan_bundles, scan_transcoder_cache
+
+    log.info(f"[JOB:{job_id}] Scanning Plex metadata at {plex_path}")
+    scan = scan_bundles(plex_path, force=True)
+    transcoder = scan_transcoder_cache(plex_path, force=True)
+    stats = scan["stats"]
+    log.info(
+        f"[JOB:{job_id}] Scan complete: {stats['bundle_count']} bundles, "
+        f"{stats['variant_count']} variants, {stats['bloat_count']} bloat; "
+        f"transcoder {transcoder['count']} files"
+    )
+    return {
+        "status": 200,
+        "success": True,
+        "message": "Plex metadata scan complete",
+        "data": {"stats": stats, "transcoder": transcoder},
+    }
+
+
+def _process_kometa_assets_scan_job(
+    payload: Dict[str, Any], logger, job_id: int, db: ChubDB = None
+) -> Dict[str, Any]:
+    """Warm the Kometa stale/orphan scan cache on a worker thread.
+
+    The asset-dir walk + Plex-mapping detection ran on the event loop on every
+    Poster Cleanarr page load; this moves it off-loop. Results land in the TTL
+    cache read by GET /plex-metadata/kometa-assets-scan.
+    """
+    log = logger.get_adapter("KOMETA_ASSETS_SCAN")
+    from backend.modules.poster_cleanarr import scan_kometa_assets
+
+    log.info(f"[JOB:{job_id}] Scanning Kometa assets")
+    with ChubDB(logger=logger) as scan_db:
+        result = scan_kometa_assets(scan_db, logger, force=True)
+    stats = result["stats"]
+    log.info(
+        f"[JOB:{job_id}] Kometa scan complete: {stats['stale_count']} stale, "
+        f"{stats['orphan_count']} orphan"
+    )
+    return {
+        "status": 200,
+        "success": True,
+        "message": "Kometa assets scan complete",
+        "data": {"stats": stats},
+    }
 
 
 def _process_cache_refresh_job(

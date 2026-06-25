@@ -653,6 +653,30 @@ class DBWorker(DatabaseBase):
                                 "data": {"job_id": existing_id},
                             }
 
+                # The Poster Cleanarr scans are idempotent cache-warmers; only
+                # one of each needs to be in flight. Two scan clicks (or a page
+                # mount racing the scan button) collapse to the same job so the
+                # UI polls a single in-progress scan instead of stacking walks.
+                if job_type in ("plex_metadata_scan", "kometa_assets_scan"):
+                    existing = conn.execute(
+                        f"SELECT id, status FROM {table_name} "
+                        f"WHERE type = ? "
+                        f"  AND status IN ('pending', 'running')",
+                        (job_type,),
+                    ).fetchone()
+                    if existing:
+                        existing_id = existing["id"]
+                        existing_status = existing["status"]
+                        return {
+                            "success": True,
+                            "deduped": True,
+                            "message": (
+                                f"{job_type} already {existing_status} "
+                                f"(job {existing_id}); skipped duplicate enqueue"
+                            ),
+                            "data": {"job_id": existing_id},
+                        }
+
                 cursor = conn.execute(
                     f"INSERT INTO {table_name} ({keys}) VALUES ({qs})",
                     tuple(fields.values()),

@@ -4,6 +4,7 @@ import glob
 import json
 import os
 import shutil
+import threading
 import time
 import zipfile
 from typing import Any, Dict, List, Optional, Set, Tuple
@@ -22,6 +23,14 @@ from backend.util.normalization import normalize_titles, parse_asset_filename
 # overlays_only mode to skip user-uploaded customs (which lack the tag).
 KOMETA_OVERLAY_EXIF_TAG = 0x04BC
 KOMETA_OVERLAY_EXIF_VALUE = "overlay"
+
+# In-memory TTL cache for the read-only Kometa stale/orphan scan. A background
+# job warms it via `scan_kometa_assets(force=True)`; the API reads it through
+# `get_cached_kometa_assets()` so the (potentially large) asset-dir walk never
+# runs on the FastAPI event loop. Mirrors the cache in util/plex_metadata.py.
+_KOMETA_CACHE_TTL_SEC = 300
+_kometa_cache_lock = threading.Lock()
+_kometa_cache: Dict[str, Any] = {}
 
 
 def _first_int_id(regex, names: Tuple[str, ...]) -> Optional[int]:
@@ -1455,3 +1464,119 @@ def run_stale_duplicates_pass(
     return cleanarr._run_stale_pass(
         db=db, instances=instances, asset_dirs=asset_dirs, mode=mode, logger=logger
     )
+
+
+def _stale_plex_match_map(db: ChubDB, ids: list) -> dict:
+    """Map ('tvdb'|'tmdb', id) -> {rating_key, title, year} for live media, via
+    media_cache.plex_mapping_id -> plex_media_cache. The Plex title+year let the
+    UI attach a stale folder to its poster row even when the cached rating_key
+    has drifted from Plex's live metadata (a re-add / re-match mints a new key,
+    so the cached plex_id no longer matches the on-disk bundle). Missing
+    mappings are simply absent from the result."""
+    out: dict = {}
+    if not ids:
+        return out
+    rows = db.media.execute_query(
+        "SELECT m.tvdb_id AS tvdb_id, m.tmdb_id AS tmdb_id, "
+        "p.plex_id AS plex_id, p.title AS title, p.year AS year "
+        "FROM media_cache m JOIN plex_media_cache p ON m.plex_mapping_id = p.id "
+        "WHERE m.plex_mapping_id IS NOT NULL",
+        fetch_all=True,
+    )
+    wanted = set(ids)
+    for r in rows or []:
+        try:
+            pid = int(r["plex_id"])
+        except (ValueError, TypeError, KeyError):
+            pid = None  # keep the title/year so the UI can still match by name
+        for kind, raw in (("tvdb", r.get("tvdb_id")), ("tmdb", r.get("tmdb_id"))):
+            try:
+                key = (kind, int(raw)) if raw not in (None, "", 0) else None
+            except (ValueError, TypeError):
+                key = None
+            if key in wanted:
+                # plex_media_cache.year is TEXT; coerce to int so it lines up
+                # with the bundle scan's integer year for the UI match.
+                year_raw = r.get("year")
+                try:
+                    year_val = int(year_raw) if year_raw not in (None, "") else None
+                except (ValueError, TypeError):
+                    year_val = None
+                out[key] = {
+                    "rating_key": pid,
+                    "title": r.get("title") or "",
+                    "year": year_val,
+                }
+    return out
+
+
+def scan_kometa_assets(
+    db: ChubDB, logger: Logger, *, force: bool = False
+) -> Dict[str, Any]:
+    """Walk the Kometa assets dir once and return {stale, orphans, stats}.
+
+    Read-only — never deletes. Detection reuses PosterCleanarr so this matches
+    the cleanup job exactly. Cached for `_KOMETA_CACHE_TTL_SEC` unless `force`;
+    the background `kometa_assets_scan` job calls this with force=True on a
+    worker thread so the asset-dir walk never blocks the event loop.
+    """
+    if not force:
+        cached = get_cached_kometa_assets()
+        if cached is not None:
+            return cached
+
+    from backend.util.config import load_config
+
+    cfg = load_config().poster_cleanarr
+    instances = PosterCleanarr._resolve_orphan_instances(cfg)
+    asset_dirs = list(getattr(cfg, "asset_dirs", []) or [])
+    ca = PosterCleanarr.__new__(PosterCleanarr)
+    ca.logger = logger
+
+    canonical = ca._build_canonical_folder_map(db, instances)
+    stale_raw = ca._scan_stale_duplicates(asset_dirs, canonical)
+    match = _stale_plex_match_map(db, [d["id"] for d in stale_raw])
+    stale = [
+        {
+            "rating_key": (match.get(d["id"]) or {}).get("rating_key"),
+            "plex_title": (match.get(d["id"]) or {}).get("title", ""),
+            "plex_year": (match.get(d["id"]) or {}).get("year"),
+            "name": d["name"],
+            "canonical": d["canonical"],
+            "canonical_present": d["canonical_present"],
+            "size": d["size"],
+            "folder": d["folder"],
+        }
+        for d in stale_raw
+    ]
+
+    titles = ca._build_library_title_set(db, instances, True)
+    tmdb_ids, tvdb_ids = ca._build_library_id_sets(db, instances)
+    orphan_raw = (
+        ca._scan_orphan_assets(asset_dirs, titles, tmdb_ids, tvdb_ids, set())
+        if titles
+        else []
+    )
+    orphans = [
+        {"path": o["path"], "parsed": o.get("parsed"), "size": o["size"]}
+        for o in orphan_raw
+    ]
+
+    result = {
+        "stale": stale,
+        "orphans": orphans,
+        "stats": {"stale_count": len(stale), "orphan_count": len(orphans)},
+    }
+    with _kometa_cache_lock:
+        _kometa_cache["kometa"] = {"_ts": time.time(), "data": result}
+    return result
+
+
+def get_cached_kometa_assets() -> Optional[Dict[str, Any]]:
+    """Return the cached Kometa stale/orphan scan, or None if unscanned/stale.
+    Walk-free read path for the API — never triggers a scan."""
+    with _kometa_cache_lock:
+        entry = _kometa_cache.get("kometa")
+        if entry and (time.time() - entry["_ts"]) < _KOMETA_CACHE_TTL_SEC:
+            return entry["data"]
+    return None
