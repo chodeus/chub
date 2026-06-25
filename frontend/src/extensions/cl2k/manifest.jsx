@@ -30,13 +30,15 @@ export default {
     settingsModules: [{ after: 'border_replacerr', entry: CL2K_MAKER_MODULE_ENTRY }],
     configModules: [{ after: 'border_replacerr', key: 'cl2k_maker' }],
     capabilities: {
-        // Extra Unmatched Assets row action: jump into the maker with the
-        // row's ids prefilled. Only for rows with a TMDB id.
+        // Extra Unmatched Assets row action: jump into the maker with the row's
+        // ids prefilled. Shown whenever the row has ANY of tmdb/tvdb/imdb — a
+        // TVDB-only Sonarr show (no TMDB cross-link) still gets the link; the
+        // maker resolves a tmdb_id on entry when one exists.
         'unmatchedAssets.rowAction': item =>
-            item.tmdb_id
+            item.tmdb_id || item.tvdb_id || item.imdb_id
                 ? {
                       to: `/poster/cl2k-maker?${new URLSearchParams({
-                          tmdb_id: item.tmdb_id,
+                          ...(item.tmdb_id ? { tmdb_id: item.tmdb_id } : {}),
                           type: item._type,
                           title: item.title || '',
                           ...(item.year ? { year: item.year } : {}),

@@ -1087,12 +1087,15 @@ def fanart_images(
     logger,
     *,
     kind: str,
-    tmdb_id: int,
+    tmdb_id: Optional[int] = None,
     tvdb_id: Optional[int] = None,
     imdb_id: Optional[str] = None,
     season_number: Optional[int] = None,
 ) -> Dict[str, Optional[str]]:
-    """Return fanart.tv ``{logo, background}`` URLs for the art picker (None on miss)."""
+    """Return fanart.tv ``{logo, background}`` URLs for the art picker (None on miss).
+
+    A show can resolve from tvdb_id alone (fanart.tv keys shows by TVDB), so
+    tmdb_id is optional — a TVDB-only title still gets fanart art."""
     cfg = full_config.cl2k_maker
     lang = cfg.language or "en"
     try:

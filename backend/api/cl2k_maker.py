@@ -1077,7 +1077,9 @@ def retext_seasons_endpoint(
 
 @router.get("/fanart-images", summary="fanart.tv logo + background for the art picker")
 def fanart_images_endpoint(
-    tmdb_id: int = Query(...),
+    # tmdb_id optional: fanart.tv keys shows by tvdb_id, so a TVDB-only title
+    # (no TMDB cross-link) can still pull a logo/background from fanart.
+    tmdb_id: Optional[int] = Query(None),
     media_type: str = Query("movie", alias="type"),
     tvdb_id: Optional[int] = Query(None),
     imdb_id: Optional[str] = Query(None),
