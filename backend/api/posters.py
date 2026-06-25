@@ -40,50 +40,6 @@ def get_cleanarr_logger(request: Request) -> Any:
     return get_module_logger(request, "poster_cleanarr")
 
 
-def _stale_plex_match_map(db: "ChubDB", ids: list) -> dict:
-    """Map ('tvdb'|'tmdb', id) -> {rating_key, title, year} for live media, via
-    media_cache.plex_mapping_id -> plex_media_cache. The Plex title+year let the
-    UI attach a stale folder to its poster row even when the cached rating_key
-    has drifted from Plex's live metadata (a re-add / re-match mints a new key,
-    so the cached plex_id no longer matches the on-disk bundle). Missing
-    mappings are simply absent from the result."""
-    out: dict = {}
-    if not ids:
-        return out
-    rows = db.media.execute_query(
-        "SELECT m.tvdb_id AS tvdb_id, m.tmdb_id AS tmdb_id, "
-        "p.plex_id AS plex_id, p.title AS title, p.year AS year "
-        "FROM media_cache m JOIN plex_media_cache p ON m.plex_mapping_id = p.id "
-        "WHERE m.plex_mapping_id IS NOT NULL",
-        fetch_all=True,
-    )
-    wanted = set(ids)
-    for r in rows or []:
-        try:
-            pid = int(r["plex_id"])
-        except (ValueError, TypeError, KeyError):
-            pid = None  # keep the title/year so the UI can still match by name
-        for kind, raw in (("tvdb", r.get("tvdb_id")), ("tmdb", r.get("tmdb_id"))):
-            try:
-                key = (kind, int(raw)) if raw not in (None, "", 0) else None
-            except (ValueError, TypeError):
-                key = None
-            if key in wanted:
-                # plex_media_cache.year is TEXT; coerce to int so it lines up
-                # with the bundle scan's integer year for the UI match.
-                year_raw = r.get("year")
-                try:
-                    year_val = int(year_raw) if year_raw not in (None, "") else None
-                except (ValueError, TypeError):
-                    year_val = None
-                out[key] = {
-                    "rating_key": pid,
-                    "title": r.get("title") or "",
-                    "year": year_val,
-                }
-    return out
-
-
 # --- New endpoints: search, stats, browse, collections ---
 
 
@@ -2889,9 +2845,10 @@ async def list_plex_metadata_by_media(
     bundle in the unfiltered scan so the frontend can render a dropdown.
     """
     try:
-        import time as _time
-
-        from backend.util.plex_metadata import scan_bundles, scan_transcoder_cache
+        from backend.util.plex_metadata import (
+            get_cached_scan,
+            get_cached_transcoder,
+        )
 
         plex_path = _get_plex_path(request)
         if not plex_path:
@@ -2901,20 +2858,32 @@ async def list_plex_metadata_by_media(
                 code="PLEX_PATH_UNSET",
                 status_code=400,
             )
-        logger.info(
-            f"UI scan requested: media_type={media_type} library_id={library_id} "
-            f"variant_kind={variant_kind} only_bloat={only_bloat} force={force}"
-        )
-        _t0 = _time.time()
-        scan = scan_bundles(plex_path, force=force)
-        transcoder = scan_transcoder_cache(plex_path, force=force)
-        logger.info(
-            f"UI scan complete in {_time.time() - _t0:.1f}s — "
-            f"{scan['stats']['bundle_count']} bundles, "
-            f"{scan['stats']['variant_count']} variants, "
-            f"{scan['stats']['bloat_count']} bloat, "
-            f"transcoder cache {transcoder['count']} files / {transcoder['size_bytes']} bytes"
-        )
+
+        # Read-only: never walk the Plex Metadata tree on the event loop. When
+        # no fresh scan is cached, tell the client to enqueue a background
+        # `plex_metadata_scan` job (POST /plex-metadata/scan) and poll it; the
+        # job warms this cache off-loop and the client re-fetches once ready.
+        scan = get_cached_scan(plex_path)
+        if scan is None:
+            return ok(
+                "No scan cached — enqueue a scan",
+                {
+                    "bundles": [],
+                    "libraries": [],
+                    "media_types": [],
+                    "variant_kinds": [],
+                    "total": 0,
+                    "limit": limit,
+                    "offset": offset,
+                    "stats": None,
+                    "transcoder": None,
+                    "scan_required": True,
+                },
+            )
+        transcoder = get_cached_transcoder(plex_path) or {
+            "count": 0,
+            "size_bytes": 0,
+        }
         bundles = scan["bundles"]
 
         media_type = (media_type or "all").lower()
@@ -2972,17 +2941,30 @@ async def list_plex_metadata_bloat(
 ):
     """Flat list of bloat variants across all bundles, largest first."""
     try:
-        from backend.util.plex_metadata import get_bloat_flat, scan_bundles
+        from backend.util.plex_metadata import bloat_flat_from_scan, get_cached_scan
 
         plex_path = _get_plex_path(request)
         if not plex_path:
             return error(
                 "Plex path is not configured", code="PLEX_PATH_UNSET", status_code=400
             )
-        items = get_bloat_flat(plex_path, force=force)
+        # Cache-only read; the scan job (POST /plex-metadata/scan) warms it.
+        scan = get_cached_scan(plex_path)
+        if scan is None:
+            return ok(
+                "No scan cached — enqueue a scan",
+                {
+                    "items": [],
+                    "total": 0,
+                    "limit": limit,
+                    "offset": offset,
+                    "stats": None,
+                    "scan_required": True,
+                },
+            )
+        items = bloat_flat_from_scan(scan)
         total = len(items)
         page = items[offset : offset + limit]
-        stats = scan_bundles(plex_path, force=False)["stats"]
         return ok(
             f"Retrieved {len(page)} of {total} bloat files",
             {
@@ -2990,7 +2972,7 @@ async def list_plex_metadata_bloat(
                 "total": total,
                 "limit": limit,
                 "offset": offset,
-                "stats": stats,
+                "stats": scan["stats"],
             },
         )
     except Exception as e:
@@ -3258,66 +3240,91 @@ async def get_plex_variant_thumbnail(
 
 @router.get("/plex-metadata/kometa-assets-scan")
 async def scan_kometa_assets(
+    logger: Any = Depends(get_cleanarr_logger),
+):
+    """Return the cached Kometa stale-duplicate + orphan scan. Read-only and
+    walk-free: the asset-dir walk runs in the background `kometa_assets_scan`
+    job (POST /plex-metadata/kometa-scan), never on the event loop. When no
+    scan is cached the client gets `scan_required` and enqueues one."""
+    try:
+        from backend.modules.poster_cleanarr import get_cached_kometa_assets
+
+        cached = get_cached_kometa_assets()
+        if cached is None:
+            return ok(
+                "No Kometa scan cached — enqueue a scan",
+                {
+                    "stale": [],
+                    "orphans": [],
+                    "stats": {"stale_count": 0, "orphan_count": 0},
+                    "scan_required": True,
+                },
+            )
+        return ok("Kometa asset scan complete", cached)
+    except Exception as e:
+        logger.error(f"Kometa asset scan read failed: {e}")
+        return error(
+            f"Kometa asset scan read failed: {str(e)}",
+            code="KOMETA_SCAN_ERROR",
+            status_code=500,
+        )
+
+
+@router.post("/plex-metadata/scan")
+async def enqueue_plex_metadata_scan(
+    request: Request,
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_cleanarr_logger),
 ):
-    """Walk the Kometa assets dir once; return stale-duplicate folders (keyed by
-    resolved Plex rating_key) and orphan assets. Read-only — never deletes.
-    Detection reuses poster_cleanarr so this matches the cleanup job exactly."""
+    """Enqueue a background `plex_metadata_scan` job that warms the bundle +
+    transcoder caches off the event loop. Returns a `job_id` the client polls
+    (GET /jobs/{id}/log-tail) before re-fetching /by-media. Duplicate enqueues
+    collapse to the in-flight scan."""
     try:
-        from backend.modules.poster_cleanarr import PosterCleanarr
-        from backend.util.config import load_config
-
-        cfg = load_config().poster_cleanarr
-        instances = PosterCleanarr._resolve_orphan_instances(cfg)
-        asset_dirs = list(getattr(cfg, "asset_dirs", []) or [])
-        ca = PosterCleanarr.__new__(PosterCleanarr)
-        ca.logger = logger
-
-        canonical = ca._build_canonical_folder_map(db, instances)
-        stale_raw = ca._scan_stale_duplicates(asset_dirs, canonical)
-        match = _stale_plex_match_map(db, [d["id"] for d in stale_raw])
-        stale = [
-            {
-                "rating_key": (match.get(d["id"]) or {}).get("rating_key"),
-                "plex_title": (match.get(d["id"]) or {}).get("title", ""),
-                "plex_year": (match.get(d["id"]) or {}).get("year"),
-                "name": d["name"],
-                "canonical": d["canonical"],
-                "canonical_present": d["canonical_present"],
-                "size": d["size"],
-                "folder": d["folder"],
-            }
-            for d in stale_raw
-        ]
-
-        titles = ca._build_library_title_set(db, instances, True)
-        tmdb_ids, tvdb_ids = ca._build_library_id_sets(db, instances)
-        orphan_raw = (
-            ca._scan_orphan_assets(asset_dirs, titles, tmdb_ids, tvdb_ids, set())
-            if titles
-            else []
+        plex_path = _get_plex_path(request)
+        if not plex_path:
+            return error(
+                "Plex path is not configured", code="PLEX_PATH_UNSET", status_code=400
+            )
+        result = db.worker.enqueue_job(
+            "jobs", {"plex_path": plex_path}, job_type="plex_metadata_scan"
         )
-        orphans = [
-            {"path": o["path"], "parsed": o.get("parsed"), "size": o["size"]}
-            for o in orphan_raw
-        ]
-        return ok(
-            "Kometa asset scan complete",
-            {
-                "stale": stale,
-                "orphans": orphans,
-                "stats": {
-                    "stale_count": len(stale),
-                    "orphan_count": len(orphans),
-                },
-            },
+        if result.get("success"):
+            job_id = result.get("data", {}).get("job_id")
+            logger.info(f"Plex metadata scan enqueued (job_id={job_id})")
+            return ok("Scan job enqueued", {"job_id": job_id})
+        return error("Failed to enqueue scan", code="ENQUEUE_FAILED", status_code=500)
+    except Exception as e:
+        logger.error(f"Error enqueuing plex metadata scan: {e}")
+        return error(
+            f"Error enqueuing scan: {str(e)}",
+            code="SCAN_ENQUEUE_ERROR",
+            status_code=500,
+        )
+
+
+@router.post("/plex-metadata/kometa-scan")
+async def enqueue_kometa_assets_scan(
+    db: ChubDB = Depends(get_database),
+    logger: Any = Depends(get_cleanarr_logger),
+):
+    """Enqueue a background `kometa_assets_scan` job that warms the stale/orphan
+    cache off the event loop. Returns a `job_id` the client polls before
+    re-fetching /kometa-assets-scan."""
+    try:
+        result = db.worker.enqueue_job("jobs", {}, job_type="kometa_assets_scan")
+        if result.get("success"):
+            job_id = result.get("data", {}).get("job_id")
+            logger.info(f"Kometa assets scan enqueued (job_id={job_id})")
+            return ok("Kometa scan job enqueued", {"job_id": job_id})
+        return error(
+            "Failed to enqueue Kometa scan", code="ENQUEUE_FAILED", status_code=500
         )
     except Exception as e:
-        logger.error(f"Kometa asset scan failed: {e}")
+        logger.error(f"Error enqueuing kometa assets scan: {e}")
         return error(
-            f"Kometa asset scan failed: {str(e)}",
-            code="KOMETA_SCAN_ERROR",
+            f"Error enqueuing Kometa scan: {str(e)}",
+            code="KOMETA_ENQUEUE_ERROR",
             status_code=500,
         )
 

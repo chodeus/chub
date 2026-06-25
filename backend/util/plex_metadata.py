@@ -24,7 +24,9 @@ Public surface:
     get_in_use_hashes(db_path) -> Set[str]
     copy_plex_db(plex_path, dest) -> Optional[str]
     scan_bundles(plex_path, *, force=False) -> Dict
-    get_bloat_flat(plex_path, *, force=False) -> List[Dict]
+    bloat_flat_from_scan(scan) -> List[Dict]
+    get_cached_scan(plex_path) -> Optional[Dict]
+    get_cached_transcoder(plex_path) -> Optional[Dict]
     scan_transcoder_cache(plex_path, *, force=False) -> Dict
     invalidate_cache()
 """
@@ -564,12 +566,10 @@ def scan_bundles(plex_path: str, *, force: bool = False) -> Dict[str, Any]:
     return result
 
 
-def get_bloat_flat(plex_path: str, *, force: bool = False) -> List[Dict[str, Any]]:
-    """
-    Return a flat list of bloat variants across all bundles, sorted by size desc.
-    Each entry: {filename, path, size, bundle_path, rating_key, title, year}.
-    """
-    scan = scan_bundles(plex_path, force=force)
+def bloat_flat_from_scan(scan: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Build the flat bloat list from a scan dict (the result of `scan_bundles`
+    or `get_cached_scan`), sorted by size desc. Split out so the API can derive
+    it from the cached scan without re-walking the filesystem."""
     flat: List[Dict[str, Any]] = []
     for b in scan["bundles"]:
         for v in b["variants"]:
@@ -630,6 +630,24 @@ def scan_transcoder_cache(plex_path: str, *, force: bool = False) -> Dict[str, i
     result = {"count": count, "size_bytes": size_bytes}
     _cache_put(cache_key, result)
     return result
+
+
+def get_cached_scan(plex_path: str) -> Optional[Dict[str, Any]]:
+    """Return the cached `scan_bundles` result, or None if no fresh scan is
+    cached. NEVER walks the filesystem — this is the read path for the API,
+    which must not do a cold scan on the event loop. A background job warms the
+    cache via `scan_bundles(force=True)`; the API only ever reads it here.
+    """
+    return _cache_get(f"scan::{plex_path}")
+
+
+def get_cached_transcoder(plex_path: str) -> Optional[Dict[str, int]]:
+    """Return the cached `scan_transcoder_cache` result, or None if unscanned.
+    Walk-free companion to `get_cached_scan` (same cold-read contract)."""
+    cached = _cache_get(f"tcache::{plex_path}")
+    if not cached:
+        return None
+    return {"count": cached["count"], "size_bytes": cached["size_bytes"]}
 
 
 def delete_variant(file_path: str, *, plex_path: str) -> bool:

@@ -615,30 +615,36 @@ export const postersAPI = {
         if (params.library_id) qs.set('library_id', params.library_id);
         if (params.variant_kind && params.variant_kind !== 'all')
             qs.set('variant_kind', params.variant_kind);
-        // Cold scans of large libraries (~30k+ variants) can run past the
-        // default 30s request timeout. Give the scan endpoint headroom so the
-        // UI doesn't surface a misleading "Request timeout" when the backend
-        // is still happily scanning.
-        return apiCore.get(`/posters/plex-metadata/by-media?${qs.toString()}`, {
-            timeout: 120000,
-        });
+        // Cheap cache read now — the heavy walk runs in the background
+        // `plex_metadata_scan` job, so the default request timeout is fine.
+        // Returns `scan_required: true` with empty bundles when no scan is
+        // cached; the caller enqueues one via `enqueuePlexMetadataScan`.
+        return apiCore.get(`/posters/plex-metadata/by-media?${qs.toString()}`);
     },
 
-    /** Flat list of bloat variants, largest first. */
+    /** Enqueue a background Plex-metadata scan job (warms the bundle +
+     *  transcoder cache off the event loop). Returns {job_id}; poll with
+     *  `tailJobLog`, then re-fetch `listPlexMetadataByMedia`. */
+    enqueuePlexMetadataScan: () => apiCore.post('/posters/plex-metadata/scan', {}),
+
+    /** Flat list of bloat variants, largest first (cache-only read). */
     listPlexMetadataBloat: (params = {}) => {
         const qs = new URLSearchParams();
         if (params.limit) qs.set('limit', params.limit);
         if (params.offset) qs.set('offset', params.offset);
-        if (params.force) qs.set('force', 'true');
         return apiCore.get(`/posters/plex-metadata/bloat?${qs.toString()}`);
     },
 
     /** Enqueue a Poster Cleanarr cleanup job. */
     runPlexMetadataCleanup: body => apiCore.post('/posters/plex-metadata/cleanup', body || {}),
 
-    /** Walk the Kometa assets dir once; return stale duplicates (keyed by Plex
-     *  rating_key) and orphan assets. Read-only — never deletes. */
+    /** Cached Kometa stale-duplicate + orphan scan (read-only, walk-free).
+     *  Returns `scan_required: true` when unscanned; enqueue via
+     *  `enqueueKometaAssetsScan`. */
     scanKometaAssets: () => apiCore.get('/posters/plex-metadata/kometa-assets-scan'),
+
+    /** Enqueue a background Kometa stale/orphan scan job. Returns {job_id}. */
+    enqueueKometaAssetsScan: () => apiCore.post('/posters/plex-metadata/kometa-scan', {}),
 
     /** Delete one variant file on disk. */
     deletePlexMetadataVariant: path =>
