@@ -92,17 +92,19 @@ The GitHub Wiki is the full source:
 
 ---
 
-## How CHUB differs from DAPS
+## Improvements over DAPS
 
-CHUB re-implements the DAPS modules (poster_renamerr, nohl, upgradinatorr, labelarr, poster_cleanarr, and the rest) on a database-backed, web-driven architecture — and fixes a number of upstream bugs along the way. Three DAPS modules are effectively broken in ordinary use and work correctly in CHUB:
+CHUB re-implements the DAPS modules on a database-backed, web-driven architecture and refines their behaviour along the way:
 
-| Module | In DAPS | In CHUB |
-| :--- | :--- | :--- |
-| **health_checkarr** | Every live prune crashes before deleting anything (a dry-run hides it). | Prunes correctly. |
-| **nohl** | With per-instance config, the search phase crashes every run — no searches fire. | Searches fire. |
-| **border_replacerr** | 3-digit hex colours decode wrong, so every poster gets the wrong border. | Correct colour. |
+- **More reliable runs** — health_checkarr prunes cleanly in live mode, nohl triggers searches under per-instance configs, and search-driven modules retry next run instead of marking an item done when its search didn't actually complete.
+- **Safer poster cleanup** — poster_cleanarr matches on stable TMDB/TVDB ids before folder names, keeps the last remaining copy of a poster, and pauses instead of purging when an *arr instance is unreachable.
+- **Better upgrade coverage** — upgradinatorr only tags an item once every search (all seasons, for series) succeeds, and skips a zero/blank count rather than clearing the whole library's checked tags.
+- **Respects your filters** — renameinatorr re-applies your ignore filter after each cycle so items tagged to be left alone stay untouched, and honours per-run count limits.
+- **Correct labels** — labelarr matches *arr tags by name (so a tag with internal id 0 still syncs) and removes managed Plex labels once their *arr entry is gone.
+- **Sharper matching** — id-aware fallback plus broader title normalization (`&` ⇄ `and`, region tags, `{tvdbid-…}` blocks, season forms) so near-miss titles line up.
+- **Robust rendering & integrations** — border_replacerr expands short hex colours the standard way, genuinely skips unchanged posters, and survives leap-day holiday schedules; sync_gdrive and jduparr harden their rclone/jdupes handling and report real failures instead of silent success.
 
-Beyond those: safer poster cleanup (id-based matching, outage guards against mass deletion), correct Plex label sync, retry-on-failure instead of silent success across modules, and tighter title matching. Full module-by-module breakdown: **[docs/daps-divergence.md](docs/daps-divergence.md)**.
+Full module-by-module breakdown: **[docs/daps-divergence.md](docs/daps-divergence.md)**.
 
 ---
 
