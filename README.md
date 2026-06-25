@@ -27,7 +27,7 @@ CHUB keeps a Plex library tidy. Point it at Radarr, Sonarr, Lidarr, and Plex, an
 - **Media** — find duplicates, flag low-rated or incomplete items, edit metadata inline with a full audit trail, and batch-import into Radarr or Sonarr.
 - **Upkeep** — upgrade searches, rename sweeps, health checks, hardlink audits, ARR tag → Plex label sync.
 
-You run it in Docker, open it in a browser, configure it once, and let it work.
+Run it in Docker, open it in a browser, and configure it once.
 
 ---
 
@@ -72,9 +72,9 @@ docker compose up -d
 
 Open <http://localhost:8000>, create your admin user, connect your Radarr / Sonarr / Plex under **Settings → Instances**, and enable the modules you want under **Settings → Modules**.
 
-> **Rootless alternative.** Prefer not to let the container start as root? Replace the `PUID`/`PGID` env vars with `user: "99:100"` (or whatever uid:gid owns your appdata) and pre-`chown` the host config dir to match. The container then never runs as root — slightly more secure, but you own the host-side permissions. PUID/PGID is the easier default; `--user` is the hardened option.
+> **Rootless alternative.** Replace `PUID`/`PGID` with `user: "99:100"` (the uid:gid that owns your appdata) and pre-`chown` the host config dir to match.
 
-Already have a `config.yml` from an older YAML-based version of this tool? Drop it into the mounted config dir before first launch — CHUB detects the older shape, preserves the original as a timestamped backup, and migrates the file in place. Details: **[Wiki → Configuration → Auto-migration](https://github.com/chodeus/chub/wiki/Configuration#-auto-migration-from-older-config-formats)**.
+Migrating from an older YAML-based version? Drop your `config.yml` into the config dir before first launch — CHUB backs it up and migrates it automatically. Details: **[Wiki → Configuration → Auto-migration](https://github.com/chodeus/chub/wiki/Configuration#-auto-migration-from-older-config-formats)**.
 
 Full walk-through: **[Wiki → Installation](https://github.com/chodeus/chub/wiki/Installation)**.
 
@@ -84,28 +84,23 @@ Single-command Docker, Unraid, and bare-metal options: **[Wiki → Installation]
 
 ---
 
-## Security — read before exposing CHUB
+## Security
 
-**CHUB is built for a private network.** Run it on a LAN or behind a VPN. Before putting it anywhere else, take the steps below.
+**CHUB is built for a private network.** Run it on a LAN or behind a VPN — it has login and rate limiting, but no WAF, and isn't meant to face the open internet alone.
 
-1. **Use a strong admin password.** First-run enforces 8+ characters; use more. Lose it and you reset with `docker compose run --rm chub python3 main.py --reset-auth`.
-2. **If you want remote access, put CHUB behind a reverse proxy with TLS.** Add a second auth layer in front (Authelia, Authentik, Cloudflare Access). CHUB has built-in login and rate limiting, but no WAF or DDoS protection — it isn't meant to face the open internet alone.
-3. **Set a webhook secret if webhooks leave your LAN.** Configure `general.webhook_secret` in **Settings → General**. Any inbound Sonarr/Radarr/Tautulli webhook must then include it. Without it, webhook URLs are unauthenticated — fine inside a LAN, not fine on the public internet. Wiring a webhook into Sonarr/Radarr is documented in the [Webhooks wiki page](https://github.com/chodeus/chub/wiki/Webhooks).
-4. **Pin the image tag for production.** Use a specific digest or date tag instead of `:latest` if you care about reproducible deploys.
-5. **Drop capabilities to harden the root window.** CHUB's entrypoint briefly runs as root to apply `PUID`/`PGID` before dropping to an unprivileged user. You can strip every capability except the four it actually uses for that handoff — the container then has no `NET_RAW`, `SYS_ADMIN`, mount, or module-loading powers even during init.
+- **Strong admin password** — 8+ chars enforced on first run. Reset: `docker compose run --rm chub python3 main.py --reset-auth`.
+- **Remote access** — front CHUB with a reverse proxy + TLS, plus an auth layer (Authelia, Authentik, Cloudflare Access).
+- **Webhook secret** — set `general.webhook_secret` (Settings → General) if webhooks leave your LAN.
+- **Pin the image tag** for reproducible deploys.
+- **Harden the container** — drop capabilities or run rootless:
 
-   ```yaml
-   services:
-     chub:
-       # ...
-       cap_drop: [ALL]
-       cap_add: [CHOWN, SETUID, SETGID, FOWNER]
-       security_opt:
-         - no-new-privileges:true
-   ```
+  ```yaml
+  cap_drop: [ALL]
+  cap_add: [CHOWN, SETUID, SETGID, FOWNER]
+  security_opt: [no-new-privileges:true]
+  ```
 
-   Or, for a fully rootless setup, replace `PUID`/`PGID` with `user: "99:100"` (or whatever uid:gid owns your appdata) and `chown` the host config dir to match — see the Quickstart note. Either approach removes meaningful attack surface; cap-drop is easier, `--user` is stricter.
-6. **Report vulnerabilities privately.** See [SECURITY.md](SECURITY.md) for the disclosure process.
+Threat model, hardening notes, and the vulnerability-disclosure process: **[SECURITY.md](SECURITY.md)**.
 
 ---
 
