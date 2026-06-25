@@ -128,8 +128,10 @@ const normalizeKind = t => {
 };
 
 // ─── ID / URL paste parsing ──────────────────────────────────────────────
-// Accepts a bare id, or a TMDB / TVDB / IMDB url. Returns {source, id} where
-// source is 'tmdb' (resolve not needed) or 'tvdb_id' / 'imdb_id' (needs resolve).
+// Accepts a bare id, an explicit `tvdb:<id>` tag, or a TMDB / TVDB / IMDB url.
+// Returns {source, id} where source is 'tmdb' (resolve not needed) or
+// 'tvdb_id' / 'imdb_id' (needs resolve), or {error} for a recognised-but-
+// unusable input (a slug-only thetvdb.com URL carries no numeric id).
 const parsePastedId = raw => {
     const s = (raw || '').trim();
     if (!s) return null;
@@ -137,8 +139,17 @@ const parsePastedId = raw => {
     if (imdb) return { source: 'imdb_id', id: imdb[1] };
     const tmdbUrl = s.match(/themoviedb\.org\/(movie|tv|collection)\/(\d+)/i);
     if (tmdbUrl) return { source: 'tmdb', id: tmdbUrl[2], type: normalizeKind(tmdbUrl[1]) };
-    const tvdbUrl = s.match(/thetvdb\.com\/.*?(\d{4,})/i);
-    if (tvdbUrl) return { source: 'tvdb_id', id: tvdbUrl[1] };
+    // Explicit tvdb tag: `tvdb:413715`, `tvdb-413715`, `tvdb 413715`, `tvdb_id=413715`.
+    const tvdbTag = s.match(/^tvdb(?:_id)?[\s:=-]+(\d+)$/i);
+    if (tvdbTag) return { source: 'tvdb_id', id: tvdbTag[1] };
+    if (/thetvdb\.com/i.test(s)) {
+        // Numeric TVDB url forms only: ?id=/&seriesid=, or /series|/movies/<digits>.
+        // Modern slug urls (/series/<name>) carry no number — flag those so the
+        // caller can tell the user to paste the numeric Series ID instead.
+        const tvdbUrl = s.match(/(?:[?&](?:id|seriesid)=|\/(?:series|movies)\/)(\d+)/i);
+        if (tvdbUrl) return { source: 'tvdb_id', id: tvdbUrl[1] };
+        return { error: 'tvdb_slug' };
+    }
     if (/^\d+$/.test(s)) return { source: 'tmdb', id: s };
     return null;
 };
@@ -337,16 +348,21 @@ const Cl2kMakerPage = () => {
     // restored from sessionStorage so an in-progress poster survives navigation.
     const [item, setItem] = useState(() => {
         const tmdbId = searchParams.get('tmdb_id');
-        if (tmdbId) {
+        const tvdbId = searchParams.get('tvdb_id');
+        const imdbId = searchParams.get('imdb_id');
+        // A deep link carries any of tmdb/tvdb/imdb. A TVDB/IMDB-only link — e.g.
+        // an unmatched Sonarr show TMDB has no cross-link for — seeds with a null
+        // tmdb_id; the resolve-on-entry effect below fills it when a match exists.
+        if (tmdbId || tvdbId || imdbId) {
             // A fresh deep link is a new title — drop any stale builder snapshot.
             ssRemove(SS_BUILDER);
             return {
-                tmdb_id: Number(tmdbId),
+                tmdb_id: tmdbId ? Number(tmdbId) : null,
                 kind: normalizeKind(searchParams.get('type')),
                 title: searchParams.get('title') || '',
                 year: searchParams.get('year') ? Number(searchParams.get('year')) : null,
-                tvdb_id: searchParams.get('tvdb_id') ? Number(searchParams.get('tvdb_id')) : null,
-                imdb_id: searchParams.get('imdb_id') || null,
+                tvdb_id: tvdbId ? Number(tvdbId) : null,
+                imdb_id: imdbId || null,
             };
         }
         return ssRead(SS_ITEM, null);
@@ -408,6 +424,45 @@ const Cl2kMakerPage = () => {
                 }
             } catch {
                 /* leave blank — the backend still backfills the filename on save */
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [item]);
+
+    // A TVDB/IMDB-only entry (deep link, or a paste TMDB has no cross-link for)
+    // carries no tmdb_id, so the TMDB art picker comes back empty. Resolve one in
+    // the background and patch it in when TMDB has the link — unlocking the full
+    // TMDB/fanart picker. A miss is harmless (Plex art + Edit IDs still work).
+    // Runs once per id-set and never clobbers an existing tmdb_id.
+    const idResolveProbe = useRef(null);
+    useEffect(() => {
+        idResolveProbe.current = null;
+    }, [selectionKey]);
+    useEffect(() => {
+        if (!item || item.tmdb_id || item.kind === 'collection') return undefined;
+        const ext = item.tvdb_id
+            ? { id: item.tvdb_id, source: 'tvdb_id' }
+            : item.imdb_id
+              ? { id: item.imdb_id, source: 'imdb_id' }
+              : null;
+        if (!ext) return undefined;
+        const sig = `${ext.source}:${ext.id}`;
+        if (idResolveProbe.current === sig) return undefined;
+        idResolveProbe.current = sig;
+        let cancelled = false;
+        (async () => {
+            try {
+                const resp = await cl2kMakerAPI.resolve(String(ext.id), ext.source, item.kind);
+                const tmdbId = resp?.data?.tmdb_id;
+                if (!cancelled && tmdbId) {
+                    setItem(prev =>
+                        prev && !prev.tmdb_id ? { ...prev, tmdb_id: Number(tmdbId) } : prev
+                    );
+                }
+            } catch {
+                /* leave tmdb_id null — Plex/fanart by tvdb + Edit IDs still work */
             }
         })();
         return () => {
@@ -659,6 +714,12 @@ const TitlePicker = ({ onPick, toast }) => {
 
     const runPaste = useCallback(async () => {
         const parsed = parsePastedId(paste);
+        if (parsed?.error === 'tvdb_slug') {
+            toast.error(
+                "TheTVDB page URLs use a name slug, not a number. Open the page and paste the numeric 'Series ID' shown there, type tvdb:<id>, or search by title above."
+            );
+            return;
+        }
         if (!parsed) {
             toast.error('Could not parse an ID or URL');
             return;
@@ -671,17 +732,23 @@ const TitlePicker = ({ onPick, toast }) => {
                 const resp = await cl2kMakerAPI.resolve(parsed.id, parsed.source, pasteKind);
                 tmdbId = resp?.data?.tmdb_id;
             }
+            const tvdbId = parsed.source === 'tvdb_id' ? Number(parsed.id) : null;
+            const imdbId = parsed.source === 'imdb_id' ? parsed.id : null;
+            // No TMDB entry is cross-linked to this external id (common for smaller
+            // TVDB-keyed shows)? Open the builder anyway with the id set — Plex /
+            // fanart art and the Edit IDs panel still work — instead of dead-ending.
             if (!tmdbId) {
-                toast.error('Could not resolve that ID to a TMDB id');
-                return;
+                toast.info(
+                    'No TMDB entry is linked to that id — opened with the ID set. Search by title above, or add a title in Edit IDs.'
+                );
             }
             const base = {
-                tmdb_id: Number(tmdbId),
+                tmdb_id: tmdbId ? Number(tmdbId) : null,
                 kind: pasteKind,
                 title: '',
                 year: null,
-                tvdb_id: parsed.source === 'tvdb_id' ? Number(parsed.id) : null,
-                imdb_id: parsed.source === 'imdb_id' ? parsed.id : null,
+                tvdb_id: tvdbId,
+                imdb_id: imdbId,
             };
             // Fill in whichever of tvdb/imdb the paste didn't already supply; the
             // blank title is resolved by the title-backfill effect once the item is
@@ -761,7 +828,7 @@ const TitlePicker = ({ onPick, toast }) => {
                         type="text"
                         value={paste}
                         onChange={e => setPaste(e.target.value)}
-                        placeholder="e.g. 603, tt0133093, or a themoviedb.org URL"
+                        placeholder="e.g. 603, tt0133093, tvdb:413715, or a TMDB/TVDB URL"
                         className="flex-1 bg-surface border border-border rounded px-3 py-2 text-sm text-fg"
                     />
                     <LoadingButton
