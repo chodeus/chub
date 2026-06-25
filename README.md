@@ -5,7 +5,6 @@
 # ![CHUB](https://img.shields.io/badge/CHUB-463fbc?style=for-the-badge&labelColor=463fbc)
 
 ### Chodeus' Media Script Hub
-**alpha version, this is still under active development**
 
 A self-hosted, all-in-one media asset manager for your Plex/ARR stack.
 
@@ -84,32 +83,26 @@ Single-command Docker, Unraid, and bare-metal options: **[Wiki → Installation]
 
 ---
 
-## Security
-
-**CHUB is built for a private network.** Run it on a LAN or behind a VPN — it has login and rate limiting, but no WAF, and isn't meant to face the open internet alone.
-
-- **Strong admin password** — 8+ chars enforced on first run. Reset: `docker compose run --rm chub python3 main.py --reset-auth`.
-- **Remote access** — front CHUB with a reverse proxy + TLS, plus an auth layer (Authelia, Authentik, Cloudflare Access).
-- **Webhook secret** — set `general.webhook_secret` (Settings → General) if webhooks leave your LAN.
-- **Pin the image tag** for reproducible deploys.
-- **Harden the container** — drop capabilities or run rootless:
-
-  ```yaml
-  cap_drop: [ALL]
-  cap_add: [CHOWN, SETUID, SETGID, FOWNER]
-  security_opt: [no-new-privileges:true]
-  ```
-
-Threat model, hardening notes, and the vulnerability-disclosure process: **[SECURITY.md](SECURITY.md)**.
-
----
-
 ## Documentation
 
 The GitHub Wiki is the full source:
 
 - **[User Guide](https://github.com/chodeus/chub/wiki)** — installation, configuration, per-module walk-through, UI tour, webhooks, troubleshooting, FAQ.
 - **[Developer Guide](https://github.com/chodeus/chub/wiki/Developer-Guide)** — REST API reference, extending CHUB with new modules, security internals.
+
+---
+
+## How CHUB differs from DAPS
+
+CHUB re-implements the DAPS modules (poster_renamerr, nohl, upgradinatorr, labelarr, poster_cleanarr, and the rest) on a database-backed, web-driven architecture — and fixes a number of upstream bugs along the way. Three DAPS modules are effectively broken in ordinary use and work correctly in CHUB:
+
+| Module | In DAPS | In CHUB |
+| :--- | :--- | :--- |
+| **health_checkarr** | Every live prune crashes before deleting anything (a dry-run hides it). | Prunes correctly. |
+| **nohl** | With per-instance config, the search phase crashes every run — no searches fire. | Searches fire. |
+| **border_replacerr** | 3-digit hex colours decode wrong, so every poster gets the wrong border. | Correct colour. |
+
+Beyond those: safer poster cleanup (id-based matching, outage guards against mass deletion), correct Plex label sync, retry-on-failure instead of silent success across modules, and tighter title matching. Full module-by-module breakdown: **[docs/daps-divergence.md](docs/daps-divergence.md)**.
 
 ---
 
@@ -121,7 +114,7 @@ I write large portions of CHUB's source, tests, and documentation with the help 
 
 ## Credits
 
-CHUB is a fork of [DAPS](https://github.com/Drazzilb08/daps) by **Drazzilb08** — thank you for the scripts and inspiration that made this possible. For the behavioral differences between CHUB and DAPS (including upstream bugs CHUB fixes), see [docs/daps-divergence.md](docs/daps-divergence.md).
+CHUB is a fork of [DAPS](https://github.com/Drazzilb08/daps) by **Drazzilb08** — thank you for the scripts and inspiration that made this possible.
 
 Logo and background artwork is sourced from [fanart.tv](https://fanart.tv) — images and metadata are provided by fanart.tv and its contributors.
 
