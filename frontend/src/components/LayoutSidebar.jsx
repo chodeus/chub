@@ -215,8 +215,13 @@ const LayoutSidebar = React.memo(() => {
         >
             <div className="flex flex-col h-full py-4">
                 {/* Brand lockup — gold mark + wordmark. Always present at the
-                    top of the sidebar. */}
-                <div className="flex items-center gap-3 px-4 pt-1 pb-4">
+                    top of the sidebar; links home. */}
+                <NavLink
+                    to="/"
+                    onClick={handleParentNavLinkClick}
+                    className="flex items-center gap-3 px-4 pt-1 pb-4 no-underline hover:opacity-90 transition-opacity"
+                    aria-label="CHUB — Media Manager, go to dashboard"
+                >
                     <BrandMark />
                     <div className="leading-tight min-w-0">
                         <div className="font-display font-bold text-[18px] tracking-[.5px] text-sidebar-text">
@@ -226,7 +231,7 @@ const LayoutSidebar = React.memo(() => {
                             Media Manager
                         </div>
                     </div>
-                </div>
+                </NavLink>
                 {/* Hierarchical Navigation */}
                 <nav className="flex-1 px-2">
                     {NAV_SECTIONS.map(section => (

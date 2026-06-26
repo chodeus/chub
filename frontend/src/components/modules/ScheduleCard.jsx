@@ -2,6 +2,7 @@ import React, { useCallback } from 'react';
 import PropTypes from 'prop-types';
 import { scheduleToHuman } from '../../utils/schedule';
 import { Button } from '../ui/button/Button';
+import StatusDot from '../ui/StatusDot.jsx';
 
 /**
  * ScheduleCard — full-width module schedule row: name + human/cron line, the
@@ -61,8 +62,11 @@ export const ScheduleCard = React.memo(
             >
                 <div className="flex items-center gap-4 px-[18px] py-[15px]">
                     <div className="w-[200px] shrink-0 min-w-0">
-                        <div className="font-display text-[15px] font-semibold text-fg truncate">
-                            {moduleLabel}
+                        <div className="flex items-center gap-2 min-w-0">
+                            {isRunning && <StatusDot status="running" size={7} />}
+                            <div className="font-display text-[15px] font-semibold text-fg truncate">
+                                {moduleLabel}
+                            </div>
                         </div>
                         <div
                             className={`font-mono text-[10.5px] mt-0.5 truncate ${
