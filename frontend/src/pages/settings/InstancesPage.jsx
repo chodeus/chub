@@ -576,8 +576,8 @@ export const InstancesPage = () => {
                         </Button>
                     </div>
 
-                    {/* Instance Cards Grid */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
+                    {/* Instance rows */}
+                    <div className="flex flex-col gap-3">
                         {Object.entries(instances?.[service.type] || {}).map(([name, data]) => (
                             <InstanceCard
                                 key={name}

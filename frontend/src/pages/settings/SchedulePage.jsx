@@ -287,8 +287,8 @@ export const SchedulePage = () => {
                 ))}
             </StatGrid>
 
-            {/* Module Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {/* Module rows */}
+            <div className="flex flex-col gap-3">
                 {availableModules.map(module => (
                     <ScheduleCard
                         key={module.key}
