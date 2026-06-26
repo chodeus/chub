@@ -35,6 +35,18 @@ class ModuleOrchestrator:
         else:
             print(f"[{source.upper()}] {msg}")
 
+    def _disabled_result(self, module_name: str, origin: str) -> Dict[str, Any]:
+        """Skip result for a hard-disabled module (Modules page)."""
+        self._log(
+            "info",
+            f"Module '{module_name}' is disabled — skipping {origin} run",
+        )
+        return {
+            "success": False,
+            "disabled": True,
+            "message": f"Module '{module_name}' is disabled",
+        }
+
     def run_module_immediate(
         self, module_name: str, origin: str = "web"
     ) -> Dict[str, Any]:
@@ -42,6 +54,10 @@ class ModuleOrchestrator:
         Run a module immediately and wait for completion.
         Used for API endpoints that need synchronous behavior.
         """
+        from backend.util.config import module_is_disabled
+
+        if module_is_disabled(module_name):
+            return self._disabled_result(module_name, origin)
         try:
             # Use shared database or create new context
             if self.db is not None:
@@ -120,6 +136,10 @@ class ModuleOrchestrator:
         Run a module asynchronously via job queue.
         Used for scheduled runs and fire-and-forget execution.
         """
+        from backend.util.config import module_is_disabled
+
+        if module_is_disabled(module_name):
+            return self._disabled_result(module_name, origin)
         try:
             payload = {
                 "module_name": module_name,
