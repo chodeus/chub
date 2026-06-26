@@ -469,6 +469,58 @@ def test_orphan_pass_scan_roots_excludes_source_dirs():
     assert roots == ["/kometa/assets"]
 
 
+# --- GDrive-as-source: drives are matchable by default, opt out via search_only ---
+
+
+def _gdrive(location, search_only=False, name="CL2K Solen"):
+    return SimpleNamespace(location=location, search_only=search_only, name=name)
+
+
+def _module_with_gdrive(source_dirs, gdrive, asset_dirs=()):
+    m = make_module()
+    m.config = SimpleNamespace(source_dirs=list(source_dirs))
+    m.full_config = SimpleNamespace(
+        sync_gdrive=SimpleNamespace(gdrive_list=list(gdrive)),
+        asset_renamerr=SimpleNamespace(source_dirs=list(asset_dirs)),
+    )
+    return m
+
+
+def test_gdrive_match_locations_excludes_search_only():
+    m = _module_with_gdrive(
+        source_dirs=[],
+        gdrive=[_gdrive("/gdrive/CL2K"), _gdrive("/gdrive/Extras", search_only=True)],
+    )
+    assert m._gdrive_match_locations() == ["/gdrive/CL2K"]
+
+
+def test_scan_source_dirs_unions_gdrive_and_dedupes():
+    m = _module_with_gdrive(
+        source_dirs=["/local/posters", "/gdrive/CL2K"],
+        gdrive=[
+            _gdrive("/gdrive/CL2K"),  # already a source_dir → not duplicated
+            _gdrive("/gdrive/MM2K"),  # auto-included, appended after locals
+            _gdrive("/gdrive/Extras", search_only=True),  # browse-only → excluded
+        ],
+    )
+    # source_dirs keep their order/position; the new matchable drive appends.
+    assert m._scan_source_dirs() == ["/local/posters", "/gdrive/CL2K", "/gdrive/MM2K"]
+
+
+def test_matchable_source_dirs_includes_gdrive_and_assets():
+    m = _module_with_gdrive(
+        source_dirs=["/local/posters"],
+        gdrive=[_gdrive("/gdrive/CL2K"), _gdrive("/gdrive/Extras", search_only=True)],
+        asset_dirs=["/assets"],
+    )
+    matchable = m._matchable_source_dirs()
+    assert "/local/posters" in matchable
+    assert "/gdrive/CL2K" in matchable
+    assert "/assets" in matchable
+    # A browse-only drive is never matchable.
+    assert "/gdrive/Extras" not in matchable
+
+
 def test_orphan_pass_scan_roots_empty_when_no_destination():
     """Without a destination_dir the orphan pass has nothing to scan.
 

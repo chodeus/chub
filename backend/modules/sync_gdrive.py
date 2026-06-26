@@ -63,9 +63,7 @@ def _empty_counters() -> dict:
     return {"copied": 0, "deleted": 0, "updated": 0, "renamed": 0}
 
 
-def _rclone_line_level(
-    line: str, rclone_level: str, *, verbose: bool
-) -> str:
+def _rclone_line_level(line: str, rclone_level: str, *, verbose: bool) -> str:
     """
     Decide which logger method should emit an rclone output line.
 
@@ -101,9 +99,7 @@ def _format_counter_summary(counters: dict) -> str:
     """
     if not counters or not any(counters.values()):
         return "already in sync, no changes"
-    return ", ".join(
-        f"{n} {action}" for action, n in sorted(counters.items()) if n
-    )
+    return ", ".join(f"{n} {action}" for action, n in sorted(counters.items()) if n)
 
 
 # Number of gdrive folders synced concurrently. Drive listing is round-trip
@@ -514,8 +510,11 @@ class SyncGDrive(ChubModule):
             priority = 0
             if is_owned:
                 # Existing behaviour: matchable row, priority from the matching
-                # source_dir (bottom-wins contract); assets gated on the feature.
-                for idx, sd in enumerate(getattr(pr.config, "source_dirs", []) or []):
+                # scan dir (bottom-wins contract); assets gated on the feature.
+                # Use the full scan set (source_dirs + matchable gdrive drives)
+                # so a drive matched via the GDrive-as-source union gets the same
+                # priority the full poster_renamerr scan would stamp.
+                for idx, sd in enumerate(pr._scan_source_dirs()):
                     if os.path.realpath(sd).rstrip("/") == target:
                         priority = idx
                         break
@@ -659,9 +658,7 @@ class SyncGDrive(ChubModule):
             # populates a freshly cleared/empty cache on a 0-change sync.
             if success and not skip_cache_refresh:
                 changed = any(counters.values())
-                if changed or not self.db.poster.has_rows_under_prefix(
-                    sync_location
-                ):
+                if changed or not self.db.poster.has_rows_under_prefix(sync_location):
                     self._refresh_poster_cache_for_folder(sync_location)
                 else:
                     self.logger.info(
