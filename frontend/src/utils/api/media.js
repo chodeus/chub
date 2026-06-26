@@ -122,6 +122,16 @@ export const mediaAPI = {
     },
 
     /**
+     * Bulk-delete media cache items (optionally from their *arr instance + disk).
+     * @param {number[]} ids - Media IDs to delete
+     * @param {{deleteFiles?: boolean, addImportExclusion?: boolean}} [options]
+     * @returns {Promise<Object>} { removed, failed }
+     */
+    bulkDeleteMedia: (ids, options = {}) => {
+        return apiCore.post('/media/bulk-delete', { ids, ...options });
+    },
+
+    /**
      * Fetch media library statistics
      * @param {Object} options - Statistics options
      * @param {string} options.type - Media type filter
