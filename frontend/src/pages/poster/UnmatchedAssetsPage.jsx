@@ -7,7 +7,7 @@ import { systemAPI } from '../../utils/api/system.js';
 import { copyText } from '../../utils/clipboard.js';
 import { buildPosterRequestText, formatId } from '../../utils/posterRequest.js';
 import { extensionCapability } from '../../extensions/index.js';
-import { Button, IconButton, Modal, PageHeader } from '../../components/ui/index.js';
+import { Button, IconButton, Modal } from '../../components/ui/index.js';
 import Spinner from '../../components/ui/Spinner.jsx';
 
 // Optional extension hook: (item) => { to, title, ariaLabel, icon } | null.
@@ -98,19 +98,38 @@ const RecentPosterReel = ({ posters, onRefresh }) => {
     return (
         <section>
             <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
-                <h3 className="text-lg font-semibold text-fg flex items-center gap-2">
-                    <span className="material-symbols-outlined text-brand-primary">movie</span>
+                <h3 className="font-display text-[15px] font-semibold text-fg flex items-center gap-2.5">
+                    <span className="w-[7px] h-[7px] rounded-full bg-success" aria-hidden="true" />
                     Recently matched
                 </h3>
                 <div className="flex items-center gap-2 flex-wrap">
+                    {/* source provenance legend */}
+                    <div className="hidden lg:flex items-center gap-3.5 font-mono text-[10px] text-fg-subtle mr-1">
+                        <span className="flex items-center gap-1.5">
+                            <span className="w-[7px] h-[7px] rounded-[2px] bg-source-gdrive" />
+                            GDrive
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                            <span className="w-[7px] h-[7px] rounded-[2px] bg-source-local" />
+                            Local
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                            <span className="w-[7px] h-[7px] rounded-[2px] bg-source-cl2k" />
+                            CL2K
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                            <span className="w-[7px] h-[7px] rounded-[2px] bg-source-mm2k" />
+                            MM2K
+                        </span>
+                    </div>
                     <div className="flex flex-wrap gap-1">
                         {REEL_FILTERS.map(f => (
                             <button
                                 key={f.key}
                                 onClick={() => selectFilter(f.key)}
-                                className={`px-3 py-1 text-sm rounded-lg border ${
+                                className={`px-3 py-1 text-xs rounded-lg border transition-colors ${
                                     filterKey === f.key
-                                        ? 'border-brand-primary/50 bg-surface-alt text-fg'
+                                        ? 'border-primary/50 bg-primary/15 text-fg'
                                         : 'border-border text-fg-muted hover:text-fg'
                                 }`}
                             >
@@ -818,10 +837,16 @@ const ARTWORK_TRANSPARENCY_BG = {
 };
 
 /** Chip listing the artwork type(s) a media row is missing/failed/ignored. */
+const MISSING_CHIP_COLOR = key => {
+    if (key === 'poster') return 'bg-warning/15 text-warning';
+    if (key === 'background') return 'bg-accent/12 text-accent';
+    return 'bg-surface-inset text-fg-data';
+};
+
 const MissingChips = ({ typeKeys, reasons }) => {
     if (!typeKeys?.length) return <span className="text-fg-subtle">—</span>;
     return (
-        <span className="flex flex-wrap gap-1">
+        <span className="flex flex-wrap gap-1.5">
             {typeKeys.map(tk => {
                 const meta = ARTWORK_TYPES.find(a => a.key === tk);
                 const reason = reasons?.[tk];
@@ -829,9 +854,8 @@ const MissingChips = ({ typeKeys, reasons }) => {
                     <span
                         key={tk}
                         title={reason || undefined}
-                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-surface-alt text-fg-muted text-xs whitespace-nowrap"
+                        className={`inline-flex items-center px-2 py-[3px] rounded-[5px] font-mono text-[9.5px] font-semibold uppercase whitespace-nowrap ${MISSING_CHIP_COLOR(tk)}`}
                     >
-                        <span className="leading-none">{meta?.icon}</span>
                         {meta?.label || tk}
                     </span>
                 );
@@ -1716,19 +1740,24 @@ const UnmatchedAssetsPage = () => {
     const hasData = SUMMARY_TYPES.some(t => summary[t.key]?.total > 0);
 
     return (
-        <div className="flex flex-col gap-6">
-            <PageHeader
-                title="Unmatched Assets"
-                description="Media in your library with no matched poster — copy a request to ask for one."
-                icon="warning"
-            />
-            {grandTotal.total > 0 && (
-                <p className="text-sm text-fg-muted">
-                    <span className="font-medium text-fg">{grandTotal.unmatched || 0}</span>{' '}
-                    unmatched of {grandTotal.total.toLocaleString()} —{' '}
-                    {(grandTotal.percent_complete || 0).toFixed(1)}% complete
-                </p>
-            )}
+        <div className="flex flex-col gap-5">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="min-w-0">
+                    <h1 className="font-display text-[26px] font-bold tracking-[-0.3px] text-fg m-0">
+                        Unmatched Assets
+                    </h1>
+                    <p className="text-fg-subtle text-[13.5px] mt-1 mb-0">
+                        Library items missing a poster or background — match a source or request the
+                        artwork.
+                    </p>
+                </div>
+                {grandTotal.total > 0 && (
+                    <span className="font-mono text-[12px] text-fg-subtle whitespace-nowrap">
+                        <span className="text-warning">{grandTotal.unmatched || 0}</span> unmatched
+                        · {(grandTotal.percent_complete || 0).toFixed(1)}% complete
+                    </span>
+                )}
+            </div>
 
             {recentPosters.length > 0 && (
                 <RecentPosterReel posters={recentPosters} onRefresh={refreshRecent} />

@@ -47,9 +47,21 @@
     /* surfaces */
     --color-bg: var(--bg);
     --color-surface: var(--surface);
+    --color-surface-inset: var(--surface-inset);
     --color-surface-alt: var(--surface-alt);
     --color-surface-elevated: var(--surface-elevated);
     --color-surface-hover: var(--surface-alt); /* legacy alias */
+    --color-row-hover: var(--row-hover);
+
+    /* extended accent roles (redesign — each colour does one job) */
+    --color-azure: var(--azure);
+    --color-gold-deep: var(--gold-deep);
+    --color-manual: var(--manual);
+    --color-source-gdrive: var(--source-gdrive);
+    --color-source-local: var(--source-local);
+    --color-source-cl2k: var(--source-cl2k);
+    --color-source-mm2k: var(--source-mm2k);
+    --color-source-orphan: var(--source-orphan);
 
     /* borders */
     --color-border: var(--border);
@@ -61,6 +73,9 @@
     --color-fg: var(--text-primary);
     --color-fg-muted: var(--text-secondary);
     --color-fg-subtle: var(--text-tertiary);
+    --color-fg-dim: var(--text-muted); /* faint #4f4a7a */
+    --color-fg-faint: var(--text-faint); /* section headings / idle #564f8a */
+    --color-fg-data: var(--text-data); /* mono-data secondary #8ea3cc */
     --color-on-color: var(--on-color-text);
     --color-primary-text: var(--primary-text);
     --color-link: var(--accent); /* legacy alias (.text-link) */
@@ -117,9 +132,9 @@
     /* Font stacks — exact values from utilities/typography.css (override
        Tailwind's defaults). font-display is an @utility below (its value
        references --font-display, which would self-reference here). */
-    --font-sans: 'Roboto', 'Open Sans', 'Helvetica Neue', 'Helvetica', 'Arial', sans-serif;
+    --font-sans: 'Hanken Grotesk', system-ui, -apple-system, sans-serif;
     --font-serif: georgia, 'Times New Roman', serif;
-    --font-mono: 'SF Mono', monaco, 'Cascadia Code', 'Roboto Mono', consolas, monospace;
+    --font-mono: 'JetBrains Mono', 'SF Mono', monaco, 'Cascadia Code', consolas, monospace;
 
     /* Clear Tailwind's default radius namespace: tokens.css already owns
        --radius-* (8/12/16/24px) for components, and the legacy `rounded-*`
@@ -344,6 +359,26 @@
 }
 @utility animate-slide-down {
     animation: slide-down 240ms ease-out;
+}
+
+/* Redesign: pulsing status dot + indeterminate progress sweep (referenced via
+   inline style on running entries). */
+@keyframes chub-pulse {
+    0%,
+    100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.35;
+    }
+}
+@keyframes chub-indeterminate {
+    0% {
+        transform: translateX(-100%);
+    }
+    100% {
+        transform: translateX(300%);
+    }
 }
 @media (prefers-reduced-motion: reduce) {
     .animate-slide-down {

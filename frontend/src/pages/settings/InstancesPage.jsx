@@ -543,17 +543,15 @@ export const InstancesPage = () => {
     }
 
     return (
-        <div className="p-3 sm:p-6 max-w-screen-xl mx-auto">
+        <div className="max-w-screen-xl mx-auto flex flex-col gap-6">
             {/* Page Header */}
             <PageHeader
                 title="Instances"
-                description="Radarr, Sonarr, Lidarr, and Plex connections."
-                badge={2}
-                icon="dns"
+                description="Radarr, Sonarr, Lidarr and Plex connections."
             />
 
             {/* Statistics */}
-            <StatGrid columns={3} className="mb-8">
+            <StatGrid columns={3}>
                 {statistics.map(stat => (
                     <StatCard
                         key={stat.label}
@@ -566,10 +564,10 @@ export const InstancesPage = () => {
 
             {/* Service Sections */}
             {services.map(service => (
-                <div key={service.type} className="mb-8">
+                <div key={service.type}>
                     {/* Service Header */}
                     <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-                        <h2 className="text-xl sm:text-2xl font-semibold text-fg flex items-center gap-2">
+                        <h2 className="font-display text-[18px] font-semibold text-fg flex items-center gap-2">
                             <ServiceIcon service={service.type} size="large" />
                             {service.label} Instances
                         </h2>
@@ -578,8 +576,8 @@ export const InstancesPage = () => {
                         </Button>
                     </div>
 
-                    {/* Instance Cards Grid */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
+                    {/* Instance rows */}
+                    <div className="flex flex-col gap-3">
                         {Object.entries(instances?.[service.type] || {}).map(([name, data]) => (
                             <InstanceCard
                                 key={name}
