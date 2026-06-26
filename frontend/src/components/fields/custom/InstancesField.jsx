@@ -28,6 +28,16 @@ import {
 import { useApiData } from '../../../hooks/useApiData.js';
 import { instancesAPI } from '../../../utils/api';
 import { humanize } from '../../../utils/tools';
+import Toggle from '../../ui/Toggle.jsx';
+
+/** A boolean as the mock's label-left / toggle-right row (used for the
+ *  plex_scope add-posters / match-collections options). */
+const ToggleRow = ({ label, checked, disabled, onChange }) => (
+    <div className="flex items-center justify-between gap-4 py-2.5 px-4 bg-surface-inset border border-border rounded-lg">
+        <span className="text-sm font-medium text-fg">{label}</span>
+        <Toggle label={label} checked={!!checked} disabled={disabled} onChange={onChange} />
+    </div>
+);
 
 /**
  * Simple Instance Selector - For Radarr/Sonarr instances
@@ -1164,8 +1174,6 @@ const PlexScopeSelector = React.memo(
                     const entry = getEntry(instance.name);
                     const isSelected = Boolean(entry);
                     const instanceId = `${scopeId}scope-inst-${instance.name}`;
-                    const addPostersId = `${scopeId}scope-ap-${instance.name}`;
-                    const matchCollId = `${scopeId}scope-mc-${instance.name}`;
 
                     // Catalog libraries for this instance (null while loading = fallback)
                     const catalogLibs = catalogLoading
@@ -1220,105 +1228,25 @@ const PlexScopeSelector = React.memo(
                             {isSelected && (
                                 <div className="flex flex-col gap-4 border-l-2 border-border-subtle pl-4 mt-2 mb-2">
                                     {showAddPosters && (
-                                        <div
-                                            className="flex items-center gap-3 py-3 px-4 bg-surface border border-border rounded-lg hover:bg-surface-hover hover:border-primary hover:shadow-sm cursor-pointer transition-all duration-200 ease-in-out"
-                                            onClick={e => {
-                                                if (disabled) return;
-                                                if (
-                                                    e.target.tagName === 'LABEL' ||
-                                                    e.target.tagName === 'INPUT'
-                                                )
-                                                    return;
-                                                updateEntry(instance.name, {
-                                                    add_posters: !entry.add_posters,
-                                                });
-                                            }}
-                                            role="button"
-                                            tabIndex={disabled ? -1 : 0}
-                                            onKeyDown={e => {
-                                                if (
-                                                    (e.key === ' ' || e.key === 'Enter') &&
-                                                    !disabled
-                                                ) {
-                                                    e.preventDefault();
-                                                    updateEntry(instance.name, {
-                                                        add_posters: !entry.add_posters,
-                                                    });
-                                                }
-                                            }}
-                                            aria-pressed={entry.add_posters}
-                                            aria-disabled={disabled}
-                                        >
-                                            <CheckboxBase
-                                                id={addPostersId}
-                                                name={`scope-ap-${instance.name}`}
-                                                checked={entry.add_posters}
-                                                onChange={e =>
-                                                    updateEntry(instance.name, {
-                                                        add_posters: e.target.checked,
-                                                    })
-                                                }
-                                                disabled={disabled}
-                                            />
-                                            <div className="flex flex-col">
-                                                <FieldLabel
-                                                    htmlFor={addPostersId}
-                                                    label="Upload posters to this Plex instance"
-                                                    className="text-sm font-medium leading-normal text-fg cursor-pointer select-none"
-                                                />
-                                            </div>
-                                        </div>
+                                        <ToggleRow
+                                            label="Upload posters to this Plex instance"
+                                            checked={entry.add_posters}
+                                            disabled={disabled}
+                                            onChange={v =>
+                                                updateEntry(instance.name, { add_posters: v })
+                                            }
+                                        />
                                     )}
 
                                     {showMatchCollections && (
-                                        <div
-                                            className="flex items-center gap-3 py-3 px-4 bg-surface border border-border rounded-lg hover:bg-surface-hover hover:border-primary hover:shadow-sm cursor-pointer transition-all duration-200 ease-in-out"
-                                            onClick={e => {
-                                                if (disabled) return;
-                                                if (
-                                                    e.target.tagName === 'LABEL' ||
-                                                    e.target.tagName === 'INPUT'
-                                                )
-                                                    return;
-                                                updateEntry(instance.name, {
-                                                    match_collections: !entry.match_collections,
-                                                });
-                                            }}
-                                            role="button"
-                                            tabIndex={disabled ? -1 : 0}
-                                            onKeyDown={e => {
-                                                if (
-                                                    (e.key === ' ' || e.key === 'Enter') &&
-                                                    !disabled
-                                                ) {
-                                                    e.preventDefault();
-                                                    updateEntry(instance.name, {
-                                                        match_collections: !entry.match_collections,
-                                                    });
-                                                }
-                                            }}
-                                            aria-pressed={entry.match_collections}
-                                            aria-disabled={disabled}
-                                        >
-                                            <CheckboxBase
-                                                id={matchCollId}
-                                                name={`scope-mc-${instance.name}`}
-                                                checked={entry.match_collections}
-                                                onChange={e =>
-                                                    updateEntry(instance.name, {
-                                                        match_collections: e.target.checked,
-                                                    })
-                                                }
-                                                disabled={disabled}
-                                            />
-                                            <div className="flex flex-col">
-                                                <FieldLabel
-                                                    htmlFor={matchCollId}
-                                                    label="Match collections in selected libraries"
-                                                    className="text-sm font-medium leading-normal text-fg cursor-pointer select-none"
-                                                />
-                                            </div>
-                                        </div>
+                                        <ToggleRow
+                                            label="Match collections in selected libraries"
+                                            checked={entry.match_collections}
+                                            disabled={disabled}
+                                            onChange={v =>
+                                                updateEntry(instance.name, { match_collections: v })
+                                            }
+                                        />
                                     )}
 
                                     <PlexScopeLibrarySelector
