@@ -6,7 +6,7 @@ import { nestarrAPI } from '../../utils/api/nestarr.js';
 import { apiCore } from '../../utils/api/core.js';
 import { Modal } from '../../components/modals/Modal';
 import EditMediaModal from '../../components/modals/EditMediaModal.jsx';
-import { Button, LoadingButton, IconButton, PageHeader } from '../../components/ui/index.js';
+import { Button, LoadingButton, IconButton } from '../../components/ui/index.js';
 import Spinner from '../../components/ui/Spinner.jsx';
 import { LibraryMaintenance } from '../../components/maintenance/LibraryMaintenance.jsx';
 import { formatDateTime, formatDate } from '../../utils/datetime.js';
@@ -302,114 +302,116 @@ const MediaManagePage = () => {
     };
 
     return (
-        <div className="flex flex-col gap-6">
-            <PageHeader
-                title="Library Management"
-                description="Manage and organize your media library."
-                badge={3}
-                icon="tune"
-                actions={
-                    <div className="flex flex-wrap items-center gap-2">
-                        <LoadingButton
-                            loading={isRefreshing}
-                            loadingText="Refreshing..."
-                            variant="ghost"
-                            icon="refresh"
-                            onClick={handleRefreshCache}
-                            title="Re-sync all media from your Radarr and Sonarr instances into the local cache"
-                        >
-                            Refresh Cache
-                        </LoadingButton>
-                        <LoadingButton
-                            loading={isExporting}
-                            loadingText="Exporting..."
-                            variant="ghost"
-                            icon="download"
-                            onClick={handleExport}
-                            title="Download your media library data as a JSON file"
-                        >
-                            Export
-                        </LoadingButton>
-                    </div>
-                }
-            />
+        <div className="flex flex-col gap-5">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="min-w-0">
+                    <h1 className="font-display text-[26px] font-bold tracking-[-0.3px] text-fg m-0">
+                        Manage
+                    </h1>
+                    <p className="text-fg-subtle text-[13.5px] mt-1 mb-0">
+                        Resolve duplicates, flag issues, and batch-import to your *arr instances.
+                    </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                    <LoadingButton
+                        loading={isRefreshing}
+                        loadingText="Refreshing..."
+                        variant="surface"
+                        icon="refresh"
+                        onClick={handleRefreshCache}
+                        title="Re-sync all media from your Radarr and Sonarr instances into the local cache"
+                    >
+                        Refresh cache
+                    </LoadingButton>
+                    <LoadingButton
+                        loading={isExporting}
+                        loadingText="Exporting..."
+                        variant="surface"
+                        icon="download"
+                        onClick={handleExport}
+                        title="Download your media library data as a JSON file"
+                    >
+                        Export
+                    </LoadingButton>
+                </div>
+            </div>
 
             {duplicates.length > 0 && (
-                <section className="mb-4">
-                    <h3 className="text-lg font-semibold text-fg mb-3 flex items-center gap-2">
+                <section>
+                    <h3 className="font-display text-lg font-semibold text-fg mb-3 flex items-center gap-2">
                         <span className="material-symbols-outlined text-warning">content_copy</span>
-                        Duplicates ({duplicates.length} groups)
+                        Duplicates
+                        <span className="font-mono text-sm text-fg-subtle">
+                            {duplicates.length} groups
+                        </span>
                     </h3>
-                    <div className="grid gap-2">
+                    <div className="flex flex-col gap-3.5">
                         {duplicates.slice(0, 10).map((dup, i) => {
-                            // Deduplicate instance names and format as badges
+                            // Deduplicate instance names for the header tag
                             const uniqueInstances = dup.instances
                                 ? [...new Set(dup.instances.split(','))]
                                       .map(s => s.trim())
                                       .filter(Boolean)
                                 : [];
+                            let paths = [];
+                            try {
+                                paths = JSON.parse(dup.folders || '[]').filter(Boolean);
+                            } catch {
+                                paths = [];
+                            }
                             return (
-                                <div
+                                <section
                                     key={dup.id || i}
-                                    className="p-3 rounded-lg bg-surface border border-border flex flex-col gap-2"
+                                    className="bg-surface border border-border rounded-xl overflow-hidden"
                                 >
-                                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                                        <div className="flex items-center gap-2 min-w-0">
-                                            <span className="font-medium text-fg truncate">
-                                                {dup.title || dup.normalized_title}
+                                    <div className="flex items-center gap-3 px-4 py-3 border-b border-border-light">
+                                        <span className="font-display text-[15px] font-semibold text-fg truncate">
+                                            {dup.title || dup.normalized_title}
+                                        </span>
+                                        {dup.year && (
+                                            <span className="font-mono text-xs text-fg-subtle">
+                                                {dup.year}
                                             </span>
-                                            {dup.year && (
-                                                <span className="text-fg-muted flex-shrink-0">
-                                                    ({dup.year})
-                                                </span>
-                                            )}
-                                        </div>
-                                        <div className="flex items-center flex-wrap gap-2 sm:gap-3">
-                                            <span className="text-sm font-medium text-warning">
-                                                {dup.count} copies
+                                        )}
+                                        <span className="font-mono text-[10px] uppercase px-[7px] py-0.5 rounded-[5px] bg-warning/15 text-warning shrink-0">
+                                            {dup.count} copies
+                                        </span>
+                                        {uniqueInstances.length > 0 && (
+                                            <span className="font-mono text-[11.5px] text-fg-subtle truncate hidden sm:inline">
+                                                {uniqueInstances.join(' · ')}
                                             </span>
-                                            <div className="flex items-center flex-wrap gap-1">
-                                                {uniqueInstances.map(inst => (
-                                                    <span
-                                                        key={inst}
-                                                        className="text-xs px-2 py-0.5 rounded-full bg-surface-alt text-fg-muted"
-                                                    >
-                                                        {inst}
-                                                    </span>
-                                                ))}
-                                            </div>
-                                            <Button
-                                                variant="ghost"
-                                                icon="auto_fix_high"
-                                                onClick={() => setResolveTarget(dup)}
-                                            >
-                                                Resolve
-                                            </Button>
-                                        </div>
+                                        )}
+                                        <Button
+                                            variant="ghost"
+                                            size="small"
+                                            icon="auto_fix_high"
+                                            className="ml-auto shrink-0"
+                                            onClick={() => setResolveTarget(dup)}
+                                        >
+                                            Resolve
+                                        </Button>
                                     </div>
-                                    {(() => {
-                                        let paths = [];
-                                        try {
-                                            paths = JSON.parse(dup.folders || '[]').filter(Boolean);
-                                        } catch {
-                                            paths = [];
-                                        }
-                                        if (paths.length === 0) return null;
-                                        return (
-                                            <div className="flex flex-col gap-0.5 text-xs font-mono text-fg-subtle">
-                                                {paths.map((p, idx) => (
+                                    {paths.length > 0 && (
+                                        <div className="flex flex-col">
+                                            {paths.map((p, idx) => (
+                                                <div
+                                                    key={`${p}-${idx}`}
+                                                    className="flex items-center gap-3 px-4 py-2.5 border-b border-border-light last:border-b-0"
+                                                >
+                                                    <span className="material-symbols-outlined text-[16px] text-fg-dim shrink-0">
+                                                        folder
+                                                    </span>
                                                     <span
-                                                        key={`${p}-${idx}`}
-                                                        className="truncate"
+                                                        className="font-mono text-[11.5px] text-fg-subtle truncate"
                                                         title={p}
                                                     >
                                                         {p}
                                                     </span>
-                                                ))}
-                                            </div>
-                                        );
-                                    })()}
-                                </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </section>
                             );
                         })}
                     </div>
@@ -418,7 +420,7 @@ const MediaManagePage = () => {
 
             {folderCollisions.length > 0 && (
                 <section className="mb-4">
-                    <h3 className="text-lg font-semibold text-fg mb-1 flex items-center gap-2">
+                    <h3 className="font-display text-lg font-semibold text-fg mb-1 flex items-center gap-2">
                         <span className="material-symbols-outlined text-fg-muted">folder_copy</span>
                         Folder collisions ({folderCollisions.length} groups)
                     </h3>
@@ -524,7 +526,7 @@ const MediaManagePage = () => {
 
             {/* Nestarr — Unmatched & Nested Media */}
             <section className="mb-4">
-                <h3 className="text-lg font-semibold text-fg mb-3 flex items-center flex-wrap gap-2">
+                <h3 className="font-display text-lg font-semibold text-fg mb-3 flex items-center flex-wrap gap-2">
                     <span className="material-symbols-outlined text-warning">account_tree</span>
                     Unmatched & Nested Media
                     {nestedIssues.length > 0 && (
@@ -724,7 +726,7 @@ const MediaManagePage = () => {
             {/* Collections */}
             {Array.isArray(collections) && collections.length > 0 && (
                 <section className="mb-4">
-                    <h3 className="text-lg font-semibold text-fg mb-3 flex items-center gap-2">
+                    <h3 className="font-display text-lg font-semibold text-fg mb-3 flex items-center gap-2">
                         <span className="material-symbols-outlined text-brand-primary">
                             collections_bookmark
                         </span>
