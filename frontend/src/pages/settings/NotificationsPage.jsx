@@ -1,7 +1,5 @@
-import { useMemo, useState, useCallback } from 'react';
-import { PageHeader } from '../../components/ui/PageHeader';
-import { StatGrid } from '../../components/statistics';
-import { StatCard, ServiceIcon } from '../../components/ui';
+import { useState, useCallback } from 'react';
+import { ServiceIcon } from '../../components/ui';
 import { Button } from '../../components/ui/button/Button';
 import { Modal } from '../../components/modals/Modal';
 import { useApiData } from '../../hooks/useApiData';
@@ -342,75 +340,35 @@ export const NotificationsPage = () => {
         refreshNotifications({ useCache: false });
     }, [bulkService, bulkForm, bulkModules, toast, refreshNotifications]);
 
-    // Calculate statistics
-    const statistics = useMemo(() => {
-        if (!notifications?.data?.notifications) {
-            return [
-                { label: 'Modules Configured', value: 0, valueColor: 'primary' },
-                { label: 'Total Services', value: 0, valueColor: '' },
-                { label: 'Discord', value: 0, valueColor: '' },
-                { label: 'Notifiarr', value: 0, valueColor: '' },
-            ];
-        }
-
-        const notificationData = notifications.data.notifications;
-        const moduleKeys = Object.keys(notificationData);
-
-        let totalServices = 0;
-        let discordCount = 0;
-        let notifiarrCount = 0;
-
-        // Count services across all modules
-        moduleKeys.forEach(moduleKey => {
-            const moduleNotifications = notificationData[moduleKey];
-
-            if (moduleNotifications.discord) {
-                discordCount++;
-                totalServices++;
-            }
-            if (moduleNotifications.notifiarr) {
-                notifiarrCount++;
-                totalServices++;
-            }
-        });
-
-        return [
-            {
-                label: 'Modules Configured',
-                value: moduleKeys.length,
-                valueColor: 'primary',
-            },
-            {
-                label: 'Total Services',
-                value: totalServices,
-                valueColor: '',
-            },
-            {
-                label: 'Discord',
-                value: discordCount,
-                valueColor: '',
-            },
-            {
-                label: 'Notifiarr',
-                value: notifiarrCount,
-                valueColor: '',
-            },
-        ];
-    }, [notifications]);
+    // Dense page header + primary action, matching the redesign mock.
+    const header = (
+        <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="min-w-0">
+                <h1 className="font-display text-[26px] font-bold tracking-[-0.3px] text-fg m-0">
+                    Notifications
+                </h1>
+                <p className="text-fg-subtle text-[13.5px] mt-1 mb-0">
+                    Where CHUB sends run summaries and failure alerts.
+                </p>
+            </div>
+            <button
+                type="button"
+                onClick={openBulk}
+                className="inline-flex items-center gap-1.5 h-[38px] px-4 rounded-lg bg-primary text-on-color font-display text-[13.5px] font-semibold hover:brightness-110 transition"
+                style={{ boxShadow: '0 4px 16px -5px var(--primary)' }}
+            >
+                <span className="material-symbols-outlined text-[18px]">add</span>
+                Add channel
+            </button>
+        </div>
+    );
 
     // Loading state
     if (isLoading) {
         return (
-            <div className="p-6 max-w-screen-xl mx-auto">
-                <PageHeader
-                    title="Notifications"
-                    description="Discord and Notifiarr alerts."
-                    badge={3}
-                    icon="notifications"
-                />
-                <div className="text-center py-12">
-                    <p className="text-fg-muted">Loading notifications...</p>
-                </div>
+            <div className="flex flex-col gap-5">
+                {header}
+                <p className="text-fg-muted">Loading notifications…</p>
             </div>
         );
     }
@@ -418,13 +376,8 @@ export const NotificationsPage = () => {
     // Error state
     if (error) {
         return (
-            <div className="p-6 max-w-screen-xl mx-auto">
-                <PageHeader
-                    title="Notifications"
-                    description="Discord and Notifiarr alerts."
-                    badge={3}
-                    icon="notifications"
-                />
+            <div className="flex flex-col gap-5">
+                {header}
                 <div className="text-center py-12">
                     <p className="text-error">Error loading notifications: {error.message}</p>
                     <Button variant="primary" onClick={refreshNotifications} className="mt-4">
@@ -435,75 +388,62 @@ export const NotificationsPage = () => {
         );
     }
 
+    const moduleEntries = Object.entries(notifications?.data?.notifications || {});
+
     return (
-        <div className="max-w-screen-xl mx-auto flex flex-col gap-6">
-            {/* Page Header */}
-            <PageHeader
-                title="Notifications"
-                description="Where CHUB sends run summaries and failure alerts."
-            />
+        <div className="flex flex-col gap-5">
+            {header}
 
-            {/* Statistics */}
-            <StatGrid columns={5}>
-                {statistics.map(stat => (
-                    <StatCard
-                        key={stat.label}
-                        label={stat.label}
-                        value={stat.value}
-                        valueColor={stat.valueColor}
-                    />
-                ))}
-            </StatGrid>
-
-            {/* Bulk action — apply one webhook to many modules at once */}
-            <div className="flex justify-end">
-                <Button variant="secondary" onClick={openBulk}>
-                    + Apply to multiple modules
-                </Button>
-            </div>
-
-            {/* Module Sections */}
-            {notifications?.data?.notifications &&
-            Object.keys(notifications.data.notifications).length > 0 ? (
-                Object.entries(notifications.data.notifications).map(
-                    ([moduleName, moduleNotifs]) => (
-                        <div key={moduleName} className="mb-8">
-                            {/* Module Header */}
-                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
-                                <h2 className="text-2xl font-semibold text-fg">
-                                    {humanize(moduleName)}
-                                </h2>
-                                <Button variant="primary" onClick={() => handleAdd(moduleName)}>
-                                    + Add Notification
-                                </Button>
+            <div className="w-full max-w-[820px] flex flex-col gap-6">
+                {moduleEntries.length > 0 ? (
+                    moduleEntries.map(([moduleName, moduleNotifs]) => (
+                        <div key={moduleName} className="flex flex-col gap-2.5">
+                            {/* Compact module label + per-module add */}
+                            <div className="flex items-center gap-3 px-1">
+                                <span className="font-mono text-[10px] uppercase tracking-wider text-fg-dim">
+                                    {moduleName === 'main'
+                                        ? 'All errors (global)'
+                                        : humanize(moduleName)}
+                                </span>
+                                <span className="flex-1 h-px bg-border-light" />
+                                <button
+                                    type="button"
+                                    onClick={() => handleAdd(moduleName)}
+                                    className="inline-flex items-center gap-1 text-[12px] text-fg-subtle hover:text-fg"
+                                >
+                                    <span className="material-symbols-outlined text-[15px]">
+                                        add
+                                    </span>
+                                    Add
+                                </button>
                             </div>
-
-                            {/* Notification Cards Grid */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                {Object.entries(moduleNotifs).map(([serviceType, config]) => (
-                                    <NotificationCard
-                                        key={`${moduleName}-${serviceType}`}
-                                        moduleName={moduleName}
-                                        serviceType={serviceType}
-                                        config={config}
-                                        onEdit={handleEdit}
-                                        onDelete={handleDelete}
-                                        onTest={handleTest}
-                                        isTesting={testingServices.has(
-                                            `${moduleName}-${serviceType}`
-                                        )}
-                                    />
-                                ))}
-                            </div>
+                            {Object.entries(moduleNotifs).map(([serviceType, config]) => (
+                                <NotificationCard
+                                    key={`${moduleName}-${serviceType}`}
+                                    moduleName={moduleName}
+                                    serviceType={serviceType}
+                                    config={config}
+                                    onEdit={handleEdit}
+                                    onDelete={handleDelete}
+                                    onTest={handleTest}
+                                    isTesting={testingServices.has(`${moduleName}-${serviceType}`)}
+                                />
+                            ))}
                         </div>
-                    )
-                )
-            ) : (
-                <div className="text-center py-12 text-fg-muted">
-                    <p>No notifications configured</p>
-                    <p className="text-sm mt-2">Add a notification to get started</p>
-                </div>
-            )}
+                    ))
+                ) : (
+                    <div className="flex flex-col items-center gap-2 py-16 px-6 rounded-xl border border-dashed border-border text-center">
+                        <span className="material-symbols-outlined text-[32px] text-fg-subtle">
+                            notifications_off
+                        </span>
+                        <p className="text-fg">No notification channels yet</p>
+                        <p className="text-sm text-fg-subtle">
+                            Click <span className="text-fg">Add channel</span> to send run summaries
+                            and failure alerts to Discord or Notifiarr.
+                        </p>
+                    </div>
+                )}
+            </div>
 
             {/* Add Notification - Step 1: Service Type Selection */}
             {addModalOpen && !selectedServiceType && (
