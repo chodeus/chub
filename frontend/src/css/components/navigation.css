@@ -20,6 +20,7 @@
     .sidebar-nav-link--active {
         background: var(--primary);
         color: var(--on-color-text);
+        box-shadow: 0 4px 16px -4px var(--primary);
     }
 
     .sidebar-nav-link--active:hover {
@@ -39,7 +40,8 @@
     .sidebar-nav-link--child-active {
         color: var(--sidebar-text);
         font-weight: 600;
-        background: var(--sidebar-hover);
+        background: rgb(255 255 255 / 5%);
+        box-shadow: inset 2px 0 0 var(--primary);
     }
 
     /* ===========================================
