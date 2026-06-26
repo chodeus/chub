@@ -6,7 +6,7 @@
  */
 
 import React, { useCallback } from 'react';
-import { FieldWrapper, FieldLabel, FieldError, FieldDescription, InputBase } from '../primitives';
+import { FieldRow, InputBase } from '../primitives';
 import { FieldButton } from '../features/shared';
 import { useOptionalFormField } from '../../forms/FormContext';
 
@@ -74,9 +74,14 @@ export const NumberField = React.memo(
         const incrementDisabled = disabled || (max !== undefined && numValue >= max);
 
         return (
-            <FieldWrapper invalid={finalHighlightInvalid}>
-                <FieldLabel htmlFor={inputId} label={field.label} required={field.required} />
-
+            <FieldRow
+                htmlFor={inputId}
+                label={field.label}
+                required={field.required}
+                description={field.description}
+                error={finalErrorMessage}
+                invalid={finalHighlightInvalid}
+            >
                 <div className="flex">
                     <FieldButton
                         onClick={handleDecrement}
@@ -114,13 +119,7 @@ export const NumberField = React.memo(
                         <span className="material-symbols-outlined text-lg">add</span>
                     </FieldButton>
                 </div>
-
-                <FieldDescription
-                    id={field.descId || `${inputId}-desc`}
-                    description={field.description}
-                />
-                <FieldError id={field.errorId || `${inputId}-error`} message={finalErrorMessage} />
-            </FieldWrapper>
+            </FieldRow>
         );
     }
 );
