@@ -4,7 +4,7 @@ import { useApiData } from '../../hooks/useApiData.js';
 import { useToast } from '../../contexts/ToastContext.jsx';
 import { postersAPI } from '../../utils/api/posters.js';
 import { Modal } from '../../components/modals/Modal';
-import { Button, LoadingButton, PageHeader } from '../../components/ui/index.js';
+import { Button, LoadingButton } from '../../components/ui/index.js';
 import Spinner from '../../components/ui/Spinner.jsx';
 
 const PAGE_SIZE = 500; // master-detail needs the full bundle list client-side
@@ -241,9 +241,9 @@ const VariantTile = ({ variant, selected, onToggleSelect, onPreview }) => {
         borderWidth: '3px',
         borderStyle: 'solid',
         borderColor: isPlex
-            ? 'rgba(150,150,160,0.55)'
+            ? '#3b3d72'
             : isActive
-              ? 'var(--color-success, #32d583)'
+              ? 'var(--color-success, #6cbc66)'
               : 'rgba(253,53,92,0.85)',
         boxShadow: isActive && !isPlex ? '0 0 0 2px rgba(50,213,131,0.4)' : 'none',
         // Poster aspect ratio — lets the full image show without cropping the
@@ -982,68 +982,93 @@ const PosterCleanarrPage = () => {
 
     return (
         <div className="flex flex-col gap-4">
-            <PageHeader
-                icon="cleaning_services"
-                title="Poster Cleanarr"
-                description="Review Plex poster variants and clean up unused (bloat) images."
-            />
-
-            {/* Global summary stats (only when a scan exists). */}
-            {hasScanned && stats && (
-                <div className="text-sm text-fg-muted flex flex-col gap-1">
-                    <div>
-                        {stats.bundle_count} items · {stats.variant_count} variants ·{' '}
-                        <span className="text-error">{stats.bloat_count} bloat</span> ·{' '}
-                        {formatBytes(stats.bloat_size)} reclaimable
+            {/* Toolbar — title + mono summary stats + legend */}
+            <div className="flex items-center gap-2.5 flex-wrap">
+                <h1 className="font-display text-[22px] font-bold tracking-[-0.3px] text-fg m-0 mr-1.5">
+                    Poster Cleanarr
+                </h1>
+                {hasScanned && stats ? (
+                    <>
+                        <span className="font-mono text-[12.5px] text-fg-muted">
+                            {stats.bundle_count} items
+                        </span>
+                        <span className="text-fg-dim">·</span>
+                        <span className="font-mono text-[12.5px] text-fg-muted">
+                            {stats.variant_count} variants
+                        </span>
+                        <span className="text-fg-dim">·</span>
+                        <span className="font-mono text-[12.5px] text-error">
+                            {stats.bloat_count} bloat
+                        </span>
+                        <span className="text-fg-dim">·</span>
+                        <span className="font-mono text-[12.5px] text-success">
+                            {formatBytes(stats.bloat_size)} reclaimable
+                        </span>
                         {staleItems.length > 0 && (
                             <>
-                                {' '}
-                                ·{' '}
-                                <span style={{ color: '#f59e0b' }}>
+                                <span className="text-fg-dim">·</span>
+                                <span className="font-mono text-[12.5px] text-warning">
                                     {staleItems.length} stale duplicate
                                     {staleItems.length === 1 ? '' : 's'}
                                 </span>
                             </>
                         )}
-                    </div>
-                    <div className="flex items-center gap-3 text-xs text-fg-subtle mt-1">
-                        <span className="flex items-center gap-1">
-                            <span style={bloatPill}>●</span> bloat
-                        </span>
-                        <span className="flex items-center gap-1">
-                            <span style={stalePill}>⧉</span> stale duplicate
-                        </span>
-                        {unmatchedStale.length > 0 && (
-                            <span>
-                                {unmatchedStale.length} stale not matched to a Plex item (see below)
+                        <span className="ml-auto flex items-center gap-3.5 font-mono text-[11px] text-fg-subtle">
+                            <span className="flex items-center gap-1.5">
+                                <span className="w-2 h-2 rounded-full bg-error" />
+                                bloat
                             </span>
-                        )}
-                        {orphans.length > 0 && (
-                            <span>orphaned assets: {orphans.length} (see below)</span>
-                        )}
-                    </div>
+                            <span className="flex items-center gap-1.5">
+                                <span className="w-2 h-2 rounded-full bg-warning" />
+                                stale duplicate
+                            </span>
+                        </span>
+                    </>
+                ) : (
+                    <span className="text-fg-subtle text-[13.5px]">
+                        Review Plex poster variants and clean up unused (bloat) images.
+                    </span>
+                )}
+            </div>
+
+            {/* Transcoder + extra notes */}
+            {hasScanned && stats && (
+                <div className="flex flex-col gap-1 text-xs text-fg-subtle -mt-1">
                     {transcoder && transcoder.count > 0 && (
                         <div>
-                            PhotoTranscoder cache: {transcoder.count.toLocaleString()} files ·{' '}
-                            {formatBytes(transcoder.size_bytes)} reclaimable ·{' '}
-                            <Link to="/settings/modules" className="text-fg hover:underline">
+                            PhotoTranscoder cache:{' '}
+                            <span className="font-mono text-fg-muted">
+                                {transcoder.count.toLocaleString()} files ·{' '}
+                                {formatBytes(transcoder.size_bytes)}
+                            </span>{' '}
+                            reclaimable ·{' '}
+                            <Link to="/settings/modules" className="text-accent hover:underline">
                                 Clean from Plex Maintenance →
                             </Link>
                         </div>
                     )}
+                    {unmatchedStale.length > 0 && (
+                        <div>
+                            {unmatchedStale.length} stale not matched to a Plex item (see below)
+                        </div>
+                    )}
+                    {orphans.length > 0 && <div>orphaned assets: {orphans.length} (see below)</div>}
                 </div>
             )}
 
             {/* Global cleanup bar — Mode dropdown (all 6 cleanup modes) + a Run
                 button whose label, colour, and confirm behaviour all track the
                 selected mode, so the destructive options are visibly distinct. */}
-            <section className="rounded-lg bg-surface border border-border p-3 flex flex-wrap items-center gap-3">
-                <label className="flex items-center gap-2 text-sm">
-                    Mode:
+            <section
+                className="rounded-xl bg-surface border border-border px-4 py-3.5 flex flex-wrap items-center gap-4"
+                style={{ boxShadow: '0 2px 16px -8px rgba(0,0,0,.6)' }}
+            >
+                <label className="flex items-center gap-2 text-[13px] font-semibold text-fg-muted">
+                    Mode
                     <select
                         value={mode}
                         onChange={e => setMode(e.target.value)}
-                        className="bg-surface-alt border border-border rounded px-2 py-1 text-sm"
+                        className="h-[34px] bg-surface-inset border border-border rounded-lg px-3 text-[13px] font-semibold text-fg outline-none focus:border-primary cursor-pointer"
                     >
                         {Object.entries(MODE_META).map(([k, m]) => (
                             <option key={k} value={k}>
@@ -1052,10 +1077,10 @@ const PosterCleanarrPage = () => {
                         ))}
                     </select>
                 </label>
-                <span className="text-xs text-fg-subtle" style={{ maxWidth: '420px' }}>
+                <span className="text-[12.5px] text-fg-subtle" style={{ maxWidth: '420px' }}>
                     {MODE_META[mode]?.description}
                 </span>
-                <div className="flex items-center gap-3 ml-3 text-sm">
+                <div className="flex items-center gap-4 text-[13px] text-fg-muted accent-primary">
                     <label className="flex items-center gap-1 cursor-pointer">
                         <input
                             type="checkbox"
@@ -1152,7 +1177,10 @@ const PosterCleanarrPage = () => {
                     side-by-side as before. Internal scroll containers are still
                     present on mobile but become no-ops because the grid has no
                     minHeight there — the page scrolls naturally instead. */}
-                    <section className="rounded-lg border border-border overflow-hidden bg-surface">
+                    <section
+                        className="rounded-xl border border-border overflow-hidden bg-surface"
+                        style={{ boxShadow: '0 2px 16px -8px rgba(0,0,0,.6)' }}
+                    >
                         <div
                             className="grid"
                             style={{
@@ -1187,23 +1215,28 @@ const PosterCleanarrPage = () => {
                                                 key={v}
                                                 type="button"
                                                 onClick={() => setTab(v)}
-                                                className={`flex-1 px-2 py-1.5 text-xs rounded-md cursor-pointer border ${
+                                                className={`flex-1 px-2 py-[7px] text-xs rounded-[7px] cursor-pointer border transition-colors ${
                                                     tab === v
-                                                        ? 'bg-primary/20 text-fg border-primary/40'
-                                                        : 'bg-transparent text-fg-muted border-transparent hover:bg-surface-alt'
+                                                        ? 'bg-primary text-on-color border-transparent font-semibold'
+                                                        : 'bg-transparent text-fg-muted border-transparent hover:bg-row-hover'
                                                 }`}
                                             >
                                                 {label}
                                             </button>
                                         ))}
                                     </div>
-                                    <input
-                                        type="search"
-                                        value={search}
-                                        onChange={e => setSearch(e.target.value)}
-                                        placeholder="Search titles..."
-                                        className="m-2 px-3 py-1.5 rounded bg-surface-alt border border-border text-sm"
-                                    />
+                                    <div className="m-2 flex items-center gap-2 h-9 px-3 rounded-lg bg-surface-inset border border-border focus-within:border-primary transition-colors">
+                                        <span className="material-symbols-outlined text-[16px] text-fg-subtle">
+                                            search
+                                        </span>
+                                        <input
+                                            type="search"
+                                            value={search}
+                                            onChange={e => setSearch(e.target.value)}
+                                            placeholder="Search titles…"
+                                            className="flex-1 min-w-0 bg-transparent border-0 outline-none text-[12.5px] text-fg placeholder:text-fg-dim"
+                                        />
+                                    </div>
                                     {/* Tree list */}
                                     <div className="overflow-y-auto flex-1">
                                         {filteredBundles.length === 0 ? (
@@ -1293,14 +1326,14 @@ const PosterCleanarrPage = () => {
                                                         </React.Fragment>
                                                     ))}
                                                 </div>
-                                                <h3 className="text-xl font-semibold text-fg m-0">
+                                                <h3 className="font-display text-[19px] font-semibold text-fg m-0">
                                                     {
                                                         detail.breadcrumb[
                                                             detail.breadcrumb.length - 1
                                                         ]
                                                     }
                                                 </h3>
-                                                <div className="text-xs text-fg-muted mt-1">
+                                                <div className="font-mono text-[12px] text-fg-muted mt-1.5">
                                                     {detail.variants.length} variants ·{' '}
                                                     <span className="text-success">
                                                         {activeInDetail} active
