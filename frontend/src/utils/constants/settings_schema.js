@@ -244,7 +244,7 @@ const CORE_SETTINGS_SCHEMA = [
             {
                 key: 'apply_method',
                 label: 'Apply Method',
-                type: 'dropdown',
+                type: 'segmented',
                 section: 'Apply',
                 options: [
                     { value: 'plex', label: 'Plex' },
@@ -501,7 +501,7 @@ const CORE_SETTINGS_SCHEMA = [
             {
                 key: 'apply_method',
                 label: 'Apply Method',
-                type: 'dropdown',
+                type: 'segmented',
                 section: 'Apply',
                 options: [
                     { value: 'plex', label: 'Plex' },

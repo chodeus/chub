@@ -7,6 +7,7 @@
 
 export { CheckboxField } from './CheckboxField.jsx';
 export { DropdownField } from './DropdownField.jsx';
+export { SegmentedField } from './SegmentedField.jsx';
 export { DateRangeField } from './DateRangeField.jsx';
 export { PrimarySourceField } from './PrimarySourceField.jsx';
 export { MultiSelectField } from './MultiSelectField.jsx';
