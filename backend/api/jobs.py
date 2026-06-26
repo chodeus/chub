@@ -7,9 +7,22 @@ from backend.api.utils import error, get_database, get_logger, ok
 from backend.util.database import ChubDB
 
 
+# How a run was triggered, derived from the module_run payload's `origin`
+# (set by ModuleOrchestrator.run_module_async): the scheduler passes
+# "scheduled"; manual UI/CLI runs pass "web"/"cli".
+_TRIGGER_BY_ORIGIN = {
+    "scheduled": "scheduled",
+    "web": "manual",
+    "cli": "manual",
+    "webhook": "webhook",
+}
+
+
 def _enrich_jobs(jobs):
-    """Extract module_name from payload and parse the phases JSON for the UI."""
+    """Extract module_name + trigger from payload and parse phases JSON for the UI."""
     for job in jobs:
+        if job.get("type") == "webhook":
+            job["trigger"] = "webhook"
         if job.get("type") == "module_run" and job.get("payload"):
             payload = job["payload"]
             if isinstance(payload, str):
@@ -19,6 +32,8 @@ def _enrich_jobs(jobs):
                     payload = {}
             if isinstance(payload, dict):
                 job["module_name"] = payload.get("module_name", "")
+                origin = payload.get("origin", "")
+                job["trigger"] = _TRIGGER_BY_ORIGIN.get(origin, origin or "manual")
         # phases is stored as a JSON string; hand the UI a parsed list so it can
         # render the per-sub-step timeline without re-parsing.
         phases = job.get("phases")
