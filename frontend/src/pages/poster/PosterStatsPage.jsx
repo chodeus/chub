@@ -60,6 +60,9 @@ const sourceBarColor = label => {
     return '#53e8f0';
 };
 
+// Avatar tints for the Top-contributors list (cycled by row index).
+const CONTRIB_COLORS = ['#8767f7', '#53e8f0', '#6cbc66', '#ffc944', '#9a7ba9', '#fd355c'];
+
 const BreakdownBars = ({ bars, onSelect, activeLabel, barColor }) => {
     const interactive = typeof onSelect === 'function';
     return (
@@ -369,6 +372,18 @@ const PosterStatsPage = () => {
     );
     const sourceBars = useMemo(() => buildBars(stats.applied_by_source, { topN: 8 }), [stats]);
 
+    // Top contributors: owners ranked by how many library items their posters
+    // are matched to (owner aggregation already returned by /api/posters/stats).
+    const contributors = useMemo(
+        () =>
+            [...matchedStats]
+                .map(s => ({ name: s.owner || 'Unknown', count: s.media_matched || 0 }))
+                .filter(c => c.count > 0)
+                .sort((a, b) => b.count - a.count)
+                .slice(0, 8),
+        [matchedStats]
+    );
+
     const handleRefresh = () => {
         refreshStats();
         refreshGDrive();
@@ -418,28 +433,31 @@ const PosterStatsPage = () => {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {[
                     {
-                        label: 'CACHED POSTERS',
+                        label: 'CACHED ASSETS',
                         value: (stats.poster_cache_count || 0).toLocaleString(),
                         color: 'text-fg',
+                        sub: 'posters + artwork',
                     },
                     {
-                        label: 'GDRIVE SOURCES',
-                        value: gdriveStats.length.toLocaleString(),
-                        color: 'text-fg',
+                        label: 'MATCHED',
+                        value: `${(grandTotal.percent_complete || 0).toFixed(1)}%`,
+                        color: 'text-success',
+                        sub:
+                            grandTotal.total > 0
+                                ? `${(grandTotal.total - grandTotal.unmatched).toLocaleString()} linked to library`
+                                : null,
+                    },
+                    {
+                        label: 'UNMATCHED',
+                        value: (grandTotal.unmatched || 0).toLocaleString(),
+                        color: 'text-warning',
+                        sub: 'no library item',
                     },
                     {
                         label: 'SYNCED SIZE',
                         value: formatSize(totalSyncedBytes),
                         color: 'text-accent',
-                    },
-                    {
-                        label: 'MATCH COMPLETION',
-                        value: `${(grandTotal.percent_complete || 0).toFixed(1)}%`,
-                        color: 'text-success',
-                        sub:
-                            grandTotal.total > 0
-                                ? `${(grandTotal.total - grandTotal.unmatched).toLocaleString()} / ${grandTotal.total.toLocaleString()} matched`
-                                : null,
+                        sub: `${gdriveStats.length} GDrive source${gdriveStats.length === 1 ? '' : 's'}`,
                     },
                 ].map(card => (
                     <div
@@ -464,7 +482,67 @@ const PosterStatsPage = () => {
                 ))}
             </div>
 
-            {/* Poster Breakdown — mix actually applied to the library */}
+            {/* By source + By type (left), Top contributors (right) — mock layout */}
+            {(sourceBars.length > 0 || typeBars.length > 0 || contributors.length > 0) && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+                    <div className="flex flex-col gap-5">
+                        {sourceBars.length > 0 && (
+                            <section>
+                                <h2 className="font-display text-[15px] font-semibold text-fg mb-3">
+                                    By source
+                                </h2>
+                                <div className="p-4 rounded-xl bg-surface border border-border">
+                                    <BreakdownBars bars={sourceBars} barColor={sourceBarColor} />
+                                </div>
+                            </section>
+                        )}
+                        {typeBars.length > 0 && (
+                            <section>
+                                <h2 className="font-display text-[15px] font-semibold text-fg mb-3">
+                                    By type
+                                </h2>
+                                <div className="p-4 rounded-xl bg-surface border border-border">
+                                    <BreakdownBars bars={typeBars} />
+                                </div>
+                            </section>
+                        )}
+                    </div>
+                    {contributors.length > 0 && (
+                        <section>
+                            <h2 className="font-display text-[15px] font-semibold text-fg mb-3">
+                                Top contributors
+                            </h2>
+                            <div className="rounded-xl bg-surface border border-border overflow-hidden">
+                                {contributors.map((c, i) => (
+                                    <div
+                                        key={`${c.name}-${i}`}
+                                        className="flex items-center gap-3 px-4 py-3 border-b border-border-light last:border-0"
+                                    >
+                                        <span
+                                            className="shrink-0 w-[30px] h-[30px] rounded-full flex items-center justify-center font-display text-[13px] font-bold"
+                                            style={{
+                                                background: `${CONTRIB_COLORS[i % CONTRIB_COLORS.length]}22`,
+                                                color: CONTRIB_COLORS[i % CONTRIB_COLORS.length],
+                                            }}
+                                            aria-hidden="true"
+                                        >
+                                            {c.name.charAt(0).toUpperCase()}
+                                        </span>
+                                        <span className="flex-1 min-w-0 text-[13.5px] font-medium text-fg truncate">
+                                            {c.name}
+                                        </span>
+                                        <span className="font-mono text-[12px] text-fg-subtle">
+                                            {c.count.toLocaleString()}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        </section>
+                    )}
+                </div>
+            )}
+
+            {/* Poster Breakdown — applied variant mix (interactive: click to request) */}
             {variantBars.length > 0 && (
                 <section>
                     <h3 className="font-display text-lg font-semibold text-fg mb-1 flex items-center gap-2">
@@ -476,23 +554,15 @@ const PosterStatsPage = () => {
                     <p className="text-xs text-fg-subtle mb-3">
                         Posters applied to your library — not the full GDrive catalog
                     </p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="p-5 rounded-xl bg-surface border border-border">
-                            <p className="text-sm text-fg-muted mb-3">
-                                By variant{' '}
-                                <span className="text-fg-subtle">
-                                    — click to list &amp; request
-                                </span>
-                            </p>
-                            <BreakdownBars
-                                bars={variantBars}
-                                onSelect={() => setVariantsOpen(o => !o)}
-                            />
-                        </div>
-                        <div className="p-5 rounded-xl bg-surface border border-border">
-                            <p className="text-sm text-fg-muted mb-3">By asset type</p>
-                            <BreakdownBars bars={typeBars} />
-                        </div>
+                    <div className="p-5 rounded-xl bg-surface border border-border">
+                        <p className="text-sm text-fg-muted mb-3">
+                            By variant{' '}
+                            <span className="text-fg-subtle">— click to list &amp; request</span>
+                        </p>
+                        <BreakdownBars
+                            bars={variantBars}
+                            onSelect={() => setVariantsOpen(o => !o)}
+                        />
                     </div>
                     {variantsOpen && (
                         <div className="mt-4">
