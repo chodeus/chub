@@ -36,7 +36,7 @@ export const SearchInput = () => {
                 className="w-full pr-10"
                 aria-label="Search logs"
             />
-            {searchValue && (
+            {searchValue ? (
                 <button
                     type="button"
                     onClick={handleClear}
@@ -45,6 +45,10 @@ export const SearchInput = () => {
                 >
                     <span className="material-symbols-outlined text-xl">cancel</span>
                 </button>
+            ) : (
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 font-mono text-[11px] text-fg-faint pointer-events-none">
+                    ⌘F
+                </span>
             )}
         </div>
     );
