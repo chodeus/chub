@@ -360,6 +360,26 @@
 @utility animate-slide-down {
     animation: slide-down 240ms ease-out;
 }
+
+/* Redesign: pulsing status dot + indeterminate progress sweep (referenced via
+   inline style on running entries). */
+@keyframes chub-pulse {
+    0%,
+    100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.35;
+    }
+}
+@keyframes chub-indeterminate {
+    0% {
+        transform: translateX(-100%);
+    }
+    100% {
+        transform: translateX(300%);
+    }
+}
 @media (prefers-reduced-motion: reduce) {
     .animate-slide-down {
         animation: none !important;
