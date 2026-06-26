@@ -244,6 +244,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             table_name="jobs", process_fn=shared_db_process_job, job_type_filter=None
         )
 
+        # Daily maintenance: auto config backups + log pruning (both gated on
+        # config; the thread is a cheap no-op when disabled).
+        try:
+            if "startup_config" in locals() and startup_config is not None:
+                from backend.util.maintenance import start_maintenance
+
+                app.state.maintenance_thread = start_maintenance(startup_config, logger)
+        except Exception as e:
+            if log:
+                log.error(f"Failed to start maintenance thread: {e}")
+
         if log:
             log.info("FastAPI application started successfully")
 

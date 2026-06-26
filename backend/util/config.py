@@ -567,6 +567,14 @@ class GeneralConfig(BaseModel):
     # runtime.
     update_notifications: bool = False
     max_logs: int = Field(default=9, ge=1, le=100)
+    # Delete rotated log files older than this many days (0 = disabled; rely on
+    # count-based rotation via max_logs only). Pruned by the daily maintenance
+    # thread.
+    log_retention_days: int = Field(default=0, ge=0, le=365)
+    # When true, the maintenance thread writes a config+db backup once a day and
+    # prunes the backups directory to the newest `auto_backup_keep` archives.
+    auto_backup: bool = False
+    auto_backup_keep: int = Field(default=12, ge=1, le=100)
     # Plex's recently-added scan can lag 5+ minutes behind a Sonarr/Radarr
     # import under load. Defaults give ~5.5 min of total search:
     #   30s warmup + 10 attempts × 30s = 330s

@@ -31,7 +31,7 @@ from backend.util.config import (
 )
 from backend.util.database import ChubDB
 from backend.util.path_safety import get_browse_roots, is_path_allowed
-from backend.util.version import get_version
+from backend.util.version import check_for_update, get_version
 
 router = APIRouter(
     prefix="/api",
@@ -98,6 +98,29 @@ async def get_version_endpoint(logger: Any = Depends(get_logger)) -> JSONRespons
         logger.error(f"Error getting version: {e}")
         return error(
             f"Error getting version: {str(e)}", code="VERSION_ERROR", status_code=500
+        )
+
+
+@router.get(
+    "/version/check",
+    summary="Check for updates",
+    description="On-demand check of the remote release manifest for a newer build.",
+)
+async def check_version_endpoint(logger: Any = Depends(get_logger)) -> JSONResponse:
+    """Poll the remote manifest and report whether a newer build is available.
+
+    The network calls are blocking, so they run off the event loop. Failures
+    degrade gracefully to `checked: false` rather than erroring.
+    """
+    try:
+        result = await run_in_threadpool(check_for_update, logger)
+        return ok("Update check complete", result)
+    except Exception as e:
+        logger.error(f"Error checking for updates: {e}")
+        return error(
+            f"Error checking for updates: {str(e)}",
+            code="VERSION_CHECK_ERROR",
+            status_code=500,
         )
 
 
@@ -547,6 +570,48 @@ def _get_backup_dir() -> Path:
     return backup_dir
 
 
+def build_backup_bytes() -> bytes:
+    """Build a backup zip (config.yml + chub.db.sql dump) and return its bytes.
+
+    Uses SQLite's backup API to safely snapshot the database while it may be in
+    use. Shared by the download endpoint and the auto-backup maintenance thread.
+    """
+    config_path = get_config_path()
+    db_path = _get_db_path()
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        if os.path.exists(config_path):
+            zf.write(config_path, "config.yml")
+
+        if os.path.exists(db_path):
+            db_buf = io.BytesIO()
+            src = sqlite3.connect(db_path)
+            try:
+                mem = sqlite3.connect(":memory:")
+                src.backup(mem)
+                for line in mem.iterdump():
+                    db_buf.write(f"{line}\n".encode("utf-8"))
+                mem.close()
+            finally:
+                src.close()
+            db_buf.seek(0)
+            zf.writestr("chub.db.sql", db_buf.read())
+
+    return buf.getvalue()
+
+
+def save_backup(logger: Any = None) -> Path:
+    """Write a timestamped backup into the backups directory; return its path."""
+    data = build_backup_bytes()
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    backup_path = _get_backup_dir() / f"chub-backup-{timestamp}.zip"
+    backup_path.write_bytes(data)
+    if logger:
+        logger.info(f"Backup created: {backup_path.name}")
+    return backup_path
+
+
 @router.post(
     "/backup",
     summary="Create backup",
@@ -566,47 +631,12 @@ def create_backup(
     """
     try:
         logger.info("Creating backup...")
-
-        config_path = get_config_path()
-        db_path = _get_db_path()
-        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-
-        buf = io.BytesIO()
-        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-            # Add config.yml
-            if os.path.exists(config_path):
-                zf.write(config_path, "config.yml")
-
-            # Safely copy SQLite database using backup API
-            if os.path.exists(db_path):
-                db_buf = io.BytesIO()
-                src = sqlite3.connect(db_path)
-                try:
-                    mem = sqlite3.connect(":memory:")
-                    src.backup(mem)
-                    # Dump from memory to bytes
-                    for line in mem.iterdump():
-                        db_buf.write(f"{line}\n".encode("utf-8"))
-                    mem.close()
-                finally:
-                    src.close()
-                db_buf.seek(0)
-                zf.writestr("chub.db.sql", db_buf.read())
-
-        buf.seek(0)
-        filename = f"chub-backup-{timestamp}.zip"
-
-        # Also save a copy to the backups directory
-        backup_dir = _get_backup_dir()
-        backup_path = backup_dir / filename
-        backup_path.write_bytes(buf.getvalue())
-        buf.seek(0)
-
-        logger.info(f"Backup created: {filename}")
+        backup_path = save_backup(logger)
+        buf = io.BytesIO(backup_path.read_bytes())
         return StreamingResponse(
             buf,
             media_type="application/zip",
-            headers={"Content-Disposition": f"attachment; filename={filename}"},
+            headers={"Content-Disposition": f"attachment; filename={backup_path.name}"},
         )
 
     except Exception as e:
@@ -1001,7 +1031,9 @@ async def get_db_stats(
             count_row = db.worker.execute_query(
                 f"SELECT COUNT(*) AS total FROM {name}", fetch_one=True
             )
-            tables.append({"name": name, "rows": count_row["total"] if count_row else 0})
+            tables.append(
+                {"name": name, "rows": count_row["total"] if count_row else 0}
+            )
 
         page_size_row = db.worker.execute_query("PRAGMA page_size", fetch_one=True)
         page_count_row = db.worker.execute_query("PRAGMA page_count", fetch_one=True)
@@ -1128,7 +1160,9 @@ async def clear_poster_cache(
 
         db.poster.clear()
 
-        logger.info(f"Wiped poster_cache via /api/system/db/poster-cache/clear ({before} rows)")
+        logger.info(
+            f"Wiped poster_cache via /api/system/db/poster-cache/clear ({before} rows)"
+        )
         return ok(
             "Poster cache cleared",
             {"deleted": before},

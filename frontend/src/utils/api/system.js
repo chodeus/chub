@@ -28,6 +28,65 @@ export const systemAPI = {
     },
 
     /**
+     * On-demand update check against the remote release manifest.
+     * @returns {Promise<Object>} { local_version, remote_version, branch, update_available, checked }
+     */
+    checkForUpdate: (options = {}) => {
+        return apiCore.get('/version/check', { ...options });
+    },
+
+    /**
+     * List saved config+db backups in the backups directory.
+     * @returns {Promise<Object>} { backups: [{ filename, size_bytes, created }] }
+     */
+    listBackups: (options = {}) => {
+        return apiCore.get('/backups', { ...options });
+    },
+
+    /**
+     * Create a backup and download the zip to the user's disk. Fetches with the
+     * auth header so a 401 isn't saved as the file body.
+     * @returns {Promise<void>}
+     */
+    downloadBackup: async () => {
+        const headers = {};
+        try {
+            const token = localStorage.getItem('chub-auth-token');
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+        } catch {
+            /* localStorage unavailable */
+        }
+        const res = await fetch('/api/backup', { method: 'POST', headers });
+        if (!res.ok) throw new Error(`Backup failed with status ${res.status}`);
+        const disposition = res.headers.get('Content-Disposition') || '';
+        const match = disposition.match(/filename=([^;]+)/);
+        const filename = match ? match[1].trim() : 'chub-backup.zip';
+        const blob = await res.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        try {
+            const link = document.createElement('a');
+            link.href = objectUrl;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        } finally {
+            URL.revokeObjectURL(objectUrl);
+        }
+    },
+
+    /**
+     * Restore config from an uploaded backup zip (multipart).
+     * @param {File} file - The backup zip
+     * @returns {Promise<Object>} Restore result
+     */
+    restoreBackup: (file, options = {}) => {
+        const form = new FormData();
+        form.append('file', file);
+        return apiCore.post('/restore', form, options);
+    },
+
+    /**
      * Disk usage snapshot for configured container mount points.
      * @param {Object} options - Request options
      * @returns {Promise<Object>} { mounts: [{ path, exists, total_bytes, free_bytes, percent_used }] }
