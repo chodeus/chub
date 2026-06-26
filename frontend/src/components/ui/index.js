@@ -28,3 +28,4 @@ export { Skeleton } from './Skeleton';
 export { StatCard } from './StatCard';
 export { default as SegmentedControl } from './SegmentedControl';
 export { default as StatusDot } from './StatusDot';
+export { default as Toggle } from './Toggle';
