@@ -15,28 +15,18 @@ import PropTypes from 'prop-types';
  * @param {string} [props.icon] - Material symbol name for the badge.
  * @param {React.ReactNode} [props.actions] - Optional right-aligned actions.
  */
-export const PageHeader = ({ title, description, badge, icon, actions }) => {
-    const hasBadge = badge && icon;
-
+// Dense control-panel header (redesign). The legacy pastel `badge`/`icon`
+// bubble is intentionally ignored now that pages lead with a flush title row.
+export const PageHeader = ({ title, description, actions }) => {
     return (
-        <div className="mb-6 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-            <div className="flex items-start gap-4 min-w-0">
-                {hasBadge && (
-                    <span
-                        className={`badge-bubble badge-bubble--${badge} rounded-full w-12 h-12 shrink-0 flex items-center justify-center`}
-                        aria-hidden="true"
-                    >
-                        <span className="material-symbols-outlined" style={{ fontSize: '24px' }}>
-                            {icon}
-                        </span>
-                    </span>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="min-w-0">
+                <h1 className="font-display text-[26px] font-bold tracking-[-0.3px] text-fg m-0">
+                    {title}
+                </h1>
+                {description && (
+                    <p className="text-fg-subtle text-[13.5px] mt-1 mb-0">{description}</p>
                 )}
-                <div className="flex flex-col gap-1 min-w-0">
-                    <h1 className="font-display text-3xl font-bold text-fg m-0 leading-tight">
-                        {title}
-                    </h1>
-                    {description && <p className="text-base text-fg-muted m-0">{description}</p>}
-                </div>
             </div>
             {actions && <div className="flex items-center gap-2 shrink-0">{actions}</div>}
         </div>

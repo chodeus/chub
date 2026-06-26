@@ -6,7 +6,6 @@ import { useLogContent } from '../hooks/useLogContent.js';
 import { useLogPolling } from '../hooks/useLogPolling.js';
 import { LogControls } from '../components/logs/controls/LogControls.jsx';
 import { LogOutput } from '../components/logs/components/LogOutput.jsx';
-import { PageHeader } from '../components/ui';
 import { logsAPI } from '../utils/api/logs.js';
 
 const LOG_LEVELS = ['critical', 'error', 'warning', 'info', 'debug'];
@@ -98,7 +97,7 @@ export default function Logs() {
     }, []);
 
     const pillBase =
-        'px-3 py-1.5 rounded-full text-xs font-medium capitalize cursor-pointer border transition-colors select-none';
+        'px-3 py-1 rounded-full font-mono text-[11px] font-semibold capitalize cursor-pointer border transition-colors select-none';
     const pillOff = 'bg-transparent text-fg-subtle border-border hover:text-fg';
     const levelOnClass = level => {
         if (level === 'critical') return 'bg-error/20 text-error border-error/40';
@@ -113,14 +112,25 @@ export default function Logs() {
 
     return (
         <div className="flex flex-col gap-4 h-full">
-            <PageHeader
-                title="Logs"
-                description="Tail module runs and diagnose failures."
-                badge={2}
-                icon="description"
-            />
+            <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="min-w-0">
+                    <h1 className="font-display text-[26px] font-bold tracking-[-0.3px] text-fg m-0">
+                        Logs
+                    </h1>
+                    <p className="text-fg-subtle text-[13.5px] mt-1 mb-0">
+                        Tail module runs and diagnose failures.
+                    </p>
+                </div>
+                <span className="inline-flex items-center gap-2 h-[30px] px-3 rounded-full bg-accent/10 border border-accent/25">
+                    <span className="w-[7px] h-[7px] rounded-full bg-accent" aria-hidden="true" />
+                    <span className="font-mono text-[11px] text-accent">live tail · 1s</span>
+                </span>
+            </div>
 
-            <div className="flex flex-col rounded-lg border border-border-light bg-surface overflow-hidden">
+            <div
+                className="flex flex-col flex-1 min-h-0 rounded-xl border border-border bg-surface overflow-hidden"
+                style={{ boxShadow: '0 2px 16px -8px rgba(0,0,0,.6)' }}
+            >
                 <LogControls
                     modules={modules}
                     logFiles={logFiles}
@@ -136,9 +146,9 @@ export default function Logs() {
                 />
 
                 {/* Filter pill bar */}
-                <div className="flex flex-wrap items-center gap-2 px-4 py-3 border-t border-border-light bg-surface-alt">
-                    <span className="text-xs uppercase tracking-wider text-fg-subtle font-semibold mr-1">
-                        Levels
+                <div className="flex flex-wrap items-center gap-2 px-4 py-3 border-t border-border bg-surface-inset">
+                    <span className="font-mono text-[10px] tracking-[1px] text-fg-faint mr-1">
+                        LEVELS
                     </span>
                     {LOG_LEVELS.map(level => (
                         <button

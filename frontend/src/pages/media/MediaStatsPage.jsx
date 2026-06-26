@@ -2,16 +2,19 @@ import React, { useMemo } from 'react';
 import { useApiData } from '../../hooks/useApiData.js';
 import { useToast } from '../../contexts/ToastContext.jsx';
 import { mediaAPI } from '../../utils/api/media.js';
-import { IconButton, PageHeader } from '../../components/ui/index.js';
 import Spinner from '../../components/ui/Spinner.jsx';
 import { formatSecondsAgo } from '../../utils/schedule';
 
 /** Reusable stat card — always reserves the subtext row so sibling cards align */
 const StatCard = ({ label, value, subtext, color = 'text-fg' }) => (
-    <div className="p-5 rounded-xl bg-surface border border-border flex flex-col">
-        <p className="text-sm text-fg-muted mb-1">{label}</p>
-        <p className={`text-3xl font-bold ${color}`}>{(value || 0).toLocaleString()}</p>
-        <p className="text-xs text-fg-subtle mt-1" style={{ minHeight: '1rem' }}>
+    <div className="p-5 rounded-xl bg-surface border border-border flex flex-col shadow-[0_2px_16px_-8px_rgba(0,0,0,0.6)]">
+        <p className="font-mono text-[10px] tracking-[1.2px] uppercase text-fg-subtle mb-2">
+            {label}
+        </p>
+        <p className={`font-mono text-[32px] leading-none font-bold ${color}`}>
+            {(value || 0).toLocaleString()}
+        </p>
+        <p className="text-xs text-fg-subtle mt-2" style={{ minHeight: '1rem' }}>
             {subtext || ' '}
         </p>
     </div>
@@ -54,18 +57,20 @@ const HealthCard = ({ title, badge, row, footer }) => {
                 )}
             </p>
             <div className="flex items-baseline gap-3 flex-wrap">
-                <span className="text-2xl font-bold text-fg">
+                <span className="font-mono text-2xl font-bold text-fg">
                     {(row.total || 0).toLocaleString()}
                 </span>
-                <span className="text-sm text-success">
+                <span className="font-mono text-sm text-success">
                     {inLibrary.toLocaleString()} in library
                 </span>
                 {hasMissing && (
-                    <span className="text-sm text-warning">{missing.toLocaleString()} missing</span>
+                    <span className="font-mono text-sm text-warning">
+                        {missing.toLocaleString()} missing
+                    </span>
                 )}
             </div>
             {(row.monitored > 0 || inLibrary > 0) && (
-                <div className="mt-2 h-1.5 bg-surface-alt rounded-full overflow-hidden">
+                <div className="mt-2 h-1.5 bg-border rounded-full overflow-hidden">
                     <div
                         className="h-full rounded-full transition-all bg-success"
                         style={{ width: `${Math.max(2, pct)}%` }}
@@ -104,7 +109,7 @@ const BreakdownBars = ({ items, labelKey, countKey = 'count', maxItems = null })
                                 {item[labelKey] || 'Unknown'}
                             </span>
                             <div
-                                className="h-2 rounded-full bg-surface-alt overflow-hidden"
+                                className="h-2 rounded-full bg-border overflow-hidden"
                                 role="presentation"
                             >
                                 <div
@@ -115,7 +120,7 @@ const BreakdownBars = ({ items, labelKey, countKey = 'count', maxItems = null })
                                     }}
                                 />
                             </div>
-                            <span className="tabular-nums text-fg-subtle font-medium">
+                            <span className="font-mono text-fg-data font-medium">
                                 {count.toLocaleString()}
                             </span>
                         </div>
@@ -342,20 +347,27 @@ const MediaStatsPage = () => {
     if (isLoading) return <Spinner size="large" text="Loading statistics..." center />;
 
     return (
-        <div className="flex flex-col gap-6">
-            {/* Header */}
-            <PageHeader
-                title="Library Statistics"
-                description="Library health for your Radarr, Sonarr, Lidarr and Plex instances."
-                icon="bar_chart"
-            />
-            <div className="flex justify-end">
-                <IconButton
-                    icon="refresh"
-                    aria-label="Refresh statistics"
-                    variant="ghost"
+        <div className="flex flex-col gap-5">
+            {/* Toolbar */}
+            <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="min-w-0">
+                    <h1 className="font-display text-[26px] font-bold tracking-[-0.3px] text-fg m-0">
+                        Library Statistics
+                    </h1>
+                    <p className="text-fg-subtle text-[13.5px] mt-1 mb-0">
+                        Library health across Radarr, Sonarr, Lidarr and Plex.
+                    </p>
+                </div>
+                <button
+                    type="button"
                     onClick={handleRefresh}
-                />
+                    className="inline-flex items-center gap-1.5 h-[38px] px-3.5 rounded-lg bg-surface border border-border text-fg-muted text-[13.5px] font-medium hover:bg-surface-elevated transition-colors"
+                >
+                    <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
+                        refresh
+                    </span>
+                    Refresh
+                </button>
             </div>
 
             {/* Summary Cards */}
@@ -383,22 +395,27 @@ const MediaStatsPage = () => {
             {/* Recently Added */}
             <RecentlyAdded data={stats.recently_added} />
 
-            {/* By Type */}
-            {byType.length > 0 && (
-                <section>
-                    <h3 className="text-lg font-semibold text-fg mb-3">By Type</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                        {byType.map(row => (
-                            <HealthCard
-                                key={row.asset_type}
-                                title={row.asset_type}
-                                badge={`${row.instances} instance${row.instances !== 1 ? 's' : ''}`}
-                                row={row}
-                            />
-                        ))}
-                    </div>
-                </section>
-            )}
+            {/* By type + Breakdowns (side by side) */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+                {byType.length > 0 ? (
+                    <section>
+                        <h3 className="font-display text-lg font-semibold text-fg mb-3">By type</h3>
+                        <div className="grid grid-cols-1 gap-3">
+                            {byType.map(row => (
+                                <HealthCard
+                                    key={row.asset_type}
+                                    title={row.asset_type}
+                                    badge={`${row.instances} instance${row.instances !== 1 ? 's' : ''}`}
+                                    row={row}
+                                />
+                            ))}
+                        </div>
+                    </section>
+                ) : (
+                    <div />
+                )}
+                <BreakdownTabs stats={stats} />
+            </div>
 
             {/* By Instance */}
             {byInstance.length > 0 && (
@@ -424,8 +441,6 @@ const MediaStatsPage = () => {
 
             {/* Plex */}
             <PlexSection plex={stats.plex} />
-
-            <BreakdownTabs stats={stats} />
         </div>
     );
 };

@@ -8,13 +8,7 @@ import { useToast } from '../../contexts/ToastContext.jsx';
 import { useSearch, SEARCH_TYPES } from '../../contexts/SearchCoordinatorContext.jsx';
 import { postersAPI } from '../../utils/api/posters.js';
 import { Modal } from '../../components/modals/Modal';
-import {
-    Button,
-    LoadingButton,
-    IconButton,
-    PageHeader,
-    Pagination,
-} from '../../components/ui/index.js';
+import { Button, LoadingButton, IconButton, Pagination } from '../../components/ui/index.js';
 import Spinner from '../../components/ui/Spinner.jsx';
 
 // Subtle checkerboard so transparent additional-artwork (logos, square art,
@@ -122,7 +116,20 @@ const PosterAssetsSearchPage = () => {
     // warns + sets an error state when no handler exists for an active type).
     // URL ?q= seeding lives in SearchInterface so any search page picks it up.
     const postersNoopSearch = useCallback(async () => ({ data: { items: [] } }), []);
-    const { term: search } = useSearch(SEARCH_TYPES.POSTERS, postersNoopSearch);
+    const { term: search, search: runPosterSearch } = useSearch(
+        SEARCH_TYPES.POSTERS,
+        postersNoopSearch
+    );
+
+    // In-page search field, synced to the shared coordinator term (which the
+    // header search also drives). Adjust-state-during-render keeps the input in
+    // sync with external term changes without an effect.
+    const [query, setQuery] = useState(search || '');
+    const [prevQueryTerm, setPrevQueryTerm] = useState(search);
+    if (search !== prevQueryTerm) {
+        setPrevQueryTerm(search);
+        setQuery(search || '');
+    }
 
     // Debounce term locally before feeding it into browseParams so the browse
     // endpoint doesn't refire on every keystroke. The bar dispatches term
@@ -282,136 +289,151 @@ const PosterAssetsSearchPage = () => {
         }
     };
 
-    return (
-        <div className="flex flex-col gap-6">
-            <PageHeader
-                title="Assets Search"
-                description={`Browse and manage posters in your local asset cache (${total} posters).`}
-                badge={2}
-                icon="folder"
-                actions={
-                    <div className="flex flex-wrap items-center gap-2">
-                        <LoadingButton
-                            loading={isRunning('poster_renamerr') || isAutoMatching}
-                            loadingText="Matching..."
-                            variant="ghost"
-                            icon="auto_fix_high"
-                            onClick={handleAutoMatch}
-                            title="Run Poster Renamerr to automatically match poster files to media items"
-                        >
-                            Auto-Match
-                        </LoadingButton>
-                        <LoadingButton
-                            loading={isAnalyzing}
-                            loadingText="Analyzing..."
-                            variant="ghost"
-                            icon="analytics"
-                            onClick={handleAnalyze}
-                            title="Scan the poster directory and report file count and total storage size"
-                        >
-                            Analyze
-                        </LoadingButton>
-                        <LoadingButton
-                            loading={isOptimizing}
-                            loadingText="Optimizing..."
-                            variant="ghost"
-                            icon="tune"
-                            onClick={() => runOptimize()}
-                            title="Resize oversized posters and compress images to save disk space"
-                        >
-                            Optimize
-                        </LoadingButton>
-                        <LoadingButton
-                            loading={isUploading}
-                            loadingText="Uploading..."
-                            variant="primary"
-                            icon="upload"
-                            onClick={() => fileInputRef.current?.click()}
-                            title="Upload a poster image file"
-                        >
-                            Upload
-                        </LoadingButton>
-                        <input
-                            ref={fileInputRef}
-                            type="file"
-                            accept="image/*"
-                            className="hidden"
-                            onChange={handleUpload}
-                        />
-                    </div>
-                }
-            />
+    const selectCls =
+        'h-9 rounded-[9px] bg-surface border border-border text-fg-muted text-[13px] px-3 cursor-pointer outline-none focus:border-primary';
 
-            {/* Filters */}
-            <div className="flex items-center gap-3 flex-wrap">
-                <div className="flex items-center gap-2">
-                    <label className="text-sm text-fg-muted">Owner</label>
-                    <select
-                        value={owner}
-                        onChange={handleFilterChange(setOwner, 'owner')}
-                        className="px-3 py-1.5 rounded-lg bg-surface border border-border text-fg text-sm"
-                    >
-                        <option value="">All</option>
-                        {owners.map(o => (
-                            <option key={o} value={o}>
-                                {o}
-                            </option>
-                        ))}
-                    </select>
+    return (
+        <div className="flex flex-col gap-5">
+            {/* Toolbar */}
+            <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="min-w-0">
+                    <h1 className="font-display text-[26px] font-bold tracking-[-0.3px] text-fg m-0">
+                        Assets
+                    </h1>
+                    <p className="text-fg-subtle text-[13.5px] mt-1 mb-0">
+                        Local + Google Drive poster library ·{' '}
+                        <span className="font-mono text-fg-muted">{total.toLocaleString()}</span>{' '}
+                        cached.
+                    </p>
                 </div>
-                <div className="flex items-center gap-2">
-                    <label className="text-sm text-fg-muted">Type</label>
-                    <select
-                        value={type}
-                        onChange={handleFilterChange(setType, 'type')}
-                        className="px-3 py-1.5 rounded-lg bg-surface border border-border text-fg text-sm"
+                <div className="flex flex-wrap items-center gap-2">
+                    <LoadingButton
+                        loading={isRunning('poster_renamerr') || isAutoMatching}
+                        loadingText="Matching..."
+                        variant="surface"
+                        icon="auto_fix_high"
+                        onClick={handleAutoMatch}
+                        title="Run Poster Renamerr to automatically match poster files to media items"
                     >
-                        <option value="">All</option>
-                        <option value="movie">Movies</option>
-                        <option value="show">Shows</option>
-                        <option value="season">Seasons</option>
-                        <option value="collection">Collections</option>
-                    </select>
-                </div>
-                <div className="flex items-center gap-2">
-                    <label className="text-sm text-fg-muted">Style</label>
-                    <select
-                        value={style}
-                        onChange={handleFilterChange(setStyle, 'style')}
-                        className="px-3 py-1.5 rounded-lg bg-surface border border-border text-fg text-sm"
+                        Auto-Match
+                    </LoadingButton>
+                    <LoadingButton
+                        loading={isAnalyzing}
+                        loadingText="Analyzing..."
+                        variant="surface"
+                        icon="analytics"
+                        onClick={handleAnalyze}
+                        title="Scan the poster directory and report file count and total storage size"
                     >
-                        <option value="">All</option>
-                        {styles.map(s => (
-                            <option key={s} value={s}>
-                                {s}
-                            </option>
-                        ))}
-                        <option value="other">Other</option>
-                    </select>
+                        Analyze
+                    </LoadingButton>
+                    <LoadingButton
+                        loading={isOptimizing}
+                        loadingText="Optimizing..."
+                        variant="surface"
+                        icon="tune"
+                        onClick={() => runOptimize()}
+                        title="Resize oversized posters and compress images to save disk space"
+                    >
+                        Optimize
+                    </LoadingButton>
+                    <LoadingButton
+                        loading={isUploading}
+                        loadingText="Uploading..."
+                        variant="primary"
+                        icon="upload"
+                        onClick={() => fileInputRef.current?.click()}
+                        title="Upload a poster image file"
+                    >
+                        Upload
+                    </LoadingButton>
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleUpload}
+                    />
                 </div>
-                <div className="flex items-center gap-2">
-                    <label className="text-sm text-fg-muted">Image</label>
-                    <select
-                        value={imageType}
+            </div>
+
+            {/* Search + filters */}
+            <div className="flex flex-wrap items-center gap-3">
+                <div className="flex-1 min-w-[240px] flex items-center gap-2.5 h-11 px-3.5 rounded-[10px] bg-surface border border-border focus-within:border-primary transition-colors">
+                    <span className="material-symbols-outlined text-[18px] text-fg-subtle">
+                        search
+                    </span>
+                    <input
+                        value={query}
                         onChange={e => {
-                            setImageType(e.target.value);
-                            setOffset(0);
+                            setQuery(e.target.value);
+                            runPosterSearch(e.target.value);
                         }}
-                        className="px-3 py-1.5 rounded-lg bg-surface border border-border text-fg text-sm"
-                    >
-                        <option value="">Posters</option>
-                        <option value="artwork">All additional artwork</option>
-                        <option value="logo">Logos</option>
-                        <option value="background">Backgrounds</option>
-                        <option value="squareart">Square art</option>
-                    </select>
+                        placeholder="Search by title or filename…"
+                        className="flex-1 min-w-0 bg-transparent border-0 outline-none text-sm text-fg placeholder:text-fg-dim"
+                        aria-label="Search posters"
+                    />
                 </div>
+                <select
+                    value={owner}
+                    onChange={handleFilterChange(setOwner, 'owner')}
+                    className={selectCls}
+                    aria-label="Owner"
+                >
+                    <option value="">Owner: All</option>
+                    {owners.map(o => (
+                        <option key={o} value={o}>
+                            {o}
+                        </option>
+                    ))}
+                </select>
+                <select
+                    value={type}
+                    onChange={handleFilterChange(setType, 'type')}
+                    className={selectCls}
+                    aria-label="Type"
+                >
+                    <option value="">Type: All</option>
+                    <option value="movie">Movies</option>
+                    <option value="show">Shows</option>
+                    <option value="season">Seasons</option>
+                    <option value="collection">Collections</option>
+                </select>
+                <select
+                    value={style}
+                    onChange={handleFilterChange(setStyle, 'style')}
+                    className={selectCls}
+                    aria-label="Style"
+                >
+                    <option value="">Style: All</option>
+                    {styles.map(s => (
+                        <option key={s} value={s}>
+                            {s}
+                        </option>
+                    ))}
+                    <option value="other">Other</option>
+                </select>
+                <select
+                    value={imageType}
+                    onChange={e => {
+                        setImageType(e.target.value);
+                        setOffset(0);
+                    }}
+                    className={selectCls}
+                    aria-label="Image type"
+                >
+                    <option value="">Posters</option>
+                    <option value="artwork">All additional artwork</option>
+                    <option value="logo">Logos</option>
+                    <option value="background">Backgrounds</option>
+                    <option value="squareart">Square art</option>
+                </select>
             </div>
 
             {/* Collections */}
             {Array.isArray(collections) && collections.length > 0 && (
                 <section>
-                    <h3 className="text-lg font-semibold text-fg mb-3 flex items-center gap-2">
+                    <h3 className="font-display text-lg font-semibold text-fg mb-3 flex items-center gap-2">
                         <span className="material-symbols-outlined text-brand-primary">
                             collections_bookmark
                         </span>
@@ -531,7 +553,9 @@ const PosterAssetsSearchPage = () => {
             ) : items.length > 0 ? (
                 <section>
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
-                        <h3 className="text-lg font-semibold text-fg">Posters ({total})</h3>
+                        <h3 className="font-display text-lg font-semibold text-fg">
+                            Posters ({total})
+                        </h3>
                         <Pagination
                             currentPage={currentPage}
                             totalPages={totalPages}

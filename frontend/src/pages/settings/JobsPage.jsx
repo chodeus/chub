@@ -4,8 +4,7 @@ import { useModuleEvents } from '../../hooks/useModuleEvents.js';
 import { useToast } from '../../contexts/ToastContext.jsx';
 import { jobsAPI } from '../../utils/api/jobs.js';
 import { modulesAPI } from '../../utils/api/modules.js';
-import { StatGrid } from '../../components/statistics';
-import { StatCard, LoadingButton, IconButton, PageHeader } from '../../components/ui';
+import { LoadingButton, IconButton, PageHeader } from '../../components/ui';
 import Spinner from '../../components/ui/Spinner.jsx';
 import { formatDateTime } from '../../utils/datetime.js';
 import { useUIState } from '../../contexts/UIStateContext.jsx';
@@ -301,36 +300,54 @@ export const JobsPage = () => {
                 }
             />
 
-            <StatGrid columns={4}>
-                <StatCard
-                    label="Pending"
-                    value={jobStats.pending}
-                    valueColor={jobStats.pending > 0 ? 'warning' : ''}
-                />
-                <StatCard
-                    label="Running"
-                    value={jobStats.running}
-                    valueColor={jobStats.running > 0 ? 'primary' : ''}
-                />
-                <StatCard label="Completed" value={jobStats.completed} valueColor="success" />
-                <StatCard
-                    label="Failed"
-                    value={jobStats.failed}
-                    valueColor={jobStats.failed > 0 ? 'error' : ''}
-                />
-            </StatGrid>
+            {/* Stat strip */}
+            <div
+                className="flex items-stretch flex-wrap bg-surface border border-border rounded-xl overflow-hidden"
+                style={{ boxShadow: '0 2px 16px -8px rgba(0,0,0,.6)' }}
+            >
+                {[
+                    {
+                        label: 'PENDING',
+                        value: jobStats.pending,
+                        tone: jobStats.pending > 0 ? 'text-warning' : 'text-fg-muted',
+                    },
+                    {
+                        label: 'RUNNING',
+                        value: jobStats.running,
+                        tone: jobStats.running > 0 ? 'text-accent' : 'text-fg-muted',
+                    },
+                    { label: 'COMPLETED', value: jobStats.completed, tone: 'text-success' },
+                    {
+                        label: 'FAILED',
+                        value: jobStats.failed,
+                        tone: jobStats.failed > 0 ? 'text-error' : 'text-fg-dim',
+                    },
+                ].map((s, i) => (
+                    <React.Fragment key={s.label}>
+                        {i > 0 && <div className="w-px self-stretch bg-border my-3" />}
+                        <div className="px-[22px] py-3.5 flex flex-col gap-1.5 min-w-0 flex-1">
+                            <span className="font-mono text-[10px] tracking-[1.2px] text-fg-subtle">
+                                {s.label}
+                            </span>
+                            <span className={`font-mono font-semibold text-[18px] ${s.tone}`}>
+                                {s.value}
+                            </span>
+                        </div>
+                    </React.Fragment>
+                ))}
+            </div>
 
-            {/* Filter buttons */}
+            {/* Filter pills */}
             <div className="flex flex-wrap items-center gap-2">
                 {STATUS_FILTERS.map(filter => (
                     <button
                         key={filter}
                         type="button"
                         onClick={() => setActiveFilter(filter)}
-                        className={`px-3 py-1.5 rounded-lg text-sm font-medium capitalize cursor-pointer border transition-colors ${
+                        className={`px-3 py-1 rounded-full font-mono text-[12.5px] font-medium capitalize cursor-pointer border transition-colors ${
                             activeFilter === filter
-                                ? 'bg-primary/15 text-fg border-primary/30'
-                                : 'bg-transparent text-fg-muted border-border hover:text-fg'
+                                ? 'bg-primary/15 text-fg border-primary/40'
+                                : 'bg-surface text-fg-muted border-border hover:text-fg'
                         }`}
                     >
                         {filter}

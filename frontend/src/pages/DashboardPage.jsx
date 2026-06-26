@@ -9,10 +9,10 @@ import { scheduleAPI } from '../utils/api/schedule';
 import { instancesAPI } from '../utils/api/instances';
 import { postersAPI } from '../utils/api/posters';
 import { configAPI } from '../utils/api/config';
-import { Button, IconButton } from '../components/ui';
+import { Button } from '../components/ui';
 import { Modal } from '../components/modals/Modal';
 import { Skeleton } from '../components/ui';
-import { useAuth } from '../contexts/AuthContext.jsx';
+import Dropdown from '../components/ui/Dropdown.jsx';
 import { useToast } from '../contexts/ToastContext.jsx';
 import { humanize } from '../utils/tools.js';
 import { formatDateTime } from '../utils/datetime.js';
@@ -80,33 +80,41 @@ const QUICK_START = [
     },
 ];
 
-const statusPillClass = status => {
-    switch (status) {
-        case 'success':
-            return 'bg-success/20 text-success';
-        case 'error':
-            return 'bg-error/20 text-error';
-        case 'running':
-            return 'bg-primary/20 text-fg';
-        case 'pending':
-            return 'bg-warning/20 text-warning';
-        default:
-            return 'bg-surface-alt text-fg-muted';
-    }
+// Status-dot colour + soft ring glow per run state. rgba glows aren't
+// expressible as theme tokens, so the presentational hexes are inlined here
+// (they mirror the redesign palette).
+const DOT = {
+    success: ['#6cbc66', 'rgba(108,188,102,.16)'],
+    running: ['#53e8f0', 'rgba(83,232,240,.18)'],
+    error: ['#fd355c', 'rgba(253,53,92,.18)'],
+    pending: ['#ffc944', 'rgba(255,201,68,.16)'],
+    idle: ['#564f8a', 'rgba(86,79,138,0)'],
+};
+
+// 7px status dot with a soft ring (box-shadow). status keys match DOT.
+const StatusDot = ({ status = 'idle', size = 7 }) => {
+    const [color, glow] = DOT[status] || DOT.idle;
+    return (
+        <span
+            className="shrink-0 rounded-full"
+            style={{ width: size, height: size, background: color, boxShadow: `0 0 0 3px ${glow}` }}
+            aria-hidden="true"
+        />
+    );
 };
 
 const DashboardPage = () => {
     const toast = useToast();
-    const { user } = useAuth();
     const [tick, setTick] = useState(() => Date.now());
     // Module name awaiting confirmation before Run-now fires. Prevents
     // misclicks on tiny inline "Run now" links from launching a module.
     const [runNowTarget, setRunNowTarget] = useState(null);
-
-    const { data: versionData } = useApiData({
-        apiFunction: systemAPI.getVersion,
-        options: { showErrorToast: false },
-    });
+    // Collapsible modules-table rows: module name -> open. Default collapsed.
+    const [expandedRows, setExpandedRows] = useState({});
+    const toggleRow = useCallback(name => setExpandedRows(s => ({ ...s, [name]: !s[name] })), []);
+    // "New run" toolbar dropdown (module picker → run-now confirm modal).
+    const [newRunOpen, setNewRunOpen] = useState(false);
+    const newRunRef = useRef(null);
 
     const {
         data: runStatesData,
@@ -166,15 +174,14 @@ const DashboardPage = () => {
     const refreshSeconds = dashboardCfg.dashboard_refresh_seconds ?? 30;
     const upcomingLimit = dashboardCfg.dashboard_upcoming_limit ?? UPCOMING_LIMIT;
 
-    // Section visibility + order. Empty = all sections in the default order.
-    // showSection() gates rendering; sectionStyle() drives flexbox order so the
-    // sections sort into the chosen sequence without moving them in the DOM.
+    // Section visibility. The redesign uses a fixed ops-board layout, so the
+    // old per-section reorder is retired; showSection() still gates the
+    // optional Quick start section (general.dashboard_sections).
     const sectionOrder = useMemo(() => {
         const arr = dashboardCfg.dashboard_sections;
         return Array.isArray(arr) && arr.length ? arr : DEFAULT_SECTIONS;
     }, [dashboardCfg]);
     const showSection = useCallback(k => sectionOrder.includes(k), [sectionOrder]);
-    const sectionStyle = useCallback(k => ({ order: sectionOrder.indexOf(k) + 1 }), [sectionOrder]);
 
     // Countdown / poll-fallback tick. refreshSeconds = 0 turns auto-refresh off.
     useEffect(() => {
@@ -265,23 +272,6 @@ const DashboardPage = () => {
 
     const isLoading = runStatesLoading || jobsLoading || modulesLoading || scheduleLoading;
 
-    const version = useMemo(() => {
-        if (!versionData) return null;
-        if (typeof versionData === 'string') return versionData;
-        return versionData?.data?.version || versionData?.data || versionData;
-    }, [versionData]);
-
-    // Backend returns `1.0.0.main51` (base + branch + commit count). Render
-    // as `1.0.0 · main #51` for end users; keeps the parseable raw string
-    // in the DOM title attr so anyone inspecting can still see the source.
-    const prettyVersion = useMemo(() => {
-        if (!version || typeof version !== 'string') return null;
-        const match = version.match(/^(\d+\.\d+\.\d+)\.([a-z][a-z0-9_-]*?)(\d+)$/i);
-        if (!match) return { display: version, raw: version };
-        const [, base, branch, count] = match;
-        return { display: `${base} · ${branch} #${count}`, raw: version };
-    }, [version]);
-
     const runStates = useMemo(() => runStatesData?.data || {}, [runStatesData]);
 
     const jobStats = useMemo(() => {
@@ -308,6 +298,31 @@ const DashboardPage = () => {
         }
         return grouped;
     }, [subSchedules]);
+    // Multi-block schedules (config.schedule_blocks): module -> [blocks]. These
+    // render as gold "block" sub-rows; per-instance profiles (above) render as
+    // cyan "profile" sub-rows. A sub_schedules entry is a block when its label
+    // matches one of the module's schedule_blocks; everything else is a profile.
+    const scheduleBlocks = useMemo(() => scheduleData?.data?.schedule_blocks || {}, [scheduleData]);
+    const subRowsByModule = useMemo(() => {
+        const out = {};
+        const names = new Set([
+            ...Object.keys(subSchedulesByModule),
+            ...Object.keys(scheduleBlocks),
+        ]);
+        for (const name of names) {
+            const blocks = scheduleBlocks[name] || [];
+            const blockLabels = new Set(blocks.map(b => b.label));
+            const profiles = (subSchedulesByModule[name] || []).filter(
+                s => !blockLabels.has(s.label)
+            );
+            out[name] = [
+                ...profiles.map(p => ({ ...p, kind: 'profile' })),
+                ...blocks.map(b => ({ ...b, module: name, kind: 'block' })),
+            ];
+        }
+        return out;
+    }, [subSchedulesByModule, scheduleBlocks]);
+
     const moduleList = useMemo(() => modulesData?.data?.modules || [], [modulesData]);
     const moduleCount = moduleList.length;
 
@@ -464,6 +479,24 @@ const DashboardPage = () => {
         return entries.slice(0, upcomingLimit);
     }, [schedules, nextRuns, subSchedules, tick, upcomingLimit]);
 
+    // Currently-running modules ride at the top of the "Up next" rail (with a
+    // pulsing dot + indeterminate bar) ahead of the scheduled entries.
+    const runningModules = useMemo(
+        () => moduleList.filter(m => m.running || runStates[m.name]?.status === 'running'),
+        [moduleList, runStates]
+    );
+    const upNext = useMemo(() => {
+        const running = runningModules.map(m => ({
+            id: `run:${m.name}`,
+            label: humanize(m.name),
+            running: true,
+        }));
+        return [...running, ...upcomingRuns.map(e => ({ ...e, running: false }))].slice(
+            0,
+            Math.max(upcomingLimit, running.length)
+        );
+    }, [runningModules, upcomingRuns, upcomingLimit]);
+
     if (isLoading && moduleList.length === 0) {
         // Skeleton placeholders for the module-card grid + health row so the
         // page doesn't pop-flicker as the run-states / jobs / modules /
@@ -492,131 +525,135 @@ const DashboardPage = () => {
         runningCount > 0 ? `${runningCount} running` : scheduledCount > 0 ? 'Active' : 'Idle';
 
     return (
-        <div className="flex flex-col gap-10">
-            {/* Greeting row — always first (order 0); configurable sections
-                sort after it via their flex order, footer stays last. */}
-            <section
-                className="flex flex-wrap items-center justify-between gap-4"
-                style={{ order: 0 }}
-            >
+        <div className="flex flex-col gap-5">
+            {/* Toolbar */}
+            <div className="flex flex-wrap items-center justify-between gap-4">
                 <div className="min-w-0">
-                    <h1 className="text-3xl md:text-4xl font-bold text-fg m-0">
-                        Hello{user ? `, ${user}` : ''}!
+                    <h1 className="font-display text-[26px] font-bold tracking-[-0.3px] text-fg m-0">
+                        Dashboard
                     </h1>
-                    <p className="text-fg-muted mt-1 mb-0">
-                        Here&apos;s what&apos;s happening across your media stack today.
+                    <p className="text-fg-subtle text-[13.5px] mt-1 mb-0">
+                        {moduleCount} modules · {instanceHealth.total} instances ·{' '}
+                        <span
+                            className="font-mono text-fg-muted"
+                            title={isConnected ? 'Live updates via SSE' : 'Polling for updates'}
+                        >
+                            {isConnected ? 'live' : 'polling'}
+                        </span>
                     </p>
                 </div>
-                <div className="flex items-center gap-3">
-                    <span
-                        className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full ${isConnected ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'}`}
-                        title={isConnected ? 'Live updates via SSE' : 'Polling for updates'}
-                    >
-                        <span
-                            className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-success' : 'bg-warning'}`}
-                        />
-                        {isConnected ? 'Live' : 'Polling'}
-                    </span>
-                    <IconButton
-                        icon="refresh"
-                        aria-label="Refresh dashboard"
-                        variant="ghost"
+                <div className="flex items-center gap-2.5">
+                    <button
+                        type="button"
                         onClick={handleRefreshAll}
-                    />
-                </div>
-            </section>
-
-            {/* At-a-glance health — disk, instances, last error. Order +
-                visibility are user-configurable; still hides when there's no
-                disk / instance / failure data to show. */}
-            {showSection('health') &&
-                (diskMounts.length > 0 || instanceHealth.total > 0 || jobStats.failed > 0) && (
-                    <section style={sectionStyle('health')}>
-                        <div className="mb-4">
-                            <h2 className="text-xl font-bold text-fg m-0">Health</h2>
-                            <p className="text-fg-muted text-sm mt-1 mb-0">
-                                Quick look at disk, instances, and recent failures.
-                            </p>
+                        className="inline-flex items-center gap-1.5 h-[38px] px-3.5 rounded-lg bg-surface border border-border text-fg-muted text-[13.5px] font-medium hover:bg-surface-elevated transition-colors"
+                    >
+                        <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
+                            refresh
+                        </span>
+                        Refresh
+                    </button>
+                    <button
+                        ref={newRunRef}
+                        type="button"
+                        onClick={() => setNewRunOpen(o => !o)}
+                        className="inline-flex items-center gap-1.5 h-[38px] px-4 rounded-lg bg-primary text-on-color font-display text-[13.5px] font-semibold hover:brightness-110 transition"
+                        style={{ boxShadow: '0 4px 16px -5px var(--primary)' }}
+                    >
+                        <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
+                            add
+                        </span>
+                        New run
+                    </button>
+                    <Dropdown
+                        isOpen={newRunOpen}
+                        onClose={() => setNewRunOpen(false)}
+                        anchorRef={newRunRef}
+                        placement="bottom-right"
+                    >
+                        <div className="max-h-72 overflow-y-auto">
+                            {moduleList.map(m => (
+                                <button
+                                    key={m.name}
+                                    type="button"
+                                    onClick={() => {
+                                        setNewRunOpen(false);
+                                        setRunNowTarget(m.name);
+                                    }}
+                                    className="w-full text-left px-3 py-2 rounded-md text-sm text-fg hover:bg-row-hover transition-colors"
+                                >
+                                    {humanize(m.name)}
+                                </button>
+                            ))}
                         </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                            {instanceHealth.total > 0 &&
-                                (() => {
-                                    // Tile prioritizes the most actionable signal:
-                                    // 1. If we have probe samples, show reachable-now + 7-day uptime%
-                                    // 2. Otherwise fall back to configured/enabled counts
-                                    const hasProbes = instanceHealth.probedCount > 0;
-                                    const allReachable =
-                                        hasProbes &&
-                                        instanceHealth.reachable === instanceHealth.probedCount;
-                                    const headlineTone = !hasProbes
-                                        ? instanceHealth.enabled === instanceHealth.total
-                                            ? 'text-success'
-                                            : 'text-warning'
-                                        : allReachable
-                                          ? 'text-success'
-                                          : instanceHealth.reachable === 0
-                                            ? 'text-error'
-                                            : 'text-warning';
-                                    const borderTone =
-                                        hasProbes && !allReachable
-                                            ? instanceHealth.reachable === 0
-                                                ? 'border-error/30'
-                                                : 'border-warning/30'
-                                            : '';
-                                    return (
-                                        <Link
-                                            to="/settings/instances"
-                                            className={`no-underline bg-surface border border-border-light rounded-lg p-4 flex flex-col gap-1 hover:border-border ${borderTone}`}
-                                        >
-                                            <div className="text-fg-subtle text-xs uppercase tracking-wider">
-                                                Instances
-                                            </div>
-                                            {hasProbes ? (
-                                                <>
-                                                    <div className="text-2xl font-bold text-fg">
-                                                        {instanceHealth.reachable} /{' '}
-                                                        {instanceHealth.probedCount} up
-                                                    </div>
-                                                    <div className={`text-xs ${headlineTone}`}>
-                                                        {instanceHealth.uptimePct != null
-                                                            ? `${instanceHealth.uptimePct}% uptime over recent probes`
-                                                            : allReachable
-                                                              ? 'All reachable'
-                                                              : 'Some unreachable'}
-                                                    </div>
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <div className="text-2xl font-bold text-fg">
-                                                        {instanceHealth.enabled} /{' '}
-                                                        {instanceHealth.total}
-                                                    </div>
-                                                    <div className={`text-xs ${headlineTone}`}>
-                                                        {instanceHealth.enabled ===
-                                                        instanceHealth.total
-                                                            ? 'All enabled'
-                                                            : `${instanceHealth.total - instanceHealth.enabled} disabled`}
-                                                    </div>
-                                                </>
-                                            )}
-                                        </Link>
-                                    );
-                                })()}
-                            <Link
-                                to={
-                                    lastFailure
-                                        ? `/logs?module=${encodeURIComponent(lastFailure.moduleName)}`
-                                        : '/settings/jobs'
-                                }
-                                className={`no-underline bg-surface border border-border-light rounded-lg p-4 flex flex-col gap-1 hover:border-border ${
-                                    lastFailure ? 'border-error/30' : ''
-                                }`}
-                            >
-                                <div className="text-fg-subtle text-xs uppercase tracking-wider">
-                                    Last failure
-                                </div>
-                                <div
-                                    className={`text-lg font-bold truncate ${lastFailure ? 'text-error' : 'text-fg'}`}
+                    </Dropdown>
+                </div>
+            </div>
+
+            {/* Status strip — scheduler / running / pending / failed / instances
+                / last-failure. Mono labels + mono values. */}
+            <div
+                className="flex items-stretch flex-wrap bg-surface border border-border rounded-xl overflow-hidden"
+                style={{ boxShadow: '0 2px 16px -8px rgba(0,0,0,.6)' }}
+            >
+                {(() => {
+                    const instTone =
+                        instanceHealth.probedCount > 0
+                            ? instanceHealth.reachable === instanceHealth.probedCount
+                                ? 'text-success'
+                                : instanceHealth.reachable === 0
+                                  ? 'text-error'
+                                  : 'text-warning'
+                            : instanceHealth.enabled === instanceHealth.total
+                              ? 'text-success'
+                              : 'text-warning';
+                    const instValue =
+                        instanceHealth.probedCount > 0
+                            ? `${instanceHealth.reachable}/${instanceHealth.probedCount}`
+                            : `${instanceHealth.enabled}/${instanceHealth.total}`;
+                    const cells = [
+                        {
+                            label: 'SCHEDULER',
+                            grow: 1.3,
+                            node: (
+                                <span className="flex items-center gap-2 font-display font-semibold text-[16px] text-fg">
+                                    <StatusDot
+                                        status={
+                                            runningCount > 0
+                                                ? 'running'
+                                                : scheduledCount > 0
+                                                  ? 'success'
+                                                  : 'idle'
+                                        }
+                                        size={8}
+                                    />
+                                    {schedulerStateLabel}
+                                </span>
+                            ),
+                        },
+                        {
+                            label: 'RUNNING',
+                            value: runningCount,
+                            tone: runningCount > 0 ? 'text-accent' : 'text-fg-muted',
+                        },
+                        { label: 'PENDING', value: jobStats.pending, tone: 'text-fg-muted' },
+                        {
+                            label: 'FAILED',
+                            value: jobStats.failed,
+                            tone: jobStats.failed > 0 ? 'text-error' : 'text-fg-dim',
+                        },
+                        { label: 'INSTANCES', value: instValue, tone: instTone },
+                        {
+                            label: 'LAST FAILURE',
+                            grow: 1.2,
+                            node: (
+                                <Link
+                                    to={
+                                        lastFailure
+                                            ? `/logs?module=${encodeURIComponent(lastFailure.moduleName)}`
+                                            : '/settings/jobs'
+                                    }
+                                    className={`font-medium text-[15px] no-underline truncate ${lastFailure ? 'text-error' : 'text-fg-muted'}`}
                                     title={
                                         lastFailure?.ts ? formatDateTime(lastFailure.ts) : undefined
                                     }
@@ -624,333 +661,469 @@ const DashboardPage = () => {
                                     {lastFailure
                                         ? formatTimeAgo(lastFailure.ts, new Date(tick))
                                         : 'None'}
-                                </div>
-                                <div className="text-xs text-fg-subtle truncate">
-                                    {lastFailure
-                                        ? humanize(lastFailure.moduleName)
-                                        : 'No failed jobs'}
-                                </div>
-                            </Link>
-                            {posterStats.cached > 0 && (
-                                <Link
-                                    to="/poster/search/assets"
-                                    className="no-underline bg-surface border border-border-light rounded-lg p-4 flex flex-col gap-1 hover:border-border"
-                                >
-                                    <div className="text-fg-subtle text-xs uppercase tracking-wider">
-                                        Cached posters
-                                    </div>
-                                    <div className="text-2xl font-bold text-fg">
-                                        {posterStats.cached.toLocaleString()}
-                                    </div>
-                                    <div className="text-xs text-fg-subtle">
-                                        In local asset cache
-                                    </div>
                                 </Link>
-                            )}
-                            {diskMounts.map(mount => {
-                                const freeGb = (mount.free_bytes / 1024 ** 3).toFixed(1);
-                                const totalGb = (mount.total_bytes / 1024 ** 3).toFixed(0);
-                                const pct = mount.percent_used ?? 0;
-                                const tone =
-                                    pct >= 90
-                                        ? 'text-error'
-                                        : pct >= 75
-                                          ? 'text-warning'
-                                          : 'text-success';
-                                const paths = mount.paths || [mount.path];
-                                return (
-                                    <div
-                                        key={paths.join('|')}
-                                        className="bg-surface border border-border-light rounded-lg p-4 flex flex-col gap-1"
-                                        title={
-                                            paths.length > 1
-                                                ? `Shared device: ${paths.join(', ')}`
-                                                : paths[0]
-                                        }
+                            ),
+                        },
+                    ];
+                    return cells.map((c, i) => (
+                        <React.Fragment key={c.label}>
+                            {i > 0 && <div className="w-px self-stretch bg-border my-3" />}
+                            <div
+                                className="px-[22px] py-3.5 flex flex-col gap-1.5 min-w-0"
+                                style={{ flex: c.grow || 1 }}
+                            >
+                                <span className="font-mono text-[10px] tracking-[1.2px] text-fg-subtle">
+                                    {c.label}
+                                </span>
+                                {c.node || (
+                                    <span
+                                        className={`font-mono font-semibold text-[18px] ${c.tone}`}
                                     >
-                                        <div className="text-fg-subtle text-xs uppercase tracking-wider truncate">
-                                            {paths.join(' · ')}
-                                        </div>
-                                        <div className="text-2xl font-bold text-fg">
-                                            {freeGb} GB
-                                        </div>
-                                        <div className={`text-xs ${tone}`}>
-                                            {pct}% used of {totalGb} GB
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </section>
-                )}
+                                        {c.value}
+                                    </span>
+                                )}
+                            </div>
+                        </React.Fragment>
+                    ));
+                })()}
+            </div>
 
-            {/* Modules — each card deep-links to its log */}
-            {showSection('modules') && (
-                <section style={sectionStyle('modules')}>
-                    <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2 mb-4">
+            {/* Modules table + right rail (Up next / Storage) */}
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-5 items-start">
+                <section
+                    className="bg-surface border border-border rounded-xl overflow-hidden"
+                    style={{ boxShadow: '0 2px 16px -8px rgba(0,0,0,.6)' }}
+                >
+                    <div className="flex items-center justify-between px-5 pt-4 pb-3.5">
                         <div>
-                            <h2 className="text-xl font-bold text-fg m-0">Modules</h2>
-                            <p className="text-fg-muted text-sm mt-1 mb-0">
-                                Live status of your modules. Click a card to open its log.
+                            <h2 className="font-display text-[15px] font-semibold text-fg m-0">
+                                Modules
+                            </h2>
+                            <p className="text-fg-subtle text-xs mt-0.5 mb-0">
+                                Live status of every configured module
                             </p>
                         </div>
                         <Link
                             to="/logs"
-                            className="self-start sm:self-auto inline-flex items-center gap-1 text-sm text-accent no-underline hover:underline whitespace-nowrap"
+                            className="text-[12.5px] text-accent no-underline font-medium hover:underline whitespace-nowrap"
                         >
-                            <span
-                                className="material-symbols-outlined text-base"
-                                aria-hidden="true"
-                            >
-                                description
-                            </span>
-                            All logs
+                            All logs →
                         </Link>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {visibleModules.map(mod => {
-                            const state = runStates[mod.name];
-                            const lastRun = mod.last_run || state?.last_run;
-                            // Live run-state wins over the persisted last-run status so an
-                            // in-progress job (overlay sets state.status = 'running') isn't
-                            // hidden by a stale 'success' from the previous completed run.
-                            const lastStatus = state?.status || mod.last_run_status;
-                            const schedule = mod.schedule;
-                            const moduleSubSchedules = subSchedulesByModule[mod.name] || [];
-                            const jobId = state?.job_id;
-                            const isRunning = lastStatus === 'running';
-                            const stopProp = e => e.stopPropagation();
-                            // Use preventDefault on inner buttons so Link doesn't
-                            // navigate when the user clicks Run now / Cancel.
-                            const stopNav = e => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                            };
-
-                            return (
-                                <Link
-                                    key={mod.name}
-                                    to={`/logs?module=${encodeURIComponent(mod.name)}`}
-                                    className="no-underline bg-surface border border-border-light rounded-lg p-4 flex flex-col gap-2 min-w-0 transition-transform hover:-translate-y-0.5 hover:border-border"
-                                >
-                                    <div className="flex items-center justify-between gap-2 min-w-0">
-                                        <span className="font-semibold text-fg truncate min-w-0">
-                                            {humanize(mod.name)}
-                                        </span>
+                    <div className="overflow-x-auto">
+                        <div className="min-w-[620px]">
+                            <div className="grid grid-cols-[1.7fr_1.5fr_0.9fr_1.3fr_86px] gap-3 px-5 py-2 border-y border-border font-mono text-[10px] tracking-[1px] text-fg-faint">
+                                <span>MODULE</span>
+                                <span>SCHEDULE</span>
+                                <span>LAST</span>
+                                <span>NEXT</span>
+                                <span className="text-right">ACTION</span>
+                            </div>
+                            {visibleModules.map(mod => {
+                                const state = runStates[mod.name];
+                                const lastRun = mod.last_run || state?.last_run;
+                                // Live run-state wins over the persisted last-run status so an
+                                // in-progress job isn't hidden by a stale completed status.
+                                const lastStatus = state?.status || mod.last_run_status;
+                                const schedule = mod.schedule;
+                                const subRows = subRowsByModule[mod.name] || [];
+                                const expandable = subRows.length > 0;
+                                const isOpen = expandable && !!expandedRows[mod.name];
+                                const jobId = state?.job_id;
+                                const isRunning = lastStatus === 'running';
+                                const dotStatus = isRunning
+                                    ? 'running'
+                                    : lastStatus === 'error'
+                                      ? 'error'
+                                      : lastStatus === 'success'
+                                        ? 'success'
+                                        : 'idle';
+                                const auto = !!schedule;
+                                const upc = upcomingRuns.find(e => e.id === mod.name);
+                                const nextText = isRunning
+                                    ? 'running…'
+                                    : upc
+                                      ? formatTimeUntil(upc.next, new Date(tick))
+                                      : '—';
+                                const nextTone = isRunning
+                                    ? 'text-accent'
+                                    : nextText === '—'
+                                      ? 'text-fg-dim'
+                                      : 'text-fg-muted';
+                                return (
+                                    <React.Fragment key={mod.name}>
                                         <div
-                                            className="flex items-center gap-1 shrink-0"
-                                            onClick={stopProp}
+                                            className={`grid grid-cols-[1.7fr_1.5fr_0.9fr_1.3fr_86px] gap-3 items-center px-5 py-3.5 border-b border-border-light transition-colors ${expandable ? 'cursor-pointer hover:bg-row-hover' : ''}`}
+                                            onClick={
+                                                expandable ? () => toggleRow(mod.name) : undefined
+                                            }
                                         >
-                                            {lastStatus && (
+                                            <div className="flex items-center gap-2 min-w-0">
                                                 <span
-                                                    className={`text-xs px-2 py-1 rounded-full ${statusPillClass(lastStatus)}`}
-                                                >
-                                                    {lastStatus}
-                                                </span>
-                                            )}
-                                            {isRunning && jobId && (
-                                                <IconButton
-                                                    icon="cancel"
-                                                    aria-label={`Cancel ${humanize(mod.name)}`}
-                                                    variant="ghost"
-                                                    onClick={e => {
-                                                        stopNav(e);
-                                                        handleCancel(mod.name, jobId);
+                                                    className="w-3 flex items-center justify-center text-fg-subtle transition-transform"
+                                                    style={{
+                                                        visibility: expandable
+                                                            ? 'visible'
+                                                            : 'hidden',
+                                                        transform: isOpen
+                                                            ? 'rotate(90deg)'
+                                                            : 'rotate(0deg)',
                                                     }}
-                                                />
-                                            )}
-                                        </div>
-                                    </div>
-                                    <div className="text-sm text-fg-muted break-words">
-                                        {schedule ? (
-                                            <span>Schedule: {scheduleToHuman(schedule)}</span>
-                                        ) : (
-                                            <span className="inline-flex items-center gap-3 flex-wrap">
-                                                <span className="text-xs px-2 py-0.5 rounded-full bg-surface-alt text-fg-subtle">
-                                                    Manual only
+                                                    aria-hidden="true"
+                                                >
+                                                    <span className="material-symbols-outlined text-[16px]">
+                                                        chevron_right
+                                                    </span>
                                                 </span>
-                                                {!isRunning && (
+                                                <StatusDot status={dotStatus} />
+                                                <Link
+                                                    to={`/logs?module=${encodeURIComponent(mod.name)}`}
+                                                    onClick={e => e.stopPropagation()}
+                                                    className="min-w-0 no-underline"
+                                                >
+                                                    <div className="font-semibold text-[13.5px] text-fg truncate hover:text-accent">
+                                                        {humanize(mod.name)}
+                                                    </div>
+                                                    <div
+                                                        className="font-mono text-[9.5px] tracking-[0.5px] mt-0.5"
+                                                        style={{
+                                                            color: auto
+                                                                ? 'var(--primary)'
+                                                                : 'var(--manual)',
+                                                        }}
+                                                    >
+                                                        {auto ? 'AUTO' : 'MANUAL'}
+                                                    </div>
+                                                </Link>
+                                            </div>
+                                            <div className="font-mono text-xs text-fg-muted truncate">
+                                                {schedule ? scheduleToHuman(schedule) : 'Manual'}
+                                            </div>
+                                            <div className="font-mono text-xs text-fg-subtle truncate">
+                                                {lastRun
+                                                    ? formatTimeAgo(lastRun, new Date(tick))
+                                                    : '—'}
+                                            </div>
+                                            <div
+                                                className={`font-mono text-xs truncate ${nextTone}`}
+                                            >
+                                                {nextText}
+                                            </div>
+                                            <div
+                                                className="flex justify-end"
+                                                onClick={e => e.stopPropagation()}
+                                            >
+                                                {isRunning && jobId ? (
                                                     <button
                                                         type="button"
-                                                        onClick={e => {
-                                                            stopNav(e);
-                                                            setRunNowTarget(mod.name);
-                                                        }}
-                                                        className="inline-flex items-center gap-1 min-h-11 px-3 py-1.5 text-xs font-medium rounded-lg bg-primary/10 text-fg border border-primary/25 hover:bg-primary/20 transition-colors cursor-pointer"
+                                                        onClick={() =>
+                                                            handleCancel(mod.name, jobId)
+                                                        }
+                                                        className="h-[30px] px-3 rounded-[7px] bg-surface-inset border border-border text-accent text-xs font-semibold hover:bg-row-hover transition-colors"
+                                                        title="Cancel run"
                                                     >
-                                                        <span
-                                                            className="material-symbols-outlined text-base"
-                                                            aria-hidden="true"
-                                                        >
-                                                            play_arrow
-                                                        </span>
-                                                        Run now
+                                                        Running
+                                                    </button>
+                                                ) : (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setRunNowTarget(mod.name)}
+                                                        className="h-[30px] px-3 rounded-[7px] bg-surface-inset border border-border text-fg-muted text-xs font-semibold hover:bg-row-hover transition-colors"
+                                                    >
+                                                        Run
                                                     </button>
                                                 )}
-                                            </span>
-                                        )}
-                                    </div>
-                                    {moduleSubSchedules.length > 0 && (
-                                        <div className="text-xs text-fg-subtle">
-                                            <span className="font-semibold uppercase tracking-wider">
-                                                Per-instance
-                                            </span>
-                                            <ul className="flex flex-col gap-0.5 m-0 mt-0.5 p-0 list-none">
-                                                {moduleSubSchedules.map(sub => (
-                                                    <li
-                                                        key={sub.label}
-                                                        className={`flex justify-between gap-2 ${sub.enabled ? '' : 'opacity-60'}`}
+                                            </div>
+                                        </div>
+                                        {isOpen &&
+                                            subRows.map(sub => {
+                                                const en = sub.enabled !== false;
+                                                const isProfile = sub.kind === 'profile';
+                                                const pillColor = isProfile
+                                                    ? 'var(--source-gdrive)'
+                                                    : 'var(--warning)';
+                                                const pillBg = isProfile
+                                                    ? 'rgba(83,232,240,.12)'
+                                                    : 'rgba(255,201,68,.12)';
+                                                const nf = en
+                                                    ? scheduleToNextFire(
+                                                          sub.schedule,
+                                                          new Date(tick)
+                                                      ) ||
+                                                      (sub.next_run ? new Date(sub.next_run) : null)
+                                                    : null;
+                                                const subNext = !en
+                                                    ? 'paused'
+                                                    : nf
+                                                      ? formatTimeUntil(nf, new Date(tick))
+                                                      : '—';
+                                                const overrideKeys =
+                                                    sub.kind === 'block' && sub.overrides
+                                                        ? Object.keys(sub.overrides)
+                                                        : [];
+                                                return (
+                                                    <div
+                                                        key={`${mod.name}:${sub.kind}:${sub.label}`}
+                                                        className="grid grid-cols-[1.7fr_1.5fr_0.9fr_1.3fr_86px] gap-3 items-center px-5 py-2.5 bg-surface-inset border-b border-border-light"
+                                                        style={{
+                                                            boxShadow:
+                                                                'inset 3px 0 0 var(--primary)',
+                                                            opacity: en ? 1 : 0.5,
+                                                        }}
                                                     >
-                                                        <span className="truncate">
-                                                            {sub.label}
-                                                        </span>
-                                                        <span className="shrink-0 text-right">
-                                                            {sub.enabled
-                                                                ? scheduleToHuman(sub.schedule)
-                                                                : 'Disabled'}
-                                                        </span>
-                                                    </li>
-                                                ))}
-                                            </ul>
-                                        </div>
-                                    )}
-                                    {lastRun && (
-                                        <div className="text-xs text-fg-subtle">
-                                            Last run: {formatTimeAgo(lastRun, new Date(tick))}
-                                        </div>
-                                    )}
-                                </Link>
-                            );
-                        })}
+                                                        <div className="flex items-center gap-2 min-w-0 pl-7">
+                                                            <span
+                                                                className="w-1.5 h-1.5 rounded-full shrink-0"
+                                                                style={{ background: pillColor }}
+                                                                aria-hidden="true"
+                                                            />
+                                                            <span className="text-[12.5px] font-medium text-fg-muted truncate">
+                                                                {sub.label}
+                                                            </span>
+                                                            <span
+                                                                className="shrink-0 font-mono text-[8.5px] tracking-[0.4px] uppercase px-1.5 py-px rounded-[5px]"
+                                                                style={{
+                                                                    color: pillColor,
+                                                                    background: pillBg,
+                                                                }}
+                                                            >
+                                                                {sub.kind}
+                                                            </span>
+                                                        </div>
+                                                        <div className="font-mono text-[11.5px] text-fg-data truncate">
+                                                            {scheduleToHuman(sub.schedule)}
+                                                        </div>
+                                                        <div className="font-mono text-[10.5px] text-fg-subtle truncate">
+                                                            {overrideKeys.join(', ')}
+                                                        </div>
+                                                        <div
+                                                            className={`font-mono text-[11.5px] truncate ${en ? 'text-fg-muted' : 'text-fg-dim'}`}
+                                                        >
+                                                            {subNext}
+                                                        </div>
+                                                        <div className="flex justify-end" />
+                                                    </div>
+                                                );
+                                            })}
+                                    </React.Fragment>
+                                );
+                            })}
+                        </div>
                     </div>
                 </section>
-            )}
 
-            {/* Scheduler — full-width panel */}
-            {showSection('scheduler') && (
-                <section
-                    className="bg-surface-alt border border-border-light rounded-lg p-6 flex flex-col gap-5"
-                    style={sectionStyle('scheduler')}
-                >
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div className="flex items-center gap-3 min-w-0">
-                            <span
-                                className="badge-bubble badge-bubble--3 w-11 h-11 rounded-full flex items-center justify-center shrink-0"
-                                aria-hidden="true"
+                {/* Right rail */}
+                <div className="flex flex-col gap-5">
+                    {/* Up next */}
+                    <section
+                        className="bg-surface border border-border rounded-xl p-[18px]"
+                        style={{ boxShadow: '0 2px 16px -8px rgba(0,0,0,.6)' }}
+                    >
+                        <div className="flex items-center justify-between mb-3.5">
+                            <h2 className="font-display text-[15px] font-semibold text-fg m-0">
+                                Up next
+                            </h2>
+                            <Link
+                                to="/settings/schedule"
+                                className="text-xs text-accent no-underline hover:underline"
                             >
-                                <span className="material-symbols-outlined">schedule</span>
-                            </span>
-                            <div className="min-w-0">
-                                <div className="text-xs font-semibold uppercase tracking-wider text-fg-subtle">
-                                    Scheduler
-                                </div>
-                                <div className="text-lg font-bold text-fg">
-                                    {schedulerStateLabel}
-                                </div>
-                            </div>
+                                Manage
+                            </Link>
                         </div>
-                        <Link
-                            to="/settings/schedule"
-                            className="text-sm text-accent no-underline hover:underline"
-                        >
-                            Manage schedules
-                        </Link>
-                    </div>
-
-                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-sm">
-                        <div className="bg-surface rounded-lg px-3 py-2">
-                            <div className="text-fg-subtle text-xs">Modules</div>
-                            <div className="font-semibold text-fg">{moduleCount}</div>
-                        </div>
-                        <div className="bg-surface rounded-lg px-3 py-2">
-                            <div className="text-fg-subtle text-xs">Scheduled</div>
-                            <div className="font-semibold text-fg">{scheduledCount}</div>
-                        </div>
-                        <div className="bg-surface rounded-lg px-3 py-2">
-                            <div className="text-fg-subtle text-xs">Running</div>
-                            <div className="font-semibold text-fg">{runningCount}</div>
-                        </div>
-                        <div className="bg-surface rounded-lg px-3 py-2">
-                            <div className="text-fg-subtle text-xs">Pending</div>
-                            <div className="font-semibold text-fg">{jobStats.pending}</div>
-                        </div>
-                        <div className="bg-surface rounded-lg px-3 py-2">
-                            <div className="text-fg-subtle text-xs">Failed</div>
-                            <div
-                                className={`font-semibold ${jobStats.failed > 0 ? 'text-error' : 'text-fg'}`}
-                            >
-                                {jobStats.failed}
-                            </div>
-                        </div>
-                    </div>
-
-                    <div>
-                        <div className="text-xs font-semibold uppercase tracking-wider text-fg-subtle mb-2">
-                            Up next
-                        </div>
-                        {upcomingRuns.length === 0 ? (
-                            <div className="text-sm text-fg-subtle italic">
+                        {upNext.length === 0 ? (
+                            <div className="text-sm text-fg-subtle italic py-2">
                                 No scheduled runs coming up.
                             </div>
                         ) : (
-                            <ul className="flex flex-col gap-2 m-0 p-0 list-none">
-                                {upcomingRuns.map(entry => (
-                                    <li
-                                        key={entry.id}
-                                        className="flex items-center justify-between gap-3 bg-surface rounded-lg px-3 py-2 text-sm"
-                                    >
-                                        <div className="min-w-0">
-                                            <div className="font-semibold text-fg truncate">
-                                                {entry.label}
-                                            </div>
-                                            <div className="text-xs text-fg-subtle truncate">
-                                                {scheduleToHuman(entry.schedule)}
-                                            </div>
-                                        </div>
-                                        <div className="text-right shrink-0">
-                                            <div className="text-xs text-fg-subtle">
-                                                {entry.next.toLocaleTimeString([], {
-                                                    hour: '2-digit',
-                                                    minute: '2-digit',
-                                                })}
-                                            </div>
-                                            <div className="text-xs font-semibold text-accent">
-                                                {formatTimeUntil(entry.next, new Date(tick))}
-                                            </div>
-                                        </div>
-                                    </li>
-                                ))}
-                            </ul>
+                            (() => {
+                                const firstUpcoming = upNext.findIndex(e => !e.running);
+                                return (
+                                    <ul className="flex flex-col m-0 p-0 list-none">
+                                        {upNext.map((entry, i) => (
+                                            <li
+                                                key={entry.id}
+                                                className={`flex gap-3 py-3 ${i < upNext.length - 1 ? 'border-b border-border-light' : ''}`}
+                                            >
+                                                {entry.running ? (
+                                                    <span
+                                                        className="shrink-0 w-[9px] h-[9px] rounded-full bg-accent mt-1"
+                                                        style={{
+                                                            boxShadow:
+                                                                '0 0 0 3px rgba(83,232,240,.18)',
+                                                            animation:
+                                                                'chub-pulse 1.4s ease-in-out infinite',
+                                                        }}
+                                                        aria-hidden="true"
+                                                    />
+                                                ) : (
+                                                    <span
+                                                        className="shrink-0 w-[9px] h-[9px] rounded-full mt-1"
+                                                        style={
+                                                            i === firstUpcoming
+                                                                ? {
+                                                                      background: '#110b28',
+                                                                      border: '2px solid #ffc944',
+                                                                  }
+                                                                : {
+                                                                      background: '#1d1942',
+                                                                      border: '2px solid #3b3d72',
+                                                                  }
+                                                        }
+                                                        aria-hidden="true"
+                                                    />
+                                                )}
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex justify-between gap-2">
+                                                        <span className="font-semibold text-[13.5px] text-fg truncate">
+                                                            {entry.label}
+                                                        </span>
+                                                        <span
+                                                            className="font-mono text-[11.5px] shrink-0"
+                                                            style={{
+                                                                color: entry.running
+                                                                    ? '#53e8f0'
+                                                                    : i === firstUpcoming
+                                                                      ? '#ffc944'
+                                                                      : '#b2d1e8',
+                                                            }}
+                                                        >
+                                                            {entry.running
+                                                                ? 'running'
+                                                                : formatTimeUntil(
+                                                                      entry.next,
+                                                                      new Date(tick)
+                                                                  )}
+                                                        </span>
+                                                    </div>
+                                                    {entry.running ? (
+                                                        <div className="h-1 rounded-[3px] bg-border mt-2 overflow-hidden">
+                                                            <div
+                                                                className="h-full w-1/3 rounded-[3px] bg-accent"
+                                                                style={{
+                                                                    animation:
+                                                                        'chub-indeterminate 1.4s ease-in-out infinite',
+                                                                }}
+                                                            />
+                                                        </div>
+                                                    ) : (
+                                                        <div className="font-mono text-[11px] text-fg-subtle mt-1 truncate">
+                                                            {entry.next.toLocaleTimeString([], {
+                                                                hour: '2-digit',
+                                                                minute: '2-digit',
+                                                            })}{' '}
+                                                            · {scheduleToHuman(entry.schedule)}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                );
+                            })()
                         )}
-                    </div>
-                </section>
-            )}
+                    </section>
+
+                    {/* Storage */}
+                    {diskMounts.length > 0 && (
+                        <section
+                            className="bg-surface border border-border rounded-xl p-[18px]"
+                            style={{ boxShadow: '0 2px 16px -8px rgba(0,0,0,.6)' }}
+                        >
+                            <div className="flex items-baseline justify-between mb-4">
+                                <h2 className="font-display text-[15px] font-semibold text-fg m-0">
+                                    Storage
+                                </h2>
+                                {posterStats.cached > 0 && (
+                                    <span className="font-mono text-[11px] text-fg-subtle">
+                                        {posterStats.cached.toLocaleString()} posters cached
+                                    </span>
+                                )}
+                            </div>
+                            <div className="flex flex-col gap-4">
+                                {diskMounts.map(mount => {
+                                    const freeGb = mount.free_bytes / 1024 ** 3;
+                                    const totalGb = mount.total_bytes / 1024 ** 3;
+                                    const pct = mount.percent_used ?? 0;
+                                    const paths = mount.paths || [mount.path];
+                                    const high = pct >= 90;
+                                    const warn = pct >= 75;
+                                    const pctColor = high
+                                        ? '#fd355c'
+                                        : warn
+                                          ? '#ffc944'
+                                          : '#6cbc66';
+                                    const barBg = high
+                                        ? '#fd355c'
+                                        : warn
+                                          ? 'linear-gradient(90deg,#e28b2d,#ffc944)'
+                                          : '#6cbc66';
+                                    const fmt = v =>
+                                        v >= 1024
+                                            ? `${(v / 1024).toFixed(2)} TB`
+                                            : `${v.toFixed(1)} GB`;
+                                    return (
+                                        <div key={paths.join('|')}>
+                                            <div className="flex justify-between items-baseline mb-1.5">
+                                                <span
+                                                    className="font-mono text-[11px] tracking-[0.5px] text-fg-muted truncate"
+                                                    title={paths.join(', ')}
+                                                >
+                                                    {paths.join(' · ')}
+                                                </span>
+                                                <span
+                                                    className="font-mono text-[11.5px] shrink-0"
+                                                    style={{ color: pctColor }}
+                                                >
+                                                    {pct}%
+                                                </span>
+                                            </div>
+                                            <div className="h-[7px] rounded-[4px] bg-border overflow-hidden">
+                                                <div
+                                                    className="h-full rounded-[4px]"
+                                                    style={{
+                                                        width: `${Math.min(pct, 100)}%`,
+                                                        background: barBg,
+                                                    }}
+                                                />
+                                            </div>
+                                            <div className="font-mono text-[10.5px] text-fg-subtle mt-1.5">
+                                                {fmt(freeGb)} free of {fmt(totalGb)}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </section>
+                    )}
+                </div>
+            </div>
 
             {/* Quick start */}
             {showSection('quick_start') && (
-                <section style={sectionStyle('quick_start')}>
-                    <div className="mb-4">
-                        <h2 className="text-xl font-bold text-fg m-0">Quick start</h2>
-                        <p className="text-fg-muted text-sm mt-1 mb-0">
-                            Jump straight into the things you do most.
-                        </p>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <section>
+                    <h2 className="font-display text-[15px] font-semibold text-fg m-0 mb-3">
+                        Quick start
+                    </h2>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                         {QUICK_START.map(card => (
                             <Link
                                 key={card.id}
                                 to={card.to}
-                                className="no-underline bg-surface border border-border-light rounded-lg p-5 flex flex-col gap-3 transition-transform hover:-translate-y-0.5 hover:border-border"
+                                className="no-underline bg-surface border border-border rounded-xl p-4 flex items-center gap-3 hover:bg-row-hover transition-colors"
                             >
                                 <span
-                                    className={`badge-bubble badge-bubble--${card.badge} w-12 h-12 rounded-full flex items-center justify-center`}
+                                    className={`badge-bubble badge-bubble--${card.badge} w-10 h-10 rounded-lg flex items-center justify-center shrink-0`}
                                     aria-hidden="true"
                                 >
-                                    <span className="material-symbols-outlined">{card.icon}</span>
+                                    <span className="material-symbols-outlined text-[20px]">
+                                        {card.icon}
+                                    </span>
                                 </span>
-                                <div>
-                                    <div className="font-semibold text-fg">{card.title}</div>
-                                    <div className="text-sm text-fg-muted mt-1">
+                                <div className="min-w-0">
+                                    <div className="font-semibold text-[13.5px] text-fg truncate">
+                                        {card.title}
+                                    </div>
+                                    <div className="text-xs text-fg-muted truncate">
                                         {card.description}
                                     </div>
                                 </div>
@@ -958,17 +1131,6 @@ const DashboardPage = () => {
                         ))}
                     </div>
                 </section>
-            )}
-
-            {/* Footer */}
-            {prettyVersion && (
-                <footer
-                    className="text-xs text-fg-subtle text-center pt-4 border-t border-border-light"
-                    title={prettyVersion.raw}
-                    style={{ order: 100 }}
-                >
-                    CHUB {prettyVersion.display}
-                </footer>
             )}
 
             {/* Run-now confirmation */}

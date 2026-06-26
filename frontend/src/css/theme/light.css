@@ -20,11 +20,23 @@
     --info: #53e8f0;
     --focus: #463fbc; /* Focus indicator matches primary */
 
+    /* Extended accent roles — darkened where needed for contrast on white */
+    --azure: #1992f3;
+    --gold-deep: #e28b2d;
+    --manual: #7e5e8d;
+    --source-gdrive: #1277cc;
+    --source-local: #4f9e49;
+    --source-cl2k: #6a5acd;
+    --source-mm2k: #b9831f;
+    --source-orphan: #d9763f;
+
     /* Surface & Background Colors */
     --bg: #eef0fb; /* Pale indigo tint — panel surround */
     --surface: #fff; /* Main content panel */
+    --surface-inset: #eef0fb; /* Inset controls, sub-rows */
     --surface-alt: #f5f6ff; /* Subtle hover / secondary blocks */
     --surface-elevated: #fff;
+    --row-hover: #f5f6ff;
 
     /* Border & Separation Colors */
     --border: #e2e4f1;
@@ -34,14 +46,18 @@
     --text-primary: #110b28;
     --text-secondary: #2a3052;
     --text-tertiary: #5f446b;
+    --text-muted: #7a7894;
+    --text-faint: #9a99ad;
+    --text-data: #2a3052;
 
     /* Layout Specific Colors */
     --sidebar-bg: #110b28; /* Deep indigo-black */
     --sidebar-surface: #1d237f; /* Active pill / hover */
-    --sidebar-hover: #1d237f; /* Legacy alias for utilities */
-    --sidebar-border: #1d237f;
+    --sidebar-hover: #191636; /* Hover fill for nav items */
+    --sidebar-border: #211c46;
     --sidebar-text: #fff;
     --sidebar-text-secondary: #b2d1e8;
+    --sidebar-heading: #564f8a;
     --header-bg: #110b28;
 
     /* Overlay & Modal Colors */

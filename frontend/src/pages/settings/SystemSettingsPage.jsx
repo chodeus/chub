@@ -2,7 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { useApiData } from '../../hooks/useApiData.js';
 import { useToast } from '../../contexts/ToastContext.jsx';
 import { systemAPI } from '../../utils/api/system.js';
-import { Button, Card, IconButton, LoadingButton, PageHeader, StatCard } from '../../components/ui';
+import { Button, Card, LoadingButton, StatCard } from '../../components/ui';
 import { Modal } from '../../components/modals/Modal';
 import Spinner from '../../components/ui/Spinner.jsx';
 import { StatGrid } from '../../components/statistics';
@@ -87,20 +87,27 @@ export const SystemSettingsPage = () => {
     }
 
     return (
-        <div className="flex flex-col gap-6">
-            <PageHeader
-                title="System"
-                description="Database statistics and maintenance actions."
-                icon="database"
-                actions={
-                    <IconButton
-                        icon="refresh"
-                        aria-label="Refresh stats"
-                        variant="ghost"
-                        onClick={refreshStats}
-                    />
-                }
-            />
+        <div className="flex flex-col gap-5">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="min-w-0">
+                    <h1 className="font-display text-[26px] font-bold tracking-[-0.3px] text-fg m-0">
+                        System
+                    </h1>
+                    <p className="text-fg-subtle text-[13.5px] mt-1 mb-0">
+                        Database statistics, maintenance, and migrations.
+                    </p>
+                </div>
+                <button
+                    type="button"
+                    onClick={refreshStats}
+                    className="inline-flex items-center gap-1.5 h-[38px] px-3.5 rounded-lg bg-surface border border-border text-fg-muted text-[13.5px] font-medium hover:bg-surface-elevated transition-colors"
+                >
+                    <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
+                        refresh
+                    </span>
+                    Refresh
+                </button>
+            </div>
 
             <StatGrid columns={4}>
                 <StatCard label="Total Rows" value={formatNumber(totalRows)} icon="table_rows" />
@@ -145,7 +152,7 @@ export const SystemSettingsPage = () => {
                         <div className="overflow-x-auto rounded-lg border border-border">
                             <table className="w-full text-sm">
                                 <thead>
-                                    <tr className="bg-surface-alt text-fg-muted text-left">
+                                    <tr className="bg-surface-inset text-fg-faint text-left font-mono text-[10px] uppercase tracking-[1px]">
                                         <th className="px-3 py-2 font-medium">Table</th>
                                         <th className="px-3 py-2 font-medium text-right">Rows</th>
                                     </tr>
@@ -196,7 +203,7 @@ export const SystemSettingsPage = () => {
                         <div className="overflow-x-auto rounded-lg border border-border">
                             <table className="w-full text-sm">
                                 <thead>
-                                    <tr className="bg-surface-alt text-fg-muted text-left">
+                                    <tr className="bg-surface-inset text-fg-faint text-left font-mono text-[10px] uppercase tracking-[1px]">
                                         <th className="px-3 py-2 font-medium">Name</th>
                                         <th className="px-3 py-2 font-medium">Applied</th>
                                     </tr>

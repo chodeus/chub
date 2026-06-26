@@ -14,7 +14,14 @@
     --radius-xl: 24px;
     --radius-full: 9999px;
 
-    /* Typography */
-    --font-display: 'Manrope', 'Inter', system-ui, -apple-system, sans-serif;
-    --font-body: 'Inter', system-ui, -apple-system, sans-serif;
+    /* Typography
+       - display: Space Grotesk (headings, wordmark, numeric display)
+       - body:    Hanken Grotesk (UI text, labels)
+       - mono:    JetBrains Mono (ALL machine-derived data — counts, paths,
+                  cron/schedules, IDs, timestamps, sizes). This "mono-for-data"
+                  rule is core to the redesign; apply it everywhere a value is
+                  machine-derived. */
+    --font-display: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+    --font-body: 'Hanken Grotesk', system-ui, -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', 'SF Mono', monaco, 'Cascadia Code', monospace;
 }
