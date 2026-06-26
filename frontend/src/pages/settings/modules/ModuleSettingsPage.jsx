@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { Link, useParams } from 'react-router-dom';
 import { configAPI } from '../../../utils/api/config.js';
 import { SETTINGS_MODULES } from '../../../utils/constants/settings_schema.js';
 import { useModuleSchema } from '../../../hooks/useModuleSchema.js';
@@ -8,7 +9,6 @@ import { FieldRegistry } from '../../../components/fields/FieldRegistry.jsx';
 import { Accordion } from '../../../components/ui/Accordion.jsx';
 import { AccordionItem } from '../../../components/ui/AccordionItem.jsx';
 import { ConfigProvider, useConfig } from '../../../contexts/ConfigContext.jsx';
-import { PageHeader } from '../../../components/ui/PageHeader';
 import { ToolBar } from '../../../components/ToolBar';
 import { useToolbar } from '../../../contexts/ToolbarContext';
 import { useUnsavedChangesWarning } from '../../../hooks/useUnsavedChangesWarning';
@@ -49,7 +49,7 @@ MemoizedFieldComponent.displayName = 'MemoizedFieldComponent';
  * Internal component that uses ConfigContext for optimal data access
  * @returns {JSX.Element} Module settings content component
  */
-const ModuleSettingsContent = () => {
+const ModuleSettingsContent = ({ moduleKey }) => {
     const config = useConfig(); // Clean access to configuration data
     const { registerToolbar, clearToolbar } = useToolbar();
     const { schemas: dynamicSchemas } = useModuleSchema();
@@ -60,7 +60,7 @@ const ModuleSettingsContent = () => {
     const conditionApiData = useMemo(() => ({ instances: instancesData || {} }), [instancesData]);
 
     // Simplified state management for the UI
-    const [expandedModules, setExpandedModules] = useState([]);
+    const [expandedModules, setExpandedModules] = useState(moduleKey ? [moduleKey] : []);
     const [formData, setFormData] = useState({});
     const [lastSaved, setLastSaved] = useState('{}');
     const [isSaving, setIsSaving] = useState(false);
@@ -83,9 +83,6 @@ const ModuleSettingsContent = () => {
         return map;
     }, []);
 
-    // Search and filter state
-    const [searchTerm, setSearchTerm] = useState('');
-
     // Initialize form data from context when config loads (render-time sync
     // pattern, avoids setState-in-effect).
     const [lastConfigRef, setLastConfigRef] = useState(null);
@@ -104,20 +101,12 @@ const ModuleSettingsContent = () => {
         }
     }, [saveSuccess]);
 
-    // Filtered modules derived from searchTerm + dynamicSchemas.
-    const filteredModules = useMemo(() => {
-        if (!searchTerm) return dynamicSchemas;
-        const q = searchTerm.toLowerCase();
-        return dynamicSchemas.filter(
-            module =>
-                module.label.toLowerCase().includes(q) ||
-                module.fields?.some(
-                    field =>
-                        field.label?.toLowerCase().includes(q) ||
-                        field.key?.toLowerCase().includes(q)
-                )
-        );
-    }, [searchTerm, dynamicSchemas]);
+    // The single module this route targets (settings/modules/:moduleKey).
+    const activeModule = useMemo(
+        () => dynamicSchemas.find(m => m.key === moduleKey) || null,
+        [dynamicSchemas, moduleKey]
+    );
+    const filteredModules = useMemo(() => (activeModule ? [activeModule] : []), [activeModule]);
 
     // Save configuration - simplified with Context
     const handleSave = useCallback(async () => {
@@ -201,11 +190,6 @@ const ModuleSettingsContent = () => {
             // Ctrl/Cmd+R is intentionally not intercepted — that's the
             // browser reload shortcut. Reset stays available via the Reset
             // button in the toolbar.
-
-            // Escape to collapse all
-            if (e.key === 'Escape') {
-                setExpandedModules([]);
-            }
         };
 
         window.addEventListener('keydown', handleKeyboard);
@@ -222,8 +206,24 @@ const ModuleSettingsContent = () => {
 
     return (
         <div className="max-w-4xl mx-auto flex flex-col gap-5">
-            {/* Header */}
-            <PageHeader title="Modules" description="Per-module configuration and options." />
+            {/* Header — back to the Modules hub + this module's name */}
+            <div className="flex flex-col gap-1">
+                <Link
+                    to="/settings/modules"
+                    className="inline-flex items-center gap-1 w-fit text-[12.5px] text-fg-subtle hover:text-fg"
+                >
+                    <span className="material-symbols-outlined text-[16px]">chevron_left</span>
+                    Modules
+                </Link>
+                <h1 className="font-display text-[26px] font-bold tracking-[-0.3px] text-fg m-0">
+                    {activeModule ? activeModule.label : 'Module'}
+                </h1>
+                {activeModule && moduleDescriptions[activeModule.key] && (
+                    <p className="text-fg-subtle text-[13.5px] mt-0.5 mb-0">
+                        {moduleDescriptions[activeModule.key]}
+                    </p>
+                )}
+            </div>
 
             {/* Error display */}
             {saveError && (
@@ -235,19 +235,17 @@ const ModuleSettingsContent = () => {
                 </div>
             )}
 
-            {/* Search functionality */}
-            <div className="relative">
-                <span className="material-symbols-outlined absolute left-3 top-3 text-fg-subtle text-[18px]">
-                    search
-                </span>
-                <input
-                    type="text"
-                    placeholder="Search modules and fields…"
-                    value={searchTerm}
-                    onChange={e => setSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-border rounded-lg focus:border-primary outline-none min-h-11 bg-surface-inset text-fg placeholder:text-fg-dim"
-                />
-            </div>
+            {!activeModule && (
+                <div className="text-center py-12 text-fg-subtle">
+                    <span className="material-symbols-outlined text-4xl mb-2 block">
+                        help_outline
+                    </span>
+                    <p>Unknown module.</p>
+                    <Link to="/settings/modules" className="text-accent hover:underline">
+                        Back to Modules
+                    </Link>
+                </div>
+            )}
 
             {/* Module accordion */}
             <Accordion>
@@ -431,6 +429,7 @@ const ModuleSettingsContent = () => {
  * @returns {JSX.Element} Module settings page component
  */
 export const ModuleSettingsPage = () => {
+    const { moduleKey } = useParams();
     const [config, setConfig] = useState({});
     const [isLoading, setIsLoading] = useState(true);
 
@@ -468,7 +467,7 @@ export const ModuleSettingsPage = () => {
 
     return (
         <ConfigProvider config={config}>
-            <ModuleSettingsContent />
+            <ModuleSettingsContent moduleKey={moduleKey} />
         </ConfigProvider>
     );
 };

@@ -205,12 +205,18 @@ def print_schedule_table(logger: Optional[Any], schedule: Dict[str, str]) -> Non
         return
 
     scheduled = [
-        (name, value) for name, value in schedule.items() if value not in (None, "", "None")
+        (name, value)
+        for name, value in schedule.items()
+        if value not in (None, "", "None")
     ]
-    unscheduled = [name for name, value in schedule.items() if value in (None, "", "None")]
+    unscheduled = [
+        name for name, value in schedule.items() if value in (None, "", "None")
+    ]
 
     if scheduled:
-        table_data = [["Module", "Schedule"]] + [[name, value] for name, value in scheduled]
+        table_data = [["Module", "Schedule"]] + [
+            [name, value] for name, value in scheduled
+        ]
         logger.info(create_table(table_data))
     else:
         logger.info("No modules are currently scheduled.")
@@ -316,9 +322,21 @@ class ChubScheduler:
     def _tick(self, schedule: Dict[str, str]) -> None:
         """Check for due modules and queue them for execution"""
         try:
+            # Hard-disabled modules (Modules page) never auto-run.
+            from backend.util.config import load_config
+
+            try:
+                disabled = set(
+                    getattr(load_config().general, "disabled_modules", None) or []
+                )
+            except Exception:
+                disabled = set()
+
             queued_modules = set()
             for name, sched in schedule.items():
                 if not sched:
+                    continue
+                if name in disabled:
                     continue
 
                 # Skip if already running (check via orchestrator)
