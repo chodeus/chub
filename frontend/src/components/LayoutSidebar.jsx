@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useUIState } from '../contexts/UIStateContext.jsx';
 import { useAuth } from '../contexts/AuthContext.jsx';
+import { useTheme } from '../contexts/ThemeContext.jsx';
 import { useApiData } from '../hooks/useApiData';
 import { systemAPI } from '../utils/api/system';
 import { withExtensionNavChildren } from '../extensions/index.js';
@@ -131,7 +132,12 @@ const LayoutSidebar = React.memo(() => {
     const location = useLocation();
     const { mobileMenuOpen, closeMobileMenu, isMobile } = useUIState();
     const { user, logout } = useAuth();
+    const { toggleTheme, isDarkTheme, isLightTheme, actualTheme } = useTheme();
     const sidebarRef = useRef(null);
+
+    // Quick theme toggle lives in the sidebar footer (the desktop top header
+    // that used to host it is retired).
+    const themeIcon = isDarkTheme ? 'light_mode' : isLightTheme ? 'dark_mode' : 'settings_suggest';
 
     const { data: versionData } = useApiData({
         apiFunction: systemAPI.getVersion,
@@ -208,21 +214,19 @@ const LayoutSidebar = React.memo(() => {
             aria-hidden={isMobile && !mobileMenuOpen}
         >
             <div className="flex flex-col h-full py-4">
-                {/* Brand lockup — gold mark + wordmark (hidden on mobile, where
-                    the header carries the logo) */}
-                {!isMobile && (
-                    <div className="flex items-center gap-3 px-4 pt-1 pb-4">
-                        <BrandMark />
-                        <div className="leading-tight min-w-0">
-                            <div className="font-display font-bold text-[18px] tracking-[.5px] text-sidebar-text">
-                                CHUB
-                            </div>
-                            <div className="text-[11px] font-medium text-sidebar-secondary">
-                                Media Manager
-                            </div>
+                {/* Brand lockup — gold mark + wordmark. Always present at the
+                    top of the sidebar. */}
+                <div className="flex items-center gap-3 px-4 pt-1 pb-4">
+                    <BrandMark />
+                    <div className="leading-tight min-w-0">
+                        <div className="font-display font-bold text-[18px] tracking-[.5px] text-sidebar-text">
+                            CHUB
+                        </div>
+                        <div className="text-[11px] font-medium text-sidebar-secondary">
+                            Media Manager
                         </div>
                     </div>
-                )}
+                </div>
                 {/* Hierarchical Navigation */}
                 <nav className="flex-1 px-2">
                     {NAV_SECTIONS.map(section => (
@@ -301,18 +305,36 @@ const LayoutSidebar = React.memo(() => {
                     ))}
                 </nav>
 
-                {/* Version footer — green dot + mono build string */}
-                {versionLine && (
-                    <div className="shrink-0 mx-2 mt-2 px-3 py-3 flex items-center gap-2 border-t border-sidebar-border">
-                        <span
-                            className="w-2 h-2 rounded-full bg-success shrink-0"
-                            aria-hidden="true"
-                        />
+                {/* Footer — version (green dot + mono build string) + quick
+                    theme toggle (relocated from the retired desktop header) */}
+                <div className="shrink-0 mx-2 mt-2 px-3 py-3 flex items-center gap-2 border-t border-sidebar-border">
+                    {versionLine ? (
+                        <>
+                            <span
+                                className="w-2 h-2 rounded-full bg-success shrink-0"
+                                aria-hidden="true"
+                            />
+                            <span className="font-mono text-[11px] text-sidebar-secondary truncate">
+                                {versionLine}
+                            </span>
+                        </>
+                    ) : (
                         <span className="font-mono text-[11px] text-sidebar-secondary truncate">
-                            {versionLine}
+                            CHUB
                         </span>
-                    </div>
-                )}
+                    )}
+                    <button
+                        type="button"
+                        onClick={toggleTheme}
+                        className="ml-auto w-8 h-8 rounded-lg flex items-center justify-center text-sidebar-secondary hover:text-sidebar-text hover:bg-sidebar-hover transition-colors touch-target shrink-0"
+                        aria-label="Toggle theme"
+                        title={`Theme: ${actualTheme}`}
+                    >
+                        <span className="material-symbols-outlined text-base" aria-hidden="true">
+                            {themeIcon}
+                        </span>
+                    </button>
+                </div>
 
                 {/* User / logout block anchored to bottom */}
                 {user && (

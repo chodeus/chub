@@ -136,6 +136,10 @@ const LayoutHeader = React.memo(() => {
         }
     };
 
+    // Desktop folds branding into the sidebar, page titles into each page, and
+    // search into in-page fields — so the top header is mobile-only now.
+    if (!isMobile) return null;
+
     return (
         <header
             className={`shrink-0 ${isMobile ? 'h-14' : 'h-20 min-h-header'} bg-header-bg z-sticky ${isSearchPage ? 'search-page' : 'non-search-page'}`}
