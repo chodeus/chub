@@ -223,10 +223,7 @@ const ModuleSettingsContent = () => {
     return (
         <div className="max-w-4xl mx-auto flex flex-col gap-5">
             {/* Header */}
-            <PageHeader
-                title="Modules"
-                description="Per-module configuration and options."
-            />
+            <PageHeader title="Modules" description="Per-module configuration and options." />
 
             {/* Error display */}
             {saveError && (
