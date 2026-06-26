@@ -7,24 +7,15 @@ import { useApiData } from '../hooks/useApiData';
 import { systemAPI } from '../utils/api/system';
 import { withExtensionNavChildren } from '../extensions/index.js';
 
-// Brand mark — gold rounded square with three indigo bars. Colours are fixed
-// brand identity (not theme-driven), so they're inlined rather than tokenised.
+// Brand mark — the real CHUB logo.
 const BrandMark = () => (
-    <div
-        className="flex flex-col justify-center gap-[3px] px-[7px] shrink-0"
-        style={{
-            width: 34,
-            height: 34,
-            borderRadius: 9,
-            background: '#ffc944',
-            boxShadow: '0 2px 14px rgba(255,201,68,.32)',
-        }}
-        aria-hidden="true"
-    >
-        <span className="block h-[3px] w-full rounded-[2px]" style={{ background: '#110b28' }} />
-        <span className="block h-[3px] w-[70%] rounded-[2px]" style={{ background: '#110b28' }} />
-        <span className="block h-[3px] w-[85%] rounded-[2px]" style={{ background: '#110b28' }} />
-    </div>
+    <img
+        src="/img/chub-logo.png"
+        alt="CHUB"
+        width="34"
+        height="34"
+        className="w-[34px] h-[34px] shrink-0 rounded-[8px]"
+    />
 );
 
 const CORE_NAV_SECTIONS = [

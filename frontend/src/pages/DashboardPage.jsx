@@ -151,7 +151,12 @@ const DashboardPage = () => {
     const handleStatusChange = useCallback(() => {
         refreshRunStates();
         refreshJobStats();
-    }, [refreshRunStates, refreshJobStats]);
+        // Also refresh the modules list: the "Up next" running indicator + the
+        // RUNNING count read each module's `running` flag, which only updates
+        // from fetchModules — without this it lingers as "running" after a run
+        // ends (SSE only refreshed run-states/jobs).
+        refreshModules();
+    }, [refreshRunStates, refreshJobStats, refreshModules]);
 
     const { isConnected } = useModuleEvents({ onStatusChange: handleStatusChange });
 

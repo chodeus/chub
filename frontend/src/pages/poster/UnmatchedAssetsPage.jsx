@@ -46,14 +46,23 @@ const REEL_FILTERS = [
 ];
 const REEL_PAGE_SIZE = 10;
 
-/** A single poster in the reel: thumbnail with fallback + source-folder caption. */
+// CL2K / MM2K are the *built* poster styles whose provenance matters — they
+// carry a real author. Other styles (GDrive / local fetches) get no tag.
+const BUILT_STYLE_TAG = {
+    CL2K: ['#a99eff', 'rgba(135,103,247,.32)'],
+    MM2K: ['#ffc944', 'rgba(255,201,68,.22)'],
+};
+
+/** A single poster in the reel: thumbnail + (for CL2K/MM2K) a source tag and
+ *  the builder it came from. */
 const ReelPosterCard = ({ poster }) => {
     const [failed, setFailed] = useState(false);
-    const caption = poster.folder || poster.style || poster.title || `#${poster.id}`;
+    const styleTag = BUILT_STYLE_TAG[poster.style];
+    const builtBy = styleTag ? poster.folder : null;
     return (
         <div className="shrink-0" style={{ width: 112 }}>
             <div
-                className="rounded-lg overflow-hidden border border-border bg-input shadow-md flex items-center justify-center"
+                className="relative rounded-lg overflow-hidden border border-border bg-input shadow-md flex items-center justify-center"
                 style={{ aspectRatio: '2 / 3' }}
                 title={poster.title || poster.file || ''}
             >
@@ -71,8 +80,23 @@ const ReelPosterCard = ({ poster }) => {
                         onError={() => setFailed(true)}
                     />
                 )}
+                {styleTag && (
+                    <span
+                        className="absolute bottom-1.5 left-1.5 font-mono text-[8px] font-bold tracking-[0.4px] px-1.5 py-0.5 rounded-[4px]"
+                        style={{ color: styleTag[0], background: styleTag[1] }}
+                    >
+                        {poster.style}
+                    </span>
+                )}
             </div>
-            <p className="mt-1 text-xs text-fg-subtle text-center truncate">{caption}</p>
+            <p className="mt-1.5 text-xs font-medium text-fg-muted text-center truncate">
+                {poster.title || `#${poster.id}`}
+            </p>
+            {builtBy && (
+                <p className="font-mono text-[9px] text-fg-subtle text-center truncate">
+                    by {builtBy}
+                </p>
+            )}
         </div>
     );
 };
@@ -103,25 +127,6 @@ const RecentPosterReel = ({ posters, onRefresh }) => {
                     Recently matched
                 </h3>
                 <div className="flex items-center gap-2 flex-wrap">
-                    {/* source provenance legend */}
-                    <div className="hidden lg:flex items-center gap-3.5 font-mono text-[10px] text-fg-subtle mr-1">
-                        <span className="flex items-center gap-1.5">
-                            <span className="w-[7px] h-[7px] rounded-[2px] bg-source-gdrive" />
-                            GDrive
-                        </span>
-                        <span className="flex items-center gap-1.5">
-                            <span className="w-[7px] h-[7px] rounded-[2px] bg-source-local" />
-                            Local
-                        </span>
-                        <span className="flex items-center gap-1.5">
-                            <span className="w-[7px] h-[7px] rounded-[2px] bg-source-cl2k" />
-                            CL2K
-                        </span>
-                        <span className="flex items-center gap-1.5">
-                            <span className="w-[7px] h-[7px] rounded-[2px] bg-source-mm2k" />
-                            MM2K
-                        </span>
-                    </div>
                     <div className="flex flex-wrap gap-1">
                         {REEL_FILTERS.map(f => (
                             <button
