@@ -47,6 +47,7 @@ const formatLastSynced = ms => (ms == null ? 'Never synced' : formatDate(ms));
 const PosterGDriveSearchPage = () => {
     const toast = useToast();
     const [syncingFolders, setSyncingFolders] = useState(new Set());
+    const [pickerSelection, setPickerSelection] = useState('');
     const [sortBy, setSortBy] = useState('name');
     const [filterBy, setFilterBy] = useState('all');
     // Frozen at mount so the staleness threshold is stable across re-renders.
@@ -209,6 +210,36 @@ const PosterGDriveSearchPage = () => {
                                 </option>
                             ))}
                         </select>
+                    </div>
+
+                    {/* Quick-sync a specific folder */}
+                    <div className="flex items-center gap-2 ml-auto">
+                        <select
+                            value={pickerSelection}
+                            onChange={e => setPickerSelection(e.target.value)}
+                            className="h-9 min-w-[180px] rounded-[9px] bg-surface border border-border text-[13px] text-fg-muted px-3 cursor-pointer outline-none focus:border-primary"
+                            aria-label="Sync a specific folder"
+                        >
+                            <option value="">Sync folder…</option>
+                            {[...sources]
+                                .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+                                .map(s => (
+                                    <option key={s.name} value={s.name}>
+                                        {s.name}
+                                    </option>
+                                ))}
+                        </select>
+                        <LoadingButton
+                            loading={pickerSelection ? syncingFolders.has(pickerSelection) : false}
+                            loadingText="Syncing…"
+                            variant="surface"
+                            size="small"
+                            icon="sync"
+                            disabled={!pickerSelection}
+                            onClick={() => syncOne(pickerSelection)}
+                        >
+                            Sync
+                        </LoadingButton>
                     </div>
                 </div>
             )}
