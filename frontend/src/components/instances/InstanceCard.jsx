@@ -1,28 +1,28 @@
 import React from 'react';
-import { Card } from '../ui/card/Card';
 import { Button } from '../ui/button/Button';
+import StatusDot from '../ui/StatusDot.jsx';
+import Toggle from '../ui/Toggle.jsx';
 import { humanize } from '../../utils/tools';
-import { formatDateTime } from '../../utils/datetime';
-import { formatSecondsAgo } from '../../utils/schedule';
+
+// Service identity colour + tint for the avatar / type pill.
+const SERVICE_STYLE = {
+    radarr: ['#6cbc66', 'rgba(108,188,102,.14)'],
+    sonarr: ['#53e8f0', 'rgba(83,232,240,.14)'],
+    lidarr: ['#9a7ba9', 'rgba(154,123,169,.16)'],
+    plex: ['#ffc944', 'rgba(255,201,68,.14)'],
+};
+
+// Render an API key masked — dots plus the last few real chars (the config GET
+// redacts secrets, so this is often all dots, which is fine).
+const maskKey = key => {
+    if (!key || typeof key !== 'string') return '';
+    const tail = key.replace(/\*/g, '').slice(-4);
+    return '•'.repeat(12) + tail;
+};
 
 /**
- * Instance card component that composes Card primitive for instance display
- * @param {Object} props
- * @param {Object} props.instance - Instance data
- * @param {string} props.instance.name - Instance name
- * @param {string} props.instance.url - Instance URL
- * @param {string} props.instance.api - Instance API key
- * @param {string} props.serviceType - Service type (radarr|sonarr|plex)
- * @param {Object} [props.connectionStatus] - Connection test status
- * @param {boolean} props.connectionStatus.success - Test success status
- * @param {string} props.connectionStatus.message - Status message
- * @param {number} props.connectionStatus.timestamp - Test timestamp
- * @param {boolean} props.isTesting - Whether test is in progress
- * @param {boolean} props.isSyncing - Whether sync is in progress
- * @param {Function} props.onTest - Test button handler
- * @param {Function} props.onSync - Sync button handler
- * @param {Function} props.onEdit - Edit button handler
- * @param {Function} props.onDelete - Delete button handler
+ * Compact instance row — service avatar, name + type pill, URL · masked key,
+ * health dot + ping/media, and Test / Sync / Edit / Delete / enable-toggle.
  */
 export const InstanceCard = ({
     instance,
@@ -30,7 +30,6 @@ export const InstanceCard = ({
     connectionStatus,
     healthStatus,
     instanceStats,
-    plexLibraries,
     isTesting,
     isSyncing,
     onTest,
@@ -38,275 +37,149 @@ export const InstanceCard = ({
     onEdit,
     onDelete,
     onToggle,
-    onFetchLibraries,
 }) => {
-    const cardData = {
-        name: humanize(instance.name),
-        url: instance.url,
-        status: getStatusDisplay(connectionStatus, isTesting),
-        lastTested: connectionStatus?.timestamp
-            ? formatTimestamp(connectionStatus.timestamp)
-            : 'Never',
-    };
+    const [color, tint] = SERVICE_STYLE[serviceType] || ['#6582ca', 'rgba(101,130,202,.14)'];
+    const name = humanize(instance.name);
+    const initial = (instance.name || '?').charAt(0).toUpperCase();
+    const enabled = instance.enabled !== false;
+
+    const hs = healthStatus?.status;
+    const dotStatus = isTesting
+        ? 'running'
+        : hs === 'healthy'
+          ? 'success'
+          : hs === 'unhealthy'
+            ? 'error'
+            : connectionStatus
+              ? connectionStatus.success
+                  ? 'success'
+                  : 'error'
+              : 'idle';
+    const healthLabel = isTesting
+        ? 'Testing'
+        : hs
+          ? hs
+          : connectionStatus
+            ? connectionStatus.success
+                ? 'Healthy'
+                : 'Failed'
+            : 'Not tested';
+    const healthTone =
+        dotStatus === 'success'
+            ? 'text-success'
+            : dotStatus === 'error'
+              ? 'text-error'
+              : dotStatus === 'running'
+                ? 'text-accent'
+                : 'text-fg-muted';
+    const ping = healthStatus?.response_time_ms;
+
+    const metaBits = [];
+    if (ping != null) metaBits.push(`${ping} ms`);
+    if (instanceStats?.total_media != null) {
+        let m = `${instanceStats.total_media} total`;
+        if (serviceType !== 'plex' && instanceStats.wanted_missing != null) {
+            m += ` · ${instanceStats.wanted_missing} missing`;
+        }
+        metaBits.push(m);
+    }
+
+    const iconBtn =
+        'w-8 h-8 rounded-lg flex items-center justify-center text-fg-muted hover:text-fg hover:bg-row-hover transition-colors disabled:opacity-50';
 
     return (
-        <Card>
-            <Card.Body>
-                {/* Instance data display */}
-                <div className="space-y-3">
-                    {Object.entries(cardData)
-                        .filter(([, value]) => value !== undefined && value !== null)
-                        .map(([key, value]) => (
-                            <div
-                                key={key}
-                                className="flex flex-col gap-1 sm:flex-row sm:items-start sm:gap-4"
-                            >
-                                <span className="font-semibold text-brand-primary shrink-0 sm:min-w-24 text-sm">
-                                    {key.charAt(0).toUpperCase() + key.slice(1)}:
-                                </span>
-                                <span className="text-fg-muted flex-1 break-words text-base leading-relaxed">
-                                    {React.isValidElement(value) ? value : String(value)}
-                                </span>
-                            </div>
-                        ))}
+        <div className="flex items-center gap-4 px-[18px] py-[15px] rounded-xl bg-surface border border-border hover:border-[#3b3d72] transition-colors">
+            <span
+                className="shrink-0 w-11 h-11 rounded-[10px] flex items-center justify-center font-display text-[17px] font-bold"
+                style={{ background: tint, color }}
+                aria-hidden="true"
+            >
+                {initial}
+            </span>
 
-                    {/* Health status */}
-                    {healthStatus && (
-                        <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:gap-4">
-                            <span className="font-semibold text-brand-primary shrink-0 sm:min-w-24 text-sm">
-                                Health:
-                            </span>
-                            <span className="text-fg-muted flex-1 flex items-center gap-2">
-                                <span
-                                    className={`w-2.5 h-2.5 rounded-full ${
-                                        healthStatus.status === 'healthy'
-                                            ? 'bg-success'
-                                            : healthStatus.status === 'unhealthy'
-                                              ? 'bg-error'
-                                              : 'bg-warning'
-                                    }`}
-                                />
-                                <span className="capitalize">{healthStatus.status}</span>
-                                {healthStatus.response_time_ms != null && (
-                                    <span className="text-xs text-fg-subtle">
-                                        ({healthStatus.response_time_ms}ms)
-                                    </span>
-                                )}
-                            </span>
-                        </div>
-                    )}
-
-                    {/* Instance stats */}
-                    {instanceStats && instanceStats.total_media != null && (
-                        <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:gap-4">
-                            <span className="font-semibold text-brand-primary shrink-0 sm:min-w-24 text-sm">
-                                Media:
-                            </span>
-                            {serviceType === 'plex' ? (
-                                <span className="text-fg-muted flex-1 text-sm">
-                                    {instanceStats.total_media} total
-                                    {instanceStats.libraries &&
-                                        Object.keys(instanceStats.libraries).length > 0 && (
-                                            <>
-                                                {' '}
-                                                &middot;{' '}
-                                                {Object.entries(instanceStats.libraries).map(
-                                                    ([lib, count], i, arr) => (
-                                                        <span key={lib}>
-                                                            <span className="text-success">
-                                                                {count}
-                                                            </span>{' '}
-                                                            <span className="text-fg-subtle">
-                                                                {lib}
-                                                            </span>
-                                                            {i < arr.length - 1 && ' \u00b7 '}
-                                                        </span>
-                                                    )
-                                                )}
-                                            </>
-                                        )}
-                                </span>
-                            ) : (
-                                <span
-                                    className="text-fg-muted flex-1 text-sm"
-                                    title="Missing = monitored items wanted by this service (released/aired) with no file yet, straight from its Wanted list."
-                                >
-                                    {instanceStats.total_media} total
-                                    {instanceStats.wanted_missing != null && (
-                                        <>
-                                            {' '}
-                                            &middot;{' '}
-                                            <span
-                                                className={
-                                                    instanceStats.wanted_missing > 0
-                                                        ? 'text-warning'
-                                                        : 'text-success'
-                                                }
-                                            >
-                                                {instanceStats.wanted_missing} missing
-                                            </span>
-                                        </>
-                                    )}
-                                </span>
-                            )}
-                        </div>
-                    )}
-
-                    {/* Snapshot freshness — when did we last sync this source's
-                        cache. Only shown when the backend reports a reliable
-                        age (Plex today; ARR omitted until it has a real
-                        sync-completion timestamp). */}
-                    {instanceStats && instanceStats.snapshot_age_seconds != null && (
-                        <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:gap-4">
-                            <span className="font-semibold text-brand-primary shrink-0 sm:min-w-24 text-sm">
-                                Synced:
-                            </span>
-                            <span className="text-fg-muted flex-1 text-sm">
-                                {formatSecondsAgo(instanceStats.snapshot_age_seconds)}
-                            </span>
-                        </div>
-                    )}
-
-                    {/* Libraries catalog — Plex only */}
-                    {serviceType === 'plex' && (
-                        <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:gap-4">
-                            <div className="flex items-center gap-1 shrink-0 sm:min-w-24">
-                                <span className="font-semibold text-brand-primary text-sm">
-                                    Libraries:
-                                </span>
-                                {onFetchLibraries && (
-                                    <button
-                                        type="button"
-                                        onClick={() => onFetchLibraries(instance.name)}
-                                        className="text-fg-subtle hover:text-fg-muted text-xs leading-none"
-                                        title="Refresh libraries"
-                                        aria-label="Refresh libraries"
-                                    >
-                                        ↺
-                                    </button>
-                                )}
-                            </div>
-                            {plexLibraries && plexLibraries.length > 0 ? (
-                                <div className="flex flex-wrap gap-1 flex-1">
-                                    {plexLibraries.map((lib, i) => {
-                                        const title = typeof lib === 'string' ? lib : lib.title;
-                                        const type = typeof lib === 'string' ? null : lib.type;
-                                        return (
-                                            <span
-                                                key={i}
-                                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-surface-alt text-fg-muted"
-                                            >
-                                                <span>{title}</span>
-                                                {type && (
-                                                    <span className="text-fg-subtle">{type}</span>
-                                                )}
-                                            </span>
-                                        );
-                                    })}
-                                </div>
-                            ) : (
-                                <div className="flex-1">
-                                    <button
-                                        type="button"
-                                        onClick={() =>
-                                            onFetchLibraries && onFetchLibraries(instance.name)
-                                        }
-                                        className="text-xs text-fg-subtle hover:text-fg-muted underline underline-offset-2"
-                                    >
-                                        Load libraries
-                                    </button>
-                                </div>
-                            )}
-                        </div>
+            <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 min-w-0">
+                    <span className="font-display text-[15px] font-semibold text-fg truncate">
+                        {name}
+                    </span>
+                    <span
+                        className="shrink-0 font-mono text-[9px] uppercase tracking-[0.4px] px-1.5 py-0.5 rounded-[5px]"
+                        style={{ color, background: tint }}
+                    >
+                        {serviceType}
+                    </span>
+                </div>
+                <div
+                    className="font-mono text-[11.5px] text-fg-data mt-1 truncate"
+                    title={instance.url}
+                >
+                    {instance.url || '—'}
+                    {instance.api && (
+                        <>
+                            <span className="text-fg-dim"> · </span>
+                            {maskKey(instance.api)}
+                        </>
                     )}
                 </div>
-            </Card.Body>
-            <Card.Footer align="space-between">
-                <div className="flex flex-wrap gap-2 w-full">
-                    {/* Primary actions row */}
-                    <div className="flex gap-2 flex-wrap">
-                        {onToggle && (
-                            <Button
-                                variant="ghost"
-                                onClick={() => onToggle(instance.name, !instance.enabled)}
-                            >
-                                {instance.enabled === false ? 'Enable' : 'Disable'}
-                            </Button>
-                        )}
-                        <Button variant="secondary" onClick={onTest} disabled={isTesting}>
-                            {isTesting ? 'Testing...' : 'Test'}
-                        </Button>
-                        <Button variant="secondary" onClick={onSync} disabled={isSyncing}>
-                            {isSyncing ? 'Syncing...' : 'Sync'}
-                        </Button>
-                        <Button variant="secondary" onClick={onEdit}>
-                            Edit
-                        </Button>
-                        <Button variant="danger" onClick={onDelete}>
-                            Delete
-                        </Button>
-                    </div>
-                </div>
-            </Card.Footer>
-        </Card>
+            </div>
+
+            <div className="hidden md:flex flex-col items-end gap-1 shrink-0 mr-1">
+                <span
+                    className={`flex items-center gap-1.5 text-[12px] font-semibold ${healthTone}`}
+                >
+                    <StatusDot status={dotStatus} size={7} ring={false} />
+                    <span className="capitalize">{healthLabel}</span>
+                </span>
+                {metaBits.length > 0 && (
+                    <span className="font-mono text-[10.5px] text-fg-subtle">
+                        {metaBits.join(' · ')}
+                    </span>
+                )}
+            </div>
+
+            <div className="flex items-center gap-1.5 shrink-0">
+                <Button variant="surface" size="small" onClick={onTest} disabled={isTesting}>
+                    {isTesting ? 'Testing…' : 'Test'}
+                </Button>
+                <button
+                    type="button"
+                    onClick={onSync}
+                    disabled={isSyncing}
+                    className={iconBtn}
+                    aria-label="Sync instance"
+                    title="Sync"
+                >
+                    <span className="material-symbols-outlined text-[18px]">sync</span>
+                </button>
+                <button
+                    type="button"
+                    onClick={onEdit}
+                    className={iconBtn}
+                    aria-label="Edit instance"
+                    title="Edit"
+                >
+                    <span className="material-symbols-outlined text-[18px]">edit</span>
+                </button>
+                <button
+                    type="button"
+                    onClick={onDelete}
+                    className={`${iconBtn} hover:text-error`}
+                    aria-label="Delete instance"
+                    title="Delete"
+                >
+                    <span className="material-symbols-outlined text-[18px]">delete</span>
+                </button>
+                {onToggle && (
+                    <Toggle
+                        checked={enabled}
+                        onChange={v => onToggle(instance.name, v)}
+                        label={`Enable ${name}`}
+                        className="ml-1"
+                    />
+                )}
+            </div>
+        </div>
     );
 };
 
-/**
- * Get status display based on connection status and testing state
- * @param {Object} connectionStatus - Connection status object
- * @param {boolean} isTesting - Whether test is in progress
- * @returns {JSX.Element} Status display element with colored circle
- */
-const getStatusDisplay = (connectionStatus, isTesting) => {
-    if (isTesting) {
-        return (
-            <span className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full bg-primary"></span>
-                Testing...
-            </span>
-        );
-    }
-    if (!connectionStatus) {
-        return (
-            <span className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full bg-warning"></span>
-                Not Tested
-            </span>
-        );
-    }
-    if (connectionStatus.success) {
-        return (
-            <span className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full bg-success"></span>
-                Connected
-            </span>
-        );
-    }
-    return (
-        <span className="flex items-center gap-2">
-            <span className="w-3 h-3 rounded-full bg-error"></span>
-            Failed
-        </span>
-    );
-};
-
-/**
- * Format timestamp to human-readable relative time
- * @param {number} timestamp - Unix timestamp
- * @returns {string} Formatted timestamp
- */
-const formatTimestamp = timestamp => {
-    if (!timestamp) return 'Never';
-
-    const now = Date.now();
-    const diff = now - timestamp;
-    const seconds = Math.floor(diff / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const hours = Math.floor(minutes / 60);
-
-    if (seconds < 60) return 'Just now';
-    if (minutes < 60) return `${minutes} min${minutes > 1 ? 's' : ''} ago`;
-    if (hours < 24) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
-    return formatDateTime(timestamp);
-};
+export default InstanceCard;

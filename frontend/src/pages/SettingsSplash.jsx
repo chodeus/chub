@@ -75,43 +75,40 @@ const SETTINGS_CARDS = [
 
 export const SettingsSplash = React.memo(() => {
     return (
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-5">
             {/* Page Header */}
-            <div className="flex flex-col gap-2">
-                <h1 className="text-3xl font-bold text-fg font-display m-0">Settings</h1>
-                <p className="text-base text-fg-muted m-0">
-                    Tune CHUB to match the shape of your stack.
+            <div className="min-w-0">
+                <h1 className="font-display text-[26px] font-bold tracking-[-0.3px] text-fg m-0">
+                    Settings
+                </h1>
+                <p className="text-fg-subtle text-[13.5px] mt-1 mb-0">
+                    Connections, schedules, modules, and system configuration.
                 </p>
             </div>
 
             {/* Card grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                 {SETTINGS_CARDS.map(card => (
                     <Link
                         key={card.to}
                         to={card.to}
-                        className="no-underline group block bg-surface border border-border-light rounded-lg p-5 transition-colors hover:bg-surface-alt focus:outline-none focus-visible:border-primary"
+                        className="no-underline group flex items-center gap-3 bg-surface border border-border rounded-xl p-4 transition-colors hover:bg-row-hover hover:border-[#3b3d72] focus:outline-none focus-visible:border-primary"
                     >
-                        <div className="flex items-start gap-4">
-                            <span
-                                className={`badge-bubble badge-bubble--${card.badge} rounded-full w-12 h-12 shrink-0 flex items-center justify-center`}
-                                aria-hidden="true"
-                            >
-                                <span
-                                    className="material-symbols-outlined"
-                                    style={{ fontSize: '24px' }}
-                                >
-                                    {card.icon}
-                                </span>
+                        <span
+                            className={`badge-bubble badge-bubble--${card.badge || 1} rounded-lg w-10 h-10 shrink-0 flex items-center justify-center`}
+                            aria-hidden="true"
+                        >
+                            <span className="material-symbols-outlined text-[20px]">
+                                {card.icon}
                             </span>
-                            <div className="flex flex-col gap-1 min-w-0">
-                                <h2 className="text-base font-semibold text-fg m-0">
-                                    {card.title}
-                                </h2>
-                                <p className="text-sm text-fg-muted m-0 leading-snug">
-                                    {card.description}
-                                </p>
-                            </div>
+                        </span>
+                        <div className="flex flex-col gap-0.5 min-w-0">
+                            <h2 className="font-display text-[14px] font-semibold text-fg m-0">
+                                {card.title}
+                            </h2>
+                            <p className="text-xs text-fg-muted m-0 leading-snug truncate">
+                                {card.description}
+                            </p>
                         </div>
                     </Link>
                 ))}

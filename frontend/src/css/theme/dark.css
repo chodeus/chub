@@ -11,39 +11,55 @@
 :root,
 [data-theme='dark'] {
     /* Brand & Semantic Colors */
-    --primary: #8767f7; /* Brighter indigo for dark bg */
+    --primary: #8767f7; /* Violet brand — buttons, active nav, AUTO tag */
     --primary-hover: #a99eff;
-    --accent: #53e8f0; /* Cyan accent pops on dark */
+    --accent: #53e8f0; /* Cyan — live/running, links, GDrive, info */
     --accent-2: #8767f7;
-    --success: #6cbc66;
-    --warning: #ffc944;
-    --error: #fd355c;
+    --success: #6cbc66; /* Healthy / active / Local source */
+    --warning: #ffc944; /* Gold — logo, storage pressure, MM2K */
+    --error: #fd355c; /* Failed / bloat / danger */
     --info: #53e8f0;
     --focus: #8767f7;
 
-    /* Surface & Background Colors */
+    /* Extended accent roles (each colour does ONE job) */
+    --azure: #1992f3; /* Secondary / scheduled */
+    --gold-deep: #e28b2d; /* Storage-bar gradient base */
+    --manual: #9a7ba9; /* MANUAL tags / lilac accents */
+    --source-gdrive: #53e8f0; /* GDrive provenance (cyan) */
+    --source-local: #6cbc66; /* Local provenance (green) */
+    --source-cl2k: #a99eff; /* CL2K provenance (light lilac) */
+    --source-mm2k: #ffc944; /* MM2K provenance (gold) */
+    --source-orphan: #ff9d75; /* Orphans (peach) */
+
+    /* Surface & Background Colors — indigo-black elevation ramp (no flat grays) */
     --bg: #110b28; /* Deep indigo canvas */
-    --surface: #1a1838; /* Content panel */
-    --surface-alt: #2a3052; /* Hover / secondary areas */
-    --surface-elevated: #2a3052;
+    --surface: #191636; /* Content panel / card */
+    --surface-inset: #140f2b; /* Inset controls, sub-rows */
+    --surface-alt: #140f2b; /* Secondary / inset blocks */
+    --surface-elevated: #1d1942; /* Row hover / raised */
+    --row-hover: #1d1942;
 
     /* Border & Separation Colors */
-    --border: #2a3052;
-    --border-light: #1d237f;
+    --border: #2a3052; /* Cards, strong dividers */
+    --border-light: #211c46; /* Subtle row separators */
 
     /* Text & Content Colors */
     --text-primary: #fff;
     --text-secondary: #b2d1e8;
     --text-tertiary: #6582ca;
+    --text-muted: #4f4a7a; /* Faint */
+    --text-faint: #564f8a; /* Section headings / idle */
+    --text-data: #8ea3cc; /* On-mono-data secondary */
 
     /* Layout Specific Colors */
-    --sidebar-bg: #0a0618;
-    --sidebar-surface: #2a3052;
-    --sidebar-hover: #2a3052;
-    --sidebar-border: #1d237f;
+    --sidebar-bg: #0c0820;
+    --sidebar-surface: #1d1942;
+    --sidebar-hover: #191636;
+    --sidebar-border: #211c46;
     --sidebar-text: #fff;
-    --sidebar-text-secondary: #6582ca;
-    --header-bg: #0a0618;
+    --sidebar-text-secondary: #b2d1e8;
+    --sidebar-heading: #564f8a;
+    --header-bg: #0c0820;
 
     /* Overlay & Modal Colors */
     --overlay: rgb(10 6 24 / 64%);
@@ -60,10 +76,10 @@
     --accent-visited: #7cf0f6;
 
     /* Form Control Colors */
-    --input-bg: #1a1838;
-    --input-bg-hover: #2a3052;
-    --input-bg-disabled: #0a0618;
-    --input-bg-readonly: #1d237f;
+    --input-bg: #140f2b;
+    --input-bg-hover: #1d1942;
+    --input-bg-disabled: #0c0820;
+    --input-bg-readonly: #191636;
     --input-border-disabled: #2a3052;
     --checkbox-indicator-bg: #fff;
 

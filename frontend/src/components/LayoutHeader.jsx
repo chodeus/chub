@@ -136,6 +136,10 @@ const LayoutHeader = React.memo(() => {
         }
     };
 
+    // Desktop folds branding into the sidebar, page titles into each page, and
+    // search into in-page fields — so the top header is mobile-only now.
+    if (!isMobile) return null;
+
     return (
         <header
             className={`shrink-0 ${isMobile ? 'h-14' : 'h-20 min-h-header'} bg-header-bg z-sticky ${isSearchPage ? 'search-page' : 'non-search-page'}`}
@@ -152,10 +156,13 @@ const LayoutHeader = React.memo(() => {
                         className="touch-target flex items-center no-underline cursor-pointer transition-opacity hover:opacity-80 focus:outline-focus"
                         aria-label="CHUB — Media Manager"
                     >
+                        {/* Desktop branding now lives in the sidebar; keep the
+                            banner element for mobile only (mobile shows the small
+                            logo below, desktop shows nothing here). */}
                         <img
                             src="/img/chub-banner.png"
                             alt="CHUB — Media Manager"
-                            className="max-md:hidden h-16 w-auto mt-3"
+                            className="hidden h-16 w-auto mt-3"
                             height="64"
                         />
                         <img

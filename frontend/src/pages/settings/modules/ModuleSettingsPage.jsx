@@ -221,18 +221,13 @@ const ModuleSettingsContent = () => {
     // No loading state needed - data comes from ConfigProvider
 
     return (
-        <div className="p-4 md:p-6 max-w-4xl mx-auto">
+        <div className="max-w-4xl mx-auto flex flex-col gap-5">
             {/* Header */}
-            <PageHeader
-                title="Modules"
-                description="Per-module configuration and options."
-                badge={4}
-                icon="extension"
-            />
+            <PageHeader title="Modules" description="Per-module configuration and options." />
 
             {/* Error display */}
             {saveError && (
-                <div className="mt-4 p-3 bg-error-bg border border-error-border text-error rounded">
+                <div className="p-3 bg-error-bg border border-error-border text-error rounded-lg">
                     <div className="flex items-center gap-2">
                         <span className="material-symbols-outlined text-sm">error</span>
                         {saveError}
@@ -241,19 +236,17 @@ const ModuleSettingsContent = () => {
             )}
 
             {/* Search functionality */}
-            <div className="mb-6">
-                <div className="relative">
-                    <span className="material-symbols-outlined absolute left-3 top-3 text-fg-muted">
-                        search
-                    </span>
-                    <input
-                        type="text"
-                        placeholder="Search modules and fields..."
-                        value={searchTerm}
-                        onChange={e => setSearchTerm(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2 border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent min-h-11 bg-surface text-fg"
-                    />
-                </div>
+            <div className="relative">
+                <span className="material-symbols-outlined absolute left-3 top-3 text-fg-subtle text-[18px]">
+                    search
+                </span>
+                <input
+                    type="text"
+                    placeholder="Search modules and fields…"
+                    value={searchTerm}
+                    onChange={e => setSearchTerm(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 border border-border rounded-lg focus:border-primary outline-none min-h-11 bg-surface-inset text-fg placeholder:text-fg-dim"
+                />
             </div>
 
             {/* Module accordion */}
@@ -267,7 +260,7 @@ const ModuleSettingsContent = () => {
                         <AccordionItem.Header className="px-6 py-4 bg-surface hover:bg-surface-hover border-b border-border-subtle">
                             <div className="flex items-center justify-between min-h-11">
                                 <div className="flex flex-col">
-                                    <span className="font-medium text-base text-fg">
+                                    <span className="font-display text-[14.5px] font-semibold text-fg">
                                         {module.label}
                                     </span>
                                     {moduleDescriptions[module.key] && (

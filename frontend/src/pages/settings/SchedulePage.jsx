@@ -268,17 +268,15 @@ export const SchedulePage = () => {
     }
 
     return (
-        <div className="p-6 max-w-screen-xl mx-auto">
+        <div className="max-w-screen-xl mx-auto flex flex-col gap-6">
             {/* Page Header */}
             <PageHeader
                 title="Schedule"
-                description="Automate when modules run."
-                badge={1}
-                icon="schedule"
+                description="When each module runs — base schedule, per-instance profiles, and multi-block overrides."
             />
 
             {/* Statistics */}
-            <StatGrid columns={3} className="mb-8">
+            <StatGrid columns={3}>
                 {statistics.map(stat => (
                     <StatCard
                         key={stat.label}
@@ -289,8 +287,8 @@ export const SchedulePage = () => {
                 ))}
             </StatGrid>
 
-            {/* Module Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {/* Module rows */}
+            <div className="flex flex-col gap-3">
                 {availableModules.map(module => (
                     <ScheduleCard
                         key={module.key}

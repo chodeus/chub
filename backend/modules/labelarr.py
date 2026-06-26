@@ -83,6 +83,8 @@ class Labelarr(ChubModule):
         plex_map: Dict[str, set] = {}
 
         for mapping in getattr(self.config, "mappings", []) or []:
+            if getattr(mapping, "enabled", True) is False:
+                continue
             app_instance = getattr(mapping, "app_instance", None)
             if isinstance(app_instance, str) and app_instance.strip():
                 arrs.add(app_instance)
@@ -365,6 +367,12 @@ class Labelarr(ChubModule):
                         plex_mapping_index.setdefault(pmid, []).append(item)
 
                 for mapping in self.config.mappings:
+                    if getattr(mapping, "enabled", True) is False:
+                        self.logger.debug(
+                            f"Skipping disabled labelarr mapping for "
+                            f"{mapping.app_instance!r}"
+                        )
+                        continue
                     app_instance = mapping.app_instance
                     labels = (
                         mapping.labels
@@ -406,9 +414,7 @@ class Labelarr(ChubModule):
                         instance_name = plex_instance.instance
                         library_names = plex_instance.library_names
 
-                        plex_conn = self.full_config.instances.plex.get(
-                            instance_name
-                        )
+                        plex_conn = self.full_config.instances.plex.get(instance_name)
                         if plex_conn is None:
                             self.logger.warning(
                                 f"Plex instance '{instance_name}' referenced by "

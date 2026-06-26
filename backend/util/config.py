@@ -458,6 +458,10 @@ class LabelarrMapping(BaseModel):
     app_instance: str = ""
     labels: Union[List[str], str] = Field(default_factory=list)
     plex_instances: List[LabelarrPlexInstance] = Field(default_factory=list)
+    # When False the mapping is configured but skipped on each run — lets a
+    # user pause a mapping without deleting it. Defaults True for back-compat
+    # with existing configs that have no `enabled` key.
+    enabled: bool = True
 
 
 class LabelarrConfig(BaseModel):

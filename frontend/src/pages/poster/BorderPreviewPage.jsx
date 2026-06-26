@@ -6,7 +6,7 @@ import { configAPI } from '../../utils/api/config.js';
 import { useApiData } from '../../hooks/useApiData.js';
 import { useToast } from '../../contexts/ToastContext.jsx';
 import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning';
-import { Button, LoadingButton, PageHeader } from '../../components/ui/index.js';
+import { Button, LoadingButton } from '../../components/ui/index.js';
 import Spinner from '../../components/ui/Spinner.jsx';
 import { ColorListField } from '../../components/fields/color/ColorListField.jsx';
 
@@ -189,13 +189,18 @@ const BorderReplacerrPage = () => {
     }
 
     return (
-        <div className="p-4 md:p-6 max-w-6xl mx-auto pb-24">
-            <PageHeader
-                title="Border Replacerr"
-                description="Choose colors and themed border art for default and per-holiday styling, and preview the result on a sample of your real posters."
-                icon="border_outer"
-                actions={headerActions}
-            />
+        <div className="max-w-6xl mx-auto pb-12">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="min-w-0">
+                    <h1 className="font-display text-[26px] font-bold tracking-[-0.3px] text-fg m-0">
+                        Border Replacerr
+                    </h1>
+                    <p className="text-fg-subtle text-[13.5px] mt-1 mb-0">
+                        Apply brand or seasonal borders to your posters — scheduled by date range.
+                    </p>
+                </div>
+                {headerActions}
+            </div>
 
             <DefaultColorsSection
                 value={config.border_colors}
@@ -219,7 +224,7 @@ const BorderReplacerrPage = () => {
 const SectionHeader = ({ title, description, action = null }) => (
     <div className="flex items-start justify-between gap-3 mb-3">
         <div>
-            <h2 className="text-lg font-semibold text-fg">{title}</h2>
+            <h2 className="font-display text-[15px] font-semibold text-fg">{title}</h2>
             {description && <p className="text-sm text-fg-subtle mt-1 max-w-2xl">{description}</p>}
         </div>
         {action}
@@ -236,7 +241,7 @@ const DEFAULT_COLOR_FIELD = {
 };
 
 const DefaultColorsSection = ({ value, onChange, disabled }) => (
-    <section className="mt-6 p-4 bg-surface border border-border rounded-lg">
+    <section className="mt-6 p-4 bg-surface border border-border rounded-xl">
         <SectionHeader
             title="Default border colors"
             description="Active outside any configured holiday window."
@@ -253,7 +258,7 @@ const DefaultColorsSection = ({ value, onChange, disabled }) => (
 const HolidaysSection = ({ holidays, onChange, disabled }) => {
     if (!holidays.length) {
         return (
-            <section className="mt-6 p-6 bg-surface border border-dashed rounded-lg text-center">
+            <section className="mt-6 p-6 bg-surface border border-dashed rounded-xl text-center">
                 <span className="material-symbols-outlined text-3xl text-fg-subtle block mb-2">
                     event
                 </span>
@@ -310,7 +315,7 @@ const HolidayCard = ({ holiday, onChange, disabled }) => {
     const updateBorders = useCallback(next => onChange({ borders: next }), [onChange]);
 
     return (
-        <article className="bg-surface border border-border rounded-lg overflow-hidden">
+        <article className="bg-surface border border-border rounded-xl overflow-hidden">
             <header
                 className="flex items-center justify-between p-3 cursor-pointer hover:bg-surface-hover"
                 onClick={() => setExpanded(v => !v)}
@@ -702,7 +707,7 @@ const PreviewSection = ({ isDirty }) => {
             )}
 
             {!isGenerating && previewData && previews.length === 0 && (
-                <div className="mt-4 p-6 text-center bg-surface border border-dashed rounded-lg text-fg-muted">
+                <div className="mt-4 p-6 text-center bg-surface border border-dashed rounded-xl text-fg-muted">
                     <span className="material-symbols-outlined text-4xl text-fg-subtle block mb-2">
                         image_not_supported
                     </span>
@@ -738,7 +743,7 @@ const PreviewCard = ({ preview }) => {
                 : preview.kind || 'Media';
 
     return (
-        <div className="bg-surface border border-border rounded-lg overflow-hidden flex flex-col">
+        <div className="bg-surface border border-border rounded-xl overflow-hidden flex flex-col">
             <img
                 src={borderReplacerrAPI.fileUrl(preview.token)}
                 alt={`${preview.title} preview (original on left, bordered on right)`}
