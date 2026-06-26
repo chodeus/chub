@@ -26,7 +26,7 @@ export const webhooksAPI = {
      * Summarize recent inbound webhook calls by origin + status.
      * Backed by GET /api/jobs/webhook-origins.
      * @param {number} days - Lookback window (1..90)
-     * @returns {Promise<Object>} { total, by_origin: [...], by_status: {...} }
+     * @returns {Promise<Object>} { total, by_origin: [{ client_host, endpoint, count, last_seen, event_type }], by_status: {...} }
      */
     getWebhookOrigins: (days = 7) => {
         return apiCore.get(`/jobs/webhook-origins?days=${encodeURIComponent(days)}`, {

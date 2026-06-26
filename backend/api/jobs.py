@@ -137,6 +137,9 @@ async def list_webhook_origins(
 
         by_origin: Counter = Counter()
         by_status: Counter = Counter()
+        # key -> {last_seen, event_type}. Rows arrive newest-first, so the first
+        # time we meet a key carries its most-recent timestamp + event type.
+        meta: Dict[Any, Dict[str, Any]] = {}
         for r in rows:
             payload = r["payload"]
             try:
@@ -150,12 +153,23 @@ async def list_webhook_origins(
             )
             by_origin[key] += 1
             by_status[r["status"]] += 1
+            if key not in meta:
+                meta[key] = {
+                    "last_seen": r["received_at"],
+                    "event_type": origin.get("event_type") or "",
+                }
         return ok(
             f"Webhook origins in last {days}d",
             {
                 "total": len(rows),
                 "by_origin": [
-                    {"client_host": h, "endpoint": e, "count": c}
+                    {
+                        "client_host": h,
+                        "endpoint": e,
+                        "count": c,
+                        "last_seen": meta[(h, e)]["last_seen"],
+                        "event_type": meta[(h, e)]["event_type"],
+                    }
                     for (h, e), c in by_origin.most_common()
                 ],
                 "by_status": dict(by_status),
