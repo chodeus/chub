@@ -1,15 +1,9 @@
 import { useState } from 'react';
 import { useLogControls } from '../context/LogControlsContext';
-import { InputBase } from '../../fields/primitives';
 
 /**
- * SearchInput - Search input with clear functionality
- *
- * Provides search input with Material Icons clear button.
- * Consumes LogControlsContext for state and actions.
- * Uses InputBase primitive for consistent styling and behavior.
- *
- * @returns {JSX.Element}
+ * SearchInput — compact dark-inset filter field with a leading search icon, a
+ * ⌘F hint when empty, and a clear button when filled. Matches the redesign mock.
  */
 export const SearchInput = () => {
     const { onSearchChange } = useLogControls();
@@ -27,26 +21,32 @@ export const SearchInput = () => {
     };
 
     return (
-        <div className="relative flex-1 min-w-0">
-            <InputBase
+        <div className="flex items-center gap-2 w-full h-9 px-3 rounded-lg bg-surface-inset border border-border focus-within:border-primary transition-colors">
+            <span
+                className="material-symbols-outlined text-[16px] text-fg-subtle shrink-0"
+                aria-hidden="true"
+            >
+                search
+            </span>
+            <input
                 type="text"
                 value={searchValue}
                 onChange={handleChange}
-                placeholder="Search logs..."
-                className="w-full pr-10"
+                placeholder="Filter lines…"
                 aria-label="Search logs"
+                className="flex-1 min-w-0 bg-transparent border-0 outline-none text-[13px] text-fg placeholder:text-fg-dim"
             />
             {searchValue ? (
                 <button
                     type="button"
                     onClick={handleClear}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-fg-muted hover:text-fg transition-colors min-h-11 min-w-11 flex items-center justify-center"
+                    className="shrink-0 text-fg-muted hover:text-fg transition-colors flex items-center"
                     aria-label="Clear search"
                 >
-                    <span className="material-symbols-outlined text-xl">cancel</span>
+                    <span className="material-symbols-outlined text-[18px]">cancel</span>
                 </button>
             ) : (
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 font-mono text-[11px] text-fg-faint pointer-events-none">
+                <span className="shrink-0 font-mono text-[11px] text-fg-faint pointer-events-none">
                     ⌘F
                 </span>
             )}

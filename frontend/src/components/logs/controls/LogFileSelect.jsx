@@ -1,34 +1,35 @@
 import React from 'react';
 import { useLogControls } from '../context/LogControlsContext';
-import { SelectBase } from '../../fields/primitives';
 
 /**
- * LogFileSelect - Log file selection dropdown
- *
- * Renders dropdown of available log files for selected module.
- * Disabled when no log files available.
- * Consumes LogControlsContext for state and actions.
- * Uses SelectBase primitive for consistent styling and behavior.
- *
- * @returns {JSX.Element}
+ * LogFileSelect — compact dark-inset log-file picker with a mono filename,
+ * matching the redesign mock. Disabled when no files are available.
  */
 export const LogFileSelect = () => {
     const { logFiles, selectedLogFile, onLogFileChange } = useLogControls();
+    const disabled = !logFiles || logFiles.length === 0;
 
     return (
-        <SelectBase
-            value={selectedLogFile || ''}
-            disabled={!logFiles || logFiles.length === 0}
-            onChange={e => onLogFileChange(e.target.value)}
-            aria-label="Select log file"
+        <div
+            className={`flex items-center w-full h-9 px-3 rounded-lg bg-surface-inset border border-border focus-within:border-primary transition-colors ${
+                disabled ? 'opacity-50' : ''
+            }`}
         >
-            <option value="">Select Log File</option>
-            {logFiles &&
-                logFiles.map(file => (
-                    <option key={file} value={file}>
-                        {file}
-                    </option>
-                ))}
-        </SelectBase>
+            <select
+                value={selectedLogFile || ''}
+                disabled={disabled}
+                onChange={e => onLogFileChange(e.target.value)}
+                aria-label="Select log file"
+                className="flex-1 min-w-0 bg-transparent border-0 outline-none font-mono text-xs text-fg-muted cursor-pointer disabled:cursor-not-allowed"
+            >
+                <option value="">Select log file</option>
+                {logFiles &&
+                    logFiles.map(file => (
+                        <option key={file} value={file}>
+                            {file}
+                        </option>
+                    ))}
+            </select>
+        </div>
     );
 };
