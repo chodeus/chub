@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { FieldWrapper, FieldLabel, FieldError, FieldDescription, InputBase } from '../primitives';
+import { FieldRow, InputBase } from '../primitives';
 import { useOptionalFormField } from '../../forms/FormContext';
 
 export const TextField = React.memo(
@@ -31,8 +31,14 @@ export const TextField = React.memo(
         const inputId = field.id || `field-${field.key}`;
 
         return (
-            <FieldWrapper invalid={finalHighlightInvalid}>
-                <FieldLabel htmlFor={inputId} label={field.label} required={field.required} />
+            <FieldRow
+                htmlFor={inputId}
+                label={field.label}
+                required={field.required}
+                description={field.description}
+                error={finalErrorMessage}
+                invalid={finalHighlightInvalid}
+            >
                 <InputBase
                     id={inputId}
                     type="text"
@@ -50,12 +56,7 @@ export const TextField = React.memo(
                     aria-describedby={`${field.descId || `${inputId}-desc`} ${field.errorId || `${inputId}-error`}`.trim()}
                     aria-invalid={finalHighlightInvalid}
                 />
-                <FieldDescription
-                    id={field.descId || `${inputId}-desc`}
-                    description={field.description}
-                />
-                <FieldError id={field.errorId || `${inputId}-error`} message={finalErrorMessage} />
-            </FieldWrapper>
+            </FieldRow>
         );
     }
 );

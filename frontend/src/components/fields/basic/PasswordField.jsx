@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { FieldWrapper, FieldLabel, FieldError, FieldDescription, InputBase } from '../primitives';
+import { FieldRow, InputBase } from '../primitives';
 import { FieldButton } from '../features/shared';
 import { useOptionalFormField } from '../../forms/FormContext';
 
@@ -40,9 +40,14 @@ export const PasswordField = React.memo(
         const inputValue = finalValue || '';
 
         return (
-            <FieldWrapper invalid={finalHighlightInvalid}>
-                <FieldLabel htmlFor={inputId} label={field.label} required={field.required} />
-
+            <FieldRow
+                htmlFor={inputId}
+                label={field.label}
+                required={field.required}
+                description={field.description}
+                error={finalErrorMessage}
+                invalid={finalHighlightInvalid}
+            >
                 <div className="flex">
                     <InputBase
                         id={inputId}
@@ -75,13 +80,7 @@ export const PasswordField = React.memo(
                         </span>
                     </FieldButton>
                 </div>
-
-                <FieldDescription
-                    id={field.descId || `${inputId}-desc`}
-                    description={field.description}
-                />
-                <FieldError id={field.errorId || `${inputId}-error`} message={finalErrorMessage} />
-            </FieldWrapper>
+            </FieldRow>
         );
     }
 );
