@@ -178,6 +178,17 @@ const CORE_SETTINGS_SCHEMA = [
 
                         description: 'Local directory to sync with the specified Google Drive ID.',
                     },
+                    {
+                        key: 'search_only',
+                        label: 'Browse only',
+                        type: 'check_box',
+                        required: false,
+                        description:
+                            'Off (default) = this drive is used for poster matching automatically — ' +
+                            'no need to also add its location to Poster Renamerr source dirs. ' +
+                            'On = browse-only: its posters show in Assets Search but are never ' +
+                            'matched or applied (for "Extras" drives).',
+                    },
                 ],
             },
         ],
