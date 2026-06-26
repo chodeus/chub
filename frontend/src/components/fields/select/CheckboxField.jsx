@@ -1,24 +1,15 @@
 /**
  * CheckboxField Component
  *
- * ENTIRE FIELD IS CLICKABLE - provides excellent UX
- * The full field area (including label and description) toggles the checkbox
- * Uses design tokens exclusively, no hardcoded values
+ * Boolean setting rendered as the redesign's row: label + description on the
+ * left, a brand toggle on the right. Used app-wide for every boolean config.
  */
 
-import React, { useCallback } from 'react';
-import {
-    FieldWrapper,
-    FieldLabel,
-    FieldError,
-    FieldDescription,
-    CheckboxBase,
-} from '../primitives';
+import React from 'react';
+import { FieldWrapper, FieldLabel, FieldError, FieldDescription } from '../primitives';
+import Toggle from '../../ui/Toggle.jsx';
 
 /**
- * CheckboxField component for boolean input
- *
- * @param {Object} props - Component props
  * @param {Object} props.field - Field configuration object
  * @param {boolean} props.value - Current field value
  * @param {Function} props.onChange - Value change handler
@@ -35,72 +26,19 @@ export const CheckboxField = React.memo(
         highlightInvalid = false,
         errorMessage = null,
     }) => {
-        const handleContainerClick = useCallback(
-            e => {
-                // Don't handle click if it came from the label or checkbox input
-                // This allows native label-checkbox association to work properly
-                if (disabled) return;
-                if (e.target.tagName === 'LABEL' || e.target.tagName === 'INPUT') return;
-
-                onChange(!value);
-            },
-            [onChange, value, disabled]
-        );
-
-        const handleCheckboxChange = useCallback(
-            e => {
-                if (disabled) return;
-                onChange(e.target.checked);
-            },
-            [onChange, disabled]
-        );
-
         const inputId = field.id || `field-${field.key}`;
         const isChecked = Boolean(value);
 
         return (
-            <FieldWrapper invalid={highlightInvalid}>
-                {/* ENTIRE AREA IS CLICKABLE */}
-                <div
-                    className="flex items-center gap-3 py-2 px-3 bg-surface border rounded-lg hover:bg-surface-hover focus:border-primary cursor-pointer transition-colors duration-200 ease-in-out"
-                    onClick={handleContainerClick}
-                    role="button"
-                    tabIndex={disabled ? -1 : 0}
-                    onKeyDown={e => {
-                        if ((e.key === ' ' || e.key === 'Enter') && !disabled) {
-                            e.preventDefault();
-                            onChange(!value);
-                        }
-                    }}
-                    aria-pressed={isChecked}
-                    aria-disabled={disabled}
-                    aria-describedby={
-                        errorMessage ? field.errorId || `${inputId}-error` : undefined
-                    }
-                >
-                    {/* Use existing CheckboxBase primitive - WRITE ONCE, USE EVERYWHERE */}
-                    <CheckboxBase
-                        id={inputId}
-                        name={field.key}
-                        checked={isChecked}
-                        onChange={handleCheckboxChange}
-                        disabled={disabled}
-                        required={field.required}
-                        invalid={highlightInvalid}
-                        ariaDescribedby={
-                            errorMessage ? field.errorId || `${inputId}-error` : undefined
-                        }
-                    />
-
-                    {/* Field content */}
-                    <div className="flex-1">
+            <FieldWrapper invalid={highlightInvalid} variant="minimal">
+                <div className="flex items-center justify-between gap-4 py-2">
+                    <div className="min-w-0">
                         <FieldLabel
                             htmlFor={inputId}
                             label={field.label}
                             required={field.required}
-                            className="text-sm font-normal leading-normal text-fg cursor-pointer select-none"
+                            className="text-sm font-medium leading-normal text-fg select-none"
                         />
-
                         {field.description && (
                             <FieldDescription
                                 id={field.descId || `${inputId}-desc`}
@@ -108,6 +46,12 @@ export const CheckboxField = React.memo(
                             />
                         )}
                     </div>
+                    <Toggle
+                        label={field.label}
+                        checked={isChecked}
+                        disabled={disabled}
+                        onChange={next => !disabled && onChange(next)}
+                    />
                 </div>
 
                 {errorMessage && (
