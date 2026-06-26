@@ -6,6 +6,7 @@ import { configAPI } from '../../utils/api/config.js';
 import { postersAPI } from '../../utils/api/posters.js';
 import { useToast } from '../../contexts/ToastContext.jsx';
 import { Button, LoadingButton, PageHeader } from '../../components/ui/index.js';
+import SegmentedControl from '../../components/ui/SegmentedControl.jsx';
 import Spinner from '../../components/ui/Spinner.jsx';
 
 /**
@@ -761,84 +762,90 @@ const TitlePicker = ({ onPick, toast }) => {
         }
     }, [paste, kind, onPick, toast]);
 
-    return (
-        <section className="mt-6 p-4 bg-surface border border-border rounded-lg">
-            <h2 className="text-lg font-semibold text-fg mb-3">Pick a title</h2>
+    const inputCls =
+        'flex-1 min-w-0 h-[42px] px-3.5 rounded-lg bg-surface-inset border border-border text-fg text-sm outline-none focus:border-primary transition-colors placeholder:text-fg-dim';
 
-            <div className="flex items-center gap-2 mb-3">
-                <span className="text-sm text-fg-muted">Type</span>
-                <select
+    return (
+        <section
+            className="mt-6 mx-auto w-full max-w-[640px] bg-surface border border-border rounded-xl p-5"
+            style={{ boxShadow: '0 2px 16px -8px rgba(0,0,0,.6)' }}
+        >
+            <h2 className="font-display text-[17px] font-semibold text-fg mb-3.5">Pick a title</h2>
+
+            <div className="mb-3.5">
+                <SegmentedControl
+                    size="sm"
+                    options={KIND_OPTIONS}
                     value={kind}
-                    onChange={e => setKind(e.target.value)}
-                    className="bg-surface border border-border rounded px-2 py-1 text-sm text-fg"
-                >
-                    {KIND_OPTIONS.map(o => (
-                        <option key={o.value} value={o.value}>
-                            {o.label}
-                        </option>
-                    ))}
-                </select>
+                    onChange={setKind}
+                />
             </div>
 
-            <form onSubmit={runSearch} className="flex gap-2 mb-2">
+            <form onSubmit={runSearch} className="flex gap-2 mb-1.5">
                 <input
                     type="text"
                     value={query}
                     onChange={e => setQuery(e.target.value)}
                     placeholder="Search TMDB by title…"
-                    className="flex-1 bg-surface border border-border rounded px-3 py-2 text-sm text-fg"
+                    className={inputCls}
                 />
-                <LoadingButton type="submit" loading={searching} icon="search">
-                    Search
-                </LoadingButton>
+                <button
+                    type="submit"
+                    disabled={searching}
+                    className="h-[42px] px-[18px] rounded-lg bg-primary text-on-color font-display text-[13.5px] font-semibold hover:brightness-110 disabled:opacity-60 transition"
+                >
+                    {searching ? 'Searching…' : 'Search'}
+                </button>
             </form>
+            <p className="text-[11.5px] text-fg-dim mb-3">
+                Try: dune, severance, shogun, oppenheimer…
+            </p>
 
             {results.length > 0 && (
-                <ul className="divide-y divide-border border border-border rounded-md mb-4 max-h-80 overflow-auto">
+                <div className="border border-border rounded-lg overflow-hidden mb-4 max-h-80 overflow-y-auto">
                     {results.map(r => {
                         const title = r.title || r.name || '(untitled)';
                         const date = r.release_date || r.first_air_date || '';
                         return (
-                            <li key={r.id}>
-                                <button
-                                    type="button"
-                                    onClick={() => pickResult(r)}
-                                    disabled={picking}
-                                    className={`w-full text-left px-3 py-2 hover:bg-surface-alt flex items-center justify-between gap-3 ${
-                                        picking ? 'opacity-60 cursor-wait' : ''
-                                    }`}
-                                >
-                                    <span className="text-fg truncate">{title}</span>
-                                    <span className="text-xs text-fg-subtle shrink-0">
-                                        {date ? date.slice(0, 4) : '—'} · #{r.id}
-                                    </span>
-                                </button>
-                            </li>
+                            <button
+                                key={r.id}
+                                type="button"
+                                onClick={() => pickResult(r)}
+                                disabled={picking}
+                                className={`w-full text-left px-3.5 py-2.5 flex items-center justify-between gap-3 border-b border-border-light last:border-0 hover:bg-row-hover transition-colors ${
+                                    picking ? 'opacity-60 cursor-wait' : ''
+                                }`}
+                            >
+                                <span className="text-sm text-fg truncate">{title}</span>
+                                <span className="font-mono text-[11.5px] text-fg-subtle shrink-0">
+                                    {date ? date.slice(0, 4) : '—'} · #{r.id}
+                                </span>
+                            </button>
                         );
                     })}
-                </ul>
+                </div>
             )}
 
-            <div className="border-t border-border-subtle pt-3">
-                <div className="text-sm text-fg-muted mb-2">
+            <div className="border-t border-border pt-3.5">
+                <p className="text-[12.5px] text-fg-subtle mb-2.5">
                     …or paste a TMDB / TVDB / IMDB ID or URL
-                </div>
+                </p>
                 <div className="flex gap-2">
                     <input
                         type="text"
                         value={paste}
                         onChange={e => setPaste(e.target.value)}
                         placeholder="e.g. 603, tt0133093, tvdb:413715, or a TMDB/TVDB URL"
-                        className="flex-1 bg-surface border border-border rounded px-3 py-2 text-sm text-fg"
+                        className={`${inputCls} h-10 font-mono text-[13px]`}
                     />
-                    <LoadingButton
+                    <button
+                        type="button"
                         onClick={runPaste}
-                        loading={resolving}
-                        variant="secondary"
-                        icon="link"
+                        disabled={resolving}
+                        className="h-10 px-4 rounded-lg bg-surface-inset border border-border text-fg-muted text-[13px] font-semibold hover:bg-row-hover hover:text-fg disabled:opacity-60 transition"
                     >
-                        Use ID
-                    </LoadingButton>
+                        {resolving ? 'Resolving…' : 'Use ID'}
+                    </button>
                 </div>
             </div>
         </section>
