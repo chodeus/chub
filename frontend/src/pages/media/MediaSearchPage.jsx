@@ -331,6 +331,10 @@ const MediaSearchPage = () => {
                                     node: <span className="text-warning">★ {item.rating}</span>,
                                 },
                                 runtime && { key: 'runtime', node: <span>{runtime}</span> },
+                                item.studio && {
+                                    key: 'studio',
+                                    node: <span>{item.studio}</span>,
+                                },
                                 item.language && {
                                     key: 'lang',
                                     node: <span className="uppercase">{item.language}</span>,
