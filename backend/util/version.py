@@ -98,6 +98,35 @@ def _check_remote_version(local_version, branch, logger):
     return remote_full, build_count, update_available
 
 
+def check_for_update(logger) -> dict:
+    """On-demand update check used by GET /api/version/check.
+
+    Derives the branch from the local version, polls the remote manifest +
+    commit count via `_check_remote_version`, and returns a summary the UI can
+    render. Network failures degrade to `update_available=False` with whatever
+    we managed to resolve (never raises).
+    """
+    local_version = get_version()
+    local_parts = local_version.strip().split(".")
+    branch = "main"
+    if len(local_parts) >= 4:
+        m = re.match(r"([a-zA-Z]+)", local_parts[3])
+        if m:
+            branch = m.group(1)
+
+    remote_full, build_count, update_available = _check_remote_version(
+        local_version, branch, logger
+    )
+    return {
+        "local_version": local_version,
+        "remote_version": remote_full,
+        "branch": branch,
+        "build_count": build_count,
+        "update_available": bool(update_available),
+        "checked": remote_full is not None,
+    }
+
+
 def start_version_check(config, logger, interval=3600):
     """Starts a background thread to check for version updates."""
 

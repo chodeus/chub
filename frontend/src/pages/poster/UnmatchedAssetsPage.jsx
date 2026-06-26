@@ -217,16 +217,20 @@ const sortRows = (rows, sort, accessors) => {
 const nextSort = (sort, key) =>
     sort.key === key ? { key, dir: sort.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' };
 
-/** A clickable table header that toggles the table's sort on `sortKey`. */
-const SortHeader = ({ label, sortKey, sort, onSort, align = 'left' }) => {
+/** A clickable table header that toggles the table's sort on `sortKey`.
+ *  `mono` switches to the dense mono-uppercase column-label styling. */
+const SortHeader = ({ label, sortKey, sort, onSort, align = 'left', mono = false }) => {
     const active = sort.key === sortKey;
+    const th = mono
+        ? 'px-4 py-2.5 font-mono text-[10px] uppercase tracking-wider text-fg-dim'
+        : 'px-3 py-2 font-medium';
     return (
-        <th className={`px-3 py-2 font-medium ${align === 'right' ? 'text-right' : ''}`}>
+        <th className={`${th} ${align === 'right' ? 'text-right' : 'text-left'}`}>
             <button
                 type="button"
                 onClick={() => onSort(sortKey)}
                 aria-label={`Sort by ${label}`}
-                className={`inline-flex items-center gap-1 font-medium hover:text-fg ${
+                className={`inline-flex items-center gap-1 hover:text-fg ${
                     active ? 'text-fg' : ''
                 } ${align === 'right' ? 'flex-row-reverse' : ''}`}
             >
@@ -253,8 +257,71 @@ const UNMATCHED_SORT = {
     instance: i => i.instance_name,
 };
 
+/** Small artwork placeholder for the title cell — an unmatched item has no
+ *  poster cached by definition. */
+const UnmatchedThumb = () => (
+    <span
+        className="shrink-0 w-7 h-10 rounded-[5px] bg-surface-inset border border-border flex items-center justify-center"
+        title="No artwork cached"
+        aria-hidden="true"
+    >
+        <span className="material-symbols-outlined text-fg-dim text-[14px]">image</span>
+    </span>
+);
+
+/** Colour the instance dot by *arr family, matching the mock. */
+const instanceDotColor = name => {
+    const n = (name || '').toLowerCase();
+    if (n.startsWith('sonarr')) return 'var(--color-accent)';
+    if (n.startsWith('radarr')) return 'var(--color-success)';
+    return 'var(--color-source-cl2k)';
+};
+
+/** Gold "missing" chips for the unmatched poster list — a POSTER chip plus a
+ *  season-count chip for series. */
+const MissingPosterChips = ({ item }) => {
+    const chips = [];
+    if (item._type === 'series') {
+        if (item.missing_main_poster) chips.push('Poster');
+        const n = item.missing_seasons?.length || 0;
+        if (n) chips.push(`${n} season${n > 1 ? 's' : ''}`);
+    }
+    if (!chips.length) chips.push('Poster');
+    return (
+        <span className="flex flex-wrap gap-1.5">
+            {chips.map(c => (
+                <span
+                    key={c}
+                    className="inline-flex items-center px-2 py-[3px] rounded-[5px] font-mono text-[9.5px] font-semibold uppercase whitespace-nowrap bg-warning/15 text-warning"
+                >
+                    {c}
+                </span>
+            ))}
+        </span>
+    );
+};
+
+/** The single primary external-id label + a tooltip listing every id. */
+const externalIdLabel = item =>
+    item.tmdb_id
+        ? `tmdb ${item.tmdb_id}`
+        : item.tvdb_id
+          ? `tvdb ${item.tvdb_id}`
+          : item.imdb_id
+            ? String(item.imdb_id)
+            : null;
+
+const externalIdTitle = item =>
+    [
+        item.tmdb_id && `TMDB ${item.tmdb_id}`,
+        item.imdb_id && `IMDB ${item.imdb_id}`,
+        item.tvdb_id && `TVDB ${item.tvdb_id}`,
+    ]
+        .filter(Boolean)
+        .join('   ·   ') || undefined;
+
 /** Unified, filterable + searchable table of every unmatched item. */
-const UnmatchedList = ({ items, onRefresh, typeKey: typeKeyProp, onTypeChange }) => {
+const UnmatchedList = ({ items, onRefresh, onPick, typeKey: typeKeyProp, onTypeChange }) => {
     const toast = useToast();
     // typeKey can be driven externally (the clickable summary cards) or locally
     // (the All/Movies/Series tabs). Controlled when onTypeChange is provided.
@@ -342,9 +409,9 @@ const UnmatchedList = ({ items, onRefresh, typeKey: typeKeyProp, onTypeChange })
     }
 
     return (
-        <div className="flex flex-col gap-3">
-            <div className="flex items-center justify-between gap-3 flex-wrap">
-                <div className="flex flex-wrap gap-1">
+        <div className="flex flex-col gap-4">
+            <div className="flex items-center gap-3 flex-wrap">
+                <div className="inline-flex items-center h-10 p-1 gap-0.5 bg-surface border border-border rounded-lg">
                     {presentTabs.map(t => (
                         <button
                             key={t.key}
@@ -352,169 +419,200 @@ const UnmatchedList = ({ items, onRefresh, typeKey: typeKeyProp, onTypeChange })
                                 setTypeKey(t.key);
                                 setPage(0);
                             }}
-                            className={`px-3 py-1 text-sm rounded-lg border ${
+                            className={`h-8 px-3 rounded-[7px] text-[12.5px] font-semibold transition-colors ${
                                 typeKey === t.key
-                                    ? 'border-primary bg-surface-alt text-fg'
-                                    : 'border-border text-fg-muted hover:text-fg'
+                                    ? 'bg-primary text-on-color'
+                                    : 'text-fg-muted hover:text-fg'
                             }`}
                         >
                             {t.label}
                         </button>
                     ))}
                 </div>
-                <input
-                    type="text"
-                    value={query}
-                    onChange={e => {
-                        setQuery(e.target.value);
-                        setPage(0);
-                    }}
-                    placeholder="Search title…"
-                    aria-label="Search unmatched titles"
-                    className="px-3 py-2 bg-input border border-border rounded-md text-fg text-sm"
-                    style={{ minWidth: '14rem' }}
-                />
+                <span className="font-mono text-[11px] px-2 py-0.5 rounded-full bg-warning/15 text-warning">
+                    {filtered.length}
+                </span>
+                <div className="flex-1 min-w-[14rem] flex items-center gap-2 h-10 px-3 rounded-lg bg-surface border border-border focus-within:border-primary transition-colors">
+                    <span
+                        className="material-symbols-outlined text-fg-subtle text-[16px] shrink-0"
+                        aria-hidden="true"
+                    >
+                        search
+                    </span>
+                    <input
+                        type="text"
+                        value={query}
+                        onChange={e => {
+                            setQuery(e.target.value);
+                            setPage(0);
+                        }}
+                        placeholder="Search unmatched…"
+                        aria-label="Search unmatched titles"
+                        className="flex-1 min-w-0 bg-transparent border-0 outline-none text-sm text-fg placeholder:text-fg-dim"
+                    />
+                </div>
             </div>
             {filtered.length === 0 ? (
                 <p className="text-sm text-fg-subtle">No matches.</p>
             ) : (
-                <div className="overflow-x-auto rounded-lg border border-border">
-                    <table className="w-full text-sm">
-                        <thead>
-                            <tr className="bg-surface-alt text-fg-muted text-left">
-                                <SortHeader
-                                    label="Title"
-                                    sortKey="title"
-                                    sort={sort}
-                                    onSort={onSort}
-                                />
-                                <SortHeader
-                                    label="Type"
-                                    sortKey="type"
-                                    sort={sort}
-                                    onSort={onSort}
-                                />
-                                <SortHeader
-                                    label="Year"
-                                    sortKey="year"
-                                    sort={sort}
-                                    onSort={onSort}
-                                />
-                                <SortHeader
-                                    label="Missing"
-                                    sortKey="missing"
-                                    sort={sort}
-                                    onSort={onSort}
-                                />
-                                <SortHeader
-                                    label="Instance"
-                                    sortKey="instance"
-                                    sort={sort}
-                                    onSort={onSort}
-                                />
-                                <th className="px-3 py-2 font-medium">TMDB</th>
-                                <th className="px-3 py-2 font-medium">IMDB</th>
-                                <th className="px-3 py-2 font-medium">TVDB</th>
-                                <th className="px-3 py-2 font-medium text-right">Request</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-border">
-                            {visible.map((item, idx) => (
-                                <tr
-                                    key={`${item._type}-${item.tmdb_id || item.tvdb_id || item.title || idx}`}
-                                    className="bg-surface hover:bg-surface-alt"
-                                >
-                                    <td className="px-3 py-2 text-fg">
-                                        {item._type !== 'collection' ? (
-                                            <Link
-                                                to={`/poster/search/assets?q=${encodeURIComponent(item.title)}`}
-                                                className="hover:text-accent hover:underline"
-                                                title="Search synced posters for this title"
-                                            >
-                                                {item.title}
-                                            </Link>
-                                        ) : (
-                                            item.title
-                                        )}
-                                    </td>
-                                    <td className="px-3 py-2 text-fg-muted">
-                                        {TYPE_LABELS[item._type]}
-                                    </td>
-                                    <td className="px-3 py-2 text-fg-muted">{item.year || '—'}</td>
-                                    <td className="px-3 py-2 text-fg-muted">
-                                        {item._type === 'series' ? (
-                                            <>
-                                                {item.missing_main_poster && (
-                                                    <span className="text-warning">Main</span>
-                                                )}
-                                                {item.missing_main_poster &&
-                                                    item.missing_seasons?.length > 0 &&
-                                                    ', '}
-                                                {item.missing_seasons?.length > 0 &&
-                                                    `S${item.missing_seasons.join(', S')}`}
-                                                {!item.missing_main_poster &&
-                                                    !(item.missing_seasons?.length > 0) &&
-                                                    '—'}
-                                            </>
-                                        ) : (
-                                            '—'
-                                        )}
-                                    </td>
-                                    <td className="px-3 py-2 text-fg-muted">
-                                        {item.instance_name || '—'}
-                                    </td>
-                                    <td className="px-3 py-2 text-fg-subtle font-mono text-xs">
-                                        {formatId(item.tmdb_id) || '—'}
-                                    </td>
-                                    <td className="px-3 py-2 text-fg-subtle font-mono text-xs">
-                                        {formatId(item.imdb_id) || '—'}
-                                    </td>
-                                    <td className="px-3 py-2 text-fg-subtle font-mono text-xs">
-                                        {formatId(item.tvdb_id) || '—'}
-                                    </td>
-                                    <td className="px-3 py-2 text-right whitespace-nowrap">
-                                        {(() => {
-                                            const action = rowActionFor?.(item);
-                                            return action ? (
-                                                <Link
-                                                    to={action.to}
-                                                    className="inline-flex items-center justify-center w-8 h-8 rounded text-fg-subtle hover:text-accent hover:bg-surface-alt align-middle"
-                                                    aria-label={action.ariaLabel}
-                                                    title={action.title}
-                                                >
-                                                    <span className="material-symbols-outlined text-base">
-                                                        {action.icon}
-                                                    </span>
-                                                </Link>
-                                            ) : null;
-                                        })()}
-                                        {item._type !== 'collection' && (
-                                            <IconButton
-                                                icon="content_copy"
-                                                size="small"
-                                                variant="ghost"
-                                                aria-label="Copy poster request to clipboard"
-                                                title="Copy poster request"
-                                                onClick={() => handleCopy(item)}
-                                            />
-                                        )}
-                                        {item.id != null && (
-                                            <IconButton
-                                                icon="block"
-                                                size="small"
-                                                variant="ghost"
-                                                disabled={busyId === item.id}
-                                                aria-label="Ignore this item"
-                                                title="Ignore — stop showing this item"
-                                                onClick={() => handleIgnore(item)}
-                                            />
-                                        )}
-                                    </td>
+                <section
+                    className="bg-surface border border-border rounded-xl overflow-hidden"
+                    style={{ boxShadow: '0 2px 16px -8px rgba(0,0,0,.6)' }}
+                >
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="border-b border-border">
+                                    <SortHeader
+                                        label="Title"
+                                        sortKey="title"
+                                        sort={sort}
+                                        onSort={onSort}
+                                        mono
+                                    />
+                                    <SortHeader
+                                        label="Type"
+                                        sortKey="type"
+                                        sort={sort}
+                                        onSort={onSort}
+                                        mono
+                                    />
+                                    <SortHeader
+                                        label="Instance"
+                                        sortKey="instance"
+                                        sort={sort}
+                                        onSort={onSort}
+                                        mono
+                                    />
+                                    <SortHeader
+                                        label="Missing"
+                                        sortKey="missing"
+                                        sort={sort}
+                                        onSort={onSort}
+                                        mono
+                                    />
+                                    <th className="px-4 py-2.5 text-left font-mono text-[10px] uppercase tracking-wider text-fg-dim">
+                                        External ID
+                                    </th>
+                                    <th className="px-4 py-2.5 text-right font-mono text-[10px] uppercase tracking-wider text-fg-dim">
+                                        Action
+                                    </th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
+                            </thead>
+                            <tbody>
+                                {visible.map((item, idx) => {
+                                    const action = rowActionFor?.(item);
+                                    const extId = externalIdLabel(item);
+                                    return (
+                                        <tr
+                                            key={`${item._type}-${item.tmdb_id || item.tvdb_id || item.title || idx}`}
+                                            className="border-b border-border-light last:border-0 hover:bg-row-hover transition-colors"
+                                        >
+                                            <td className="px-4 py-2.5">
+                                                <div className="flex items-center gap-3 min-w-0">
+                                                    <UnmatchedThumb />
+                                                    <div className="min-w-0">
+                                                        <div className="font-semibold text-sm text-fg truncate">
+                                                            {item._type !== 'collection' ? (
+                                                                <Link
+                                                                    to={`/poster/search/assets?q=${encodeURIComponent(item.title)}`}
+                                                                    className="hover:text-accent hover:underline"
+                                                                    title="Search synced posters for this title"
+                                                                >
+                                                                    {item.title}
+                                                                </Link>
+                                                            ) : (
+                                                                item.title
+                                                            )}
+                                                        </div>
+                                                        <div className="font-mono text-[10px] text-fg-subtle mt-0.5">
+                                                            {item.year || '—'}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-2.5 font-mono text-[11px] uppercase text-fg-data">
+                                                {TYPE_LABELS[item._type]}
+                                            </td>
+                                            <td className="px-4 py-2.5">
+                                                <span className="flex items-center gap-2 min-w-0 font-mono text-[11px] text-fg-muted">
+                                                    <span
+                                                        className="shrink-0 w-1.5 h-1.5 rounded-full"
+                                                        style={{
+                                                            background: instanceDotColor(
+                                                                item.instance_name
+                                                            ),
+                                                        }}
+                                                    />
+                                                    <span className="truncate">
+                                                        {item.instance_name || '—'}
+                                                    </span>
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-2.5">
+                                                <MissingPosterChips item={item} />
+                                            </td>
+                                            <td
+                                                className="px-4 py-2.5 font-mono text-[12px] text-accent whitespace-nowrap"
+                                                title={externalIdTitle(item)}
+                                            >
+                                                {extId || '—'}
+                                            </td>
+                                            <td className="px-4 py-2.5">
+                                                <div className="flex items-center gap-2 justify-end">
+                                                    {action && (
+                                                        <Link
+                                                            to={action.to}
+                                                            className="inline-flex items-center justify-center w-8 h-8 rounded-[7px] text-fg-subtle hover:text-accent hover:bg-surface-inset"
+                                                            aria-label={action.ariaLabel}
+                                                            title={action.title}
+                                                        >
+                                                            <span className="material-symbols-outlined text-[18px]">
+                                                                {action.icon}
+                                                            </span>
+                                                        </Link>
+                                                    )}
+                                                    {item._type !== 'collection' && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleCopy(item)}
+                                                            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-[7px] bg-primary text-on-color text-xs font-semibold hover:brightness-110 transition"
+                                                            title="Copy a poster request to the clipboard"
+                                                        >
+                                                            <span className="material-symbols-outlined text-[14px]">
+                                                                send
+                                                            </span>
+                                                            Request
+                                                        </button>
+                                                    )}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => onPick?.(item)}
+                                                        className="inline-flex items-center h-8 px-3 rounded-[7px] bg-surface-inset border border-border text-fg-muted text-xs font-semibold hover:bg-row-hover hover:text-fg transition"
+                                                        title="Pick a poster to apply now"
+                                                    >
+                                                        Match
+                                                    </button>
+                                                    {item.id != null && (
+                                                        <IconButton
+                                                            icon="block"
+                                                            size="small"
+                                                            variant="ghost"
+                                                            disabled={busyId === item.id}
+                                                            aria-label="Ignore this item"
+                                                            title="Ignore — stop showing this item"
+                                                            onClick={() => handleIgnore(item)}
+                                                        />
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
             )}
             {filtered.length > 0 && pageCount > 1 && (
                 <div className="flex items-center justify-center gap-3 text-sm text-fg-muted">
@@ -537,6 +635,22 @@ const UnmatchedList = ({ items, onRefresh, typeKey: typeKeyProp, onTypeChange })
                     />
                 </div>
             )}
+
+            <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-dashed border-border">
+                <span
+                    className="material-symbols-outlined text-fg-subtle text-[18px] shrink-0"
+                    aria-hidden="true"
+                >
+                    info
+                </span>
+                <span className="text-[12.5px] text-fg-subtle">
+                    Matched artwork can come from <span className="text-accent">GDrive</span>,{' '}
+                    <span className="text-success">local assets</span>, or be built in{' '}
+                    <span className="text-source-cl2k">CL2K</span> /{' '}
+                    <span className="text-warning">MM2K</span> — every match records the source
+                    style and the user it came from.
+                </span>
+            </div>
         </div>
     );
 };
@@ -1944,6 +2058,7 @@ const UnmatchedAssetsPage = () => {
                         <UnmatchedList
                             items={items}
                             onRefresh={refresh}
+                            onPick={setPickerItem}
                             typeKey={posterTypeFilter}
                             onTypeChange={setPosterTypeFilter}
                         />
