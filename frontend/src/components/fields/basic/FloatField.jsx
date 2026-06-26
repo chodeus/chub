@@ -6,7 +6,7 @@
  */
 
 import React, { useCallback } from 'react';
-import { FieldWrapper, FieldLabel, FieldError, FieldDescription, InputBase } from '../primitives';
+import { FieldRow, InputBase } from '../primitives';
 import { FieldButton } from '../features/shared';
 
 export const FloatField = React.memo(
@@ -76,9 +76,14 @@ export const FloatField = React.memo(
         const incrementDisabled = disabled || percentageValue >= percentMax;
 
         return (
-            <FieldWrapper invalid={highlightInvalid}>
-                <FieldLabel htmlFor={inputId} label={field.label} required={field.required} />
-
+            <FieldRow
+                htmlFor={inputId}
+                label={field.label}
+                required={field.required}
+                description={field.description}
+                error={errorMessage}
+                invalid={highlightInvalid}
+            >
                 <div className="flex">
                     <FieldButton
                         onClick={handleDecrement}
@@ -115,13 +120,7 @@ export const FloatField = React.memo(
                         <span className="material-symbols-outlined text-lg">add</span>
                     </FieldButton>
                 </div>
-
-                <FieldDescription
-                    id={field.descId || `${inputId}-desc`}
-                    description={field.description}
-                />
-                <FieldError id={field.errorId || `${inputId}-error`} message={errorMessage} />
-            </FieldWrapper>
+            </FieldRow>
         );
     }
 );
