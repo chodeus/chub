@@ -263,17 +263,13 @@ export const GeneralSettingsPage = () => {
     }
 
     return (
-        <div className="p-4 md:p-6 max-w-4xl mx-auto">
+        <div className="max-w-4xl mx-auto flex flex-col gap-4">
             {/* Header */}
-            <PageHeader
-                title="General Settings"
-                description="Theme and global preferences for CHUB."
-                icon="tune"
-            />
+            <PageHeader title="General" description="Appearance, dashboard, and access." />
 
             {/* Error display */}
             {saveError && (
-                <div className="mb-6 p-3 bg-error-bg border border-error-border text-error rounded">
+                <div className="p-3 bg-error-bg border border-error-border text-error rounded-lg">
                     <div className="flex items-center gap-2">
                         <span className="material-symbols-outlined text-sm">error</span>
                         {saveError}
@@ -285,9 +281,9 @@ export const GeneralSettingsPage = () => {
             {GENERAL_SETTINGS_SCHEMA.map((module, moduleIndex) => (
                 <div
                     key={`module-${module.key}-${moduleIndex}`}
-                    className="bg-surface border border-border-subtle rounded-lg p-4 md:p-6"
+                    className="bg-surface border border-border rounded-xl p-5"
                 >
-                    <h2 className="text-lg md:text-xl font-semibold mb-4 text-fg">
+                    <h2 className="font-display text-[15px] font-semibold mb-4 text-fg">
                         {module.label}
                     </h2>
 
