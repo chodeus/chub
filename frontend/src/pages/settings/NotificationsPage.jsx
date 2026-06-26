@@ -436,17 +436,15 @@ export const NotificationsPage = () => {
     }
 
     return (
-        <div className="p-6 max-w-screen-xl mx-auto">
+        <div className="max-w-screen-xl mx-auto flex flex-col gap-6">
             {/* Page Header */}
             <PageHeader
                 title="Notifications"
-                description="Discord and Notifiarr alerts."
-                badge={3}
-                icon="notifications"
+                description="Where CHUB sends run summaries and failure alerts."
             />
 
             {/* Statistics */}
-            <StatGrid columns={5} className="mb-8">
+            <StatGrid columns={5}>
                 {statistics.map(stat => (
                     <StatCard
                         key={stat.label}
@@ -458,7 +456,7 @@ export const NotificationsPage = () => {
             </StatGrid>
 
             {/* Bulk action — apply one webhook to many modules at once */}
-            <div className="flex justify-end mb-6">
+            <div className="flex justify-end">
                 <Button variant="secondary" onClick={openBulk}>
                     + Apply to multiple modules
                 </Button>

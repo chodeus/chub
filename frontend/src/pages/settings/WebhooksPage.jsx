@@ -4,7 +4,7 @@ import { useToast } from '../../contexts/ToastContext.jsx';
 import { webhooksAPI } from '../../utils/api/webhooks.js';
 import { copyText } from '../../utils/clipboard.js';
 import { Card } from '../../components/ui/card/Card.jsx';
-import { IconButton, PageHeader } from '../../components/ui';
+import { IconButton } from '../../components/ui';
 
 const buildPosterAddUrl = (path, secret) => {
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
@@ -54,7 +54,9 @@ const PosterAddCard = ({ wiringData, originsData, onRefresh }) => {
                             <span className="material-symbols-outlined text-brand-primary">
                                 add_photo_alternate
                             </span>
-                            <h3 className="text-lg font-semibold text-fg">Poster on Media Add</h3>
+                            <h3 className="font-display text-[15px] font-semibold text-fg">
+                                Poster on Media Add
+                            </h3>
                         </div>
                         <span
                             className={`text-xs px-2 py-1 rounded-full font-medium ${
@@ -263,20 +265,23 @@ export const WebhooksPage = () => {
     };
 
     return (
-        <div className="flex flex-col gap-6">
-            <PageHeader
-                title="Webhooks"
-                description="Wire Sonarr / Radarr / Tautulli to push posters the moment new media lands."
-                icon="webhook"
-                actions={
-                    <IconButton
-                        icon="refresh"
-                        aria-label="Refresh webhook status"
-                        variant="ghost"
-                        onClick={handleRefreshAll}
-                    />
-                }
-            />
+        <div className="flex flex-col gap-5">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="min-w-0">
+                    <h1 className="font-display text-[26px] font-bold tracking-[-0.3px] text-fg m-0">
+                        Webhooks
+                    </h1>
+                    <p className="text-fg-subtle text-[13.5px] mt-1 mb-0">
+                        Wire Sonarr / Radarr / Tautulli to push posters the moment new media lands.
+                    </p>
+                </div>
+                <IconButton
+                    icon="refresh"
+                    aria-label="Refresh webhook status"
+                    variant="ghost"
+                    onClick={handleRefreshAll}
+                />
+            </div>
 
             <PosterAddCard
                 wiringData={wiringData}
