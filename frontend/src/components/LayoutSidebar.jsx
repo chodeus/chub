@@ -1,8 +1,30 @@
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useUIState } from '../contexts/UIStateContext.jsx';
 import { useAuth } from '../contexts/AuthContext.jsx';
+import { useApiData } from '../hooks/useApiData';
+import { systemAPI } from '../utils/api/system';
 import { withExtensionNavChildren } from '../extensions/index.js';
+
+// Brand mark — gold rounded square with three indigo bars. Colours are fixed
+// brand identity (not theme-driven), so they're inlined rather than tokenised.
+const BrandMark = () => (
+    <div
+        className="flex flex-col justify-center gap-[3px] px-[7px] shrink-0"
+        style={{
+            width: 34,
+            height: 34,
+            borderRadius: 9,
+            background: '#ffc944',
+            boxShadow: '0 2px 14px rgba(255,201,68,.32)',
+        }}
+        aria-hidden="true"
+    >
+        <span className="block h-[3px] w-full rounded-[2px]" style={{ background: '#110b28' }} />
+        <span className="block h-[3px] w-[70%] rounded-[2px]" style={{ background: '#110b28' }} />
+        <span className="block h-[3px] w-[85%] rounded-[2px]" style={{ background: '#110b28' }} />
+    </div>
+);
 
 const CORE_NAV_SECTIONS = [
     {
@@ -111,6 +133,23 @@ const LayoutSidebar = React.memo(() => {
     const { user, logout } = useAuth();
     const sidebarRef = useRef(null);
 
+    const { data: versionData } = useApiData({
+        apiFunction: systemAPI.getVersion,
+        options: { showErrorToast: false },
+    });
+
+    // Backend returns `1.0.0.main51` (base + branch + commit count); render as
+    // `v1.0.0 · main #51` in the footer, mirroring the dashboard footer.
+    const versionLine = useMemo(() => {
+        const raw =
+            typeof versionData === 'string'
+                ? versionData
+                : versionData?.data?.version || versionData?.data || versionData;
+        if (!raw || typeof raw !== 'string') return null;
+        const m = raw.match(/^(\d+\.\d+\.\d+)\.([a-z][a-z0-9_-]*?)(\d+)$/i);
+        return m ? `v${m[1]} · ${m[2]} #${m[3]}` : `v${raw}`;
+    }, [versionData]);
+
     const handleParentNavLinkClick = useCallback(() => {}, []);
 
     const handleChildNavLinkClick = useCallback(() => {
@@ -162,19 +201,34 @@ const LayoutSidebar = React.memo(() => {
                 ${
                     isMobile
                         ? `fixed top-14 bottom-0 left-0 w-72 z-40 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`
-                        : 'flex-none min-w-sidebar translate-x-0'
+                        : 'flex-none w-[244px] translate-x-0'
                 } ${isMobile && mobileMenuOpen ? 'page-sidebar--mobile-open' : ''}`}
             role="navigation"
             aria-label="Main navigation"
             aria-hidden={isMobile && !mobileMenuOpen}
         >
             <div className="flex flex-col h-full py-4">
+                {/* Brand lockup — gold mark + wordmark (hidden on mobile, where
+                    the header carries the logo) */}
+                {!isMobile && (
+                    <div className="flex items-center gap-3 px-4 pt-1 pb-4">
+                        <BrandMark />
+                        <div className="leading-tight min-w-0">
+                            <div className="font-display font-bold text-[18px] tracking-[.5px] text-sidebar-text">
+                                CHUB
+                            </div>
+                            <div className="text-[11px] font-medium text-sidebar-secondary">
+                                Media Manager
+                            </div>
+                        </div>
+                    </div>
+                )}
                 {/* Hierarchical Navigation */}
                 <nav className="flex-1 px-2">
                     {NAV_SECTIONS.map(section => (
                         <div key={section.id} className="mb-2">
                             {section.heading && (
-                                <div className="px-3 pt-4 pb-2 text-xs font-semibold uppercase tracking-wider text-sidebar-secondary opacity-70">
+                                <div className="px-3 pt-4 pb-2 font-mono text-[10px] font-medium uppercase tracking-[0.15em] text-fg-faint">
                                     {section.heading}
                                 </div>
                             )}
@@ -246,6 +300,19 @@ const LayoutSidebar = React.memo(() => {
                         </div>
                     ))}
                 </nav>
+
+                {/* Version footer — green dot + mono build string */}
+                {versionLine && (
+                    <div className="shrink-0 mx-2 mt-2 px-3 py-3 flex items-center gap-2 border-t border-sidebar-border">
+                        <span
+                            className="w-2 h-2 rounded-full bg-success shrink-0"
+                            aria-hidden="true"
+                        />
+                        <span className="font-mono text-[11px] text-sidebar-secondary truncate">
+                            {versionLine}
+                        </span>
+                    </div>
+                )}
 
                 {/* User / logout block anchored to bottom */}
                 {user && (

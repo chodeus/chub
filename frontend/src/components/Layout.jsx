@@ -64,7 +64,7 @@ const Layout = ({ children }) => {
 
                         <main
                             id="main-content"
-                            className="flex-1 overflow-y-auto bg-surface rounded-xl m-3 md:m-5 p-4 sm:p-5 md:p-6"
+                            className="flex-1 overflow-y-auto bg-bg px-4 pt-4 pb-10 sm:px-6 md:px-[30px] md:pt-[22px]"
                         >
                             <Breadcrumbs />
                             <FeatureErrorBoundary
