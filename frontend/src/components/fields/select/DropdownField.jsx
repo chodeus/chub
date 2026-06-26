@@ -6,7 +6,7 @@
  */
 
 import React, { useCallback, useMemo } from 'react';
-import { FieldWrapper, FieldLabel, FieldError, FieldDescription, SelectBase } from '../primitives';
+import { FieldRow, SelectBase } from '../primitives';
 
 /**
  * DropdownField component for select input
@@ -54,9 +54,14 @@ export const DropdownField = React.memo(
         }, [field.options]);
 
         return (
-            <FieldWrapper invalid={highlightInvalid}>
-                <FieldLabel htmlFor={inputId} label={field.label} required={field.required} />
-
+            <FieldRow
+                htmlFor={inputId}
+                label={field.label}
+                required={field.required}
+                description={field.description}
+                error={errorMessage}
+                invalid={highlightInvalid}
+            >
                 <SelectBase
                     id={inputId}
                     name={field.key}
@@ -69,10 +74,7 @@ export const DropdownField = React.memo(
                     placeholder={field.placeholder || 'Select an option...'}
                     ariaDescribedby={`${inputId}-desc ${inputId}-error`.trim()}
                 />
-
-                <FieldDescription id={`${inputId}-desc`} description={field.description} />
-                <FieldError id={`${inputId}-error`} message={errorMessage} />
-            </FieldWrapper>
+            </FieldRow>
         );
     }
 );
