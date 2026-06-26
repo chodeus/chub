@@ -49,7 +49,18 @@ const buildBars = (counts, { topN, labelMap } = {}) => {
 
 /** Horizontal bar list for a single breakdown chart. When `onSelect` is
  * provided each row becomes a button (used to drill into a variant). */
-const BreakdownBars = ({ bars, onSelect, activeLabel }) => {
+// Colour a "by source" bar by its source so Local/GDrive/CL2K/MM2K read
+// distinctly (matching the mock). Other charts pass no barColor → cyan.
+const sourceBarColor = label => {
+    const l = (label || '').toLowerCase();
+    if (l.includes('local')) return '#6cbc66';
+    if (l.includes('drive') || l.includes('gdrive')) return '#53e8f0';
+    if (l.includes('cl2k')) return '#a99eff';
+    if (l.includes('mm2k')) return '#ffc944';
+    return '#53e8f0';
+};
+
+const BreakdownBars = ({ bars, onSelect, activeLabel, barColor }) => {
     const interactive = typeof onSelect === 'function';
     return (
         <div className="flex flex-col gap-3">
@@ -65,10 +76,13 @@ const BreakdownBars = ({ bars, onSelect, activeLabel }) => {
                                 {count.toLocaleString()} · {pct.toFixed(1)}%
                             </span>
                         </div>
-                        <div className="h-2 bg-surface-alt rounded-full overflow-hidden">
+                        <div className="h-2 bg-border rounded-full overflow-hidden">
                             <div
-                                className="h-full bg-accent rounded-full"
-                                style={{ width: `${barPct}%` }}
+                                className="h-full rounded-full"
+                                style={{
+                                    width: `${barPct}%`,
+                                    background: barColor ? barColor(label) : 'var(--accent)',
+                                }}
                             />
                         </div>
                     </>
@@ -430,7 +444,7 @@ const PosterStatsPage = () => {
                 ].map(card => (
                     <div
                         key={card.label}
-                        className="p-5 rounded-xl bg-surface border border-border flex flex-col"
+                        className="p-5 rounded-xl bg-surface border border-border flex flex-col shadow-[0_2px_16px_-8px_rgba(0,0,0,0.6)]"
                     >
                         <p className="font-mono text-[10px] tracking-[1px] text-fg-subtle">
                             {card.label}
@@ -503,7 +517,7 @@ const PosterStatsPage = () => {
                     {sourceBars.length > 0 && (
                         <div className="p-5 rounded-xl bg-surface border border-border mt-4">
                             <p className="text-sm text-fg-muted mb-3">Top sources used</p>
-                            <BreakdownBars bars={sourceBars} />
+                            <BreakdownBars bars={sourceBars} barColor={sourceBarColor} />
                         </div>
                     )}
                 </section>
@@ -529,7 +543,7 @@ const PosterStatsPage = () => {
                                                 {stat.media_matched || 0}/{stat.media_total || 0}
                                             </span>
                                         </div>
-                                        <div className="mt-1 h-2 bg-surface-alt rounded-full overflow-hidden">
+                                        <div className="mt-1 h-2 bg-border rounded-full overflow-hidden">
                                             <div
                                                 className="h-full bg-success rounded-full"
                                                 style={{ width: `${stat.media_pct || 0}%` }}
@@ -544,7 +558,7 @@ const PosterStatsPage = () => {
                                                 {stat.collections_total || 0}
                                             </span>
                                         </div>
-                                        <div className="mt-1 h-2 bg-surface-alt rounded-full overflow-hidden">
+                                        <div className="mt-1 h-2 bg-border rounded-full overflow-hidden">
                                             <div
                                                 className="h-full bg-accent rounded-full"
                                                 style={{
