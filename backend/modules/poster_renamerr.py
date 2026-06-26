@@ -1296,7 +1296,7 @@ class PosterRenamerr(ChubModule):
         # will fail. Don't change without reading that test first.
         start_time = datetime.now()
         self.logger.info("Gathering all the posters, please wait...")
-        source_dirs = source_dirs or self.config.source_dirs
+        source_dirs = source_dirs or self._scan_source_dirs()
 
         # Plan the progress curve: count total assets across all source_dirs
         # up front so each per-asset write contributes a proportional slice.
@@ -1378,17 +1378,67 @@ class PosterRenamerr(ChubModule):
         formatted_duration = f"{int(hours)}h {int(minutes)}m {int(seconds)}s"
         self.logger.info(f"Merge run time: {formatted_duration}")
 
+    def _gdrive_match_locations(self) -> List[str]:
+        """gdrive_list locations folded into poster matching — every drive
+        except those flagged `search_only` (browse-only "Extras" drives).
+
+        Typically all GDrives are match sources, so they're included by default
+        with no per-drive config; the rare browse-only drive opts out via the
+        search_only flag."""
+        full_config = getattr(self, "full_config", None)
+        sync_cfg = getattr(full_config, "sync_gdrive", None)
+        gdrive_list = getattr(sync_cfg, "gdrive_list", None) or []
+        out: List[str] = []
+        for entry in gdrive_list:
+            loc = (getattr(entry, "location", "") or "").strip()
+            if loc and not getattr(entry, "search_only", False):
+                out.append(loc)
+        return out
+
+    def _scan_source_dirs(self) -> List[str]:
+        """Directories poster_renamerr scans AND matches: the configured local
+        source_dirs plus every matchable gdrive_list location, deduped by
+        realpath (first occurrence wins).
+
+        A drive already listed in source_dirs keeps its position (and its
+        bottom-wins priority); auto-included drives append after, so a GDrive
+        contributor drive wins over a plain local fallback dir — the usual
+        intent. See the GDrive-as-source design."""
+        ordered = list(getattr(self.config, "source_dirs", []) or [])
+        ordered += self._gdrive_match_locations()
+        seen: set = set()
+        out: List[str] = []
+        for d in ordered:
+            if not d:
+                continue
+            rp = os.path.realpath(d).rstrip("/")
+            if rp in seen:
+                continue
+            seen.add(rp)
+            out.append(d)
+        return out
+
     def _matchable_source_dirs(self) -> List[str]:
-        """Realpath'd source_dirs that own *matchable* rows — the union of
-        poster_renamerr's and asset_renamerr's source_dirs. A gdrive_list
-        folder under any of these is already indexed by a renamer scan and is
-        excluded from the search-only gdrive pass."""
+        """Realpath'd dirs that own *matchable* rows — poster_renamerr's scan
+        set (local source_dirs + matchable gdrive locations) plus
+        asset_renamerr's source_dirs. A gdrive_list folder under any of these is
+        already indexed by a renamer scan and is excluded from the search-only
+        gdrive pass."""
         full_config = getattr(self, "full_config", None)
         ar_cfg = getattr(full_config, "asset_renamerr", None)
-        covered = list(getattr(self.config, "source_dirs", []) or []) + list(
+        covered = self._scan_source_dirs() + list(
             getattr(ar_cfg, "source_dirs", []) or []
         )
-        return [os.path.realpath(sd).rstrip("/") for sd in covered if sd]
+        seen: set = set()
+        out: List[str] = []
+        for sd in covered:
+            if not sd:
+                continue
+            rp = os.path.realpath(sd).rstrip("/")
+            if rp not in seen:
+                seen.add(rp)
+                out.append(rp)
+        return out
 
     def merge_gdrive_search_index(self, db: ChubDB):
         """Index gdrive_list locations that aren't a renamer source_dir into
@@ -1510,7 +1560,7 @@ class PosterRenamerr(ChubModule):
                 # a clear with the other's insert (see _POSTER_CACHE_REBUILD_LOCK).
                 with _POSTER_CACHE_REBUILD_LOCK:
                     db.poster.clear()
-                    self.merge_assets(source_dirs=self.config.source_dirs, db=db)
+                    self.merge_assets(source_dirs=self._scan_source_dirs(), db=db)
                     # Index gdrive_list folders outside source_dirs as
                     # search-only so Assets Search covers all local assets.
                     self.merge_gdrive_search_index(db)
@@ -1658,7 +1708,7 @@ class PosterRenamerr(ChubModule):
                 with self._phase("merge cache"), _POSTER_CACHE_REBUILD_LOCK:
                     self.logger.info("Clearing poster cache for rebuild")
                     db.poster.clear()
-                    self.merge_assets(source_dirs=self.config.source_dirs, db=db)
+                    self.merge_assets(source_dirs=self._scan_source_dirs(), db=db)
                     # Index gdrive_list folders outside source_dirs as
                     # search-only so Assets Search covers all local assets.
                     self.merge_gdrive_search_index(db)
