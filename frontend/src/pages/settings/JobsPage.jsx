@@ -9,7 +9,32 @@ import Spinner from '../../components/ui/Spinner.jsx';
 import { formatDateTime } from '../../utils/datetime.js';
 import { useUIState } from '../../contexts/UIStateContext.jsx';
 
-const STATUS_FILTERS = ['all', 'pending', 'running', 'completed', 'error'];
+const STATUS_FILTERS = [
+    { key: 'all', label: 'All' },
+    { key: 'running', label: 'Running' },
+    { key: 'success', label: 'Success' },
+    { key: 'error', label: 'Error' },
+    { key: 'webhook', label: 'Webhook' },
+];
+
+// Trigger pill styling — scheduled (brand), manual (neutral), webhook (cyan).
+const TRIGGER_STYLE = {
+    scheduled: 'bg-primary/15 text-source-cl2k',
+    manual: 'bg-surface-inset text-fg-data',
+    webhook: 'bg-accent/12 text-accent',
+};
+const triggerOf = job =>
+    job.trigger || (job.type === 'webhook' || job.job_type === 'webhook' ? 'webhook' : 'manual');
+
+// Status-dot colour for the table's STATUS cell.
+const STATUS_DOT = {
+    pending: 'bg-warning',
+    running: 'bg-accent',
+    completed: 'bg-success',
+    success: 'bg-success',
+    error: 'bg-error',
+    cancelled: 'bg-fg-dim',
+};
 
 const STATUS_COLORS = {
     pending: 'bg-warning/20 text-warning',
@@ -111,13 +136,14 @@ export const JobsPage = () => {
         return () => clearInterval(id);
     }, [expandedJobId, jobDetail?.status]);
 
-    const fetchJobsFiltered = useCallback(
-        () =>
-            jobsAPI.listJobs(
-                activeFilter !== 'all' ? { status: activeFilter, limit: 100 } : { limit: 100 }
-            ),
-        [activeFilter]
-    );
+    const [clearingOld, setClearingOld] = useState(false);
+
+    const fetchJobsFiltered = useCallback(() => {
+        if (activeFilter === 'all') return jobsAPI.listJobs({ limit: 100 });
+        if (activeFilter === 'webhook')
+            return jobsAPI.listJobs({ job_type: 'webhook', limit: 100 });
+        return jobsAPI.listJobs({ status: activeFilter, limit: 100 });
+    }, [activeFilter]);
 
     const {
         data: statsData,
@@ -166,6 +192,20 @@ export const JobsPage = () => {
         refreshStats();
         refreshJobs();
     }, [refreshStats, refreshJobs]);
+
+    const handleClearOld = useCallback(async () => {
+        setClearingOld(true);
+        try {
+            await jobsAPI.deleteOldJobs(30);
+            toast.success('Cleared completed jobs older than 30 days');
+            refreshJobs();
+            refreshStats();
+        } catch {
+            toast.error('Failed to clear old jobs');
+        } finally {
+            setClearingOld(false);
+        }
+    }, [toast, refreshJobs, refreshStats]);
 
     const handleRetry = async jobId => {
         try {
@@ -287,16 +327,28 @@ export const JobsPage = () => {
         <div className="flex flex-col gap-6">
             <PageHeader
                 title="Jobs"
-                description="Monitor queued and completed runs."
+                description="Queued, running and completed runs — retry failures or clear old jobs."
                 badge={2}
                 icon="work_history"
                 actions={
-                    <IconButton
-                        icon="refresh"
-                        aria-label="Refresh jobs"
-                        variant="ghost"
-                        onClick={handleRefresh}
-                    />
+                    <div className="flex items-center gap-2">
+                        <LoadingButton
+                            loading={clearingOld}
+                            loadingText="Clearing…"
+                            variant="ghost"
+                            size="small"
+                            icon="delete_sweep"
+                            onClick={handleClearOld}
+                        >
+                            Clear &gt; 30d
+                        </LoadingButton>
+                        <IconButton
+                            icon="refresh"
+                            aria-label="Refresh jobs"
+                            variant="ghost"
+                            onClick={handleRefresh}
+                        />
+                    </div>
                 }
             />
 
@@ -341,16 +393,16 @@ export const JobsPage = () => {
             <div className="flex flex-wrap items-center gap-2">
                 {STATUS_FILTERS.map(filter => (
                     <button
-                        key={filter}
+                        key={filter.key}
                         type="button"
-                        onClick={() => setActiveFilter(filter)}
-                        className={`px-3 py-1 rounded-full font-mono text-[12.5px] font-medium capitalize cursor-pointer border transition-colors ${
-                            activeFilter === filter
+                        onClick={() => setActiveFilter(filter.key)}
+                        className={`px-3 py-1 rounded-full font-mono text-[12.5px] font-medium cursor-pointer border transition-colors ${
+                            activeFilter === filter.key
                                 ? 'bg-primary/15 text-fg border-primary/40'
                                 : 'bg-surface text-fg-muted border-border hover:text-fg'
                         }`}
                     >
-                        {filter}
+                        {filter.label}
                     </button>
                 ))}
             </div>
@@ -460,23 +512,20 @@ export const JobsPage = () => {
                 <div className="border border-border rounded-lg overflow-hidden">
                     <table className="w-full text-sm table-fixed sm:table-auto">
                         <thead>
-                            <tr className="bg-surface-alt border-b border-border">
-                                <th className="hidden sm:table-cell text-left px-4 py-3 font-medium text-fg-muted">
-                                    ID
+                            <tr className="bg-surface-alt border-b border-border font-mono text-[10px] uppercase tracking-wider text-fg-dim">
+                                <th className="hidden sm:table-cell text-left px-4 py-3 font-medium">
+                                    Job
                                 </th>
-                                <th className="text-left px-2 sm:px-4 py-3 font-medium text-fg-muted">
-                                    Type
+                                <th className="text-left px-2 sm:px-4 py-3 font-medium">Module</th>
+                                <th className="hidden sm:table-cell text-left px-4 py-3 font-medium">
+                                    Trigger
                                 </th>
-                                <th className="text-left px-2 sm:px-4 py-3 font-medium text-fg-muted">
-                                    Status
-                                </th>
-                                <th className="text-left px-2 sm:px-4 py-3 font-medium text-fg-muted">
-                                    Created
-                                </th>
-                                <th className="hidden sm:table-cell text-left px-4 py-3 font-medium text-fg-muted">
+                                <th className="text-left px-2 sm:px-4 py-3 font-medium">Status</th>
+                                <th className="hidden sm:table-cell text-left px-4 py-3 font-medium">
                                     Duration
                                 </th>
-                                <th className="text-right px-2 sm:px-4 py-3 font-medium text-fg-muted">
+                                <th className="text-left px-2 sm:px-4 py-3 font-medium">Started</th>
+                                <th className="text-right px-2 sm:px-4 py-3 font-medium">
                                     Actions
                                 </th>
                             </tr>
@@ -488,23 +537,29 @@ export const JobsPage = () => {
                                         <td className="hidden sm:table-cell px-4 py-3 font-mono text-xs text-fg-subtle">
                                             #{job.id}
                                         </td>
-                                        <td className="px-2 sm:px-4 py-3">
-                                            <span className="inline-block px-2 py-0.5 rounded bg-surface-alt text-fg text-xs font-medium break-all">
-                                                {job.module_name || job.job_type || job.type || '-'}
+                                        <td className="px-2 sm:px-4 py-3 text-fg text-sm font-semibold break-all">
+                                            {job.module_name || job.job_type || job.type || '-'}
+                                        </td>
+                                        <td className="hidden sm:table-cell px-4 py-3">
+                                            <span
+                                                className={`font-mono text-[11px] px-2 py-[3px] rounded-md ${TRIGGER_STYLE[triggerOf(job)] || TRIGGER_STYLE.manual}`}
+                                            >
+                                                {triggerOf(job)}
                                             </span>
                                         </td>
                                         <td className="px-2 sm:px-4 py-3">
-                                            <span
-                                                className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${STATUS_COLORS[job.status] || 'bg-surface text-fg-muted'}`}
-                                            >
+                                            <span className="flex items-center gap-2 text-xs font-medium capitalize text-fg">
+                                                <span
+                                                    className={`w-[7px] h-[7px] rounded-full ${STATUS_DOT[job.status] || 'bg-fg-dim'}`}
+                                                />
                                                 {job.status}
                                             </span>
                                         </td>
-                                        <td className="px-2 sm:px-4 py-3 text-fg-muted text-xs">
-                                            {formatTime(job.received_at || job.created_at)}
-                                        </td>
-                                        <td className="hidden sm:table-cell px-4 py-3 text-fg-muted text-xs">
+                                        <td className="hidden sm:table-cell px-4 py-3 font-mono text-fg-muted text-xs">
                                             {jobDuration(job)}
+                                        </td>
+                                        <td className="px-2 sm:px-4 py-3 font-mono text-fg-subtle text-xs">
+                                            {formatTime(job.received_at || job.created_at)}
                                         </td>
                                         <td className="px-2 sm:px-4 py-3 text-right">
                                             <div className="flex items-center justify-end gap-1">
@@ -535,7 +590,7 @@ export const JobsPage = () => {
                                     </tr>
                                     {expandedJobId === job.id && (
                                         <tr className="bg-surface-alt/30">
-                                            <td colSpan={6} className="px-4 py-3">
+                                            <td colSpan={7} className="px-4 py-3">
                                                 {detailLoading ? (
                                                     <span className="text-xs text-fg-muted">
                                                         Loading...

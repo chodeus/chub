@@ -41,6 +41,9 @@ export const jobsAPI = {
         if (filters.status) {
             params.append('status', filters.status);
         }
+        if (filters.job_type) {
+            params.append('job_type', filters.job_type);
+        }
         if (filters.limit) {
             params.append('limit', filters.limit.toString());
         }
@@ -76,5 +79,14 @@ export const jobsAPI = {
      */
     retryJob: (jobId, options = {}) => {
         return apiCore.post(`/jobs/${jobId}/retry`, {}, options);
+    },
+
+    /**
+     * Delete completed/errored jobs older than `days` (default 30).
+     * @param {number} days - Age threshold in days
+     * @returns {Promise<Object>} { deleted }
+     */
+    deleteOldJobs: (days = 30) => {
+        return apiCore.delete(`/jobs/old?days=${days}`);
     },
 };
