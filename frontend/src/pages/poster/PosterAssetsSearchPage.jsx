@@ -370,7 +370,7 @@ const PosterAssetsSearchPage = () => {
                             runPosterSearch(e.target.value);
                         }}
                         placeholder="Search by title or filename…"
-                        className="flex-1 min-w-0 bg-transparent border-0 outline-none text-sm text-fg placeholder:text-fg-subtle"
+                        className="flex-1 min-w-0 bg-transparent border-0 outline-none text-sm text-fg placeholder:text-fg-dim"
                         aria-label="Search posters"
                     />
                 </div>

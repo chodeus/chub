@@ -7,7 +7,7 @@ import { formatSecondsAgo } from '../../utils/schedule';
 
 /** Reusable stat card — always reserves the subtext row so sibling cards align */
 const StatCard = ({ label, value, subtext, color = 'text-fg' }) => (
-    <div className="p-5 rounded-xl bg-surface border border-border flex flex-col">
+    <div className="p-5 rounded-xl bg-surface border border-border flex flex-col shadow-[0_2px_16px_-8px_rgba(0,0,0,0.6)]">
         <p className="font-mono text-[10px] tracking-[1.2px] uppercase text-fg-subtle mb-2">
             {label}
         </p>
@@ -70,7 +70,7 @@ const HealthCard = ({ title, badge, row, footer }) => {
                 )}
             </div>
             {(row.monitored > 0 || inLibrary > 0) && (
-                <div className="mt-2 h-1.5 bg-surface-alt rounded-full overflow-hidden">
+                <div className="mt-2 h-1.5 bg-border rounded-full overflow-hidden">
                     <div
                         className="h-full rounded-full transition-all bg-success"
                         style={{ width: `${Math.max(2, pct)}%` }}
@@ -109,7 +109,7 @@ const BreakdownBars = ({ items, labelKey, countKey = 'count', maxItems = null })
                                 {item[labelKey] || 'Unknown'}
                             </span>
                             <div
-                                className="h-2 rounded-full bg-surface-alt overflow-hidden"
+                                className="h-2 rounded-full bg-border overflow-hidden"
                                 role="presentation"
                             >
                                 <div
