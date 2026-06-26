@@ -6,7 +6,7 @@ import { configAPI } from '../../utils/api/config.js';
 import { useApiData } from '../../hooks/useApiData.js';
 import { useToast } from '../../contexts/ToastContext.jsx';
 import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning';
-import { Button, LoadingButton, PageHeader } from '../../components/ui/index.js';
+import { Button, LoadingButton } from '../../components/ui/index.js';
 import Spinner from '../../components/ui/Spinner.jsx';
 import { ColorListField } from '../../components/fields/color/ColorListField.jsx';
 
@@ -189,13 +189,18 @@ const BorderReplacerrPage = () => {
     }
 
     return (
-        <div className="p-4 md:p-6 max-w-6xl mx-auto pb-24">
-            <PageHeader
-                title="Border Replacerr"
-                description="Choose colors and themed border art for default and per-holiday styling, and preview the result on a sample of your real posters."
-                icon="border_outer"
-                actions={headerActions}
-            />
+        <div className="max-w-6xl mx-auto pb-12">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="min-w-0">
+                    <h1 className="font-display text-[26px] font-bold tracking-[-0.3px] text-fg m-0">
+                        Border Replacerr
+                    </h1>
+                    <p className="text-fg-subtle text-[13.5px] mt-1 mb-0">
+                        Apply brand or seasonal borders to your posters — scheduled by date range.
+                    </p>
+                </div>
+                {headerActions}
+            </div>
 
             <DefaultColorsSection
                 value={config.border_colors}
@@ -219,7 +224,7 @@ const BorderReplacerrPage = () => {
 const SectionHeader = ({ title, description, action = null }) => (
     <div className="flex items-start justify-between gap-3 mb-3">
         <div>
-            <h2 className="text-lg font-semibold text-fg">{title}</h2>
+            <h2 className="font-display text-lg font-semibold text-fg">{title}</h2>
             {description && <p className="text-sm text-fg-subtle mt-1 max-w-2xl">{description}</p>}
         </div>
         {action}
