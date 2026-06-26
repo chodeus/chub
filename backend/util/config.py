@@ -29,6 +29,13 @@ class GDriveListEntry(BaseModel):
     id: Optional[str] = ""
     location: Optional[str] = ""
     name: Optional[str] = ""
+    # When True this drive is "browse only": its posters are indexed for Assets
+    # Search but excluded from poster matching. Default False — drives are folded
+    # into poster_renamerr's scan set automatically (see _scan_source_dirs). This
+    # only flips an existing drive's behaviour if its location was NOT already a
+    # source_dir, so old / DAPS-migrated configs (which list match dirs in
+    # source_dirs) are unaffected.
+    search_only: bool = False
 
 
 class SyncGDriveToken(BaseModel):
