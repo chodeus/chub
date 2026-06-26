@@ -14,6 +14,7 @@ import DashboardPage from './pages/DashboardPage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 
 // Lazy-loaded pages - settings
+const ModulesHubPage = React.lazy(() => import('./pages/settings/modules/ModulesHubPage.jsx'));
 const ModuleSettingsPage = React.lazy(
     () => import('./pages/settings/modules/ModuleSettingsPage.jsx')
 );
@@ -407,6 +408,17 @@ const App = () => {
                                                     />
                                                     <Route
                                                         path="settings/modules"
+                                                        element={
+                                                            <PageErrorBoundary
+                                                                pageName="Modules"
+                                                                pageDescription="Module overview and enable toggles"
+                                                            >
+                                                                <ModulesHubPage />
+                                                            </PageErrorBoundary>
+                                                        }
+                                                    />
+                                                    <Route
+                                                        path="settings/modules/:moduleKey"
                                                         element={
                                                             <PageErrorBoundary
                                                                 pageName="Module Settings"
