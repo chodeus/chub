@@ -11,6 +11,294 @@ import Spinner from '../../components/ui/Spinner.jsx';
 import { LibraryMaintenance } from '../../components/maintenance/LibraryMaintenance.jsx';
 import { formatDateTime, formatDate } from '../../utils/datetime.js';
 
+const fmtBytes = n => {
+    if (!n) return '0 B';
+    const u = ['B', 'KB', 'MB', 'GB', 'TB'];
+    let s = n;
+    let i = 0;
+    while (s >= 1024 && i < u.length - 1) {
+        s /= 1024;
+        i += 1;
+    }
+    return `${s.toFixed(1)} ${u[i]}`;
+};
+
+const dupKey = dup => String(dup.id ?? dup.ids ?? dup.normalized_title);
+const dupIds = dup => (dup.ids || '').split(',').map(Number).filter(Boolean);
+
+/** One duplicate group: a header that expands to the mock's per-copy grid
+ *  (checkbox + quality + size + path + suggested KEEP/DUPLICATE). Copy details
+ *  are loaded lazily on first expand (they need a live *arr probe per copy). */
+const DuplicateGroup = ({
+    dup,
+    expanded,
+    members,
+    loading,
+    selected,
+    onToggleExpand,
+    onToggleSelect,
+    onResolve,
+}) => {
+    const uniqueInstances = dup.instances
+        ? [...new Set(dup.instances.split(','))].map(s => s.trim()).filter(Boolean)
+        : [];
+    // The largest file is the suggested keeper; the rest are flagged duplicates.
+    const keepId =
+        members && members.length
+            ? members.reduce((a, b) =>
+                  (b.live?.size_bytes || 0) > (a.live?.size_bytes || 0) ? b : a
+              ).id
+            : null;
+
+    return (
+        <section className="bg-surface border border-border rounded-xl overflow-hidden">
+            <button
+                type="button"
+                onClick={onToggleExpand}
+                className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-row-hover transition-colors"
+            >
+                <span
+                    className="material-symbols-outlined text-[18px] text-fg-subtle transition-transform shrink-0"
+                    style={{ transform: expanded ? 'rotate(90deg)' : 'none' }}
+                    aria-hidden="true"
+                >
+                    chevron_right
+                </span>
+                <span className="font-display text-[15px] font-semibold text-fg truncate">
+                    {dup.title || dup.normalized_title}
+                </span>
+                {dup.year && <span className="font-mono text-xs text-fg-subtle">{dup.year}</span>}
+                <span className="font-mono text-[10px] uppercase px-[7px] py-0.5 rounded-[5px] bg-warning/15 text-warning shrink-0">
+                    {dup.count} copies
+                </span>
+                {uniqueInstances.length > 0 && (
+                    <span className="ml-auto font-mono text-[11.5px] text-fg-subtle truncate hidden sm:inline">
+                        {uniqueInstances.join(' · ')}
+                    </span>
+                )}
+            </button>
+
+            {expanded &&
+                (loading ? (
+                    <div className="px-4 py-4 border-t border-border-light">
+                        <Spinner size="small" text="Probing copies…" />
+                    </div>
+                ) : members && members.length ? (
+                    <div className="border-t border-border-light">
+                        {members.map(m => {
+                            const id = m.id;
+                            const live = m.live || {};
+                            const isKeep = id === keepId;
+                            const isSel = selected.has(id);
+                            return (
+                                <div
+                                    key={id}
+                                    className="grid items-center gap-3 px-4 py-3 border-b border-border-light last:border-0"
+                                    style={{
+                                        gridTemplateColumns: '26px 1.2fr 0.7fr 1.7fr 96px',
+                                    }}
+                                >
+                                    <button
+                                        type="button"
+                                        onClick={() => onToggleSelect(id, live.size_bytes || 0)}
+                                        aria-label={isSel ? 'Deselect copy' : 'Select copy'}
+                                        className="w-[18px] h-[18px] rounded-[5px] flex items-center justify-center transition-colors"
+                                        style={{
+                                            background: isSel ? 'var(--primary)' : 'transparent',
+                                            border: `1px solid ${isSel ? 'var(--primary)' : '#3b3d72'}`,
+                                        }}
+                                    >
+                                        {isSel && (
+                                            <span className="material-symbols-outlined text-white text-[13px]">
+                                                check
+                                            </span>
+                                        )}
+                                    </button>
+                                    <span
+                                        className={`font-mono text-[12.5px] font-semibold truncate ${
+                                            isKeep ? 'text-success' : 'text-fg-muted'
+                                        }`}
+                                        title={live.quality || ''}
+                                    >
+                                        {live.quality || '—'}
+                                    </span>
+                                    <span className="font-mono text-[12px] text-fg-muted">
+                                        {live.size_human || '—'}
+                                    </span>
+                                    <span
+                                        className="font-mono text-[11px] text-fg-subtle truncate"
+                                        title={live.path || m.folder || ''}
+                                    >
+                                        {live.path || m.folder || '—'}
+                                    </span>
+                                    <span className="text-right">
+                                        <span
+                                            className={`font-mono text-[10px] font-semibold px-[9px] py-[3px] rounded-full ${
+                                                isKeep
+                                                    ? 'bg-success/15 text-success'
+                                                    : 'bg-error/15 text-error'
+                                            }`}
+                                        >
+                                            {isKeep ? 'KEEP' : 'DUPLICATE'}
+                                        </span>
+                                    </span>
+                                </div>
+                            );
+                        })}
+                        <div className="flex justify-end px-4 py-2.5">
+                            <Button
+                                variant="ghost"
+                                size="small"
+                                icon="auto_fix_high"
+                                onClick={() => onResolve(dup)}
+                            >
+                                Resolve manually
+                            </Button>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="px-4 py-4 border-t border-border-light text-sm text-fg-subtle">
+                        Couldn&apos;t load copy details for this group.
+                    </div>
+                ))}
+        </section>
+    );
+};
+
+/** The Duplicates section: lazy-expand per-group copy grids, a cross-group
+ *  selection, and a bulk-delete bar. Falls back to the per-group Resolve modal
+ *  for picking a keeper manually. */
+const DuplicatesSection = ({ duplicates, onResolve, onRefresh }) => {
+    const toast = useToast();
+    const [expanded, setExpanded] = useState({});
+    const [membersByKey, setMembersByKey] = useState({});
+    const [loadingKeys, setLoadingKeys] = useState(() => new Set());
+    // id -> size_bytes, so the bulk bar can total the space freed.
+    const [selected, setSelected] = useState({});
+    const [deleteFiles, setDeleteFiles] = useState(true);
+    const [busy, setBusy] = useState(false);
+
+    const toggleExpand = async dup => {
+        const k = dupKey(dup);
+        const willOpen = !expanded[k];
+        setExpanded(e => ({ ...e, [k]: willOpen }));
+        if (willOpen && !membersByKey[k]) {
+            setLoadingKeys(s => new Set(s).add(k));
+            try {
+                const res = await mediaAPI.fetchDuplicateMembers(dupIds(dup));
+                setMembersByKey(m => ({ ...m, [k]: res?.data?.members || [] }));
+            } catch {
+                setMembersByKey(m => ({ ...m, [k]: [] }));
+            } finally {
+                setLoadingKeys(s => {
+                    const n = new Set(s);
+                    n.delete(k);
+                    return n;
+                });
+            }
+        }
+    };
+
+    const toggleSelect = (id, bytes) =>
+        setSelected(sel => {
+            const next = { ...sel };
+            if (id in next) delete next[id];
+            else next[id] = bytes;
+            return next;
+        });
+
+    const selectedIds = Object.keys(selected).map(Number);
+    const freed = selectedIds.reduce((sum, id) => sum + (selected[id] || 0), 0);
+
+    const doDelete = async () => {
+        setBusy(true);
+        try {
+            const res = await mediaAPI.bulkDeleteMedia(selectedIds, { deleteFiles });
+            const removed = res?.data?.removed?.length ?? selectedIds.length;
+            toast.success(`Deleted ${removed} cop${removed === 1 ? 'y' : 'ies'}`);
+            setSelected({});
+            setMembersByKey({});
+            setExpanded({});
+            onRefresh();
+        } catch {
+            toast.error('Bulk delete failed');
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    if (!duplicates.length) return null;
+
+    return (
+        <section>
+            <h3 className="font-display text-lg font-semibold text-fg mb-3 flex items-center gap-2">
+                <span className="material-symbols-outlined text-warning">content_copy</span>
+                Duplicates
+                <span className="font-mono text-sm text-fg-subtle">{duplicates.length} groups</span>
+            </h3>
+
+            {selectedIds.length > 0 && (
+                <div className="flex items-center gap-3.5 flex-wrap px-4 py-3 mb-4 rounded-lg bg-primary/10 border border-primary/30">
+                    <span className="flex items-center justify-center w-5 h-5 rounded-[5px] bg-primary">
+                        <span className="material-symbols-outlined text-white text-[14px]">
+                            check
+                        </span>
+                    </span>
+                    <span className="text-[13.5px] font-semibold text-fg">
+                        {selectedIds.length} cop{selectedIds.length === 1 ? 'y' : 'ies'} selected
+                    </span>
+                    <span className="font-mono text-[12px] text-fg-muted">
+                        frees {fmtBytes(freed)}
+                    </span>
+                    <label className="flex items-center gap-1.5 text-[12px] text-fg-muted cursor-pointer select-none">
+                        <input
+                            type="checkbox"
+                            checked={deleteFiles}
+                            onChange={e => setDeleteFiles(e.target.checked)}
+                            style={{ accentColor: 'var(--primary)' }}
+                        />
+                        delete files from disk
+                    </label>
+                    <div className="ml-auto flex gap-2">
+                        <Button variant="ghost" size="small" onClick={() => setSelected({})}>
+                            Clear
+                        </Button>
+                        <LoadingButton
+                            loading={busy}
+                            loadingText="Deleting…"
+                            variant="danger"
+                            size="small"
+                            icon="delete"
+                            onClick={doDelete}
+                        >
+                            Delete copies
+                        </LoadingButton>
+                    </div>
+                </div>
+            )}
+
+            <div className="flex flex-col gap-3.5">
+                {duplicates.slice(0, 10).map((dup, i) => {
+                    const k = dupKey(dup);
+                    return (
+                        <DuplicateGroup
+                            key={dup.id || i}
+                            dup={dup}
+                            expanded={!!expanded[k]}
+                            members={membersByKey[k]}
+                            loading={loadingKeys.has(k)}
+                            selected={new Set(selectedIds)}
+                            onToggleExpand={() => toggleExpand(dup)}
+                            onToggleSelect={toggleSelect}
+                            onResolve={onResolve}
+                        />
+                    );
+                })}
+            </div>
+        </section>
+    );
+};
+
 const MediaManagePage = () => {
     const toast = useToast();
     const [deleteTarget, setDeleteTarget] = useState(null);
@@ -336,87 +624,11 @@ const MediaManagePage = () => {
                 </div>
             </div>
 
-            {duplicates.length > 0 && (
-                <section>
-                    <h3 className="font-display text-lg font-semibold text-fg mb-3 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-warning">content_copy</span>
-                        Duplicates
-                        <span className="font-mono text-sm text-fg-subtle">
-                            {duplicates.length} groups
-                        </span>
-                    </h3>
-                    <div className="flex flex-col gap-3.5">
-                        {duplicates.slice(0, 10).map((dup, i) => {
-                            // Deduplicate instance names for the header tag
-                            const uniqueInstances = dup.instances
-                                ? [...new Set(dup.instances.split(','))]
-                                      .map(s => s.trim())
-                                      .filter(Boolean)
-                                : [];
-                            let paths = [];
-                            try {
-                                paths = JSON.parse(dup.folders || '[]').filter(Boolean);
-                            } catch {
-                                paths = [];
-                            }
-                            return (
-                                <section
-                                    key={dup.id || i}
-                                    className="bg-surface border border-border rounded-xl overflow-hidden"
-                                >
-                                    <div className="flex items-center gap-3 px-4 py-3 border-b border-border-light">
-                                        <span className="font-display text-[15px] font-semibold text-fg truncate">
-                                            {dup.title || dup.normalized_title}
-                                        </span>
-                                        {dup.year && (
-                                            <span className="font-mono text-xs text-fg-subtle">
-                                                {dup.year}
-                                            </span>
-                                        )}
-                                        <span className="font-mono text-[10px] uppercase px-[7px] py-0.5 rounded-[5px] bg-warning/15 text-warning shrink-0">
-                                            {dup.count} copies
-                                        </span>
-                                        {uniqueInstances.length > 0 && (
-                                            <span className="font-mono text-[11.5px] text-fg-subtle truncate hidden sm:inline">
-                                                {uniqueInstances.join(' · ')}
-                                            </span>
-                                        )}
-                                        <Button
-                                            variant="ghost"
-                                            size="small"
-                                            icon="auto_fix_high"
-                                            className="ml-auto shrink-0"
-                                            onClick={() => setResolveTarget(dup)}
-                                        >
-                                            Resolve
-                                        </Button>
-                                    </div>
-                                    {paths.length > 0 && (
-                                        <div className="flex flex-col">
-                                            {paths.map((p, idx) => (
-                                                <div
-                                                    key={`${p}-${idx}`}
-                                                    className="flex items-center gap-3 px-4 py-2.5 border-b border-border-light last:border-b-0"
-                                                >
-                                                    <span className="material-symbols-outlined text-[16px] text-fg-dim shrink-0">
-                                                        folder
-                                                    </span>
-                                                    <span
-                                                        className="font-mono text-[11.5px] text-fg-subtle truncate"
-                                                        title={p}
-                                                    >
-                                                        {p}
-                                                    </span>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                </section>
-                            );
-                        })}
-                    </div>
-                </section>
-            )}
+            <DuplicatesSection
+                duplicates={duplicates}
+                onResolve={setResolveTarget}
+                onRefresh={refreshDups}
+            />
 
             {folderCollisions.length > 0 && (
                 <section className="mb-4">
