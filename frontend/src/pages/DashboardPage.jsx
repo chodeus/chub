@@ -24,61 +24,6 @@ import {
 } from '../utils/schedule.js';
 
 const UPCOMING_LIMIT = 5;
-// Default render order for the configurable dashboard sections. Used when
-// general.dashboard_sections is empty. Greeting stays first and the footer
-// last regardless; only these four are user-orderable/hideable.
-const DEFAULT_SECTIONS = ['health', 'modules', 'scheduler', 'quick_start'];
-
-const QUICK_START = [
-    {
-        id: 'run-module',
-        title: 'Run a module',
-        description: 'Kick off any configured module on demand.',
-        icon: 'play_arrow',
-        badge: 1,
-        to: '/settings/schedule',
-    },
-    {
-        id: 'browse-media',
-        title: 'Browse media',
-        description: 'Search and manage your Radarr / Sonarr library.',
-        icon: 'movie',
-        badge: 2,
-        to: '/media/search',
-    },
-    {
-        id: 'browse-posters',
-        title: 'Browse posters',
-        description: 'Explore GDrive and local asset libraries.',
-        icon: 'image',
-        badge: 3,
-        to: '/poster/search/assets',
-    },
-    {
-        id: 'duplicates',
-        title: 'Find duplicates',
-        description: 'Resolve duplicate media across instances.',
-        icon: 'content_copy',
-        badge: 4,
-        to: '/media/manage',
-    },
-    {
-        id: 'logs',
-        title: 'Inspect logs',
-        description: 'Tail module runs and diagnose failures.',
-        icon: 'description',
-        badge: 5,
-        to: '/logs',
-    },
-    {
-        id: 'webhooks',
-        title: 'Webhooks',
-        description: 'Trigger cleanup and unmatched asset flows.',
-        icon: 'webhook',
-        badge: 1,
-        to: '/settings/webhooks',
-    },
-];
 
 // Status-dot colour + soft ring glow per run state. rgba glows aren't
 // expressible as theme tokens, so the presentational hexes are inlined here
@@ -173,15 +118,6 @@ const DashboardPage = () => {
     const dashboardCfg = useMemo(() => configData?.data?.general || {}, [configData]);
     const refreshSeconds = dashboardCfg.dashboard_refresh_seconds ?? 30;
     const upcomingLimit = dashboardCfg.dashboard_upcoming_limit ?? UPCOMING_LIMIT;
-
-    // Section visibility. The redesign uses a fixed ops-board layout, so the
-    // old per-section reorder is retired; showSection() still gates the
-    // optional Quick start section (general.dashboard_sections).
-    const sectionOrder = useMemo(() => {
-        const arr = dashboardCfg.dashboard_sections;
-        return Array.isArray(arr) && arr.length ? arr : DEFAULT_SECTIONS;
-    }, [dashboardCfg]);
-    const showSection = useCallback(k => sectionOrder.includes(k), [sectionOrder]);
 
     // Countdown / poll-fallback tick. refreshSeconds = 0 turns auto-refresh off.
     useEffect(() => {
@@ -1097,41 +1033,6 @@ const DashboardPage = () => {
                     )}
                 </div>
             </div>
-
-            {/* Quick start */}
-            {showSection('quick_start') && (
-                <section>
-                    <h2 className="font-display text-[15px] font-semibold text-fg m-0 mb-3">
-                        Quick start
-                    </h2>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                        {QUICK_START.map(card => (
-                            <Link
-                                key={card.id}
-                                to={card.to}
-                                className="no-underline bg-surface border border-border rounded-xl p-4 flex items-center gap-3 hover:bg-row-hover transition-colors"
-                            >
-                                <span
-                                    className={`badge-bubble badge-bubble--${card.badge} w-10 h-10 rounded-lg flex items-center justify-center shrink-0`}
-                                    aria-hidden="true"
-                                >
-                                    <span className="material-symbols-outlined text-[20px]">
-                                        {card.icon}
-                                    </span>
-                                </span>
-                                <div className="min-w-0">
-                                    <div className="font-semibold text-[13.5px] text-fg truncate">
-                                        {card.title}
-                                    </div>
-                                    <div className="text-xs text-fg-muted truncate">
-                                        {card.description}
-                                    </div>
-                                </div>
-                            </Link>
-                        ))}
-                    </div>
-                </section>
-            )}
 
             {/* Run-now confirmation */}
             <Modal isOpen={!!runNowTarget} onClose={() => setRunNowTarget(null)} size="small">
