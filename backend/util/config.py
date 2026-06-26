@@ -582,6 +582,10 @@ class GeneralConfig(BaseModel):
     # prunes the backups directory to the newest `auto_backup_keep` archives.
     auto_backup: bool = False
     auto_backup_keep: int = Field(default=12, ge=1, le=100)
+    # Modules the user has hard-disabled on the Modules page. A disabled module
+    # is skipped by the scheduler AND blocked from manual / webhook runs. Names
+    # are the module keys in backend.modules.MODULES (e.g. "poster_renamerr").
+    disabled_modules: List[str] = Field(default_factory=list)
     # Plex's recently-added scan can lag 5+ minutes behind a Sonarr/Radarr
     # import under load. Defaults give ~5.5 min of total search:
     #   30s warmup + 10 attempts × 30s = 330s
@@ -1138,6 +1142,21 @@ def load_config_cli(path: Optional[str] = None) -> ChubConfig:
     except ConfigError as e:
         print(f"\u274c {e}")
         sys.exit(1)
+
+
+def module_is_disabled(module_name: str, config: Optional[ChubConfig] = None) -> bool:
+    """True if `module_name` is hard-disabled (in general.disabled_modules).
+
+    A disabled module is skipped by the scheduler and blocked from manual /
+    webhook runs. Loads config if one isn't supplied; never raises."""
+    try:
+        cfg = config if config is not None else load_config()
+        disabled = (
+            getattr(getattr(cfg, "general", None), "disabled_modules", None) or []
+        )
+        return module_name in disabled
+    except Exception:
+        return False
 
 
 def save_config(config: ChubConfig, path: Optional[str] = None) -> None:
