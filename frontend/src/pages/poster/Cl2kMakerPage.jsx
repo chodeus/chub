@@ -496,7 +496,7 @@ const Cl2kMakerPage = () => {
     }, []);
 
     return (
-        <div className="cl2k-page p-4 md:p-6 max-w-[1700px] mx-auto pb-24">
+        <div className="cl2k-page p-4 md:p-6 pb-24">
             {/* Brand-styled range sliders (mock spec) — scoped to this page so
                 it stays develop-only and doesn't touch shared CSS. */}
             <style>{`
