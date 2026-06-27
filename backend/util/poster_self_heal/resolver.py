@@ -1,15 +1,17 @@
 # backend/util/poster_self_heal/resolver.py
-"""Decide whether a CL2K poster's embedded id / title has drifted from TMDB.
+"""Decide whether a CL2K poster's embedded ids / title / year have drifted.
 
-CL2K posters are always made for the user's library items, so we bridge
-"stale id -> current id" through media_cache (matched by title+year, since a
-stale id can't match by id) and take the *canonical title* from TMDB
-``get_details`` — keeping TMDB as the source of truth the user picked while
-avoiding a TMDB free-text search.
+CL2K posters are always made for the user's library items, so the live
+``media_cache`` row is the source of the current id set (tmdb/tvdb/imdb) — it
+mirrors *arr/Plex, which sync from TMDB/TVDB. We match each poster to its library
+row (id-first across all three ids, then title+year), rebuild the canonical DAPS
+filename from that row's ids plus TMDB's canonical title/year (``get_details``),
+and propose the rename when it differs from the current filename. One pass heals
+id, title, and year drift together — a filename is canonical or it isn't.
 
 ``resolve_poster`` returns a proposal dict (shaped for poster_heal_review.upsert)
-or None when there's nothing to do (no drift, or a transient TMDB failure that
-must be retried rather than acted on).
+or None for a no-op (already canonical, no library match, or a transient TMDB
+failure that must be retried rather than acted on).
 """
 
 import os
@@ -44,30 +46,58 @@ def _as_int(value: Any) -> Optional[int]:
         return None
 
 
-def index_media(media_rows: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
-    """Group matched media_cache rows by normalized title for title+year lookup."""
+def _imdb(value: Any) -> str:
+    """Normalize an IMDb id to a comparable 'tt…' string, or '' when absent."""
+    s = str(value).strip().lower() if value not in (None, "", "None") else ""
+    return s if s.startswith("tt") else ""
+
+
+def index_media(media_rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Build id + title indexes over matched media_cache rows. First write wins
+    per id (media_cache is deduped per identity already)."""
+    by_tmdb: Dict[int, Dict[str, Any]] = {}
+    by_tvdb: Dict[int, Dict[str, Any]] = {}
+    by_imdb: Dict[str, Dict[str, Any]] = {}
     by_title: Dict[str, List[Dict[str, Any]]] = {}
     for m in media_rows:
         if not m.get("matched"):
             continue
+        t = _as_int(m.get("tmdb_id"))
+        if t and t not in by_tmdb:
+            by_tmdb[t] = m
+        v = _as_int(m.get("tvdb_id"))
+        if v and v not in by_tvdb:
+            by_tvdb[v] = m
+        i = _imdb(m.get("imdb_id"))
+        if i and i not in by_imdb:
+            by_imdb[i] = m
         nt = m.get("normalized_title") or _norm(m.get("title"))
         if nt:
             by_title.setdefault(nt, []).append(m)
-    return by_title
+    return {"tmdb": by_tmdb, "tvdb": by_tvdb, "imdb": by_imdb, "title": by_title}
 
 
 def _find_media(
-    poster: Dict[str, Any], media_index: Dict[str, List[Dict[str, Any]]]
-) -> Tuple[Optional[Dict[str, Any]], bool]:
-    """Match a poster to a single live media row by title (+year when present).
+    poster: Dict[str, Any], idx: Dict[str, Any]
+) -> Tuple[Optional[Dict[str, Any]], str, bool]:
+    """Match a poster to one live media row.
 
-    Returns (media_row, ambiguous). ``ambiguous`` is True when >1 candidate
-    survives — the caller should queue it for manual resolution rather than guess.
+    Returns (media_row, match_kind, ambiguous). ``match_kind`` is "id" (a high-
+    confidence id hit on any of tmdb/tvdb/imdb), "title" (a unique title+year
+    hit), or "". ``ambiguous`` is True when title+year matched >1 row.
     """
+    t = _as_int(poster.get("tmdb_id"))
+    if t and t in idx["tmdb"]:
+        return idx["tmdb"][t], "id", False
+    v = _as_int(poster.get("tvdb_id"))
+    if v and v in idx["tvdb"]:
+        return idx["tvdb"][v], "id", False
+    i = _imdb(poster.get("imdb_id"))
+    if i and i in idx["imdb"]:
+        return idx["imdb"][i], "id", False
+
     nt = poster.get("normalized_title") or _norm(poster.get("title"))
-    if not nt:
-        return None, False
-    candidates = media_index.get(nt, [])
+    candidates = idx["title"].get(nt, []) if nt else []
     poster_year = _as_int(poster.get("year"))
     if poster_year is not None:
         yeared = [
@@ -79,146 +109,141 @@ def _find_media(
         if yeared:
             candidates = yeared
     if len(candidates) == 1:
-        return candidates[0], False
+        return candidates[0], "title", False
     if len(candidates) > 1:
-        return None, True
-    return None, False
+        return None, "", True
+    return None, "", False
 
 
-def _proposed_name(poster: Dict[str, Any], title: str, tmdb_id: Optional[int]) -> str:
-    """Build the canonical DAPS filename the poster should have."""
-    _, ext = os.path.splitext(poster.get("file", ""))
-    return build_poster_filename(
-        kind=poster.get("asset_type") or "movie",
-        title=title,
-        year=_as_int(poster.get("year")),
-        tmdb_id=tmdb_id,
-        tvdb_id=_as_int(poster.get("tvdb_id")),
-        imdb_id=poster.get("imdb_id") or None,
-        season_number=_as_int(poster.get("season_number")),
-        ext=ext or ".jpg",
-        asset_suffix=_ASSET_SUFFIX.get(poster.get("image_type") or "poster", ""),
-    )
+def _canonical_title_year(
+    tmdb_id: Optional[int],
+    media_type: str,
+    tmdb_client,
+    fallback_title: str,
+    fallback_year: Optional[int],
+) -> Tuple[Optional[str], Optional[int], bool]:
+    """(title, year, ok). ok=False means a transient TMDB failure → retry later.
 
-
-def _canonical_title(tmdb_id: int, media_type: str, tmdb_client, fallback: str) -> str:
+    Uses TMDB get_details for the canonical title/year (the user's chosen source
+    of truth), falling back to the library values when TMDB has nothing useful.
+    """
+    if not tmdb_id:
+        return fallback_title, fallback_year, True
     details = tmdb_client.get_details(tmdb_id, media_type)
-    if details and details.get("verified") and details.get("title"):
-        return details["title"]
-    return fallback
+    if details is None:
+        return None, None, False  # transient — don't act
+    title = fallback_title
+    year = fallback_year
+    if details.get("verified"):
+        if details.get("title"):
+            title = details["title"]
+        if _as_int(details.get("year")):
+            year = _as_int(details.get("year"))
+    return title, year, True
 
 
 def resolve_poster(
     poster: Dict[str, Any],
-    media_index: Dict[str, List[Dict[str, Any]]],
+    media_index: Dict[str, Any],
     drive_folder_id: Optional[str],
     tmdb_client,
     cfg,
 ) -> Optional[Dict[str, Any]]:
-    """Return a poster_heal_review proposal dict, or None for no-op / retry-later."""
+    """Return a poster_heal_review proposal dict, or None for a no-op / retry."""
     asset_type = poster.get("asset_type") or "movie"
     media_type = _media_type(asset_type)
     cur_name = os.path.basename(poster.get("file", ""))
+    _, ext = os.path.splitext(poster.get("file", ""))
     title_old = poster.get("title") or ""
     old_tmdb = _as_int(poster.get("tmdb_id"))
+    old_tvdb = _as_int(poster.get("tvdb_id"))
+    old_imdb = _imdb(poster.get("imdb_id"))
+    old_year = _as_int(poster.get("year"))
+    has_any_id = bool(old_tmdb or old_tvdb or old_imdb)
 
-    def proposal(drift_type, tmdb_new, title_new, confidence, reason, status):
-        new_name = _proposed_name(poster, title_new, tmdb_new)
-        if new_name == cur_name:
-            return None
-        return {
-            "poster_file": poster.get("file"),
-            "drive_folder_id": drive_folder_id,
-            "asset_type": asset_type,
-            "drift_type": drift_type,
-            "current_filename": cur_name,
-            "proposed_filename": new_name,
-            "tmdb_id_old": old_tmdb,
-            "tmdb_id_new": tmdb_new,
-            "title_old": title_old,
-            "title_new": title_new,
-            "confidence": confidence,
-            "reason": reason,
-            "status": status,
-        }
+    if not has_any_id and not cfg.backfill_ids:
+        return None  # id-less poster, backfill disabled
 
-    if old_tmdb:
-        details = tmdb_client.get_details(old_tmdb, media_type)
-        if details is None:
-            return None  # transient TMDB failure — retry next run, don't act
-        if details.get("verified"):
-            # id is valid; only the title may have drifted.
-            if not cfg.heal_titles:
-                return None
-            canon = details.get("title")
-            if canon and _norm(canon) != _norm(title_old):
-                return proposal(
-                    "title",
-                    old_tmdb,
-                    canon,
-                    0.95,
-                    "TMDB title changed since the poster was named",
-                    "proposed",
-                )
-            return None
-        # verified is False -> the embedded id no longer exists on TMDB
-        # (merged/removed). Re-resolve through the live library by title+year.
-        if not cfg.heal_ids:
-            return None
-        media, ambiguous = _find_media(poster, media_index)
-        if media:
-            new_id = _as_int(media.get("tmdb_id"))
-            if new_id and new_id != old_tmdb:
-                title_new = _canonical_title(
-                    new_id, media_type, tmdb_client, media.get("title") or title_old
-                )
-                return proposal(
-                    "id",
-                    new_id,
-                    title_new,
-                    0.9,
-                    "embedded TMDB id no longer exists; matched a live library item",
-                    "proposed",
-                )
-            return None
+    media, match_kind, ambiguous = _find_media(poster, media_index)
+
+    if not media:
         if ambiguous:
-            return proposal(
-                "id",
-                None,
-                title_old,
-                0.5,
-                "embedded TMDB id no longer exists; multiple library items share "
-                "this title — pick the right one",
-                "pending",
-            )
-        return None
+            # Multiple library items share this title — can't safely pick one.
+            return {
+                "poster_file": poster.get("file"),
+                "drive_folder_id": drive_folder_id,
+                "asset_type": asset_type,
+                "drift_type": "ambiguous",
+                "current_filename": cur_name,
+                "proposed_filename": cur_name,
+                "tmdb_id_old": old_tmdb,
+                "tmdb_id_new": None,
+                "title_old": title_old,
+                "title_new": title_old,
+                "confidence": 0.5,
+                "reason": "matches multiple library items by title — pick the right one",
+                "status": "pending",
+            }
+        return None  # no library match (or non-library poster) — leave it alone
 
-    # No embedded id -> backfill from the live library.
-    if not cfg.backfill_ids:
-        return None
-    media, ambiguous = _find_media(poster, media_index)
-    if media:
-        new_id = _as_int(media.get("tmdb_id"))
-        if new_id:
-            title_new = _canonical_title(
-                new_id, media_type, tmdb_client, media.get("title") or title_old
-            )
-            return proposal(
-                "backfill",
-                new_id,
-                title_new,
-                0.85,
-                "resolved a TMDB id for an id-less poster from the live library",
-                "proposed",
-            )
-        return None
-    if ambiguous:
-        return proposal(
-            "backfill",
-            None,
-            title_old,
-            0.5,
-            "id-less poster matches multiple library items — pick the right one",
-            "pending",
-        )
-    return None
+    # Canonical id set comes from the live library row; title/year from TMDB.
+    new_tmdb = _as_int(media.get("tmdb_id")) or old_tmdb
+    new_tvdb = _as_int(media.get("tvdb_id")) or old_tvdb
+    new_imdb = _imdb(media.get("imdb_id")) or old_imdb
+    title_new, year_new, ok = _canonical_title_year(
+        new_tmdb,
+        media_type,
+        tmdb_client,
+        media.get("title") or title_old,
+        _as_int(media.get("year")) or old_year,
+    )
+    if not ok:
+        return None  # transient TMDB failure — retry next run
+
+    new_name = build_poster_filename(
+        kind=asset_type,
+        title=title_new or title_old,
+        year=year_new,
+        tmdb_id=new_tmdb,
+        tvdb_id=new_tvdb,
+        imdb_id=new_imdb or None,
+        season_number=_as_int(poster.get("season_number")),
+        ext=ext or ".jpg",
+        asset_suffix=_ASSET_SUFFIX.get(poster.get("image_type") or "poster", ""),
+    )
+    if new_name == cur_name:
+        return None  # already canonical
+
+    # Label what changed (the current -> proposed filename shows the full detail).
+    changed: List[str] = []
+    if old_tmdb != new_tmdb:
+        changed.append("backfill" if not old_tmdb else "tmdb")
+    if new_tvdb and old_tvdb != new_tvdb:
+        changed.append("tvdb")
+    if new_imdb and old_imdb != new_imdb:
+        changed.append("imdb")
+    if _norm(title_old) != _norm(title_new):
+        changed.append("title")
+    if year_new and old_year != year_new:
+        changed.append("year")
+    drift_type = "+".join(changed) or "rename"
+
+    return {
+        "poster_file": poster.get("file"),
+        "drive_folder_id": drive_folder_id,
+        "asset_type": asset_type,
+        "drift_type": drift_type,
+        "current_filename": cur_name,
+        "proposed_filename": new_name,
+        "tmdb_id_old": old_tmdb,
+        "tmdb_id_new": new_tmdb,
+        "title_old": title_old,
+        "title_new": title_new,
+        "confidence": 0.95 if match_kind == "id" else 0.9,
+        "reason": (
+            "matched the live library item by id"
+            if match_kind == "id"
+            else "matched the live library item by title + year"
+        ),
+        "status": "proposed",
+    }
