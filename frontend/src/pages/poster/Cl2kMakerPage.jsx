@@ -2726,9 +2726,10 @@ const RenderPanel = ({
                         />
                     </section>
 
-                    {/* CENTER: persistent preview + framer + actions (never moves) */}
+                    {/* CENTER: large persistent preview + actions (never moves). The
+                        crop framer lives in the right-column Framing group. */}
                     <section className="sticky top-0 self-start flex flex-col items-center gap-[13px]">
-                        <div className="relative w-full max-w-[420px] aspect-[2/3] bg-black rounded-[10px] overflow-hidden flex items-center justify-center border border-border shadow-lg">
+                        <div className="relative aspect-[2/3] h-[clamp(640px,80vh,880px)] max-w-full bg-black rounded-[10px] overflow-hidden flex items-center justify-center border border-border shadow-lg">
                             {hasBackdrop && previewUrl ? (
                                 <>
                                     <img
@@ -2757,37 +2758,6 @@ const RenderPanel = ({
                                 </span>
                             )}
                         </div>
-
-                        {backdropUrl && (
-                            <CropFramer
-                                imageUrl={backdropUrl}
-                                fitMode={fitMode}
-                                setFitMode={setFitMode}
-                                crop={crop}
-                                setCrop={setCrop}
-                                vPos={vPos}
-                                setVPos={setVPos}
-                                zoom={zoom}
-                                setZoom={setZoom}
-                                focusX={focusX}
-                                focusY={focusY}
-                                onChange={onFocusChange}
-                                mockLabel={
-                                    isSeasonPoster
-                                        ? bandLabel ||
-                                          (Number(seasonNumber) === 0
-                                              ? 'Specials'
-                                              : `Season ${seasonNumber}`)
-                                        : bandLabel ||
-                                          (item.kind === 'collection' ? 'COLLECTION' : '')
-                                }
-                                labelYFrac={
-                                    !isSeasonPoster && !bandLabel && item.kind === 'collection'
-                                        ? 1350 / 1500
-                                        : 1440 / 1500
-                                }
-                            />
-                        )}
 
                         {/* Primary actions */}
                         <div className="flex gap-2 w-full max-w-[420px] flex-wrap">
@@ -2854,6 +2824,37 @@ const RenderPanel = ({
                             — all RenderPanel props — so no CropFramer drag math moves. */}
                         <div className="flex flex-col gap-3">
                             <StudioGroupLabel>Framing</StudioGroupLabel>
+                            {backdropUrl && (
+                                <CropFramer
+                                    compact
+                                    imageUrl={backdropUrl}
+                                    fitMode={fitMode}
+                                    setFitMode={setFitMode}
+                                    crop={crop}
+                                    setCrop={setCrop}
+                                    vPos={vPos}
+                                    setVPos={setVPos}
+                                    zoom={zoom}
+                                    setZoom={setZoom}
+                                    focusX={focusX}
+                                    focusY={focusY}
+                                    onChange={onFocusChange}
+                                    mockLabel={
+                                        isSeasonPoster
+                                            ? bandLabel ||
+                                              (Number(seasonNumber) === 0
+                                                  ? 'Specials'
+                                                  : `Season ${seasonNumber}`)
+                                            : bandLabel ||
+                                              (item.kind === 'collection' ? 'COLLECTION' : '')
+                                    }
+                                    labelYFrac={
+                                        !isSeasonPoster && !bandLabel && item.kind === 'collection'
+                                            ? 1350 / 1500
+                                            : 1440 / 1500
+                                    }
+                                />
+                            )}
                             <div>
                                 <div className="flex justify-between mb-1.5">
                                     <span className="text-sm text-fg-muted">Zoom</span>
@@ -3639,6 +3640,9 @@ const CropFramer = ({
     onChange,
     mockLabel = '',
     labelYFrac = 1440 / 1500,
+    // Compact = the right-rail placement: no nested card chrome, no FitMock
+    // (the big center preview is the result view), image fills the rail width.
+    compact = false,
 }) => {
     const wrapRef = useRef(null);
     // Natural aspect ratio (h/w) of the backdrop — display-size independent, so
@@ -3785,10 +3789,14 @@ const CropFramer = ({
           : 'Re-centre the focal point';
 
     return (
-        <div className="bg-surface border border-border rounded-lg p-3">
-            <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-medium text-fg">Crop framing</h3>
-                <div className="flex items-center gap-1">
+        <div
+            className={
+                compact ? 'flex flex-col gap-2' : 'bg-surface border border-border rounded-lg p-3'
+            }
+        >
+            <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+                {!compact && <h3 className="text-sm font-medium text-fg">Crop framing</h3>}
+                <div className="flex items-center gap-1 flex-wrap">
                     <Button
                         onClick={() => setFitMode('cover')}
                         variant={fitMode === 'cover' ? 'primary' : 'secondary'}
@@ -3831,10 +3839,12 @@ const CropFramer = ({
             {/* Zoom / Vertical position sliders moved to the right-column FRAMING
                 group so they are always visible (the canvas math below still reads
                 zoom/vPos). */}
-            <div className="flex gap-3 items-start">
+            <div className={compact ? '' : 'flex gap-3 items-start'}>
                 <div
                     ref={wrapRef}
-                    className="relative inline-block leading-none select-none overflow-hidden rounded cursor-crosshair min-w-0"
+                    className={`relative leading-none select-none overflow-hidden rounded cursor-crosshair ${
+                        compact ? 'block w-full' : 'inline-block min-w-0'
+                    }`}
                     onMouseDown={down}
                     onMouseMove={moveEvt}
                     onMouseUp={up}
@@ -3870,14 +3880,16 @@ const CropFramer = ({
                         />
                     )}
                 </div>
-                <FitMock
-                    imageUrl={imageUrl}
-                    ratio={ratio}
-                    crop={mockCrop}
-                    vPos={isBox ? vPos : 0}
-                    label={mockLabel}
-                    labelYFrac={labelYFrac}
-                />
+                {!compact && (
+                    <FitMock
+                        imageUrl={imageUrl}
+                        ratio={ratio}
+                        crop={mockCrop}
+                        vPos={isBox ? vPos : 0}
+                        label={mockLabel}
+                        labelYFrac={labelYFrac}
+                    />
+                )}
             </div>
         </div>
     );
