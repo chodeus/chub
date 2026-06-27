@@ -608,10 +608,12 @@ const DashboardPage = () => {
                     ];
                     return cells.map((c, i) => (
                         <React.Fragment key={c.label}>
-                            {i > 0 && <div className="w-px self-stretch bg-border my-3" />}
+                            {i > 0 && (
+                                <div className="hidden sm:block w-px self-stretch bg-border my-3" />
+                            )}
                             <div
-                                className="px-[22px] py-3.5 flex flex-col gap-1.5 min-w-0"
-                                style={{ flex: c.grow || 1 }}
+                                className="px-4 sm:px-[22px] py-3.5 flex flex-col gap-1.5 min-w-0"
+                                style={{ flex: c.grow || 1, minWidth: 116 }}
                             >
                                 <span className="font-mono text-[10px] tracking-[1.2px] text-fg-subtle">
                                     {c.label}
