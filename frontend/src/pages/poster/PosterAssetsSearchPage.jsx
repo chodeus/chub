@@ -11,6 +11,19 @@ import { Modal } from '../../components/modals/Modal';
 import { Button, LoadingButton, IconButton, Pagination } from '../../components/ui/index.js';
 import Spinner from '../../components/ui/Spinner.jsx';
 
+// Compact "5d ago" relative time for the GDrive last-sync stat.
+const relTime = ts => {
+    if (!ts) return '—';
+    const diff = Date.now() - ts;
+    if (diff < 0) return 'just now';
+    const d = Math.floor(diff / 86400000);
+    if (d > 0) return `${d}d ago`;
+    const h = Math.floor(diff / 3600000);
+    if (h > 0) return `${h}h ago`;
+    const m = Math.floor(diff / 60000);
+    return m > 0 ? `${m}m ago` : 'just now';
+};
+
 // Subtle checkerboard so transparent additional-artwork (logos, square art,
 // backgrounds) reads clearly instead of blending into a flat dark panel.
 const TRANSPARENCY_BG = {
@@ -217,6 +230,31 @@ const PosterAssetsSearchPage = () => {
         options: { showErrorToast: false },
     });
 
+    // Lightweight cache-coverage strip (mock's stats header). All three metrics
+    // come from the single /posters/stats payload — Orphans is intentionally
+    // omitted (it only exists after a Poster Cleanarr scan).
+    const { data: assetStatsData } = useApiData({
+        apiFunction: postersAPI.fetchStatistics,
+        options: { showErrorToast: false },
+    });
+    const assetStats = useMemo(() => {
+        const s = assetStatsData?.data || {};
+        const matched = Array.isArray(s.matched_stats) ? s.matched_stats : [];
+        const totalMatched = matched.reduce((a, m) => a + (m.media_matched || 0), 0);
+        const totalMedia = matched.reduce((a, m) => a + (m.media_total || 0), 0);
+        const gdrive = Array.isArray(s.gdrive_stats) ? s.gdrive_stats : [];
+        const lastSync = gdrive.reduce((latest, g) => {
+            const t = g.last_updated ? new Date(g.last_updated).getTime() : 0;
+            return t > latest ? t : latest;
+        }, 0);
+        return {
+            cached: s.poster_cache_count || 0,
+            matchedPct: totalMedia > 0 ? (totalMatched / totalMedia) * 100 : null,
+            lastSync,
+            sources: gdrive.length,
+        };
+    }, [assetStatsData]);
+
     const items = useMemo(() => browseData?.data?.items || [], [browseData]);
     const total = useMemo(() => browseData?.data?.total || 0, [browseData]);
     const owners = useMemo(() => browseData?.data?.owners || [], [browseData]);
@@ -355,6 +393,43 @@ const PosterAssetsSearchPage = () => {
                         onChange={handleUpload}
                     />
                 </div>
+            </div>
+
+            {/* Cache-coverage stats strip */}
+            <div className="grid grid-cols-3 gap-3">
+                {[
+                    {
+                        label: 'CACHED ASSETS',
+                        value: assetStats.cached.toLocaleString(),
+                        tone: 'text-fg',
+                        sub: 'posters + artwork',
+                    },
+                    {
+                        label: 'MATCHED',
+                        value:
+                            assetStats.matchedPct != null
+                                ? `${assetStats.matchedPct.toFixed(1)}%`
+                                : '—',
+                        tone: 'text-success',
+                        sub: 'linked to library',
+                    },
+                    {
+                        label: 'LAST SYNC',
+                        value: relTime(assetStats.lastSync),
+                        tone: 'text-accent',
+                        sub: `${assetStats.sources} GDrive source${assetStats.sources === 1 ? '' : 's'}`,
+                    },
+                ].map(c => (
+                    <div key={c.label} className="rounded-xl bg-surface border border-border p-4">
+                        <div className="font-mono text-[10px] font-semibold uppercase tracking-[1.5px] text-fg-subtle">
+                            {c.label}
+                        </div>
+                        <div className={`font-display text-2xl font-bold mt-1.5 ${c.tone}`}>
+                            {c.value}
+                        </div>
+                        <div className="text-[12px] text-fg-subtle mt-1">{c.sub}</div>
+                    </div>
+                ))}
             </div>
 
             {/* Search + filters */}
