@@ -40,20 +40,6 @@ export const SchedulePage = () => {
     // Module Execution Hook
     const { executeModule, isRunning, runStates } = useModuleExecution();
 
-    const handleModuleTest = useCallback(
-        async moduleKey => {
-            try {
-                await modulesAPI.testModule(moduleKey);
-                toast.success(`${humanize(moduleKey)} connectivity test passed`);
-            } catch (err) {
-                toast.error(
-                    `${humanize(moduleKey)} test failed: ${err?.message || 'Unknown error'}`
-                );
-            }
-        },
-        [toast]
-    );
-
     const handleModuleCancel = useCallback(
         async moduleKey => {
             const jobId = runStates[moduleKey]?.job_id;
@@ -260,7 +246,6 @@ export const SchedulePage = () => {
                         onRun={handleModuleRun}
                         onEdit={handleScheduleEdit}
                         onCancel={handleModuleCancel}
-                        onTest={handleModuleTest}
                     />
                 ))}
             </div>
