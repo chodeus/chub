@@ -39,96 +39,67 @@ const ToggleRow = ({ label, checked, disabled, onChange }) => (
     </div>
 );
 
-/**
- * Simple Instance Selector - For Radarr/Sonarr instances
- * Basic checkbox selection for simple string values
- */
-const SimpleInstanceSelector = React.memo(
-    ({ instances, selectedInstances, onSelectionChange, serviceType, disabled, scopeId = '' }) => {
-        const serviceInstances = useMemo(() => {
-            if (!instances || !Array.isArray(instances)) {
-                return [];
-            }
-            return instances.filter(instance => instance.type === serviceType);
-        }, [instances, serviceType]);
+// Per-service dot colour for the instance pills (mirrors the design mock):
+// Radarr green, Sonarr cyan, Lidarr/other lilac, Plex gold. The dot shows the
+// service regardless of selection; selection is encoded by the pill's fill.
+const SERVICE_DOT = {
+    radarr: '#6cbc66',
+    sonarr: '#53e8f0',
+    lidarr: '#9a7ba9',
+    readarr: '#9a7ba9',
+    whisparr: '#9a7ba9',
+    plex: '#ffc944',
+};
 
-        const handleInstanceToggle = useCallback(
-            (instanceName, checked) => {
-                const safeSelectedInstances = selectedInstances || [];
-                const newSelection = checked
-                    ? [...safeSelectedInstances, instanceName]
-                    : safeSelectedInstances.filter(name => name !== instanceName);
-                onSelectionChange(newSelection);
-            },
-            [selectedInstances, onSelectionChange]
+/**
+ * ARR instance pills — the *arr multi-select rendered as the design mock's
+ * pill row (selected = brand fill, a service-colour dot on each). One row spans
+ * all configured ARR service types. Toggling a pill emits a plain instance-name
+ * string for that service type via onToggle(serviceType, name, checked) — the
+ * exact same emit the previous checkbox UI used, so value shapes are unchanged.
+ */
+const ArrInstancePills = React.memo(
+    ({ instances, arrTypes, selectedByType, onToggle, disabled }) => {
+        const pills = useMemo(
+            () => (instances || []).filter(i => arrTypes.includes(i.type)),
+            [instances, arrTypes]
         );
 
-        if (serviceInstances.length === 0) {
+        if (pills.length === 0) {
             return (
-                <div className="flex flex-col items-center gap-4 p-8 text-center bg-surface-alt border border-dashed border-border-subtle rounded-lg text-fg-muted">
-                    <div className="text-3xl text-fg-muted opacity-60">📋</div>
-                    <div className="font-semibold text-fg">
-                        No {humanize(serviceType)} instances configured
-                    </div>
-                    <div className="text-sm text-fg-subtle max-w-xs">
-                        Configure instances in Settings → Instances to get started
-                    </div>
+                <div className="text-sm text-fg-subtle bg-surface-inset border border-dashed border-border rounded-lg px-4 py-3">
+                    No {arrTypes.map(humanize).join(' / ')} instances configured — add one in
+                    Settings → Instances.
                 </div>
             );
         }
 
         return (
-            <div className="flex flex-col gap-2">
-                {serviceInstances.map(instance => {
-                    const isSelected = (selectedInstances || []).includes(instance.name);
-                    const inputId = `${scopeId}instance-${serviceType}-${instance.name}`;
-
+            <div className="flex flex-wrap gap-2">
+                {pills.map(instance => {
+                    const isSelected = (selectedByType[instance.type] || []).includes(
+                        instance.name
+                    );
                     return (
-                        <div key={instance.name}>
-                            <div
-                                className="flex items-center gap-3 py-3 px-4 bg-surface border border-border rounded-lg hover:bg-surface-hover hover:border-primary hover:shadow-sm focus:border-primary cursor-pointer transition-all duration-200 ease-in-out"
-                                onClick={e => {
-                                    // Don't handle click if it came from the label or checkbox input
-                                    if (disabled) return;
-                                    if (
-                                        e.target.tagName === 'LABEL' ||
-                                        e.target.tagName === 'INPUT'
-                                    )
-                                        return;
-                                    handleInstanceToggle(instance.name, !isSelected);
-                                }}
-                                role="button"
-                                tabIndex={disabled ? -1 : 0}
-                                onKeyDown={e => {
-                                    if ((e.key === ' ' || e.key === 'Enter') && !disabled) {
-                                        e.preventDefault();
-                                        handleInstanceToggle(instance.name, !isSelected);
-                                    }
-                                }}
-                                aria-pressed={isSelected}
-                                aria-disabled={disabled}
-                            >
-                                <CheckboxBase
-                                    id={inputId}
-                                    name={`${serviceType}-instances`}
-                                    checked={isSelected}
-                                    onChange={e =>
-                                        handleInstanceToggle(instance.name, e.target.checked)
-                                    }
-                                    disabled={disabled}
-                                />
-                                <div className="flex flex-col">
-                                    <FieldLabel
-                                        htmlFor={inputId}
-                                        label={humanize(instance.name)}
-                                        className="text-sm font-normal leading-normal text-fg cursor-pointer select-none"
-                                    />
-                                    {instance.url && (
-                                        <div className="text-xs text-fg-muted">{instance.url}</div>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
+                        <button
+                            key={`${instance.type}-${instance.name}`}
+                            type="button"
+                            disabled={disabled}
+                            onClick={() => onToggle(instance.type, instance.name, !isSelected)}
+                            aria-pressed={isSelected}
+                            title={instance.url || instance.name}
+                            className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[12.5px] font-medium border transition-colors cursor-pointer disabled:opacity-50 ${
+                                isSelected
+                                    ? 'bg-primary/15 border-primary text-fg'
+                                    : 'bg-surface-inset border-border text-fg-muted hover:border-primary'
+                            }`}
+                        >
+                            <span
+                                className="w-1.5 h-1.5 rounded-full shrink-0"
+                                style={{ background: SERVICE_DOT[instance.type] || '#8ea3cc' }}
+                            />
+                            {humanize(instance.name)}
+                        </button>
                     );
                 })}
             </div>
@@ -136,7 +107,7 @@ const SimpleInstanceSelector = React.memo(
     }
 );
 
-SimpleInstanceSelector.displayName = 'SimpleInstanceSelector';
+ArrInstancePills.displayName = 'ArrInstancePills';
 
 /**
  * Plex Library Selector - Component for selecting libraries within a Plex instance
@@ -1421,6 +1392,18 @@ export const InstancesField = React.memo(
             [instanceTypes, serviceSelections, onChange, value]
         );
 
+        // Toggle a single ARR instance pill — recompute that service type's
+        // string selection and route through updateServiceSelection so the
+        // emitted value shape (plain instance-name strings) is unchanged.
+        const handleArrToggle = useCallback(
+            (serviceType, name, checked) => {
+                const current = serviceSelections[serviceType] || [];
+                const next = checked ? [...current, name] : current.filter(n => n !== name);
+                updateServiceSelection(serviceType, next);
+            },
+            [serviceSelections, updateServiceSelection]
+        );
+
         const inputId = `field-${field.key}`;
 
         // Show loading state
@@ -1487,82 +1470,44 @@ export const InstancesField = React.memo(
             );
         }
 
-        // Render based on schema configuration
-        const renderServiceSelector = serviceType => {
-            if (serviceType === 'plex') {
-                return (
-                    <PlexInstanceSelector
-                        key={serviceType}
-                        instances={instances}
-                        selectedInstances={serviceSelections[serviceType] || []}
-                        onSelectionChange={newSelection =>
-                            updateServiceSelection(serviceType, newSelection)
-                        }
-                        showPosterOption={showPosterOption}
-                        disabled={disabled}
-                        valueFormat={valueFormat}
-                        scopeId={scopeId}
-                    />
-                );
-            } else {
-                return (
-                    <SimpleInstanceSelector
-                        key={serviceType}
-                        instances={instances}
-                        selectedInstances={serviceSelections[serviceType] || []}
-                        onSelectionChange={newSelection =>
-                            updateServiceSelection(serviceType, newSelection)
-                        }
-                        serviceType={serviceType}
-                        disabled={disabled}
-                        scopeId={scopeId}
-                    />
-                );
-            }
-        };
+        // ARR service types render as one pill row; Plex (with its libraries /
+        // add-posters config) keeps the richer card selector below.
+        const arrTypes = instanceTypes.filter(serviceType => serviceType !== 'plex');
+        const hasPlex = instanceTypes.includes('plex');
 
         return (
             <FieldWrapper invalid={highlightInvalid}>
                 <FieldLabel label={field.label} required={isRequired} />
 
-                <div id={inputId}>
-                    {instanceTypes.length === 1 ? (
-                        // Single service type - simplified UI
-                        <div className="flex flex-col gap-4">
-                            <h4 className="text-lg font-bold text-fg mb-2 border-b border-border pb-2">
-                                {humanize(instanceTypes[0])}
-                            </h4>
-                            {renderServiceSelector(instanceTypes[0])}
-                        </div>
-                    ) : (
-                        // Multiple service types - custom layout: ARR types side by side, Plex below
-                        <div className="flex flex-col gap-6">
-                            {/* ARR types (Radarr, Sonarr, Lidarr, etc.) in a 2-column grid */}
-                            <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
-                                {instanceTypes
-                                    .filter(serviceType => serviceType !== 'plex')
-                                    .map(serviceType => (
-                                        <div
-                                            key={serviceType}
-                                            className="flex flex-col gap-3 bg-surface border border-border rounded-lg p-4 shadow-sm"
-                                        >
-                                            <h4 className="text-lg font-bold text-fg mb-1 border-b border-border pb-2">
-                                                {humanize(serviceType)}
-                                            </h4>
-                                            {renderServiceSelector(serviceType)}
-                                        </div>
-                                    ))}
-                            </div>
+                <div id={inputId} className="flex flex-col gap-5">
+                    {arrTypes.length > 0 && (
+                        <ArrInstancePills
+                            instances={instances}
+                            arrTypes={arrTypes}
+                            selectedByType={serviceSelections}
+                            onToggle={handleArrToggle}
+                            disabled={disabled}
+                        />
+                    )}
 
-                            {/* Plex full width below */}
-                            {instanceTypes.includes('plex') && (
-                                <div className="flex flex-col gap-3 bg-surface border border-border rounded-lg p-4 shadow-sm">
-                                    <h4 className="text-lg font-bold text-fg mb-1 border-b border-border pb-2">
-                                        {humanize('plex')}
-                                    </h4>
-                                    {renderServiceSelector('plex')}
-                                </div>
+                    {hasPlex && (
+                        <div className="flex flex-col gap-3">
+                            {arrTypes.length > 0 && (
+                                <span className="font-mono text-[10px] tracking-[0.8px] text-fg-subtle">
+                                    PLEX
+                                </span>
                             )}
+                            <PlexInstanceSelector
+                                instances={instances}
+                                selectedInstances={serviceSelections.plex || []}
+                                onSelectionChange={newSelection =>
+                                    updateServiceSelection('plex', newSelection)
+                                }
+                                showPosterOption={showPosterOption}
+                                disabled={disabled}
+                                valueFormat={valueFormat}
+                                scopeId={scopeId}
+                            />
                         </div>
                     )}
                 </div>
