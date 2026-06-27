@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { GENERAL_SETTINGS_SCHEMA } from '../../utils/constants/general_settings_schema.js';
 import { FieldRegistry } from '../../components/fields/FieldRegistry.jsx';
 import { PageHeader } from '../../components/ui/PageHeader';
@@ -80,6 +81,7 @@ export const GeneralSettingsPage = () => {
         apiFunction: configAPI.fetchConfig,
     });
 
+    const navigate = useNavigate();
     const [formData, setFormData] = useState({});
     const [lastSaved, setLastSaved] = useState('{}');
     const [isSaving, setIsSaving] = useState(false);
@@ -370,6 +372,26 @@ export const GeneralSettingsPage = () => {
                     )}
                 </div>
             ))}
+
+            {/* First-run setup — re-runs the full-screen Setup Wizard. The
+                wizard also auto-launches on a fresh install; this is the
+                re-entry point now that the Settings hub page is gone. */}
+            <div className="bg-surface border border-border rounded-xl p-5">
+                <h2 className="font-display text-[15px] font-semibold mb-1 text-fg">
+                    First-run setup
+                </h2>
+                <p className="text-[13px] text-fg-subtle mb-4">
+                    Re-run the guided setup wizard to reconfigure instances, paths, and modules.
+                </p>
+                <button
+                    type="button"
+                    onClick={() => navigate('/setup')}
+                    className="inline-flex items-center gap-2 h-9 px-4 rounded-lg bg-surface-inset border border-border text-fg-muted text-[13px] font-semibold transition-colors hover:border-border-light hover:text-fg"
+                >
+                    <span className="material-symbols-outlined text-base">auto_fix_high</span>
+                    Launch wizard
+                </button>
+            </div>
         </div>
     );
 };
