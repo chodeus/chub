@@ -1170,6 +1170,8 @@ const CORE_SETTINGS_SCHEMA = [
                 key: 'path_mapping',
                 label: 'Path Mapping',
                 type: 'object_array',
+                displayType: 'path_mapping',
+                alwaysExpanded: true,
                 description:
                     'Map ARR container paths to CHUB-accessible paths for filesystem scanning. Only needed if containers use different volume mount points. Leave empty if all containers share the same media mounts.',
                 fields: [
