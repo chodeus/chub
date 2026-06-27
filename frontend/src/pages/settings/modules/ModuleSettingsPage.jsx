@@ -106,6 +106,10 @@ const ModuleSettingsContent = ({ moduleKey }) => {
 
     const hasDryRun = !!activeModule?.fields?.some(f => f.key === 'dry_run');
     const dryRunValue = !!formData[activeModule?.key]?.dry_run;
+    // Config-only modules (e.g. CL2K Maker) opt out of execution via
+    // `runnable: false` in their schema — no Run-now button, no Dry-run toggle,
+    // and they're excluded from the Schedule. Default (undefined) stays runnable.
+    const isRunnable = activeModule?.runnable !== false;
 
     const handleSave = useCallback(async () => {
         if (!isDirty || isSaving) return;
@@ -221,7 +225,7 @@ const ModuleSettingsContent = ({ moduleKey }) => {
                     </div>
                     {activeModule && (
                         <div className="flex items-center gap-2.5 shrink-0">
-                            {hasDryRun && (
+                            {hasDryRun && isRunnable && (
                                 <label className="flex items-center gap-2 text-[13px] text-fg-muted cursor-pointer select-none">
                                     Dry run
                                     <Toggle
@@ -233,17 +237,19 @@ const ModuleSettingsContent = ({ moduleKey }) => {
                                     />
                                 </label>
                             )}
-                            <button
-                                type="button"
-                                onClick={runNow}
-                                disabled={running}
-                                className="inline-flex items-center gap-1.5 h-[38px] px-3.5 rounded-lg bg-surface border border-border text-fg-muted text-[13.5px] font-medium hover:bg-row-hover disabled:opacity-50 transition-colors"
-                            >
-                                <span className="material-symbols-outlined text-[18px]">
-                                    play_arrow
-                                </span>
-                                {running ? 'Queuing…' : 'Run now'}
-                            </button>
+                            {isRunnable && (
+                                <button
+                                    type="button"
+                                    onClick={runNow}
+                                    disabled={running}
+                                    className="inline-flex items-center gap-1.5 h-[38px] px-3.5 rounded-lg bg-surface border border-border text-fg-muted text-[13.5px] font-medium hover:bg-row-hover disabled:opacity-50 transition-colors"
+                                >
+                                    <span className="material-symbols-outlined text-[18px]">
+                                        play_arrow
+                                    </span>
+                                    {running ? 'Queuing…' : 'Run now'}
+                                </button>
+                            )}
                             {isDirty && (
                                 <button
                                     type="button"
