@@ -697,14 +697,6 @@ const CORE_SETTINGS_SCHEMA = [
         label: 'Upgradinatorr',
         fields: [
             {
-                key: 'log_level',
-                label: 'Log Level',
-                type: 'dropdown',
-                options: ['debug', 'info'],
-                required: true,
-                description: 'Set the logging verbosity for upgradinatorr.',
-            },
-            {
                 key: 'dry_run',
                 label: 'Dry Run',
                 type: 'check_box',
@@ -712,7 +704,7 @@ const CORE_SETTINGS_SCHEMA = [
             },
             {
                 key: 'instances_list',
-                label: 'Instances List',
+                label: 'Instance profiles',
                 type: 'object_array',
                 displayType: 'upgradinatorr',
                 alwaysExpanded: true,
@@ -850,6 +842,16 @@ const CORE_SETTINGS_SCHEMA = [
                             'Minimum percentage of monitored seasons required (Sonarr only).',
                     },
                 ],
+            },
+            // ─── Logging ───────────────────────────────────────────────
+            {
+                key: 'log_level',
+                label: 'Log Level',
+                type: 'dropdown',
+                section: 'Logging',
+                options: ['debug', 'info'],
+                required: true,
+                description: 'Set the logging verbosity for upgradinatorr.',
             },
         ],
     },
@@ -1013,14 +1015,6 @@ const CORE_SETTINGS_SCHEMA = [
         label: 'Labelarr',
         fields: [
             {
-                key: 'log_level',
-                label: 'Log Level',
-                type: 'dropdown',
-                options: ['debug', 'info'],
-                required: true,
-                description: 'Set the logging verbosity for labelarr.',
-            },
-            {
                 key: 'dry_run',
                 label: 'Dry Run',
                 type: 'check_box',
@@ -1072,6 +1066,16 @@ const CORE_SETTINGS_SCHEMA = [
                             'Uncheck to pause this mapping without deleting it — disabled mappings are skipped on every run.',
                     },
                 ],
+            },
+            // ─── Logging ───────────────────────────────────────────────
+            {
+                key: 'log_level',
+                label: 'Log Level',
+                type: 'dropdown',
+                section: 'Logging',
+                options: ['debug', 'info'],
+                required: true,
+                description: 'Set the logging verbosity for labelarr.',
             },
         ],
     },
@@ -1151,16 +1155,8 @@ const CORE_SETTINGS_SCHEMA = [
         label: 'Nestarr',
         fields: [
             {
-                key: 'log_level',
-                label: 'Log Level',
-                type: 'dropdown',
-                options: ['info', 'debug'],
-                required: true,
-                description: 'Set the logging verbosity for nest detection.',
-            },
-            {
                 key: 'library_mappings',
-                label: 'Library Mappings',
+                label: 'Library mappings',
                 type: 'object_array',
                 displayType: 'nestarr',
                 alwaysExpanded: true,
@@ -1191,7 +1187,7 @@ const CORE_SETTINGS_SCHEMA = [
             },
             {
                 key: 'path_mapping',
-                label: 'Path Mapping',
+                label: 'Path mapping',
                 type: 'object_array',
                 displayType: 'path_mapping',
                 alwaysExpanded: true,
@@ -1216,6 +1212,16 @@ const CORE_SETTINGS_SCHEMA = [
                             'Equivalent path as seen inside the CHUB container (e.g. /mnt/user/data).',
                     },
                 ],
+            },
+            // ─── Logging ───────────────────────────────────────────────
+            {
+                key: 'log_level',
+                label: 'Log Level',
+                type: 'dropdown',
+                section: 'Logging',
+                options: ['info', 'debug'],
+                required: true,
+                description: 'Set the logging verbosity for nest detection.',
             },
         ],
     },
