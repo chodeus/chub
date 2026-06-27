@@ -860,13 +860,17 @@ const CORE_SETTINGS_SCHEMA = [
         key: 'renameinatorr',
         label: 'Renameinatorr',
         fields: [
+            // ─── Scope ─────────────────────────────────────────────────
             {
-                key: 'log_level',
-                label: 'Log Level',
-                type: 'dropdown',
-                options: ['info', 'debug'],
+                key: 'instances',
+                label: 'Instances',
+                type: 'instances',
+                section: 'Scope',
                 required: true,
-                description: 'Set the logging verbosity for renameinatorr.',
+                instance_types: ['radarr', 'sonarr'],
+                // Backend: RenameinatorrConfig.instances is List[str].
+                valueFormat: 'string',
+                description: 'List of Radarr and Sonarr instances to rename.',
             },
             {
                 key: 'dry_run',
@@ -874,65 +878,75 @@ const CORE_SETTINGS_SCHEMA = [
                 type: 'check_box',
                 description: 'Simulate renaming without making changes.',
             },
+            // ─── Rename behaviour ──────────────────────────────────────
             {
                 key: 'rename_folders',
                 label: 'Rename Folders',
                 type: 'check_box',
+                section: 'Rename behaviour',
                 description: 'Enable to rename folders as well as files.',
             },
             {
                 key: 'refresh_before_rename',
                 label: 'Refresh Before Rename',
                 type: 'check_box',
+                section: 'Rename behaviour',
                 description:
                     'Refresh metadata before checking what needs renaming, so renames pick up the latest titles (e.g. Sonarr TBA episodes). Slower; waits for each refresh to finish.',
+            },
+            {
+                key: 'enable_batching',
+                label: 'Enable Batching',
+                type: 'check_box',
+                section: 'Rename behaviour',
+                description: 'Enable batch processing for renaming.',
             },
             {
                 key: 'count',
                 label: 'Count',
                 type: 'number',
+                section: 'Rename behaviour',
                 description: 'Number of items to rename per operation.',
             },
             {
                 key: 'radarr_count',
                 label: 'Radarr Count',
                 type: 'number',
+                section: 'Rename behaviour',
                 description: 'Number of Radarr items to process per run.',
             },
             {
                 key: 'sonarr_count',
                 label: 'Sonarr Count',
                 type: 'number',
+                section: 'Rename behaviour',
                 description: 'Number of Sonarr items to process per run.',
             },
             {
                 key: 'tag_name',
                 label: 'Tag Name',
                 type: 'text',
+                section: 'Rename behaviour',
                 description: 'Tag name to filter items for renaming.',
             },
+            // ─── Ignore filters ────────────────────────────────────────
             {
                 key: 'ignore_tags',
                 label: 'Ignore Tag',
                 type: 'text',
+                section: 'Ignore filters',
                 description:
                     'Skip any item carrying this tag. Items with this tag are excluded from renaming.',
             },
+            // ─── Logging ───────────────────────────────────────────────
             {
-                key: 'enable_batching',
-                label: 'Enable Batching',
-                type: 'check_box',
-                description: 'Enable batch processing for renaming.',
-            },
-            {
-                key: 'instances',
-                label: 'Instances',
-                type: 'instances',
+                key: 'log_level',
+                label: 'Log Level',
+                type: 'dropdown',
+                section: 'Logging',
+                options: ['info', 'debug'],
                 required: true,
-                instance_types: ['radarr', 'sonarr'],
-                // Backend: RenameinatorrConfig.instances is List[str].
-                valueFormat: 'string',
-                description: 'List of Radarr and Sonarr instances to rename.',
+                description: 'Set the logging verbosity for renameinatorr.',
             },
         ],
     },
@@ -941,37 +955,12 @@ const CORE_SETTINGS_SCHEMA = [
         key: 'nohl',
         label: 'Nohl',
         fields: [
-            {
-                key: 'log_level',
-                label: 'Log Level',
-                type: 'dropdown',
-                options: ['debug', 'info'],
-                required: true,
-                description: 'Set the logging verbosity for Nohl module.',
-            },
-            {
-                key: 'dry_run',
-                label: 'Dry Run',
-                type: 'check_box',
-                description: 'Simulate actions without making changes.',
-            },
-            {
-                key: 'searches',
-                label: 'Searches',
-                type: 'number',
-                required: true,
-                description: 'Number of search operations to perform.',
-            },
-            {
-                key: 'print_files',
-                label: 'Print Files',
-                type: 'check_box',
-                description: 'Print file paths during operation.',
-            },
+            // ─── Paths to scan ─────────────────────────────────────────
             {
                 key: 'source_dirs',
                 label: 'Source Directories',
                 type: 'dirlist_options',
+                section: 'Paths to scan',
                 options: ['scan', 'resolve'],
                 default_mode: 'resolve',
                 required: true,
@@ -979,33 +968,71 @@ const CORE_SETTINGS_SCHEMA = [
                 description: 'Directories to scan or resolve for files.',
             },
             {
+                key: 'dry_run',
+                label: 'Dry Run',
+                type: 'check_box',
+                description: 'Simulate actions without making changes.',
+            },
+            // ─── Detection ─────────────────────────────────────────────
+            {
+                key: 'print_files',
+                label: 'Print Files',
+                type: 'check_box',
+                section: 'Detection',
+                description: 'Print file paths during operation.',
+            },
+            {
                 key: 'exclude_profiles',
                 label: 'Exclude Profiles',
                 type: 'textarea',
+                section: 'Detection',
                 description: 'Profiles to exclude from processing.',
             },
             {
                 key: 'exclude_movies',
                 label: 'Exclude Movies',
                 type: 'textarea',
+                section: 'Detection',
                 description: 'Movies to exclude from processing.',
             },
             {
                 key: 'exclude_series',
                 label: 'Exclude Series',
                 type: 'textarea',
+                section: 'Detection',
                 description: 'Series to exclude from processing.',
             },
+            // ─── When a non-hardlinked file is found ───────────────────
+            {
+                key: 'searches',
+                label: 'Searches',
+                type: 'number',
+                section: 'When a non-hardlinked file is found',
+                required: true,
+                description: 'Number of search operations to perform.',
+            },
+            // ─── Scope ─────────────────────────────────────────────────
             {
                 key: 'instances',
                 label: 'Instances',
                 type: 'instances',
+                section: 'Scope',
                 required: true,
                 add_posters_option: false,
                 instance_types: ['radarr', 'sonarr'],
                 // Backend: NohlConfig.instances is List[str].
                 valueFormat: 'string',
                 description: 'Instances to apply Nohl logic to.',
+            },
+            // ─── Logging ───────────────────────────────────────────────
+            {
+                key: 'log_level',
+                label: 'Log Level',
+                type: 'dropdown',
+                section: 'Logging',
+                options: ['debug', 'info'],
+                required: true,
+                description: 'Set the logging verbosity for Nohl module.',
             },
         ],
     },
@@ -1084,13 +1111,18 @@ const CORE_SETTINGS_SCHEMA = [
         key: 'health_checkarr',
         label: 'Health Checkarr',
         fields: [
+            // ─── Scope ─────────────────────────────────────────────────
             {
-                key: 'log_level',
-                label: 'Log Level',
-                type: 'dropdown',
-                options: ['info', 'debug'],
+                key: 'instances',
+                label: 'Instances',
+                type: 'instances',
+                section: 'Scope',
                 required: true,
-                description: 'Set the logging verbosity for health checks.',
+                add_posters_option: false,
+                instance_types: ['radarr', 'sonarr'],
+                // Backend: HealthCheckarrConfig.instances is Optional[List[str]].
+                valueFormat: 'string',
+                // description: 'Instances to run health checks on.',
             },
             {
                 key: 'dry_run',
@@ -1099,16 +1131,15 @@ const CORE_SETTINGS_SCHEMA = [
                 description:
                     'Log what would be deleted from Radarr/Sonarr without actually deleting. Turn off to actually clean up media flagged as removed from TMDB/TVDB.',
             },
+            // ─── Logging ───────────────────────────────────────────────
             {
-                key: 'instances',
-                label: 'Instances',
-                type: 'instances',
+                key: 'log_level',
+                label: 'Log Level',
+                type: 'dropdown',
+                section: 'Logging',
+                options: ['info', 'debug'],
                 required: true,
-                add_posters_option: false,
-                instance_types: ['radarr', 'sonarr'],
-                // Backend: HealthCheckarrConfig.instances is Optional[List[str]].
-                valueFormat: 'string',
-                // description: 'Instances to run health checks on.',
+                description: 'Set the logging verbosity for health checks.',
             },
         ],
     },
@@ -1117,13 +1148,16 @@ const CORE_SETTINGS_SCHEMA = [
         key: 'jduparr',
         label: 'Jduparr',
         fields: [
+            // ─── Paths to audit ────────────────────────────────────────
             {
-                key: 'log_level',
-                label: 'Log Level',
-                type: 'dropdown',
-                options: ['debug', 'info'],
+                key: 'source_dirs',
+                label: 'Source Directories',
+                type: 'dirlist',
+                section: 'Paths to audit',
                 required: true,
-                description: 'Set the logging verbosity for jduparr.',
+
+                description:
+                    'Directories to scan together for duplicate media files. Duplicates across these directories can be hardlinked.',
             },
             {
                 key: 'dry_run',
@@ -1131,21 +1165,24 @@ const CORE_SETTINGS_SCHEMA = [
                 type: 'check_box',
                 description: 'Simulate duplicate detection without making changes.',
             },
-            {
-                key: 'source_dirs',
-                label: 'Source Directories',
-                type: 'dirlist',
-                required: true,
-
-                description:
-                    'Directories to scan together for duplicate media files. Duplicates across these directories can be hardlinked.',
-            },
+            // ─── jdupes options ────────────────────────────────────────
             {
                 key: 'hash_database',
                 label: 'Hash Database',
                 type: 'text',
+                section: 'jdupes options',
                 description:
                     'Optional jdupes hash database file path. Leave blank unless you want jdupes to reuse a persistent hash cache.',
+            },
+            // ─── Logging ───────────────────────────────────────────────
+            {
+                key: 'log_level',
+                label: 'Log Level',
+                type: 'dropdown',
+                section: 'Logging',
+                options: ['debug', 'info'],
+                required: true,
+                description: 'Set the logging verbosity for jduparr.',
             },
         ],
     },
@@ -1410,13 +1447,33 @@ const CORE_SETTINGS_SCHEMA = [
         key: 'plex_maintenance',
         label: 'Plex Maintenance',
         fields: [
+            // ─── Plex connection ───────────────────────────────────────
             {
-                key: 'log_level',
-                label: 'Log Level',
-                type: 'dropdown',
-                options: ['debug', 'info'],
+                key: 'instances',
+                label: 'Plex Instances',
+                type: 'instances',
+                section: 'Plex connection',
                 required: true,
-                description: 'Set the logging verbosity for Plex maintenance.',
+                instance_types: ['plex'],
+                valueFormat: 'string',
+                description: 'Plex instance to run maintenance tasks against.',
+            },
+            {
+                key: 'plex_path',
+                label: 'Plex Path',
+                type: 'text',
+                section: 'Plex connection',
+                required: true,
+                description:
+                    "Path inside the CHUB container that points at your Plex Media Server's data dir " +
+                    '(same value as poster_cleanarr). Required for the PhotoTranscoder cache cleanup.',
+            },
+            {
+                key: 'timeout',
+                label: 'Connection Timeout',
+                type: 'number',
+                section: 'Plex connection',
+                description: 'Plex connection timeout in seconds (default: 600).',
             },
             {
                 key: 'dry_run',
@@ -1425,19 +1482,12 @@ const CORE_SETTINGS_SCHEMA = [
                 description:
                     'Log what each selected task would do (including which PhotoTranscoder cache files would be deleted) without making any changes.',
             },
-            {
-                key: 'plex_path',
-                label: 'Plex Path',
-                type: 'text',
-                required: true,
-                description:
-                    "Path inside the CHUB container that points at your Plex Media Server's data dir " +
-                    '(same value as poster_cleanarr). Required for the PhotoTranscoder cache cleanup.',
-            },
+            // ─── Maintenance tasks ─────────────────────────────────────
             {
                 key: 'empty_trash',
                 label: 'Empty Trash',
                 type: 'check_box',
+                section: 'Maintenance tasks',
                 description:
                     "Purge Plex's internal trash. Permanently deletes items you've already removed.",
             },
@@ -1445,40 +1495,39 @@ const CORE_SETTINGS_SCHEMA = [
                 key: 'clean_bundles',
                 label: 'Clean Bundles',
                 type: 'check_box',
+                section: 'Maintenance tasks',
                 description: 'Remove orphaned .bundle folders for media that no longer exists.',
             },
             {
                 key: 'optimize_db',
                 label: 'Optimize Database',
                 type: 'check_box',
+                section: 'Maintenance tasks',
                 description: "Run VACUUM on Plex's database. Reclaims space, rebuilds indexes.",
             },
             {
                 key: 'photo_transcoder',
                 label: 'Clear PhotoTranscoder Cache',
                 type: 'check_box',
+                section: 'Maintenance tasks',
                 description: "Clear Plex's transcoded-image cache. Plex regenerates on demand.",
             },
             {
                 key: 'sleep',
                 label: 'Sleep Between Tasks',
                 type: 'number',
+                section: 'Maintenance tasks',
                 description: 'Seconds to wait between Plex maintenance operations (default: 60).',
             },
+            // ─── Logging ───────────────────────────────────────────────
             {
-                key: 'timeout',
-                label: 'Connection Timeout',
-                type: 'number',
-                description: 'Plex connection timeout in seconds (default: 600).',
-            },
-            {
-                key: 'instances',
-                label: 'Plex Instances',
-                type: 'instances',
+                key: 'log_level',
+                label: 'Log Level',
+                type: 'dropdown',
+                section: 'Logging',
+                options: ['debug', 'info'],
                 required: true,
-                instance_types: ['plex'],
-                valueFormat: 'string',
-                description: 'Plex instance to run maintenance tasks against.',
+                description: 'Set the logging verbosity for Plex maintenance.',
             },
         ],
     },
