@@ -2984,6 +2984,7 @@ const RenderPanel = ({
                                 brushSize={brushSize}
                                 setBrushSize={setBrushSize}
                                 backdropUrl={backdropUrl}
+                                mask={maskB64}
                                 onMaskChange={onMaskChange}
                                 hasMask={!!maskB64}
                                 aiBusy={aiErasing}
@@ -3128,6 +3129,7 @@ const AiPanel = ({
     brushSize,
     setBrushSize,
     backdropUrl,
+    mask,
     onMaskChange,
     hasMask,
     aiBusy,
@@ -3136,7 +3138,10 @@ const AiPanel = ({
     setAiPrompt,
 }) => {
     // UI-only: the large pop-out mask editor (mock cl2k-09). Reuses the same
-    // BrushMask + onMaskChange pipeline — no new mask handlers.
+    // BrushMask + onMaskChange pipeline — no new mask handlers. Both the inline
+    // and pop-out canvases seed from the current `mask`, and the inline one is
+    // keyed on modalOpen so it remounts (and re-seeds from the updated mask) when
+    // the pop-out closes — strokes carry both ways.
     const [modalOpen, setModalOpen] = useState(false);
     const provider = config?.ai_provider || 'none';
     // Why AI can't run (mirrors the backend's unavailable_reason) — gates the
@@ -3187,9 +3192,11 @@ const AiPanel = ({
                         </label>
                         {backdropUrl ? (
                             <BrushMask
+                                key={modalOpen ? 'inline-modal-open' : 'inline-modal-closed'}
                                 imageUrl={backdropUrl}
                                 brushSize={brushSize}
                                 onMaskChange={onMaskChange}
+                                initialMask={mask}
                             />
                         ) : (
                             <div className="text-xs text-fg-subtle">
@@ -3238,11 +3245,8 @@ const AiPanel = ({
                 )}
             </div>
             {/* Large pop-out mask editor (mock cl2k-09). Reuses the same BrushMask +
-            onMaskChange pipeline at a bigger size — no new mask handlers.
-            TODO: this is a second BrushMask canvas, so strokes don't carry between
-            the inline brush and the pop-out (each canvas owns its own backing
-            store). Wiring a single shared canvas across both would require changing
-            BrushMask's handler contract, which the immutability contract forbids. */}
+            onMaskChange pipeline at a bigger size — both canvases seed from the
+            shared `mask`, so strokes carry between the inline brush and the pop-out. */}
             {modalOpen && backdropUrl && (
                 <div
                     onClick={() => setModalOpen(false)}
@@ -3275,6 +3279,7 @@ const AiPanel = ({
                                         imageUrl={backdropUrl}
                                         brushSize={brushSize}
                                         onMaskChange={onMaskChange}
+                                        initialMask={mask}
                                     />
                                 </div>
                             </div>
@@ -3331,16 +3336,34 @@ const AiPanel = ({
  * opacity only dims the display, so toDataURL still yields a clean mask that the
  * backend resizes to the backdrop and feeds to the AI inpainter.
  */
-const BrushMask = ({ imageUrl, brushSize, onMaskChange }) => {
+const BrushMask = ({ imageUrl, brushSize, onMaskChange, initialMask = null }) => {
     const canvasRef = useRef(null);
     const drawing = useRef(false);
 
-    const sizeToImage = useCallback(img => {
-        const c = canvasRef.current;
-        if (!c) return;
-        c.width = img.clientWidth;
-        c.height = img.clientHeight;
-    }, []);
+    // Size the canvas to the displayed image, then re-paint any existing mask onto
+    // it so a freshly-mounted instance (e.g. the pop-out editor, or the inline one
+    // after the pop-out closes) shows the strokes already made. drawImage scales
+    // the prior mask to this canvas, so the inline ↔ pop-out size difference is
+    // handled — and emit() captures the union when painting continues.
+    const sizeToImage = useCallback(
+        img => {
+            const c = canvasRef.current;
+            if (!c) return;
+            c.width = img.clientWidth;
+            c.height = img.clientHeight;
+            if (initialMask) {
+                const m = new Image();
+                m.onload = () => {
+                    const ctx = c.getContext('2d');
+                    ctx.drawImage(m, 0, 0, c.width, c.height);
+                };
+                m.src = initialMask.startsWith('data:')
+                    ? initialMask
+                    : `data:image/png;base64,${initialMask}`;
+            }
+        },
+        [initialMask]
+    );
 
     const pointFor = useCallback(e => {
         const c = canvasRef.current;
@@ -4393,6 +4416,47 @@ const LogoSelector = ({
 // ─── Square art tab ─────────────────────────────────────────────────────────
 
 // Drag a 1:1 cover-crop box over the source art to choose what fills the square.
+// Zoom + Focus-Y sliders for the asset framers (Background / Square), surfaced in
+// the right-column FRAMING group to mirror the Poster tab. The frame itself (fit
+// tabs + drag-to-pan) stays in the center SquareFramer; these drive the same
+// zoom / focusY state, so they stay in sync with a drag.
+const FramingSliders = ({ zoom, setZoom, focusY, setFocusY }) => (
+    <>
+        <div>
+            <div className="flex justify-between mb-1.5">
+                <span className="text-sm text-fg-muted">Zoom</span>
+                <span className="font-mono text-xs text-fg-subtle">{(zoom ?? 1).toFixed(2)}×</span>
+            </div>
+            <input
+                type="range"
+                min="0.5"
+                max="3"
+                step="0.05"
+                value={zoom ?? 1}
+                onChange={e => setZoom(Number(e.target.value))}
+                className="w-full"
+            />
+        </div>
+        <div>
+            <div className="flex justify-between mb-1.5">
+                <span className="text-sm text-fg-muted">Focus Y</span>
+                <span className="font-mono text-xs text-fg-subtle">
+                    {(focusY ?? 0.5).toFixed(2)}
+                </span>
+            </div>
+            <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                value={focusY ?? 0.5}
+                onChange={e => setFocusY(Number(e.target.value))}
+                className="w-full"
+            />
+        </div>
+    </>
+);
+
 const SquareFramer = ({
     imageUrl,
     focusX,
@@ -4497,24 +4561,9 @@ const SquareFramer = ({
             </div>
             <p className="text-xs text-fg-subtle mb-2">
                 {fitMode === 'fit'
-                    ? 'Fit shows the whole image on black. Zoom in to fill more; drag to pan when zoomed.'
-                    : `Fill crops to the ${frameName} — drag to choose what stays. Zoom to punch in tighter.`}
+                    ? 'Fit shows the whole image on black. Zoom (in the Framing panel) fills more; drag to pan when zoomed.'
+                    : `Fill crops to the ${frameName} — drag to choose what stays. Zoom (in the Framing panel) punches in tighter.`}
             </p>
-            <label className="flex items-center gap-2 text-xs text-fg-muted mb-2">
-                <span className="w-12 shrink-0">Zoom</span>
-                <input
-                    type="range"
-                    min="0.5"
-                    max="3"
-                    step="0.05"
-                    value={zoom ?? 1}
-                    onChange={e => setZoom(Number(e.target.value))}
-                    className="flex-1"
-                />
-                <span className="w-12 shrink-0 text-right text-fg-subtle">
-                    {(zoom ?? 1).toFixed(2)}×
-                </span>
-            </label>
             <div
                 ref={wrapRef}
                 className="relative inline-block leading-none select-none overflow-hidden rounded cursor-crosshair max-w-full"
@@ -4832,8 +4881,17 @@ const SquareArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                 </div>
             </section>
 
-            {/* RIGHT: history accordion */}
+            {/* RIGHT: framing + history accordion */}
             <section className="bg-surface border border-border rounded-[12px] p-4 flex flex-col gap-3.5">
+                <div className="flex flex-col gap-3">
+                    <StudioGroupLabel>Framing</StudioGroupLabel>
+                    <FramingSliders
+                        zoom={zoom}
+                        setZoom={setZoom}
+                        focusY={focusY}
+                        setFocusY={setFocusY}
+                    />
+                </div>
                 <StudioAccordion title="Recently generated">
                     <HistorySection toast={toast} />
                 </StudioAccordion>
@@ -5122,6 +5180,12 @@ const BackgroundArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast 
                             </button>
                         </div>
                     </div>
+                    <FramingSliders
+                        zoom={zoom}
+                        setZoom={setZoom}
+                        focusY={focusY}
+                        setFocusY={setFocusY}
+                    />
                 </div>
                 <StudioAccordion title="Recently generated">
                     <HistorySection toast={toast} />
