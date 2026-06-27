@@ -33,22 +33,27 @@ export default {
         // Extra Unmatched Assets row action: jump into the maker with the row's
         // ids prefilled. Shown whenever the row has ANY of tmdb/tvdb/imdb — a
         // TVDB-only Sonarr show (no TMDB cross-link) still gets the link; the
-        // maker resolves a tmdb_id on entry when one exists.
-        'unmatchedAssets.rowAction': item =>
-            item.tmdb_id || item.tvdb_id || item.imdb_id
-                ? {
-                      to: `/poster/cl2k-maker?${new URLSearchParams({
-                          ...(item.tmdb_id ? { tmdb_id: item.tmdb_id } : {}),
-                          type: item._type,
-                          title: item.title || '',
-                          ...(item.year ? { year: item.year } : {}),
-                          ...(item.tvdb_id ? { tvdb_id: item.tvdb_id } : {}),
-                          ...(item.imdb_id ? { imdb_id: item.imdb_id } : {}),
-                      }).toString()}`,
-                      title: 'Make a CL2K poster',
-                      ariaLabel: 'Make a CL2K poster',
-                      icon: 'wallpaper',
-                  }
-                : null,
+        // maker resolves a tmdb_id on entry when one exists. The optional
+        // `asset` arg (from the Additional-artwork view) maps the missing
+        // artwork type to the maker tab so it opens ready to build it.
+        'unmatchedAssets.rowAction': (item, asset) => {
+            if (!(item.tmdb_id || item.tvdb_id || item.imdb_id)) return null;
+            const ASSET_TAB = { background: 'background', logo: 'logo', squareart: 'square' };
+            const tab = ASSET_TAB[asset];
+            return {
+                to: `/poster/cl2k-maker?${new URLSearchParams({
+                    ...(item.tmdb_id ? { tmdb_id: item.tmdb_id } : {}),
+                    type: item._type,
+                    title: item.title || '',
+                    ...(item.year ? { year: item.year } : {}),
+                    ...(item.tvdb_id ? { tvdb_id: item.tvdb_id } : {}),
+                    ...(item.imdb_id ? { imdb_id: item.imdb_id } : {}),
+                    ...(tab ? { asset: tab } : {}),
+                }).toString()}`,
+                title: tab ? 'Build this artwork in CL2K' : 'Make a CL2K poster',
+                ariaLabel: tab ? 'Build this artwork in CL2K' : 'Make a CL2K poster',
+                icon: 'wallpaper',
+            };
+        },
     },
 };
