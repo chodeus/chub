@@ -285,8 +285,10 @@ const LabelarrPage = () => {
             >
                 {stats.map((s, i) => (
                     <React.Fragment key={s.label}>
-                        {i > 0 && <div className="w-px self-stretch bg-border my-3" />}
-                        <div className="px-[22px] py-3.5 flex flex-col gap-1.5 min-w-0 flex-1">
+                        {i > 0 && (
+                            <div className="hidden sm:block w-px self-stretch bg-border my-3" />
+                        )}
+                        <div className="px-4 sm:px-[22px] py-3.5 flex flex-col gap-1.5 min-w-[116px] flex-1">
                             <span className="font-mono text-[10px] tracking-[1.2px] text-fg-subtle">
                                 {s.label}
                             </span>
