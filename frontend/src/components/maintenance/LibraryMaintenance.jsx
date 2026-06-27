@@ -4,29 +4,51 @@ import { mediaAPI } from '../../utils/api/media.js';
 import { Modal } from '../modals/Modal';
 import { Button, LoadingButton } from '../ui/index.js';
 
-const MaintenanceCard = ({ title, icon, description, children, defaultOpen = false }) => {
+const MaintenanceCard = ({
+    title,
+    icon,
+    iconClass = 'text-warning',
+    count,
+    countClass = 'bg-warning/15 text-warning',
+    description,
+    children,
+    defaultOpen = false,
+}) => {
     const [open, setOpen] = useState(defaultOpen);
     return (
-        <div className="rounded-lg bg-surface border border-border overflow-hidden">
+        <div className="rounded-xl bg-surface border border-border overflow-hidden">
             <button
                 type="button"
                 onClick={() => setOpen(o => !o)}
-                className="w-full flex items-center gap-3 p-4 text-left cursor-pointer bg-transparent border-0"
+                className="w-full flex items-center gap-3.5 px-5 py-4 text-left cursor-pointer bg-transparent border-0 transition-colors hover:bg-row-hover"
                 aria-expanded={open}
             >
-                <span className="material-symbols-outlined text-warning">{icon}</span>
+                <span className={`material-symbols-outlined text-[22px] ${iconClass}`}>{icon}</span>
                 <div className="flex-1 min-w-0">
-                    <div className="font-medium text-fg">{title}</div>
-                    <div className="text-xs text-fg-subtle mt-0.5">{description}</div>
+                    <div className="flex items-center gap-2.5">
+                        <span className="font-display text-base font-semibold text-fg">
+                            {title}
+                        </span>
+                        {count != null && (
+                            <span
+                                className={`font-mono text-[10px] font-semibold px-2 py-0.5 rounded-full ${countClass}`}
+                            >
+                                {count}
+                            </span>
+                        )}
+                    </div>
+                    <div className="text-[12.5px] text-fg-subtle mt-0.5">{description}</div>
                 </div>
                 <span
-                    className="material-symbols-outlined text-fg-muted transition-transform"
+                    className="material-symbols-outlined text-fg-subtle transition-transform"
                     style={{ transform: open ? 'rotate(90deg)' : 'rotate(0deg)' }}
                 >
                     chevron_right
                 </span>
             </button>
-            {open && <div className="p-4 border-t border-border">{children}</div>}
+            {open && (
+                <div className="px-5 pt-3.5 pb-4 border-t border-border-light">{children}</div>
+            )}
         </div>
     );
 };
@@ -71,7 +93,10 @@ const OrphanedCacheCard = () => {
     return (
         <MaintenanceCard
             title="Orphaned cache rows"
-            icon="cleaning_services"
+            icon="link_off"
+            iconClass="text-warning"
+            count={data ? `${items.length} rows` : undefined}
+            countClass="bg-warning/15 text-warning"
             description="Items in CHUB's local cache whose ARR entry no longer exists. Purging only removes the cache row; ARR and disk are untouched."
             defaultOpen
         >
@@ -216,6 +241,9 @@ const IncompleteMetadataCard = () => {
         <MaintenanceCard
             title="Incomplete metadata"
             icon="rule"
+            iconClass="text-[#ff9d75]"
+            count={data ? `${items.length} items` : undefined}
+            countClass="bg-[#ff9d75]/15 text-[#ff9d75]"
             description="Items missing key fields. External IDs (TMDB/TVDB/IMDB) missing → Poster Renamerr and Border Replacerr can't match them. Fix in the origin ARR."
         >
             <div className="flex flex-wrap gap-2 mb-3">
@@ -285,11 +313,11 @@ const IncompleteMetadataCard = () => {
 };
 
 export const LibraryMaintenance = () => (
-    <section>
-        <h3 className="text-lg font-semibold text-fg mb-3 flex items-center gap-2">
-            <span className="material-symbols-outlined text-brand-primary">build</span>
-            Library Maintenance
-        </h3>
+    <section className="mt-9">
+        <div className="flex items-center gap-3 mb-3.5">
+            <span className="material-symbols-outlined text-[22px] text-[#a99eff]">handyman</span>
+            <h2 className="font-display text-xl font-bold text-fg">Library Maintenance</h2>
+        </div>
         <div className="flex flex-col gap-3">
             <OrphanedCacheCard />
             <IncompleteMetadataCard />
