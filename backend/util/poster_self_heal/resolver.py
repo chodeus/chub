@@ -46,6 +46,17 @@ def _as_int(value: Any) -> Optional[int]:
         return None
 
 
+def _season_int(value: Any) -> Optional[int]:
+    """Like _as_int but KEEPS 0 — season 0 is the Specials season, a real value
+    (unlike an id, where 0 means 'absent')."""
+    if value in (None, "", "None"):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _imdb(value: Any) -> str:
     """Normalize an IMDb id to a comparable 'tt…' string, or '' when absent."""
     s = str(value).strip().lower() if value not in (None, "", "None") else ""
@@ -150,13 +161,6 @@ def resolve_poster(
     cfg,
 ) -> Optional[Dict[str, Any]]:
     """Return a poster_heal_review proposal dict, or None for a no-op / retry."""
-    # Season posters are not healed in v1: the ` - Season NN` / ` - Specials` tag
-    # (and its zero-padding canonicalization) needs dedicated handling, and a
-    # season doesn't carry its own ids in media_cache. Skip rather than risk
-    # dropping the season tag and corrupting the name into a show-poster filename.
-    if poster.get("season_number") is not None:
-        return None
-
     asset_type = poster.get("asset_type") or "movie"
     media_type = _media_type(asset_type)
     cur_name = os.path.basename(poster.get("file", ""))
@@ -207,14 +211,19 @@ def resolve_poster(
     if not ok:
         return None  # transient TMDB failure — retry next run
 
+    # A season/specials poster heals the SHOW's identity (it matches the show's
+    # media row) while keeping its own season tag: pass kind="season" so
+    # build_poster_filename re-emits ` - Season NN` / ` - Specials` (0 = Specials,
+    # which is why _season_int keeps 0). Otherwise the tag would be dropped.
+    season = _season_int(poster.get("season_number"))
     new_name = build_poster_filename(
-        kind=asset_type,
+        kind="season" if season is not None else asset_type,
         title=title_new or title_old,
         year=year_new,
         tmdb_id=new_tmdb,
         tvdb_id=new_tvdb,
         imdb_id=new_imdb or None,
-        season_number=_as_int(poster.get("season_number")),
+        season_number=season,
         ext=ext or ".jpg",
         asset_suffix=_ASSET_SUFFIX.get(poster.get("image_type") or "poster", ""),
     )

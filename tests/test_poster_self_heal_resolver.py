@@ -251,23 +251,42 @@ def test_backfill_disabled_skips_idless():
     )
 
 
-def test_season_poster_is_skipped():
-    # Regression: a season poster must NOT be healed (would drop the season tag).
-    assert (
-        _resolve(
-            poster(
-                "Big Sho (2018) {tmdb-800} - Season 2.jpg",
-                "show",
-                "Big Sho",
-                2018,
-                tmdb=800,
-                season=2,
-            ),
-            [media("show", "Big Show", 2018, tmdb=800)],
-            {800: {"verified": True, "title": "Big Show", "year": 2018}},
-        )
-        is None
+def test_season_poster_heals_title_keeping_tag():
+    # A season poster heals the show's title/id while KEEPING its ` - Season NN`
+    # tag (the regression was dropping it).
+    r = _resolve(
+        poster(
+            "Big Sho (2018) {tmdb-800} - Season 02.jpg",
+            "show",
+            "Big Sho",
+            2018,
+            tmdb=800,
+            season=2,
+        ),
+        [media("show", "Big Show", 2018, tmdb=800)],
+        {800: {"verified": True, "title": "Big Show", "year": 2018}},
     )
+    assert r["proposed_filename"] == "Big Show (2018) {tmdb-800} - Season 02.jpg"
+    assert r["drift_type"] == "title"
+
+
+def test_specials_poster_heals_title_keeping_tag():
+    # Season 0 = Specials — must keep the ` - Specials` tag (0 is a real season,
+    # not 'absent', so _season_int preserves it).
+    r = _resolve(
+        poster(
+            "Big Sho (2018) {tmdb-800} - Specials.jpg",
+            "show",
+            "Big Sho",
+            2018,
+            tmdb=800,
+            season=0,
+        ),
+        [media("show", "Big Show", 2018, tmdb=800)],
+        {800: {"verified": True, "title": "Big Show", "year": 2018}},
+    )
+    assert r["proposed_filename"] == "Big Show (2018) {tmdb-800} - Specials.jpg"
+    assert r["drift_type"] == "title"
 
 
 def test_logo_asset_keeps_suffix():
