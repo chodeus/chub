@@ -206,14 +206,8 @@ const ModuleSettingsContent = ({ moduleKey }) => {
 
     return (
         <div className="flex flex-col gap-5">
-            {/* Breadcrumb + header */}
+            {/* Header */}
             <div className="flex flex-col gap-2.5">
-                <nav className="font-mono text-[11.5px] text-fg-subtle">
-                    <Link to="/settings/modules" className="hover:text-fg">
-                        Modules
-                    </Link>{' '}
-                    / <span className="text-fg-muted">{activeModule?.label || moduleKey}</span>
-                </nav>
                 <div className="flex flex-wrap items-start justify-between gap-4">
                     <div className="min-w-0">
                         <h1 className="font-display text-[25px] font-bold tracking-[-0.3px] text-fg m-0">

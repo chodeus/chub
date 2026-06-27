@@ -7,8 +7,7 @@ import { scheduleAPI } from '../../utils/api/schedule';
 import { modulesAPI } from '../../utils/api/modules';
 import { useToast } from '../../contexts/ToastContext';
 import { PageHeader } from '../../components/ui/PageHeader';
-import { StatGrid } from '../../components/statistics';
-import { StatCard, Button, Modal } from '../../components/ui';
+import { Button, Modal } from '../../components/ui';
 import { ScheduleCard } from '../../components/modules/ScheduleCard';
 import { ScheduleField } from '../../components/fields/custom/ScheduleField';
 import {
@@ -100,33 +99,6 @@ export const SchedulePage = () => {
                 })),
         []
     );
-
-    // Statistics
-    const statistics = useMemo(() => {
-        // Only count schedules for modules that are in the available modules list
-        const scheduledCount = availableModules.filter(
-            module => schedules[module.key] && schedules[module.key] !== null
-        ).length;
-        const unscheduledCount = availableModules.length - scheduledCount;
-
-        return [
-            {
-                label: 'Scheduled Modules',
-                value: scheduledCount,
-                colorClass: 'text-success',
-            },
-            {
-                label: 'Unscheduled Modules',
-                value: unscheduledCount,
-                colorClass: 'text-warning',
-            },
-            {
-                label: 'Total Modules',
-                value: availableModules.length,
-                colorClass: 'text-brand-primary',
-            },
-        ];
-    }, [schedules, availableModules]);
 
     // Handlers
     const handleModuleRun = useCallback(
@@ -275,18 +247,6 @@ export const SchedulePage = () => {
                 description="When each module runs — base schedule, per-instance profiles, and multi-block overrides."
             />
 
-            {/* Statistics */}
-            <StatGrid columns={3}>
-                {statistics.map(stat => (
-                    <StatCard
-                        key={stat.label}
-                        label={stat.label}
-                        value={stat.value}
-                        colorClass={stat.colorClass}
-                    />
-                ))}
-            </StatGrid>
-
             {/* Module rows */}
             <div className="flex flex-col gap-3">
                 {availableModules.map(module => (
@@ -312,6 +272,19 @@ export const SchedulePage = () => {
                         schedule
                     </span>
                     <p className="text-lg">No modules available for scheduling</p>
+                </div>
+            )}
+
+            {/* Legend — explains base vs profile vs block schedules */}
+            {availableModules.length > 0 && (
+                <div className="flex items-center gap-3 rounded-xl border border-dashed border-border px-[18px] py-3.5">
+                    <span className="material-symbols-outlined text-fg-subtle text-lg">info</span>
+                    <span className="text-[12.5px] text-fg-subtle">
+                        The base schedule runs the module across all instances.{' '}
+                        <span className="text-accent">Profiles</span> fire independently per
+                        instance; <span className="text-warning">blocks</span> fire on their own
+                        schedule with per-run overrides. All run in addition to the base.
+                    </span>
                 </div>
             )}
 
