@@ -257,18 +257,6 @@ const UNMATCHED_SORT = {
     instance: i => i.instance_name,
 };
 
-/** Small artwork placeholder for the title cell — an unmatched item has no
- *  poster cached by definition. */
-const UnmatchedThumb = () => (
-    <span
-        className="shrink-0 w-7 h-10 rounded-[5px] bg-surface-inset border border-border flex items-center justify-center"
-        title="No artwork cached"
-        aria-hidden="true"
-    >
-        <span className="material-symbols-outlined text-fg-dim text-[14px]">image</span>
-    </span>
-);
-
 /** Colour the instance dot by *arr family, matching the mock. */
 const instanceDotColor = name => {
     const n = (name || '').toLowerCase();
@@ -510,7 +498,6 @@ const UnmatchedList = ({ items, onRefresh, onPick, typeKey: typeKeyProp, onTypeC
                                         >
                                             <td className="px-4 py-2.5">
                                                 <div className="flex items-center gap-3 min-w-0">
-                                                    <UnmatchedThumb />
                                                     <div className="min-w-0">
                                                         <div className="font-semibold text-sm text-fg truncate">
                                                             {item._type !== 'collection' ? (
@@ -1374,6 +1361,28 @@ const ArtworkView = ({ data, status, isLoading, onRefresh, onPick }) => {
                                                 {formatId(item.tvdb_id) || '—'}
                                             </td>
                                             <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                                                {!isIgnoredTab &&
+                                                    (() => {
+                                                        // Build the missing artwork in CL2K (develop
+                                                        // only — null on main). Opens the maker on the
+                                                        // tab for this artwork type.
+                                                        const cl2k = rowActionFor?.(
+                                                            { ...item, _type: item.asset_type },
+                                                            (item[cfg.typesKey] || [])[0]
+                                                        );
+                                                        return cl2k ? (
+                                                            <Link
+                                                                to={cl2k.to}
+                                                                className="inline-flex items-center justify-center w-8 h-8 rounded-[7px] text-source-cl2k hover:bg-surface-inset align-middle"
+                                                                aria-label={cl2k.ariaLabel}
+                                                                title={cl2k.title}
+                                                            >
+                                                                <span className="material-symbols-outlined text-[18px]">
+                                                                    {cl2k.icon}
+                                                                </span>
+                                                            </Link>
+                                                        ) : null;
+                                                    })()}
                                                 {!isIgnoredTab && (
                                                     <IconButton
                                                         icon="wallpaper"
