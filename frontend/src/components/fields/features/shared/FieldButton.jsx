@@ -28,7 +28,7 @@ export const FieldButton = React.memo(
     ({ onClick, disabled = false, ariaLabel, children, className = '' }) => {
         // Base atomic utility classes for consistent button appearance with 44x44px touch targets
         const baseClasses =
-            'inline-flex items-center justify-center touch-target px-2 rounded-lg border bg-surface text-fg hover:text-white hover:bg-primary focus:outline-none focus:border-focus disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200 ease-in-out';
+            'inline-flex items-center justify-center touch-target px-2 rounded-lg border bg-surface text-fg hover:text-on-color hover:bg-primary focus:outline-none focus:border-focus disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200 ease-in-out';
         const buttonClasses = `${baseClasses} ${className}`.trim();
 
         return (

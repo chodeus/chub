@@ -46,7 +46,7 @@ export const MonthdaySelector = React.memo(
                                 ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
                                 ${
                                     isSelected
-                                        ? 'bg-primary text-white border border-primary shadow-sm'
+                                        ? 'bg-primary text-on-color border border-primary shadow-sm'
                                         : 'bg-surface-elevated text-fg border border-border hover:bg-primary hover:border-border-light'
                                 }
                             `}

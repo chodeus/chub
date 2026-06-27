@@ -76,7 +76,7 @@ export const ScheduleTypePanel = React.memo(
                                 type="button"
                                 onClick={addTime}
                                 disabled={disabled || times.length >= 8}
-                                className="px-3 py-1 text-sm bg-surface-elevated text-fg border border-border rounded-lg hover:bg-primary hover:text-white disabled:opacity-50 disabled:cursor-not-allowed min-h-11"
+                                className="px-3 py-1 text-sm bg-surface-elevated text-fg border border-border rounded-lg hover:bg-primary hover:text-on-color disabled:opacity-50 disabled:cursor-not-allowed min-h-11"
                             >
                                 Add Time
                             </button>
