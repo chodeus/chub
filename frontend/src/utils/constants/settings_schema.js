@@ -134,6 +134,7 @@ const CORE_SETTINGS_SCHEMA = [
                 label: 'Google Drive List',
                 type: 'object_array',
                 displayType: 'gdrive',
+                alwaysExpanded: true,
                 required: false,
                 description: 'Each entry contains id, location, and name.',
                 bulkPreset: {
@@ -701,6 +702,7 @@ const CORE_SETTINGS_SCHEMA = [
                 label: 'Instances List',
                 type: 'object_array',
                 displayType: 'upgradinatorr',
+                alwaysExpanded: true,
 
                 description:
                     'Profiles can run with the main Upgradinatorr schedule or on their own schedule.',
@@ -1016,6 +1018,7 @@ const CORE_SETTINGS_SCHEMA = [
                 label: 'Mappings',
                 type: 'object_array',
                 displayType: 'labelarr',
+                alwaysExpanded: true,
 
                 description:
                     'Choose which Sonarr/Radarr tag becomes which Plex label, and on which Plex instance.',
@@ -1137,6 +1140,7 @@ const CORE_SETTINGS_SCHEMA = [
                 label: 'Library Mappings',
                 type: 'object_array',
                 displayType: 'nestarr',
+                alwaysExpanded: true,
                 description:
                     'Map Plex libraries to ARR instances to enable ARR↔Plex unmatched detection. Only mapped libraries are checked — unmapped libraries (e.g. Music) are excluded. Leave empty to keep unmatched detection off (nested and stray-file detection still run).',
                 fields: [
