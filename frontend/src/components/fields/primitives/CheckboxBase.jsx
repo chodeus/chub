@@ -55,7 +55,7 @@ export const CheckboxBase = React.memo(
             'border rounded-sm',
             'transition-colors transition-fast',
             'cursor-pointer shrink-0',
-            checked ? 'bg-primary border-primary text-white' : 'bg-surface border-border',
+            checked ? 'bg-primary border-primary text-on-color' : 'bg-surface border-border',
             !disabled && !checked && 'hover:border-primary',
             !disabled && checked && 'hover:bg-primary',
             'focus-within:border-primary',

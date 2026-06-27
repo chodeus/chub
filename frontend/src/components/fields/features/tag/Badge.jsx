@@ -90,7 +90,7 @@ export const Badge = React.memo(
 
         const variantClasses = {
             default: 'bg-surface-elevated text-fg-muted border-border',
-            interactive: 'bg-primary text-white hover:opacity-80 cursor-pointer',
+            interactive: 'bg-primary text-on-color hover:opacity-80 cursor-pointer',
             accent: 'bg-accent text-white hover:opacity-80 cursor-pointer',
             success: 'bg-success text-white',
             warning: 'bg-warning text-black',

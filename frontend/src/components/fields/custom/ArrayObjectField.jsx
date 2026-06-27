@@ -289,7 +289,7 @@ export const ArrayObjectField = ({
                     </button>
                     <button
                         type="button"
-                        className="min-h-11 min-w-11 inline-flex items-center justify-center px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer border bg-primary text-white border-primary hover:bg-primary-hover focus:outline-2 focus:outline-primary focus:outline-offset-2 disabled:opacity-50 disabled:cursor-not-allowed w-full md:w-auto md:min-w-25"
+                        className="min-h-11 min-w-11 inline-flex items-center justify-center px-4 py-3 rounded-lg text-sm font-medium transition-colors cursor-pointer border bg-primary text-on-color border-primary hover:bg-primary-hover focus:outline-2 focus:outline-primary focus:outline-offset-2 disabled:opacity-50 disabled:cursor-not-allowed w-full md:w-auto md:min-w-25"
                         onClick={handleSave}
                         disabled={disabled}
                     >
