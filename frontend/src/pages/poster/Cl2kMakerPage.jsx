@@ -5,7 +5,7 @@ import { cl2kMakerAPI } from '../../utils/api/cl2k_maker.js';
 import { configAPI } from '../../utils/api/config.js';
 import { postersAPI } from '../../utils/api/posters.js';
 import { useToast } from '../../contexts/ToastContext.jsx';
-import { Button, LoadingButton, PageHeader } from '../../components/ui/index.js';
+import { Button, LoadingButton, PageHeader, Toggle } from '../../components/ui/index.js';
 import SegmentedControl from '../../components/ui/SegmentedControl.jsx';
 import Spinner from '../../components/ui/Spinner.jsx';
 
@@ -496,7 +496,14 @@ const Cl2kMakerPage = () => {
     }, []);
 
     return (
-        <div className="p-4 md:p-6 max-w-6xl mx-auto pb-24">
+        <div className="cl2k-page p-4 md:p-6 max-w-6xl mx-auto pb-24">
+            {/* Brand-styled range sliders (mock spec) — scoped to this page so
+                it stays develop-only and doesn't touch shared CSS. */}
+            <style>{`
+.cl2k-page input[type=range]{-webkit-appearance:none;appearance:none;height:5px;border-radius:3px;background:#2a3052;accent-color:var(--primary);cursor:pointer;}
+.cl2k-page input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.5);cursor:pointer;}
+.cl2k-page input[type=range]::-moz-range-thumb{width:15px;height:15px;border:none;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.5);cursor:pointer;}
+`}</style>
             <PageHeader
                 title="CL2K Poster Maker"
                 description="Turn a TMDB/TVDB/IMDB title into a DAPS-named CL2K asset — the full 4-asset studio"
@@ -2513,14 +2520,16 @@ const RenderPanel = ({
                             is the fallback when neither is set. Brush over the old text and{' '}
                             <span className="text-fg-muted">Send to AI</span> first to remove it.
                         </p>
-                        <label className="flex items-center gap-2 text-sm text-fg font-medium">
-                            <input
-                                type="checkbox"
+                        <div className="flex items-center justify-between gap-3">
+                            <span className="text-sm text-fg font-medium">
+                                Add CL2K white border
+                            </span>
+                            <Toggle
                                 checked={asisBorder}
-                                onChange={e => setAsisBorder(e.target.checked)}
+                                onChange={setAsisBorder}
+                                label="Add CL2K white border"
                             />
-                            Add CL2K white border
-                        </label>
+                        </div>
                         <p className="text-xs text-fg-subtle">
                             The DAPS default 26px white frame (per the CL2K PSD). Uncheck only if
                             this poster already has the required border.
@@ -4094,12 +4103,9 @@ const GuideOverlay = () => (
     </div>
 );
 
-// Small "Show CL2K guides" checkbox used next to every poster preview.
+// CL2K-guides toggle pill (the row beside it supplies the "CL2K guides" label).
 const GuidesToggle = ({ show, onChange }) => (
-    <label className="flex items-center gap-1.5 text-xs text-fg-muted cursor-pointer">
-        <input type="checkbox" checked={show} onChange={e => onChange(e.target.checked)} />
-        CL2K guides
-    </label>
+    <Toggle checked={show} onChange={onChange} label="Toggle CL2K guides" />
 );
 
 // ─── Logo selector (TMDB / fanart grid + custom upload) ─────────────────────
@@ -4333,17 +4339,15 @@ const LogoSelector = ({
                 makes darkness the opacity: black text -> solid white, the plate ->
                 transparent. Only meaningful on the CL2K-white two-tone. */}
             {onInvert && whiten && showControls && (
-                <label className="mt-2 flex items-center gap-2 text-xs text-fg-muted cursor-pointer">
-                    <input
-                        type="checkbox"
-                        checked={!!invert}
-                        onChange={e => onInvert(e.target.checked)}
-                    />
-                    Invert logo
-                    <span className="text-fg-subtle">
-                        — white becomes transparent, black becomes white (for plate/sticker logos)
-                    </span>
-                </label>
+                <div className="mt-2 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                        <span className="text-xs text-fg-muted">Invert logo</span>
+                        <span className="block text-[11px] text-fg-subtle">
+                            white becomes transparent, black becomes white (for plate/sticker logos)
+                        </span>
+                    </div>
+                    <Toggle checked={!!invert} onChange={onInvert} label="Invert logo" />
+                </div>
             )}
             {/* B/W touch-up: a global two-tone map can't decide interior accents
                 that share saturation + luma with their surroundings — brush those
