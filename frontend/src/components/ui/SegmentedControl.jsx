@@ -21,6 +21,16 @@ const SegmentedControl = ({ options, value, onChange, size = 'md', className = '
         >
             {options.map(opt => {
                 const active = opt.value === value;
+                // `danger` marks a destructive option (e.g. a Remove mode): red
+                // when selected, red-tinted text when not — distinct from the
+                // brand-violet active state of normal options.
+                const stateCls = active
+                    ? opt.danger
+                        ? 'bg-error text-white font-semibold'
+                        : 'bg-primary text-on-color font-semibold'
+                    : opt.danger
+                      ? 'text-error font-medium hover:brightness-110'
+                      : 'text-fg-muted font-medium hover:text-fg';
                 return (
                     <button
                         key={opt.value}
@@ -28,11 +38,7 @@ const SegmentedControl = ({ options, value, onChange, size = 'md', className = '
                         role="tab"
                         aria-selected={active}
                         onClick={() => onChange(opt.value)}
-                        className={`inline-flex items-center justify-center ${segH} rounded-[7px] whitespace-nowrap transition-colors cursor-pointer ${
-                            active
-                                ? 'bg-primary text-on-color font-semibold'
-                                : 'text-fg-muted font-medium hover:text-fg'
-                        }`}
+                        className={`inline-flex items-center justify-center ${segH} rounded-[7px] whitespace-nowrap transition-colors cursor-pointer ${stateCls}`}
                     >
                         {opt.label}
                     </button>
@@ -47,6 +53,7 @@ SegmentedControl.propTypes = {
         PropTypes.shape({
             value: PropTypes.string.isRequired,
             label: PropTypes.node.isRequired,
+            danger: PropTypes.bool,
         })
     ).isRequired,
     value: PropTypes.string,

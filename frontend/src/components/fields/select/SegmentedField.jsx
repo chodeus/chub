@@ -23,7 +23,7 @@ export const SegmentedField = React.memo(
                 (field.options || []).map(o =>
                     typeof o === 'string'
                         ? { value: o, label: o }
-                        : { value: o.value, label: o.label || o.value }
+                        : { value: o.value, label: o.label || o.value, danger: o.danger }
                 ),
             [field.options]
         );
