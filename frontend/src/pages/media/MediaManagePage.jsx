@@ -29,6 +29,25 @@ const dupIds = dup => (dup.ids || '').split(',').map(Number).filter(Boolean);
 /** One duplicate group: a header that expands to the mock's per-copy grid
  *  (checkbox + quality + size + path + suggested KEEP/DUPLICATE). Copy details
  *  are loaded lazily on first expand (they need a live *arr probe per copy). */
+/** Mock-styled section header: a coloured glyph, a Space-Grotesk h2, an
+ *  optional mono count pill, and a right-aligned slot for filters/actions. */
+const ManageSectionHeader = ({ icon, iconClass, title, count, countClass, children }) => (
+    <div className="flex items-center flex-wrap gap-3 mb-3.5">
+        <span className={`material-symbols-outlined text-[22px] ${iconClass}`} aria-hidden="true">
+            {icon}
+        </span>
+        <h2 className="font-display text-xl font-bold text-fg">{title}</h2>
+        {count != null && (
+            <span
+                className={`font-mono text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${countClass}`}
+            >
+                {count}
+            </span>
+        )}
+        {children}
+    </div>
+);
+
 const DuplicateGroup = ({
     dup,
     expanded,
@@ -177,6 +196,7 @@ const DuplicatesSection = ({ duplicates, onResolve, onRefresh }) => {
     const [selected, setSelected] = useState({});
     const [deleteFiles, setDeleteFiles] = useState(true);
     const [busy, setBusy] = useState(false);
+    const [filter, setFilter] = useState('');
 
     const toggleExpand = async dup => {
         const k = dupKey(dup);
@@ -227,15 +247,44 @@ const DuplicatesSection = ({ duplicates, onResolve, onRefresh }) => {
         }
     };
 
-    if (!duplicates.length) return null;
+    const q = filter.trim().toLowerCase();
+    const shown = q
+        ? duplicates.filter(d => (d.title || d.normalized_title || '').toLowerCase().includes(q))
+        : duplicates;
 
     return (
-        <section>
-            <h3 className="font-display text-lg font-semibold text-fg mb-3 flex items-center gap-2">
-                <span className="material-symbols-outlined text-warning">content_copy</span>
-                Duplicates
-                <span className="font-mono text-sm text-fg-subtle">{duplicates.length} groups</span>
-            </h3>
+        <section className="mt-6">
+            <ManageSectionHeader
+                icon="content_copy"
+                iconClass="text-accent"
+                title="Duplicate Files"
+                count={`${duplicates.length} group${duplicates.length === 1 ? '' : 's'}`}
+                countClass="bg-warning/15 text-warning"
+            >
+                {duplicates.length > 0 && (
+                    <div className="ml-auto flex items-center gap-2 h-9 px-3 rounded-lg bg-surface border border-border w-full sm:w-auto sm:flex-[0_1_280px]">
+                        <span
+                            className="material-symbols-outlined text-base text-fg-subtle"
+                            aria-hidden="true"
+                        >
+                            search
+                        </span>
+                        <input
+                            type="text"
+                            value={filter}
+                            onChange={e => setFilter(e.target.value)}
+                            placeholder="Filter duplicates…"
+                            className="flex-1 min-w-0 bg-transparent border-0 outline-none text-[12.5px] text-fg placeholder:text-fg-subtle"
+                        />
+                    </div>
+                )}
+            </ManageSectionHeader>
+
+            {duplicates.length === 0 && (
+                <div className="rounded-xl bg-surface border border-border px-4 py-6 text-center text-sm text-fg-subtle">
+                    No duplicate files found.
+                </div>
+            )}
 
             {selectedIds.length > 0 && (
                 <div className="flex items-center gap-3.5 flex-wrap px-4 py-3 mb-4 rounded-lg bg-primary/10 border border-primary/30">
@@ -278,7 +327,7 @@ const DuplicatesSection = ({ duplicates, onResolve, onRefresh }) => {
             )}
 
             <div className="flex flex-col gap-3.5">
-                {duplicates.slice(0, 10).map((dup, i) => {
+                {shown.slice(0, 10).map((dup, i) => {
                     const k = dupKey(dup);
                     return (
                         <DuplicateGroup
@@ -631,12 +680,15 @@ const MediaManagePage = () => {
             />
 
             {folderCollisions.length > 0 && (
-                <section className="mb-4">
-                    <h3 className="font-display text-lg font-semibold text-fg mb-1 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-fg-muted">folder_copy</span>
-                        Folder collisions ({folderCollisions.length} groups)
-                    </h3>
-                    <p className="text-xs text-fg-subtle mb-3">
+                <section className="mt-9">
+                    <ManageSectionHeader
+                        icon="folder_copy"
+                        iconClass="text-error"
+                        title="Folder collisions"
+                        count={`${folderCollisions.length} group${folderCollisions.length === 1 ? '' : 's'}`}
+                        countClass="bg-error/15 text-error"
+                    />
+                    <p className="text-xs text-fg-subtle -mt-1.5 mb-3">
                         Same normalized title with missing or ambiguous external IDs — can&apos;t be
                         told apart from metadata alone. Review before resolving.
                     </p>
@@ -737,19 +789,22 @@ const MediaManagePage = () => {
             )}
 
             {/* Nestarr — Unmatched & Nested Media */}
-            <section className="mb-4">
-                <h3 className="font-display text-lg font-semibold text-fg mb-3 flex items-center flex-wrap gap-2">
-                    <span className="material-symbols-outlined text-warning">account_tree</span>
-                    Unmatched & Nested Media
+            <section className="mt-9">
+                <ManageSectionHeader
+                    icon="account_tree"
+                    iconClass="text-warning"
+                    title="Unmatched & Nested Media"
+                >
                     {nestedIssues.length > 0 && (
-                        <span className="text-sm font-normal text-warning">
+                        <span className="font-mono text-xs text-warning">
                             ({nestedIssues.length} issue{nestedIssues.length !== 1 ? 's' : ''})
                         </span>
                     )}
                     <LoadingButton
                         loading={isNestScanning}
                         loadingText="Scanning..."
-                        variant="ghost"
+                        variant="surface"
+                        size="small"
                         icon="radar"
                         onClick={handleNestedScan}
                         title="Compare ARR media against Plex and detect nested paths"
@@ -757,11 +812,11 @@ const MediaManagePage = () => {
                         Scan
                     </LoadingButton>
                     {lastScanTime && (
-                        <span className="text-xs font-normal text-fg-subtle sm:ml-auto">
+                        <span className="ml-auto font-mono text-[11.5px] text-fg-subtle">
                             Last scan: {formatDateTime(lastScanTime)}
                         </span>
                     )}
-                </h3>
+                </ManageSectionHeader>
                 {!unmatchedEnabled && (
                     <div className="mb-3 p-3 rounded-lg bg-info/10 border border-info/20 text-sm text-fg-muted">
                         <span className="material-symbols-outlined text-info align-middle mr-1 text-base">
@@ -812,6 +867,10 @@ const MediaManagePage = () => {
                                 badgeLabel = 'Extra Video Files';
                                 badgeColor = 'text-error';
                                 badgeBg = 'bg-error/10';
+                            } else if (isNested) {
+                                badgeLabel = 'Nested Folder';
+                                badgeColor = 'text-warning';
+                                badgeBg = 'bg-warning/10';
                             } else {
                                 badgeLabel = issue.type
                                     .replace(/_/g, ' ')
@@ -821,110 +880,108 @@ const MediaManagePage = () => {
                             }
 
                             return (
-                                <div
+                                <section
                                     key={issue.id}
-                                    className="p-3 rounded-lg bg-surface border border-border"
+                                    className="rounded-xl bg-surface border border-border p-[15px] transition-colors hover:border-border-light"
                                 >
-                                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-3">
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-center flex-wrap gap-2 mb-1">
-                                                <span
-                                                    className={`text-xs px-2 py-0.5 rounded-full ${badgeBg} ${badgeColor} font-medium`}
+                                    <div className="flex items-center flex-wrap gap-2.5 mb-2.5">
+                                        <span
+                                            className={`font-mono text-[10px] font-semibold px-2.5 py-[3px] rounded-md ${badgeBg} ${badgeColor}`}
+                                        >
+                                            {badgeLabel}
+                                        </span>
+                                        <span className="font-mono text-[11.5px] text-fg-subtle">
+                                            {issue.instance}
+                                        </span>
+                                        {isPlexNotArr && issue.library_name && (
+                                            <span className="font-mono text-[11.5px] text-fg-subtle">
+                                                {issue.library_name}
+                                            </span>
+                                        )}
+                                        {isNested && (
+                                            <div className="ml-auto flex gap-1.5">
+                                                <Button
+                                                    variant="surface"
+                                                    size="small"
+                                                    icon="drive_file_move"
+                                                    onClick={() => handlePreviewFix(issue)}
                                                 >
-                                                    {badgeLabel}
+                                                    Fix
+                                                </Button>
+                                            </div>
+                                        )}
+                                    </div>
+                                    {isUnmatched ? (
+                                        <>
+                                            <div className="flex items-baseline gap-2">
+                                                <span className="font-display text-base font-semibold text-fg">
+                                                    {issue.name}
                                                 </span>
-                                                <span className="text-xs text-fg-muted">
-                                                    {issue.instance}
-                                                </span>
-                                                {isPlexNotArr && issue.library_name && (
-                                                    <span className="text-xs text-fg-subtle">
-                                                        {issue.library_name}
+                                                {issue.year && (
+                                                    <span className="font-mono text-[13px] text-fg-subtle">
+                                                        {issue.year}
                                                     </span>
                                                 )}
                                             </div>
-                                            {isUnmatched ? (
-                                                <>
-                                                    <div className="text-sm text-fg font-medium">
-                                                        {issue.name}
-                                                        {issue.year && (
-                                                            <span className="text-fg-muted font-normal">
-                                                                {' '}
-                                                                ({issue.year})
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                    {issue.path && (
-                                                        <div
-                                                            className="text-xs text-fg-subtle mt-1 font-mono truncate truncate-start"
-                                                            title={issue.path}
-                                                        >
-                                                            {issue.path}
-                                                        </div>
-                                                    )}
-                                                </>
-                                            ) : isFilesystem ? (
-                                                <>
-                                                    <div className="text-sm text-fg font-medium">
-                                                        {issue.name}
-                                                        {issue.year && (
-                                                            <span className="text-fg-muted font-normal">
-                                                                {' '}
-                                                                ({issue.year})
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                    <div
-                                                        className="text-xs text-fg-subtle mt-1 font-mono truncate truncate-start"
-                                                        title={issue.path}
-                                                    >
-                                                        {issue.path}
-                                                    </div>
-                                                    {issue.video_files &&
-                                                        issue.video_files.length > 0 && (
-                                                            <div className="text-xs text-error mt-1 break-words">
-                                                                {issue.video_files.length} video
-                                                                files:{' '}
-                                                                {issue.video_files.join(', ')}
-                                                            </div>
-                                                        )}
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <div className="text-sm text-fg-muted">
-                                                        <span className="text-fg font-medium">
-                                                            {issue.nested?.title}
-                                                        </span>
-                                                        {issue.nested?.year && (
-                                                            <span> ({issue.nested.year})</span>
-                                                        )}
-                                                        <span className="text-fg-subtle">
-                                                            {' '}
-                                                            is nested inside{' '}
-                                                        </span>
-                                                        <span className="text-fg font-medium">
-                                                            {issue.parent?.title}
-                                                        </span>
-                                                        {issue.parent?.year && (
-                                                            <span> ({issue.parent.year})</span>
-                                                        )}
-                                                    </div>
-                                                    <div className="text-xs text-fg-subtle mt-1 font-mono truncate">
-                                                        {issue.path}
-                                                    </div>
-                                                </>
+                                            {issue.path && (
+                                                <div
+                                                    className="mt-1 font-mono text-xs text-fg-subtle break-all"
+                                                    title={issue.path}
+                                                >
+                                                    {issue.path}
+                                                </div>
                                             )}
-                                        </div>
-                                        {isNested && (
-                                            <Button
-                                                variant="ghost"
-                                                icon="drive_file_move"
-                                                onClick={() => handlePreviewFix(issue)}
+                                        </>
+                                    ) : isFilesystem ? (
+                                        <>
+                                            <div className="flex items-baseline gap-2">
+                                                <span className="font-display text-base font-semibold text-fg">
+                                                    {issue.name}
+                                                </span>
+                                                {issue.year && (
+                                                    <span className="font-mono text-[13px] text-fg-subtle">
+                                                        {issue.year}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div
+                                                className="mt-1 font-mono text-xs text-fg-subtle break-all"
+                                                title={issue.path}
                                             >
-                                                Fix
-                                            </Button>
-                                        )}
-                                    </div>
-                                </div>
+                                                {issue.path}
+                                            </div>
+                                            {issue.video_files && issue.video_files.length > 0 && (
+                                                <div className="mt-1.5 font-mono text-xs leading-relaxed text-error/80 break-words">
+                                                    {issue.video_files.length} video files:{' '}
+                                                    {issue.video_files.join(' · ')}
+                                                </div>
+                                            )}
+                                        </>
+                                    ) : (
+                                        <>
+                                            <div className="flex items-baseline gap-2">
+                                                <span className="font-display text-base font-semibold text-fg">
+                                                    {issue.nested?.title}
+                                                </span>
+                                                {issue.nested?.year && (
+                                                    <span className="font-mono text-[13px] text-fg-subtle">
+                                                        {issue.nested.year}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div className="mt-1 font-mono text-xs text-fg-subtle break-all">
+                                                {issue.path}
+                                            </div>
+                                            <div className="mt-1.5 font-mono text-xs leading-relaxed text-warning/80 break-words">
+                                                Nested inside {issue.parent?.title}
+                                                {issue.parent?.year
+                                                    ? ` (${issue.parent.year})`
+                                                    : ''}{' '}
+                                                — flatten so the *arr can detect it.
+                                            </div>
+                                        </>
+                                    )}
+                                </section>
                             );
                         })}
                     </div>
@@ -937,12 +994,14 @@ const MediaManagePage = () => {
 
             {/* Collections */}
             {Array.isArray(collections) && collections.length > 0 && (
-                <section className="mb-4">
-                    <h3 className="font-display text-lg font-semibold text-fg mb-3 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-brand-primary">
-                            collections_bookmark
-                        </span>
-                        Collections ({collections.length})
+                <section className="mt-9">
+                    <ManageSectionHeader
+                        icon="collections_bookmark"
+                        iconClass="text-primary"
+                        title="Collections"
+                        count={`${collections.length}`}
+                        countClass="bg-primary/15 text-primary"
+                    >
                         <Button
                             variant="ghost"
                             icon="add"
@@ -950,7 +1009,7 @@ const MediaManagePage = () => {
                         >
                             Create
                         </Button>
-                    </h3>
+                    </ManageSectionHeader>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                         {collections.map((col, i) => (
                             <div
