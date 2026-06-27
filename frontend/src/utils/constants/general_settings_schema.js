@@ -5,7 +5,7 @@
 // dedicated page) because it's a single setting — splitting it out earned
 // its own page back when more UI knobs were planned, but in practice only
 // the theme stuck.
-import { SETTINGS_MODULES } from './settings_schema.js';
+import { SETTINGS_MODULES, SETTINGS_SCHEMA } from './settings_schema.js';
 
 // Dashboard-toggleable modules = the executable modules the dashboard lists
 // (backend MODULES / GET /api/modules). Derived from SETTINGS_MODULES so it
@@ -13,6 +13,15 @@ import { SETTINGS_MODULES } from './settings_schema.js';
 const DASHBOARD_MODULE_OPTIONS = SETTINGS_MODULES.filter(
     m => m.key !== 'tmdb' && m.key !== 'fanart'
 ).map(m => ({ value: m.key, label: m.name }));
+
+// tmdb + fanart carry the TMDB / fanart.tv API keys but are config-only modules
+// with no card in the Modules hub (moduleOrder omits them), which left the keys
+// unreachable after the settings redesign. Surface those sections here on the
+// General page. Reuse the canonical field defs from SETTINGS_SCHEMA so the
+// labels/descriptions never drift from the source schema.
+const API_KEY_SECTIONS = ['tmdb', 'fanart']
+    .map(key => SETTINGS_SCHEMA.find(m => m.key === key))
+    .filter(Boolean);
 
 export const GENERAL_SETTINGS_SCHEMA = [
     {
@@ -29,6 +38,7 @@ export const GENERAL_SETTINGS_SCHEMA = [
             },
         ],
     },
+    ...API_KEY_SECTIONS,
     {
         key: 'general',
         label: 'General',

@@ -104,6 +104,12 @@ export const GeneralSettingsPage = () => {
         };
         const initialData = {
             user_interface: configData.data.user_interface || { theme: 'auto' },
+            // tmdb + fanart surface their API keys on this page (see
+            // general_settings_schema). Load them so the fields show current
+            // state (the redacted placeholder when a key is set) and the save
+            // round-trips the section intact.
+            tmdb: configData.data.tmdb || {},
+            fanart: configData.data.fanart || {},
             general: {
                 ...generalData,
                 duplicate_exclude_groups: normalizeDuplicateExcludeGroups(
