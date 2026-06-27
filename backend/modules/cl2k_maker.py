@@ -5,7 +5,6 @@ import shutil
 import tempfile
 from typing import Any, Dict, Optional, Tuple
 
-from backend.util.base_module import ChubModule
 from backend.util.cl2k import color
 from backend.util.cl2k import geometry as geo
 from backend.util.cl2k import image_fetch, text_removal
@@ -16,12 +15,10 @@ from backend.util.cl2k.tmdb_art import list_images
 from backend.util.database import ChubDB
 from backend.util.database.cl2k_generated import cl2k_generated_for
 from backend.util.fanart import FanartClient
-from backend.util.logger import Logger
 from backend.util.normalization import normalize_titles
 from backend.util.tmdb import TMDBClient
 
 _VALID_KINDS = ("movie", "show", "collection", "season")
-_BATCH_KINDS = ("movie", "show")  # media_cache asset_types we batch over
 
 # Prompt for the "extend" framing's AI outpaint. The model must *continue the
 # existing scene downward* — never invent text, logos, or new subjects (those would
@@ -1359,74 +1356,3 @@ def psd_for_item(
         whiten=cfg.whiten_logo if whiten is None else whiten,
         invert=invert,
     )
-
-
-class Cl2kMaker(ChubModule):
-    """Batch CL2K poster generation over the media library.
-
-    On-demand single-poster generation goes through the API, which calls
-    :func:`generate_for_item` directly. This run() is the scheduled/manual batch:
-    it walks media_cache for matched movies/shows lacking a CL2K poster and
-    generates one for each (honouring the duplicate guard).
-    """
-
-    def __init__(self, logger: Optional[Logger] = None) -> None:
-        super().__init__(logger=logger)
-
-    def run(self, manifest: Optional[dict] = None) -> None:
-        cfg = self.config
-        if not cfg.enabled:
-            self.logger.info("cl2k_maker is disabled; skipping batch run.")
-            return
-        if not cfg.output_dir:
-            self.logger.error("cl2k_maker.output_dir is not configured; aborting.")
-            return
-
-        with ChubDB(logger=self.logger) as db:
-            rows = db.media.get_all()
-            candidates = [
-                r
-                for r in rows
-                if r.get("asset_type") in _BATCH_KINDS
-                and r.get("tmdb_id")
-                and r.get("matched")
-            ]
-            total = len(candidates)
-            self.logger.info(f"CL2K batch: {total} matched movie/show candidates")
-            generated = skipped = failed = 0
-            for idx, media in enumerate(candidates, 1):
-                if self.is_cancelled():
-                    self.logger.info("CL2K batch cancelled.")
-                    break
-                try:
-                    result = generate_for_item(
-                        db=db,
-                        full_config=self.full_config,
-                        logger=self.logger,
-                        kind=media["asset_type"],
-                        title=media.get("title", ""),
-                        tmdb_id=media.get("tmdb_id"),
-                        year=media.get("year"),
-                        tvdb_id=media.get("tvdb_id"),
-                        imdb_id=media.get("imdb_id"),
-                    )
-                    status = result.get("status")
-                    if status == "generated":
-                        generated += 1
-                    elif status == "skipped":
-                        skipped += 1
-                    else:
-                        failed += 1
-                except Exception as exc:
-                    failed += 1
-                    self.logger.warning(
-                        f"CL2K generation failed for {media.get('title')}: {exc}",
-                        exc_info=True,
-                    )
-                if total:
-                    self._report_progress(int(idx / total * 100))
-
-            self.logger.info(
-                f"CL2K batch done: {generated} generated, {skipped} skipped, "
-                f"{failed} failed"
-            )

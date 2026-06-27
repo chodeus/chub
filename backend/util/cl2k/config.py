@@ -12,7 +12,6 @@ from pydantic import BaseModel, Field
 
 class Cl2kMakerConfig(BaseModel):
     log_level: str = "info"
-    enabled: bool = False
     # Local source_dir where generated CL2K posters land (then matched by
     # poster_renamerr). Should be one of poster_renamerr.source_dirs.
     output_dir: str = ""
