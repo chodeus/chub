@@ -551,7 +551,7 @@ const ThumbnailGroup = ({
                                 className="absolute inset-0 w-full h-full object-cover bg-black"
                             />
                             {isSelected && (
-                                <span className="absolute top-1 right-1 inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary text-white shadow-md">
+                                <span className="absolute top-1 right-1 inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary text-on-color shadow-md">
                                     <span className="material-symbols-outlined text-base">
                                         check
                                     </span>
