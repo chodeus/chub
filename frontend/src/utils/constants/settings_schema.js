@@ -230,6 +230,7 @@ const CORE_SETTINGS_SCHEMA = [
                 section: 'Source',
                 required: true,
                 bulkSource: 'gdrive',
+                priorityOrder: true,
                 description:
                     'Folders scanned for poster assets. Bulk-add the Google Drives you configured in Sync GDrive, or add directories individually. Drag to set priority — later directories win when multiple sources have a poster for the same item (bottom of the list takes precedence).',
             },
