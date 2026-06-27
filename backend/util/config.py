@@ -470,6 +470,23 @@ class LabelarrMapping(BaseModel):
     # with existing configs that have no `enabled` key.
     enabled: bool = True
 
+    @field_validator("labels", mode="before")
+    @classmethod
+    def _coerce_labels(cls, value: Any) -> List[str]:
+        """Normalise labels to a list so the UI always edits them as chips.
+
+        Accepts a legacy comma-separated string ("4k,remux") or a plain single
+        label and splits it; an existing list is cleaned of blanks. Old configs
+        keep loading unchanged while new saves round-trip a list.
+        """
+        if value is None or value == "":
+            return []
+        if isinstance(value, str):
+            return [p.strip() for p in value.split(",") if p.strip()]
+        if isinstance(value, list):
+            return [str(p).strip() for p in value if str(p).strip()]
+        return []
+
 
 class LabelarrConfig(BaseModel):
     log_level: str = "info"
