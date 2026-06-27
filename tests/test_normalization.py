@@ -76,7 +76,7 @@ def test_normalize_titles_normalizes_em_dash():
 
 
 def test_normalize_titles_strips_emoji():
-    assert normalize_titles("Movie \U0001F3AC") == normalize_titles("Movie")
+    assert normalize_titles("Movie \U0001f3ac") == normalize_titles("Movie")
 
 
 def test_normalize_titles_handles_decomposed_diacritic():
@@ -90,7 +90,7 @@ def test_normalize_titles_handles_decomposed_diacritic():
 
 
 def test_parse_asset_filename_strips_emoji():
-    assert parse_asset_filename("Movie \U0001F3AC (2020).jpg") == "Movie"
+    assert parse_asset_filename("Movie \U0001f3ac (2020).jpg") == "Movie"
 
 
 def test_parse_asset_filename_strips_nbsp():
@@ -187,6 +187,22 @@ def test_normalize_titles_id_block_stripped():
 def test_normalize_titles_returns_lowercase():
     out = normalize_titles("CAPS LOCK MOVIE")
     assert out == out.lower()
+
+
+def test_normalize_titles_strips_unknown_year_placeholder():
+    """*arr writes "(0)" when the release year is unknown; year_regex only strips a
+    4-digit year, so without the unknown-year strip the "0" sticks to the title
+    ("thesavant0") and breaks matching. The placeholder must normalize away like a
+    bare year so a folder built from that path still matches the live item."""
+    assert normalize_titles("The Savant (0)") == normalize_titles("The Savant")
+    assert normalize_titles("The Savant (0)") == "thesavant"
+    assert normalize_titles("The Savant (00)") == "thesavant"
+    assert normalize_titles("The Savant (0000)") == "thesavant"
+
+
+def test_parse_asset_filename_strips_unknown_year_placeholder():
+    assert parse_asset_filename("The Savant (0).jpg") == "The Savant"
+    assert parse_asset_filename("The Savant (0) - Season 1.jpg") == "The Savant"
 
 
 def test_parse_asset_filename_strips_idsuffix_blocks():
