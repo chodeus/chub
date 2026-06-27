@@ -577,10 +577,12 @@ export const ArrayObjectField = ({
     // button that opens the same dir_picker modal DirField uses.
     const renderGdriveTable = () => {
         const DirPickerField = FieldRegistry.getField('dir_picker');
-        const cols = '1fr 1.3fr 1.2fr auto 32px';
+        const cols = '1fr 1.3fr 1.2fr auto 28px';
         const head = 'font-mono text-[10px] tracking-[0.8px] text-fg-subtle';
+        // Flat borderless field — reads as a table cell; the row border
+        // highlights on focus-within (mock style), not per-input boxes.
         const cell =
-            'h-9 px-2.5 rounded-md bg-surface-inset border border-border text-fg text-sm outline-none focus:border-primary w-full';
+            'bg-transparent border-0 outline-none px-0 py-1 text-sm text-fg placeholder:text-fg-dim w-full disabled:opacity-60';
         return (
             <>
                 {value.length > 0 ? (
@@ -596,7 +598,7 @@ export const ArrayObjectField = ({
                             {value.map((item, index) => (
                                 <div
                                     key={index}
-                                    className="grid gap-3 items-center px-2 py-2 rounded-lg bg-surface border border-border"
+                                    className="grid gap-3 items-center px-3 py-2 rounded-[9px] bg-surface-inset border border-border transition-colors focus-within:border-primary"
                                     style={{ gridTemplateColumns: cols }}
                                 >
                                     <input
@@ -636,9 +638,9 @@ export const ArrayObjectField = ({
                                             onClick={() => setGdrivePickerRow(index)}
                                             disabled={disabled}
                                             title="Browse folders"
-                                            className="shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-md bg-surface-inset border border-border text-fg-muted hover:border-primary"
+                                            className="shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-[7px] bg-transparent border border-border text-fg-subtle transition-colors hover:text-fg hover:border-border-light"
                                         >
-                                            <span className="material-symbols-outlined text-[18px]">
+                                            <span className="material-symbols-outlined text-[15px]">
                                                 folder_open
                                             </span>
                                         </button>
@@ -653,11 +655,18 @@ export const ArrayObjectField = ({
                                             }
                                         />
                                     </div>
-                                    <RemoveButton
+                                    <button
+                                        type="button"
                                         onClick={() => handleRemove(index)}
-                                        itemName={`drive ${index + 1}`}
                                         disabled={disabled}
-                                    />
+                                        aria-label={`Remove drive ${index + 1}`}
+                                        title={`Remove drive ${index + 1}`}
+                                        className="shrink-0 flex items-center justify-center w-7 h-7 rounded-[7px] border border-border bg-transparent text-fg-subtle transition-colors hover:text-error hover:border-error/50 disabled:opacity-40"
+                                    >
+                                        <span className="material-symbols-outlined text-[15px]">
+                                            close
+                                        </span>
+                                    </button>
                                 </div>
                             ))}
                         </div>
