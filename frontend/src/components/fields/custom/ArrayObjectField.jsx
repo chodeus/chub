@@ -13,6 +13,7 @@ import { useInstancesData } from '../../../hooks/useInstancesData';
 import { scheduleToHuman } from '../../../utils/schedule';
 import Toggle from '../../ui/Toggle.jsx';
 import SegmentedControl from '../../ui/SegmentedControl.jsx';
+import { Modal } from '../../ui';
 
 /**
  * Unified ArrayObjectField - Handles dynamic array of objects with configurable schemas
@@ -35,6 +36,8 @@ export const ArrayObjectField = ({
 }) => {
     const [expandedIndex, setExpandedIndex] = useState(null);
     const [editingData, setEditingData] = useState({});
+    // Which gdrive-table row has its folder-picker modal open (bespoke gdrive view).
+    const [gdrivePickerRow, setGdrivePickerRow] = useState(null);
 
     // Load instances data for conditional field evaluation and dynamic dropdowns
     const { instancesData } = useInstancesData();
@@ -565,6 +568,143 @@ export const ArrayObjectField = ({
         );
     };
 
+    // Bespoke Sync-GDrive drive table — matches the mock's compact rows
+    // (NAME / FOLDER ID / LOCAL LOCATION + browse-only + remove) under column
+    // headers. Location stays editable AND keeps the folder picker via a browse
+    // button that opens the same dir_picker modal DirField uses.
+    const renderGdriveTable = () => {
+        const DirPickerField = FieldRegistry.getField('dir_picker');
+        const cols = '1fr 1.3fr 1.2fr auto 32px';
+        const head = 'font-mono text-[10px] tracking-[0.8px] text-fg-subtle';
+        const cell =
+            'h-9 px-2.5 rounded-md bg-surface-inset border border-border text-fg text-sm outline-none focus:border-primary w-full';
+        return (
+            <>
+                {value.length > 0 ? (
+                    <>
+                        <div className="grid gap-3 px-2" style={{ gridTemplateColumns: cols }}>
+                            <span className={head}>NAME</span>
+                            <span className={head}>FOLDER ID</span>
+                            <span className={head}>LOCAL LOCATION</span>
+                            <span className={head}>BROWSE ONLY</span>
+                            <span />
+                        </div>
+                        <div className="flex flex-col gap-2">
+                            {value.map((item, index) => (
+                                <div
+                                    key={index}
+                                    className="grid gap-3 items-center px-2 py-2 rounded-lg bg-surface border border-border"
+                                    style={{ gridTemplateColumns: cols }}
+                                >
+                                    <input
+                                        value={item.name || ''}
+                                        onChange={e =>
+                                            handleItemFieldChange(index, 'name', e.target.value)
+                                        }
+                                        placeholder="Name"
+                                        disabled={disabled}
+                                        className={cell}
+                                    />
+                                    <input
+                                        value={item.id || ''}
+                                        onChange={e =>
+                                            handleItemFieldChange(index, 'id', e.target.value)
+                                        }
+                                        placeholder="Folder ID"
+                                        disabled={disabled}
+                                        className={`${cell} font-mono text-xs`}
+                                    />
+                                    <div className="flex items-center gap-1.5">
+                                        <input
+                                            value={item.location || ''}
+                                            onChange={e =>
+                                                handleItemFieldChange(
+                                                    index,
+                                                    'location',
+                                                    e.target.value
+                                                )
+                                            }
+                                            placeholder="/local/path"
+                                            disabled={disabled}
+                                            className={`${cell} font-mono text-xs`}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setGdrivePickerRow(index)}
+                                            disabled={disabled}
+                                            title="Browse folders"
+                                            className="shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-md bg-surface-inset border border-border text-fg-muted hover:border-primary"
+                                        >
+                                            <span className="material-symbols-outlined text-[18px]">
+                                                folder_open
+                                            </span>
+                                        </button>
+                                    </div>
+                                    <div className="flex justify-center">
+                                        <Toggle
+                                            label="Browse only"
+                                            checked={!!item.search_only}
+                                            disabled={disabled}
+                                            onChange={v =>
+                                                handleItemFieldChange(index, 'search_only', v)
+                                            }
+                                        />
+                                    </div>
+                                    <RemoveButton
+                                        onClick={() => handleRemove(index)}
+                                        itemName={`drive ${index + 1}`}
+                                        disabled={disabled}
+                                    />
+                                </div>
+                            ))}
+                        </div>
+                    </>
+                ) : (
+                    <div className="p-8 text-center border border-dashed border-border rounded-lg bg-surface-alt">
+                        <div className="text-sm text-fg-muted">No drive locations configured</div>
+                    </div>
+                )}
+                <Modal
+                    isOpen={gdrivePickerRow !== null}
+                    onClose={() => setGdrivePickerRow(null)}
+                    size="large"
+                >
+                    <Modal.Header>Select Directory</Modal.Header>
+                    <Modal.Body>
+                        {DirPickerField && (
+                            <DirPickerField
+                                field={{
+                                    key: 'directory_browser',
+                                    label: 'Directory Browser',
+                                    type: 'dir_picker',
+                                    description: 'Browse and select a directory',
+                                }}
+                                value={
+                                    gdrivePickerRow !== null
+                                        ? value[gdrivePickerRow]?.location || ''
+                                        : ''
+                                }
+                                onChange={path => {
+                                    if (gdrivePickerRow !== null)
+                                        handleItemFieldChange(gdrivePickerRow, 'location', path);
+                                    setGdrivePickerRow(null);
+                                }}
+                            />
+                        )}
+                    </Modal.Body>
+                    <Modal.Footer>
+                        <button
+                            onClick={() => setGdrivePickerRow(null)}
+                            className="px-4 py-2 bg-surface-alt text-fg rounded-lg hover:bg-surface-hover transition-colors min-h-11"
+                        >
+                            Close
+                        </button>
+                    </Modal.Footer>
+                </Modal>
+            </>
+        );
+    };
+
     if (field.alwaysExpanded) {
         return (
             <FieldWrapper invalid={highlightInvalid} variant="standard">
@@ -587,7 +727,9 @@ export const ArrayObjectField = ({
                             disabled={disabled}
                         />
                     )}
-                    {value.length > 0 ? (
+                    {field.displayType === 'gdrive' ? (
+                        renderGdriveTable()
+                    ) : value.length > 0 ? (
                         value.map((item, index) =>
                             field.displayType === 'upgradinatorr'
                                 ? renderUpgradinatorrCard(item, index)
