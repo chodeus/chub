@@ -6,12 +6,17 @@ import { configAPI } from '../../../utils/api/config.js';
 import { scheduleAPI } from '../../../utils/api/schedule.js';
 import { moduleOrder } from '../../../utils/constants/constants.js';
 import { SETTINGS_MODULES } from '../../../utils/constants/settings_schema.js';
+import { withExtensionConfigModuleKeys } from '../../../extensions/index.js';
 import { humanize } from '../../../utils/tools.js';
 import Toggle from '../../../components/ui/Toggle.jsx';
 import Spinner from '../../../components/ui/Spinner.jsx';
 
-// Runnable modules in display order — drop the non-module config sections.
-const HUB_MODULES = moduleOrder.filter(k => k !== 'general' && k !== 'main');
+// Modules in display order — drop the non-module config sections. Extension
+// modules (e.g. cl2k_maker, poster_self_heal) are spliced in at their anchors
+// so they get a hub card too; identity on main where no extensions are present.
+const HUB_MODULES = withExtensionConfigModuleKeys(moduleOrder).filter(
+    k => k !== 'general' && k !== 'main'
+);
 
 // name + description per module key (from the shared settings metadata).
 const META = SETTINGS_MODULES.reduce((acc, m) => {
