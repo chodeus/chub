@@ -60,10 +60,10 @@ const sortWordmarkFirst = logos =>
 // Top-level tabs = WHAT you're building. Sources (TMDB/fanart/Plex/Upload) are
 // chosen per-picker inside each page (see SourceSelector).
 const BUILD_TABS = [
-    { key: 'poster', label: 'Poster', icon: 'image' },
-    { key: 'background', label: 'Background', icon: 'wallpaper' },
-    { key: 'square', label: 'Square art', icon: 'crop_square' },
-    { key: 'logo', label: 'Logo', icon: 'sell' },
+    { key: 'poster', label: 'Poster', icon: 'image', ar: '2:3' },
+    { key: 'background', label: 'Background', icon: 'wallpaper', ar: '16:9' },
+    { key: 'square', label: 'Square art', icon: 'crop_square', ar: '1:1' },
+    { key: 'logo', label: 'Logo', icon: 'sell', ar: 'logo' },
 ];
 // Retired tab keys (source-as-tab, the Finished-poster tab, and the removed
 // Edit-poster / upload-backdrop tabs) → the unified 'poster' build tab, so a
@@ -499,8 +499,12 @@ const Cl2kMakerPage = () => {
         <div className="p-4 md:p-6 max-w-6xl mx-auto pb-24">
             <PageHeader
                 title="CL2K Poster Maker"
-                description="Turn a TMDB/TVDB/IMDB title into a DAPS-named CL2K poster — pick the art and logo, optionally brush out text, then generate."
-                icon="wallpaper"
+                description="Turn a TMDB/TVDB/IMDB title into a DAPS-named CL2K asset — the full 4-asset studio"
+                actions={
+                    <span className="font-mono text-[10px] tracking-[0.6px] px-2.5 py-1 rounded-md bg-accent/12 text-accent self-center">
+                        DEVELOP
+                    </span>
+                }
             />
 
             <ConfigBanner config={config} uploadStatus={uploadStatus} />
@@ -531,48 +535,67 @@ const ConfigBanner = ({ config, uploadStatus }) => {
     // upload will fail (a service account can't own files in a personal Drive).
     const uploadNoToken = uploadStatus?.upload_to_gdrive && uploadStatus?.token_ok === false;
     return (
-        <section className="mt-4 p-3 bg-surface border border-border rounded-lg text-sm">
-            <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-fg-muted">
-                <span>
-                    <span className="text-fg-subtle">Output dir: </span>
-                    {config.output_dir ? (
-                        <span className="font-mono text-fg">{config.output_dir}</span>
-                    ) : (
-                        <span className="text-error">not configured</span>
-                    )}
+        <>
+            {/* Config strip — the non-visual knobs live in Module Settings; the
+                output dir is shown read-only (styled like the mock's field) since
+                there's no inline-save backend, with a link back to edit it. */}
+            <section className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 px-4 py-[11px] bg-surface border border-border rounded-[10px] text-[12.5px]">
+                <span className="flex items-center gap-[7px] text-fg-subtle">
+                    Output dir
+                    <span
+                        className={`inline-flex items-center h-7 px-2.5 rounded-md bg-surface-inset border font-mono text-[11.5px] ${
+                            missingDir ? 'border-error text-error' : 'border-border text-fg-muted'
+                        }`}
+                    >
+                        {config.output_dir || 'not set'}
+                    </span>
                 </span>
-                <span>
-                    <span className="text-fg-subtle">Whiten logo: </span>
-                    <span className="text-fg">{config.whiten_logo ? 'yes' : 'no'}</span>
+                <span className="text-fg-subtle">
+                    Whiten logo{' '}
+                    <span className={config.whiten_logo ? 'text-success' : 'text-fg-muted'}>
+                        {config.whiten_logo ? 'yes' : 'no'}
+                    </span>
                 </span>
-                <span>
-                    <span className="text-fg-subtle">AI provider: </span>
-                    <span className="text-fg">{config.ai_provider || 'none'}</span>
+                <span className="text-fg-subtle">
+                    AI provider{' '}
+                    <span className="text-fg-muted">{config.ai_provider || 'none'}</span>
                 </span>
                 <Link
                     to="/settings/modules"
-                    className="text-fg underline hover:no-underline ml-auto"
+                    className="ml-auto font-medium text-accent hover:underline"
                 >
                     Edit in Module Settings →
                 </Link>
-            </div>
+            </section>
+
             {missingDir && (
-                <div className="mt-2 text-xs text-error">
-                    Set an output directory before generating, or saves will fail.
+                <div className="mt-2.5 flex items-center gap-2.5 px-3.5 py-2.5 rounded-[9px] bg-error/10 border border-error/30">
+                    <span className="material-symbols-outlined text-error text-[17px] shrink-0">
+                        warning
+                    </span>
+                    <span className="text-[12.5px] text-fg-muted">
+                        Output directory not set — saves will fail.{' '}
+                        <Link to="/settings/modules" className="text-error hover:underline">
+                            Set it in Module Settings.
+                        </Link>
+                    </span>
                 </div>
             )}
             {uploadNoToken && (
-                <div className="mt-2 text-xs text-warning">
-                    Google Drive upload is enabled, but no usable Sync GDrive OAuth token is set —
-                    uploads will fail. Add a token under{' '}
-                    <Link to="/settings/modules" className="text-fg underline hover:no-underline">
-                        Sync GDrive
-                    </Link>{' '}
-                    (a service account can’t own files in a personal Drive). Generation still
-                    succeeds locally.
+                <div className="mt-2.5 flex items-center gap-2.5 px-3.5 py-2.5 rounded-[9px] bg-warning/10 border border-warning/30">
+                    <span className="material-symbols-outlined text-warning text-[17px] shrink-0">
+                        warning
+                    </span>
+                    <span className="text-[12.5px] text-fg-muted">
+                        Google Drive upload enabled but no OAuth token — uploads will fail, local
+                        save still works.{' '}
+                        <Link to="/settings/modules" className="text-warning hover:underline">
+                            Connect Drive →
+                        </Link>
+                    </span>
                 </div>
             )}
-        </section>
+        </>
     );
 };
 
@@ -1555,21 +1578,33 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
     return (
         <>
             {/* Selected title bar */}
-            <section className="mt-6 p-4 bg-surface border border-border rounded-lg">
+            <section className="mt-6 px-4 py-3 bg-surface border border-border rounded-[12px]">
                 <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                        <div className="text-lg font-semibold text-fg truncate">
+                    <div className="flex items-baseline gap-2.5 flex-wrap min-w-0">
+                        <span className="font-display text-lg font-semibold text-fg truncate">
                             {item.title || `TMDB #${item.tmdb_id}`}
-                            {item.year ? (
-                                <span className="text-fg-subtle font-normal"> ({item.year})</span>
-                            ) : null}
-                        </div>
-                        <div className="text-xs text-fg-subtle mt-0.5">
+                        </span>
+                        {item.year ? (
+                            <span className="font-mono text-sm text-fg-subtle">{item.year}</span>
+                        ) : null}
+                        <span className="font-mono text-[10px] uppercase px-1.5 py-0.5 rounded bg-success/15 text-success">
                             {item.kind}
-                            {item.tmdb_id ? ` · TMDB ${item.tmdb_id}` : ''}
-                            {item.tvdb_id ? ` · TVDB ${item.tvdb_id}` : ''}
-                            {item.imdb_id ? ` · ${item.imdb_id}` : ''}
-                        </div>
+                        </span>
+                        {item.tmdb_id ? (
+                            <span className="font-mono text-[11px] px-2 py-0.5 rounded bg-surface-inset text-accent">
+                                TMDB {item.tmdb_id}
+                            </span>
+                        ) : null}
+                        {item.tvdb_id ? (
+                            <span className="font-mono text-[11px] px-2 py-0.5 rounded bg-surface-inset text-accent">
+                                TVDB {item.tvdb_id}
+                            </span>
+                        ) : null}
+                        {item.imdb_id ? (
+                            <span className="font-mono text-[11px] px-2 py-0.5 rounded bg-surface-inset text-accent">
+                                {item.imdb_id}
+                            </span>
+                        ) : null}
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                         <Button
@@ -1591,26 +1626,27 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             {/* Stage 2: build-type tabs (what you're making) + a More ▾ menu for
                 the occasional finished-poster / edit workflows. Sources are picked
                 per-picker inside each page. */}
-            <div className="mt-6 flex flex-wrap items-center gap-2">
-                {BUILD_TABS.map(t => {
-                    const tabCls = on =>
-                        `inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm border transition-colors ${
-                            on
-                                ? 'bg-primary text-white border-primary'
-                                : 'bg-surface text-fg-muted border-border hover:border-primary'
-                        }`;
-                    return (
-                        <button
-                            key={t.key}
-                            type="button"
-                            onClick={() => setTab(t.key)}
-                            className={tabCls(tab === t.key)}
-                        >
-                            <span className="material-symbols-outlined text-base">{t.icon}</span>
-                            {t.label}
-                        </button>
-                    );
-                })}
+            <div className="mt-6 flex flex-wrap items-center gap-3.5">
+                <div className="flex gap-1 p-1 rounded-lg bg-surface-inset border border-border">
+                    {BUILD_TABS.map(t => {
+                        const on = tab === t.key;
+                        return (
+                            <button
+                                key={t.key}
+                                type="button"
+                                onClick={() => setTab(t.key)}
+                                className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-md text-[13px] transition-colors ${
+                                    on
+                                        ? 'bg-primary text-white font-semibold'
+                                        : 'text-fg-muted hover:text-fg'
+                                }`}
+                            >
+                                <span className="font-mono text-[9px] opacity-80">{t.ar}</span>
+                                {t.label}
+                            </button>
+                        );
+                    })}
+                </div>
             </div>
 
             {/* Stage 3 + 4 panels */}
@@ -1713,12 +1749,66 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                 />
             )}
 
-            <HistorySection toast={toast} />
+            {/* Each tab now renders its own "Recently generated" accordion in its
+                right column, so no Builder-level history section is needed. */}
         </>
     );
 };
 
 // ─── Render panel (TMDB / fanart) ──────────────────────────────────────────
+
+// Collapsible accordion for the studio's right-column secondary panels (AI text
+// removal, touch-up, extraction, bulk seasons, history). Pure UI open/closed
+// state — content (and all its handlers) is passed as children. `dot` shows a
+// small accent indicator on the header when a flag is active.
+// Optionally controlled: pass `open` + `onToggle` to drive the open state from
+// the parent (e.g. so a success handler can collapse it); otherwise it manages
+// its own UI-only state.
+const StudioAccordion = ({
+    title,
+    count,
+    dot = false,
+    defaultOpen = false,
+    open: openProp,
+    onToggle,
+    children,
+}) => {
+    const [openState, setOpenState] = useState(defaultOpen);
+    const controlled = openProp !== undefined;
+    const open = controlled ? openProp : openState;
+    const toggle = () => (controlled ? onToggle?.() : setOpenState(o => !o));
+    return (
+        <div>
+            <div className="h-px bg-border" />
+            <button
+                type="button"
+                onClick={toggle}
+                className="flex w-full items-center gap-2.5 px-2 -mx-2 py-2 rounded-md hover:bg-row-hover transition-colors"
+            >
+                <span
+                    className={`material-symbols-outlined text-base text-fg-subtle transition-transform ${
+                        open ? 'rotate-90' : ''
+                    }`}
+                >
+                    chevron_right
+                </span>
+                <span className="flex-1 text-left font-mono text-[10px] tracking-wide uppercase text-fg-subtle">
+                    {title}
+                </span>
+                {dot && <span className="w-1.5 h-1.5 rounded-full bg-accent" />}
+                {count != null && (
+                    <span className="font-mono text-[10px] text-fg-dim">{count}</span>
+                )}
+            </button>
+            {open && <div className="pt-3">{children}</div>}
+        </div>
+    );
+};
+
+// A labelled section header for the always-visible studio control groups.
+const StudioGroupLabel = ({ children }) => (
+    <span className="font-mono text-[10px] tracking-wide uppercase text-fg-subtle">{children}</span>
+);
 
 const RenderPanel = ({
     artBySource,
@@ -2234,24 +2324,28 @@ const RenderPanel = ({
         };
     }, [asisSig, isAsis, hasBackdrop]);
 
+    const fileNameHint = `${item.title || `TMDB ${item.tmdb_id}`}${
+        item.year ? ` (${item.year})` : ''
+    }.jpg`;
     return (
         <section className="mt-4 flex flex-col gap-4">
-            {/* Output mode — full CL2K render vs. file the image as-is. */}
-            <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-2">
-                <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-fg">Output</span>
-                    <Button
-                        variant={outputMode === 'cl2k' ? 'primary' : 'secondary'}
-                        size="small"
-                        icon="auto_awesome"
+            {/* Output mode — full CL2K render vs. file the image as-is. A second
+                segmented pill tucked under the asset tabs, plus a filename hint. */}
+            <div className="flex flex-wrap items-center gap-3.5">
+                <div className="flex gap-1 p-1 rounded-lg bg-surface-inset border border-border">
+                    <button
+                        type="button"
                         onClick={() => setOutputMode('cl2k')}
+                        className={`px-3.5 py-2 rounded-md text-[13px] transition-colors ${
+                            outputMode === 'cl2k'
+                                ? 'bg-primary text-white font-semibold'
+                                : 'text-fg-muted hover:text-fg'
+                        }`}
                     >
                         Full CL2K render
-                    </Button>
-                    <Button
-                        variant={outputMode === 'asis' ? 'primary' : 'secondary'}
-                        size="small"
-                        icon="image"
+                    </button>
+                    <button
+                        type="button"
                         onClick={() => {
                             setOutputMode('asis');
                             // As-is files a manually-uploaded image only — drop any
@@ -2259,189 +2353,338 @@ const RenderPanel = ({
                             setBackdropSource('upload');
                             setBackdrop(null);
                         }}
+                        className={`px-3.5 py-2 rounded-md text-[13px] transition-colors ${
+                            outputMode === 'asis'
+                                ? 'bg-primary text-white font-semibold'
+                                : 'text-fg-muted hover:text-fg'
+                        }`}
                     >
                         File as-is
-                    </Button>
+                    </button>
                 </div>
-                <p className="text-xs text-fg-subtle">
-                    {isAsis
-                        ? 'Upload a finished poster built outside CHUB and file it unchanged (the optional CL2K border is the only edit). Saves to your output dir and/or GDrive.'
-                        : 'The full CL2K treatment: framing + clear logo + gradient + season band + border.'}
-                </p>
+                <span className="ml-auto font-mono text-[11px] text-fg-dim truncate">
+                    → {fileNameHint}
+                </span>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {/* Left: pickers + AI */}
-                <div className="flex flex-col gap-4">
-                    {!isAsis && seasonPosters.length > 0 && (
-                        <Picker
-                            label="Season poster (tmdb)"
-                            items={seasonPosters}
-                            loading={false}
-                            selected={backdrop}
-                            onSelect={setBackdrop}
-                            aspect="aspect-[2/3]"
-                            emptyText="No TMDB season posters."
-                        />
-                    )}
-                    {/* Source. As-is = a plain manual upload (no source selector).
-                        Otherwise source-selectable: 'Upload' swaps the grid for a
-                        custom-image dropzone; 'GDrive' for the sync-cache picker;
-                        official posters from the same source appear below. */}
-                    {isAsis ? (
+            {isAsis ? (
+                /* FILE-AS-IS single-column panel (mock cl2k-12). */
+                <div className="grid grid-cols-1 md:grid-cols-[280px_minmax(0,1fr)] gap-6 items-start bg-surface border border-border rounded-[12px] p-5 max-w-[820px]">
+                    <div className="flex flex-col gap-2">
+                        <StudioGroupLabel>Preview</StudioGroupLabel>
+                        <div className="relative aspect-[2/3] bg-black rounded-lg overflow-hidden flex items-center justify-center border border-border">
+                            {hasBackdrop && asisShownSrc ? (
+                                <img
+                                    src={asisShownSrc}
+                                    alt="Finished poster preview"
+                                    className="w-full h-full object-contain"
+                                />
+                            ) : (
+                                <span className="text-xs text-fg-subtle px-4 text-center">
+                                    Upload a finished poster to start.
+                                </span>
+                            )}
+                            <PreviewRefreshing active={asisPreviewing} />
+                        </div>
+                        <LoadingButton
+                            onClick={runAsisPreview}
+                            loading={asisPreviewing}
+                            disabled={!hasBackdrop}
+                            icon="visibility"
+                            size="small"
+                            variant="secondary"
+                        >
+                            Preview
+                        </LoadingButton>
+                    </div>
+                    <div className="flex flex-col gap-4">
+                        <div>
+                            <h2 className="font-display text-base font-semibold text-fg">
+                                Re-file an existing poster
+                            </h2>
+                            <p className="text-xs text-fg-subtle mt-1">
+                                Upload a finished poster and save it under DAPS naming — no CL2K
+                                render.
+                            </p>
+                        </div>
                         <UploadArtCard
                             label="Poster image"
                             custom={customBackdrop}
                             onFile={onBackdropFile}
                             onClear={() => setCustomBackdrop(null)}
                         />
-                    ) : backdropSource === 'upload' ? (
-                        <UploadArtCard
-                            label={bdLabel}
-                            headerRight={bdSel}
-                            custom={customBackdrop}
-                            onFile={onBackdropFile}
-                            onClear={() => setCustomBackdrop(null)}
-                        />
-                    ) : backdropSource === 'gdrive' ? (
-                        <div className="bg-surface border border-border rounded-lg p-3">
-                            <div className="flex items-center justify-between gap-2 mb-2">
-                                <h3 className="text-sm font-medium text-fg">{bdLabel}</h3>
-                                {bdSel}
-                            </div>
-                            {customBackdrop ? (
-                                <div className="flex items-center gap-3 rounded-md border-2 border-primary bg-surface-alt p-2">
-                                    <img
-                                        src={customBackdrop.url}
-                                        alt="Grabbed"
-                                        className="h-16 w-auto max-w-[60%] object-contain rounded"
+                        {item.kind === 'show' && (
+                            <label className="flex items-center gap-2 text-sm text-fg-muted">
+                                <span className="w-28">Season number</span>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    value={seasonNumber}
+                                    onChange={e => setSeasonNumber(e.target.value)}
+                                    placeholder="blank = none, 0 = Specials"
+                                    className="flex-1 bg-surface border border-border rounded px-2 py-1 text-sm text-fg"
+                                />
+                            </label>
+                        )}
+                        {item.kind === 'show' && (
+                            <div className="flex flex-col gap-1">
+                                <div className="flex items-center gap-2">
+                                    <span className="w-28 text-sm text-fg-muted">All seasons</span>
+                                    <input
+                                        type="text"
+                                        value={bulkSeasons}
+                                        onChange={e => setBulkSeasons(e.target.value)}
+                                        placeholder="Generate all: 1,2,3"
+                                        className="flex-1 bg-surface border border-border rounded px-2 py-1 text-sm text-fg"
                                     />
-                                    <span className="flex-1 truncate text-xs text-fg-muted">
-                                        {customBackdrop.name}
-                                    </span>
-                                    <Button
-                                        onClick={() => setCustomBackdrop(null)}
+                                    <LoadingButton
+                                        onClick={runAsisBulkSeasons}
+                                        loading={asisBulkBusy}
+                                        disabled={!hasBackdrop || saveTargets.noTarget}
                                         variant="secondary"
-                                        icon="close"
+                                        icon="grid_view"
                                         size="small"
                                     >
-                                        Remove
-                                    </Button>
+                                        Generate seasons
+                                    </LoadingButton>
+                                    {asisBulkBusy && asisBulkProgress && (
+                                        <span className="text-xs text-fg-muted tabular-nums whitespace-nowrap">
+                                            {asisBulkProgress}
+                                        </span>
+                                    )}
                                 </div>
-                            ) : gdriveLoading || gdrivePosters === null ? (
-                                <div className="text-xs text-fg-subtle py-4">Searching…</div>
-                            ) : gdrivePosters.length === 0 ? (
-                                <div className="text-xs text-fg-subtle py-2">
-                                    No synced posters match this title. Only images already pulled
-                                    by Sync GDrive appear here.
-                                </div>
-                            ) : (
-                                <div
-                                    className="grid gap-2 max-h-72 overflow-auto"
-                                    style={{
-                                        gridTemplateColumns: 'repeat(auto-fill, minmax(96px, 1fr))',
-                                    }}
+                                <p className="text-xs text-fg-subtle">
+                                    Files this poster once per season with its own SEASON N band
+                                    (Season 0 = Specials). Runs in the background — the count
+                                    updates as each season is saved.
+                                </p>
+                            </div>
+                        )}
+                        {item.kind !== 'collection' && (
+                            <label className="flex items-center gap-2 text-sm text-fg-muted">
+                                <span className="w-28">Banner</span>
+                                <select
+                                    value={bandLabel}
+                                    onChange={e => setBandLabel(e.target.value)}
+                                    className="flex-1 bg-surface border border-border rounded px-2 py-1 text-sm text-fg"
                                 >
-                                    {gdrivePosters.map(p => (
-                                        <button
-                                            key={p.id || `${p.folder}/${p.file}`}
-                                            type="button"
-                                            disabled={importing}
-                                            onClick={() => importFromSync(p)}
-                                            title={p.file}
-                                            className="relative bg-surface-alt overflow-hidden rounded border border-border hover:border-primary disabled:opacity-50 p-0"
-                                            style={{ aspectRatio: '2 / 3' }}
-                                        >
-                                            <img
-                                                src={
-                                                    p.id
-                                                        ? postersAPI.getThumbnailUrl(p.id, 200)
-                                                        : postersAPI.getPreviewUrl(p.folder, p.file)
-                                                }
-                                                alt={p.file}
-                                                loading="lazy"
-                                                className="w-full h-full object-cover"
-                                            />
-                                            {p.style && (
-                                                <span
-                                                    className="absolute top-1.5 left-1.5 z-10 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-black/65 text-white backdrop-blur-sm pointer-events-none"
-                                                    title={`Style: ${p.style}`}
-                                                >
-                                                    {p.style}
-                                                </span>
-                                            )}
-                                        </button>
+                                    {BAND_LABEL_OPTIONS.map(o => (
+                                        <option key={o.value} value={o.value}>
+                                            {o.label}
+                                        </option>
                                     ))}
-                                </div>
-                            )}
-                            {importing && (
-                                <div className="text-xs text-fg-subtle mt-2">
-                                    Importing full-resolution poster…
-                                </div>
-                            )}
-                        </div>
-                    ) : (
-                        <>
+                                </select>
+                            </label>
+                        )}
+                        <label className="flex flex-col gap-1 text-sm text-fg-muted">
+                            <span>New title (fallback — used when no season or banner is set)</span>
+                            <input
+                                type="text"
+                                value={asisLabel}
+                                onChange={e => setAsisLabel(e.target.value)}
+                                disabled={isSeasonPoster || !!bandLabel}
+                                placeholder="leave blank to keep the poster as-is"
+                                className="bg-surface border border-border rounded px-2 py-1 text-sm text-fg disabled:opacity-50"
+                            />
+                        </label>
+                        <label className="flex items-center gap-2 text-sm text-fg-muted">
+                            <span className="w-20">Position</span>
+                            <input
+                                type="range"
+                                min="0"
+                                max="100"
+                                value={Math.round(asisTextY * 100)}
+                                onChange={e => setAsisTextY(Number(e.target.value) / 100)}
+                                className="flex-1"
+                            />
+                            <span className="w-10 text-right font-mono text-xs text-fg-subtle">
+                                {Math.round(asisTextY * 100)}%
+                            </span>
+                        </label>
+                        <p className="text-xs text-fg-subtle">
+                            Drawn in the CL2K font at 96% — the locked CL2K band position (the
+                            season/specials line). Set a Season number (draws SEASON N / SPECIALS);
+                            a Banner overrides it (e.g. COMPLETE LIMITED SERIES). The New title box
+                            is the fallback when neither is set. Brush over the old text and{' '}
+                            <span className="text-fg-muted">Send to AI</span> first to remove it.
+                        </p>
+                        <label className="flex items-center gap-2 text-sm text-fg font-medium">
+                            <input
+                                type="checkbox"
+                                checked={asisBorder}
+                                onChange={e => setAsisBorder(e.target.checked)}
+                            />
+                            Add CL2K white border
+                        </label>
+                        <p className="text-xs text-fg-subtle">
+                            The DAPS default 26px white frame (per the CL2K PSD). Uncheck only if
+                            this poster already has the required border.
+                        </p>
+                        <SaveTargets targets={saveTargets} />
+                        <LoadingButton
+                            onClick={runAsisSave}
+                            loading={asisSaving}
+                            disabled={!hasBackdrop || saveTargets.noTarget}
+                            icon="save"
+                        >
+                            Save as {fileNameHint}
+                        </LoadingButton>
+                        <p className="text-xs text-fg-subtle">
+                            .psd export is unavailable for as-is files — the original is copied,
+                            renamed, and optionally bordered.
+                        </p>
+                    </div>
+                </div>
+            ) : (
+                /* FULL CL2K STUDIO — 3-column grid (mock cl2k-02). */
+                <div className="grid grid-cols-1 xl:grid-cols-[320px_minmax(0,1fr)_300px] gap-4 items-start">
+                    {/* LEFT: source pickers */}
+                    <section className="bg-surface border border-border rounded-[12px] p-4 flex flex-col gap-[18px]">
+                        {!isAsis && seasonPosters.length > 0 && (
                             <Picker
-                                label={bdLabel}
-                                headerRight={bdSel}
-                                items={backdrops}
-                                loading={loadingArt}
+                                label="Season poster (tmdb)"
+                                items={seasonPosters}
+                                loading={false}
                                 selected={backdrop}
                                 onSelect={setBackdrop}
-                                aspect="aspect-video"
-                                emptyText={
-                                    plexBackdropEmpty
-                                        ? bdArt.reason
-                                        : 'No backdrops from this source.'
-                                }
+                                aspect="aspect-[2/3]"
+                                emptyText="No TMDB season posters."
                             />
-                            {posters.length > 0 && (
+                        )}
+                        {/* Source. As-is = a plain manual upload (no source selector).
+                        Otherwise source-selectable: 'Upload' swaps the grid for a
+                        custom-image dropzone; 'GDrive' for the sync-cache picker;
+                        official posters from the same source appear below. */}
+                        {isAsis ? (
+                            <UploadArtCard
+                                label="Poster image"
+                                custom={customBackdrop}
+                                onFile={onBackdropFile}
+                                onClear={() => setCustomBackdrop(null)}
+                            />
+                        ) : backdropSource === 'upload' ? (
+                            <UploadArtCard
+                                label={bdLabel}
+                                headerRight={bdSel}
+                                custom={customBackdrop}
+                                onFile={onBackdropFile}
+                                onClear={() => setCustomBackdrop(null)}
+                            />
+                        ) : backdropSource === 'gdrive' ? (
+                            <div className="bg-surface border border-border rounded-lg p-3">
+                                <div className="flex items-center justify-between gap-2 mb-2">
+                                    <h3 className="text-sm font-medium text-fg">{bdLabel}</h3>
+                                    {bdSel}
+                                </div>
+                                {customBackdrop ? (
+                                    <div className="flex items-center gap-3 rounded-md border-2 border-primary bg-surface-alt p-2">
+                                        <img
+                                            src={customBackdrop.url}
+                                            alt="Grabbed"
+                                            className="h-16 w-auto max-w-[60%] object-contain rounded"
+                                        />
+                                        <span className="flex-1 truncate text-xs text-fg-muted">
+                                            {customBackdrop.name}
+                                        </span>
+                                        <Button
+                                            onClick={() => setCustomBackdrop(null)}
+                                            variant="secondary"
+                                            icon="close"
+                                            size="small"
+                                        >
+                                            Remove
+                                        </Button>
+                                    </div>
+                                ) : gdriveLoading || gdrivePosters === null ? (
+                                    <div className="text-xs text-fg-subtle py-4">Searching…</div>
+                                ) : gdrivePosters.length === 0 ? (
+                                    <div className="text-xs text-fg-subtle py-2">
+                                        No synced posters match this title. Only images already
+                                        pulled by Sync GDrive appear here.
+                                    </div>
+                                ) : (
+                                    <div
+                                        className="grid gap-2 max-h-72 overflow-auto"
+                                        style={{
+                                            gridTemplateColumns:
+                                                'repeat(auto-fill, minmax(96px, 1fr))',
+                                        }}
+                                    >
+                                        {gdrivePosters.map(p => (
+                                            <button
+                                                key={p.id || `${p.folder}/${p.file}`}
+                                                type="button"
+                                                disabled={importing}
+                                                onClick={() => importFromSync(p)}
+                                                title={p.file}
+                                                className="relative bg-surface-alt overflow-hidden rounded border border-border hover:border-primary disabled:opacity-50 p-0"
+                                                style={{ aspectRatio: '2 / 3' }}
+                                            >
+                                                <img
+                                                    src={
+                                                        p.id
+                                                            ? postersAPI.getThumbnailUrl(p.id, 200)
+                                                            : postersAPI.getPreviewUrl(
+                                                                  p.folder,
+                                                                  p.file
+                                                              )
+                                                    }
+                                                    alt={p.file}
+                                                    loading="lazy"
+                                                    className="w-full h-full object-cover"
+                                                />
+                                                {p.style && (
+                                                    <span
+                                                        className="absolute top-1.5 left-1.5 z-10 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-black/65 text-white backdrop-blur-sm pointer-events-none"
+                                                        title={`Style: ${p.style}`}
+                                                    >
+                                                        {p.style}
+                                                    </span>
+                                                )}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                                {importing && (
+                                    <div className="text-xs text-fg-subtle mt-2">
+                                        Importing full-resolution poster…
+                                    </div>
+                                )}
+                            </div>
+                        ) : (
+                            <>
                                 <Picker
-                                    label="Poster"
-                                    items={posters}
+                                    label={bdLabel}
+                                    headerRight={bdSel}
+                                    items={backdrops}
                                     loading={loadingArt}
                                     selected={backdrop}
                                     onSelect={setBackdrop}
-                                    aspect="aspect-[2/3]"
-                                    emptyText="No posters from this source."
+                                    aspect="aspect-video"
+                                    emptyText={
+                                        plexBackdropEmpty
+                                            ? bdArt.reason
+                                            : 'No backdrops from this source.'
+                                    }
                                 />
-                            )}
-                        </>
-                    )}
+                                {posters.length > 0 && (
+                                    <Picker
+                                        label="Poster"
+                                        items={posters}
+                                        loading={loadingArt}
+                                        selected={backdrop}
+                                        onSelect={setBackdrop}
+                                        aspect="aspect-[2/3]"
+                                        emptyText="No posters from this source."
+                                    />
+                                )}
+                            </>
+                        )}
 
-                    {!isAsis && backdropUrl && (
-                        <CropFramer
-                            imageUrl={backdropUrl}
-                            fitMode={fitMode}
-                            setFitMode={setFitMode}
-                            crop={crop}
-                            setCrop={setCrop}
-                            vPos={vPos}
-                            setVPos={setVPos}
-                            zoom={zoom}
-                            setZoom={setZoom}
-                            focusX={focusX}
-                            focusY={focusY}
-                            onChange={onFocusChange}
-                            mockLabel={
-                                isSeasonPoster
-                                    ? bandLabel ||
-                                      (Number(seasonNumber) === 0
-                                          ? 'Specials'
-                                          : `Season ${seasonNumber}`)
-                                    : bandLabel || (item.kind === 'collection' ? 'COLLECTION' : '')
-                            }
-                            labelYFrac={
-                                !isSeasonPoster && !bandLabel && item.kind === 'collection'
-                                    ? 1350 / 1500
-                                    : 1440 / 1500
-                            }
-                        />
-                    )}
-
-                    {!isAsis && (
+                        {/* Logo source picker (grid + source tabs only — controls live
+                        in the right column). */}
                         <LogoSelector
+                            variant="picker"
                             label="Logo"
                             logos={logos}
                             loading={loadingArt}
@@ -2467,107 +2710,12 @@ const RenderPanel = ({
                                     : 'No logos from this source — switch source or Upload, or a text wordmark is used as fallback.'
                             }
                         />
-                    )}
+                    </section>
 
-                    {!isAsis && item.kind === 'show' && (
-                        <SeasonControls
-                            seasonNumber={seasonNumber}
-                            setSeasonNumber={setSeasonNumber}
-                            bulkSeasons={bulkSeasons}
-                            setBulkSeasons={setBulkSeasons}
-                            onBulkSeasons={onBulkSeasons}
-                            bulkProgress={bulkProgress}
-                            busy={busy}
-                        />
-                    )}
-
-                    {!isAsis && item.kind !== 'collection' && (
-                        <div className="bg-surface border border-border rounded-lg p-3">
-                            <label className="flex items-center gap-2 text-sm text-fg-muted">
-                                <span className="w-28 text-fg font-medium">Banner</span>
-                                <select
-                                    value={bandLabel}
-                                    onChange={e => setBandLabel(e.target.value)}
-                                    className="flex-1 bg-surface border border-border rounded px-2 py-1 text-sm text-fg"
-                                >
-                                    {BAND_LABEL_OPTIONS.map(o => (
-                                        <option key={o.value} value={o.value}>
-                                            {o.label}
-                                        </option>
-                                    ))}
-                                </select>
-                            </label>
-                            <p className="text-xs text-fg-subtle mt-2">
-                                Optional bottom banner in the CL2K label band (e.g. a limited
-                                series). On a season poster it replaces the SEASON N text — the file
-                                is still saved as the season poster.
-                            </p>
-                        </div>
-                    )}
-
-                    <AiPanel
-                        config={config}
-                        removeText={removeText}
-                        setRemoveText={setRemoveText}
-                        brushSize={brushSize}
-                        setBrushSize={setBrushSize}
-                        backdropUrl={backdropUrl}
-                        onMaskChange={onMaskChange}
-                        hasMask={!!maskB64}
-                        aiBusy={aiErasing}
-                        onSendToAi={runBackdropErase}
-                        aiPrompt={aiPrompt}
-                        setAiPrompt={setAiPrompt}
-                    />
-                </div>
-
-                {/* Right: preview + output — sticky so it stays in view while the long
-                    left control column scrolls (seeing the preview is the whole point). */}
-                <div className="flex flex-col gap-3 self-start sticky top-4 max-h-screen overflow-y-auto">
-                    <div className="bg-surface border border-border rounded-lg p-3">
-                        <div className="flex items-center justify-between mb-2">
-                            <h3 className="text-sm font-medium text-fg">Preview</h3>
-                            <div className="flex items-center gap-3">
-                                {!isAsis && (
-                                    <GuidesToggle show={showGuides} onChange={setShowGuides} />
-                                )}
-                                {isAsis ? (
-                                    <LoadingButton
-                                        onClick={runAsisPreview}
-                                        loading={asisPreviewing}
-                                        disabled={!hasBackdrop}
-                                        icon="visibility"
-                                        size="small"
-                                    >
-                                        Preview
-                                    </LoadingButton>
-                                ) : (
-                                    <LoadingButton
-                                        onClick={onPreview}
-                                        loading={previewing}
-                                        disabled={!hasBackdrop}
-                                        icon="refresh"
-                                        size="small"
-                                    >
-                                        Refresh
-                                    </LoadingButton>
-                                )}
-                            </div>
-                        </div>
-                        <div className="relative aspect-[2/3] bg-black rounded overflow-hidden flex items-center justify-center">
-                            {isAsis ? (
-                                hasBackdrop && asisShownSrc ? (
-                                    <img
-                                        src={asisShownSrc}
-                                        alt="Finished poster preview"
-                                        className="w-full h-full object-contain"
-                                    />
-                                ) : (
-                                    <span className="text-xs text-fg-subtle px-4 text-center">
-                                        Upload a finished poster to start.
-                                    </span>
-                                )
-                            ) : hasBackdrop && previewUrl ? (
+                    {/* CENTER: persistent preview + framer + actions (never moves) */}
+                    <section className="sticky top-0 self-start flex flex-col items-center gap-[13px]">
+                        <div className="relative w-full max-w-[420px] aspect-[2/3] bg-black rounded-[10px] overflow-hidden flex items-center justify-center border border-border shadow-lg">
+                            {hasBackdrop && previewUrl ? (
                                 <>
                                     <img
                                         src={previewUrl}
@@ -2595,186 +2743,315 @@ const RenderPanel = ({
                                 </span>
                             )}
                         </div>
-                    </div>
 
-                    {isAsis ? (
-                        <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-2">
-                            <h3 className="text-sm font-medium text-fg">Output</h3>
-                            {item.kind === 'show' && (
-                                <label className="flex items-center gap-2 text-sm text-fg-muted">
-                                    <span className="w-28">Season number</span>
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        value={seasonNumber}
-                                        onChange={e => setSeasonNumber(e.target.value)}
-                                        placeholder="blank = none, 0 = Specials"
-                                        className="flex-1 bg-surface border border-border rounded px-2 py-1 text-sm text-fg"
-                                    />
-                                </label>
-                            )}
-                            {item.kind === 'show' && (
-                                <div className="flex flex-col gap-1">
-                                    <div className="flex items-center gap-2">
-                                        <span className="w-28 text-sm text-fg-muted">
-                                            All seasons
-                                        </span>
-                                        <input
-                                            type="text"
-                                            value={bulkSeasons}
-                                            onChange={e => setBulkSeasons(e.target.value)}
-                                            placeholder="Generate all: 1,2,3"
-                                            className="flex-1 bg-surface border border-border rounded px-2 py-1 text-sm text-fg"
-                                        />
-                                        <LoadingButton
-                                            onClick={runAsisBulkSeasons}
-                                            loading={asisBulkBusy}
-                                            disabled={!hasBackdrop || saveTargets.noTarget}
-                                            variant="secondary"
-                                            icon="grid_view"
-                                            size="small"
-                                        >
-                                            Generate seasons
-                                        </LoadingButton>
-                                        {asisBulkBusy && asisBulkProgress && (
-                                            <span className="text-xs text-fg-muted tabular-nums whitespace-nowrap">
-                                                {asisBulkProgress}
-                                            </span>
-                                        )}
-                                    </div>
-                                    <p className="text-xs text-fg-subtle">
-                                        Files this poster once per season with its own SEASON N band
-                                        (Season 0 = Specials). Runs in the background — the count
-                                        updates as each season is saved.
-                                    </p>
-                                </div>
-                            )}
-                            {item.kind !== 'collection' && (
-                                <label className="flex items-center gap-2 text-sm text-fg-muted">
-                                    <span className="w-28">Banner</span>
-                                    <select
-                                        value={bandLabel}
-                                        onChange={e => setBandLabel(e.target.value)}
-                                        className="flex-1 bg-surface border border-border rounded px-2 py-1 text-sm text-fg"
-                                    >
-                                        {BAND_LABEL_OPTIONS.map(o => (
-                                            <option key={o.value} value={o.value}>
-                                                {o.label}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </label>
-                            )}
-                            <label className="flex flex-col gap-1 text-sm text-fg-muted">
-                                <span>
-                                    New title (fallback — used when no season or banner is set)
-                                </span>
-                                <input
-                                    type="text"
-                                    value={asisLabel}
-                                    onChange={e => setAsisLabel(e.target.value)}
-                                    disabled={isSeasonPoster || !!bandLabel}
-                                    placeholder="leave blank to keep the poster as-is"
-                                    className="bg-surface border border-border rounded px-2 py-1 text-sm text-fg disabled:opacity-50"
-                                />
-                            </label>
-                            <label className="flex items-center gap-2 text-sm text-fg-muted">
-                                <span className="w-20">Position</span>
-                                <input
-                                    type="range"
-                                    min="0"
-                                    max="100"
-                                    value={Math.round(asisTextY * 100)}
-                                    onChange={e => setAsisTextY(Number(e.target.value) / 100)}
-                                    className="flex-1"
-                                />
-                                <span className="w-10 text-right">
-                                    {Math.round(asisTextY * 100)}%
-                                </span>
-                            </label>
-                            <p className="text-xs text-fg-subtle">
-                                Drawn in the CL2K font at 96% — the locked CL2K band position (the
-                                season/specials line). Set a Season number (draws SEASON N /
-                                SPECIALS); a Banner overrides it (e.g. COMPLETE LIMITED SERIES). The
-                                New title box is the fallback when neither is set. Brush over the
-                                old text and <span className="text-fg-muted">Send to AI</span> first
-                                to remove it.
-                            </p>
-                            <label className="flex items-center gap-2 text-sm text-fg font-medium">
-                                <input
-                                    type="checkbox"
-                                    checked={asisBorder}
-                                    onChange={e => setAsisBorder(e.target.checked)}
-                                />
-                                Add CL2K white border
-                            </label>
-                            <p className="text-xs text-fg-subtle">
-                                The DAPS default 26px white frame (per the CL2K PSD). Uncheck only
-                                if this poster already has the required border.
-                            </p>
-                            <SaveTargets targets={saveTargets} />
-                            <LoadingButton
-                                onClick={runAsisSave}
-                                loading={asisSaving}
-                                disabled={!hasBackdrop || saveTargets.noTarget}
-                                icon="save"
-                            >
-                                Save poster
-                            </LoadingButton>
-                            <p className="text-xs text-fg-subtle">
-                                Files the poster (new title + optional border, DAPS-named) — no
-                                logo, gradient, or reframe. Drawing the label costs no AI.
-                            </p>
-                        </div>
-                    ) : (
-                        <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-2">
-                            <h3 className="text-sm font-medium text-fg">Output</h3>
-                            <SaveTargets targets={saveTargets} />
+                        {backdropUrl && (
+                            <CropFramer
+                                imageUrl={backdropUrl}
+                                fitMode={fitMode}
+                                setFitMode={setFitMode}
+                                crop={crop}
+                                setCrop={setCrop}
+                                vPos={vPos}
+                                setVPos={setVPos}
+                                zoom={zoom}
+                                setZoom={setZoom}
+                                focusX={focusX}
+                                focusY={focusY}
+                                onChange={onFocusChange}
+                                mockLabel={
+                                    isSeasonPoster
+                                        ? bandLabel ||
+                                          (Number(seasonNumber) === 0
+                                              ? 'Specials'
+                                              : `Season ${seasonNumber}`)
+                                        : bandLabel ||
+                                          (item.kind === 'collection' ? 'COLLECTION' : '')
+                                }
+                                labelYFrac={
+                                    !isSeasonPoster && !bandLabel && item.kind === 'collection'
+                                        ? 1350 / 1500
+                                        : 1440 / 1500
+                                }
+                            />
+                        )}
+
+                        {/* Primary actions */}
+                        <div className="flex gap-2 w-full max-w-[420px] flex-wrap">
                             <LoadingButton
                                 onClick={onGenerate}
                                 loading={busy}
                                 disabled={!hasBackdrop || saveTargets.noTarget}
                                 icon="save"
+                                className="flex-1 min-w-[150px]"
                             >
                                 Generate &amp; save
                             </LoadingButton>
-                            <div className="flex gap-2">
-                                <LoadingButton
-                                    onClick={onPsdExport}
-                                    loading={busy}
-                                    disabled={!backdrop}
-                                    variant="secondary"
-                                    icon="layers"
+                            <LoadingButton
+                                onClick={onPreview}
+                                loading={previewing}
+                                disabled={!hasBackdrop}
+                                icon="refresh"
+                                variant="secondary"
+                            >
+                                Preview
+                            </LoadingButton>
+                            <LoadingButton
+                                onClick={onPsdExport}
+                                loading={busy}
+                                disabled={!backdrop}
+                                variant="secondary"
+                                icon="layers"
+                            >
+                                .psd
+                            </LoadingButton>
+                        </div>
+
+                        {backdropUrl && (
+                            <div className="flex gap-2 w-full max-w-[420px]">
+                                <a
+                                    href={backdropUrl}
+                                    download
+                                    className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs border border-border text-fg-muted hover:border-primary"
+                                    title="Download the backdrop to clean externally (Firefly/Photoshop), then re-import via the backdrop Upload source"
                                 >
-                                    Export .psd
-                                </LoadingButton>
-                                {backdropUrl && (
-                                    <a
-                                        href={backdropUrl}
+                                    <span className="material-symbols-outlined text-base">
                                         download
-                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm border border-border text-fg-muted hover:border-primary"
-                                        title="Download the backdrop to clean externally (Firefly/Photoshop), then re-import via the backdrop Upload source"
-                                    >
-                                        <span className="material-symbols-outlined text-base">
-                                            download
-                                        </span>
-                                        Backdrop
-                                    </a>
-                                )}
+                                    </span>
+                                    Download backdrop
+                                </a>
                             </div>
+                        )}
+
+                        {/* Save targets + Generate handoff hint */}
+                        <div className="w-full max-w-[420px] flex flex-col gap-2">
+                            <SaveTargets targets={saveTargets} />
                             <p className="text-xs text-fg-subtle">
                                 Handoff: download the backdrop, clean it in Firefly/Photoshop, then
                                 bring it back via the backdrop{' '}
                                 <span className="text-fg-muted">Upload</span> source.
                             </p>
                         </div>
-                    )}
+                    </section>
+
+                    {/* RIGHT: framing + logo controls + accordions */}
+                    <section className="bg-surface border border-border rounded-[12px] p-4 flex flex-col gap-3.5">
+                        {/* FRAMING — always visible (Zoom / Vertical / Focus Y +
+                            guides). The sliders only call setZoom/setVPos/onFocusChange
+                            — all RenderPanel props — so no CropFramer drag math moves. */}
+                        <div className="flex flex-col gap-3">
+                            <StudioGroupLabel>Framing</StudioGroupLabel>
+                            <div>
+                                <div className="flex justify-between mb-1.5">
+                                    <span className="text-sm text-fg-muted">Zoom</span>
+                                    <span className="font-mono text-xs text-fg-subtle">
+                                        {(zoom ?? 1).toFixed(2)}×
+                                    </span>
+                                </div>
+                                <input
+                                    type="range"
+                                    min="0.5"
+                                    max="3"
+                                    step="0.05"
+                                    value={zoom ?? 1}
+                                    onChange={e => setZoom(Number(e.target.value))}
+                                    className="w-full"
+                                />
+                            </div>
+                            <div>
+                                <div className="flex justify-between mb-1.5">
+                                    <span className="text-sm text-fg-muted">Vertical position</span>
+                                    <span className="font-mono text-xs text-fg-subtle">
+                                        {Math.round((vPos ?? 0) * 100)}
+                                    </span>
+                                </div>
+                                <input
+                                    type="range"
+                                    min="0"
+                                    max="1"
+                                    step="0.01"
+                                    value={vPos}
+                                    onChange={e => setVPos(Number(e.target.value))}
+                                    className="w-full"
+                                />
+                            </div>
+                            <div>
+                                <div className="flex justify-between mb-1.5">
+                                    <span className="text-sm text-fg-muted">Focus Y</span>
+                                    <span className="font-mono text-xs text-fg-subtle">
+                                        {(focusY ?? 0.5).toFixed(2)}
+                                    </span>
+                                </div>
+                                <input
+                                    type="range"
+                                    min="0"
+                                    max="1"
+                                    step="0.01"
+                                    value={focusY ?? 0.5}
+                                    onChange={e => onFocusChange(focusX, Number(e.target.value))}
+                                    className="w-full"
+                                />
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <span className="text-sm text-fg-muted">CL2K guides</span>
+                                <GuidesToggle show={showGuides} onChange={setShowGuides} />
+                            </div>
+                        </div>
+
+                        {/* LOGO controls — always visible (colour mode + sliders +
+                            invert). Touch-up brush lives in its own accordion below. */}
+                        <div className="h-px bg-border" />
+                        <div className="flex flex-col gap-3">
+                            <StudioGroupLabel>Logo</StudioGroupLabel>
+                            <LogoSelector
+                                variant="controls"
+                                label="Logo"
+                                logos={logos}
+                                loading={loadingArt}
+                                selected={logo}
+                                onSelect={setLogo}
+                                customLogo={customLogo}
+                                onCustomChange={setCustomLogo}
+                                scale={logoScale}
+                                onScale={setLogoScale}
+                                yOffset={logoYOffset}
+                                onYOffset={setLogoYOffset}
+                                whiten={whitenLogo}
+                                onWhiten={setWhitenLogo}
+                                invert={invertLogo}
+                                onInvert={setInvertLogo}
+                                touchUpUrl={logoTouchUpUrl}
+                                onFlipMask={onLogoFlip}
+                                source={logoSource}
+                                onSource={onLogoSource}
+                            />
+                        </div>
+
+                        {/* SEASON · BANNER — season-number always visible; bulk in an
+                            accordion below. Banner select for non-collections. */}
+                        {(item.kind === 'show' || item.kind !== 'collection') && (
+                            <>
+                                <div className="h-px bg-border" />
+                                <div className="flex flex-col gap-3">
+                                    <StudioGroupLabel>Season · Banner</StudioGroupLabel>
+                                    {item.kind === 'show' && (
+                                        <SeasonControls
+                                            variant="season"
+                                            seasonNumber={seasonNumber}
+                                            setSeasonNumber={setSeasonNumber}
+                                            bulkSeasons={bulkSeasons}
+                                            setBulkSeasons={setBulkSeasons}
+                                            onBulkSeasons={onBulkSeasons}
+                                            bulkProgress={bulkProgress}
+                                            busy={busy}
+                                        />
+                                    )}
+                                    {item.kind !== 'collection' && (
+                                        <div>
+                                            <label className="flex items-center gap-2 text-sm text-fg-muted">
+                                                <span className="w-28 text-fg font-medium">
+                                                    Banner
+                                                </span>
+                                                <select
+                                                    value={bandLabel}
+                                                    onChange={e => setBandLabel(e.target.value)}
+                                                    className="flex-1 bg-surface border border-border rounded px-2 py-1 text-sm text-fg"
+                                                >
+                                                    {BAND_LABEL_OPTIONS.map(o => (
+                                                        <option key={o.value} value={o.value}>
+                                                            {o.label}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </label>
+                                            <p className="text-xs text-fg-subtle mt-2">
+                                                Optional bottom banner in the CL2K label band (e.g.
+                                                a limited series). On a season poster it replaces
+                                                the SEASON N text — the file is still saved as the
+                                                season poster.
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
+                            </>
+                        )}
+
+                        {/* ACCORDION: AI text removal */}
+                        <StudioAccordion title="AI text removal" dot={removeText}>
+                            <AiPanel
+                                config={config}
+                                removeText={removeText}
+                                setRemoveText={setRemoveText}
+                                brushSize={brushSize}
+                                setBrushSize={setBrushSize}
+                                backdropUrl={backdropUrl}
+                                onMaskChange={onMaskChange}
+                                hasMask={!!maskB64}
+                                aiBusy={aiErasing}
+                                onSendToAi={runBackdropErase}
+                                aiPrompt={aiPrompt}
+                                setAiPrompt={setAiPrompt}
+                            />
+                        </StudioAccordion>
+
+                        {/* ACCORDION: Logo touch-up (B/W brush over the processed logo) */}
+                        {logoTouchUpUrl && whitenLogo && (
+                            <StudioAccordion title="Logo touch-up">
+                                <LogoSelector
+                                    variant="touchup"
+                                    label="Logo"
+                                    logos={logos}
+                                    loading={loadingArt}
+                                    selected={logo}
+                                    onSelect={setLogo}
+                                    customLogo={customLogo}
+                                    onCustomChange={setCustomLogo}
+                                    scale={logoScale}
+                                    onScale={setLogoScale}
+                                    yOffset={logoYOffset}
+                                    onYOffset={setLogoYOffset}
+                                    whiten={whitenLogo}
+                                    onWhiten={setWhitenLogo}
+                                    invert={invertLogo}
+                                    onInvert={setInvertLogo}
+                                    touchUpUrl={logoTouchUpUrl}
+                                    onFlipMask={onLogoFlip}
+                                    source={logoSource}
+                                    onSource={onLogoSource}
+                                />
+                            </StudioAccordion>
+                        )}
+
+                        {/* ACCORDION: Bulk seasons (shows only) */}
+                        {item.kind === 'show' && (
+                            <StudioAccordion title="Bulk seasons">
+                                <SeasonControls
+                                    variant="bulk"
+                                    seasonNumber={seasonNumber}
+                                    setSeasonNumber={setSeasonNumber}
+                                    bulkSeasons={bulkSeasons}
+                                    setBulkSeasons={setBulkSeasons}
+                                    onBulkSeasons={onBulkSeasons}
+                                    bulkProgress={bulkProgress}
+                                    busy={busy}
+                                />
+                            </StudioAccordion>
+                        )}
+
+                        {/* ACCORDION: Recently generated (moved from Builder level) */}
+                        <StudioAccordion title="Recently generated">
+                            <HistorySection toast={toast} />
+                        </StudioAccordion>
+                    </section>
                 </div>
-            </div>
+            )}
         </section>
     );
 };
 
+// Presentational split for the studio right column: 'season' = the single
+// Season-number input (always visible under SEASON·BANNER); 'bulk' = the
+// "1,2,3 → Generate seasons" row + help (a collapsed accordion); undefined =
+// the whole card. No handler logic differs by variant — props still flow.
 const SeasonControls = ({
     seasonNumber,
     setSeasonNumber,
@@ -2783,50 +3060,64 @@ const SeasonControls = ({
     onBulkSeasons,
     bulkProgress,
     busy,
-}) => (
-    <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-3">
-        <h3 className="text-sm font-medium text-fg">Season variant</h3>
-        <label className="flex items-center gap-2 text-sm text-fg-muted">
-            <span className="w-28">Season number</span>
-            <input
-                type="number"
-                min="0"
-                value={seasonNumber}
-                onChange={e => setSeasonNumber(e.target.value)}
-                placeholder="blank = show poster, 0 = Specials"
-                className="flex-1 bg-surface border border-border rounded px-2 py-1 text-sm text-fg"
-            />
-        </label>
-        <div className="flex items-center gap-2">
-            <input
-                type="text"
-                value={bulkSeasons}
-                onChange={e => setBulkSeasons(e.target.value)}
-                placeholder="Generate all: 1,2,3"
-                className="flex-1 bg-surface border border-border rounded px-2 py-1 text-sm text-fg"
-            />
-            <LoadingButton
-                onClick={onBulkSeasons}
-                loading={busy}
-                variant="secondary"
-                icon="grid_view"
-                size="small"
-            >
-                Generate seasons
-            </LoadingButton>
-            {busy && bulkProgress && (
-                <span className="text-xs text-fg-muted tabular-nums whitespace-nowrap">
-                    {bulkProgress}
-                </span>
+    variant,
+}) => {
+    const showSeason = variant !== 'bulk';
+    const showBulk = variant !== 'season';
+    const cardCls = variant
+        ? 'flex flex-col gap-3'
+        : 'bg-surface border border-border rounded-lg p-3 flex flex-col gap-3';
+    return (
+        <div className={cardCls}>
+            {!variant && <h3 className="text-sm font-medium text-fg">Season variant</h3>}
+            {showSeason && (
+                <label className="flex items-center gap-2 text-sm text-fg-muted">
+                    <span className="w-28">Season number</span>
+                    <input
+                        type="number"
+                        min="0"
+                        value={seasonNumber}
+                        onChange={e => setSeasonNumber(e.target.value)}
+                        placeholder="blank = show poster, 0 = Specials"
+                        className="flex-1 bg-surface border border-border rounded px-2 py-1 text-sm text-fg"
+                    />
+                </label>
+            )}
+            {showBulk && (
+                <>
+                    <div className="flex items-center gap-2">
+                        <input
+                            type="text"
+                            value={bulkSeasons}
+                            onChange={e => setBulkSeasons(e.target.value)}
+                            placeholder="Generate all: 1,2,3"
+                            className="flex-1 bg-surface border border-border rounded px-2 py-1 text-sm text-fg"
+                        />
+                        <LoadingButton
+                            onClick={onBulkSeasons}
+                            loading={busy}
+                            variant="secondary"
+                            icon="grid_view"
+                            size="small"
+                        >
+                            Generate seasons
+                        </LoadingButton>
+                        {busy && bulkProgress && (
+                            <span className="text-xs text-fg-muted tabular-nums whitespace-nowrap">
+                                {bulkProgress}
+                            </span>
+                        )}
+                    </div>
+                    <p className="text-xs text-fg-subtle">
+                        Each season reuses the backdrop &amp; logo from the poster you built above;
+                        only the season number changes. Runs in the background — the count updates
+                        as each season is saved.
+                    </p>
+                </>
             )}
         </div>
-        <p className="text-xs text-fg-subtle">
-            Each season reuses the backdrop &amp; logo from the poster you built above; only the
-            season number changes. Runs in the background — the count updates as each season is
-            saved.
-        </p>
-    </div>
-);
+    );
+};
 
 // ─── AI text-removal panel + brush canvas ──────────────────────────────────
 
@@ -2844,6 +3135,9 @@ const AiPanel = ({
     aiPrompt,
     setAiPrompt,
 }) => {
+    // UI-only: the large pop-out mask editor (mock cl2k-09). Reuses the same
+    // BrushMask + onMaskChange pipeline — no new mask handlers.
+    const [modalOpen, setModalOpen] = useState(false);
     const provider = config?.ai_provider || 'none';
     // Why AI can't run (mirrors the backend's unavailable_reason) — gates the
     // Send to AI button so it doesn't silently no-op. api_key reads back as
@@ -2857,79 +3151,177 @@ const AiPanel = ({
                 ? 'No AI Endpoint set — add your LaMa container URL in Module Settings.'
                 : null;
     return (
-        <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-3">
-            <label className="flex items-center gap-2 text-sm text-fg font-medium">
-                <input
-                    type="checkbox"
-                    checked={removeText}
-                    onChange={e => setRemoveText(e.target.checked)}
-                />
-                Remove text with AI
-            </label>
-            <p className="text-xs text-fg-subtle">
-                Provider: <span className="text-fg-muted">{provider}</span>. OpenAI re-imagines the
-                whole image — brush a mask over just the text to keep faces/art intact. Set the
-                provider/key in{' '}
-                <Link to="/settings/modules" className="text-fg underline hover:no-underline">
-                    Module Settings
-                </Link>
-                .
-            </p>
-            {removeText && aiBlock && <div className="text-xs text-warning">{aiBlock}</div>}
-            {removeText && (
-                <>
-                    <label className="flex items-center gap-2 text-sm text-fg-muted">
-                        <span className="w-20">Brush</span>
-                        <input
-                            type="range"
-                            min="4"
-                            max="60"
-                            value={brushSize}
-                            onChange={e => setBrushSize(Number(e.target.value))}
-                            className="flex-1"
-                        />
-                        <span className="w-10 text-right">{brushSize}px</span>
-                    </label>
-                    {backdropUrl ? (
-                        <BrushMask
-                            imageUrl={backdropUrl}
-                            brushSize={brushSize}
-                            onMaskChange={onMaskChange}
-                        />
-                    ) : (
-                        <div className="text-xs text-fg-subtle">
-                            Select a backdrop to brush a mask over.
-                        </div>
-                    )}
-                    {backdropUrl && (
-                        <>
-                            <label className="flex flex-col gap-1 text-sm text-fg-muted">
-                                <span>AI prompt (defaults to module settings)</span>
-                                <textarea
-                                    value={aiPrompt}
-                                    onChange={e => setAiPrompt(e.target.value)}
-                                    rows={2}
-                                    className="bg-surface border border-border rounded px-2 py-1 text-sm text-fg"
-                                />
-                            </label>
-                            <LoadingButton
-                                onClick={onSendToAi}
-                                loading={aiBusy}
-                                disabled={!hasMask || !!aiBlock}
-                                icon="auto_fix_high"
+        <>
+            <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-3">
+                <label className="flex items-center gap-2 text-sm text-fg font-medium">
+                    <input
+                        type="checkbox"
+                        checked={removeText}
+                        onChange={e => setRemoveText(e.target.checked)}
+                    />
+                    Remove text with AI
+                </label>
+                <p className="text-xs text-fg-subtle">
+                    Provider: <span className="text-fg-muted">{provider}</span>. OpenAI re-imagines
+                    the whole image — brush a mask over just the text to keep faces/art intact. Set
+                    the provider/key in{' '}
+                    <Link to="/settings/modules" className="text-fg underline hover:no-underline">
+                        Module Settings
+                    </Link>
+                    .
+                </p>
+                {removeText && aiBlock && <div className="text-xs text-warning">{aiBlock}</div>}
+                {removeText && (
+                    <>
+                        <label className="flex items-center gap-2 text-sm text-fg-muted">
+                            <span className="w-20">Brush</span>
+                            <input
+                                type="range"
+                                min="4"
+                                max="60"
+                                value={brushSize}
+                                onChange={e => setBrushSize(Number(e.target.value))}
+                                className="flex-1"
+                            />
+                            <span className="w-10 text-right">{brushSize}px</span>
+                        </label>
+                        {backdropUrl ? (
+                            <BrushMask
+                                imageUrl={backdropUrl}
+                                brushSize={brushSize}
+                                onMaskChange={onMaskChange}
+                            />
+                        ) : (
+                            <div className="text-xs text-fg-subtle">
+                                Select a backdrop to brush a mask over.
+                            </div>
+                        )}
+                        {backdropUrl && (
+                            <button
+                                type="button"
+                                onClick={() => setModalOpen(true)}
+                                className="self-start inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs border border-border bg-surface-inset text-fg-muted hover:border-primary"
                             >
-                                Send to AI — erase masked text
-                            </LoadingButton>
-                            <p className="text-xs text-fg-subtle">
-                                Erases the brushed text and updates the preview, so you see the
-                                result before you Generate &amp; save. This is the only step that
-                                uses AI credits.
-                            </p>
-                        </>
-                    )}
-                </>
+                                <span className="material-symbols-outlined text-sm">
+                                    open_in_full
+                                </span>
+                                Open large editor
+                            </button>
+                        )}
+                        {backdropUrl && (
+                            <>
+                                <label className="flex flex-col gap-1 text-sm text-fg-muted">
+                                    <span>AI prompt (defaults to module settings)</span>
+                                    <textarea
+                                        value={aiPrompt}
+                                        onChange={e => setAiPrompt(e.target.value)}
+                                        rows={2}
+                                        className="bg-surface border border-border rounded px-2 py-1 text-sm text-fg"
+                                    />
+                                </label>
+                                <LoadingButton
+                                    onClick={onSendToAi}
+                                    loading={aiBusy}
+                                    disabled={!hasMask || !!aiBlock}
+                                    icon="auto_fix_high"
+                                >
+                                    Send to AI — erase masked text
+                                </LoadingButton>
+                                <p className="text-xs text-fg-subtle">
+                                    Erases the brushed text and updates the preview, so you see the
+                                    result before you Generate &amp; save. This is the only step
+                                    that uses AI credits.
+                                </p>
+                            </>
+                        )}
+                    </>
+                )}
+            </div>
+            {/* Large pop-out mask editor (mock cl2k-09). Reuses the same BrushMask +
+            onMaskChange pipeline at a bigger size — no new mask handlers.
+            TODO: this is a second BrushMask canvas, so strokes don't carry between
+            the inline brush and the pop-out (each canvas owns its own backing
+            store). Wiring a single shared canvas across both would require changing
+            BrushMask's handler contract, which the immutability contract forbids. */}
+            {modalOpen && backdropUrl && (
+                <div
+                    onClick={() => setModalOpen(false)}
+                    className="fixed inset-0 z-modal flex items-center justify-center p-8 bg-black/80 backdrop-blur-sm"
+                >
+                    <div
+                        onClick={e => e.stopPropagation()}
+                        className="w-[min(1080px,94vw)] max-h-[90vh] bg-canvas border border-border rounded-[16px] shadow-2xl flex flex-col overflow-hidden"
+                    >
+                        <div className="flex items-center gap-3 px-5 py-4 border-b border-border">
+                            <span className="font-display text-base font-semibold text-fg">
+                                AI text removal
+                            </span>
+                            <span className="font-mono text-xs text-fg-subtle">
+                                {provider} · inpaint
+                            </span>
+                            <button
+                                type="button"
+                                onClick={() => setModalOpen(false)}
+                                className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs border border-border bg-surface-inset text-fg-muted hover:border-primary"
+                            >
+                                <span className="material-symbols-outlined text-sm">close</span>
+                                Close
+                            </button>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_268px] min-h-0 flex-1">
+                            <div className="flex items-center justify-center p-6 bg-black/40 min-h-[360px] overflow-auto">
+                                <div className="max-w-full">
+                                    <BrushMask
+                                        imageUrl={backdropUrl}
+                                        brushSize={brushSize}
+                                        onMaskChange={onMaskChange}
+                                    />
+                                </div>
+                            </div>
+                            <div className="border-l border-border p-5 flex flex-col gap-4 overflow-y-auto">
+                                <p className="text-xs leading-relaxed text-fg-muted">
+                                    Brush over every title, logo and watermark you want gone. The
+                                    masked region is sent to the AI inpainter with your prompt.
+                                </p>
+                                <label className="flex items-center gap-2 text-sm text-fg-muted">
+                                    <span className="w-20">Brush size</span>
+                                    <input
+                                        type="range"
+                                        min="4"
+                                        max="80"
+                                        value={brushSize}
+                                        onChange={e => setBrushSize(Number(e.target.value))}
+                                        className="flex-1"
+                                    />
+                                    <span className="w-10 text-right font-mono text-xs text-fg-subtle">
+                                        {brushSize}px
+                                    </span>
+                                </label>
+                                <label className="flex flex-col gap-1 text-sm text-fg-muted">
+                                    <span>AI prompt</span>
+                                    <textarea
+                                        value={aiPrompt}
+                                        onChange={e => setAiPrompt(e.target.value)}
+                                        rows={3}
+                                        className="bg-surface border border-border rounded px-2 py-1 text-sm text-fg"
+                                    />
+                                </label>
+                                {aiBlock && <div className="text-xs text-warning">{aiBlock}</div>}
+                                <div className="flex-1" />
+                                <LoadingButton
+                                    onClick={onSendToAi}
+                                    loading={aiBusy}
+                                    disabled={!hasMask || !!aiBlock}
+                                    icon="auto_fix_high"
+                                >
+                                    Send to AI
+                                </LoadingButton>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             )}
-        </div>
+        </>
     );
 };
 
@@ -3197,9 +3589,10 @@ const CropFramer = ({
     crop,
     setCrop,
     vPos,
-    setVPos,
+    // setVPos / setZoom are still passed by the parent (the Zoom + Vertical
+    // sliders now live in the right-column FRAMING group), but CropFramer only
+    // reads vPos/zoom for its canvas math — the slider UI moved out.
     zoom,
-    setZoom,
     focusX,
     focusY,
     onChange,
@@ -3394,42 +3787,9 @@ const CropFramer = ({
             <p className="text-xs text-fg-subtle mb-2">
                 {FRAMING_HELP[fitMode] || FRAMING_HELP.cover}
             </p>
-            <label className="flex items-center gap-2 text-xs text-fg-muted mb-2">
-                <span className="shrink-0 w-24">Vertical position</span>
-                <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.01"
-                    value={vPos}
-                    onChange={e => setVPos(Number(e.target.value))}
-                    className="flex-1"
-                />
-                <span className="w-16 shrink-0 text-fg-subtle">
-                    {vPos < 0.02
-                        ? isBox
-                            ? 'top'
-                            : 'default'
-                        : isBox
-                          ? `${Math.round(vPos * 100)}% down`
-                          : `${Math.round(vPos * 100)}% up`}
-                </span>
-            </label>
-            {(isBox || fitMode === 'cover') && (
-                <label className="flex items-center gap-2 text-xs text-fg-muted mb-2">
-                    <span className="shrink-0 w-24">Zoom</span>
-                    <input
-                        type="range"
-                        min="0.5"
-                        max="3"
-                        step="0.05"
-                        value={zoom ?? 1}
-                        onChange={e => setZoom(Number(e.target.value))}
-                        className="flex-1"
-                    />
-                    <span className="w-16 shrink-0 text-fg-subtle">{(zoom ?? 1).toFixed(2)}×</span>
-                </label>
-            )}
+            {/* Zoom / Vertical position sliders moved to the right-column FRAMING
+                group so they are always visible (the canvas math below still reads
+                zoom/vPos). */}
             <div className="flex gap-3 items-start">
                 <div
                     ref={wrapRef}
@@ -3747,8 +4107,20 @@ const LogoSelector = ({
     source, // optional per-picker source ('tmdb'|'fanart'|'plex'|'upload')
     onSource,
     emptyText = 'No logos from this source — a text wordmark is used as fallback.',
+    // Pure-presentational split for the 3-column studio: 'picker' renders only the
+    // source tabs + grid (left column), 'controls' renders only the colour-mode
+    // tabs + sliders + touch-up (right column). Undefined = the whole card (the
+    // LogoAssetPanel call site, unchanged). No handler/state logic differs by
+    // variant — props still flow identically.
+    variant,
 }) => {
     const [showTouchUp, setShowTouchUp] = useState(false);
+    // Presentational split: 'picker' = grid only; 'controls' = colour mode +
+    // sliders + invert (no touch-up); 'touchup' = the B/W touch-up brush only;
+    // undefined = the whole card (LogoAssetPanel call site, unchanged).
+    const showPicker = variant !== 'controls' && variant !== 'touchup';
+    const showControls = variant !== 'picker' && variant !== 'touchup';
+    const showTouchUpSection = variant !== 'picker' && variant !== 'controls';
     const onFile = e => {
         const f = e.target.files?.[0];
         e.target.value = ''; // allow re-selecting the same file
@@ -3762,45 +4134,71 @@ const LogoSelector = ({
             });
         reader.readAsDataURL(f);
     };
+    const colorTabs = onWhiten && (
+        <div className="flex gap-1 p-1 rounded-lg bg-surface-inset border border-border">
+            <button
+                type="button"
+                className={`flex-1 text-center px-3 py-1.5 rounded-md text-xs ${
+                    whiten ? 'bg-primary text-white font-semibold' : 'text-fg-muted hover:text-fg'
+                }`}
+                onClick={() => onWhiten(true)}
+                title="CL2K two-tone: white fills, black keylines"
+            >
+                CL2K white
+            </button>
+            <button
+                type="button"
+                className={`flex-1 text-center px-3 py-1.5 rounded-md text-xs ${
+                    !whiten ? 'bg-primary text-white font-semibold' : 'text-fg-muted hover:text-fg'
+                }`}
+                onClick={() => onWhiten(false)}
+                title="Keep the logo's original colors"
+            >
+                Original
+            </button>
+        </div>
+    );
+    const cardCls = variant
+        ? 'flex flex-col gap-3'
+        : 'bg-surface border border-border rounded-lg p-3';
     return (
-        <div className="bg-surface border border-border rounded-lg p-3">
-            <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-medium text-fg">{label}</h3>
-                <div className="flex items-center gap-1.5">
-                    {onWhiten && (
-                        <>
-                            <button
-                                type="button"
-                                className={`px-2.5 py-1 text-xs rounded-md border ${
-                                    whiten
-                                        ? 'bg-primary text-white border-primary'
-                                        : 'bg-surface text-fg-muted border-border hover:border-primary'
-                                }`}
-                                onClick={() => onWhiten(true)}
-                                title="CL2K two-tone: white fills, black keylines"
-                            >
-                                CL2K white
-                            </button>
-                            <button
-                                type="button"
-                                className={`px-2.5 py-1 text-xs rounded-md border ${
-                                    !whiten
-                                        ? 'bg-primary text-white border-primary'
-                                        : 'bg-surface text-fg-muted border-border hover:border-primary'
-                                }`}
-                                onClick={() => onWhiten(false)}
-                                title="Keep the logo's original colors"
-                            >
-                                Original
-                            </button>
-                        </>
-                    )}
-                    {onSource ? (
-                        <SourceSelector value={source} onChange={onSource} />
-                    ) : (
-                        <label className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs border border-border text-fg-muted hover:border-primary cursor-pointer">
-                            <span className="material-symbols-outlined text-sm">upload</span>
-                            Upload custom
+        <div className={cardCls}>
+            {showPicker && (
+                <>
+                    <div className="flex items-center justify-between mb-2">
+                        {variant ? (
+                            <span className="font-mono text-[10px] tracking-wide uppercase text-fg-subtle">
+                                Logo / wordmark
+                            </span>
+                        ) : (
+                            <h3 className="text-sm font-medium text-fg">{label}</h3>
+                        )}
+                        <div className="flex items-center gap-1.5">
+                            {!variant && colorTabs}
+                            {onSource ? (
+                                <SourceSelector value={source} onChange={onSource} />
+                            ) : (
+                                <label className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs border border-border text-fg-muted hover:border-primary cursor-pointer">
+                                    <span className="material-symbols-outlined text-sm">
+                                        upload
+                                    </span>
+                                    Upload custom
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        className="hidden"
+                                        onChange={onFile}
+                                    />
+                                </label>
+                            )}
+                        </div>
+                    </div>
+                    {/* 'Upload' source with nothing uploaded yet → a dropzone (the chosen
+                file then shows in the customLogo card below). */}
+                    {onSource && source === 'upload' && !customLogo ? (
+                        <label className="flex flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed border-border text-fg-subtle text-xs py-6 cursor-pointer hover:border-primary">
+                            <span className="material-symbols-outlined">upload</span>
+                            Upload a logo (PNG, transparent)
                             <input
                                 type="file"
                                 accept="image/*"
@@ -3808,75 +4206,69 @@ const LogoSelector = ({
                                 onChange={onFile}
                             />
                         </label>
-                    )}
-                </div>
-            </div>
-            {/* 'Upload' source with nothing uploaded yet → a dropzone (the chosen
-                file then shows in the customLogo card below). */}
-            {onSource && source === 'upload' && !customLogo ? (
-                <label className="flex flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed border-border text-fg-subtle text-xs py-6 cursor-pointer hover:border-primary">
-                    <span className="material-symbols-outlined">upload</span>
-                    Upload a logo (PNG, transparent)
-                    <input type="file" accept="image/*" className="hidden" onChange={onFile} />
-                </label>
-            ) : customLogo ? (
-                <div className="flex items-center gap-3 rounded-md border-2 border-primary bg-black p-2">
-                    <img
-                        src={customLogo.url}
-                        alt="Custom logo"
-                        className="h-14 w-auto max-w-[60%] object-contain"
-                    />
-                    <span className="flex-1 truncate text-xs text-fg-muted">{customLogo.name}</span>
-                    <Button
-                        onClick={() => onCustomChange(null)}
-                        variant="secondary"
-                        icon="close"
-                        size="small"
-                    >
-                        Remove
-                    </Button>
-                </div>
-            ) : loading ? (
-                <div className="text-xs text-fg-subtle py-4">Loading…</div>
-            ) : logos.length === 0 ? (
-                <div className="text-xs text-fg-subtle py-2">{emptyText}</div>
-            ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-72 overflow-auto">
-                    {logos.map((it, idx) => {
-                        const path = it.file_path;
-                        const isSel = selected === path;
-                        return (
-                            <button
-                                key={`${path}-${idx}`}
-                                type="button"
-                                onClick={() => onSelect(isSel ? null : path)}
-                                aria-pressed={isSel}
-                                className={`relative aspect-video rounded-md overflow-hidden border-2 bg-black transition-all ${
-                                    isSel
-                                        ? 'border-primary ring-2 ring-primary/40'
-                                        : 'border-border hover:border-primary'
-                                }`}
-                                title={it.width ? `${it.width}×${it.height}` : path}
+                    ) : customLogo ? (
+                        <div className="flex items-center gap-3 rounded-md border-2 border-primary bg-black p-2">
+                            <img
+                                src={customLogo.url}
+                                alt="Custom logo"
+                                className="h-14 w-auto max-w-[60%] object-contain"
+                            />
+                            <span className="flex-1 truncate text-xs text-fg-muted">
+                                {customLogo.name}
+                            </span>
+                            <Button
+                                onClick={() => onCustomChange(null)}
+                                variant="secondary"
+                                icon="close"
+                                size="small"
                             >
-                                <img
-                                    src={it.url || urlForPath(path)}
-                                    alt=""
-                                    loading="lazy"
-                                    className="absolute inset-0 w-full h-full object-contain"
-                                />
-                                {isSel && (
-                                    <span className="absolute top-1 right-1 inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary text-white">
-                                        <span className="material-symbols-outlined text-sm">
-                                            check
-                                        </span>
-                                    </span>
-                                )}
-                            </button>
-                        );
-                    })}
-                </div>
+                                Remove
+                            </Button>
+                        </div>
+                    ) : loading ? (
+                        <div className="text-xs text-fg-subtle py-4">Loading…</div>
+                    ) : logos.length === 0 ? (
+                        <div className="text-xs text-fg-subtle py-2">{emptyText}</div>
+                    ) : (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-72 overflow-auto">
+                            {logos.map((it, idx) => {
+                                const path = it.file_path;
+                                const isSel = selected === path;
+                                return (
+                                    <button
+                                        key={`${path}-${idx}`}
+                                        type="button"
+                                        onClick={() => onSelect(isSel ? null : path)}
+                                        aria-pressed={isSel}
+                                        className={`relative aspect-video rounded-md overflow-hidden border-2 bg-black transition-all ${
+                                            isSel
+                                                ? 'border-primary ring-2 ring-primary/40'
+                                                : 'border-border hover:border-primary'
+                                        }`}
+                                        title={it.width ? `${it.width}×${it.height}` : path}
+                                    >
+                                        <img
+                                            src={it.url || urlForPath(path)}
+                                            alt=""
+                                            loading="lazy"
+                                            className="absolute inset-0 w-full h-full object-contain"
+                                        />
+                                        {isSel && (
+                                            <span className="absolute top-1 right-1 inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary text-white">
+                                                <span className="material-symbols-outlined text-sm">
+                                                    check
+                                                </span>
+                                            </span>
+                                        )}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    )}
+                </>
             )}
-            {onScale && (
+            {showControls && variant && colorTabs}
+            {onScale && showControls && (
                 <label className="mt-2 flex items-center gap-2 text-xs text-fg-muted">
                     <span className="w-24">Logo size</span>
                     <input
@@ -3891,7 +4283,7 @@ const LogoSelector = ({
                     <span className="w-10 text-right">{Math.round((scale ?? 1) * 100)}%</span>
                 </label>
             )}
-            {onYOffset && (
+            {onYOffset && showControls && (
                 <label className="mt-2 flex items-center gap-2 text-xs text-fg-muted">
                     <span className="w-24">Logo position</span>
                     <input
@@ -3912,7 +4304,7 @@ const LogoSelector = ({
                 whitens into a white box — the OPPOSITE of a clearlogo. Inverting
                 makes darkness the opacity: black text -> solid white, the plate ->
                 transparent. Only meaningful on the CL2K-white two-tone. */}
-            {onInvert && whiten && (
+            {onInvert && whiten && showControls && (
                 <label className="mt-2 flex items-center gap-2 text-xs text-fg-muted cursor-pointer">
                     <input
                         type="checkbox"
@@ -3930,7 +4322,7 @@ const LogoSelector = ({
                 regions to flip black↔white. Drawn over the UN-flipped processed
                 logo so the accumulated strokes stay valid; the live overlay and
                 the render apply the flip. */}
-            {onFlipMask && touchUpUrl && whiten && (
+            {onFlipMask && touchUpUrl && whiten && showTouchUpSection && (
                 <div className="mt-2">
                     <button
                         type="button"
@@ -3961,37 +4353,39 @@ const LogoSelector = ({
                     )}
                 </div>
             )}
-            <p className="mt-2 text-xs text-fg-subtle">
-                Whitened, trimmed and placed on the CL2K guides automatically — it moves live in the
-                preview as you drag.
-                {onScale && (
-                    <>
-                        {' '}
-                        Size 100% = the 700px recommended guide box; the 800px line is the
-                        template’s suggested max (a guideline, not enforced).
-                    </>
-                )}
-                {onYOffset && (
-                    <>
-                        {' '}
-                        Position 0 = the template’s logo-bottom guide (where finished CL2K posters
-                        sit); negative moves the logo up, positive down.
-                    </>
-                )}{' '}
-                {((onScale && Math.round((scale ?? 1) * 100) !== 100) ||
-                    (onYOffset && (yOffset ?? 0) !== 0)) && (
-                    <button
-                        type="button"
-                        onClick={() => {
-                            if (onScale) onScale(1);
-                            if (onYOffset) onYOffset(0);
-                        }}
-                        className="text-fg underline hover:no-underline"
-                    >
-                        Reset to CL2K defaults
-                    </button>
-                )}
-            </p>
+            {showControls && (
+                <p className="mt-2 text-xs text-fg-subtle">
+                    Whitened, trimmed and placed on the CL2K guides automatically — it moves live in
+                    the preview as you drag.
+                    {onScale && (
+                        <>
+                            {' '}
+                            Size 100% = the 700px recommended guide box; the 800px line is the
+                            template’s suggested max (a guideline, not enforced).
+                        </>
+                    )}
+                    {onYOffset && (
+                        <>
+                            {' '}
+                            Position 0 = the template’s logo-bottom guide (where finished CL2K
+                            posters sit); negative moves the logo up, positive down.
+                        </>
+                    )}{' '}
+                    {((onScale && Math.round((scale ?? 1) * 100) !== 100) ||
+                        (onYOffset && (yOffset ?? 0) !== 0)) && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                if (onScale) onScale(1);
+                                if (onYOffset) onYOffset(0);
+                            }}
+                            className="text-fg underline hover:no-underline"
+                        >
+                            Reset to CL2K defaults
+                        </button>
+                    )}
+                </p>
+            )}
         </div>
     );
 };
@@ -4328,8 +4722,9 @@ const SquareArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
     };
 
     return (
-        <section className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div className="flex flex-col gap-4">
+        <section className="mt-4 grid grid-cols-1 xl:grid-cols-[320px_minmax(0,1fr)_300px] gap-4 items-start">
+            {/* LEFT: source pickers */}
+            <div className="bg-surface border border-border rounded-[12px] p-4 flex flex-col gap-[18px]">
                 {bgSource === 'upload' ? (
                     <UploadArtCard
                         label="Source art (backdrop)"
@@ -4371,46 +4766,46 @@ const SquareArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                         emptyText="No posters from this source."
                     />
                 )}
-
-                {srcUrl && (
-                    <SquareFramer
-                        imageUrl={srcUrl}
-                        focusX={focusX}
-                        focusY={focusY}
-                        onChange={(fx, fy) => {
-                            setFocusX(fx);
-                            setFocusY(fy);
-                        }}
-                        fitMode={fitMode}
-                        setFitMode={setFitMode}
-                        zoom={zoom}
-                        setZoom={setZoom}
-                    />
-                )}
             </div>
 
-            <div className="flex flex-col gap-3 self-start sticky top-4 max-h-screen overflow-y-auto">
-                <div className="bg-surface border border-border rounded-lg p-3">
-                    <h3 className="text-sm font-medium text-fg mb-2">Preview (1000×1000)</h3>
-                    <div className="relative aspect-square bg-black rounded overflow-hidden flex items-center justify-center">
-                        {hasSrc && previewUrl ? (
-                            <>
-                                <img
-                                    src={previewUrl}
-                                    alt="Square art preview"
-                                    className="w-full h-full object-contain"
-                                />
-                                <PreviewRefreshing active={previewing} />
-                            </>
-                        ) : (
-                            <span className="text-xs text-fg-subtle px-4 text-center">
-                                {hasSrc ? 'Rendering preview…' : 'Pick or upload source art.'}
-                            </span>
-                        )}
-                    </div>
+            {/* CENTER: sticky preview + framer + output */}
+            <section className="sticky top-0 self-start flex flex-col items-center gap-[13px]">
+                <div className="relative w-full max-w-[420px] aspect-square bg-black rounded-[10px] overflow-hidden flex items-center justify-center border border-border shadow-lg">
+                    {hasSrc && previewUrl ? (
+                        <>
+                            <img
+                                src={previewUrl}
+                                alt="Square art preview"
+                                className="w-full h-full object-contain"
+                            />
+                            <PreviewRefreshing active={previewing} />
+                        </>
+                    ) : (
+                        <span className="text-xs text-fg-subtle px-4 text-center">
+                            {hasSrc ? 'Rendering preview…' : 'Pick or upload source art.'}
+                        </span>
+                    )}
                 </div>
-                <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-2">
-                    <h3 className="text-sm font-medium text-fg">Output</h3>
+
+                {srcUrl && (
+                    <div className="w-full max-w-[420px]">
+                        <SquareFramer
+                            imageUrl={srcUrl}
+                            focusX={focusX}
+                            focusY={focusY}
+                            onChange={(fx, fy) => {
+                                setFocusX(fx);
+                                setFocusY(fy);
+                            }}
+                            fitMode={fitMode}
+                            setFitMode={setFitMode}
+                            zoom={zoom}
+                            setZoom={setZoom}
+                        />
+                    </div>
+                )}
+
+                <div className="w-full max-w-[420px] flex flex-col gap-2">
                     <AssetSeasonField
                         show={item.kind === 'show'}
                         value={seasonNumber}
@@ -4435,7 +4830,14 @@ const SquareArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                         Generate &amp; save
                     </LoadingButton>
                 </div>
-            </div>
+            </section>
+
+            {/* RIGHT: history accordion */}
+            <section className="bg-surface border border-border rounded-[12px] p-4 flex flex-col gap-3.5">
+                <StudioAccordion title="Recently generated">
+                    <HistorySection toast={toast} />
+                </StudioAccordion>
+            </section>
         </section>
     );
 };
@@ -4570,16 +4972,10 @@ const BackgroundArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast 
         }
     };
 
-    const resCls = on =>
-        `px-2.5 py-1 text-sm rounded-md border ${
-            on
-                ? 'bg-primary text-white border-primary'
-                : 'bg-surface text-fg-muted border-border hover:border-primary'
-        }`;
-
     return (
-        <section className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div className="flex flex-col gap-4">
+        <section className="mt-4 grid grid-cols-1 xl:grid-cols-[320px_minmax(0,1fr)_300px] gap-4 items-start">
+            {/* LEFT: source pickers */}
+            <div className="bg-surface border border-border rounded-[12px] p-4 flex flex-col gap-[18px]">
                 {bgSource === 'upload' ? (
                     <UploadArtCard
                         label="Source art (backdrop)"
@@ -4621,69 +5017,49 @@ const BackgroundArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast 
                         emptyText="No posters from this source."
                     />
                 )}
-
-                {srcUrl && (
-                    <SquareFramer
-                        imageUrl={srcUrl}
-                        focusX={focusX}
-                        focusY={focusY}
-                        onChange={(fx, fy) => {
-                            setFocusX(fx);
-                            setFocusY(fy);
-                        }}
-                        fitMode={fitMode}
-                        setFitMode={setFitMode}
-                        zoom={zoom}
-                        setZoom={setZoom}
-                        aspect={9 / 16}
-                        title="Crop to 16:9"
-                        frameName="16:9 frame"
-                    />
-                )}
             </div>
 
-            <div className="flex flex-col gap-3 self-start sticky top-4 max-h-screen overflow-y-auto">
-                <div className="bg-surface border border-border rounded-lg p-3">
-                    <div className="flex items-center justify-between mb-2">
-                        <h3 className="text-sm font-medium text-fg">
-                            Preview ({resolution === '4k' ? '3840×2160' : '1920×1080'})
-                        </h3>
-                        <div className="flex items-center gap-1">
-                            <button
-                                type="button"
-                                className={resCls(resolution !== '4k')}
-                                onClick={() => setResolution('1080p')}
-                            >
-                                1080p
-                            </button>
-                            <button
-                                type="button"
-                                className={resCls(resolution === '4k')}
-                                onClick={() => setResolution('4k')}
-                            >
-                                4K
-                            </button>
-                        </div>
-                    </div>
-                    <div className="relative aspect-video bg-black rounded overflow-hidden flex items-center justify-center">
-                        {hasSrc && previewUrl ? (
-                            <>
-                                <img
-                                    src={previewUrl}
-                                    alt="Background art preview"
-                                    className="w-full h-full object-contain"
-                                />
-                                <PreviewRefreshing active={previewing} />
-                            </>
-                        ) : (
-                            <span className="text-xs text-fg-subtle px-4 text-center">
-                                {hasSrc ? 'Rendering preview…' : 'Pick or upload source art.'}
-                            </span>
-                        )}
-                    </div>
+            {/* CENTER: sticky preview + framer + output */}
+            <section className="sticky top-0 self-start flex flex-col items-center gap-[13px]">
+                <div className="relative w-full max-w-[560px] aspect-video bg-black rounded-[10px] overflow-hidden flex items-center justify-center border border-border shadow-lg">
+                    {hasSrc && previewUrl ? (
+                        <>
+                            <img
+                                src={previewUrl}
+                                alt="Background art preview"
+                                className="w-full h-full object-contain"
+                            />
+                            <PreviewRefreshing active={previewing} />
+                        </>
+                    ) : (
+                        <span className="text-xs text-fg-subtle px-4 text-center">
+                            {hasSrc ? 'Rendering preview…' : 'Pick or upload source art.'}
+                        </span>
+                    )}
                 </div>
-                <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-2">
-                    <h3 className="text-sm font-medium text-fg">Output</h3>
+
+                {srcUrl && (
+                    <div className="w-full max-w-[560px]">
+                        <SquareFramer
+                            imageUrl={srcUrl}
+                            focusX={focusX}
+                            focusY={focusY}
+                            onChange={(fx, fy) => {
+                                setFocusX(fx);
+                                setFocusY(fy);
+                            }}
+                            fitMode={fitMode}
+                            setFitMode={setFitMode}
+                            zoom={zoom}
+                            setZoom={setZoom}
+                            aspect={9 / 16}
+                            title="Crop to 16:9"
+                            frameName="16:9 frame"
+                        />
+                    </div>
+                )}
+
+                <div className="w-full max-w-[560px] flex flex-col gap-2">
                     <AssetSeasonField
                         show={item.kind === 'show'}
                         value={seasonNumber}
@@ -4708,7 +5084,49 @@ const BackgroundArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast 
                         Generate &amp; save
                     </LoadingButton>
                 </div>
-            </div>
+            </section>
+
+            {/* RIGHT: FRAMING (resolution) + history accordion */}
+            <section className="bg-surface border border-border rounded-[12px] p-4 flex flex-col gap-3.5">
+                <div className="flex flex-col gap-3">
+                    <StudioGroupLabel>Framing</StudioGroupLabel>
+                    <div className="flex items-center justify-between">
+                        <span className="text-sm text-fg-muted">
+                            Resolution{' '}
+                            <span className="font-mono text-xs text-fg-subtle">
+                                {resolution === '4k' ? '3840×2160' : '1920×1080'}
+                            </span>
+                        </span>
+                        <div className="flex gap-1 p-1 rounded-lg bg-surface-inset border border-border">
+                            <button
+                                type="button"
+                                onClick={() => setResolution('1080p')}
+                                className={`px-3 py-1.5 rounded-md font-mono text-xs ${
+                                    resolution !== '4k'
+                                        ? 'bg-primary text-white font-semibold'
+                                        : 'text-fg-muted hover:text-fg'
+                                }`}
+                            >
+                                1080p
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setResolution('4k')}
+                                className={`px-3 py-1.5 rounded-md font-mono text-xs ${
+                                    resolution === '4k'
+                                        ? 'bg-primary text-white font-semibold'
+                                        : 'text-fg-muted hover:text-fg'
+                                }`}
+                            >
+                                4K
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <StudioAccordion title="Recently generated">
+                    <HistorySection toast={toast} />
+                </StudioAccordion>
+            </section>
         </section>
     );
 };
@@ -4742,7 +5160,8 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
     const [flip, setFlip] = useState(null); // { key, b64 }
     const flipB64 = flip && flip.key === flipKey ? flip.b64 : null;
     const setFlipB64 = useCallback(b64 => setFlip(b64 ? { key: flipKey, b64 } : null), [flipKey]);
-    const [showTouchUp, setShowTouchUp] = useState(false);
+    // The B/W touch-up brush now lives in a StudioAccordion (its own open state),
+    // so no separate showTouchUp toggle is needed.
     const [flipped, setFlipped] = useState(null); // { forB64, url } — flipped preview
 
     const setCustomExclusive = useCallback(c => {
@@ -4938,9 +5357,11 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
         }`;
 
     return (
-        <section className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div className="flex flex-col gap-4">
+        <section className="mt-4 grid grid-cols-1 xl:grid-cols-[320px_minmax(0,1fr)_300px] gap-4 items-start">
+            {/* LEFT: logo source picker */}
+            <div className="bg-surface border border-border rounded-[12px] p-4 flex flex-col gap-[18px]">
                 <LogoSelector
+                    variant="picker"
                     label="Logo"
                     logos={logos}
                     loading={loadingArt}
@@ -4956,206 +5377,30 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                             : 'No logos from this source — switch source or Upload a custom PNG.'
                     }
                 />
-                <div className="bg-surface border border-border rounded-lg p-3">
-                    <button
-                        type="button"
-                        onClick={() => setExtractOpen(o => !o)}
-                        className="w-full flex items-center justify-between text-left"
-                    >
-                        <span className="text-sm font-medium text-fg">
-                            Extract logo from a poster{' '}
-                            <span className="text-fg-subtle font-normal">— no AI</span>
-                        </span>
-                        <span className="text-xs text-fg-muted">
-                            {extractOpen ? 'Hide' : 'Open'}
-                        </span>
-                    </button>
-                    {extractOpen && (
-                        <div className="mt-3 flex flex-col gap-3">
-                            <p className="text-xs text-fg-subtle">
-                                Pull a white title straight off a poster — no OpenAI. Pick a poster,
-                                brush over the title (a loose scribble is fine; keep off bright
-                                areas), then Extract. The result becomes your logo below.
-                            </p>
-                            {posterSource === 'upload' ? (
-                                <UploadArtCard
-                                    label="Poster"
-                                    headerRight={
-                                        <SourceSelector
-                                            value={posterSource}
-                                            onChange={onPosterSource}
-                                        />
-                                    }
-                                    custom={customPoster}
-                                    onFile={onPosterFile}
-                                    onClear={() => setCustomPoster(null)}
-                                />
-                            ) : (
-                                <Picker
-                                    label="Poster"
-                                    headerRight={
-                                        <SourceSelector
-                                            value={posterSource}
-                                            onChange={onPosterSource}
-                                        />
-                                    }
-                                    items={posters}
-                                    loading={loadingArt}
-                                    selected={posterPath}
-                                    onSelect={pickPoster}
-                                    aspect="aspect-[2/3]"
-                                    emptyText={
-                                        posterSource === 'plex' &&
-                                        artBySource.plex?.reason &&
-                                        !posters.length
-                                            ? artBySource.plex.reason
-                                            : 'No posters from this source — switch source or Upload one.'
-                                    }
-                                />
-                            )}
-                            {posterUrl && (
-                                <div>
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <button
-                                            type="button"
-                                            className={seg(extractMode === 'white')}
-                                            onClick={() => setExtractMode('white')}
-                                        >
-                                            White title
-                                        </button>
-                                        <button
-                                            type="button"
-                                            className={seg(extractMode === 'subject')}
-                                            onClick={() => setExtractMode('subject')}
-                                        >
-                                            Coloured title
-                                        </button>
-                                    </div>
-                                    <p className="text-xs text-fg-subtle mb-1">
-                                        {extractMode === 'subject'
-                                            ? 'Brush over the coloured title (keep close to it):'
-                                            : 'Brush over the white title:'}
-                                    </p>
-                                    <div className="bg-black rounded p-1 inline-block max-w-full">
-                                        <BrushMask
-                                            imageUrl={posterUrl}
-                                            brushSize={18}
-                                            onMaskChange={setExtractMask}
-                                        />
-                                    </div>
-                                </div>
-                            )}
-                            <LoadingButton
-                                onClick={onExtract}
-                                loading={extracting}
-                                disabled={!posterUrl || !extractMask}
-                                icon="content_cut"
-                            >
-                                Extract logo
-                            </LoadingButton>
-                        </div>
-                    )}
-                </div>
-                <div className="bg-surface border border-border rounded-lg p-3">
-                    <h3 className="text-sm font-medium text-fg mb-2">Colour</h3>
-                    <div className="flex items-center gap-2">
-                        <button
-                            type="button"
-                            className={seg(!whiten)}
-                            onClick={() => setWhiten(false)}
-                        >
-                            Original
-                        </button>
-                        <button
-                            type="button"
-                            className={seg(whiten)}
-                            onClick={() => setWhiten(true)}
-                        >
-                            CL2K white
-                        </button>
-                    </div>
-                    <p className="text-xs text-fg-subtle mt-2">
-                        Original keeps the clear logo&apos;s colours (the usual Plex/Kometa logo
-                        asset). CL2K white recolours it to the CL2K two-tone — white fills, black
-                        keylines — like a CL2K poster logo.
-                    </p>
-                    {whiten && (
-                        <label className="mt-2 flex items-center gap-2 text-xs text-fg-muted cursor-pointer">
-                            <input
-                                type="checkbox"
-                                checked={invert}
-                                onChange={e => setInvert(e.target.checked)}
-                            />
-                            Invert logo
-                            <span className="text-fg-subtle">
-                                — white becomes transparent, black becomes white (for plate/sticker
-                                logos)
-                            </span>
-                        </label>
-                    )}
-                    {/* B/W touch-up: flip the regions the automatic two-tone got wrong.
-                        Drawn over the UN-flipped preview so strokes stay valid. */}
-                    {whiten && hasLogo && previewUrl && (
-                        <div className="mt-2">
-                            <button
-                                type="button"
-                                onClick={() => setShowTouchUp(s => !s)}
-                                className="px-2.5 py-1 text-xs rounded-md border bg-surface text-fg-muted border-border hover:border-primary"
-                            >
-                                {showTouchUp
-                                    ? 'Hide colour fix'
-                                    : 'Fix a mis-coloured area (optional)'}
-                            </button>
-                            {showTouchUp && (
-                                <div className="mt-2">
-                                    <p className="text-xs text-fg-subtle mb-1">
-                                        <span className="text-fg-muted">
-                                            Most logos whiten correctly — you can skip this.
-                                        </span>{' '}
-                                        Only if a part came out the wrong shade, brush over just
-                                        those spots to flip them black↔white. Everything you
-                                        don&apos;t paint is left exactly as shown.
-                                    </p>
-                                    <div className="bg-black rounded p-1 inline-block max-w-full">
-                                        <BrushMask
-                                            imageUrl={previewUrl}
-                                            brushSize={10}
-                                            onMaskChange={setFlipB64}
-                                        />
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    )}
-                </div>
             </div>
 
-            <div className="flex flex-col gap-3 self-start sticky top-4 max-h-screen overflow-y-auto">
-                <div className="bg-surface border border-border rounded-lg p-3">
-                    <h3 className="text-sm font-medium text-fg mb-2">Preview</h3>
-                    <div
-                        className="relative aspect-video rounded overflow-hidden flex items-center justify-center"
-                        style={{
-                            backgroundImage:
-                                'repeating-conic-gradient(#3a3a4a 0% 25%, #2a2a38 0% 50%)',
-                            backgroundSize: '22px 22px',
-                        }}
-                    >
-                        {hasLogo && displayUrl ? (
-                            <img
-                                src={displayUrl}
-                                alt="Logo preview"
-                                className="max-w-[90%] max-h-[90%] object-contain"
-                            />
-                        ) : (
-                            <span className="text-xs text-fg-subtle px-4 text-center bg-black/40 rounded px-2 py-1">
-                                {hasLogo ? 'Rendering preview…' : 'Pick or upload a logo.'}
-                            </span>
-                        )}
-                    </div>
+            {/* CENTER: sticky checkerboard preview + output */}
+            <section className="sticky top-0 self-start flex flex-col items-center gap-[13px]">
+                <div
+                    className="relative w-full max-w-[480px] aspect-video rounded-[10px] overflow-hidden flex items-center justify-center border border-border shadow-lg"
+                    style={{
+                        backgroundImage: 'repeating-conic-gradient(#3a3a4a 0% 25%, #2a2a38 0% 50%)',
+                        backgroundSize: '22px 22px',
+                    }}
+                >
+                    {hasLogo && displayUrl ? (
+                        <img
+                            src={displayUrl}
+                            alt="Logo preview"
+                            className="max-w-[90%] max-h-[90%] object-contain"
+                        />
+                    ) : (
+                        <span className="text-xs text-fg-subtle px-4 text-center bg-black/40 rounded px-2 py-1">
+                            {hasLogo ? 'Rendering preview…' : 'Pick or upload a logo.'}
+                        </span>
+                    )}
                 </div>
-                <div className="bg-surface border border-border rounded-lg p-3 flex flex-col gap-2">
-                    <h3 className="text-sm font-medium text-fg">Output</h3>
+                <div className="w-full max-w-[480px] flex flex-col gap-2">
                     <p className="text-xs text-fg-subtle">
                         Filed as{' '}
                         <span className="text-fg-muted">Title (Year) {'{ids}'} - Logo.png</span> and
@@ -5180,7 +5425,167 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                         Download to PC
                     </button>
                 </div>
-            </div>
+            </section>
+
+            {/* RIGHT: colour controls + extract / touch-up / history accordions */}
+            <section className="bg-surface border border-border rounded-[12px] p-4 flex flex-col gap-3.5">
+                <div className="flex flex-col gap-3">
+                    <StudioGroupLabel>Colour</StudioGroupLabel>
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            className={seg(!whiten)}
+                            onClick={() => setWhiten(false)}
+                        >
+                            Original
+                        </button>
+                        <button
+                            type="button"
+                            className={seg(whiten)}
+                            onClick={() => setWhiten(true)}
+                        >
+                            CL2K white
+                        </button>
+                    </div>
+                    <p className="text-xs text-fg-subtle">
+                        Original keeps the clear logo&apos;s colours (the usual Plex/Kometa logo
+                        asset). CL2K white recolours it to the CL2K two-tone — white fills, black
+                        keylines — like a CL2K poster logo.
+                    </p>
+                    {whiten && (
+                        <label className="flex items-center gap-2 text-xs text-fg-muted cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={invert}
+                                onChange={e => setInvert(e.target.checked)}
+                            />
+                            Invert logo
+                            <span className="text-fg-subtle">
+                                — white becomes transparent, black becomes white (for plate/sticker
+                                logos)
+                            </span>
+                        </label>
+                    )}
+                </div>
+
+                {/* ACCORDION: Extract logo from poster (controlled — onExtract
+                    collapses it on success via setExtractOpen). */}
+                <StudioAccordion
+                    title="Extract logo from poster"
+                    open={extractOpen}
+                    onToggle={() => setExtractOpen(o => !o)}
+                >
+                    <div className="flex flex-col gap-3">
+                        <p className="text-xs text-fg-subtle">
+                            Pull a white title straight off a poster — no OpenAI. Pick a poster,
+                            brush over the title (a loose scribble is fine; keep off bright areas),
+                            then Extract. The result becomes your logo below.
+                        </p>
+                        {posterSource === 'upload' ? (
+                            <UploadArtCard
+                                label="Poster"
+                                headerRight={
+                                    <SourceSelector
+                                        value={posterSource}
+                                        onChange={onPosterSource}
+                                    />
+                                }
+                                custom={customPoster}
+                                onFile={onPosterFile}
+                                onClear={() => setCustomPoster(null)}
+                            />
+                        ) : (
+                            <Picker
+                                label="Poster"
+                                headerRight={
+                                    <SourceSelector
+                                        value={posterSource}
+                                        onChange={onPosterSource}
+                                    />
+                                }
+                                items={posters}
+                                loading={loadingArt}
+                                selected={posterPath}
+                                onSelect={pickPoster}
+                                aspect="aspect-[2/3]"
+                                emptyText={
+                                    posterSource === 'plex' &&
+                                    artBySource.plex?.reason &&
+                                    !posters.length
+                                        ? artBySource.plex.reason
+                                        : 'No posters from this source — switch source or Upload one.'
+                                }
+                            />
+                        )}
+                        {posterUrl && (
+                            <div>
+                                <div className="flex items-center gap-2 mb-1">
+                                    <button
+                                        type="button"
+                                        className={seg(extractMode === 'white')}
+                                        onClick={() => setExtractMode('white')}
+                                    >
+                                        White title
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className={seg(extractMode === 'subject')}
+                                        onClick={() => setExtractMode('subject')}
+                                    >
+                                        Coloured title
+                                    </button>
+                                </div>
+                                <p className="text-xs text-fg-subtle mb-1">
+                                    {extractMode === 'subject'
+                                        ? 'Brush over the coloured title (keep close to it):'
+                                        : 'Brush over the white title:'}
+                                </p>
+                                <div className="bg-black rounded p-1 inline-block max-w-full">
+                                    <BrushMask
+                                        imageUrl={posterUrl}
+                                        brushSize={18}
+                                        onMaskChange={setExtractMask}
+                                    />
+                                </div>
+                            </div>
+                        )}
+                        <LoadingButton
+                            onClick={onExtract}
+                            loading={extracting}
+                            disabled={!posterUrl || !extractMask}
+                            icon="content_cut"
+                        >
+                            Extract logo
+                        </LoadingButton>
+                    </div>
+                </StudioAccordion>
+
+                {/* ACCORDION: Logo touch-up (B/W brush over the processed logo) */}
+                {whiten && hasLogo && previewUrl && (
+                    <StudioAccordion title="Logo touch-up">
+                        <p className="text-xs text-fg-subtle mb-2">
+                            <span className="text-fg-muted">
+                                Most logos whiten correctly — you can skip this.
+                            </span>{' '}
+                            Only if a part came out the wrong shade, brush over just those spots to
+                            flip them black↔white. Everything you don&apos;t paint is left exactly
+                            as shown.
+                        </p>
+                        <div className="bg-black rounded p-1 inline-block max-w-full">
+                            <BrushMask
+                                imageUrl={previewUrl}
+                                brushSize={10}
+                                onMaskChange={setFlipB64}
+                            />
+                        </div>
+                    </StudioAccordion>
+                )}
+
+                {/* ACCORDION: Recently generated */}
+                <StudioAccordion title="Recently generated">
+                    <HistorySection toast={toast} />
+                </StudioAccordion>
+            </section>
         </section>
     );
 };
