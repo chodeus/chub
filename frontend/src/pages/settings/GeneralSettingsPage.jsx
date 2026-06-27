@@ -68,7 +68,7 @@ const normalizeDuplicateExcludeGroups = groups => {
  */
 export const GeneralSettingsPage = () => {
     const toast = useToast();
-    const { setTheme } = useTheme();
+    const { setTheme, accent, setAccent, accents } = useTheme();
     const { registerToolbar, clearToolbar } = useToolbar();
 
     // Load config from backend
@@ -279,99 +279,178 @@ export const GeneralSettingsPage = () => {
                 </div>
             )}
 
-            {/* Settings card */}
-            {GENERAL_SETTINGS_SCHEMA.map((module, moduleIndex) => (
-                <div
-                    key={`module-${module.key}-${moduleIndex}`}
-                    className="bg-surface border border-border rounded-xl p-5"
-                >
-                    <h2 className="font-display text-[15px] font-semibold mb-4 text-fg">
-                        {module.label}
-                    </h2>
-
-                    {module.fields && module.fields.length > 0 ? (
-                        <form
-                            onSubmit={e => {
-                                e.preventDefault();
-                                handleSave();
-                            }}
-                            className="space-y-4 md:space-y-6"
-                            noValidate
-                        >
-                            {module.fields.map((field, fieldIndex) => {
-                                try {
-                                    // Generate unique IDs for this field instance
-                                    const uniqueId = `field-${module.key}-${field.key}-${fieldIndex}`;
-                                    const errorId = `${uniqueId}-error`;
-                                    const descId = `${uniqueId}-desc`;
-
-                                    // Get field value from current module data
-                                    const moduleData = formData[module.key] || {};
-                                    let fieldValue = moduleData[field.key];
-
-                                    // Handle special case for nested values
-                                    if (fieldValue === undefined) {
-                                        fieldValue = field.defaultValue;
-                                    }
-
-                                    // Handle null values - convert to empty string for form fields
-                                    if (fieldValue === null) {
-                                        fieldValue = '';
-                                    }
-
-                                    // Handle object values - stringify for JSON fields
-                                    if (
-                                        fieldValue &&
-                                        typeof fieldValue === 'object' &&
-                                        field.type === 'json'
-                                    ) {
-                                        fieldValue = JSON.stringify(fieldValue, null, 2);
-                                    }
-
-                                    return (
-                                        <div key={`field-${module.key}-${field.key}-${fieldIndex}`}>
-                                            <MemoizedFieldComponent
-                                                field={{
-                                                    ...field,
-                                                    id: uniqueId,
-                                                    errorId,
-                                                    descId,
-                                                }}
-                                                value={fieldValue}
-                                                onChange={value =>
-                                                    handleFieldChange(module.key, field.key, value)
-                                                }
-                                                disabled={isSaving}
-                                                highlightInvalid={false}
-                                                errorMessage={null}
-                                                rootConfig={formData}
-                                            />
-                                        </div>
-                                    );
-                                } catch (error) {
-                                    console.error(`Error rendering field ${field.key}:`, error);
-                                    return (
-                                        <div
-                                            key={`error-${module.key}-${field.key}-${fieldIndex}`}
-                                            className="p-2 bg-warning-bg text-warning rounded"
-                                        >
-                                            Field type &apos;{field.type}&apos; error:{' '}
-                                            {error.message}
-                                        </div>
-                                    );
-                                }
-                            })}
-                        </form>
-                    ) : (
-                        <div className="text-center py-8 text-fg-subtle">
-                            <span className="material-symbols-outlined text-4xl mb-2 block">
-                                inbox
-                            </span>
-                            <p>No general settings available</p>
+            {/* Appearance — theme + accent (mock's Appearance section). Replaces
+                the schema's plain theme dropdown (filtered out of the map below). */}
+            <div className="bg-surface border border-border rounded-xl p-5">
+                <h2 className="font-display text-[15px] font-semibold mb-4 text-fg">Appearance</h2>
+                <div className="flex flex-col gap-4">
+                    <div className="flex items-center justify-between gap-4 flex-wrap">
+                        <div>
+                            <div className="text-sm font-medium text-fg">Theme</div>
+                            <div className="text-xs text-fg-subtle mt-0.5">
+                                Light, dark, or follow system
+                            </div>
                         </div>
-                    )}
+                        <div className="flex gap-1 p-1 rounded-lg bg-surface-inset border border-border">
+                            {[
+                                ['light', 'Light'],
+                                ['dark', 'Dark'],
+                                ['auto', 'System'],
+                            ].map(([val, label]) => {
+                                const active = (formData.user_interface?.theme || 'auto') === val;
+                                return (
+                                    <button
+                                        key={val}
+                                        type="button"
+                                        onClick={() =>
+                                            handleFieldChange('user_interface', 'theme', val)
+                                        }
+                                        className={`px-3.5 py-1.5 rounded-md text-[13px] transition-colors ${
+                                            active
+                                                ? 'bg-primary text-on-color font-semibold'
+                                                : 'text-fg-muted hover:text-fg'
+                                        }`}
+                                    >
+                                        {label}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                    <div className="flex items-center justify-between gap-4 flex-wrap border-t border-border-light pt-4">
+                        <div>
+                            <div className="text-sm font-medium text-fg">Accent</div>
+                            <div className="text-xs text-fg-subtle mt-0.5">
+                                Recolours buttons, nav, toggles and links
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2.5">
+                            {Object.entries(accents).map(([key, a]) => {
+                                const active = accent === key;
+                                return (
+                                    <button
+                                        key={key}
+                                        type="button"
+                                        onClick={() => setAccent(key)}
+                                        aria-label={a.label}
+                                        aria-pressed={active}
+                                        title={a.label}
+                                        className="w-8 h-8 rounded-lg transition-transform hover:scale-105"
+                                        style={{
+                                            background: a.brand,
+                                            boxShadow: active
+                                                ? `0 0 0 2px var(--surface), 0 0 0 4px ${a.brand}`
+                                                : undefined,
+                                        }}
+                                    />
+                                );
+                            })}
+                        </div>
+                    </div>
                 </div>
-            ))}
+            </div>
+
+            {/* Settings card */}
+            {GENERAL_SETTINGS_SCHEMA.filter(module => module.key !== 'user_interface').map(
+                (module, moduleIndex) => (
+                    <div
+                        key={`module-${module.key}-${moduleIndex}`}
+                        className="bg-surface border border-border rounded-xl p-5"
+                    >
+                        <h2 className="font-display text-[15px] font-semibold mb-4 text-fg">
+                            {module.label}
+                        </h2>
+
+                        {module.fields && module.fields.length > 0 ? (
+                            <form
+                                onSubmit={e => {
+                                    e.preventDefault();
+                                    handleSave();
+                                }}
+                                className="space-y-4 md:space-y-6"
+                                noValidate
+                            >
+                                {module.fields.map((field, fieldIndex) => {
+                                    try {
+                                        // Generate unique IDs for this field instance
+                                        const uniqueId = `field-${module.key}-${field.key}-${fieldIndex}`;
+                                        const errorId = `${uniqueId}-error`;
+                                        const descId = `${uniqueId}-desc`;
+
+                                        // Get field value from current module data
+                                        const moduleData = formData[module.key] || {};
+                                        let fieldValue = moduleData[field.key];
+
+                                        // Handle special case for nested values
+                                        if (fieldValue === undefined) {
+                                            fieldValue = field.defaultValue;
+                                        }
+
+                                        // Handle null values - convert to empty string for form fields
+                                        if (fieldValue === null) {
+                                            fieldValue = '';
+                                        }
+
+                                        // Handle object values - stringify for JSON fields
+                                        if (
+                                            fieldValue &&
+                                            typeof fieldValue === 'object' &&
+                                            field.type === 'json'
+                                        ) {
+                                            fieldValue = JSON.stringify(fieldValue, null, 2);
+                                        }
+
+                                        return (
+                                            <div
+                                                key={`field-${module.key}-${field.key}-${fieldIndex}`}
+                                            >
+                                                <MemoizedFieldComponent
+                                                    field={{
+                                                        ...field,
+                                                        id: uniqueId,
+                                                        errorId,
+                                                        descId,
+                                                    }}
+                                                    value={fieldValue}
+                                                    onChange={value =>
+                                                        handleFieldChange(
+                                                            module.key,
+                                                            field.key,
+                                                            value
+                                                        )
+                                                    }
+                                                    disabled={isSaving}
+                                                    highlightInvalid={false}
+                                                    errorMessage={null}
+                                                    rootConfig={formData}
+                                                />
+                                            </div>
+                                        );
+                                    } catch (error) {
+                                        console.error(`Error rendering field ${field.key}:`, error);
+                                        return (
+                                            <div
+                                                key={`error-${module.key}-${field.key}-${fieldIndex}`}
+                                                className="p-2 bg-warning-bg text-warning rounded"
+                                            >
+                                                Field type &apos;{field.type}&apos; error:{' '}
+                                                {error.message}
+                                            </div>
+                                        );
+                                    }
+                                })}
+                            </form>
+                        ) : (
+                            <div className="text-center py-8 text-fg-subtle">
+                                <span className="material-symbols-outlined text-4xl mb-2 block">
+                                    inbox
+                                </span>
+                                <p>No general settings available</p>
+                            </div>
+                        )}
+                    </div>
+                )
+            )}
 
             {/* First-run setup — re-runs the full-screen Setup Wizard. The
                 wizard also auto-launches on a fresh install; this is the
