@@ -56,6 +56,10 @@ const SortableDirectoryItem = React.memo(
         mode,
         modeOptions,
         onModeChange,
+        // Priority-order display (opt-in via field.priorityOrder)
+        showPriority,
+        priorityLabel,
+        priorityHighest,
     }) => {
         const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
             useSortable({ id });
@@ -185,6 +189,18 @@ const SortableDirectoryItem = React.memo(
                     >
                         <span className="material-symbols-outlined text-2xl">drag_indicator</span>
                     </div>
+                )}
+
+                {showPriority && priorityLabel && (
+                    <span
+                        className={`flex-none self-center font-mono text-[10px] font-semibold px-2 py-0.5 rounded-[5px] whitespace-nowrap ${
+                            priorityHighest
+                                ? 'bg-success/15 text-success'
+                                : 'bg-surface-elevated text-fg-muted'
+                        }`}
+                    >
+                        {priorityLabel}
+                    </span>
                 )}
 
                 {inputBlock}
@@ -359,6 +375,8 @@ export const DirectoryArray = React.memo(
         modeOptions = null,
         modes = [],
         onModeChange = null,
+        // Priority-order display (opt-in)
+        showPriority = false,
         ...props
     }) => {
         const [modalOpen, setModalOpen] = useState(false);
@@ -450,6 +468,14 @@ export const DirectoryArray = React.memo(
                                 // Get mode for this directory index
                                 const itemMode = modes[index] || '';
 
+                                // Priority badge: bottom of the list wins.
+                                const isHighest = index === directories.length - 1;
+                                const priorityLabel = showPriority
+                                    ? `P${index + 1}${
+                                          isHighest ? ' · wins' : index === 0 ? ' · base' : ''
+                                      }`
+                                    : null;
+
                                 // Use SortableDirectoryItem for drag and drop, regular DirectoryItem otherwise
                                 if (enableReordering) {
                                     return (
@@ -479,6 +505,10 @@ export const DirectoryArray = React.memo(
                                             mode={itemMode}
                                             modeOptions={modeOptions}
                                             onModeChange={onModeChange}
+                                            // Priority display
+                                            showPriority={showPriority}
+                                            priorityLabel={priorityLabel}
+                                            priorityHighest={isHighest}
                                         />
                                     );
                                 } else {

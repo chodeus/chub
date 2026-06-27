@@ -154,6 +154,20 @@ export const DirListDragDropField = React.memo(
                     />
                 )}
 
+                {/* Priority hint — bottom of the list wins (opt-in) */}
+                {field.priorityOrder && (
+                    <p className="mb-3 flex items-center gap-1.5 text-xs text-warning">
+                        <span className="material-symbols-outlined text-sm leading-none">
+                            arrow_upward
+                        </span>
+                        <span>
+                            Drag to reorder — the{' '}
+                            <strong className="font-semibold">lowest entry (bottom) wins</strong>{' '}
+                            when a poster matches in more than one source.
+                        </span>
+                    </p>
+                )}
+
                 <DndContext
                     sensors={sensors}
                     collisionDetection={closestCenter}
@@ -179,9 +193,16 @@ export const DirListDragDropField = React.memo(
                             enableReordering={true}
                             onMoveUp={handleMoveUp}
                             onMoveDown={handleMoveDown}
+                            showPriority={!!field.priorityOrder}
                         />
                     </SortableContext>
                 </DndContext>
+
+                {field.priorityOrder && (
+                    <div className="mt-3 font-mono text-[11px] text-fg-subtle">
+                        ↑ lowest priority · highest priority ↓
+                    </div>
+                )}
 
                 <FieldDescription id={`${inputId}-desc`} description={field.description} />
                 <FieldError id={`${inputId}-error`} message={errorMessage} />
