@@ -5,7 +5,6 @@ import { FeatureErrorBoundary } from './error';
 import LayoutHeader from './LayoutHeader.jsx';
 import LayoutSidebar from './LayoutSidebar.jsx';
 import PageToolbar from './ToolBar/PageToolbar.jsx';
-import Breadcrumbs from './Breadcrumbs.jsx';
 import { ToolbarProvider } from '../contexts/ToolbarContext.jsx';
 import { useUIState } from '../contexts/UIStateContext.jsx';
 import { useDocumentTitle } from '../hooks/useDocumentTitle.js';
@@ -66,7 +65,6 @@ const Layout = ({ children }) => {
                             id="main-content"
                             className="flex-1 overflow-y-auto bg-bg px-4 pt-4 pb-10 sm:px-6 md:px-[30px] md:pt-[22px]"
                         >
-                            <Breadcrumbs />
                             <FeatureErrorBoundary
                                 key={location.pathname}
                                 featureName="Page Content"
