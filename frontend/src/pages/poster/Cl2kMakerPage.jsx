@@ -4,10 +4,30 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { cl2kMakerAPI } from '../../utils/api/cl2k_maker.js';
 import { configAPI } from '../../utils/api/config.js';
 import { postersAPI } from '../../utils/api/posters.js';
+import { posterSelfHealAPI } from '../../utils/api/posterSelfHeal.js';
 import { useToast } from '../../contexts/ToastContext.jsx';
 import { Button, LoadingButton, PageHeader, Toggle } from '../../components/ui/index.js';
 import SegmentedControl from '../../components/ui/SegmentedControl.jsx';
 import Spinner from '../../components/ui/Spinner.jsx';
+
+// Small self-contained badge: shows "N posters need review" linking to the
+// Poster Healer review page, only when the healer has open proposals. Lives here
+// so the CL2K page surfaces healer work without threading state through the page.
+const HealReviewLink = () => {
+    const [count, setCount] = useState(0);
+    useEffect(() => {
+        posterSelfHealAPI
+            .count()
+            .then(r => setCount(r?.data?.count || 0))
+            .catch(() => {});
+    }, []);
+    if (!count) return null;
+    return (
+        <Link to="/poster/heal-review" className="font-medium text-warning hover:underline">
+            {count} poster{count === 1 ? '' : 's'} need review →
+        </Link>
+    );
+};
 
 /**
  * CL2K Poster Maker.
@@ -567,6 +587,7 @@ const ConfigBanner = ({ config, uploadStatus }) => {
                     AI provider{' '}
                     <span className="text-fg-muted">{config.ai_provider || 'none'}</span>
                 </span>
+                <HealReviewLink />
                 <Link
                     to="/settings/modules/cl2k_maker"
                     className="ml-auto font-medium text-accent hover:underline"
