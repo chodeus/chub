@@ -150,6 +150,13 @@ def resolve_poster(
     cfg,
 ) -> Optional[Dict[str, Any]]:
     """Return a poster_heal_review proposal dict, or None for a no-op / retry."""
+    # Season posters are not healed in v1: the ` - Season NN` / ` - Specials` tag
+    # (and its zero-padding canonicalization) needs dedicated handling, and a
+    # season doesn't carry its own ids in media_cache. Skip rather than risk
+    # dropping the season tag and corrupting the name into a show-poster filename.
+    if poster.get("season_number") is not None:
+        return None
+
     asset_type = poster.get("asset_type") or "movie"
     media_type = _media_type(asset_type)
     cur_name = os.path.basename(poster.get("file", ""))
