@@ -7,6 +7,12 @@ initialising, so module-level imports here would risk circular imports.
 """
 
 
+def routers():
+    from backend.api.poster_self_heal import router
+
+    return [router]
+
+
 def modules():
     from backend.modules.poster_self_heal import PosterSelfHeal
 
