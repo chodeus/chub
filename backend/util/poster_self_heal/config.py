@@ -17,9 +17,13 @@ from pydantic import BaseModel
 class PosterSelfHealConfig(BaseModel):
     log_level: str = "info"
 
-    # Which kinds of drift to detect and propose. (Per-id TMDB lookups are cached
-    # by the TMDB client's own cache_expiration, so a scheduled run re-checks every
-    # poster cheaply without a separate recheck interval here.)
-    heal_ids: bool = True  # stale/merged embedded TMDB id no longer resolves
-    heal_titles: bool = True  # the title on TMDB changed since the poster was named
-    backfill_ids: bool = True  # add a resolved {tmdb-id} to an id-less poster
+    # The healer rebuilds each poster's canonical DAPS filename from its live
+    # library row (current tmdb/tvdb/imdb ids) + TMDB's canonical title/year, and
+    # proposes the rename when it differs — so id, title, and year drift are all
+    # healed together (a filename is canonical or it isn't; partial heals don't
+    # make sense). Per-id TMDB lookups are cached by the TMDB client's own
+    # cache_expiration, so a scheduled run re-checks every poster cheaply.
+    #
+    # The one genuinely-optional behaviour: whether to also ADD ids to a poster
+    # that has none (backfill), vs only correcting posters that already carry one.
+    backfill_ids: bool = True
