@@ -5,13 +5,14 @@
 // dedicated page) because it's a single setting — splitting it out earned
 // its own page back when more UI knobs were planned, but in practice only
 // the theme stuck.
-import { SETTINGS_MODULES, SETTINGS_SCHEMA } from './settings_schema.js';
+import { SETTINGS_MODULES, SETTINGS_SCHEMA, CONFIG_ONLY_MODULE_KEYS } from './settings_schema.js';
 
 // Dashboard-toggleable modules = the executable modules the dashboard lists
 // (backend MODULES / GET /api/modules). Derived from SETTINGS_MODULES so it
-// stays in sync; tmdb + fanart are config-only and never get a dashboard card.
+// stays in sync; tmdb + fanart are config-only and never get a dashboard card,
+// as are any modules flagged runnable:false (e.g. the CL2K Maker).
 const DASHBOARD_MODULE_OPTIONS = SETTINGS_MODULES.filter(
-    m => m.key !== 'tmdb' && m.key !== 'fanart'
+    m => m.key !== 'tmdb' && m.key !== 'fanart' && !CONFIG_ONLY_MODULE_KEYS.has(m.key)
 ).map(m => ({ value: m.key, label: m.name }));
 
 // tmdb + fanart carry the TMDB / fanart.tv API keys but are config-only modules

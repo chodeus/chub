@@ -1698,3 +1698,10 @@ const CORE_SETTINGS_MODULES = [
 // Extension module blocks spliced in (src/extensions) \u2014 identity on main.
 export const SETTINGS_SCHEMA = withExtensionSettingsSchema(CORE_SETTINGS_SCHEMA);
 export const SETTINGS_MODULES = withExtensionSettingsModules(CORE_SETTINGS_MODULES);
+
+// Keys of config-only modules (schema `runnable: false`) — they have nothing to
+// run/schedule (e.g. the CL2K Maker). Empty on main; extension modules opt in.
+// Used to drop them from the Schedule, Notifications, and Dashboard module lists.
+export const CONFIG_ONLY_MODULE_KEYS = new Set(
+    SETTINGS_SCHEMA.filter(m => m.runnable === false).map(m => m.key)
+);
