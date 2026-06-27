@@ -24,6 +24,31 @@ const relTime = ts => {
     return m > 0 ? `${m}m ago` : 'just now';
 };
 
+// gdrive_stats.last_updated is stored as a compact "YYYYMMDD" string, which
+// `new Date()` can't parse (→ NaN). Parse that shape explicitly; fall back to
+// native parsing for any ISO-ish values. Returns epoch ms, or 0 if unparseable.
+const parseSyncDate = v => {
+    if (!v) return 0;
+    const s = String(v);
+    if (/^\d{8}$/.test(s)) {
+        const t = new Date(+s.slice(0, 4), +s.slice(4, 6) - 1, +s.slice(6, 8)).getTime();
+        return Number.isNaN(t) ? 0 : t;
+    }
+    const t = new Date(s).getTime();
+    return Number.isNaN(t) ? 0 : t;
+};
+
+// Human-readable byte size for the synced-library storage stat (1 decimal,
+// stepping GB→TB→PB). 0 / falsy → '—'.
+const formatBytes = bytes => {
+    const b = Number(bytes) || 0;
+    if (b <= 0) return '—';
+    const gb = b / 1024 ** 3;
+    if (gb >= 1024) return `${(gb / 1024).toFixed(1)} TB`;
+    if (gb >= 1) return `${gb.toFixed(1)} GB`;
+    return `${(b / 1024 ** 2).toFixed(0)} MB`;
+};
+
 // Subtle checkerboard so transparent additional-artwork (logos, square art,
 // backgrounds) reads clearly instead of blending into a flat dark panel.
 const TRANSPARENCY_BG = {
@@ -244,12 +269,14 @@ const PosterAssetsSearchPage = () => {
         const totalMedia = matched.reduce((a, m) => a + (m.media_total || 0), 0);
         const gdrive = Array.isArray(s.gdrive_stats) ? s.gdrive_stats : [];
         const lastSync = gdrive.reduce((latest, g) => {
-            const t = g.last_updated ? new Date(g.last_updated).getTime() : 0;
+            const t = parseSyncDate(g.last_updated);
             return t > latest ? t : latest;
         }, 0);
+        const storageBytes = gdrive.reduce((a, g) => a + (Number(g.size_bytes) || 0), 0);
         return {
             cached: s.poster_cache_count || 0,
             matchedPct: totalMedia > 0 ? (totalMatched / totalMedia) * 100 : null,
+            storageBytes,
             lastSync,
             sources: gdrive.length,
         };
@@ -405,13 +432,10 @@ const PosterAssetsSearchPage = () => {
                         sub: 'posters + artwork',
                     },
                     {
-                        label: 'MATCHED',
-                        value:
-                            assetStats.matchedPct != null
-                                ? `${assetStats.matchedPct.toFixed(1)}%`
-                                : '—',
-                        tone: 'text-success',
-                        sub: 'linked to library',
+                        label: 'LIBRARY SIZE',
+                        value: formatBytes(assetStats.storageBytes),
+                        tone: 'text-fg',
+                        sub: 'across synced GDrives',
                     },
                     {
                         label: 'LAST SYNC',
