@@ -16,7 +16,7 @@ const SegmentedControl = ({ options, value, onChange, size = 'md', className = '
     const segH = size === 'sm' ? 'h-7 px-3 text-xs' : 'h-9 px-3.5 text-[13px]';
     return (
         <div
-            className={`inline-flex items-center ${wrapH} p-1 gap-0.5 rounded-[10px] bg-surface border border-border ${className}`}
+            className={`inline-flex items-center ${wrapH} p-1 gap-0.5 rounded-[10px] bg-surface-inset border border-border ${className}`}
             role="tablist"
         >
             {options.map(opt => {
