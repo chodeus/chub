@@ -612,6 +612,23 @@ const PosterCleanarrPage = () => {
     const transcoder = byMedia.data?.data?.transcoder || null;
     const loading = byMedia.isLoading;
 
+    // On mount, read the server's cached scan — a cheap read that returns
+    // scan_required + empty bundles when nothing is cached (never the ~140k-file
+    // walk). So returning to the page shows the LAST scan's results immediately
+    // instead of forcing a re-scan; an explicit Run scan still re-warms it.
+    useEffect(() => {
+        byMedia.refresh();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    // Reveal the results view as soon as a cached scan is present (whether from
+    // the mount read above or after an explicit scan completes). Render-time
+    // state sync — React's sanctioned pattern; the guard flips once so it
+    // doesn't loop.
+    if (!hasScanned && (byMedia.data?.data?.bundles?.length || 0) > 0) {
+        setHasScanned(true);
+    }
+
     // Build all trees once per scan payload.
     const bundleTrees = useMemo(() => {
         const m = new Map();
