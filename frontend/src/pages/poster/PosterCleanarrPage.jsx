@@ -288,22 +288,66 @@ const VariantTile = ({ variant, selected, onToggleSelect, onPreview }) => {
                 }}
             />
             {!isActive && !isPlex && (
-                <label
-                    className="absolute top-1 left-1 rounded px-1 py-0.5 cursor-pointer"
-                    style={{ background: 'rgba(0,0,0,0.7)' }}
-                    onClick={e => e.stopPropagation()}
+                <button
+                    type="button"
+                    aria-label={selected ? 'Deselect variant' : 'Select variant'}
+                    onClick={e => {
+                        e.stopPropagation();
+                        onToggleSelect(variant);
+                    }}
+                    className={`absolute top-1.5 left-1.5 flex items-center justify-center w-[18px] h-[18px] rounded-[4px] border transition-colors ${
+                        selected ? 'bg-primary border-primary' : 'border-fg-subtle'
+                    }`}
+                    style={{ background: selected ? undefined : 'rgba(12,8,32,0.55)' }}
                 >
-                    <input
-                        type="checkbox"
-                        checked={selected}
-                        onChange={() => onToggleSelect(variant)}
-                        className="cursor-pointer"
-                    />
-                </label>
+                    {selected && (
+                        <span className="material-symbols-outlined text-white text-[13px] leading-none">
+                            check
+                        </span>
+                    )}
+                </button>
             )}
+            <span
+                className={`absolute bottom-0 left-0 right-0 px-1.5 py-1 font-mono text-[8.5px] font-semibold tracking-[0.3px] ${
+                    isActive ? 'text-success' : isPlex ? 'text-fg-subtle' : 'text-error'
+                }`}
+                style={{
+                    background: 'linear-gradient(to top, rgba(12,8,32,0.85), transparent)',
+                }}
+            >
+                {isActive ? 'active' : isPlex ? 'plex' : 'bloat'}
+            </span>
         </div>
     );
 };
+
+// Mode-bar checkbox styled to the mock: a 17px rounded box that fills with the
+// brand colour + a check glyph when on (replaces the native browser checkbox so
+// it matches the rest of the redesign).
+const ModeCheck = ({ label, checked, disabled, onChange, title }) => (
+    <button
+        type="button"
+        disabled={disabled}
+        onClick={() => onChange(!checked)}
+        title={title}
+        className={`flex items-center gap-2 text-[13px] text-fg ${
+            disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'
+        }`}
+    >
+        <span
+            className={`flex items-center justify-center w-[17px] h-[17px] rounded-[4px] border transition-colors ${
+                checked ? 'bg-primary border-primary' : 'bg-transparent border-[#3b3d72]'
+            }`}
+        >
+            {checked && (
+                <span className="material-symbols-outlined text-white text-[13px] leading-none">
+                    check
+                </span>
+            )}
+        </span>
+        {label}
+    </button>
+);
 
 // ---------------------------------------------------------------------------
 // Live cleanup log modal (polling)
@@ -1097,45 +1141,17 @@ const PosterCleanarrPage = () => {
                 <span className="text-[12.5px] text-fg-subtle" style={{ maxWidth: '420px' }}>
                     {MODE_META[mode]?.description}
                 </span>
-                <div className="flex items-center gap-4 text-[13px] text-fg-muted accent-primary">
-                    <label className="flex items-center gap-1 cursor-pointer">
-                        <input
-                            type="checkbox"
-                            checked={cleanBloat}
-                            onChange={e => setCleanBloat(e.target.checked)}
-                        />
-                        Bloat
-                    </label>
-                    <label className="flex items-center gap-1 cursor-pointer">
-                        <input
-                            type="checkbox"
-                            checked={cleanStale}
-                            onChange={e => setCleanStale(e.target.checked)}
-                        />
-                        Stale
-                    </label>
-                    <label className="flex items-center gap-1 cursor-pointer">
-                        <input
-                            type="checkbox"
-                            checked={cleanOrphan}
-                            onChange={e => setCleanOrphan(e.target.checked)}
-                        />
-                        Orphan
-                    </label>
-                    <label
-                        className={`flex items-center gap-1 ${
-                            cleanBloat ? 'cursor-pointer' : 'opacity-40 cursor-not-allowed'
-                        }`}
+                <div className="flex items-center gap-4">
+                    <ModeCheck label="Bloat" checked={cleanBloat} onChange={setCleanBloat} />
+                    <ModeCheck label="Stale" checked={cleanStale} onChange={setCleanStale} />
+                    <ModeCheck label="Orphan" checked={cleanOrphan} onChange={setCleanOrphan} />
+                    <ModeCheck
+                        label="Overlays only"
+                        checked={cleanOverlaysOnly}
+                        disabled={!cleanBloat}
+                        onChange={setCleanOverlaysOnly}
                         title="Limit the bloat pass to Kometa overlay images (EXIF-tagged), sparing user-uploaded customs"
-                    >
-                        <input
-                            type="checkbox"
-                            checked={cleanOverlaysOnly}
-                            disabled={!cleanBloat}
-                            onChange={e => setCleanOverlaysOnly(e.target.checked)}
-                        />
-                        Overlays only
-                    </label>
+                    />
                 </div>
                 <div className="ml-auto flex items-center gap-2">
                     {MODE_META[mode]?.scopeable && (
