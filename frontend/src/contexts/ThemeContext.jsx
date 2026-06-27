@@ -14,6 +14,51 @@ export const THEMES = {
 
 // Local storage key for theme preference
 const THEME_STORAGE_KEY = 'chub-theme-preference';
+const ACCENT_STORAGE_KEY = 'chub-accent-preference';
+
+// Accent themes — each resolves to a brand colour + the text/icon colour that
+// sits ON the brand (dark for the light accents so labels stay legible). These
+// override --primary / --primary-text app-wide; neutrals never change.
+// (Mirrors design_handoff "Accent themes".)
+export const ACCENTS = {
+    violet: { label: 'Violet', brand: '#8767f7', hover: '#a99eff', onBrand: '#ffffff' },
+    cyan: { label: 'Cyan', brand: '#53e8f0', hover: '#7af0f5', onBrand: '#110b28' },
+    azure: { label: 'Azure', brand: '#1992f3', hover: '#47a9f6', onBrand: '#ffffff' },
+    gold: { label: 'Gold', brand: '#ffc944', hover: '#ffd873', onBrand: '#110b28' },
+};
+const DEFAULT_ACCENT = 'violet';
+
+const getStoredAccent = () => {
+    if (typeof window === 'undefined') return DEFAULT_ACCENT;
+    try {
+        const a = localStorage.getItem(ACCENT_STORAGE_KEY);
+        return a && ACCENTS[a] ? a : DEFAULT_ACCENT;
+    } catch {
+        return DEFAULT_ACCENT;
+    }
+};
+
+const storeAccent = accent => {
+    if (typeof window === 'undefined') return;
+    try {
+        localStorage.setItem(ACCENT_STORAGE_KEY, accent);
+    } catch (error) {
+        console.warn('Failed to store accent preference in localStorage:', error);
+    }
+};
+
+// Set the brand CSS variables inline on <html> so they win over the theme
+// stylesheet (which defines the Violet defaults). The shared components read
+// var(--primary) / var(--on-color-text), so this recolours the whole app.
+const applyAccent = accent => {
+    if (typeof document === 'undefined') return;
+    const a = ACCENTS[accent] || ACCENTS[DEFAULT_ACCENT];
+    const s = document.documentElement.style;
+    s.setProperty('--primary', a.brand);
+    s.setProperty('--primary-hover', a.hover);
+    s.setProperty('--primary-text', a.onBrand);
+    s.setProperty('--on-color-text', a.onBrand);
+};
 
 // Create context
 const ThemeContext = createContext();
@@ -107,6 +152,18 @@ export const ThemeProvider = ({ children, defaultTheme = THEMES.SYSTEM }) => {
         const stored = getStoredTheme() || defaultTheme;
         return stored === THEMES.SYSTEM ? getSystemTheme() : stored;
     });
+    const [accent, setAccentState] = useState(() => getStoredAccent());
+
+    // Apply the brand accent to the document (external side-effect, no setState).
+    useEffect(() => {
+        applyAccent(accent);
+    }, [accent]);
+
+    const setAccent = useCallback(next => {
+        if (!ACCENTS[next]) return;
+        setAccentState(next);
+        storeAccent(next);
+    }, []);
 
     /**
      * Apply the resolved theme to the document after mount. This is a pure
@@ -215,6 +272,11 @@ export const ThemeProvider = ({ children, defaultTheme = THEMES.SYSTEM }) => {
         isDarkTheme,
         isLightTheme,
         isSystemTheme,
+
+        // Accent
+        accent,
+        setAccent,
+        accents: ACCENTS,
 
         // Actions
         setTheme,
