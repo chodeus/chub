@@ -496,7 +496,7 @@ const Cl2kMakerPage = () => {
     }, []);
 
     return (
-        <div className="cl2k-page p-4 md:p-6 max-w-6xl mx-auto pb-24">
+        <div className="cl2k-page p-4 md:p-6 max-w-[1700px] mx-auto pb-24">
             {/* Brand-styled range sliders (mock spec) — scoped to this page so
                 it stays develop-only and doesn't touch shared CSS. */}
             <style>{`
@@ -3221,9 +3221,9 @@ const AiPanel = ({
                             <button
                                 type="button"
                                 onClick={() => setModalOpen(true)}
-                                className="self-start inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs border border-border bg-surface-inset text-fg-muted hover:border-primary"
+                                className="self-start inline-flex items-center gap-1.5 h-[30px] px-[11px] rounded-[7px] text-xs font-semibold border border-border bg-surface-elevated text-fg-muted transition-colors hover:border-border-light"
                             >
-                                <span className="material-symbols-outlined text-sm">
+                                <span className="material-symbols-outlined text-[15px]">
                                     open_in_full
                                 </span>
                                 Open large editor
@@ -3280,9 +3280,9 @@ const AiPanel = ({
                             <button
                                 type="button"
                                 onClick={() => setModalOpen(false)}
-                                className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs border border-border bg-surface-inset text-fg-muted hover:border-primary"
+                                className="ml-auto inline-flex items-center gap-1.5 h-[30px] px-[11px] rounded-[7px] text-xs font-semibold border border-border bg-surface-elevated text-fg-muted transition-colors hover:border-border-light"
                             >
-                                <span className="material-symbols-outlined text-sm">close</span>
+                                <span className="material-symbols-outlined text-[15px]">close</span>
                                 Close
                             </button>
                         </div>
@@ -3457,9 +3457,13 @@ const BrushMask = ({ imageUrl, brushSize, onMaskChange, initialMask = null }) =>
                 />
             </div>
             <div>
-                <Button onClick={clear} variant="secondary" icon="ink_eraser" size="small">
+                <button
+                    type="button"
+                    onClick={clear}
+                    className="inline-flex items-center self-start h-[30px] px-[11px] rounded-[7px] bg-surface-inset border border-border text-fg-muted text-xs font-semibold transition-colors hover:border-border-light"
+                >
                     Clear mask
-                </Button>
+                </button>
             </div>
         </div>
     );
