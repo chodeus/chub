@@ -345,7 +345,7 @@ class FeatureErrorBoundaryBase extends Component {
                                     </p>
                                     <button
                                         onClick={this.handleReload}
-                                        className="touch-target bg-primary text-white px-2 py-1 border-none rounded-md cursor-pointer transition-colors inline-flex items-center justify-center text-sm"
+                                        className="touch-target bg-primary text-on-color px-2 py-1 border-none rounded-md cursor-pointer transition-colors inline-flex items-center justify-center text-sm"
                                         type="button"
                                     >
                                         Reload Application
