@@ -1639,7 +1639,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                 the occasional finished-poster / edit workflows. Sources are picked
                 per-picker inside each page. */}
             <div className="mt-6 flex flex-wrap items-center gap-3.5">
-                <div className="flex gap-1 p-1 rounded-lg bg-surface-inset border border-border">
+                <div className="flex gap-1 p-1 rounded-lg bg-surface-inset border border-border max-w-full overflow-x-auto">
                     {BUILD_TABS.map(t => {
                         const on = tab === t.key;
                         return (
@@ -1647,7 +1647,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                                 key={t.key}
                                 type="button"
                                 onClick={() => setTab(t.key)}
-                                className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-md text-[13px] transition-colors ${
+                                className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 sm:px-4 py-2 rounded-md text-[13px] transition-colors ${
                                     on
                                         ? 'bg-primary text-white font-semibold'
                                         : 'text-fg-muted hover:text-fg'
