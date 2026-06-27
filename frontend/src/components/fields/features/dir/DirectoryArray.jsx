@@ -20,8 +20,8 @@
 import React, { useCallback, useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { InputBase, SelectBase } from '../../primitives';
-import { AddButton, RemoveButton, EmptyState, FieldButton } from '../shared';
+import { SelectBase } from '../../primitives';
+import { AddButton, EmptyState, FieldButton } from '../shared';
 import { useTouchDevice } from '../../../../utils/touchDetection';
 import { Modal } from '../../../ui';
 import { FieldRegistry } from '../../FieldRegistry';
@@ -51,7 +51,6 @@ const SortableDirectoryItem = React.memo(
         placeholder,
         label,
         baseId,
-        removeButtonText,
         // Mode selection props
         mode,
         modeOptions,
@@ -76,7 +75,9 @@ const SortableDirectoryItem = React.memo(
             <div
                 className={`flex ${modeOptions ? 'flex-col gap-2 md:flex-row md:gap-3' : ''} flex-1 min-w-0`}
             >
-                <InputBase
+                {/* Flat mono path (mock style) — borderless input inside the row's
+                    inset container; the row border highlights on focus-within. */}
+                <input
                     id={itemId}
                     type="text"
                     name={`${baseId}-${index}`}
@@ -84,9 +85,11 @@ const SortableDirectoryItem = React.memo(
                     placeholder={placeholder}
                     disabled={disabled}
                     onChange={e => onPathChange(index, e.target.value)}
-                    invalid={invalid}
                     aria-label={`${label} ${index + 1}`}
-                    className={modeOptions ? 'md:min-w-30' : ''}
+                    aria-invalid={invalid || undefined}
+                    className={`flex-1 min-w-0 bg-transparent border-0 outline-none p-0 font-mono text-[12.5px] text-fg-muted placeholder:text-fg-dim disabled:opacity-60 ${
+                        modeOptions ? 'md:min-w-30' : ''
+                    }`}
                 />
 
                 {/* Mode selection - only show if modeOptions provided */}
@@ -108,14 +111,15 @@ const SortableDirectoryItem = React.memo(
         );
 
         const browseButton = (
-            <FieldButton
+            <button
+                type="button"
                 onClick={() => onBrowseClick(index)}
                 disabled={disabled}
-                ariaLabel={`Browse for ${label} ${index + 1}`}
-                className="flex-shrink-0 self-start"
+                aria-label={`Browse for ${label} ${index + 1}`}
+                className="shrink-0 flex items-center justify-center w-7 h-7 rounded-[7px] border border-border bg-transparent text-fg-subtle transition-colors hover:text-fg hover:border-border-light disabled:opacity-50 disabled:cursor-not-allowed"
             >
-                <span className="material-symbols-outlined text-base">folder_open</span>
-            </FieldButton>
+                <span className="material-symbols-outlined text-[15px]">folder_open</span>
+            </button>
         );
 
         const moveUpButton = enableReordering && isTouch && (
@@ -141,21 +145,20 @@ const SortableDirectoryItem = React.memo(
         );
 
         const removeButton = (
-            <RemoveButton
+            <button
+                type="button"
                 onClick={() => onRemove(index)}
                 disabled={!canRemoveDirectory}
-                itemName={`${label} ${index + 1}`}
-                itemType="directory"
-                text={removeButtonText}
-                variant="default"
-                size="medium"
+                aria-label={`Remove ${label} ${index + 1}`}
                 title={
                     isLastItem
                         ? 'Cannot remove the last directory entry'
                         : `Remove directory ${index + 1}`
                 }
-                className="flex-shrink-0 self-start"
-            />
+                className="shrink-0 flex items-center justify-center w-7 h-7 rounded-[7px] border border-border bg-transparent text-fg-subtle transition-colors hover:text-error hover:border-error/50 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+                <span className="material-symbols-outlined text-[15px]">close</span>
+            </button>
         );
 
         // Touch devices: stack input + browse on the top row,
@@ -164,7 +167,11 @@ const SortableDirectoryItem = React.memo(
         // it between four square buttons.
         if (isTouch) {
             return (
-                <div className="flex flex-col gap-2" ref={setNodeRef} style={style}>
+                <div
+                    className="flex flex-col gap-2 px-[13px] py-2.5 rounded-[9px] bg-surface-inset border border-border focus-within:border-primary transition-colors"
+                    ref={setNodeRef}
+                    style={style}
+                >
                     <div className="flex gap-2 items-stretch">
                         {inputBlock}
                         {browseButton}
@@ -179,15 +186,19 @@ const SortableDirectoryItem = React.memo(
         }
 
         return (
-            <div className="flex gap-2 items-start" ref={setNodeRef} style={style}>
-                {/* Non-touch devices: Drag Handle (left side) */}
+            <div
+                className="flex items-center gap-3 px-[13px] py-2.5 rounded-[9px] bg-surface-inset border border-border transition-colors focus-within:border-primary"
+                ref={setNodeRef}
+                style={style}
+            >
+                {/* Drag handle (left) — muted dots like the mock */}
                 {enableReordering && (
                     <div
-                        className="flex items-center justify-center w-11 h-11 text-brand-primary cursor-grab hover:text-fg transition-colors touch-target flex-shrink-0"
+                        className="flex items-center justify-center shrink-0 text-fg-faint cursor-grab hover:text-fg-muted transition-colors"
                         {...attributes}
                         {...listeners}
                     >
-                        <span className="material-symbols-outlined text-2xl">drag_indicator</span>
+                        <span className="material-symbols-outlined text-xl">drag_indicator</span>
                     </div>
                 )}
 
@@ -232,7 +243,6 @@ const DirectoryItem = React.memo(
         placeholder,
         label,
         baseId,
-        removeButtonText,
         // Mode selection props
         mode,
         modeOptions,
@@ -244,7 +254,9 @@ const DirectoryItem = React.memo(
             <div
                 className={`flex ${modeOptions ? 'flex-col gap-2 md:flex-row md:gap-3' : ''} flex-1 min-w-0`}
             >
-                <InputBase
+                {/* Flat mono path (mock style) — borderless input inside the row's
+                    inset container; the row border highlights on focus-within. */}
+                <input
                     id={itemId}
                     type="text"
                     name={`${baseId}-${index}`}
@@ -252,9 +264,11 @@ const DirectoryItem = React.memo(
                     placeholder={placeholder}
                     disabled={disabled}
                     onChange={e => onPathChange(index, e.target.value)}
-                    invalid={invalid}
                     aria-label={`${label} ${index + 1}`}
-                    className={modeOptions ? 'md:min-w-30' : ''}
+                    aria-invalid={invalid || undefined}
+                    className={`flex-1 min-w-0 bg-transparent border-0 outline-none p-0 font-mono text-[12.5px] text-fg-muted placeholder:text-fg-dim disabled:opacity-60 ${
+                        modeOptions ? 'md:min-w-30' : ''
+                    }`}
                 />
 
                 {/* Mode selection - only show if modeOptions provided */}
@@ -276,37 +290,37 @@ const DirectoryItem = React.memo(
         );
 
         const browseButton = (
-            <FieldButton
+            <button
+                type="button"
                 onClick={() => onBrowseClick(index)}
                 disabled={disabled}
-                ariaLabel={`Browse for ${label} ${index + 1}`}
-                className="flex-shrink-0 self-start"
+                aria-label={`Browse for ${label} ${index + 1}`}
+                className="shrink-0 flex items-center justify-center w-7 h-7 rounded-[7px] border border-border bg-transparent text-fg-subtle transition-colors hover:text-fg hover:border-border-light disabled:opacity-50 disabled:cursor-not-allowed"
             >
-                <span className="material-symbols-outlined text-base">folder_open</span>
-            </FieldButton>
+                <span className="material-symbols-outlined text-[15px]">folder_open</span>
+            </button>
         );
 
         const removeButton = (
-            <RemoveButton
+            <button
+                type="button"
                 onClick={() => onRemove(index)}
                 disabled={!canRemoveDirectory}
-                itemName={`${label} ${index + 1}`}
-                itemType="directory"
-                text={removeButtonText}
-                variant="default"
-                size="medium"
+                aria-label={`Remove ${label} ${index + 1}`}
                 title={
                     isLastItem
                         ? 'Cannot remove the last directory entry'
                         : `Remove directory ${index + 1}`
                 }
-                className="flex-shrink-0 self-start"
-            />
+                className="shrink-0 flex items-center justify-center w-7 h-7 rounded-[7px] border border-border bg-transparent text-fg-subtle transition-colors hover:text-error hover:border-error/50 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+                <span className="material-symbols-outlined text-[15px]">close</span>
+            </button>
         );
 
         if (isTouch) {
             return (
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-2 px-[13px] py-2.5 rounded-[9px] bg-surface-inset border border-border focus-within:border-primary transition-colors">
                     <div className="flex gap-2 items-stretch">
                         {inputBlock}
                         {browseButton}
@@ -317,7 +331,7 @@ const DirectoryItem = React.memo(
         }
 
         return (
-            <div className="flex gap-2 items-start">
+            <div className="flex items-center gap-3 px-[13px] py-2.5 rounded-[9px] bg-surface-inset border border-border transition-colors focus-within:border-primary">
                 {inputBlock}
                 {browseButton}
                 {removeButton}
