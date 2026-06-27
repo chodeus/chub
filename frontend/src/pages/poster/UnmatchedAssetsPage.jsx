@@ -1174,48 +1174,56 @@ const ArtworkView = ({ data, status, isLoading, onRefresh, onPick }) => {
                 })}
             </div>
 
-            <div className="flex items-center justify-between gap-3 flex-wrap">
-                <div className="flex items-center gap-2 flex-wrap">
-                    <div className="flex flex-wrap gap-1">
-                        {mediaTabs.map(t => (
-                            <button
-                                key={t.key}
-                                onClick={() => {
-                                    setMediaTypeKey(t.key);
-                                    setPage(0);
-                                }}
-                                className={`px-3 py-1 text-sm rounded-lg border ${
-                                    mediaTypeKey === t.key
-                                        ? 'border-primary bg-surface-alt text-fg'
-                                        : 'border-border text-fg-muted hover:text-fg'
-                                }`}
-                            >
-                                {t.label}
-                            </button>
-                        ))}
-                    </div>
-                    {typeFilter && (
+            <div className="flex items-center gap-3 flex-wrap">
+                <div className="inline-flex items-center h-10 p-1 gap-0.5 bg-surface border border-border rounded-lg">
+                    {mediaTabs.map(t => (
                         <button
-                            type="button"
-                            onClick={() => setTypeFilter(null)}
-                            className="text-xs text-fg-muted hover:text-fg underline"
+                            key={t.key}
+                            onClick={() => {
+                                setMediaTypeKey(t.key);
+                                setPage(0);
+                            }}
+                            className={`h-8 px-3 rounded-[7px] text-[12.5px] font-semibold transition-colors ${
+                                mediaTypeKey === t.key
+                                    ? 'bg-primary text-on-color'
+                                    : 'text-fg-muted hover:text-fg'
+                            }`}
                         >
-                            Clear {ARTWORK_TYPES.find(a => a.key === typeFilter)?.label} filter
+                            {t.label}
                         </button>
-                    )}
+                    ))}
                 </div>
-                <input
-                    type="text"
-                    value={query}
-                    onChange={e => {
-                        setQuery(e.target.value);
-                        setPage(0);
-                    }}
-                    placeholder="Search title…"
-                    aria-label="Search titles"
-                    className="px-3 py-2 bg-input border border-border rounded-md text-fg text-sm"
-                    style={{ minWidth: '14rem' }}
-                />
+                <span className="font-mono text-[11px] px-2 py-0.5 rounded-full bg-warning/15 text-warning">
+                    {filtered.length}
+                </span>
+                {typeFilter && (
+                    <button
+                        type="button"
+                        onClick={() => setTypeFilter(null)}
+                        className="text-xs text-fg-muted hover:text-fg underline"
+                    >
+                        Clear {ARTWORK_TYPES.find(a => a.key === typeFilter)?.label} filter
+                    </button>
+                )}
+                <div className="flex-1 min-w-[14rem] flex items-center gap-2 h-10 px-3 rounded-lg bg-surface border border-border focus-within:border-primary transition-colors">
+                    <span
+                        className="material-symbols-outlined text-fg-subtle text-[16px] shrink-0"
+                        aria-hidden="true"
+                    >
+                        search
+                    </span>
+                    <input
+                        type="text"
+                        value={query}
+                        onChange={e => {
+                            setQuery(e.target.value);
+                            setPage(0);
+                        }}
+                        placeholder="Search title…"
+                        aria-label="Search titles"
+                        className="flex-1 min-w-0 bg-transparent border-0 outline-none text-sm text-fg placeholder:text-fg-dim"
+                    />
+                </div>
             </div>
 
             {filtered.length === 0 ? (
@@ -1228,184 +1236,206 @@ const ArtworkView = ({ data, status, isLoading, onRefresh, onPick }) => {
                 </p>
             ) : (
                 <>
-                    <div className="overflow-x-auto rounded-lg border border-border">
-                        <table className="w-full text-sm">
-                            <thead>
-                                <tr className="bg-surface-alt text-fg-muted text-left">
-                                    <SortHeader
-                                        label="Title"
-                                        sortKey="title"
-                                        sort={sort}
-                                        onSort={onSort}
-                                    />
-                                    <SortHeader
-                                        label="Type"
-                                        sortKey="type"
-                                        sort={sort}
-                                        onSort={onSort}
-                                    />
-                                    <SortHeader
-                                        label="Year"
-                                        sortKey="year"
-                                        sort={sort}
-                                        onSort={onSort}
-                                    />
-                                    <SortHeader
-                                        label={missingColLabel}
-                                        sortKey="missing"
-                                        sort={sort}
-                                        onSort={onSort}
-                                    />
-                                    {isReviewTab && <th className="px-3 py-2 font-medium">Why</th>}
-                                    <SortHeader
-                                        label="Instance"
-                                        sortKey="instance"
-                                        sort={sort}
-                                        onSort={onSort}
-                                    />
-                                    <th className="px-3 py-2 font-medium">TMDB</th>
-                                    <th className="px-3 py-2 font-medium">IMDB</th>
-                                    <th className="px-3 py-2 font-medium">TVDB</th>
-                                    <th className="px-3 py-2 font-medium text-right">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-border">
-                                {visible.map((item, idx) => (
-                                    <tr
-                                        key={`${item.id ?? idx}`}
-                                        className="bg-surface hover:bg-surface-alt align-top"
-                                    >
-                                        <td className="px-3 py-2 text-fg">
-                                            <Link
-                                                to={`/poster/search/assets?q=${encodeURIComponent(item.title || '')}&image_type=${typeFilter || 'artwork'}`}
-                                                className="hover:text-accent hover:underline"
-                                                title="Search synced assets for this title"
-                                            >
-                                                {item.title}
-                                            </Link>
-                                            {item.season_number != null && (
-                                                <span className="ml-2 text-xs text-fg-subtle">
-                                                    {item.season_number === 0
-                                                        ? 'Specials'
-                                                        : `S${String(item.season_number).padStart(2, '0')}`}
-                                                </span>
-                                            )}
-                                        </td>
-                                        <td className="px-3 py-2 text-fg-muted">
-                                            {item.asset_type === 'show'
-                                                ? item.season_number != null
-                                                    ? 'Season'
-                                                    : 'Series'
-                                                : TYPE_LABELS[item.asset_type] ||
-                                                  item.asset_type ||
-                                                  '—'}
-                                        </td>
-                                        <td className="px-3 py-2 text-fg-muted">
-                                            {item.year || '—'}
-                                        </td>
-                                        <td className="px-3 py-2">
-                                            <MissingChips
-                                                typeKeys={item[cfg.typesKey]}
-                                                reasons={item.reasons}
-                                            />
-                                        </td>
+                    <section
+                        className="bg-surface border border-border rounded-xl overflow-hidden"
+                        style={{ boxShadow: '0 2px 16px -8px rgba(0,0,0,.6)' }}
+                    >
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                                <thead>
+                                    <tr className="border-b border-border">
+                                        <SortHeader
+                                            label="Title"
+                                            sortKey="title"
+                                            sort={sort}
+                                            onSort={onSort}
+                                            mono
+                                        />
+                                        <SortHeader
+                                            label="Type"
+                                            sortKey="type"
+                                            sort={sort}
+                                            onSort={onSort}
+                                            mono
+                                        />
+                                        <SortHeader
+                                            label="Year"
+                                            sortKey="year"
+                                            sort={sort}
+                                            onSort={onSort}
+                                            mono
+                                        />
+                                        <SortHeader
+                                            label={missingColLabel}
+                                            sortKey="missing"
+                                            sort={sort}
+                                            onSort={onSort}
+                                            mono
+                                        />
                                         {isReviewTab && (
-                                            <td className="px-3 py-2 text-fg-muted max-w-xs">
-                                                {(() => {
-                                                    const reasons = item.reasons || {};
-                                                    const uniq = [
-                                                        ...new Set(
-                                                            (item.failed || [])
-                                                                .map(t => reasons[t])
-                                                                .filter(Boolean)
-                                                        ),
-                                                    ];
-                                                    return uniq.length ? (
-                                                        <span title={uniq.join(' • ')}>
-                                                            {uniq.join('; ')}
-                                                        </span>
-                                                    ) : (
-                                                        <span className="text-fg-subtle">
-                                                            No detail recorded
-                                                        </span>
-                                                    );
-                                                })()}
-                                            </td>
+                                            <th className="px-4 py-2.5 text-left font-mono text-[10px] uppercase tracking-wider text-fg-dim">
+                                                Why
+                                            </th>
                                         )}
-                                        <td className="px-3 py-2 text-fg-muted">
-                                            {item.instance_name || '—'}
-                                        </td>
-                                        <td className="px-3 py-2 text-fg-subtle font-mono text-xs">
-                                            {formatId(item.tmdb_id) || '—'}
-                                        </td>
-                                        <td className="px-3 py-2 text-fg-subtle font-mono text-xs">
-                                            {formatId(item.imdb_id) || '—'}
-                                        </td>
-                                        <td className="px-3 py-2 text-fg-subtle font-mono text-xs">
-                                            {formatId(item.tvdb_id) || '—'}
-                                        </td>
-                                        <td className="px-3 py-2 text-right whitespace-nowrap">
-                                            {!isIgnoredTab && (
-                                                <IconButton
-                                                    icon="wallpaper"
-                                                    size="small"
-                                                    variant="ghost"
-                                                    aria-label="Choose artwork"
-                                                    title={
-                                                        isLockedTab
-                                                            ? 'Re-pick — choose a different artwork file'
-                                                            : 'Choose an artwork file to apply'
-                                                    }
-                                                    onClick={() =>
-                                                        onPick?.(item, item[cfg.typesKey] || [])
-                                                    }
-                                                />
-                                            )}
-                                            <IconButton
-                                                icon="content_copy"
-                                                size="small"
-                                                variant="ghost"
-                                                aria-label="Copy request"
-                                                title="Copy a request for this artwork"
-                                                onClick={() => copyRequest(item)}
-                                            />
-                                            {isIgnoredTab ? (
-                                                <IconButton
-                                                    icon="undo"
-                                                    size="small"
-                                                    variant="ghost"
-                                                    disabled={busyKey === item.id}
-                                                    aria-label="Restore"
-                                                    title="Restore — track this artwork again"
-                                                    onClick={() => setIgnored(item, false)}
-                                                />
-                                            ) : isLockedTab ? (
-                                                <IconButton
-                                                    icon="lock_open"
-                                                    size="small"
-                                                    variant="ghost"
-                                                    disabled={busyKey === item.id}
-                                                    aria-label="Unlock"
-                                                    title="Unlock — let the matcher re-resolve this artwork on the next run"
-                                                    onClick={() => unlockRow(item)}
-                                                />
-                                            ) : (
-                                                <IconButton
-                                                    icon="block"
-                                                    size="small"
-                                                    variant="ghost"
-                                                    disabled={busyKey === item.id}
-                                                    aria-label="Not needed"
-                                                    title="Not needed — stop tracking the missing artwork for this item"
-                                                    onClick={() => setIgnored(item, true)}
-                                                />
-                                            )}
-                                        </td>
+                                        <SortHeader
+                                            label="Instance"
+                                            sortKey="instance"
+                                            sort={sort}
+                                            onSort={onSort}
+                                            mono
+                                        />
+                                        <th className="px-4 py-2.5 text-left font-mono text-[10px] uppercase tracking-wider text-fg-dim">
+                                            TMDB
+                                        </th>
+                                        <th className="px-4 py-2.5 text-left font-mono text-[10px] uppercase tracking-wider text-fg-dim">
+                                            IMDB
+                                        </th>
+                                        <th className="px-4 py-2.5 text-left font-mono text-[10px] uppercase tracking-wider text-fg-dim">
+                                            TVDB
+                                        </th>
+                                        <th className="px-4 py-2.5 text-right font-mono text-[10px] uppercase tracking-wider text-fg-dim">
+                                            Actions
+                                        </th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
+                                </thead>
+                                <tbody>
+                                    {visible.map((item, idx) => (
+                                        <tr
+                                            key={`${item.id ?? idx}`}
+                                            className="border-b border-border-light last:border-0 hover:bg-row-hover transition-colors align-top"
+                                        >
+                                            <td className="px-4 py-2.5 text-fg">
+                                                <Link
+                                                    to={`/poster/search/assets?q=${encodeURIComponent(item.title || '')}&image_type=${typeFilter || 'artwork'}`}
+                                                    className="hover:text-accent hover:underline"
+                                                    title="Search synced assets for this title"
+                                                >
+                                                    {item.title}
+                                                </Link>
+                                                {item.season_number != null && (
+                                                    <span className="ml-2 text-xs text-fg-subtle">
+                                                        {item.season_number === 0
+                                                            ? 'Specials'
+                                                            : `S${String(item.season_number).padStart(2, '0')}`}
+                                                    </span>
+                                                )}
+                                            </td>
+                                            <td className="px-4 py-2.5 text-fg-muted">
+                                                {item.asset_type === 'show'
+                                                    ? item.season_number != null
+                                                        ? 'Season'
+                                                        : 'Series'
+                                                    : TYPE_LABELS[item.asset_type] ||
+                                                      item.asset_type ||
+                                                      '—'}
+                                            </td>
+                                            <td className="px-4 py-2.5 text-fg-muted">
+                                                {item.year || '—'}
+                                            </td>
+                                            <td className="px-4 py-2.5">
+                                                <MissingChips
+                                                    typeKeys={item[cfg.typesKey]}
+                                                    reasons={item.reasons}
+                                                />
+                                            </td>
+                                            {isReviewTab && (
+                                                <td className="px-4 py-2.5 text-fg-muted max-w-xs">
+                                                    {(() => {
+                                                        const reasons = item.reasons || {};
+                                                        const uniq = [
+                                                            ...new Set(
+                                                                (item.failed || [])
+                                                                    .map(t => reasons[t])
+                                                                    .filter(Boolean)
+                                                            ),
+                                                        ];
+                                                        return uniq.length ? (
+                                                            <span title={uniq.join(' • ')}>
+                                                                {uniq.join('; ')}
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-fg-subtle">
+                                                                No detail recorded
+                                                            </span>
+                                                        );
+                                                    })()}
+                                                </td>
+                                            )}
+                                            <td className="px-4 py-2.5 text-fg-muted">
+                                                {item.instance_name || '—'}
+                                            </td>
+                                            <td className="px-4 py-2.5 text-fg-subtle font-mono text-xs">
+                                                {formatId(item.tmdb_id) || '—'}
+                                            </td>
+                                            <td className="px-4 py-2.5 text-fg-subtle font-mono text-xs">
+                                                {formatId(item.imdb_id) || '—'}
+                                            </td>
+                                            <td className="px-4 py-2.5 text-fg-subtle font-mono text-xs">
+                                                {formatId(item.tvdb_id) || '—'}
+                                            </td>
+                                            <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                                                {!isIgnoredTab && (
+                                                    <IconButton
+                                                        icon="wallpaper"
+                                                        size="small"
+                                                        variant="ghost"
+                                                        aria-label="Choose artwork"
+                                                        title={
+                                                            isLockedTab
+                                                                ? 'Re-pick — choose a different artwork file'
+                                                                : 'Choose an artwork file to apply'
+                                                        }
+                                                        onClick={() =>
+                                                            onPick?.(item, item[cfg.typesKey] || [])
+                                                        }
+                                                    />
+                                                )}
+                                                <IconButton
+                                                    icon="content_copy"
+                                                    size="small"
+                                                    variant="ghost"
+                                                    aria-label="Copy request"
+                                                    title="Copy a request for this artwork"
+                                                    onClick={() => copyRequest(item)}
+                                                />
+                                                {isIgnoredTab ? (
+                                                    <IconButton
+                                                        icon="undo"
+                                                        size="small"
+                                                        variant="ghost"
+                                                        disabled={busyKey === item.id}
+                                                        aria-label="Restore"
+                                                        title="Restore — track this artwork again"
+                                                        onClick={() => setIgnored(item, false)}
+                                                    />
+                                                ) : isLockedTab ? (
+                                                    <IconButton
+                                                        icon="lock_open"
+                                                        size="small"
+                                                        variant="ghost"
+                                                        disabled={busyKey === item.id}
+                                                        aria-label="Unlock"
+                                                        title="Unlock — let the matcher re-resolve this artwork on the next run"
+                                                        onClick={() => unlockRow(item)}
+                                                    />
+                                                ) : (
+                                                    <IconButton
+                                                        icon="block"
+                                                        size="small"
+                                                        variant="ghost"
+                                                        disabled={busyKey === item.id}
+                                                        aria-label="Not needed"
+                                                        title="Not needed — stop tracking the missing artwork for this item"
+                                                        onClick={() => setIgnored(item, true)}
+                                                    />
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
 
                     {pageCount > 1 && (
                         <div className="flex items-center justify-center gap-3 text-sm text-fg-muted">

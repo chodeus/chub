@@ -180,7 +180,7 @@ export const ArrayObjectField = ({
                                 e.stopPropagation();
                                 handleRemove(index);
                             }}
-                            ariaLabel={`Remove ${displayTemplate.itemName} ${index + 1}`}
+                            itemName={`${displayTemplate.itemName} ${index + 1}`}
                             disabled={disabled}
                         />
                     </div>
@@ -294,6 +294,128 @@ export const ArrayObjectField = ({
             </div>
         );
     };
+
+    // ── Always-expanded card mode (opt-in via field.alwaysExpanded) ──────────
+    // Each item is an open card whose fields edit the item in place — no
+    // draft/Save round-trip. Used by the per-instance / mapping module configs
+    // whose mocks show every field at once.
+    const handleItemFieldChange = useCallback(
+        (index, fieldKey, fieldValue) => {
+            onChange(value.map((it, i) => (i === index ? { ...it, [fieldKey]: fieldValue } : it)));
+        },
+        [value, onChange]
+    );
+
+    const handleAddExpanded = useCallback(() => {
+        onChange([...value, buildDefaultItem()]);
+    }, [value, onChange, buildDefaultItem]);
+
+    const renderItemFields = (item, index) => {
+        const apiData = { instances: instancesData };
+        return field.fields
+            .filter(subField => shouldShowField(subField, item, apiData))
+            .map(subField => {
+                const FieldComponent = getFieldComponent(subField.type);
+                const additionalProps = {};
+                if (subField.type === 'presets') {
+                    additionalProps.moduleConfig = { [field.key]: value };
+                }
+                let enhancedField = subField;
+                if (subField.options_source === 'api_instances') {
+                    enhancedField = {
+                        ...subField,
+                        options: generateInstanceOptions(
+                            apiData?.instances,
+                            subField.options_filter,
+                            false
+                        ),
+                        placeholder: '— Select instance... —',
+                    };
+                }
+                const typeField = subField.typeField || 'instance';
+                const instanceType = getInstanceType(item[typeField], apiData.instances);
+                enhancedField = resolveTypeAwareField(enhancedField, instanceType);
+                return (
+                    <div key={subField.key}>
+                        <FieldComponent
+                            field={enhancedField}
+                            value={
+                                item[subField.key] ??
+                                subField.defaultValue ??
+                                subField.default ??
+                                ''
+                            }
+                            onChange={val => handleItemFieldChange(index, subField.key, val)}
+                            disabled={disabled}
+                            {...additionalProps}
+                        />
+                    </div>
+                );
+            });
+    };
+
+    const renderExpandedCard = (item, index) => {
+        const { primary, badge } = displayTemplate.display(item);
+        return (
+            <div key={index} className="bg-surface border border-border rounded-xl overflow-hidden">
+                <div className="flex items-center gap-3 px-4 py-3 border-b border-border bg-surface-inset">
+                    <div className="min-w-0 flex-1">
+                        <div className="font-semibold text-sm text-fg truncate">{primary}</div>
+                    </div>
+                    {badge && (
+                        <span className="font-mono text-[10px] px-2 py-0.5 rounded-full bg-surface text-fg-muted border border-border whitespace-nowrap">
+                            {badge}
+                        </span>
+                    )}
+                    <RemoveButton
+                        onClick={() => handleRemove(index)}
+                        itemName={`${displayTemplate.itemName} ${index + 1}`}
+                        disabled={disabled}
+                    />
+                </div>
+                <div className="p-4 flex flex-col gap-4">{renderItemFields(item, index)}</div>
+            </div>
+        );
+    };
+
+    if (field.alwaysExpanded) {
+        return (
+            <FieldWrapper invalid={highlightInvalid} variant="standard">
+                <div className="flex items-center justify-between gap-3">
+                    <FieldLabel label={field.label} required={field.required} />
+                    <AddButton
+                        onClick={handleAddExpanded}
+                        disabled={disabled}
+                        itemType={displayTemplate.itemName}
+                        text={`Add ${displayTemplate.itemName}`}
+                    />
+                </div>
+
+                <div className="flex flex-col gap-3 mt-1" id={inputId}>
+                    {field.bulkPreset && (
+                        <BulkPresetPicker
+                            field={field}
+                            value={value}
+                            onChange={onChange}
+                            disabled={disabled}
+                        />
+                    )}
+                    {value.length > 0 ? (
+                        value.map((item, index) => renderExpandedCard(item, index))
+                    ) : (
+                        <div className="p-8 text-center border border-dashed border-border rounded-lg bg-surface-alt">
+                            <div className="text-sm text-fg-muted">
+                                No {displayTemplate.itemName.toLowerCase()}s configured
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                <FieldDescription id={`${inputId}-description`} description={field.description} />
+                <FieldError id={`${inputId}-error`} message={errorMessage} />
+            </FieldWrapper>
+        );
+    }
 
     return (
         <FieldWrapper invalid={highlightInvalid} variant="standard">
