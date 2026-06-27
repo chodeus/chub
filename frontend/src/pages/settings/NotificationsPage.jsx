@@ -10,11 +10,17 @@ import { NOTIFICATIONS_SCHEMA } from '../../utils/constants/notifications_schema
 import { useToast } from '../../contexts/ToastContext';
 import { humanize } from '../../utils/tools';
 import { moduleOrder } from '../../utils/constants/constants';
+import { CONFIG_ONLY_MODULE_KEYS } from '../../utils/constants/settings_schema';
+import { withExtensionConfigModuleKeys } from '../../extensions/index.js';
 
-// Every notifiable channel (matches the backend ConfigNotifications model):
-// all modules in display order plus the global "main" error channel, minus the
-// non-notifiable "general" section.
-const NOTIFY_MODULES = moduleOrder.filter(m => m !== 'general');
+// Every notifiable channel (matches the backend ConfigNotifications model, which
+// is `extra="allow"` so extension channels persist): all modules in display
+// order — extension modules spliced in at their anchors — plus the global "main"
+// error channel, minus the non-notifiable "general" section and config-only
+// modules (runnable:false, e.g. CL2K Maker) which never run to notify.
+const NOTIFY_MODULES = withExtensionConfigModuleKeys(moduleOrder).filter(
+    m => m !== 'general' && !CONFIG_ONLY_MODULE_KEYS.has(m)
+);
 
 /**
  * Notifications Management page
