@@ -1035,9 +1035,11 @@ const CORE_SETTINGS_SCHEMA = [
                     {
                         key: 'labels',
                         label: 'Labels',
-                        type: 'text',
+                        type: 'array',
                         required: true,
-                        description: 'Labels to assign in this mapping.',
+                        placeholder: 'Add a label…',
+                        description:
+                            'Plex labels to apply for this mapping (the *arr tags become these labels).',
                     },
                     {
                         key: 'plex_instances',
@@ -1047,6 +1049,14 @@ const CORE_SETTINGS_SCHEMA = [
                         instance_types: ['plex'],
                         add_posters_option: false,
                         description: 'List of Plex instances to apply the labels to.',
+                    },
+                    {
+                        key: 'enabled',
+                        label: 'Enabled',
+                        type: 'check_box',
+                        defaultValue: true,
+                        description:
+                            'Uncheck to pause this mapping without deleting it — disabled mappings are skipped on every run.',
                     },
                 ],
             },
