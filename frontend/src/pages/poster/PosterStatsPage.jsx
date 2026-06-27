@@ -341,18 +341,18 @@ const PosterStatsPage = () => {
     }, [toast, refreshLowRes]);
 
     const stats = useMemo(() => statsData?.data || {}, [statsData]);
-    const matchedStats = useMemo(
-        () =>
-            matchedDetailData?.data?.matched_stats ||
-            matchedDetailData?.data ||
-            stats.matched_stats ||
-            [],
-        [matchedDetailData, stats]
-    );
-    const gdriveStats = useMemo(
-        () => gdriveDetailData?.data?.gdrive_stats || stats.gdrive_stats || [],
-        [gdriveDetailData, stats]
-    );
+    // Always land on an ARRAY: the detail endpoints can return a bare object
+    // ({} or {summary}) with no matched_stats/gdrive_stats key, and spreading
+    // / reducing that downstream threw "x is not iterable" (the page crash).
+    const matchedStats = useMemo(() => {
+        const d = matchedDetailData?.data;
+        const candidate = d?.matched_stats ?? d ?? stats.matched_stats;
+        return Array.isArray(candidate) ? candidate : [];
+    }, [matchedDetailData, stats]);
+    const gdriveStats = useMemo(() => {
+        const candidate = gdriveDetailData?.data?.gdrive_stats ?? stats.gdrive_stats;
+        return Array.isArray(candidate) ? candidate : [];
+    }, [gdriveDetailData, stats]);
     const totalSyncedBytes = useMemo(
         () => gdriveStats.reduce((sum, s) => sum + (s.size_bytes || 0), 0),
         [gdriveStats]
