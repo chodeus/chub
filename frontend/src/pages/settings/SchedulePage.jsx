@@ -1,5 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { moduleOrder } from '../../utils/constants/constants.js';
+import { SETTINGS_SCHEMA } from '../../utils/constants/settings_schema.js';
+import { withExtensionConfigModuleKeys } from '../../extensions/index.js';
 import { humanize } from '../../utils/tools.js';
 import { useModuleExecution } from '../../hooks/useModuleExecution.js';
 import { useApiData } from '../../hooks/useApiData';
@@ -75,16 +77,17 @@ export const SchedulePage = () => {
         () => scheduleData?.data?.schedule_blocks || {},
         [scheduleData?.data?.schedule_blocks]
     );
-    const availableModules = useMemo(
-        () =>
-            moduleOrder
-                .filter(k => k !== 'main' && k !== 'general')
-                .map(moduleKey => ({
-                    key: moduleKey,
-                    label: humanize(moduleKey),
-                })),
-        []
-    );
+    // Schedulable modules: extension modules (e.g. poster_self_heal) spliced in
+    // at their anchors, minus config-only modules (runnable:false, e.g.
+    // cl2k_maker) which have nothing to run/schedule. Identity on main.
+    const availableModules = useMemo(() => {
+        const configOnly = new Set(
+            SETTINGS_SCHEMA.filter(m => m.runnable === false).map(m => m.key)
+        );
+        return withExtensionConfigModuleKeys(moduleOrder)
+            .filter(k => k !== 'main' && k !== 'general' && !configOnly.has(k))
+            .map(moduleKey => ({ key: moduleKey, label: humanize(moduleKey) }));
+    }, []);
 
     // Handlers
     const handleModuleRun = useCallback(
