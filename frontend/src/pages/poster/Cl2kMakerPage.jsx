@@ -952,10 +952,15 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
     // effect below, cleared when a new title is picked) so they survive
     // navigation. Read once on mount.
     const saved = useMemo(() => ssRead(SS_BUILDER, {}), []);
+    const [searchParams] = useSearchParams();
 
     // Migrate retired tab keys to the unified 'poster' build tab (see TAB_MIGRATE)
-    // so a saved session never lands on a tab that no longer exists.
+    // so a saved session never lands on a tab that no longer exists. A deep link
+    // from Unmatched → Additional artwork carries ?asset=<tab> so the maker opens
+    // on the right asset tab (background / square / logo) ready to build it.
     const [tab, setTab] = useState(() => {
+        const assetParam = searchParams.get('asset');
+        if (assetParam && BUILD_TABS.some(t => t.key === assetParam)) return assetParam;
         const t = saved.tab ?? 'poster';
         return TAB_MIGRATE[t] || t;
     });
