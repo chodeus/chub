@@ -39,6 +39,28 @@ def test_parse_tags_json_string():
     assert m._parse_tags('["x", "y"]') == ["x", "y"]
 
 
+# --- LabelarrMapping.labels coercion (str | list -> list) + enabled default ---
+
+
+def test_mapping_labels_coerces_comma_string():
+    # Legacy configs stored labels as a comma-separated string.
+    m = LabelarrMapping(app_instance="radarr", labels="4k, remux")
+    assert m.labels == ["4k", "remux"]
+
+
+def test_mapping_labels_keeps_list_and_strips_blanks():
+    m = LabelarrMapping(labels=["a", " b ", "", "c"])
+    assert m.labels == ["a", "b", "c"]
+
+
+def test_mapping_labels_empty_string_is_empty_list():
+    assert LabelarrMapping(labels="").labels == []
+
+
+def test_mapping_enabled_defaults_true():
+    assert LabelarrMapping().enabled is True
+
+
 def test_parse_tags_invalid_json_returns_empty():
     m = make_module()
     assert m._parse_tags("not-json") == []

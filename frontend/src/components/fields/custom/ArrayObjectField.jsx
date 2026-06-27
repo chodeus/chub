@@ -315,10 +315,13 @@ export const ArrayObjectField = ({
         onChange([...value, buildDefaultItem()]);
     }, [value, onChange, buildDefaultItem]);
 
-    const renderItemFields = (item, index) => {
+    const renderItemFields = (item, index, excludeKeys = []) => {
         const apiData = { instances: instancesData };
         return field.fields
-            .filter(subField => shouldShowField(subField, item, apiData))
+            .filter(
+                subField =>
+                    !excludeKeys.includes(subField.key) && shouldShowField(subField, item, apiData)
+            )
             .map(subField => {
                 const FieldComponent = getFieldComponent(subField.type);
                 const additionalProps = {};
@@ -705,6 +708,64 @@ export const ArrayObjectField = ({
         );
     };
 
+    // Bespoke Labelarr mapping card — matches the mock: header with the ARR
+    // instance + Enabled toggle + remove, then the labels (chips) and the Plex
+    // targets configurator in the body. app_instance + enabled are hoisted to
+    // the header; the rest render via renderItemFields.
+    const renderLabelarrCard = (item, index) => {
+        const apiData = { instances: instancesData };
+        const set = (k, v) => handleItemFieldChange(index, k, v);
+        const appField = (field.fields || []).find(f => f.key === 'app_instance');
+        const instanceOptions = generateInstanceOptions(
+            apiData.instances,
+            appField?.options_filter,
+            false
+        );
+        const enabled = item.enabled !== false;
+        return (
+            <div
+                key={index}
+                className={`bg-surface border border-border rounded-xl overflow-hidden ${enabled ? '' : 'opacity-60'}`}
+            >
+                <div className="flex items-center gap-3 px-4 py-3 border-b border-border bg-surface-inset">
+                    <span className="font-mono text-[10px] tracking-[0.8px] text-fg-subtle shrink-0">
+                        ARR
+                    </span>
+                    <select
+                        value={item.app_instance || ''}
+                        onChange={e => set('app_instance', e.target.value)}
+                        disabled={disabled}
+                        className="h-9 px-2.5 rounded-md bg-surface border border-border text-fg text-sm font-semibold outline-none focus:border-primary min-w-[160px]"
+                    >
+                        <option value="">— Select —</option>
+                        {instanceOptions.map(o => (
+                            <option key={o.value} value={o.value}>
+                                {o.label}
+                            </option>
+                        ))}
+                    </select>
+                    <label className="ml-auto flex items-center gap-2 text-[12.5px] text-fg-muted shrink-0">
+                        Enabled
+                        <Toggle
+                            label="Enabled"
+                            checked={enabled}
+                            disabled={disabled}
+                            onChange={v => set('enabled', v)}
+                        />
+                    </label>
+                    <RemoveButton
+                        onClick={() => handleRemove(index)}
+                        itemName={`mapping ${index + 1}`}
+                        disabled={disabled}
+                    />
+                </div>
+                <div className="p-4 flex flex-col gap-4">
+                    {renderItemFields(item, index, ['app_instance', 'enabled'])}
+                </div>
+            </div>
+        );
+    };
+
     if (field.alwaysExpanded) {
         return (
             <FieldWrapper invalid={highlightInvalid} variant="standard">
@@ -733,7 +794,9 @@ export const ArrayObjectField = ({
                         value.map((item, index) =>
                             field.displayType === 'upgradinatorr'
                                 ? renderUpgradinatorrCard(item, index)
-                                : renderExpandedCard(item, index)
+                                : field.displayType === 'labelarr'
+                                  ? renderLabelarrCard(item, index)
+                                  : renderExpandedCard(item, index)
                         )
                     ) : (
                         <div className="p-8 text-center border border-dashed border-border rounded-lg bg-surface-alt">
