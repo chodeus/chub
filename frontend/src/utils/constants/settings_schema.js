@@ -55,40 +55,12 @@ const CORE_SETTINGS_SCHEMA = [
         key: 'sync_gdrive',
         label: 'Sync Gdrive',
         fields: [
-            {
-                key: 'log_level',
-                label: 'Log Level',
-                type: 'dropdown',
-                options: ['debug', 'info'],
-                required: true,
-                description: 'Set the logging verbosity for Google Drive sync.',
-            },
-            {
-                key: 'dry_run',
-                label: 'Dry Run',
-                type: 'check_box',
-                description:
-                    'Pass --dry-run to rclone — log every file that would be copied or deleted without touching the local filesystem.',
-            },
-            {
-                key: 'verbose',
-                label: 'Verbose',
-                type: 'check_box',
-                description:
-                    'Log every file rclone copies, deletes, updates, or renames. Useful for tracing what changed; can be noisy on large syncs.',
-            },
-            {
-                key: 'gdrive_sa_location',
-                label: 'Service Account Location',
-                type: 'text',
-                required: false,
-                description:
-                    'Path to a Google Drive service-account JSON keyfile. If this is set, the three OAuth fields below are ignored — choose ONE method.',
-            },
+            // ─── Authentication ────────────────────────────────────────
             {
                 key: 'client_id',
                 label: 'Client ID',
                 type: 'password',
+                section: 'Authentication',
                 required: false,
                 placeholder: 'Place Client ID Here',
                 conditional: {
@@ -102,6 +74,7 @@ const CORE_SETTINGS_SCHEMA = [
                 key: 'client_secret',
                 label: 'Client Secret',
                 type: 'password',
+                section: 'Authentication',
                 required: false,
                 conditional: {
                     field: 'gdrive_sa_location',
@@ -111,9 +84,19 @@ const CORE_SETTINGS_SCHEMA = [
                     'OAuth client secret. Only used when no service-account file is set above.',
             },
             {
+                key: 'gdrive_sa_location',
+                label: 'Service Account Location',
+                type: 'text',
+                section: 'Authentication',
+                required: false,
+                description:
+                    'Path to a Google Drive service-account JSON keyfile. If this is set, the three OAuth fields below are ignored — choose ONE method.',
+            },
+            {
                 key: 'token',
                 label: 'Token (JSON)',
                 type: 'json',
+                section: 'Authentication',
                 required: false,
                 placeholder:
                     '{\n  "access_token": "ya29.a0AfH6SMBEXAMPLEEXAMPLETOKEN",\n  "refresh_token": "1",\n  "scope": "https://www.googleapis.com/auth/drive",\n  "token_type": "Bearer",\n  "expiry_date": 1712345678901\n}',
@@ -134,6 +117,7 @@ const CORE_SETTINGS_SCHEMA = [
                 label: 'Google Drive List',
                 type: 'object_array',
                 displayType: 'gdrive',
+                section: 'Authentication',
                 alwaysExpanded: true,
                 required: false,
                 description: 'Each entry contains id, location, and name.',
@@ -191,6 +175,31 @@ const CORE_SETTINGS_SCHEMA = [
                             'matched or applied (for "Extras" drives).',
                     },
                 ],
+            },
+            // ─── Options ───────────────────────────────────────────────
+            {
+                key: 'verbose',
+                label: 'Verbose',
+                type: 'check_box',
+                section: 'Options',
+                description:
+                    'Log every file rclone copies, deletes, updates, or renames. Useful for tracing what changed; can be noisy on large syncs.',
+            },
+            {
+                key: 'log_level',
+                label: 'Log Level',
+                type: 'dropdown',
+                section: 'Options',
+                options: ['debug', 'info'],
+                required: true,
+                description: 'Set the logging verbosity for Google Drive sync.',
+            },
+            {
+                key: 'dry_run',
+                label: 'Dry Run',
+                type: 'check_box',
+                description:
+                    'Pass --dry-run to rclone — log every file that would be copied or deleted without touching the local filesystem.',
             },
         ],
     },
