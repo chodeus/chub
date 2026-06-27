@@ -288,7 +288,7 @@ export const ArrayObjectField = ({
                         onClick={handleSave}
                         disabled={disabled}
                     >
-                        {isEditing ? 'Save Changes' : 'Add Item'}
+                        {isEditing ? 'Save Changes' : `Add ${displayTemplate.itemName}`}
                     </button>
                 </div>
             </div>
@@ -334,6 +334,7 @@ export const ArrayObjectField = ({
                             onClick={handleAdd}
                             disabled={disabled}
                             itemType={displayTemplate.itemName}
+                            text={`Add ${displayTemplate.itemName}`}
                         />
                     </div>
                 )}
