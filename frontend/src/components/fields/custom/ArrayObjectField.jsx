@@ -11,6 +11,8 @@ import {
 } from '../../../utils/forms/conditionalFields';
 import { useInstancesData } from '../../../hooks/useInstancesData';
 import { scheduleToHuman } from '../../../utils/schedule';
+import Toggle from '../../ui/Toggle.jsx';
+import SegmentedControl from '../../ui/SegmentedControl.jsx';
 
 /**
  * Unified ArrayObjectField - Handles dynamic array of objects with configurable schemas
@@ -378,6 +380,191 @@ export const ArrayObjectField = ({
         );
     };
 
+    // Bespoke Upgradinatorr profile card — matches the design mock's compact
+    // layout (inline name + schedule readout + Enabled + remove in the header,
+    // a labelled grid of the core fields, the rich schedule picker, and the
+    // unattended footer). Reuses handleItemFieldChange so emit shapes are intact.
+    const renderUpgradinatorrCard = (item, index) => {
+        const apiData = { instances: instancesData };
+        const set = (k, v) => handleItemFieldChange(index, k, v);
+        const byKey = k => (field.fields || []).find(f => f.key === k);
+        const enabled = item.enabled !== false;
+        const instanceOptions = generateInstanceOptions(
+            apiData.instances,
+            byKey('instance')?.options_filter,
+            false
+        );
+        const instanceType = getInstanceType(item.instance, apiData.instances);
+        const ScheduleComp = getFieldComponent('schedule');
+        const schedHuman = item.schedule ? scheduleToHuman(item.schedule) : 'Main schedule only';
+        const showCountMode = shouldShowField(byKey('count_mode'), item, apiData);
+        const showThreshold = shouldShowField(byKey('season_monitored_threshold'), item, apiData);
+        const countModeOpts = (byKey('count_mode')?.options || []).map(o => ({
+            value: o.value,
+            label: o.labelByType?.[instanceType] || o.labelByType?.default || o.value,
+        }));
+        const lbl = 'font-mono text-[10px] tracking-[0.8px] text-fg-subtle';
+        const ctrl =
+            'h-9 px-2.5 rounded-md bg-surface-inset border border-border text-fg text-sm outline-none focus:border-primary w-full';
+        return (
+            <div
+                key={index}
+                className={`bg-surface border border-border rounded-xl overflow-hidden ${enabled ? '' : 'opacity-60'}`}
+            >
+                <div className="flex items-center gap-3 px-4 py-3 border-b border-border bg-surface-inset">
+                    <input
+                        value={item.label || ''}
+                        onChange={e => set('label', e.target.value)}
+                        placeholder="Profile name"
+                        disabled={disabled}
+                        className="font-display font-semibold text-sm text-fg bg-transparent border-0 outline-none min-w-0 max-w-[240px] flex-1"
+                    />
+                    <span
+                        className={`font-mono text-[11px] shrink-0 ${enabled ? 'text-accent' : 'text-fg-subtle'}`}
+                    >
+                        {schedHuman}
+                    </span>
+                    <label className="ml-auto flex items-center gap-2 text-[12.5px] text-fg-muted shrink-0">
+                        Enabled
+                        <Toggle
+                            label="Enabled"
+                            checked={enabled}
+                            disabled={disabled}
+                            onChange={v => set('enabled', v)}
+                        />
+                    </label>
+                    <RemoveButton
+                        onClick={() => handleRemove(index)}
+                        itemName={`profile ${index + 1}`}
+                        disabled={disabled}
+                    />
+                </div>
+                <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    <label className="flex flex-col gap-1.5">
+                        <span className={lbl}>INSTANCE</span>
+                        <select
+                            value={item.instance || ''}
+                            onChange={e => set('instance', e.target.value)}
+                            disabled={disabled}
+                            className={ctrl}
+                        >
+                            <option value="">— Select —</option>
+                            {instanceOptions.map(o => (
+                                <option key={o.value} value={o.value}>
+                                    {o.label}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+                    <label className="flex flex-col gap-1.5">
+                        <span className={lbl}>COUNT / RUN</span>
+                        <input
+                            type="number"
+                            value={item.count ?? ''}
+                            onChange={e =>
+                                set('count', e.target.value === '' ? '' : Number(e.target.value))
+                            }
+                            disabled={disabled}
+                            className={`${ctrl} font-mono`}
+                        />
+                    </label>
+                    {showCountMode && (
+                        <label className="flex flex-col gap-1.5">
+                            <span className={lbl}>COUNT MODE</span>
+                            <select
+                                value={item.count_mode || 'series_artist'}
+                                onChange={e => set('count_mode', e.target.value)}
+                                disabled={disabled}
+                                className={ctrl}
+                            >
+                                {countModeOpts.map(o => (
+                                    <option key={o.value} value={o.value}>
+                                        {o.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                    )}
+                    <label className="flex flex-col gap-1.5">
+                        <span className={lbl}>TAG NAME</span>
+                        <input
+                            type="text"
+                            value={item.tag_name || ''}
+                            onChange={e => set('tag_name', e.target.value)}
+                            placeholder="checked"
+                            disabled={disabled}
+                            className={`${ctrl} font-mono`}
+                        />
+                    </label>
+                    <label className="flex flex-col gap-1.5">
+                        <span className={lbl}>IGNORE TAG</span>
+                        <input
+                            type="text"
+                            value={item.ignore_tag || ''}
+                            onChange={e => set('ignore_tag', e.target.value)}
+                            placeholder="ignore"
+                            disabled={disabled}
+                            className={`${ctrl} font-mono`}
+                        />
+                    </label>
+                    {showThreshold && (
+                        <label className="flex flex-col gap-1.5">
+                            <span className={lbl}>SEASON MONITORED %</span>
+                            <input
+                                type="number"
+                                step="0.01"
+                                value={item.season_monitored_threshold ?? ''}
+                                onChange={e =>
+                                    set(
+                                        'season_monitored_threshold',
+                                        e.target.value === '' ? '' : Number(e.target.value)
+                                    )
+                                }
+                                disabled={disabled}
+                                className={`${ctrl} font-mono`}
+                            />
+                        </label>
+                    )}
+                    <label className="flex flex-col gap-1.5 sm:col-span-2 lg:col-span-3">
+                        <span className={lbl}>SEARCH MODE</span>
+                        <div>
+                            <SegmentedControl
+                                size="sm"
+                                options={[
+                                    { value: 'upgrade', label: 'Upgrade' },
+                                    { value: 'missing', label: 'Missing' },
+                                    { value: 'cutoff', label: 'Cutoff' },
+                                ]}
+                                value={item.search_mode || 'upgrade'}
+                                onChange={v => set('search_mode', v)}
+                            />
+                        </div>
+                    </label>
+                </div>
+                <div className="px-4 pb-3">
+                    <ScheduleComp
+                        field={byKey('schedule')}
+                        value={item.schedule}
+                        onChange={v => set('schedule', v)}
+                        disabled={disabled}
+                    />
+                </div>
+                <div className="flex items-center gap-2.5 px-4 pb-4">
+                    <Toggle
+                        label="Auto reset"
+                        checked={!!item.unattended}
+                        disabled={disabled}
+                        onChange={v => set('unattended', v)}
+                    />
+                    <span className="text-[12.5px] text-fg-muted">
+                        Unattended — when every eligible item is tagged, clear the tag and start the
+                        rotation again.
+                    </span>
+                </div>
+            </div>
+        );
+    };
+
     if (field.alwaysExpanded) {
         return (
             <FieldWrapper invalid={highlightInvalid} variant="standard">
@@ -401,7 +588,11 @@ export const ArrayObjectField = ({
                         />
                     )}
                     {value.length > 0 ? (
-                        value.map((item, index) => renderExpandedCard(item, index))
+                        value.map((item, index) =>
+                            field.displayType === 'upgradinatorr'
+                                ? renderUpgradinatorrCard(item, index)
+                                : renderExpandedCard(item, index)
+                        )
                     ) : (
                         <div className="p-8 text-center border border-dashed border-border rounded-lg bg-surface-alt">
                             <div className="text-sm text-fg-muted">
