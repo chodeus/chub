@@ -37,21 +37,12 @@ export const Badge = React.memo(
         ariaProps = {},
         ...restProps
     }) => {
-        // Development-time validation to prevent domain-specific prop drift
+        // Development-time validation to prevent domain-specific prop drift.
+        // Only inspect caller pass-through props (restProps) — the destructured
+        // props above are Badge's own API, and including them flagged legitimate
+        // names (e.g. `removeLabel` contains "label"), firing on every render.
         if (import.meta.env.DEV) {
-            const propNames = Object.keys({
-                children,
-                variant,
-                size,
-                onRemove,
-                onClick,
-                disabled,
-                focused,
-                className,
-                removeLabel,
-                ariaProps,
-                ...restProps,
-            });
+            const propNames = Object.keys(restProps);
             const forbidden = ['tag', 'label', 'status', 'category', 'type'];
             const hasForbidden = propNames.some(name =>
                 forbidden.some(term => name.toLowerCase().includes(term))
