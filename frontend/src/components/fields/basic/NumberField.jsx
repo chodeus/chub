@@ -1,13 +1,12 @@
 /**
  * NumberField Component
  *
- * Number input field with +/- buttons using primitive composition.
- * Prevents text input and forces button-only interaction for better UX.
+ * Clean number input (no ± stepper buttons — those aren't in the mocks).
+ * Accepts typed digits/decimal/minus with min/max bounds.
  */
 
 import React, { useCallback } from 'react';
 import { FieldRow, InputBase } from '../primitives';
-import { FieldButton } from '../features/shared';
 import { useOptionalFormField } from '../../forms/FormContext';
 
 export const NumberField = React.memo(
@@ -30,7 +29,6 @@ export const NumberField = React.memo(
         const finalErrorMessage = formField?.errorMessage ?? errorMessage;
         const finalOnBlur = formField?.onBlur ?? onBlur;
         const numValue = finalValue !== null && finalValue !== undefined ? Number(finalValue) : 0;
-        const step = field.step || 1;
         const min = field.min !== undefined ? Number(field.min) : undefined;
         const max = field.max !== undefined ? Number(field.max) : undefined;
 
@@ -57,21 +55,7 @@ export const NumberField = React.memo(
             [min, max, finalOnChange]
         );
 
-        const handleDecrement = useCallback(() => {
-            const newValue = numValue - step;
-            if (min !== undefined && newValue < min) return;
-            finalOnChange(newValue);
-        }, [numValue, step, min, finalOnChange]);
-
-        const handleIncrement = useCallback(() => {
-            const newValue = numValue + step;
-            if (max !== undefined && newValue > max) return;
-            finalOnChange(newValue);
-        }, [numValue, step, max, finalOnChange]);
-
         const inputId = field.id || `field-${field.key}`;
-        const decrementDisabled = disabled || (min !== undefined && numValue <= min);
-        const incrementDisabled = disabled || (max !== undefined && numValue >= max);
 
         return (
             <FieldRow
@@ -82,43 +66,22 @@ export const NumberField = React.memo(
                 error={finalErrorMessage}
                 invalid={finalHighlightInvalid}
             >
-                <div className="flex">
-                    <FieldButton
-                        onClick={handleDecrement}
-                        disabled={decrementDisabled}
-                        ariaLabel={`Decrease ${field.label}`}
-                        variant="left"
-                        className="text-brand-primary"
-                    >
-                        <span className="material-symbols-outlined text-lg">remove</span>
-                    </FieldButton>
-
-                    <InputBase
-                        id={inputId}
-                        type="text"
-                        name={field.key}
-                        value={typeof finalValue === 'string' ? finalValue : numValue || ''}
-                        onChange={handleInputChange}
-                        onBlur={finalOnBlur}
-                        disabled={disabled}
-                        required={field.required}
-                        placeholder={field.placeholder}
-                        invalid={finalHighlightInvalid}
-                        className="flex-1 border-t border-b  border-default bg-input text-center"
-                        aria-describedby={`${field.descId || `${inputId}-desc`} ${field.errorId || `${inputId}-error`}`.trim()}
-                        aria-invalid={finalHighlightInvalid}
-                    />
-
-                    <FieldButton
-                        onClick={handleIncrement}
-                        disabled={incrementDisabled}
-                        ariaLabel={`Increase ${field.label}`}
-                        variant="right"
-                        className="text-brand-primary"
-                    >
-                        <span className="material-symbols-outlined text-lg">add</span>
-                    </FieldButton>
-                </div>
+                <InputBase
+                    id={inputId}
+                    type="text"
+                    inputMode="numeric"
+                    name={field.key}
+                    value={typeof finalValue === 'string' ? finalValue : numValue || ''}
+                    onChange={handleInputChange}
+                    onBlur={finalOnBlur}
+                    disabled={disabled}
+                    required={field.required}
+                    placeholder={field.placeholder}
+                    invalid={finalHighlightInvalid}
+                    className="w-full sm:max-w-[200px] sm:ml-auto"
+                    aria-describedby={`${field.descId || `${inputId}-desc`} ${field.errorId || `${inputId}-error`}`.trim()}
+                    aria-invalid={finalHighlightInvalid}
+                />
             </FieldRow>
         );
     }
