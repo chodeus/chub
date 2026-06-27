@@ -19,7 +19,6 @@ export const ScheduleCard = React.memo(
         onRun,
         onEdit,
         onCancel,
-        onTest,
     }) => {
         const hasSchedule = !!schedule;
 
@@ -44,14 +43,6 @@ export const ScheduleCard = React.memo(
             },
             [moduleKey, onCancel]
         );
-        const handleTestClick = useCallback(
-            e => {
-                e.stopPropagation();
-                if (onTest) onTest(moduleKey);
-            },
-            [moduleKey, onTest]
-        );
-
         const iconBtn =
             'w-8 h-8 rounded-lg flex items-center justify-center text-fg-muted hover:text-fg hover:bg-row-hover transition-colors';
 
@@ -88,15 +79,6 @@ export const ScheduleCard = React.memo(
                     </div>
 
                     <div className="flex items-center gap-1.5 shrink-0">
-                        {onTest && !isRunning && (
-                            <button
-                                type="button"
-                                onClick={handleTestClick}
-                                className="h-[30px] px-3 rounded-[7px] bg-surface-inset border border-border text-fg-muted text-xs font-semibold hover:bg-row-hover transition-colors"
-                            >
-                                Test
-                            </button>
-                        )}
                         {isRunning && onCancel && (
                             <Button variant="danger" size="small" onClick={handleCancelClick}>
                                 Cancel
@@ -180,7 +162,6 @@ ScheduleCard.propTypes = {
     onRun: PropTypes.func.isRequired,
     onEdit: PropTypes.func.isRequired,
     onCancel: PropTypes.func,
-    onTest: PropTypes.func,
 };
 
 export default ScheduleCard;
