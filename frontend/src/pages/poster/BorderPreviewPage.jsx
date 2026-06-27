@@ -258,14 +258,16 @@ const DefaultColorsSection = ({ value, onChange, disabled }) => (
 const HolidaysSection = ({ holidays, onChange, disabled }) => {
     if (!holidays.length) {
         return (
-            <section className="mt-6 p-6 bg-surface border border-dashed rounded-xl text-center">
+            <section className="mt-6 p-8 bg-surface border border-dashed border-border rounded-xl text-center">
                 <span className="material-symbols-outlined text-3xl text-fg-subtle block mb-2">
                     event
                 </span>
-                <h2 className="text-lg font-semibold text-fg">No holidays configured</h2>
-                <p className="text-sm text-fg-subtle mt-1">
+                <h2 className="font-display text-base font-semibold text-fg">
+                    No holidays configured
+                </h2>
+                <p className="text-[13px] text-fg-subtle mt-1.5 max-w-md mx-auto leading-relaxed">
                     Add holidays (name and date window) in{' '}
-                    <Link to="/settings/modules" className="text-fg underline hover:no-underline">
+                    <Link to="/settings/modules" className="text-accent hover:underline">
                         Module Settings → Border Replacerr
                     </Link>
                     . They&apos;ll show up here so you can pick colors and themed border art.
@@ -743,7 +745,7 @@ const PreviewCard = ({ preview }) => {
                 : preview.kind || 'Media';
 
     return (
-        <div className="bg-surface border border-border rounded-xl overflow-hidden flex flex-col">
+        <div className="bg-surface border border-border rounded-xl overflow-hidden flex flex-col transition-colors hover:border-border-light">
             <img
                 src={borderReplacerrAPI.fileUrl(preview.token)}
                 alt={`${preview.title} preview (original on left, bordered on right)`}
@@ -752,10 +754,13 @@ const PreviewCard = ({ preview }) => {
             />
             <div className="p-3 flex items-center justify-between gap-2">
                 <div className="min-w-0">
-                    <div className="text-sm font-medium text-fg truncate" title={preview.title}>
+                    <div
+                        className="font-display text-sm font-semibold text-fg truncate"
+                        title={preview.title}
+                    >
                         {preview.title}
                     </div>
-                    <div className="text-xs text-fg-subtle">{kindLabel}</div>
+                    <div className="font-mono text-[11px] text-fg-subtle mt-0.5">{kindLabel}</div>
                 </div>
                 {preview.border ? (
                     <div
