@@ -14,10 +14,9 @@ def routers():
     return [router]
 
 
-def modules():
-    from backend.modules.cl2k_maker import Cl2kMaker
-
-    return {"cl2k_maker": Cl2kMaker}
+# No modules() hook: the CL2K maker is config-only — generation is on-demand from
+# the maker page (via the API), so there is no batch run to register, schedule, or
+# surface in Jobs. Its config page comes from config_fields() below.
 
 
 def config_fields():

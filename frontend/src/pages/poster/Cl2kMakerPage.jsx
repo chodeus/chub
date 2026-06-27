@@ -568,7 +568,7 @@ const ConfigBanner = ({ config, uploadStatus }) => {
                     <span className="text-fg-muted">{config.ai_provider || 'none'}</span>
                 </span>
                 <Link
-                    to="/settings/modules"
+                    to="/settings/modules/cl2k_maker"
                     className="ml-auto font-medium text-accent hover:underline"
                 >
                     Edit in Module Settings →
@@ -582,7 +582,10 @@ const ConfigBanner = ({ config, uploadStatus }) => {
                     </span>
                     <span className="text-[12.5px] text-fg-muted">
                         Output directory not set — saves will fail.{' '}
-                        <Link to="/settings/modules" className="text-error hover:underline">
+                        <Link
+                            to="/settings/modules/cl2k_maker"
+                            className="text-error hover:underline"
+                        >
                             Set it in Module Settings.
                         </Link>
                     </span>
@@ -596,7 +599,10 @@ const ConfigBanner = ({ config, uploadStatus }) => {
                     <span className="text-[12.5px] text-fg-muted">
                         Google Drive upload enabled but no OAuth token — uploads will fail, local
                         save still works.{' '}
-                        <Link to="/settings/modules" className="text-warning hover:underline">
+                        <Link
+                            to="/settings/modules/cl2k_maker"
+                            className="text-warning hover:underline"
+                        >
                             Connect Drive →
                         </Link>
                     </span>
@@ -674,7 +680,7 @@ const SaveTargets = ({ targets }) => {
             {!folderSet && (
                 <p className="text-xs text-fg-subtle">
                     Set a Drive folder under{' '}
-                    <Link to="/settings/modules" className="text-fg underline">
+                    <Link to="/settings/modules/cl2k_maker" className="text-fg underline">
                         Module Settings
                     </Link>{' '}
                     to enable Drive upload.
@@ -3185,7 +3191,10 @@ const AiPanel = ({
                     Provider: <span className="text-fg-muted">{provider}</span>. OpenAI re-imagines
                     the whole image — brush a mask over just the text to keep faces/art intact. Set
                     the provider/key in{' '}
-                    <Link to="/settings/modules" className="text-fg underline hover:no-underline">
+                    <Link
+                        to="/settings/modules/cl2k_maker"
+                        className="text-fg underline hover:no-underline"
+                    >
                         Module Settings
                     </Link>
                     .

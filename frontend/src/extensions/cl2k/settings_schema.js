@@ -5,6 +5,10 @@
 export const CL2K_MAKER_SCHEMA = {
     key: 'cl2k_maker',
     label: 'CL2K Maker',
+    // Config-only: posters are generated on-demand from the CL2K Poster Maker
+    // page, so there is no batch run. `runnable: false` hides the Run button +
+    // Dry-run (ModuleSettingsPage) and drops it from the Schedule and Dashboard.
+    runnable: false,
     fields: [
         {
             key: 'log_level',
@@ -14,13 +18,6 @@ export const CL2K_MAKER_SCHEMA = {
             required: true,
             description:
                 '"debug" prints per-poster art/logo resolution; "info" is the normal cron-friendly level.',
-        },
-        {
-            key: 'enabled',
-            label: 'Enabled',
-            type: 'check_box',
-            description:
-                'Enable the scheduled batch run (walks matched movies/shows lacking a CL2K poster). On-demand generation from the CL2K Poster Maker page works regardless.',
         },
         // ─── Output ────────────────────────────────────────────────
         {
