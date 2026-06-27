@@ -533,7 +533,10 @@ export const JobsPage = () => {
                         <tbody>
                             {jobs.map(job => (
                                 <React.Fragment key={job.id}>
-                                    <tr className="border-b border-border last:border-b-0 hover:bg-surface-alt/50">
+                                    <tr
+                                        className="border-b border-border last:border-b-0 hover:bg-surface-alt/50 cursor-pointer"
+                                        onClick={() => handleToggleDetail(job.id, job)}
+                                    >
                                         <td className="hidden sm:table-cell px-4 py-3 font-mono text-xs text-fg-subtle">
                                             #{job.id}
                                         </td>
@@ -562,30 +565,20 @@ export const JobsPage = () => {
                                             {formatTime(job.received_at || job.created_at)}
                                         </td>
                                         <td className="px-2 sm:px-4 py-3 text-right">
-                                            <div className="flex items-center justify-end gap-1">
-                                                <IconButton
-                                                    icon={
-                                                        expandedJobId === job.id
-                                                            ? 'expand_less'
-                                                            : 'expand_more'
-                                                    }
-                                                    aria-label="Toggle detail"
-                                                    variant="ghost"
-                                                    onClick={() => handleToggleDetail(job.id, job)}
-                                                />
-                                                {(job.status === 'error' ||
-                                                    job.status === 'success') && (
-                                                    <LoadingButton
-                                                        loading={isRetrying}
-                                                        loadingText="..."
-                                                        variant="ghost"
-                                                        icon="replay"
-                                                        onClick={() => handleRetry(job.id)}
-                                                    >
-                                                        Retry
-                                                    </LoadingButton>
-                                                )}
-                                            </div>
+                                            {(job.status === 'error' ||
+                                                job.status === 'failed') && (
+                                                <button
+                                                    type="button"
+                                                    disabled={isRetrying}
+                                                    onClick={e => {
+                                                        e.stopPropagation();
+                                                        handleRetry(job.id);
+                                                    }}
+                                                    className="font-mono text-[11px] text-accent hover:underline disabled:opacity-50 cursor-pointer"
+                                                >
+                                                    {isRetrying ? '…' : 'Retry'}
+                                                </button>
+                                            )}
                                         </td>
                                     </tr>
                                     {expandedJobId === job.id && (
