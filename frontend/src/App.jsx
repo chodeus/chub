@@ -28,9 +28,6 @@ const InstancesPage = React.lazy(() =>
 const NotificationsPage = React.lazy(() =>
     import('./pages/settings/NotificationsPage.jsx').then(m => ({ default: m.NotificationsPage }))
 );
-const SettingsSplash = React.lazy(() =>
-    import('./pages/SettingsSplash.jsx').then(m => ({ default: m.SettingsSplash }))
-);
 const JobsPage = React.lazy(() =>
     import('./pages/settings/JobsPage.jsx').then(m => ({ default: m.JobsPage }))
 );
@@ -377,12 +374,10 @@ const App = () => {
                                                     <Route
                                                         path="settings"
                                                         element={
-                                                            <PageErrorBoundary
-                                                                pageName="Settings"
-                                                                pageDescription="Settings navigation and configuration hub"
-                                                            >
-                                                                <SettingsSplash />
-                                                            </PageErrorBoundary>
+                                                            <Navigate
+                                                                to="/settings/general"
+                                                                replace
+                                                            />
                                                         }
                                                     />
                                                     <Route
