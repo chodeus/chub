@@ -875,6 +875,14 @@ const DISPLAY_TEMPLATES = {
             badge: null,
         }),
     },
+    path_mapping: {
+        itemName: 'Path Mapping',
+        display: item => ({
+            primary: item.arr_path || 'New path mapping',
+            secondary: item.local_path ? `→ ${item.local_path}` : 'No local path set',
+            badge: null,
+        }),
+    },
     qualityGroup: {
         itemName: 'Quality Group',
         display: item => {
