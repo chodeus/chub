@@ -11,6 +11,7 @@ import { ConfigProvider, useConfig } from '../../../contexts/ConfigContext.jsx';
 import { useToast } from '../../../contexts/ToastContext.jsx';
 import { useUnsavedChangesWarning } from '../../../hooks/useUnsavedChangesWarning';
 import Toggle from '../../../components/ui/Toggle.jsx';
+import SegmentedControl from '../../../components/ui/SegmentedControl.jsx';
 
 /**
  * Memoized field component — only re-renders when value/key/disabled change.
@@ -301,22 +302,85 @@ const ModuleSettingsContent = ({ moduleKey }) => {
                             <p>This module has no configurable options.</p>
                         </div>
                     ) : (
-                        sections.map((group, gi) => (
-                            <section
-                                key={group.name || `section-${gi}`}
-                                className="bg-surface border border-border rounded-xl p-5"
-                                style={{ boxShadow: '0 2px 16px -8px rgba(0,0,0,.6)' }}
-                            >
-                                {group.name && (
-                                    <h2 className="font-display text-[15px] font-semibold text-fg mb-4">
-                                        {group.name}
-                                    </h2>
-                                )}
-                                <div className="flex flex-col gap-4">
-                                    {group.fields.map((field, fi) => renderField(field, fi))}
-                                </div>
-                            </section>
-                        ))
+                        sections.map((group, gi) => {
+                            // A section may hoist two fields into its header: a
+                            // `sectionToggle` enable switch (rendered as a Toggle
+                            // beside the title) and a `placement: 'header'` control
+                            // (e.g. a report/move/remove mode segmented, right-
+                            // aligned). When the enable toggle is off, the header
+                            // control + body are dimmed. Sections without these
+                            // flags render exactly as before.
+                            const moduleData = formData[activeModule.key] || {};
+                            const enableF = group.fields.find(f => f.sectionToggle);
+                            const headerF = group.fields.find(f => f.placement === 'header');
+                            const bodyFields = group.fields.filter(
+                                f => f !== enableF && f !== headerF
+                            );
+                            const enabled = enableF ? !!moduleData[enableF.key] : true;
+                            const dimCls =
+                                enableF && !enabled ? 'opacity-50 pointer-events-none' : '';
+                            const segOptions = f =>
+                                (f.options || []).map(o =>
+                                    typeof o === 'string'
+                                        ? { value: o, label: o }
+                                        : {
+                                              value: o.value,
+                                              label: o.label || o.value,
+                                              danger: o.danger,
+                                          }
+                                );
+                            return (
+                                <section
+                                    key={group.name || `section-${gi}`}
+                                    className="bg-surface border border-border rounded-xl p-5"
+                                    style={{ boxShadow: '0 2px 16px -8px rgba(0,0,0,.6)' }}
+                                >
+                                    {(group.name || enableF || headerF) && (
+                                        <div className="flex items-center justify-between gap-3 mb-4">
+                                            <div className="flex items-center gap-2.5 min-w-0">
+                                                {group.name && (
+                                                    <h2 className="font-display text-[15px] font-semibold text-fg">
+                                                        {group.name}
+                                                    </h2>
+                                                )}
+                                                {enableF && (
+                                                    <Toggle
+                                                        label={enableF.label}
+                                                        checked={enabled}
+                                                        onChange={v =>
+                                                            handleFieldChange(
+                                                                activeModule.key,
+                                                                enableF.key,
+                                                                v
+                                                            )
+                                                        }
+                                                    />
+                                                )}
+                                            </div>
+                                            {headerF && (
+                                                <div className={dimCls}>
+                                                    <SegmentedControl
+                                                        size="sm"
+                                                        options={segOptions(headerF)}
+                                                        value={moduleData[headerF.key] || ''}
+                                                        onChange={v =>
+                                                            handleFieldChange(
+                                                                activeModule.key,
+                                                                headerF.key,
+                                                                v
+                                                            )
+                                                        }
+                                                    />
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                    <div className={`flex flex-col gap-4 ${dimCls}`}>
+                                        {bodyFields.map((field, fi) => renderField(field, fi))}
+                                    </div>
+                                </section>
+                            );
+                        })
                     )}
                 </div>
             )}
