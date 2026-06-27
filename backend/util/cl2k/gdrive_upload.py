@@ -166,6 +166,52 @@ def upload_file(
     logger.debug(f"uploaded {os.path.basename(local_path)} to drive {folder_id}")
 
 
+def move_file(
+    old_name: str,
+    new_name: str,
+    folder_id: str,
+    sync_cfg: Any,
+    logger,
+) -> None:
+    """Rename a file in the Drive folder ``folder_id`` (``old_name`` -> ``new_name``).
+
+    A server-side rename via ``rclone moveto``, authenticated as the user with the
+    Sync GDrive OAuth token (the same write path as :func:`upload_file`) so it can
+    write to the user's own Drive. Both names are relative to ``folder_id`` (the
+    rclone root). Used by the poster healer to rewrite a poster's embedded id /
+    title on the user's Drive. Raises on a missing token or non-zero rclone exit.
+    """
+    _reject_unsafe_id(folder_id, "gdrive_folder_id")
+    _reject_unsafe(old_name, "gdrive_old_name")
+    _reject_unsafe(new_name, "gdrive_new_name")
+    auth = _upload_auth_args(sync_cfg)
+    if not auth:
+        raise RuntimeError(
+            "no usable Google Drive OAuth token configured — set a token under "
+            "Sync GDrive (a service account cannot own files in a personal Drive)"
+        )
+    rclone = _rclone_path()
+    _ensure_remote(rclone)
+    cmd = [
+        rclone,
+        "moveto",
+        f"posters:{old_name}",
+        f"posters:{new_name}",
+        "--drive-root-folder-id",
+        folder_id,
+        "--drive-use-trash=false",
+        "--no-update-modtime",
+        "-v",
+        *auth,
+    ]
+    result = subprocess.run(cmd, check=False, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"rclone moveto failed: {_rclone_error_detail(result.stderr)}"
+        )
+    logger.debug(f"renamed {old_name} -> {new_name} in drive {folder_id}")
+
+
 def _rclone_error_detail(stderr: str) -> str:
     """Pull the meaningful cause out of rclone stderr.
 
