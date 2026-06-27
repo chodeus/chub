@@ -11,6 +11,7 @@ from backend.util.constants import (
     illegal_chars_regex,
     remove_special_chars,
     season_number_regex,
+    unknown_year_regex,
     words_to_remove,
     year_regex,
 )
@@ -26,7 +27,7 @@ _tokens_regex = re.compile(
 # that occasionally appear in curator-exported filenames and would
 # otherwise survive normalization. NBSP (U+00A0) is handled separately so
 # it converts to a real space rather than gluing adjacent words.
-_invisible_chars_regex = re.compile("[\u200B-\u200F\uFEFF]")
+_invisible_chars_regex = re.compile("[\u200b-\u200f\ufeff]")
 
 # Combining diacritical marks left over after NFD decomposition.
 _combining_marks_regex = re.compile("[\u0300-\u036f]")
@@ -135,6 +136,7 @@ def parse_asset_filename(file_name: str) -> str:
     base = _clean_unicode(html.unescape(base))
     base = id_content_regex.sub("", base).strip()
     base = year_regex.sub("", base).strip()
+    base = unknown_year_regex.sub("", base).strip()
     base = season_number_regex.sub("", base).strip(" -_")
     return base
 
@@ -158,6 +160,10 @@ def normalize_titles(title: str) -> str:
         str: Normalized title.
     """
     normalized_title = year_regex.sub("", title)
+    # Strip the *arr "(0)" unknown-year placeholder (year_regex only catches a
+    # 4-digit year), so a folder built from that path normalizes to the bare
+    # title instead of leaving a "0" glued on ("thesavant0").
+    normalized_title = unknown_year_regex.sub("", normalized_title)
     # Strip a delimited season/specials tag so a season poster's key is the
     # SHOW key (the season is carried separately in season_number). year_regex
     # above already removes "(YYYY) - Season N" for yeared files; this also
