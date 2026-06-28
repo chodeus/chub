@@ -111,6 +111,18 @@ const ModuleSettingsContent = ({ moduleKey }) => {
     // and they're excluded from the Schedule. Default (undefined) stays runnable.
     const isRunnable = activeModule?.runnable !== false;
 
+    // Unmet config preconditions a module declares via `requires` in its schema
+    // (e.g. the Poster Healer needs a TMDB API key on the General page). Each
+    // entry is { field: 'tmdb.apikey', message, linkTo?, linkText? }; the dotted
+    // path is read from the loaded config and a falsy value means unmet. A *set*
+    // secret comes back redacted as '********' (truthy), so this only fires when
+    // the field is genuinely blank.
+    const unmetRequirements = useMemo(() => {
+        const reqs = activeModule?.requires || [];
+        const read = path => path.split('.').reduce((o, k) => (o == null ? o : o[k]), formData);
+        return reqs.filter(r => !read(r.field));
+    }, [activeModule, formData]);
+
     const handleSave = useCallback(async () => {
         if (!isDirty || isSaving) return;
         try {
@@ -281,6 +293,31 @@ const ModuleSettingsContent = ({ moduleKey }) => {
                     </div>
                 </div>
             )}
+
+            {unmetRequirements.map((req, i) => (
+                <div
+                    key={`req-${i}`}
+                    className="p-3 bg-warning-bg border border-warning text-warning rounded-lg max-w-[820px]"
+                >
+                    <div className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-sm">warning</span>
+                        <span>
+                            {req.message}
+                            {req.linkTo && (
+                                <>
+                                    {' '}
+                                    <Link
+                                        to={req.linkTo}
+                                        className="underline font-medium hover:opacity-80"
+                                    >
+                                        {req.linkText || 'Open settings'}
+                                    </Link>
+                                </>
+                            )}
+                        </span>
+                    </div>
+                </div>
+            ))}
 
             {!activeModule ? (
                 <div className="text-center py-12 text-fg-subtle">
