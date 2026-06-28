@@ -208,6 +208,7 @@ def _resolve_and_render(
     logo_y_offset: int = 0,
     logo_flip_bytes: Optional[bytes] = None,  # B/W touch-up regions (mask PNG)
     whiten: Optional[bool] = None,  # None = module config (whiten_logo)
+    flat_white: bool = False,  # paint the logo a flat pure-white silhouette
     invert: bool = False,  # plate logo -> clearlogo (white->transparent, black->white)
     allow_ai_extend: bool = True,
     place_logo: bool = True,
@@ -352,6 +353,7 @@ def _resolve_and_render(
         logo_y_offset=logo_y_offset,
         logo_flip_bytes=logo_flip_bytes,
         whiten=cfg.whiten_logo if whiten is None else whiten,
+        flat_white=flat_white,
         invert=invert,
         focus_x=focus_x,
         focus_y=focus_y,
@@ -408,6 +410,7 @@ def generate_for_item(
     logo_y_offset: int = 0,
     logo_flip_bytes: Optional[bytes] = None,  # B/W touch-up regions (mask PNG)
     whiten: Optional[bool] = None,  # None = module config (whiten_logo)
+    flat_white: bool = False,  # paint the logo a flat pure-white silhouette
     invert: bool = False,  # plate logo -> clearlogo (white->transparent, black->white)
     force: bool = False,
     save_local: bool = True,
@@ -474,6 +477,7 @@ def generate_for_item(
         logo_y_offset=logo_y_offset,
         logo_flip_bytes=logo_flip_bytes,
         whiten=whiten,
+        flat_white=flat_white,
         invert=invert,
     )
     if blob is None:
@@ -684,6 +688,7 @@ def generate_logo_asset(
     logo_path: Optional[str] = None,
     logo_bytes: Optional[bytes] = None,
     whiten: bool = False,
+    flat_white: bool = False,  # paint the logo a flat pure-white silhouette
     invert: bool = False,  # plate logo -> clearlogo (white->transparent, black->white)
     flip_mask_bytes: Optional[bytes] = None,  # B/W touch-up regions (mask PNG)
     save_local: bool = True,
@@ -717,7 +722,11 @@ def generate_logo_asset(
     if not raw:
         return {"status": "error", "reason": "no logo selected"}
     png, _w, _h = renderer.process_logo(
-        raw, whiten=whiten, flip_mask_bytes=flip_mask_bytes, invert=invert
+        raw,
+        whiten=whiten,
+        flat_white=flat_white,
+        flip_mask_bytes=flip_mask_bytes,
+        invert=invert,
     )
     return _persist_poster(
         db,
@@ -733,7 +742,7 @@ def generate_logo_asset(
         imdb_id=imdb_id,
         season_number=None,
         backdrop_path=None,
-        logo_source="logo-white" if whiten else "logo",
+        logo_source="logo-white" if (whiten or flat_white) else "logo",
         save_local=save_local,
         upload_gdrive=upload_gdrive,
         image_type="logo",
@@ -1009,6 +1018,7 @@ def save_finished_poster(
     logo_scale: float = 1.0,
     logo_y_offset: int = 0,
     whiten: Optional[bool] = None,  # None = module config (whiten_logo)
+    flat_white: bool = False,  # paint the logo a flat pure-white silhouette
     invert: bool = False,  # plate logo -> clearlogo (white->transparent, black->white)
     save_local: bool = True,
     upload_gdrive: Optional[bool] = None,
@@ -1052,6 +1062,7 @@ def save_finished_poster(
             logo_scale=logo_scale,
             logo_y_offset=logo_y_offset,
             whiten=cfg.whiten_logo if whiten is None else whiten,
+            flat_white=flat_white,
             invert=invert,
         )
     if add_border:
@@ -1219,6 +1230,7 @@ def generate_seasons(
     logo_scale: float = 1.0,
     logo_y_offset: int = 0,
     whiten: Optional[bool] = None,  # None = module config (whiten_logo)
+    flat_white: bool = False,  # paint the logo a flat pure-white silhouette
     invert: bool = False,  # plate logo -> clearlogo (white->transparent, black->white)
     force: bool = False,
     backdrop_path: Optional[str] = None,
@@ -1271,6 +1283,7 @@ def generate_seasons(
                 logo_scale=logo_scale,
                 logo_y_offset=logo_y_offset,
                 whiten=whiten,
+                flat_white=flat_white,
                 invert=invert,
                 force=force,
                 save_local=save_local,
@@ -1311,6 +1324,7 @@ def psd_for_item(
     v_pos: float = 0.0,
     zoom: float = 1.0,
     whiten: Optional[bool] = None,  # None = module config (whiten_logo)
+    flat_white: bool = False,  # paint the logo a flat pure-white silhouette
     invert: bool = False,  # plate logo -> clearlogo (white->transparent, black->white)
 ) -> Optional[bytes]:
     """Resolve art and return a layered CL2K poster as PSD bytes (for Photopea).
@@ -1354,5 +1368,6 @@ def psd_for_item(
         logo_scale=logo_scale,
         logo_y_offset=logo_y_offset,
         whiten=cfg.whiten_logo if whiten is None else whiten,
+        flat_white=flat_white,
         invert=invert,
     )

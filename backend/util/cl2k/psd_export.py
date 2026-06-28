@@ -157,6 +157,7 @@ def export_psd(
     logo_scale: float = 1.0,
     logo_y_offset: int = 0,
     whiten: bool = True,
+    flat_white: bool = False,
     invert: bool = False,
 ) -> bytes:
     """Build the CL2K poster as a layered PSD and return its bytes."""
@@ -178,9 +179,11 @@ def export_psd(
         bbox = lg.getbbox()
         if bbox:
             lg = lg.crop(bbox)
-        if whiten:
+        if flat_white:
+            lg = _flat_white(lg)
+        elif whiten:
             lg = _whiten(lg, flat_fallback=not invert)
-        if invert:
+        if invert and not flat_white:
             lg = _invert_to_clear(lg)
         tw = min(logo_max_width, geo.LOGO_WIDTH_MAX)
         th = round(lg.height * tw / lg.width)
