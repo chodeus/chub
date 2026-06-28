@@ -18,8 +18,9 @@ import os
 from typing import Any, Dict, List, Optional, Tuple
 
 from backend.util.cl2k.naming import build_poster_filename
-from backend.util.constants import season_number_regex
-from backend.util.normalization import normalize_titles
+from backend.util.constants import asset_type_regex, season_number_regex
+from backend.util.helper import extract_ids, extract_year
+from backend.util.normalization import normalize_titles, parse_asset_filename
 
 YEAR_TOLERANCE = 1
 
@@ -74,6 +75,49 @@ def _imdb(value: Any) -> str:
     """Normalize an IMDb id to a comparable 'tt…' string, or '' when absent."""
     s = str(value).strip().lower() if value not in (None, "", "None") else ""
     return s if s.startswith("tt") else ""
+
+
+_IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".webp")
+
+
+def poster_from_filename(filename: str) -> Optional[Dict[str, Any]]:
+    """Parse a bare Drive filename into the poster dict ``resolve_poster``
+    consumes — the live-Drive counterpart of a poster_cache row, for CL2K posters
+    saved straight to Drive (never recorded in poster_cache). Mirrors
+    poster_renamerr's own filename parsing so a Drive poster heals identically to
+    a local one. ``file`` is the bare name (no directory) so apply renames only
+    on Drive. ``asset_type`` is left for resolve_poster to refine from the matched
+    library row (a season tag ⇒ show). Returns None for a non-image file."""
+    _, ext = os.path.splitext(filename)
+    if ext.lower() not in _IMAGE_EXTS:
+        return None
+    m = asset_type_regex.search(filename)
+    if m:
+        image_type = m.group(1).lower()
+        base = asset_type_regex.sub("", filename).strip(" -_")
+        title = parse_asset_filename(base + ext)
+        normalized_title = normalize_titles(base)
+    else:
+        image_type = "poster"
+        title = parse_asset_filename(filename)
+        normalized_title = normalize_titles(filename)
+    tmdb_id, tvdb_id, imdb_id = extract_ids(filename)
+    match = season_number_regex.search(filename)
+    season_number = (
+        int(match.group(1)) if match and match.group(1) else (0 if match else None)
+    )
+    return {
+        "title": title,
+        "normalized_title": normalized_title,
+        "year": extract_year(filename) or extract_year(title),
+        "tmdb_id": tmdb_id,
+        "tvdb_id": tvdb_id,
+        "imdb_id": imdb_id,
+        "season_number": season_number,
+        "image_type": image_type,
+        "asset_type": "show" if season_number is not None else None,
+        "file": filename,
+    }
 
 
 def index_media(media_rows: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -175,7 +219,6 @@ def resolve_poster(
 ) -> Optional[Dict[str, Any]]:
     """Return a poster_heal_review proposal dict, or None for a no-op / retry."""
     asset_type = poster.get("asset_type") or "movie"
-    media_type = _media_type(asset_type)
     cur_name = os.path.basename(poster.get("file", ""))
     _, ext = os.path.splitext(poster.get("file", ""))
     title_old = poster.get("title") or ""
@@ -210,6 +253,12 @@ def resolve_poster(
             }
         return None  # no library match (or non-library poster) — leave it alone
 
+    # The matched library row is authoritative for the media type — a live-Drive
+    # poster may carry none (asset_type=None). Drives the TMDB endpoint and the
+    # canonical filename's kind.
+    resolved_type = media.get("asset_type") or asset_type
+    media_type = _media_type(resolved_type)
+
     # Canonical id set comes from the live library row; title/year from TMDB.
     new_tmdb = _as_int(media.get("tmdb_id")) or old_tmdb
     new_tvdb = _as_int(media.get("tvdb_id")) or old_tvdb
@@ -230,7 +279,7 @@ def resolve_poster(
     # which is why _season_int keeps 0). Otherwise the tag would be dropped.
     season = _season_int(poster.get("season_number"))
     new_name = build_poster_filename(
-        kind="season" if season is not None else asset_type,
+        kind="season" if season is not None else resolved_type,
         title=title_new or title_old,
         year=year_new,
         tmdb_id=new_tmdb,
@@ -267,7 +316,7 @@ def resolve_poster(
     return {
         "poster_file": poster.get("file"),
         "drive_folder_id": drive_folder_id,
-        "asset_type": asset_type,
+        "asset_type": resolved_type,
         "drift_type": drift_type,
         "current_filename": cur_name,
         "proposed_filename": new_name,

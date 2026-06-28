@@ -1,9 +1,11 @@
 # backend/modules/poster_self_heal.py
 """poster_self_heal module — scheduled drift detection for CL2K posters.
 
-The run() scans the CL2K maker's OWN posters (those under its ``output_dir``;
-other owners' synced-in CL2K drives share the style tag but are skipped),
-re-resolves each against
+The run() scans the CL2K maker's OWN posters from two sources — locally-saved
+ones in poster_cache scoped to its ``output_dir`` (other owners' synced-in CL2K
+drives share the style tag but are skipped), and a live listing of the linked
+``gdrive_folder_id`` (the source of truth for a Drive-only setup, where posters
+were never recorded in poster_cache). It re-resolves each against
 TMDB (bridging stale ids through media_cache), and upserts proposals into
 poster_heal_review. By default it only DETECTS (proposals wait for manual review
 via backend/api/poster_self_heal.py). With ``auto_apply`` on, confident proposals
@@ -14,11 +16,16 @@ manual pick. A run sends a Discord notification summarising the outcome.
 import os
 
 from backend.util.base_module import ChubModule
+from backend.util.cl2k.gdrive_upload import list_files
 from backend.util.database import ChubDB
 from backend.util.database.poster_heal_review import poster_heal_review_for
 from backend.util.notification import NotificationManager
 from backend.util.poster_self_heal.apply import apply_proposal
-from backend.util.poster_self_heal.resolver import index_media, resolve_poster
+from backend.util.poster_self_heal.resolver import (
+    index_media,
+    poster_from_filename,
+    resolve_poster,
+)
 from backend.util.tmdb import TMDBClient
 
 _HEAL_KINDS = ("movie", "show")
@@ -50,17 +57,18 @@ class PosterSelfHeal(ChubModule):
         style = (getattr(cl2k, "style", "") or "CL2K").strip()
         folder_id = (getattr(cl2k, "gdrive_folder_id", "") or "").strip() or None
         output_dir = (getattr(cl2k, "output_dir", "") or "").strip()
-        if not output_dir:
+        if not output_dir and not folder_id:
             self.logger.error(
-                "CL2K maker output_dir is not set — poster_self_heal heals the "
-                "locally-saved CL2K posters CHUB tracks in poster_cache, scoped to "
-                "output_dir. A Drive-only save isn't recorded in poster_cache "
-                "(nothing local to match), so there's nothing to heal. Set "
-                "output_dir under Settings → Modules → CL2K Maker to enable "
-                "healing (a linked Drive folder is optional — it only adds the "
-                "Drive-side rename when a fix is applied). Nothing scanned."
+                "CL2K maker has neither output_dir nor gdrive_folder_id set — "
+                "poster_self_heal heals the CL2K posters it can see: locally-saved "
+                "ones (tracked in poster_cache under output_dir) and/or ones in the "
+                "linked Drive folder. Set at least one under Settings → Modules → "
+                "CL2K Maker. Nothing scanned."
             )
             return
+
+        sync_cfg = self.full_config.sync_gdrive
+        auto = bool(getattr(self.config, "auto_apply", False))
 
         with ChubDB(self.logger) as db:
             tmdb_client = TMDBClient(self.full_config.tmdb, db, self.logger)
@@ -71,37 +79,61 @@ class PosterSelfHeal(ChubModule):
                 )
                 return
 
-            # Scope to the user's OWN CL2K output (output_dir) — NOT every poster
-            # carrying the shared "CL2K" style tag, which also covers other
-            # owners' "CL2K <name>" drives synced into the cache.
-            posters = [
-                p
-                for p in db.poster.get_all()
-                if p.get("style") == style
-                and p.get("asset_type") in _HEAL_KINDS
-                and _is_under(p.get("file"), output_dir)
-            ]
+            # LOCAL source — the user's OWN CL2K output (output_dir), NOT every
+            # poster carrying the shared "CL2K" style tag (that also covers other
+            # owners' "CL2K <name>" drives synced into the cache).
+            local_posters = (
+                [
+                    p
+                    for p in db.poster.get_all()
+                    if p.get("style") == style
+                    and p.get("asset_type") in _HEAL_KINDS
+                    and _is_under(p.get("file"), output_dir)
+                ]
+                if output_dir
+                else []
+            )
+            local_names = {os.path.basename(p.get("file") or "") for p in local_posters}
+
+            # LIVE-DRIVE source — posters that live in the linked Drive folder. The
+            # source of truth for a Drive-only setup (no local copy in poster_cache).
+            # Skip names a local row already covers (its apply renames the Drive copy
+            # too). A listing failure logs a warning and yields [].
+            drive_posters = []
+            if folder_id:
+                for name in list_files(folder_id, sync_cfg, self.logger):
+                    base = os.path.basename(name)
+                    if base in local_names:
+                        continue
+                    parsed = poster_from_filename(base)
+                    if parsed:
+                        drive_posters.append(parsed)
+
+            posters = local_posters + drive_posters
             media_index = index_media(db.media.get_all())
             reviews = poster_heal_review_for(db)
 
-            # Drop open proposals no longer in scope (e.g. left by an earlier,
-            # broader scan) so the queue only ever holds output_dir posters.
+            # Drop open proposals from an earlier, broader scan — absolute local
+            # paths outside output_dir (e.g. other owners' synced posters). Live-
+            # Drive proposals carry a bare filename (not absolute), so they're kept.
             pruned = 0
-            for row in reviews.list_open(limit=1_000_000):
-                if not _is_under(row.get("poster_file"), output_dir):
-                    reviews.delete(row["id"])
-                    pruned += 1
+            if output_dir:
+                for row in reviews.list_open(limit=1_000_000):
+                    pf = row.get("poster_file") or ""
+                    if os.path.isabs(pf) and not _is_under(pf, output_dir):
+                        reviews.delete(row["id"])
+                        pruned += 1
             if pruned:
                 self.logger.info(
                     f"poster_self_heal: pruned {pruned} out-of-scope proposal(s)"
                 )
 
-            auto = bool(getattr(self.config, "auto_apply", False))
-            sync_cfg = self.full_config.sync_gdrive
             total = len(posters)
             self.logger.info(
-                f"poster_self_heal: scanning {total} CL2K posters under "
-                f"{output_dir} (style={style!r})"
+                f"poster_self_heal: scanning {total} CL2K posters "
+                f"({len(local_posters)} local"
+                f"{f' under {output_dir}' if output_dir else ''}, "
+                f"{len(drive_posters)} on Drive)"
                 f"{' [auto-apply ON]' if auto else ''}"
             )
             proposed = pending = applied = failed = 0

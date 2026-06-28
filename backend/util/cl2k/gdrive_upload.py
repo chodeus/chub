@@ -212,6 +212,47 @@ def move_file(
     logger.debug(f"renamed {old_name} -> {new_name} in drive {folder_id}")
 
 
+def list_files(folder_id: str, sync_cfg: Any, logger) -> List[str]:
+    """List the file names (top level, files only) in the Drive folder
+    ``folder_id`` via ``rclone lsf``.
+
+    Used by the poster healer's live-Drive source so it can heal posters saved
+    straight to Drive (a Drive-only save is never recorded in poster_cache).
+    Authenticated with the Sync GDrive OAuth token, like upload_file/move_file.
+    Returns [] (logging a warning) on a missing token or any rclone failure — a
+    Drive-listing problem must not abort a run that may still have local posters
+    to heal. Names are returned relative to ``folder_id`` (the rclone root), the
+    same form move_file expects.
+    """
+    _reject_unsafe_id(folder_id, "gdrive_folder_id")
+    auth = _upload_auth_args(sync_cfg)
+    if not auth:
+        logger.warning(
+            "poster_self_heal: no Google Drive OAuth token — skipping live Drive "
+            "listing (set one under Sync GDrive)"
+        )
+        return []
+    rclone = _rclone_path()
+    _ensure_remote(rclone)
+    cmd = [
+        rclone,
+        "lsf",
+        "posters:",
+        "--drive-root-folder-id",
+        folder_id,
+        "--files-only",
+        *auth,
+    ]
+    result = subprocess.run(cmd, check=False, capture_output=True, text=True)
+    if result.returncode != 0:
+        logger.warning(
+            f"poster_self_heal: rclone lsf failed: "
+            f"{_rclone_error_detail(result.stderr)}"
+        )
+        return []
+    return [ln.strip() for ln in result.stdout.splitlines() if ln.strip()]
+
+
 def _rclone_error_detail(stderr: str) -> str:
     """Pull the meaningful cause out of rclone stderr.
 
