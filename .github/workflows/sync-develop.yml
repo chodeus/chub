@@ -1,0 +1,54 @@
+name: Sync develop from main
+
+# Open a back-merge PR from main into develop on every push to main, so develop
+# (the public app + develop-only extensions) keeps receiving everything that lands
+# on main — releases, fixes, dependency bumps. The branch model's sync direction
+# is main -> develop and shared files are byte-identical on both, so the merge
+# should never conflict while the invariant holds. The PR is a review gate: you
+# merge it; nothing is pushed automatically. An already-open base:develop /
+# head:main PR auto-tracks main's tip, so we only create one when none is open.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: sync-develop
+  cancel-in-progress: false
+
+jobs:
+  sync-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Open develop-sync PR if needed
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git fetch --quiet origin main develop
+
+          if [ "$(gh pr list --base develop --head main --state open --json number --jq 'length')" -gt 0 ]; then
+            echo "A main -> develop sync PR is already open; it tracks main automatically."
+            exit 0
+          fi
+
+          if git merge-base --is-ancestor origin/main origin/develop; then
+            echo "develop already contains main; nothing to sync."
+            exit 0
+          fi
+
+          gh pr create \
+            --base develop \
+            --head main \
+            --title "chore: sync develop with main" \
+            --body "Automated back-merge of \`main\` into \`develop\`. Sync direction is main -> develop and shared files are byte-identical, so this should merge cleanly. Review and merge to bring main's changes (releases, fixes, dependency bumps) onto develop. Opened by the sync-develop workflow."
