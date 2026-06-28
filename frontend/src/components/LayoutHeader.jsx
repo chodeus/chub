@@ -142,7 +142,7 @@ const LayoutHeader = React.memo(() => {
 
     return (
         <header
-            className={`shrink-0 ${isMobile ? 'h-14' : 'h-20 min-h-header'} bg-header-bg z-sticky ${isSearchPage ? 'search-page' : 'non-search-page'}`}
+            className={`shrink-0 h-14 bg-header-bg z-sticky ${isSearchPage ? 'search-page' : 'non-search-page'}`}
             role="banner"
         >
             <div
