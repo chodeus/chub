@@ -303,3 +303,28 @@ def test_logo_asset_keeps_suffix():
         {410: {"verified": True, "title": "New Name", "year": 2019}},
     )
     assert r["proposed_filename"] == "New Name (2019) {tmdb-410} - Logo.jpg"
+
+
+# --- scope predicate: only the CL2K maker's own output_dir is healed ---
+
+from backend.modules.poster_self_heal import _is_under  # noqa: E402
+
+
+def test_is_under_matches_own_output_dir():
+    base = "/kometa/posters/CL2K/Chodeus"
+    assert _is_under("/kometa/posters/CL2K/Chodeus/1923 (2022) - Specials.jpg", base)
+    assert _is_under(base, base)  # the dir itself
+
+
+def test_is_under_excludes_other_owners_and_prefix_collisions():
+    base = "/kometa/posters/CL2K/Chodeus"
+    # Another owner's synced-in CL2K drive (same style tag, different folder).
+    assert not _is_under("/kometa/posters/CL2K/Solen/1923 (2022).jpg", base)
+    # Prefix collision must NOT match (Chodeus vs Chodeus2).
+    assert not _is_under("/kometa/posters/CL2K/Chodeus2/x.jpg", base)
+
+
+def test_is_under_empty_inputs_are_false():
+    assert not _is_under("", "/kometa/posters/CL2K/Chodeus")
+    assert not _is_under("/kometa/posters/CL2K/Chodeus/x.jpg", "")
+    assert not _is_under(None, "/base")
