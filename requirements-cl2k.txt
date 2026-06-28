@@ -2,5 +2,5 @@
 # extension). Kept out of requirements.txt so that file stays identical to
 # main; installed by the CL2K block in deploy/docker/Dockerfile and needed
 # locally to run the cl2k tests.
-psd-tools[composite]==1.17.3
-Wand==0.7.1
+psd-tools[composite]==1.17.4
+Wand==0.7.2
