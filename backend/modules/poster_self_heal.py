@@ -52,10 +52,13 @@ class PosterSelfHeal(ChubModule):
         output_dir = (getattr(cl2k, "output_dir", "") or "").strip()
         if not output_dir:
             self.logger.error(
-                "CL2K maker output_dir is not set — poster_self_heal can't tell "
-                "your own posters from synced-in CL2K posters (every synced "
-                "'CL2K <owner>' drive shares the same style tag). Set it under "
-                "Settings → Modules → CL2K Maker; nothing scanned."
+                "CL2K maker output_dir is not set — poster_self_heal heals the "
+                "locally-saved CL2K posters CHUB tracks in poster_cache, scoped to "
+                "output_dir. A Drive-only save isn't recorded in poster_cache "
+                "(nothing local to match), so there's nothing to heal. Set "
+                "output_dir under Settings → Modules → CL2K Maker to enable "
+                "healing (a linked Drive folder is optional — it only adds the "
+                "Drive-side rename when a fix is applied). Nothing scanned."
             )
             return
 
