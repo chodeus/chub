@@ -390,6 +390,39 @@ def _flip_regions(logo: Image, mask_bytes: bytes) -> None:
         mask.close()
 
 
+def _erase_regions(logo: Image, mask_bytes: bytes) -> None:
+    """Make brushed regions transparent (manual logo cleanup), in place.
+
+    The mask is brushed over the PROCESSED logo — white strokes on transparency,
+    at display resolution — and is resized here. Extraction and whitening can keep
+    stray bits a clean logo shouldn't have (a leftover glyph, a ® mark, edge
+    speckle); the user paints those away. White = erase; everything unpainted
+    keeps its alpha. Colours are untouched — only alpha is reduced. Decode
+    failures are a no-op (the un-erased logo renders).
+    """
+    try:
+        mask = Image(blob=mask_bytes)
+    except Exception:
+        return
+    try:
+        # Brush strokes are white-on-transparent: flatten onto black so the mask
+        # reads white=erase / black=keep, match the logo's size, then negate so it
+        # becomes an alpha multiplier (erase->0, keep->full).
+        mask.background_color = Color("black")
+        mask.alpha_channel = "remove"
+        mask.transform_colorspace("gray")
+        mask.resize(logo.width, logo.height)
+        mask.negate()
+        with logo.clone() as alpha:
+            alpha.alpha_channel = "extract"
+            alpha.composite(mask, operator="multiply")  # zero alpha where erased
+            logo.composite(alpha, operator=_COPY_ALPHA)
+    except Exception:
+        pass  # fail open: an unreadable mask must not break the render
+    finally:
+        mask.close()
+
+
 def _invert_to_clear(logo: Image) -> None:
     """Invert logo: white → transparent, black → white, in place.
 
@@ -455,6 +488,7 @@ def process_logo(
     whiten: bool = True,
     flat_white: bool = False,
     flip_mask_bytes: Optional[bytes] = None,
+    erase_mask_bytes: Optional[bytes] = None,
     invert: bool = False,
 ) -> Tuple[bytes, int, int]:
     """Trim transparent padding and (optionally) whiten a clear logo.
@@ -479,6 +513,8 @@ def process_logo(
             _flip_regions(logo, flip_mask_bytes)
         if invert and not flat_white:
             _invert_to_clear(logo)
+        if erase_mask_bytes:
+            _erase_regions(logo, erase_mask_bytes)
         logo.format = "png"
         return logo.make_blob(), logo.width, logo.height
 
@@ -510,6 +546,7 @@ def _place_logo(
     logo_scale: float = 1.0,
     logo_y_offset: int = 0,
     flip_mask_bytes: Optional[bytes] = None,
+    erase_mask_bytes: Optional[bytes] = None,
     invert: bool = False,
     flat_white: bool = False,
 ) -> None:
@@ -549,6 +586,8 @@ def _place_logo(
             _flip_regions(logo, flip_mask_bytes)
         if invert and not flat_white:
             _invert_to_clear(logo)
+        if erase_mask_bytes:
+            _erase_regions(logo, erase_mask_bytes)
         target_w = min(max_width, geo.LOGO_WIDTH_MAX)  # the guide box width
         target_h = int(round(logo.height * target_w / logo.width))
         max_h = baseline - geo.LOGO_ZONE_TOP
@@ -876,6 +915,7 @@ def render_cl2k(
     logo_scale: float = 1.0,
     logo_y_offset: int = 0,
     logo_flip_bytes: Optional[bytes] = None,  # B/W touch-up regions (mask PNG)
+    logo_erase_bytes: Optional[bytes] = None,  # erase regions (mask PNG, white=erase)
     whiten: bool = True,
     flat_white: bool = False,  # paint the logo a flat pure-white silhouette
     invert: bool = False,  # plate logo -> clearlogo (white->transparent, black->white)
@@ -954,6 +994,7 @@ def render_cl2k(
                     logo_scale,
                     logo_y_offset,
                     flip_mask_bytes=logo_flip_bytes,
+                    erase_mask_bytes=logo_erase_bytes,
                     invert=invert,
                     flat_white=flat_white,
                 )
