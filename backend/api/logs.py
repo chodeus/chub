@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import PlainTextResponse
 
 from backend.api.utils import error, get_logger, ok
+from backend.extensions import extension_config_fields
 from backend.modules import MODULES
 
 if os.environ.get("DOCKER_ENV"):
@@ -13,11 +14,17 @@ if os.environ.get("DOCKER_ENV"):
 else:
     LOG_BASE_DIR = str((Path(__file__).parents[2] / "logs").resolve())
 
+
 # Allow-list of module names accepted by the log-reading endpoints. Anything
 # outside this set is rejected before touching the filesystem, which keeps
 # user-controlled path components from reaching os.path.join even indirectly.
 # "general" is the shared/root log emitted by the main app (not a module).
-VALID_LOG_MODULES = set(MODULES.keys()) | {"general"}
+# extension_config_fields() adds CONFIG-ONLY extension modules (e.g. cl2k_maker)
+# that log via get_module_logger but aren't in the runnable MODULES registry —
+# empty on main. Computed per call so late extension registration is reflected.
+def _valid_log_modules() -> set:
+    return set(MODULES.keys()) | {"general"} | set(extension_config_fields().keys())
+
 
 router = APIRouter(
     prefix="/api",
@@ -51,7 +58,7 @@ async def list_logs(logger: Any = Depends(get_logger)) -> Dict[str, Any]:
         # only serves VALID_LOG_MODULES, so a stale/unknown dir left by an older
         # build (e.g. an 'orphan-dryrun' leftover) would otherwise show as a dead
         # entry that 404s when opened.
-        modules = sorted(set(MODULES.keys()) | {"general"})
+        modules = sorted(_valid_log_modules())
 
         logger.debug("Log modules listed: %s", modules)
         return ok(
@@ -84,7 +91,7 @@ async def list_logs_for_module(
         # filesystem. Covers path-injection and makes the intent explicit
         # (basename alone is safe, but CodeQL doesn't recognize it as a
         # sanitizer and we'd rather fail closed than lean on implicit trust).
-        if module_name not in VALID_LOG_MODULES:
+        if module_name not in _valid_log_modules():
             return error(
                 f"Unknown module '{module_name}'",
                 code="UNKNOWN_MODULE",
@@ -144,7 +151,7 @@ def read_log(
         # Allow-list the module name (same guard as list_logs_for_module).
         # Filename still goes through basename+realpath because it's
         # user-driven but constrained to a known module dir.
-        if module not in VALID_LOG_MODULES:
+        if module not in _valid_log_modules():
             return error(
                 "Log file not found",
                 code="LOG_FILE_NOT_FOUND",
