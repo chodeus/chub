@@ -1,16 +1,19 @@
 # backend/modules/poster_self_heal.py
 """poster_self_heal module — scheduled drift detection for CL2K posters.
 
-The run() does DETECTION only: it scans the CL2K-styled posters in poster_cache,
-re-resolves each against TMDB (bridging stale ids through media_cache), and
-upserts proposals into poster_heal_review. Applying a proposal is a separate,
-manually-reviewed action (backend/api/poster_self_heal.py), so a run never
-touches a file on its own.
+The run() scans CL2K-styled posters in poster_cache, re-resolves each against
+TMDB (bridging stale ids through media_cache), and upserts proposals into
+poster_heal_review. By default it only DETECTS (proposals wait for manual review
+via backend/api/poster_self_heal.py). With ``auto_apply`` on, confident proposals
+are renamed immediately (Drive + local); ambiguous matches always wait for a
+manual pick. A run sends a Discord notification summarising the outcome.
 """
 
 from backend.util.base_module import ChubModule
 from backend.util.database import ChubDB
 from backend.util.database.poster_heal_review import poster_heal_review_for
+from backend.util.notification import NotificationManager
+from backend.util.poster_self_heal.apply import apply_proposal
 from backend.util.poster_self_heal.resolver import index_media, resolve_poster
 from backend.util.tmdb import TMDBClient
 
@@ -49,11 +52,14 @@ class PosterSelfHeal(ChubModule):
             media_index = index_media(db.media.get_all())
             reviews = poster_heal_review_for(db)
 
+            auto = bool(getattr(self.config, "auto_apply", False))
+            sync_cfg = self.full_config.sync_gdrive
             total = len(posters)
             self.logger.info(
                 f"poster_self_heal: scanning {total} CL2K posters (style={style!r})"
+                f"{' [auto-apply ON]' if auto else ''}"
             )
-            proposed = pending = 0
+            proposed = pending = applied = failed = 0
             for idx, poster in enumerate(posters, 1):
                 if self.is_cancelled():
                     self.logger.info("poster_self_heal cancelled.")
@@ -69,19 +75,52 @@ class PosterSelfHeal(ChubModule):
                     )
                     prop = None
                 if prop:
-                    reviews.upsert(prop)
-                    if prop["status"] == "pending":
-                        pending += 1
-                    else:
-                        proposed += 1
                     self.logger.debug(
                         f"[{prop['drift_type']}] {prop['current_filename']} -> "
                         f"{prop['proposed_filename']}"
                     )
+                    # Auto-apply confident proposals when enabled; ambiguous
+                    # (pending) ones always wait for a manual pick.
+                    if auto and prop["status"] == "proposed":
+                        try:
+                            note = apply_proposal(prop, sync_cfg, self.logger)
+                            prop["status"] = "applied"
+                            applied += 1
+                            self.logger.info(
+                                f"auto-applied {prop['proposed_filename']}{note}"
+                            )
+                        except Exception as exc:
+                            failed += 1
+                            self.logger.warning(
+                                f"auto-apply failed for {prop['current_filename']}: {exc}"
+                                " — left for manual review"
+                            )
+                    if prop["status"] == "pending":
+                        pending += 1
+                    elif prop["status"] == "proposed":
+                        proposed += 1
+                    reviews.upsert(prop)
                 if total:
                     self._report_progress(int(idx / total * 100))
 
             self.logger.info(
-                f"poster_self_heal done: {proposed} proposed, {pending} need a manual "
-                f"pick, {reviews.open_count()} open for review total"
+                f"poster_self_heal done: {applied} auto-applied, {proposed} proposed, "
+                f"{pending} need a manual pick, {failed} failed; "
+                f"{reviews.open_count()} open for review total"
             )
+
+            if applied or proposed or pending:
+                output = {
+                    "scanned": total,
+                    "applied": applied,
+                    "proposed": proposed,
+                    "pending": pending,
+                    "failed": failed,
+                    "open": reviews.open_count(),
+                }
+                try:
+                    NotificationManager(
+                        self.full_config, self.logger, module_name="poster_self_heal"
+                    ).send_notification(output)
+                except Exception as exc:
+                    self.logger.error(f"Failed to send notification: {exc}")

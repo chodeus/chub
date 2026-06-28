@@ -22,6 +22,13 @@ export const POSTER_SELF_HEAL_SCHEMA = {
             description:
                 'Also ADD resolved {tmdb-…}/{tvdb-…}/{imdb-…} ids to a poster that has none — not just correct posters that already carry an id. The source drive (CL2K output dir + Google Drive folder) comes from the CL2K Maker settings.',
         },
+        {
+            key: 'auto_apply',
+            label: 'Auto-apply confident fixes',
+            type: 'check_box',
+            description:
+                'Apply confident fixes automatically during the run (rename on Google Drive + locally) instead of waiting for manual review. Ambiguous matches — where a title matches more than one library item — always go to the review page regardless.',
+        },
     ],
 };
 
