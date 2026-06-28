@@ -1,13 +1,17 @@
 # backend/modules/poster_self_heal.py
 """poster_self_heal module — scheduled drift detection for CL2K posters.
 
-The run() scans CL2K-styled posters in poster_cache, re-resolves each against
+The run() scans the CL2K maker's OWN posters (those under its ``output_dir``;
+other owners' synced-in CL2K drives share the style tag but are skipped),
+re-resolves each against
 TMDB (bridging stale ids through media_cache), and upserts proposals into
 poster_heal_review. By default it only DETECTS (proposals wait for manual review
 via backend/api/poster_self_heal.py). With ``auto_apply`` on, confident proposals
 are renamed immediately (Drive + local); ambiguous matches always wait for a
 manual pick. A run sends a Discord notification summarising the outcome.
 """
+
+import os
 
 from backend.util.base_module import ChubModule
 from backend.util.database import ChubDB
@@ -18,6 +22,17 @@ from backend.util.poster_self_heal.resolver import index_media, resolve_poster
 from backend.util.tmdb import TMDBClient
 
 _HEAL_KINDS = ("movie", "show")
+
+
+def _is_under(path: str, base_dir: str) -> bool:
+    """True if ``path`` lives inside ``base_dir`` (or equals it). Scopes the heal
+    to the CL2K maker's own ``output_dir`` so synced-in CL2K posters from other
+    owners' drives (same ``style`` tag, different folder) are left alone."""
+    if not path or not base_dir:
+        return False
+    base = os.path.normpath(base_dir)
+    p = os.path.normpath(path)
+    return p == base or p.startswith(base + os.sep)
 
 
 class PosterSelfHeal(ChubModule):
@@ -34,6 +49,15 @@ class PosterSelfHeal(ChubModule):
 
         style = (getattr(cl2k, "style", "") or "CL2K").strip()
         folder_id = (getattr(cl2k, "gdrive_folder_id", "") or "").strip() or None
+        output_dir = (getattr(cl2k, "output_dir", "") or "").strip()
+        if not output_dir:
+            self.logger.error(
+                "CL2K maker output_dir is not set — poster_self_heal can't tell "
+                "your own posters from synced-in CL2K posters (every synced "
+                "'CL2K <owner>' drive shares the same style tag). Set it under "
+                "Settings → Modules → CL2K Maker; nothing scanned."
+            )
+            return
 
         with ChubDB(self.logger) as db:
             tmdb_client = TMDBClient(self.full_config.tmdb, db, self.logger)
@@ -44,19 +68,37 @@ class PosterSelfHeal(ChubModule):
                 )
                 return
 
+            # Scope to the user's OWN CL2K output (output_dir) — NOT every poster
+            # carrying the shared "CL2K" style tag, which also covers other
+            # owners' "CL2K <name>" drives synced into the cache.
             posters = [
                 p
                 for p in db.poster.get_all()
-                if p.get("style") == style and p.get("asset_type") in _HEAL_KINDS
+                if p.get("style") == style
+                and p.get("asset_type") in _HEAL_KINDS
+                and _is_under(p.get("file"), output_dir)
             ]
             media_index = index_media(db.media.get_all())
             reviews = poster_heal_review_for(db)
+
+            # Drop open proposals no longer in scope (e.g. left by an earlier,
+            # broader scan) so the queue only ever holds output_dir posters.
+            pruned = 0
+            for row in reviews.list_open(limit=1_000_000):
+                if not _is_under(row.get("poster_file"), output_dir):
+                    reviews.delete(row["id"])
+                    pruned += 1
+            if pruned:
+                self.logger.info(
+                    f"poster_self_heal: pruned {pruned} out-of-scope proposal(s)"
+                )
 
             auto = bool(getattr(self.config, "auto_apply", False))
             sync_cfg = self.full_config.sync_gdrive
             total = len(posters)
             self.logger.info(
-                f"poster_self_heal: scanning {total} CL2K posters (style={style!r})"
+                f"poster_self_heal: scanning {total} CL2K posters under "
+                f"{output_dir} (style={style!r})"
                 f"{' [auto-apply ON]' if auto else ''}"
             )
             proposed = pending = applied = failed = 0
