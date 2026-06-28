@@ -46,3 +46,30 @@ def test_module_logger_attaches_file_handler_despite_root_handler(
             h.close()
             mod_logger.removeHandler(h)
         Logger._initialized.discard((name, str(log_file)))
+
+
+def test_console_log_level_decoupled_from_file_level(tmp_path, monkeypatch):
+    """CONSOLE_LOG_LEVEL caps the console (container stdout) independently of the
+    logger/file level, so files can stay DEBUG while stdout stays quiet."""
+    monkeypatch.setenv("LOG_DIR", str(tmp_path))
+    monkeypatch.setenv("LOG_TO_CONSOLE", "1")
+    monkeypatch.setenv("CONSOLE_LOG_LEVEL", "WARNING")
+    name = "ut_console_decouple"
+    log_file = tmp_path / name / f"{name}.log"
+    try:
+        lg = Logger(log_level="debug", module_name=name)
+        assert lg._logger.level == logging.DEBUG  # file/logger stays verbose
+        streams = [
+            h
+            for h in lg._logger.handlers
+            if isinstance(h, logging.StreamHandler)
+            and not isinstance(h, logging.FileHandler)
+        ]
+        # the non-error console handler is pinned to CONSOLE_LOG_LEVEL, not DEBUG
+        assert any(h.level == logging.WARNING for h in streams)
+    finally:
+        ml = logging.getLogger(name)
+        for h in list(ml.handlers):
+            h.close()
+            ml.removeHandler(h)
+        Logger._initialized.discard((name, str(log_file)))

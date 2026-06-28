@@ -255,7 +255,16 @@ class Logger:
 
         if should_log_to_console:
             console = logging.StreamHandler()
-            console.setLevel(self._logger.level)
+            # Console (container stdout) level is independent of the file level so
+            # you can keep verbose DEBUG in the per-module files while the
+            # container log stays clean: set CONSOLE_LOG_LEVEL=INFO. Unset → matches
+            # the logger's own level (previous behaviour).
+            console_level = os.getenv("CONSOLE_LOG_LEVEL", "").strip().upper()
+            console.setLevel(
+                getattr(logging, console_level, self._logger.level)
+                if console_level
+                else self._logger.level
+            )
             console.addFilter(lambda record: record.levelno < logging.ERROR)
             console.setFormatter(logging.Formatter("%(message)s"))
             console.addFilter(redaction_filter)
