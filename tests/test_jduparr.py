@@ -48,7 +48,9 @@ def make_module(monkeypatch, config):
     monkeypatch.setattr(base_module, "load_config", lambda: config)
     CapturingNotificationManager.init_args = []
     CapturingNotificationManager.sent = []
-    monkeypatch.setattr(jduparr_module, "NotificationManager", CapturingNotificationManager)
+    monkeypatch.setattr(
+        jduparr_module, "NotificationManager", CapturingNotificationManager
+    )
     return Jduparr(logger=logger), logger
 
 
@@ -146,7 +148,15 @@ def test_dry_run_scans_all_source_dirs_once_and_does_not_link(tmp_path, monkeypa
     module.run()
 
     assert calls == [
-        ["jdupes", "-r", "--json", "-X", "onlyext:mp4,mkv,avi", str(source_a), str(source_b)]
+        [
+            "jdupes",
+            "-r",
+            "--json",
+            "-X",
+            "onlyext:mp4,mkv,avi",
+            str(source_a),
+            str(source_b),
+        ]
     ]
     assert CapturingNotificationManager.init_args == [(config, "jduparr")]
     output = CapturingNotificationManager.sent[0]
@@ -370,7 +380,10 @@ def test_subprocess_run_called_with_timeout(tmp_path, monkeypatch):
 
     module.run()
 
-    assert seen_kwargs and seen_kwargs[0].get("timeout") == jduparr_module.JDUPES_TIMEOUT_SECONDS
+    assert (
+        seen_kwargs
+        and seen_kwargs[0].get("timeout") == jduparr_module.JDUPES_TIMEOUT_SECONDS
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -520,11 +533,16 @@ def test_notification_manager_reads_jduparr_targets_from_full_config(monkeypatch
     config = ChubConfig(
         jduparr=JduparrConfig(dry_run=True),
         notifications=ConfigNotifications(
-            jduparr={
-                "discord": {
-                    "webhook": "https://discord.com/api/webhooks/1/token",
+            destinations=[
+                {
+                    "id": "j1",
+                    "method": "discord",
+                    "enabled": True,
+                    "events": {"success": True, "failure": False},
+                    "modules": ["jduparr"],
+                    "config": {"webhook": "https://discord.com/api/webhooks/1/token"},
                 }
-            }
+            ]
         ),
     )
     manager = NotificationManager(config, CapturingLogger(), module_name="jduparr")
@@ -532,13 +550,16 @@ def test_notification_manager_reads_jduparr_targets_from_full_config(monkeypatch
     from backend.util.notification import DiscordConfig
 
     assert manager.module_config.dry_run is True
-    assert manager.collect_valid_targets() == {
-        "discord": {
-            "webhook": "https://discord.com/api/webhooks/1/token",
-            "bot_name": None,
-            "color": None,
-        }
-    }
+    assert manager._resolve_targets("success", "jduparr") == [
+        (
+            "discord",
+            {
+                "webhook": "https://discord.com/api/webhooks/1/token",
+                "bot_name": None,
+                "color": None,
+            },
+        )
+    ]
 
     monkeypatch.setattr(
         manager,

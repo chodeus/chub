@@ -49,8 +49,8 @@ def test_asset_renamerr_defaults():
     assert ar.asset_types == ["logo", "background"]
     assert ar.apply_method == "kometa"
     assert config.poster_renamerr.run_asset_renamerr is False
-    # notifications section accepts asset_renamerr
-    assert config.notifications.asset_renamerr == {}
+    # notifications now default to an empty destinations list
+    assert config.notifications.destinations == []
 
 
 def test_poster_renamerr_music_defaults():
@@ -163,6 +163,54 @@ def test_save_config_creates_config_directory(tmp_path):
     save_config(ChubConfig(), str(config_path))
 
     assert config_path.exists()
+
+
+def test_legacy_notifications_auto_heal_on_load(tmp_path):
+    """An existing per-module notifications config must auto-migrate to the
+    per-destination shape on load AND be rewritten to disk, with the original
+    preserved as a legacy backup."""
+    config_path = tmp_path / "config.yml"
+    legacy = {
+        "general": {"log_level": "info"},
+        "notifications": {
+            "poster_renamerr": {
+                "discord": {
+                    "webhook": "https://discord.com/api/webhooks/1/a",
+                    "bot_name": "CHUB",
+                }
+            },
+            "asset_renamerr": {
+                "discord": {"webhook": "https://discord.com/api/webhooks/1/a"}
+            },
+            "main": {"discord": {"webhook": "https://discord.com/api/webhooks/9/err"}},
+        },
+    }
+    config_path.write_text(yaml.safe_dump(legacy, sort_keys=False))
+
+    config = load_config(str(config_path))
+
+    # In-memory model is the new shape.
+    dests = config.notifications.destinations
+    assert dests, "expected migrated destinations"
+    shared = [d for d in dests if "webhooks/1/a" in (d.config.get("webhook") or "")]
+    assert len(shared) == 1
+    assert sorted(shared[0].modules) == ["asset_renamerr", "poster_renamerr"]
+    assert shared[0].events.success is True
+    errd = [d for d in dests if "webhooks/9/err" in (d.config.get("webhook") or "")]
+    assert errd and errd[0].events.failure is True and errd[0].modules == ["__ALL__"]
+
+    # File on disk was rewritten to the new shape...
+    persisted = yaml.safe_load(config_path.read_text())
+    assert set(persisted["notifications"].keys()) == {"destinations"}
+
+    # ...and the original was preserved as a legacy backup.
+    backups = list(tmp_path.glob("config.yml.legacy-*.yml"))
+    assert backups, "expected a legacy backup file"
+
+    # Reloading the healed file is a no-op (no further migration).
+    reloaded = load_config(str(config_path))
+    assert len(reloaded.notifications.destinations) == len(dests)
+    assert len(list(tmp_path.glob("config.yml.legacy-*.yml"))) == len(backups)
 
 
 # --- GDrive Token Tests ---

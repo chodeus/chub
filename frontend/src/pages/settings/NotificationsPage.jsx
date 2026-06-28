@@ -1,10 +1,10 @@
 import { useState, useCallback } from 'react';
 import { ServiceIcon } from '../../components/ui';
+import Toggle from '../../components/ui/Toggle';
 import { Button } from '../../components/ui/button/Button';
 import { Modal } from '../../components/modals/Modal';
 import { useApiData } from '../../hooks/useApiData';
-import { notificationsAPI } from '../../utils/api/notifications';
-import { NotificationCard } from '../../components/notifications/NotificationCard';
+import { notificationsAPI, ALL_MODULES } from '../../utils/api/notifications';
 import { FieldRegistry } from '../../components/fields/FieldRegistry';
 import { NOTIFICATIONS_SCHEMA } from '../../utils/constants/notifications_schema';
 import { useToast } from '../../contexts/ToastContext';
@@ -13,132 +13,169 @@ import { moduleOrder } from '../../utils/constants/constants';
 import { CONFIG_ONLY_MODULE_KEYS } from '../../utils/constants/settings_schema';
 import { withExtensionConfigModuleKeys } from '../../extensions/index.js';
 
-// Every notifiable channel (matches the backend ConfigNotifications model, which
-// is `extra="allow"` so extension channels persist): all modules in display
-// order — extension modules spliced in at their anchors — plus the global "main"
-// error channel, minus the non-notifiable "general" section and config-only
-// modules (runnable:false, e.g. CL2K Maker) which never run to notify.
-const NOTIFY_MODULES = withExtensionConfigModuleKeys(moduleOrder).filter(
-    m => m !== 'general' && !CONFIG_ONLY_MODULE_KEYS.has(m)
+const REDACTED = '********';
+const CHIP_LIMIT = 6;
+
+// The modules a destination can report on — every runnable module in display
+// order (extension modules spliced at their anchors), minus the non-notifiable
+// "general"/"main" pseudo-sections and config-only modules (CL2K Maker) that
+// never run to notify. Kept in sync with Settings → Modules, not hard-coded.
+const MODULE_KEYS = withExtensionConfigModuleKeys(moduleOrder).filter(
+    m => m !== 'general' && m !== 'main' && !CONFIG_ONLY_MODULE_KEYS.has(m)
 );
 
+// Method identity — tints/status are independent of the accent theme.
+const METHOD = {
+    discord: {
+        label: 'Discord',
+        tint: '#a99eff',
+        tintBg: 'rgba(135,103,247,.14)',
+        tintBorder: 'rgba(135,103,247,.32)',
+        status: 'Direct',
+        statusColor: '#6cbc66',
+        statusRing: 'rgba(108,188,102,.16)',
+        blurb: 'Post rich embeds straight into a channel with an incoming webhook URL. No account needed.',
+        addLabel: 'Add webhook',
+        noun: 'webhook',
+    },
+    notifiarr: {
+        label: 'Notifiarr',
+        tint: '#ff9d75',
+        tintBg: 'rgba(255,157,117,.14)',
+        tintBorder: 'rgba(255,157,117,.32)',
+        status: 'Connected',
+        statusColor: '#53e8f0',
+        statusRing: 'rgba(83,232,240,.16)',
+        blurb: 'Route alerts through your Notifiarr account — fan out to Discord, mobile push, Telegram & more.',
+        addLabel: 'Add alert',
+        noun: 'alert',
+    },
+};
+
+const isAll = modules => Array.isArray(modules) && modules.includes(ALL_MODULES);
+
+const selectedModules = modules => (isAll(modules) ? MODULE_KEYS : modules || []);
+
+const targetLine = d =>
+    d.method === 'discord'
+        ? `Discord · incoming webhook${d.config?.bot_name ? ` · ${d.config.bot_name}` : ''}`
+        : `Notifiarr · channel ${d.config?.channel_id ?? '—'}`;
+
 /**
- * Notifications Management page
+ * Notifications settings — per-destination outbound alerting.
  *
- * Manages notification service configurations for all CHUB modules:
- * - Discord and Notifiarr notification services
- * - Per-module notification settings
- * - Service testing and validation
- *
- * @returns {JSX.Element} Notifications page component
+ * Each destination (a Discord webhook or Notifiarr alert) fans out to the
+ * modules it should report on, with independent success/failure triggers and
+ * an enable toggle. Wired to the destinations config/API.
  */
 export const NotificationsPage = () => {
     const toast = useToast();
 
-    // Data loading
     const {
-        data: notifications,
+        data,
         isLoading,
         error,
-        execute: refreshNotifications,
-    } = useApiData({
-        apiFunction: notificationsAPI.fetchNotifications,
-    });
+        execute: refresh,
+    } = useApiData({ apiFunction: notificationsAPI.fetchNotifications });
 
-    // Modal state
-    const [addModalOpen, setAddModalOpen] = useState(false);
-    const [editModalOpen, setEditModalOpen] = useState(false);
-    const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-    const [selectedModule, setSelectedModule] = useState(null);
-    const [selectedServiceType, setSelectedServiceType] = useState(null);
-    const [moduleToDelete, setModuleToDelete] = useState(null);
-    const [serviceToDelete, setServiceToDelete] = useState(null);
-    const [formData, setFormData] = useState({});
-    const [formErrors, setFormErrors] = useState({});
-    const [isSaving, setIsSaving] = useState(false);
+    // Local working mirror of the server's destinations list (optimistic UI).
+    // Reset during render when a fresh server snapshot arrives — the React-
+    // sanctioned "adjust state on prop change" pattern (no effect needed).
+    const [dests, setDests] = useState([]);
+    const [snapshot, setSnapshot] = useState(null);
+    const serverList = data?.data?.destinations;
+    if (Array.isArray(serverList) && serverList !== snapshot) {
+        setSnapshot(serverList);
+        setDests(serverList);
+    }
 
-    // Testing state
-    const [testingServices, setTestingServices] = useState(new Set());
+    const [pickerOpen, setPickerOpen] = useState(null);
+    const [modal, setModal] = useState(null); // { mode, method, id?, name, config, errors }
+    const [deleteId, setDeleteId] = useState(null);
+    const [testing, setTesting] = useState(() => new Set());
+    const [busy, setBusy] = useState(false);
 
-    // Bulk "apply to multiple modules" state
-    const [bulkOpen, setBulkOpen] = useState(false);
-    const [bulkService, setBulkService] = useState(null);
-    const [bulkForm, setBulkForm] = useState({});
-    const [bulkErrors, setBulkErrors] = useState({});
-    const [bulkModules, setBulkModules] = useState(() => new Set(NOTIFY_MODULES));
-    const [bulkSaving, setBulkSaving] = useState(false);
-
-    /**
-     * Handle add notification action
-     * @param {string} moduleName - Module to add notification for
-     */
-    const handleAdd = useCallback(moduleName => {
-        setSelectedModule(moduleName);
-        setSelectedServiceType(null);
-        setFormData({});
-        setFormErrors({});
-        setAddModalOpen(true);
-    }, []);
-
-    /**
-     * Handle edit notification action
-     * @param {string} moduleName - Module name
-     * @param {string} serviceType - Service type to edit
-     * @param {Object} config - Existing configuration
-     */
-    const handleEdit = useCallback((moduleName, serviceType, config) => {
-        setSelectedModule(moduleName);
-        setSelectedServiceType(serviceType);
-        setFormData({ ...config }); // Prepopulate with existing data
-        setFormErrors({});
-        setEditModalOpen(true);
-    }, []);
-
-    /**
-     * Handle delete notification action
-     * @param {string} moduleName - Module name
-     * @param {string} serviceType - Service type to delete
-     */
-    const handleDelete = useCallback((moduleName, serviceType) => {
-        setModuleToDelete(moduleName);
-        setServiceToDelete(serviceType);
-        setDeleteModalOpen(true);
-    }, []);
-
-    /**
-     * Handle test notification
-     * @param {string} moduleName - Module name
-     * @param {string} serviceType - Service type
-     * @param {Object} config - Notification configuration
-     */
-    const handleTest = useCallback(
-        async (moduleName, serviceType, config) => {
-            const testKey = `${moduleName}-${serviceType}`;
-
-            // Add to testing set
-            setTestingServices(prev => new Set([...prev, testKey]));
-
+    // ── persistence ──────────────────────────────────────────────────────
+    const persistDest = useCallback(
+        async d => {
             try {
-                // Call test endpoint with correct payload structure
-                const result = await notificationsAPI.testNotification({
-                    module: moduleName,
-                    notifications: {
-                        [serviceType]: config,
-                    },
+                await notificationsAPI.updateDestination(d.id, {
+                    method: d.method,
+                    name: d.name,
+                    enabled: d.enabled,
+                    events: d.events,
+                    modules: d.modules,
+                    config: d.config,
                 });
+            } catch (e) {
+                toast.error(e.message || 'Failed to save destination');
+                refresh({ useCache: false });
+            }
+        },
+        [toast, refresh]
+    );
 
-                // Success
-                const successMessage = result?.message || 'Test notification sent successfully';
-                toast.success(`${serviceType}: ${successMessage}`);
-            } catch (error) {
-                console.error('Test notification error:', error);
-                const errorMessage = error.message || 'Test notification failed';
-                toast.error(`${serviceType}: ${errorMessage}`);
+    // Mutate a destination locally; persist immediately unless save=false (used
+    // by the module picker, which batches its edits until "Done").
+    const mutate = useCallback(
+        (id, patch, save = true) => {
+            const current = dests.find(d => d.id === id);
+            if (!current) return;
+            const updated = { ...current, ...patch };
+            setDests(prev => prev.map(d => (d.id === id ? updated : d)));
+            if (save) persistDest(updated);
+        },
+        [dests, persistDest]
+    );
+
+    const closePicker = useCallback(
+        id => {
+            const d = dests.find(x => x.id === id);
+            if (d) persistDest(d);
+            setPickerOpen(null);
+        },
+        [dests, persistDest]
+    );
+
+    // ── module picker actions ────────────────────────────────────────────
+    const toggleModule = useCallback(
+        (id, key) => {
+            const d = dests.find(x => x.id === id);
+            if (!d) return;
+            const base = isAll(d.modules) ? [...MODULE_KEYS] : [...(d.modules || [])];
+            const next = base.includes(key) ? base.filter(m => m !== key) : [...base, key];
+            mutate(id, { modules: next }, false);
+        },
+        [dests, mutate]
+    );
+
+    const removeChip = useCallback(
+        (id, key) => {
+            const d = dests.find(x => x.id === id);
+            if (!d) return;
+            const base = isAll(d.modules) ? [...MODULE_KEYS] : [...(d.modules || [])];
+            mutate(id, { modules: base.filter(m => m !== key) });
+        },
+        [dests, mutate]
+    );
+
+    // ── test ─────────────────────────────────────────────────────────────
+    const handleTest = useCallback(
+        async d => {
+            setTesting(prev => new Set(prev).add(d.id));
+            try {
+                const res = await notificationsAPI.testDestination({
+                    method: d.method,
+                    config: d.config,
+                    id: d.id,
+                });
+                toast.success(res?.message || 'Test notification sent');
+            } catch (e) {
+                toast.error(e.message || 'Test notification failed');
             } finally {
-                // Remove from testing set
-                setTestingServices(prev => {
+                setTesting(prev => {
                     const next = new Set(prev);
-                    next.delete(testKey);
+                    next.delete(d.id);
                     return next;
                 });
             }
@@ -146,230 +183,107 @@ export const NotificationsPage = () => {
         [toast]
     );
 
-    /**
-     * Validate form data
-     * @returns {boolean} True if valid
-     */
-    const validateForm = useCallback(() => {
-        if (!selectedServiceType) return false;
+    // ── add / edit credential modal ──────────────────────────────────────
+    const openAdd = method => setModal({ mode: 'add', method, name: '', config: {}, errors: {} });
 
-        const errors = {};
-        const serviceSchema = NOTIFICATIONS_SCHEMA.find(s => s.type === selectedServiceType);
-
-        serviceSchema?.fields.forEach(field => {
-            if (field.required && !formData[field.key]) {
-                errors[field.key] = `${field.label} is required`;
-            }
-            if (field.validate && formData[field.key] && !field.validate(formData[field.key])) {
-                errors[field.key] = `${field.label} format is invalid`;
-            }
+    const openEdit = d =>
+        setModal({
+            mode: 'edit',
+            method: d.method,
+            id: d.id,
+            name: d.name || '',
+            config: { ...d.config },
+            errors: {},
         });
 
-        setFormErrors(errors);
+    const setModalField = (key, value) =>
+        setModal(m => ({
+            ...m,
+            config: { ...m.config, [key]: value },
+            errors: { ...m.errors, [key]: undefined },
+        }));
+
+    const validateModal = () => {
+        const schema = NOTIFICATIONS_SCHEMA.find(s => s.type === modal.method);
+        const errors = {};
+        schema?.fields.forEach(f => {
+            const v = modal.config[f.key];
+            if (v === REDACTED) return; // unchanged secret — leave as-is
+            if (f.required && !v) errors[f.key] = `${f.label} is required`;
+            else if (f.validate && v && !f.validate(v))
+                errors[f.key] = `${f.label} format is invalid`;
+        });
+        setModal(m => ({ ...m, errors }));
         return Object.keys(errors).length === 0;
-    }, [selectedServiceType, formData]);
+    };
 
-    /**
-     * Handle field change
-     */
-    const handleFieldChange = useCallback((fieldKey, value) => {
-        setFormData(prev => ({ ...prev, [fieldKey]: value }));
-        setFormErrors(prev => {
-            const newErrors = { ...prev };
-            delete newErrors[fieldKey];
-            return newErrors;
-        });
-    }, []);
-
-    /**
-     * Handle form submission for Add
-     */
-    const handleFormSubmit = useCallback(async () => {
-        if (!validateForm()) {
-            toast.error('Please fill in all required fields correctly');
+    const saveModal = async () => {
+        if (!validateModal()) {
+            toast.error('Please fix the highlighted fields');
             return;
         }
-
-        setIsSaving(true);
-
+        setBusy(true);
         try {
-            await notificationsAPI.updateNotification({
-                module: selectedModule,
-                service_type: selectedServiceType,
-                config: formData,
-            });
-
-            toast.success(
-                `${selectedServiceType} notification added successfully for ${selectedModule}`
-            );
-            setIsSaving(false);
-
-            setAddModalOpen(false);
-            setSelectedServiceType(null);
-            refreshNotifications({ useCache: false });
-        } catch (error) {
-            setIsSaving(false);
-            console.error('Notification save error:', error);
-            toast.error(error.message || 'Failed to add notification');
-        }
-    }, [validateForm, selectedModule, selectedServiceType, formData, toast, refreshNotifications]);
-
-    /**
-     * Handle edit form submission
-     */
-    const handleEditSubmit = useCallback(async () => {
-        if (!validateForm()) {
-            toast.error('Please fill in all required fields correctly');
-            return;
-        }
-
-        setIsSaving(true);
-
-        try {
-            await notificationsAPI.updateNotification({
-                module: selectedModule,
-                service_type: selectedServiceType,
-                config: formData,
-            });
-
-            toast.success(`${selectedServiceType} notification updated successfully`);
-            setIsSaving(false);
-
-            setEditModalOpen(false);
-            refreshNotifications({ useCache: false });
-        } catch (error) {
-            setIsSaving(false);
-            console.error('Notification update error:', error);
-            toast.error(error.message || 'Failed to update notification');
-        }
-    }, [validateForm, selectedModule, selectedServiceType, formData, toast, refreshNotifications]);
-
-    /**
-     * Handle delete confirmation
-     */
-    const handleConfirmDelete = useCallback(async () => {
-        if (!moduleToDelete || !serviceToDelete) return;
-
-        setIsSaving(true);
-
-        try {
-            await notificationsAPI.deleteNotification(moduleToDelete, serviceToDelete);
-
-            toast.success(`${serviceToDelete} notification deleted successfully`);
-            setIsSaving(false);
-            setDeleteModalOpen(false);
-
-            refreshNotifications({ useCache: false });
-        } catch (error) {
-            setIsSaving(false);
-            console.error('Notification delete error:', error);
-            toast.error(error.message || 'Failed to delete notification');
-        }
-    }, [moduleToDelete, serviceToDelete, toast, refreshNotifications]);
-
-    /**
-     * Open the "apply to multiple modules" flow (defaults to all modules).
-     */
-    const openBulk = useCallback(() => {
-        setBulkService(null);
-        setBulkForm({});
-        setBulkErrors({});
-        setBulkModules(new Set(NOTIFY_MODULES));
-        setBulkOpen(true);
-    }, []);
-
-    const toggleBulkModule = useCallback(key => {
-        setBulkModules(prev => {
-            const next = new Set(prev);
-            next.has(key) ? next.delete(key) : next.add(key);
-            return next;
-        });
-    }, []);
-
-    const handleBulkFieldChange = useCallback((fieldKey, value) => {
-        setBulkForm(prev => ({ ...prev, [fieldKey]: value }));
-        setBulkErrors(prev => {
-            const next = { ...prev };
-            delete next[fieldKey];
-            return next;
-        });
-    }, []);
-
-    /**
-     * Apply one service config to every selected module via the existing
-     * per-module endpoint (no bulk backend route needed).
-     */
-    const handleBulkSubmit = useCallback(async () => {
-        const errors = {};
-        const serviceSchema = NOTIFICATIONS_SCHEMA.find(s => s.type === bulkService);
-        serviceSchema?.fields.forEach(field => {
-            if (field.required && !bulkForm[field.key]) {
-                errors[field.key] = `${field.label} is required`;
+            if (modal.mode === 'add') {
+                const res = await notificationsAPI.createDestination({
+                    method: modal.method,
+                    name: modal.name,
+                    enabled: true,
+                    events: { success: true, failure: false },
+                    modules: [],
+                    config: modal.config,
+                });
+                const newId = res?.data?.destination?.id;
+                await refresh({ useCache: false });
+                setModal(null);
+                if (newId) setPickerOpen(newId); // pick modules straight away
+            } else {
+                const d = dests.find(x => x.id === modal.id);
+                await notificationsAPI.updateDestination(modal.id, {
+                    method: modal.method,
+                    name: modal.name,
+                    enabled: d?.enabled ?? true,
+                    events: d?.events ?? { success: true, failure: false },
+                    modules: d?.modules ?? [],
+                    config: modal.config,
+                });
+                await refresh({ useCache: false });
+                setModal(null);
             }
-            if (field.validate && bulkForm[field.key] && !field.validate(bulkForm[field.key])) {
-                errors[field.key] = `${field.label} format is invalid`;
-            }
-        });
-        setBulkErrors(errors);
-        if (Object.keys(errors).length > 0) {
-            toast.error('Please fill in all required fields correctly');
-            return;
+        } catch (e) {
+            toast.error(e.message || 'Failed to save destination');
+        } finally {
+            setBusy(false);
         }
-        if (bulkModules.size === 0) {
-            toast.error('Select at least one module to apply to');
-            return;
+    };
+
+    const confirmDelete = async () => {
+        setBusy(true);
+        try {
+            await notificationsAPI.deleteDestination(deleteId);
+            setDeleteId(null);
+            await refresh({ useCache: false });
+            toast.success('Destination deleted');
+        } catch (e) {
+            toast.error(e.message || 'Failed to delete destination');
+        } finally {
+            setBusy(false);
         }
+    };
 
-        setBulkSaving(true);
-        const targets = [...bulkModules];
-        const results = await Promise.allSettled(
-            targets.map(m =>
-                notificationsAPI.updateNotification({
-                    module: m,
-                    service_type: bulkService,
-                    config: bulkForm,
-                })
-            )
-        );
-        setBulkSaving(false);
-
-        const failed = results.filter(r => r.status === 'rejected').length;
-        const ok = targets.length - failed;
-        if (failed === 0) {
-            toast.success(`${bulkService} applied to ${ok} module${ok === 1 ? '' : 's'}`);
-        } else if (ok === 0) {
-            toast.error(`Failed to apply to all ${failed} module(s)`);
-        } else {
-            toast.error(`Applied to ${ok} module(s); ${failed} failed`);
-        }
-        setBulkOpen(false);
-        refreshNotifications({ useCache: false });
-    }, [bulkService, bulkForm, bulkModules, toast, refreshNotifications]);
-
-    // Dense page header + primary action, matching the redesign mock.
+    // ── header ───────────────────────────────────────────────────────────
     const header = (
-        <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="min-w-0">
-                <h1 className="font-display text-[26px] font-bold tracking-[-0.3px] text-fg m-0">
-                    Notifications
-                </h1>
-                <p className="text-fg-subtle text-[13.5px] mt-1 mb-0">
-                    Where CHUB sends run summaries and failure alerts.
-                </p>
-            </div>
-            <button
-                type="button"
-                onClick={openBulk}
-                className="inline-flex items-center gap-1.5 h-[38px] px-4 rounded-lg bg-primary text-on-color font-display text-[13.5px] font-semibold hover:brightness-110 transition"
-                style={{ boxShadow: '0 4px 16px -5px var(--primary)' }}
-            >
-                <span className="material-symbols-outlined text-[18px]">add</span>
-                Add channel
-            </button>
+        <div className="min-w-0">
+            <h1 className="font-display text-[26px] font-bold tracking-[-0.3px] text-fg m-0">
+                Notifications
+            </h1>
+            <p className="text-fg-subtle text-[13.5px] mt-1 mb-0">
+                Choose how CHUB reaches you, then point each destination at the modules it should
+                report on.
+            </p>
         </div>
     );
 
-    // Loading state
     if (isLoading) {
         return (
             <div className="flex flex-col gap-5">
@@ -378,15 +292,13 @@ export const NotificationsPage = () => {
             </div>
         );
     }
-
-    // Error state
     if (error) {
         return (
             <div className="flex flex-col gap-5">
                 {header}
                 <div className="text-center py-12">
                     <p className="text-error">Error loading notifications: {error.message}</p>
-                    <Button variant="primary" onClick={refreshNotifications} className="mt-4">
+                    <Button variant="primary" onClick={refresh} className="mt-4">
                         Retry
                     </Button>
                 </div>
@@ -394,449 +306,510 @@ export const NotificationsPage = () => {
         );
     }
 
-    const moduleEntries = Object.entries(notifications?.data?.notifications || {});
+    const countFor = method => dests.filter(d => d.method === method).length;
 
     return (
-        <div className="flex flex-col gap-5">
+        <div className="w-full max-w-[920px] mx-auto flex flex-col">
             {header}
 
-            <div className="w-full max-w-[820px] flex flex-col gap-6">
-                {moduleEntries.length > 0 ? (
-                    moduleEntries.map(([moduleName, moduleNotifs]) => (
-                        <div key={moduleName} className="flex flex-col gap-2.5">
-                            {/* Compact module label + per-module add */}
-                            <div className="flex items-center gap-3 px-1">
-                                <span className="font-mono text-[10px] uppercase tracking-wider text-fg-dim">
-                                    {moduleName === 'main'
-                                        ? 'All errors (global)'
-                                        : humanize(moduleName)}
+            {/* NOTIFICATION METHODS */}
+            <div className="font-mono text-[10px] tracking-[1.5px] text-fg-faint mt-[22px] mb-[11px]">
+                NOTIFICATION METHODS
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-[14px] mb-[30px]">
+                {['discord', 'notifiarr'].map(method => {
+                    const m = METHOD[method];
+                    const n = countFor(method);
+                    return (
+                        <div
+                            key={method}
+                            className="bg-surface border border-border rounded-[14px] p-[16px_18px] flex flex-col gap-3"
+                        >
+                            <div className="flex items-start gap-3">
+                                <div
+                                    className="shrink-0 w-10 h-10 rounded-[11px] flex items-center justify-center"
+                                    style={{ background: m.tintBg }}
+                                >
+                                    <ServiceIcon service={method} size="small" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                        <span className="font-display text-[15px] font-semibold text-fg">
+                                            {m.label}
+                                        </span>
+                                        <span
+                                            className="flex items-center gap-1.5 font-mono text-[10px]"
+                                            style={{ color: m.statusColor }}
+                                        >
+                                            <span
+                                                className="w-1.5 h-1.5 rounded-full"
+                                                style={{
+                                                    background: m.statusColor,
+                                                    boxShadow: `0 0 0 3px ${m.statusRing}`,
+                                                }}
+                                            />
+                                            {m.status}
+                                        </span>
+                                    </div>
+                                    <div className="text-[12.5px] text-fg-data leading-[1.45] mt-1">
+                                        {m.blurb}
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="h-px bg-border-light" />
+                            <div className="flex items-center justify-between">
+                                <span className="font-mono text-[11.5px] text-fg-subtle">
+                                    {n} {m.noun}
+                                    {n === 1 ? '' : 's'}
                                 </span>
-                                <span className="flex-1 h-px bg-border-light" />
                                 <button
                                     type="button"
-                                    onClick={() => handleAdd(moduleName)}
-                                    className="inline-flex items-center gap-1 text-[12px] text-fg-subtle hover:text-fg"
+                                    onClick={() => openAdd(method)}
+                                    className="flex items-center gap-1.5 h-8 px-[13px] rounded-lg font-display text-[12.5px] font-semibold transition hover:brightness-110"
+                                    style={{
+                                        background: m.tintBg,
+                                        border: `1px solid ${m.tintBorder}`,
+                                        color: m.tint,
+                                    }}
                                 >
                                     <span className="material-symbols-outlined text-[15px]">
                                         add
                                     </span>
-                                    Add
+                                    {m.addLabel}
                                 </button>
                             </div>
-                            {Object.entries(moduleNotifs).map(([serviceType, config]) => (
-                                <NotificationCard
-                                    key={`${moduleName}-${serviceType}`}
-                                    moduleName={moduleName}
-                                    serviceType={serviceType}
-                                    config={config}
-                                    onEdit={handleEdit}
-                                    onDelete={handleDelete}
-                                    onTest={handleTest}
-                                    isTesting={testingServices.has(`${moduleName}-${serviceType}`)}
-                                />
-                            ))}
                         </div>
-                    ))
-                ) : (
-                    <div className="flex flex-col items-center gap-2 py-16 px-6 rounded-xl border border-dashed border-border text-center">
-                        <span className="material-symbols-outlined text-[32px] text-fg-subtle">
-                            notifications_off
-                        </span>
-                        <p className="text-fg">No notification channels yet</p>
-                        <p className="text-sm text-fg-subtle">
-                            Click <span className="text-fg">Add channel</span> to send run summaries
-                            and failure alerts to Discord or Notifiarr.
-                        </p>
-                    </div>
-                )}
+                    );
+                })}
             </div>
 
-            {/* Add Notification - Step 1: Service Type Selection */}
-            {addModalOpen && !selectedServiceType && (
-                <Modal
-                    isOpen={true}
-                    onClose={() => {
-                        setAddModalOpen(false);
-                        setSelectedModule(null);
-                    }}
-                    size="small"
-                >
-                    <Modal.Header>Select Notification Service</Modal.Header>
-                    <Modal.Body>
-                        <div className="flex flex-col gap-4">
-                            {NOTIFICATIONS_SCHEMA.map(service => {
-                                const alreadyConfigured =
-                                    notifications?.data?.notifications?.[selectedModule]?.[
-                                        service.type
-                                    ];
-
-                                return (
-                                    <Button
-                                        key={service.type}
-                                        variant={alreadyConfigured ? 'muted' : 'ghost'}
-                                        onClick={() => {
-                                            if (!alreadyConfigured) {
-                                                setSelectedServiceType(service.type);
-                                                setFormData({});
-                                            }
-                                        }}
-                                        disabled={alreadyConfigured}
-                                        fullWidth
-                                        className="justify-start"
-                                    >
-                                        <div className="flex items-center gap-3 w-full">
-                                            {/* Icon */}
-                                            <div className="flex items-center justify-center min-w-6">
-                                                <ServiceIcon service={service.type} size="medium" />
-                                            </div>
-
-                                            {/* Label */}
-                                            <div className="flex-1 text-left">
-                                                <div className="font-medium">{service.label}</div>
-                                                {alreadyConfigured && (
-                                                    <div className="text-fg-muted text-sm">
-                                                        Already configured
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </Button>
-                                );
-                            })}
+            {/* DESTINATIONS, GROUPED BY METHOD */}
+            {['discord', 'notifiarr'].map(method => {
+                const m = METHOD[method];
+                const group = dests.filter(d => d.method === method);
+                return (
+                    <div key={method} className="mb-[26px]">
+                        <div className="flex items-center gap-2.5 mb-3">
+                            <span style={{ color: m.tint }} className="flex">
+                                <ServiceIcon service={method} size="small" />
+                            </span>
+                            <span className="font-display text-[14px] font-semibold tracking-[.2px] text-fg">
+                                {m.label}
+                            </span>
+                            <span className="font-mono text-[10px] text-fg-faint px-[7px] py-0.5 rounded-full bg-surface-inset border border-border">
+                                {group.length}
+                            </span>
+                            <span className="flex-1 h-px bg-border-light" />
                         </div>
-                    </Modal.Body>
-                    <Modal.Footer>
-                        <Button
-                            variant="secondary"
-                            onClick={() => {
-                                setAddModalOpen(false);
-                                setSelectedModule(null);
-                            }}
-                        >
-                            Cancel
-                        </Button>
-                    </Modal.Footer>
-                </Modal>
-            )}
 
-            {/* Add Notification - Step 2: Configuration */}
-            {addModalOpen && selectedServiceType && (
-                <Modal
-                    isOpen={true}
-                    onClose={() => {
-                        setAddModalOpen(false);
-                        setSelectedServiceType(null);
-                    }}
-                    size="medium"
-                >
-                    <Modal.Header>
-                        Add {NOTIFICATIONS_SCHEMA.find(s => s.type === selectedServiceType)?.label}{' '}
-                        Notification
-                    </Modal.Header>
-                    <Modal.Body>
-                        <div className="mb-4">
-                            <p className="text-sm text-fg-muted">
-                                Module:{' '}
-                                <span className="font-medium text-fg">{selectedModule}</span>
-                            </p>
-                        </div>
-                        <div className="flex flex-col gap-4">
-                            {NOTIFICATIONS_SCHEMA.find(
-                                s => s.type === selectedServiceType
-                            )?.fields.map(field => {
-                                const FieldComponent = FieldRegistry.getField(field.type);
-                                return (
-                                    <FieldComponent
-                                        key={field.key}
-                                        field={field}
-                                        value={formData[field.key] || ''}
-                                        onChange={value => handleFieldChange(field.key, value)}
-                                        errorMessage={formErrors[field.key]}
-                                        highlightInvalid={!!formErrors[field.key]}
-                                    />
-                                );
-                            })}
-                        </div>
-                    </Modal.Body>
-                    <Modal.Footer>
-                        <Button
-                            variant="ghost"
-                            onClick={() => setSelectedServiceType(null)}
-                            disabled={isSaving}
-                        >
-                            Back
-                        </Button>
-                        <Button
-                            variant="ghost"
-                            bgClass="bg-transparent"
-                            textClass="text-fg"
-                            onClick={() => {
-                                setAddModalOpen(false);
-                                setSelectedServiceType(null);
-                            }}
-                            disabled={isSaving}
-                            style={{ border: '2px solid var(--primary)' }}
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            variant="primary"
-                            onClick={() => handleFormSubmit(false)}
-                            disabled={isSaving}
-                        >
-                            {isSaving ? 'Saving...' : 'Add Notification'}
-                        </Button>
-                    </Modal.Footer>
-                </Modal>
-            )}
-
-            {/* Edit Notification Modal */}
-            {editModalOpen && selectedServiceType && (
-                <Modal isOpen={true} onClose={() => setEditModalOpen(false)} size="medium">
-                    <Modal.Header>
-                        Edit {NOTIFICATIONS_SCHEMA.find(s => s.type === selectedServiceType)?.label}{' '}
-                        Notification
-                    </Modal.Header>
-                    <Modal.Body>
-                        <div className="mb-4">
-                            <p className="text-sm text-fg-muted">
-                                Module:{' '}
-                                <span className="font-medium text-fg">{selectedModule}</span>
-                            </p>
-                            <p className="text-sm text-fg-muted">
-                                Service:{' '}
-                                <span className="font-medium text-fg">
-                                    {
-                                        NOTIFICATIONS_SCHEMA.find(
-                                            s => s.type === selectedServiceType
-                                        )?.label
-                                    }
-                                </span>
-                            </p>
-                        </div>
-                        <div className="flex flex-col gap-4">
-                            {NOTIFICATIONS_SCHEMA.find(
-                                s => s.type === selectedServiceType
-                            )?.fields.map(field => {
-                                const FieldComponent = FieldRegistry.getField(field.type);
-                                return (
-                                    <FieldComponent
-                                        key={field.key}
-                                        field={field}
-                                        value={formData[field.key] || ''}
-                                        onChange={value => handleFieldChange(field.key, value)}
-                                        errorMessage={formErrors[field.key]}
-                                        highlightInvalid={!!formErrors[field.key]}
-                                    />
-                                );
-                            })}
-                        </div>
-                    </Modal.Body>
-                    <Modal.Footer>
-                        <Button
-                            variant="ghost"
-                            bgClass="bg-transparent"
-                            textClass="text-fg"
-                            onClick={() => setEditModalOpen(false)}
-                            disabled={isSaving}
-                            style={{ border: '2px solid var(--primary)' }}
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            variant="primary"
-                            onClick={() => handleEditSubmit()}
-                            disabled={isSaving}
-                        >
-                            {isSaving ? 'Saving...' : 'Save Changes'}
-                        </Button>
-                    </Modal.Footer>
-                </Modal>
-            )}
-
-            {/* Delete Notification Modal */}
-            {deleteModalOpen && moduleToDelete && serviceToDelete && (
-                <Modal isOpen={true} onClose={() => setDeleteModalOpen(false)} size="small">
-                    <Modal.Header>Confirm Delete</Modal.Header>
-                    <Modal.Body>
-                        <div className="flex flex-col gap-4">
-                            <p className="text-base">
-                                Are you sure you want to delete this notification?
-                            </p>
-                            <div className="p-4 bg-surface-alt rounded-lg border border-border">
-                                <div className="flex flex-col gap-2 text-sm">
-                                    <div>
-                                        <span className="text-fg-muted">Module:</span>{' '}
-                                        <span className="font-medium">{moduleToDelete}</span>
-                                    </div>
-                                    <div>
-                                        <span className="text-fg-muted">Service:</span>{' '}
-                                        <span className="font-medium">
-                                            {
-                                                NOTIFICATIONS_SCHEMA.find(
-                                                    s => s.type === serviceToDelete
-                                                )?.label
-                                            }
-                                        </span>
-                                    </div>
+                        <div className="flex flex-col gap-3">
+                            {group.length === 0 ? (
+                                <div className="border border-dashed border-border rounded-xl p-[18px] text-center text-[12.5px] text-fg-faint">
+                                    No {m.label} destinations yet.
                                 </div>
-                            </div>
-                            <p className="text-sm text-warning">⚠️ This action cannot be undone.</p>
+                            ) : (
+                                group.map(d => (
+                                    <DestinationCard
+                                        key={d.id}
+                                        d={d}
+                                        meta={m}
+                                        testing={testing.has(d.id)}
+                                        pickerOpen={pickerOpen === d.id}
+                                        onTest={() => handleTest(d)}
+                                        onEdit={() => openEdit(d)}
+                                        onDelete={() => setDeleteId(d.id)}
+                                        onToggleEnabled={() =>
+                                            mutate(d.id, { enabled: !d.enabled })
+                                        }
+                                        onToggleEvent={ev =>
+                                            mutate(d.id, {
+                                                events: {
+                                                    ...d.events,
+                                                    [ev]: !d.events?.[ev],
+                                                },
+                                            })
+                                        }
+                                        onRemoveChip={key => removeChip(d.id, key)}
+                                        onOpenPicker={() => setPickerOpen(d.id)}
+                                        onClosePicker={() => closePicker(d.id)}
+                                        onToggleModule={key => toggleModule(d.id, key)}
+                                        onSelectAll={() =>
+                                            mutate(d.id, { modules: [ALL_MODULES] }, false)
+                                        }
+                                        onClearAll={() => mutate(d.id, { modules: [] }, false)}
+                                    />
+                                ))
+                            )}
                         </div>
-                    </Modal.Body>
-                    <Modal.Footer>
-                        <Button
-                            variant="secondary"
-                            onClick={() => setDeleteModalOpen(false)}
-                            disabled={isSaving}
-                        >
-                            Cancel
-                        </Button>
-                        <Button variant="danger" onClick={handleConfirmDelete} disabled={isSaving}>
-                            {isSaving ? 'Deleting...' : 'Delete Notification'}
-                        </Button>
-                    </Modal.Footer>
-                </Modal>
+                    </div>
+                );
+            })}
+
+            {modal && (
+                <CredentialModal
+                    modal={modal}
+                    busy={busy}
+                    onName={name => setModal(m => ({ ...m, name }))}
+                    onField={setModalField}
+                    onClose={() => setModal(null)}
+                    onSave={saveModal}
+                />
             )}
 
-            {/* Bulk: apply one service config to multiple modules */}
-            {bulkOpen && (
-                <Modal isOpen={true} onClose={() => setBulkOpen(false)} size="medium">
-                    <Modal.Header>Apply a notification to multiple modules</Modal.Header>
+            {deleteId && (
+                <Modal isOpen onClose={() => setDeleteId(null)} size="small">
+                    <Modal.Header>Delete destination</Modal.Header>
                     <Modal.Body>
-                        {!bulkService ? (
-                            <div className="flex flex-col gap-4">
-                                <p className="text-sm text-fg-muted">
-                                    Choose a service, then pick which modules it should notify.
-                                </p>
-                                {NOTIFICATIONS_SCHEMA.map(service => (
-                                    <Button
-                                        key={service.type}
-                                        variant="ghost"
-                                        fullWidth
-                                        className="justify-start"
-                                        onClick={() => {
-                                            setBulkService(service.type);
-                                            setBulkForm({});
-                                            setBulkErrors({});
-                                        }}
-                                    >
-                                        <div className="flex items-center gap-3 w-full">
-                                            <div className="flex items-center justify-center min-w-6">
-                                                <ServiceIcon service={service.type} size="medium" />
-                                            </div>
-                                            <div className="flex-1 text-left">
-                                                <div className="font-medium">{service.label}</div>
-                                            </div>
-                                        </div>
-                                    </Button>
-                                ))}
-                            </div>
-                        ) : (
-                            <div className="flex flex-col gap-4">
-                                {NOTIFICATIONS_SCHEMA.find(s => s.type === bulkService)?.fields.map(
-                                    field => {
-                                        const FieldComponent = FieldRegistry.getField(field.type);
-                                        return (
-                                            <FieldComponent
-                                                key={field.key}
-                                                field={field}
-                                                value={bulkForm[field.key] || ''}
-                                                onChange={value =>
-                                                    handleBulkFieldChange(field.key, value)
-                                                }
-                                                errorMessage={bulkErrors[field.key]}
-                                                highlightInvalid={!!bulkErrors[field.key]}
-                                            />
-                                        );
-                                    }
-                                )}
-                                <div>
-                                    <div className="flex items-center justify-between mb-2">
-                                        <span className="text-sm font-medium text-fg-muted">
-                                            Apply to modules ({bulkModules.size})
-                                        </span>
-                                        <div className="flex gap-2">
-                                            <Button
-                                                variant="ghost"
-                                                size="small"
-                                                onClick={() =>
-                                                    setBulkModules(new Set(NOTIFY_MODULES))
-                                                }
-                                            >
-                                                Select all
-                                            </Button>
-                                            <Button
-                                                variant="ghost"
-                                                size="small"
-                                                onClick={() => setBulkModules(new Set(['main']))}
-                                            >
-                                                Errors only
-                                            </Button>
-                                            <Button
-                                                variant="ghost"
-                                                size="small"
-                                                onClick={() => setBulkModules(new Set())}
-                                            >
-                                                Clear
-                                            </Button>
-                                        </div>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-2 max-h-60 overflow-y-auto">
-                                        {NOTIFY_MODULES.map(m => (
-                                            <label
-                                                key={m}
-                                                className="flex items-center gap-2 p-2 rounded-lg bg-surface-alt cursor-pointer"
-                                            >
-                                                <input
-                                                    type="checkbox"
-                                                    checked={bulkModules.has(m)}
-                                                    onChange={() => toggleBulkModule(m)}
-                                                    style={{ accentColor: 'var(--primary)' }}
-                                                />
-                                                <span className="text-sm">
-                                                    {m === 'main'
-                                                        ? 'All errors (global)'
-                                                        : humanize(m)}
-                                                </span>
-                                            </label>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                        )}
+                        <p className="text-fg">
+                            Remove this destination? Modules pointed at it will no longer report
+                            here.
+                        </p>
                     </Modal.Body>
                     <Modal.Footer>
-                        {bulkService && (
-                            <Button
-                                variant="ghost"
-                                onClick={() => setBulkService(null)}
-                                disabled={bulkSaving}
-                            >
-                                Back
-                            </Button>
-                        )}
                         <Button
                             variant="secondary"
-                            onClick={() => setBulkOpen(false)}
-                            disabled={bulkSaving}
+                            onClick={() => setDeleteId(null)}
+                            disabled={busy}
                         >
                             Cancel
                         </Button>
-                        {bulkService && (
-                            <Button
-                                variant="primary"
-                                onClick={handleBulkSubmit}
-                                disabled={bulkSaving || bulkModules.size === 0}
-                            >
-                                {bulkSaving
-                                    ? 'Applying...'
-                                    : `Apply to ${bulkModules.size} module${bulkModules.size === 1 ? '' : 's'}`}
-                            </Button>
-                        )}
+                        <Button variant="danger" onClick={confirmDelete} disabled={busy}>
+                            {busy ? 'Deleting…' : 'Delete'}
+                        </Button>
                     </Modal.Footer>
                 </Modal>
             )}
         </div>
+    );
+};
+
+// ── Destination card ─────────────────────────────────────────────────────
+const DestinationCard = ({
+    d,
+    meta,
+    testing,
+    pickerOpen,
+    onTest,
+    onEdit,
+    onDelete,
+    onToggleEnabled,
+    onToggleEvent,
+    onRemoveChip,
+    onOpenPicker,
+    onClosePicker,
+    onToggleModule,
+    onSelectAll,
+    onClearAll,
+}) => {
+    const all = isAll(d.modules);
+    const selected = selectedModules(d.modules);
+    const chips = all ? [] : selected.slice(0, CHIP_LIMIT);
+    const more = all ? 0 : Math.max(0, selected.length - CHIP_LIMIT);
+
+    return (
+        <div
+            className="relative rounded-[13px] bg-surface border border-border transition-colors hover:border-[#3b3d72]"
+            style={{ opacity: d.enabled ? 1 : 0.62 }}
+        >
+            {/* header band */}
+            <div className="flex items-center gap-[14px] p-[15px_17px]">
+                <div
+                    className="shrink-0 w-10 h-10 rounded-[10px] flex items-center justify-center"
+                    style={{ background: meta.tintBg }}
+                >
+                    <ServiceIcon service={d.method} size="small" />
+                </div>
+                <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2.5">
+                        <span className="font-display text-[15px] font-semibold text-fg truncate">
+                            {d.name || meta.label}
+                        </span>
+                        <span
+                            className="font-mono text-[9px] uppercase tracking-[.5px] px-1.5 py-0.5 rounded-[5px]"
+                            style={{ background: meta.tintBg, color: meta.tint }}
+                        >
+                            {meta.label}
+                        </span>
+                    </div>
+                    <div className="font-mono text-[11.5px] text-fg-subtle mt-1 truncate">
+                        {targetLine(d)}
+                    </div>
+                </div>
+                <div className="shrink-0 flex items-center gap-1">
+                    <button
+                        type="button"
+                        onClick={onTest}
+                        disabled={testing}
+                        className="h-[30px] px-[11px] rounded-[7px] bg-transparent border border-border text-fg-data text-[12px] font-semibold transition-colors hover:bg-[#221c45] disabled:opacity-60"
+                    >
+                        {testing ? 'Testing…' : 'Test'}
+                    </button>
+                    <IconBtn icon="edit" label="Edit destination" onClick={onEdit} />
+                    <IconBtn icon="delete" label="Delete destination" onClick={onDelete} />
+                    <Toggle
+                        checked={d.enabled}
+                        onChange={onToggleEnabled}
+                        label="Enable destination"
+                        className="ml-1.5"
+                    />
+                </div>
+            </div>
+
+            <div className="h-px bg-border-light mx-[17px]" />
+
+            {/* triggers + modules */}
+            <div className="flex flex-col gap-[13px] p-[14px_17px_16px]">
+                <div className="flex items-center gap-[14px]">
+                    <span className="font-mono text-[9.5px] tracking-[1px] text-fg-faint w-16 shrink-0">
+                        TRIGGER
+                    </span>
+                    <div className="flex gap-2">
+                        <TriggerPill
+                            active={!!d.events?.success}
+                            label="On success"
+                            tone="success"
+                            onClick={() => onToggleEvent('success')}
+                        />
+                        <TriggerPill
+                            active={!!d.events?.failure}
+                            label="On failure"
+                            tone="failure"
+                            onClick={() => onToggleEvent('failure')}
+                        />
+                    </div>
+                </div>
+
+                <div className="flex items-start gap-[14px]">
+                    <span className="font-mono text-[9.5px] tracking-[1px] text-fg-faint w-16 shrink-0 pt-1.5">
+                        MODULES
+                    </span>
+                    <div className="flex-1 min-w-0 flex flex-wrap items-center gap-[7px]">
+                        {all && (
+                            <span
+                                className="flex items-center gap-1.5 px-[11px] py-1 rounded-[7px] text-[12px] font-semibold"
+                                style={{
+                                    background: 'rgba(135,103,247,.13)',
+                                    border: '1px solid rgba(135,103,247,.3)',
+                                    color: '#a99eff',
+                                }}
+                            >
+                                <span className="material-symbols-outlined text-[14px]">check</span>
+                                All modules
+                            </span>
+                        )}
+                        {!all && selected.length === 0 && (
+                            <span className="text-[12.5px] text-fg-faint italic py-1">
+                                No modules yet — pick which runs report here.
+                            </span>
+                        )}
+                        {chips.map(key => (
+                            <span
+                                key={key}
+                                className="group flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-[7px] bg-surface-inset border border-border text-fg-muted text-[12px] font-medium"
+                            >
+                                {humanize(key)}
+                                <button
+                                    type="button"
+                                    aria-label={`Remove ${humanize(key)}`}
+                                    onClick={() => onRemoveChip(key)}
+                                    className="flex opacity-45 group-hover:opacity-100 transition-opacity"
+                                >
+                                    <span className="material-symbols-outlined text-[14px]">
+                                        close
+                                    </span>
+                                </button>
+                            </span>
+                        ))}
+                        {more > 0 && (
+                            <span className="font-mono text-[11px] text-fg-subtle px-1 py-1">
+                                +{more} more
+                            </span>
+                        )}
+                        <button
+                            type="button"
+                            onClick={onOpenPicker}
+                            className="flex items-center gap-1.5 px-2.5 py-1 rounded-[7px] bg-transparent text-fg-data text-[12px] font-semibold transition-colors hover:bg-[#191636]"
+                            style={{ border: '1px dashed #3b3d72' }}
+                        >
+                            <span className="material-symbols-outlined text-[14px]">add</span>
+                            Select modules
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            {pickerOpen && (
+                <ModulePicker
+                    selected={selected}
+                    all={all}
+                    onToggle={onToggleModule}
+                    onSelectAll={onSelectAll}
+                    onClearAll={onClearAll}
+                    onDone={onClosePicker}
+                />
+            )}
+        </div>
+    );
+};
+
+const IconBtn = ({ icon, label, onClick }) => (
+    <button
+        type="button"
+        aria-label={label}
+        onClick={onClick}
+        className="w-[30px] h-[30px] rounded-[7px] bg-transparent text-fg-subtle flex items-center justify-center transition-colors hover:bg-[#221c45] hover:text-fg-muted"
+    >
+        <span className="material-symbols-outlined text-[16px]">{icon}</span>
+    </button>
+);
+
+const TriggerPill = ({ active, label, tone, onClick }) => {
+    const colors =
+        tone === 'success'
+            ? { c: '#6cbc66', bg: 'rgba(108,188,102,.12)', b: 'rgba(108,188,102,.4)' }
+            : { c: '#fd355c', bg: 'rgba(253,53,92,.12)', b: 'rgba(253,53,92,.4)' };
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            className="flex items-center gap-1.5 px-[11px] py-[5px] rounded-full text-[12px] font-semibold transition-colors"
+            style={{
+                color: active ? colors.c : '#6582ca',
+                background: active ? colors.bg : 'transparent',
+                border: `1px solid ${active ? colors.b : '#2a3052'}`,
+            }}
+        >
+            {active && <span className="material-symbols-outlined text-[14px]">check</span>}
+            {label}
+        </button>
+    );
+};
+
+// ── Module multiselect popover ───────────────────────────────────────────
+const ModulePicker = ({ selected, all, onToggle, onSelectAll, onClearAll, onDone }) => {
+    const isChecked = key => all || selected.includes(key);
+    return (
+        <div
+            className="absolute z-30 right-[17px] bottom-[14px] w-[340px] rounded-[12px] overflow-hidden"
+            style={{
+                background: '#15112e',
+                border: '1px solid #3b3d72',
+                boxShadow: '0 18px 48px -12px rgba(0,0,0,.7)',
+            }}
+        >
+            <div className="flex items-center justify-between p-[12px_14px] border-b border-border-light">
+                <span className="font-display text-[13px] font-semibold text-fg">
+                    Report to this destination
+                </span>
+                <span className="font-mono text-[10.5px] text-fg-subtle">
+                    {all ? MODULE_KEYS.length : selected.length} of {MODULE_KEYS.length}
+                </span>
+            </div>
+            <div className="flex gap-[7px] p-[10px_14px] border-b border-border-light">
+                <button
+                    type="button"
+                    onClick={onSelectAll}
+                    className="flex-1 h-7 rounded-[7px] bg-surface-inset border border-border text-fg-muted text-[11.5px] font-semibold"
+                >
+                    Select all
+                </button>
+                <button
+                    type="button"
+                    onClick={onClearAll}
+                    className="flex-1 h-7 rounded-[7px] bg-surface-inset border border-border text-fg-data text-[11.5px] font-semibold"
+                >
+                    Clear
+                </button>
+            </div>
+            <div className="max-h-[240px] overflow-y-auto p-[5px]">
+                {MODULE_KEYS.map(key => {
+                    const checked = isChecked(key);
+                    return (
+                        <button
+                            type="button"
+                            key={key}
+                            onClick={() => onToggle(key)}
+                            className="w-full flex items-center gap-2.5 p-[8px_9px] rounded-lg transition-colors hover:bg-row-hover text-left"
+                        >
+                            <span
+                                className="shrink-0 w-[17px] h-[17px] rounded-[5px] flex items-center justify-center"
+                                style={{
+                                    border: `1.5px solid ${checked ? 'var(--primary)' : '#3b3d72'}`,
+                                    background: checked ? 'var(--primary)' : 'transparent',
+                                }}
+                            >
+                                {checked && (
+                                    <span className="material-symbols-outlined text-[13px] text-on-color">
+                                        check
+                                    </span>
+                                )}
+                            </span>
+                            <span
+                                className={`text-[13px] ${checked ? 'text-fg font-semibold' : 'text-fg-muted font-medium'}`}
+                            >
+                                {humanize(key)}
+                            </span>
+                        </button>
+                    );
+                })}
+            </div>
+            <div className="p-[10px_14px] border-t border-border-light flex justify-end">
+                <button
+                    type="button"
+                    onClick={onDone}
+                    className="h-[30px] px-4 rounded-lg bg-primary text-on-color font-display text-[12.5px] font-semibold"
+                >
+                    Done
+                </button>
+            </div>
+        </div>
+    );
+};
+
+// ── Add / edit credential modal ──────────────────────────────────────────
+const CredentialModal = ({ modal, busy, onName, onField, onClose, onSave }) => {
+    const schema = NOTIFICATIONS_SCHEMA.find(s => s.type === modal.method);
+    const title = `${modal.mode === 'add' ? 'Add' : 'Edit'} ${METHOD[modal.method].label} destination`;
+    return (
+        <Modal isOpen onClose={onClose} size="medium">
+            <Modal.Header>{title}</Modal.Header>
+            <Modal.Body>
+                <div className="flex flex-col gap-4">
+                    <div className="flex flex-col gap-1.5">
+                        <label className="text-[13px] font-medium text-fg-muted">
+                            Display name
+                        </label>
+                        <input
+                            type="text"
+                            value={modal.name}
+                            onChange={e => onName(e.target.value)}
+                            placeholder={modal.method === 'discord' ? 'My CHUB' : 'Homelab'}
+                            className="h-10 px-3 rounded-lg bg-surface-inset border border-border text-fg text-[14px] outline-none focus:border-[#3b3d72]"
+                        />
+                    </div>
+                    {schema?.fields.map(field => {
+                        const FieldComponent = FieldRegistry.getField(field.type);
+                        return (
+                            <FieldComponent
+                                key={field.key}
+                                field={field}
+                                value={modal.config[field.key] || ''}
+                                onChange={value => onField(field.key, value)}
+                                errorMessage={modal.errors[field.key]}
+                                highlightInvalid={!!modal.errors[field.key]}
+                            />
+                        );
+                    })}
+                </div>
+            </Modal.Body>
+            <Modal.Footer>
+                <Button variant="secondary" onClick={onClose} disabled={busy}>
+                    Cancel
+                </Button>
+                <Button variant="primary" onClick={onSave} disabled={busy}>
+                    {busy ? 'Saving…' : modal.mode === 'add' ? 'Add destination' : 'Save'}
+                </Button>
+            </Modal.Footer>
+        </Modal>
     );
 };
