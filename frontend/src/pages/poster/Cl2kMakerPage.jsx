@@ -1740,6 +1740,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                     logoTouchUpUrl={processedBase?.dataUrl || null}
                     onLogoFlip={setLogoFlipB64}
                     onLogoErase={setLogoEraseB64}
+                    logoEraseB64={logoEraseB64}
                     processedLogo={overlayLogo}
                     fitMode={fitMode}
                     setFitMode={setFitMode}
@@ -1902,6 +1903,7 @@ const RenderPanel = ({
     logoTouchUpUrl,
     onLogoFlip,
     onLogoErase,
+    logoEraseB64,
     processedLogo,
     fitMode,
     setFitMode,
@@ -3106,20 +3108,19 @@ const RenderPanel = ({
                                     transparent. Use the square brush for straight edges. Everything
                                     you don&apos;t paint is left exactly as shown.
                                 </p>
-                                <div
-                                    className="rounded p-1 inline-block max-w-full"
-                                    style={{
+                                <MaskBrushEditor
+                                    imageUrl={logoTouchUpUrl}
+                                    mask={logoEraseB64}
+                                    onMaskChange={onLogoErase}
+                                    title="Erase logo parts"
+                                    modalSubtitle="logo · erase"
+                                    help="Brush over anything that shouldn't be in the logo to make it transparent. The square brush is handy for straight edges. Everything you don't paint is kept exactly as shown."
+                                    bgStyle={{
                                         backgroundImage:
                                             'repeating-conic-gradient(#3a3a4a 0% 25%, #2a2a38 0% 50%)',
                                         backgroundSize: '22px 22px',
                                     }}
-                                >
-                                    <BrushMask
-                                        imageUrl={logoTouchUpUrl}
-                                        brushSize={10}
-                                        onMaskChange={onLogoErase}
-                                    />
-                                </div>
+                                />
                             </StudioAccordion>
                         )}
 
@@ -3580,6 +3581,112 @@ const BrushMask = ({ imageUrl, brushSize, onMaskChange, initialMask = null }) =>
                 </div>
             </div>
         </div>
+    );
+};
+
+// Brush mask + adjustable size + a large pop-out editor (same pattern as the AI
+// text-removal panel). Inline and pop-out canvases share the one `mask` via
+// initialMask/onMaskChange; the inline one is keyed on modalOpen so it remounts
+// and re-seeds from the updated mask when the pop-out closes — strokes carry both
+// ways. ``bgStyle`` is the swatch behind the canvas (checkerboard for an eraser so
+// transparency reads; black for a colour flip).
+const MaskBrushEditor = ({
+    imageUrl,
+    mask,
+    onMaskChange,
+    title,
+    modalSubtitle = '',
+    help = '',
+    bgStyle,
+    defaultBrush = 10,
+}) => {
+    const [modalOpen, setModalOpen] = useState(false);
+    const [brushSize, setBrushSize] = useState(defaultBrush);
+    const sizeSlider = (
+        <label className="flex items-center gap-2 text-xs text-fg-muted">
+            <span className="w-14">Brush</span>
+            <input
+                type="range"
+                min="3"
+                max="80"
+                value={brushSize}
+                onChange={e => setBrushSize(Number(e.target.value))}
+                className="flex-1"
+            />
+            <span className="w-10 text-right font-mono text-xs text-fg-subtle">{brushSize}px</span>
+        </label>
+    );
+    return (
+        <>
+            <div className="flex flex-col gap-2">
+                {sizeSlider}
+                <div className="rounded p-1 inline-block max-w-full" style={bgStyle}>
+                    <BrushMask
+                        key={modalOpen ? 'inline-modal-open' : 'inline-modal-closed'}
+                        imageUrl={imageUrl}
+                        brushSize={brushSize}
+                        onMaskChange={onMaskChange}
+                        initialMask={mask}
+                    />
+                </div>
+                <button
+                    type="button"
+                    onClick={() => setModalOpen(true)}
+                    className="self-start inline-flex items-center gap-1.5 h-[30px] px-[11px] rounded-[7px] text-xs font-semibold border border-border bg-surface-elevated text-fg-muted transition-colors hover:border-border-light"
+                >
+                    <span className="material-symbols-outlined text-[15px]">open_in_full</span>
+                    Open large editor
+                </button>
+            </div>
+            {modalOpen && imageUrl && (
+                <div
+                    onClick={() => setModalOpen(false)}
+                    className="fixed inset-0 z-modal flex items-center justify-center p-8 bg-black/80 backdrop-blur-sm"
+                >
+                    <div
+                        onClick={e => e.stopPropagation()}
+                        className="w-[min(1080px,94vw)] max-h-[90vh] bg-canvas border border-border rounded-[16px] shadow-2xl flex flex-col overflow-hidden"
+                    >
+                        <div className="flex items-center gap-3 px-5 py-4 border-b border-border">
+                            <span className="font-display text-base font-semibold text-fg">
+                                {title}
+                            </span>
+                            {modalSubtitle && (
+                                <span className="font-mono text-xs text-fg-subtle">
+                                    {modalSubtitle}
+                                </span>
+                            )}
+                            <button
+                                type="button"
+                                onClick={() => setModalOpen(false)}
+                                className="ml-auto inline-flex items-center gap-1.5 h-[30px] px-[11px] rounded-[7px] text-xs font-semibold border border-border bg-surface-elevated text-fg-muted transition-colors hover:border-border-light"
+                            >
+                                <span className="material-symbols-outlined text-[15px]">close</span>
+                                Close
+                            </button>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_268px] min-h-0 flex-1">
+                            <div className="flex items-center justify-center p-6 bg-black/40 min-h-[360px] overflow-auto">
+                                <div className="rounded p-1 max-w-full" style={bgStyle}>
+                                    <BrushMask
+                                        imageUrl={imageUrl}
+                                        brushSize={brushSize}
+                                        onMaskChange={onMaskChange}
+                                        initialMask={mask}
+                                    />
+                                </div>
+                            </div>
+                            <div className="border-l border-border p-5 flex flex-col gap-4 overflow-y-auto">
+                                {help && (
+                                    <p className="text-xs leading-relaxed text-fg-muted">{help}</p>
+                                )}
+                                {sizeSlider}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </>
     );
 };
 
@@ -5852,20 +5959,19 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                             square brush for straight edges. Everything you don&apos;t paint is left
                             exactly as shown; applies to the preview and the saved logo.
                         </p>
-                        <div
-                            className="rounded p-1 inline-block max-w-full"
-                            style={{
+                        <MaskBrushEditor
+                            imageUrl={previewUrl}
+                            mask={eraseB64}
+                            onMaskChange={setEraseB64}
+                            title="Erase logo parts"
+                            modalSubtitle="logo · erase"
+                            help="Brush over anything that shouldn't be in the logo to make it transparent. The square brush is handy for straight edges. Everything you don't paint is kept exactly as shown."
+                            bgStyle={{
                                 backgroundImage:
                                     'repeating-conic-gradient(#3a3a4a 0% 25%, #2a2a38 0% 50%)',
                                 backgroundSize: '22px 22px',
                             }}
-                        >
-                            <BrushMask
-                                imageUrl={previewUrl}
-                                brushSize={10}
-                                onMaskChange={setEraseB64}
-                            />
-                        </div>
+                        />
                     </StudioAccordion>
                 )}
 
