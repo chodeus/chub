@@ -2,6 +2,98 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.36.0](https://github.com/chodeus/chub/compare/v2.35.0...v2.36.0) (2026-06-28)
+
+
+### Features
+
+* **assets-search:** cache-coverage stats strip from the mock ([eebbe71](https://github.com/chodeus/chub/commit/eebbe7197b1e8f2ed0948f117489e8939b82e0d0))
+* **assets:** library-size stat + fix last-sync parsing (YYYYMMDD) ([cfdeb69](https://github.com/chodeus/chub/commit/cfdeb69517812e579afc5962d82e72d043afb39a))
+* **cleanarr:** restyle Poster Cleanarr config to the 3-pass mock ([31302d1](https://github.com/chodeus/chub/commit/31302d13e7f5941e15c96cc3a01cf1deb664427f))
+* **extensions:** generic notification_formatters() hook for extension modules ([bc20215](https://github.com/chodeus/chub/commit/bc202156f6671510bdc43be64af8a9cb5b51264c))
+* **fields:** always-expanded card mode for array-object configs ([1218ff9](https://github.com/chodeus/chub/commit/1218ff98403e546de7d41a83e75a3edaef47eaeb))
+* **fields:** contextual add-button label on array-object fields ([8238414](https://github.com/chodeus/chub/commit/823841469b81c6cfd0dfcad880eb891d3dde2e95))
+* **gdrive-presets:** add MajorGiant CL2K drive ([01bb26c](https://github.com/chodeus/chub/commit/01bb26c2aa95d9e0c5abf9469c0f1e4943fe33b3))
+* **gdrive:** use GDrive drives for poster matching by default ([2aefff5](https://github.com/chodeus/chub/commit/2aefff51e97973a6118d12fd844c2f9fca2c243b))
+* **instances:** render *arr instance multi-select as pills ([5630de6](https://github.com/chodeus/chub/commit/5630de6a03838d93162c3520249d328456208fae))
+* **jobs:** TRIGGER column + Clear&gt;30d to match mock ([d8932ee](https://github.com/chodeus/chub/commit/d8932eeeb4096c9da4513ac3ecad95566dbb3e25))
+* **labelarr:** bespoke mapping card with enabled toggle + label chips ([bddac4d](https://github.com/chodeus/chub/commit/bddac4dfa025131c943dec0d2ca09c0eb0116f18))
+* **labelarr:** inline mapping CRUD with per-mapping enable toggle ([651d296](https://github.com/chodeus/chub/commit/651d2963fa854819e64e05f15f0944acba8e7fdb))
+* **layout:** remove the global breadcrumb bar ([94d5951](https://github.com/chodeus/chub/commit/94d5951f67abe623c16640e1f3ae76b866005b83))
+* **library-manage:** restyle to the new mock ([254e7e4](https://github.com/chodeus/chub/commit/254e7e4a31eaeaa2d7c59a5d916cad5e742a01a9))
+* **login:** restyle to redesign mock ([aebdeb3](https://github.com/chodeus/chub/commit/aebdeb34f24b79d86187ab3b826c6adf20576068))
+* **manage:** mock duplicate grid with lazy copies + bulk delete ([a017b09](https://github.com/chodeus/chub/commit/a017b093967e680441ad38f85b8926901d137424))
+* **module-configs:** lead with primary content, demote Log Level to Logging ([46ad67e](https://github.com/chodeus/chub/commit/46ad67e62723333f9460282aabf92bed794dc0ff))
+* **module-configs:** section Renameinatorr/Nohl/Health Checkarr/Jduparr/Plex Maintenance to mocks ([a3621ea](https://github.com/chodeus/chub/commit/a3621ea37fb9b6ca067fc51a5fdcea5376de80fa))
+* **modules:** hub grid + per-module routes + hard-disable (Phase 1) ([4bd95eb](https://github.com/chodeus/chub/commit/4bd95ebf49de6197b2e4ea331de4e62e0c9b5d86))
+* **modules:** module-settings shell + boolean toggle rows (Phase 2) ([c3d67c0](https://github.com/chodeus/chub/commit/c3d67c019fe598ec415b3f811e78bef3d76d89d9))
+* **nestarr:** surface path_mapping as expanded cards ([4af24e4](https://github.com/chodeus/chub/commit/4af24e46970bb0f356316c9ed0e4055f7fd7d87e))
+* **notifications:** per-destination model, migration, dispatch + redesigned page ([9c0f5f6](https://github.com/chodeus/chub/commit/9c0f5f6d6899b5c4cb8c876a50cc98c9f12f4135))
+* **notifications:** reshape Notifications to mock channel rows ([0c9e667](https://github.com/chodeus/chub/commit/0c9e66749bb8f29e7c993fc0b1463808e852ceb6))
+* **plex-scope:** add-posters / match-collections as toggle rows ([97a7838](https://github.com/chodeus/chub/commit/97a78380b8afd10bc44dcd08c1d9a3aa747637e0))
+* **poster-renamerr:** priority badges + bottom-wins hint on source dirs ([443740d](https://github.com/chodeus/chub/commit/443740d0e43782005bdebc4c1ab32e6d30e63400))
+* **poster-renamerr:** reorder config to mock (Output → Source → Targets → Chained actions) ([59476cc](https://github.com/chodeus/chub/commit/59476cc61cbf3c0fb3b77ee2d1b2fd72693a1d88))
+* **poster-stats:** adopt mock layout + Top contributors ([d3752e6](https://github.com/chodeus/chub/commit/d3752e667a4f6fd247f04901b1508cdd74cfcfff))
+* **schedule:** drop stats strip, add base/profile/block legend ([93d1d9c](https://github.com/chodeus/chub/commit/93d1d9c1ca6c89fcc2f26e56ee235ecbfb06632f))
+* **schedule:** remove the per-module Test button ([f7366d0](https://github.com/chodeus/chub/commit/f7366d0b2c50cc12cb8c0a62a169583f97486d39))
+* **settings:** accent picker + Appearance section on General ([3e20375](https://github.com/chodeus/chub/commit/3e203750b267f7397ace802ea0a5295e2d02c3b5))
+* **settings:** drop the Settings cards hub; re-run wizard from General ([622076b](https://github.com/chodeus/chub/commit/622076b232262976b2b87babdc914bbeda285b13))
+* **settings:** extension-aware Modules hub + Schedule, add runnable:false flag ([983aec0](https://github.com/chodeus/chub/commit/983aec0465c3b3d4f50d3b90d4d8e1f22af9a994))
+* **settings:** extension-aware Notifications + Dashboard; share config-only helper ([2d6cd5e](https://github.com/chodeus/chub/commit/2d6cd5e0ac050fbd359f83aff365563d304dfbe4))
+* **settings:** generic 'requires' precondition warning on module config pages ([c0ec00f](https://github.com/chodeus/chub/commit/c0ec00f82a1fb5d4f862aa44f6a538e5b26fb5a1))
+* **settings:** label-left/control-right field rows (Phase 2b) ([c230c2c](https://github.com/chodeus/chub/commit/c230c2cc45eb2ec7445079174d191e089eb370e7))
+* **settings:** segmented field type for either/or enums ([5e99e03](https://github.com/chodeus/chub/commit/5e99e0370a91d07dd501cdbf0026bc5d09cf38a3))
+* **sync-gdrive:** bespoke drive table matching the mock ([3ce8528](https://github.com/chodeus/chub/commit/3ce8528281a14dfadaf3db1d61496010ed359f2b))
+* **sync-gdrive:** section config to mock (Authentication → Options) ([6c9599c](https://github.com/chodeus/chub/commit/6c9599c746a278c2cc9438a59010b1f02267543e))
+* **system:** rebuild System settings to redesign mock ([eae1705](https://github.com/chodeus/chub/commit/eae17054e399549bd6e8b16e6a1c066327fc9899))
+* **ui:** add the mock's filter ⌘F hint to the Logs search input ([aafadeb](https://github.com/chodeus/chub/commit/aafadebd4dce8437501caedcccd280c4acbcab1d))
+* **ui:** polish Settings sub-components to match mocks ([290b08a](https://github.com/chodeus/chub/commit/290b08a34eb0cd211a28f7fcf8fc3ac82e73df52))
+* **ui:** redesign Assets Search ([bf9594c](https://github.com/chodeus/chub/commit/bf9594c97a6f43c7566e9b48413ddde93047c826))
+* **ui:** redesign Border Replacerr + Logs ([4bc1ec0](https://github.com/chodeus/chub/commit/4bc1ec0bff8ab34a5d8f3d83b9269bd9d12a9b9a))
+* **ui:** redesign dashboard as a dense ops board ([b7c84af](https://github.com/chodeus/chub/commit/b7c84af9b8df2f36a877e18779e656dd98d3574b))
+* **ui:** redesign foundation — fonts, palette tokens, sidebar shell ([f24005f](https://github.com/chodeus/chub/commit/f24005f28ac55bc90b904c3f817f60dad2545091))
+* **ui:** redesign GDrive Sources + Poster Statistics ([59a1f34](https://github.com/chodeus/chub/commit/59a1f34409fc8b616c5249f2e074ea1affe95daf))
+* **ui:** redesign Library section (search, manage, stats, label sync) ([d86e27e](https://github.com/chodeus/chub/commit/d86e27ea2e8975c4e61af51ba9324196f2b4e3ea))
+* **ui:** redesign Poster Cleanarr + Unmatched Assets (master-detail) ([73ba3a6](https://github.com/chodeus/chub/commit/73ba3a699016b3fbb38d3fdc362df8dd24011f0b))
+* **ui:** redesign Settings Jobs — mono stat strip + filter pills ([ce93e60](https://github.com/chodeus/chub/commit/ce93e60cc3f1db8044deac3c78523dbdfe93856c))
+* **ui:** redesign Settings page shells (Instances/General/Modules/Notifications/Schedule) ([2742d82](https://github.com/chodeus/chub/commit/2742d827dc6f864ca4d1089b43e78af929aafe34))
+* **ui:** redesign Settings shell — dense PageHeader + hub/System/Webhooks ([8376587](https://github.com/chodeus/chub/commit/8376587408d49f4b38bfa8483365fcdf91d5575b))
+* **ui:** remove Quick start section from the dashboard ([abe7a14](https://github.com/chodeus/chub/commit/abe7a14a6fab2724b966d13e9c1c7c5317ae303d))
+* **ui:** retire desktop top header; tighten Logs to match mock ([441050b](https://github.com/chodeus/chub/commit/441050bcbf59dde578d12adbb36e4f09db19fb2f))
+* **unmatched:** drop blank thumb; add CL2K build action to artwork rows ([631ca10](https://github.com/chodeus/chub/commit/631ca10f2c32ec625cf45fabf3218ed48a4b208b))
+* **unmatched:** match Additional-artwork view to the poster styling ([1ec28f4](https://github.com/chodeus/chub/commit/1ec28f4a6ab2d154f74b9ab8457d536c03ece3a5))
+* **unmatched:** reshape unmatched list to redesign mock ([52a3a0e](https://github.com/chodeus/chub/commit/52a3a0e0e0f3a6a0097b12363636bdb9f53efd65))
+* **upgradinatorr:** bespoke profile card matching the mock ([25b010c](https://github.com/chodeus/chub/commit/25b010c4c43ff0adfbbfba3250d5f6a48a638a52))
+* **webhooks:** reshape Webhooks page to mock + per-origin telemetry ([d0412fd](https://github.com/chodeus/chub/commit/d0412fd8bf1a35400aa0cb4a6e615f33b6960de6))
+
+
+### Bug Fixes
+
+* **accent:** use text-on-color (not hard-coded white) on brand surfaces ([7bdbdb1](https://github.com/chodeus/chub/commit/7bdbdb1e3026cea4d8e9395eb4fe7c1493b5b0df))
+* **badge:** stop dev prop-validation false-positives ([fc942bd](https://github.com/chodeus/chub/commit/fc942bd7af0670abd6946bb402ce9a76b7088a40))
+* **deps:** update all non-major dependencies ([#274](https://github.com/chodeus/chub/issues/274)) ([6e694ef](https://github.com/chodeus/chub/commit/6e694efab591b301ca0c0ad19f05618d6580fe5c))
+* **deps:** update all non-major dependencies ([#275](https://github.com/chodeus/chub/issues/275)) ([13986c4](https://github.com/chodeus/chub/commit/13986c460dd8bc620744fb00b6ae3fc7449d401c))
+* **dirlist:** compact flat path rows to match the module mocks ([4bf4606](https://github.com/chodeus/chub/commit/4bf4606d2a969ee3d4e09111f79d257b1bfccd51))
+* **gdrive-table:** flat fields in inset rows to match the mock ([8039be3](https://github.com/chodeus/chub/commit/8039be30779f9ad6b037aa13be6c1fe67e2c4714))
+* **jobs+modules:** mock-style job actions; drop module-config breadcrumb ([c36fd06](https://github.com/chodeus/chub/commit/c36fd06fb2c73ca31d8a329675d697386e8adc58))
+* **logger:** attach module file handler regardless of root handlers ([21b6379](https://github.com/chodeus/chub/commit/21b6379dc01f85b210b192eebeb1903df926777d))
+* **logs:** don't list stale on-disk dirs as log modules ([97d38da](https://github.com/chodeus/chub/commit/97d38da851c515c2cfbc200dd4effbaf03fc4b95))
+* **logs:** list config-only extension modules (e.g. cl2k_maker) ([dab7f45](https://github.com/chodeus/chub/commit/dab7f4505793d0e63f795fc24e007870af97130d))
+* **matching:** strip *arr "(0)" unknown-year placeholder in normalization ([6b08881](https://github.com/chodeus/chub/commit/6b0888194722381a95a862b78b59854827b0e5eb))
+* **mobile:** stat strips wrap instead of overlapping on narrow screens ([ad43180](https://github.com/chodeus/chub/commit/ad43180352f0a95e635108755597f7cdb8cd21e2))
+* **poster-cleanarr:** mock-style checkboxes + variant status tags ([48ac575](https://github.com/chodeus/chub/commit/48ac575ac5093fffc65d082c20ad13fcce98340a))
+* **poster-cleanarr:** show cached scan on return, don't re-scan ([9dfdb6e](https://github.com/chodeus/chub/commit/9dfdb6e8bae3ce6971c5631fcd79147f74ca78be))
+* **poster-stats:** guard non-array detail data (page crash) ([b4b04da](https://github.com/chodeus/chub/commit/b4b04da0d64734ea2dbf0fae6f39e612a52f9b27))
+* **settings:** surface TMDB + fanart.tv API keys on the General page ([61b11bf](https://github.com/chodeus/chub/commit/61b11bf6f1f8fba3a02cd2bed2b4a60812f4cea0))
+* **ui:** fidelity pass — match mock bar tracks, shadows, radii, accents ([53ed50a](https://github.com/chodeus/chub/commit/53ed50a68f59aa770937a9d6692a0d5e67ece6a6))
+* **ui:** live-walkthrough polish ([c6607e4](https://github.com/chodeus/chub/commit/c6607e412fcd28e0b7d674a92135b20a085c9ccd))
+* **ui:** restore functionality dropped during the redesign ([94ccf47](https://github.com/chodeus/chub/commit/94ccf4747fa3d10d519018fc99abcb6e3ea3a074))
+
+
+### Documentation
+
+* **notify:** correct stale ErrorNotifyHandler startup message ([075c73f](https://github.com/chodeus/chub/commit/075c73fc5d564fa6f6def21fc100a8a50fd5b040))
+
 ## [2.35.0](https://github.com/chodeus/chub/compare/v2.34.0...v2.35.0) (2026-06-25)
 
 
