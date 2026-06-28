@@ -404,3 +404,105 @@ def test_id_drift_still_proposed_despite_season_padding():
     assert r is not None
     assert "tvdb" in r["drift_type"]
     assert r["proposed_filename"].endswith(" - Season 01.jpg")
+
+
+# --- live-Drive source: filename parser + type-from-library + apply guard ---
+
+from backend.util.poster_self_heal.resolver import poster_from_filename  # noqa: E402
+from backend.util.poster_self_heal.apply import apply_proposal  # noqa: E402
+
+
+def test_poster_from_filename_movie():
+    p = poster_from_filename("Some Movie (2010) {tmdb-111} {imdb-tt1}.jpg")
+    assert p["tmdb_id"] == 111
+    assert p["imdb_id"] == "tt1"
+    assert p["year"] == 2010
+    assert p["season_number"] is None
+    assert p["asset_type"] is None  # resolved from the matched library row
+    assert p["file"] == "Some Movie (2010) {tmdb-111} {imdb-tt1}.jpg"
+    assert N(p["title"]) == N("Some Movie")
+
+
+def test_poster_from_filename_season_show():
+    p = poster_from_filename("Breaking Bad (2008) {tvdb-81189} - Season 1.jpg")
+    assert p["tvdb_id"] == 81189
+    assert p["season_number"] == 1
+    assert p["asset_type"] == "show"
+
+
+def test_poster_from_filename_specials_is_season_zero():
+    p = poster_from_filename("Show (2008) {tvdb-1} - Specials.jpg")
+    assert p["season_number"] == 0
+    assert p["asset_type"] == "show"
+
+
+def test_poster_from_filename_non_image_is_none():
+    assert poster_from_filename("notes.txt") is None
+    assert poster_from_filename("folder") is None
+
+
+def test_drive_poster_resolves_show_type_from_library():
+    # Drive entry carries no asset_type; the matched library row supplies it,
+    # so the TMDB endpoint + canonical kind (season) are correct.
+    p = poster_from_filename("Breaking Bad (2008) {tvdb-81189} - Season 1.jpg")
+    r = _resolve(
+        p,
+        [media("show", "Breaking Bad", 2008, tmdb=1396, tvdb=81189)],
+        {1396: {"verified": True, "title": "Breaking Bad", "year": 2008}},
+    )
+    assert r is not None
+    assert r["asset_type"] == "show"
+    assert r["tmdb_id_new"] == 1396  # backfilled from the library row
+    assert r["proposed_filename"].endswith(" - Season 01.jpg")
+
+
+def test_drive_poster_resolves_movie_type_from_library():
+    p = poster_from_filename("Some Movie (2010).jpg")  # id-less
+    r = _resolve(
+        p,
+        [media("movie", "Some Movie", 2010, tmdb=111, imdb="tt1")],
+        {111: {"verified": True, "title": "Some Movie", "year": 2010}},
+    )
+    assert r is not None
+    assert r["asset_type"] == "movie"
+    assert r["proposed_filename"] == "Some Movie (2010) {tmdb-111} {imdb-tt1}.jpg"
+
+
+class _NullLog:
+    def info(self, *a, **k):
+        pass
+
+    def warning(self, *a, **k):
+        pass
+
+    def debug(self, *a, **k):
+        pass
+
+
+def test_apply_drive_only_skips_local_rename():
+    # Bare filename (Drive-only) + no folder_id → no Drive call, no local touch.
+    note = apply_proposal(
+        {
+            "current_filename": "a.jpg",
+            "proposed_filename": "b.jpg",
+            "poster_file": "a.jpg",
+            "drive_folder_id": None,
+        },
+        None,
+        _NullLog(),
+    )
+    assert note == ""
+
+
+def test_apply_absolute_missing_local_still_notes():
+    note = apply_proposal(
+        {
+            "current_filename": "a.jpg",
+            "proposed_filename": "b.jpg",
+            "poster_file": "/nonexistent/dir/a.jpg",
+            "drive_folder_id": None,
+        },
+        None,
+        _NullLog(),
+    )
+    assert "missing" in note

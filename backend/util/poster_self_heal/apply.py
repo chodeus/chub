@@ -26,13 +26,18 @@ def apply_proposal(row: Dict[str, Any], sync_cfg: Any, logger) -> str:
     if folder_id:
         move_file(current, proposed, folder_id, sync_cfg, logger)
 
+    # A live-Drive-only poster carries just its bare filename (no directory) —
+    # there's no local copy to touch, so the Drive rename above is the whole job.
+    if not old_path or not os.path.isabs(old_path):
+        return ""
+
     note = ""
     new_path = os.path.join(os.path.dirname(old_path), proposed)
     try:
-        if old_path and os.path.exists(old_path):
+        if os.path.exists(old_path):
             os.replace(old_path, new_path)
             logger.info(f"renamed local {current} -> {proposed}")
-        elif old_path:
+        else:
             note = " (local copy was missing; it will refresh on the next scan)"
             logger.warning(f"local file missing, skipped local rename: {old_path}")
     except OSError as exc:
