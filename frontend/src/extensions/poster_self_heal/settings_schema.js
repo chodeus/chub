@@ -5,6 +5,17 @@
 export const POSTER_SELF_HEAL_SCHEMA = {
     key: 'poster_self_heal',
     label: 'Poster Healer',
+    // The healer can't resolve canonical ids/titles/years without TMDB — warn on
+    // the config page when no key is set (ModuleSettingsPage reads `requires`).
+    requires: [
+        {
+            field: 'tmdb.apikey',
+            message:
+                'The Poster Healer needs a TMDB API key to resolve canonical ids, titles, and years — without one, runs will do nothing.',
+            linkTo: '/settings/general',
+            linkText: 'Set it in General settings',
+        },
+    ],
     fields: [
         {
             key: 'log_level',
