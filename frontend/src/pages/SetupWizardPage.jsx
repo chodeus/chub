@@ -125,9 +125,8 @@ const SetupWizardPage = () => {
                 const res = await configAPI.fetchConfig({ section: 'notifications' });
                 const cfg = res?.data ?? res ?? {};
                 const n = cfg.notifications ?? cfg;
-                const configured = Object.values(n || {}).some(
-                    mod => mod && (mod.discord?.webhook || mod.notifiarr?.webhook)
-                );
+                const destinations = Array.isArray(n?.destinations) ? n.destinations : [];
+                const configured = destinations.some(d => d?.config?.webhook);
                 if (!cancelled && configured) setNotifyConfigured(true);
             } catch {
                 /* ignore */

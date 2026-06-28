@@ -1,21 +1,36 @@
 """
-Notification testing API endpoints for CHUB.
+Notification configuration API endpoints for CHUB.
 
-Provides notification system testing functionality for validating
-configuration of various notification services, as well as CRUD
-operations for managing notification configurations.
+Notifications are stored as a list of **destinations** (per-channel), each
+fanning out to the modules it should report on. A destination is:
+
+    {
+        "id": "d1a2b3c4",
+        "method": "discord" | "notifiarr",
+        "name": "My CHUB",
+        "enabled": true,
+        "events": {"success": true, "failure": false},
+        "modules": ["poster_renamerr", ...]  | ["__ALL__"],
+        "config": { ...method-specific credentials... }
+    }
+
+Endpoints: list destinations, create/update/delete a destination, and send a
+test message for one method+config.
 """
 
-from typing import Any
+import uuid
+from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from backend.api.utils import error, ok
 from backend.modules import MODULES
 from backend.util.config import (
+    ALL_MODULES_SENTINEL,
     ChubConfig,
+    ConfigNotifications,
     load_config,
     redact_secrets,
     save_config,
@@ -33,37 +48,35 @@ router = APIRouter(
     },
 )
 
-
-class NotificationPayload(BaseModel):
-    """Request schema for test notification."""
-
-    module: str
-    notifications: dict
+ALLOWED_METHODS = ("discord", "notifiarr")
 
 
-class NotificationUpdateRequest(BaseModel):
-    """Request schema for creating/updating notification configuration."""
-
-    module: str
-    service_type: str  # "discord" | "notifiarr"
-    config: dict  # Service-specific configuration
+class NotificationEventsPayload(BaseModel):
+    success: bool = True
+    failure: bool = False
 
 
-def get_notification_section(config: ChubConfig, module_name: str) -> dict:
-    notifications = getattr(config, "notifications", None)
-    if isinstance(notifications, dict):
-        return notifications.get(module_name) or {}
-    return getattr(notifications, module_name, {}) or {}
+class DestinationPayload(BaseModel):
+    """Request schema for creating/updating a destination."""
+
+    method: str
+    name: str = ""
+    enabled: bool = True
+    events: NotificationEventsPayload = Field(default_factory=NotificationEventsPayload)
+    modules: List[str] = Field(default_factory=list)
+    config: dict = Field(default_factory=dict)
 
 
-def set_notification_section(
-    config: ChubConfig, module_name: str, notifications_for_module: dict
-) -> None:
-    notifications = getattr(config, "notifications", None)
-    if isinstance(notifications, dict):
-        notifications[module_name] = notifications_for_module
-    else:
-        setattr(notifications, module_name, notifications_for_module)
+class TestPayload(BaseModel):
+    """Request schema for the test button. `id` (optional) lets the server
+    resolve redacted secrets against an already-saved destination."""
+
+    method: str
+    config: dict = Field(default_factory=dict)
+    id: Optional[str] = None
+
+
+# ── helpers ──────────────────────────────────────────────────────────────
 
 
 def get_logger(request: Request, source: str = "WEB") -> Any:
@@ -76,73 +89,290 @@ def get_config() -> ChubConfig:
     return load_config()
 
 
+def _destinations_as_dicts(config: ChubConfig) -> List[dict]:
+    """Current destinations as plain dicts (real secrets, unredacted)."""
+    notif = getattr(config, "notifications", None)
+    data = notif.model_dump(mode="python") if hasattr(notif, "model_dump") else {}
+    dests = data.get("destinations") if isinstance(data, dict) else None
+    return list(dests) if isinstance(dests, list) else []
+
+
+def _save_destinations(config: ChubConfig, destinations: List[dict]) -> None:
+    """Persist a new destinations list, preserving any extra notification keys."""
+    notif = getattr(config, "notifications", None)
+    data = notif.model_dump(mode="python") if hasattr(notif, "model_dump") else {}
+    if not isinstance(data, dict):
+        data = {}
+    data["destinations"] = destinations
+    config.notifications = ConfigNotifications.model_validate(data)
+    save_config(config)
+
+
+def _new_id(method: str, existing_ids: set) -> str:
+    base = (method[:1] or "d").lower()
+    while True:
+        candidate = f"{base}{uuid.uuid4().hex[:8]}"
+        if candidate not in existing_ids:
+            return candidate
+
+
+def _validate_method(method: str) -> Optional[JSONResponse]:
+    if method not in ALLOWED_METHODS:
+        return error(
+            f"Invalid method: '{method}'. Allowed: {', '.join(ALLOWED_METHODS)}",
+            code="INVALID_METHOD",
+            status_code=400,
+        )
+    return None
+
+
+def _validate_modules(modules: List[str]) -> Optional[JSONResponse]:
+    for m in modules:
+        if m != ALL_MODULES_SENTINEL and m not in MODULES:
+            return error(
+                f"Invalid module: '{m}'.",
+                code="INVALID_MODULE_NAME",
+                status_code=400,
+            )
+    return None
+
+
+def _normalize_modules(modules: List[str]) -> List[str]:
+    """Collapse to the `__ALL__` sentinel when present; de-dupe otherwise."""
+    if ALL_MODULES_SENTINEL in modules:
+        return [ALL_MODULES_SENTINEL]
+    seen: List[str] = []
+    for m in modules:
+        if m not in seen:
+            seen.append(m)
+    return seen
+
+
+# ── endpoints ────────────────────────────────────────────────────────────
+
+
+@router.get(
+    "/notifications",
+    summary="List notification destinations",
+    description="Retrieve all configured notification destinations (secrets redacted).",
+)
+async def get_all_notifications(
+    config: ChubConfig = Depends(get_config), logger: Any = Depends(get_logger)
+) -> JSONResponse:
+    try:
+        logger.debug("Serving GET /api/notifications")
+        destinations = redact_secrets(_destinations_as_dicts(config))
+        return ok(
+            "Notifications retrieved successfully",
+            {"destinations": destinations},
+        )
+    except Exception as e:
+        logger.error(f"Error retrieving notifications: {e}")
+        return error(
+            f"Error retrieving notifications: {str(e)}",
+            code="NOTIFICATIONS_RETRIEVAL_ERROR",
+            status_code=500,
+        )
+
+
+@router.post(
+    "/notifications/destinations",
+    summary="Create a notification destination",
+    description="Append a new destination and persist it.",
+)
+async def create_destination(
+    payload: DestinationPayload, logger: Any = Depends(get_logger)
+) -> JSONResponse:
+    try:
+        method_err = _validate_method(payload.method)
+        if method_err:
+            return method_err
+        module_err = _validate_modules(payload.modules)
+        if module_err:
+            return module_err
+
+        config = load_config()
+        destinations = _destinations_as_dicts(config)
+        existing_ids = {d.get("id") for d in destinations if isinstance(d, dict)}
+
+        new_dest = {
+            "id": _new_id(payload.method, existing_ids),
+            "method": payload.method,
+            "name": payload.name,
+            "enabled": payload.enabled,
+            "events": payload.events.model_dump(),
+            "modules": _normalize_modules(payload.modules),
+            "config": payload.config,
+        }
+        destinations.append(new_dest)
+        _save_destinations(config, destinations)
+
+        logger.info(
+            f"Created {payload.method} notification destination {new_dest['id']}"
+        )
+        return ok(
+            "Notification destination created successfully",
+            {"destination": redact_secrets(new_dest)},
+        )
+    except Exception as e:
+        logger.error(f"Failed to create notification destination: {e}")
+        return error(
+            f"Failed to create destination: {str(e)}",
+            code="NOTIFICATION_CREATE_ERROR",
+            status_code=500,
+        )
+
+
+@router.put(
+    "/notifications/destinations/{destination_id}",
+    summary="Update a notification destination",
+    description="Update an existing destination. Secrets sent back as the "
+    "redacted placeholder are preserved (not overwritten).",
+)
+async def update_destination(
+    destination_id: str,
+    payload: DestinationPayload,
+    logger: Any = Depends(get_logger),
+) -> JSONResponse:
+    try:
+        method_err = _validate_method(payload.method)
+        if method_err:
+            return method_err
+        module_err = _validate_modules(payload.modules)
+        if module_err:
+            return module_err
+
+        config = load_config()
+        destinations = _destinations_as_dicts(config)
+
+        idx = next(
+            (
+                i
+                for i, d in enumerate(destinations)
+                if isinstance(d, dict) and d.get("id") == destination_id
+            ),
+            None,
+        )
+        if idx is None:
+            return error(
+                f"No destination found with id '{destination_id}'",
+                code="NOTIFICATION_NOT_FOUND",
+                status_code=404,
+            )
+
+        existing_config = destinations[idx].get("config") or {}
+        merged_config = strip_redacted_placeholders(payload.config, existing_config)
+
+        updated = {
+            "id": destination_id,
+            "method": payload.method,
+            "name": payload.name,
+            "enabled": payload.enabled,
+            "events": payload.events.model_dump(),
+            "modules": _normalize_modules(payload.modules),
+            "config": merged_config,
+        }
+        destinations[idx] = updated
+        _save_destinations(config, destinations)
+
+        logger.info(f"Updated notification destination {destination_id}")
+        return ok(
+            "Notification destination updated successfully",
+            {"destination": redact_secrets(updated)},
+        )
+    except Exception as e:
+        logger.error(f"Failed to update notification destination {destination_id}: {e}")
+        return error(
+            f"Failed to update destination: {str(e)}",
+            code="NOTIFICATION_UPDATE_ERROR",
+            status_code=500,
+        )
+
+
+@router.delete(
+    "/notifications/destinations/{destination_id}",
+    summary="Delete a notification destination",
+    description="Remove a destination by id.",
+)
+async def delete_destination(
+    destination_id: str, logger: Any = Depends(get_logger)
+) -> JSONResponse:
+    try:
+        config = load_config()
+        destinations = _destinations_as_dicts(config)
+        remaining = [
+            d
+            for d in destinations
+            if not (isinstance(d, dict) and d.get("id") == destination_id)
+        ]
+        if len(remaining) == len(destinations):
+            return error(
+                f"No destination found with id '{destination_id}'",
+                code="NOTIFICATION_NOT_FOUND",
+                status_code=404,
+            )
+        _save_destinations(config, remaining)
+
+        logger.info(f"Deleted notification destination {destination_id}")
+        return ok(
+            "Notification destination deleted successfully",
+            {"id": destination_id},
+        )
+    except Exception as e:
+        logger.error(f"Failed to delete notification destination {destination_id}: {e}")
+        return error(
+            f"Failed to delete destination: {str(e)}",
+            code="NOTIFICATION_DELETE_ERROR",
+            status_code=500,
+        )
+
+
 @router.post(
     "/notifications/test",
-    summary="Test notification configuration",
-    description="Send a test notification to validate notification service configuration.",
+    summary="Test a notification destination",
+    description="Send a test message for one method + config without saving.",
     responses={
-        200: {
-            "description": "Test notification sent successfully",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "success": True,
-                        "message": "Test notification sent successfully for module 'sync_gdrive'",
-                        "data": {"sent": True, "service": "discord"},
-                    }
-                }
-            },
-        },
+        200: {"description": "Test notification sent successfully"},
         400: {"description": "Invalid notification configuration"},
         502: {"description": "Notification service connection failed"},
     },
 )
 def test_notification(
-    payload: NotificationPayload, logger: Any = Depends(get_logger)
+    payload: TestPayload, logger: Any = Depends(get_logger)
 ) -> JSONResponse:
-    """
-    Test notification configuration for a module.
-
-    Sends a test notification using the provided configuration to verify
-    that notification settings are working correctly. Supports the configured
-    notification services (Discord, Notifiarr).
-
-    Args:
-        payload: Module name and notification configuration to test
-
-    Returns:
-        Test result indicating success or failure with error details
-    """
     try:
-        logger.debug(
-            "Serving POST /api/test-notification for module: %s", payload.module
-        )
-        # Redact webhook URLs / secrets before logging the payload.
-        logger.debug("Payload: %s", redact_secrets(payload.dict()))
+        logger.debug("Serving POST /api/notifications/test (%s)", payload.method)
 
-        config = payload.dict()
-        # Resolve redacted placeholders against the stored config so testing an
-        # already-saved notification uses the real webhook, not "********".
-        stored_module = get_notification_section(load_config(), payload.module)
-        incoming = config.get("notifications") or {}
-        config["notifications"] = {
-            svc: strip_redacted_placeholders(svc_cfg, stored_module.get(svc) or {})
-            for svc, svc_cfg in incoming.items()
-        }
-        manager = NotificationManager(config, logger, module_name=payload.module)
-        result = manager.send_test_notification()
+        method_err = _validate_method(payload.method)
+        if method_err:
+            return method_err
 
-        # Check if the result is already in our standard format
+        config = load_config()
+        # Resolve redacted placeholders against the stored destination so testing
+        # an already-saved channel uses the real webhook, not "********".
+        resolved = payload.config
+        if payload.id:
+            stored = next(
+                (
+                    d
+                    for d in _destinations_as_dicts(config)
+                    if isinstance(d, dict) and d.get("id") == payload.id
+                ),
+                None,
+            )
+            if stored:
+                resolved = strip_redacted_placeholders(
+                    payload.config, stored.get("config") or {}
+                )
+
+        manager = NotificationManager(config, logger, module_name="main")
+        result = manager.send_test_to(payload.method, resolved)
+
         if isinstance(result, dict) and "success" in result:
             return JSONResponse(
                 status_code=200 if result["success"] else 400, content=result
             )
-
-        # Assume success if no exception was raised and we got a result
-        return ok(
-            f"Test notification sent successfully for module '{payload.module}'",
-            result if result else {},
-        )
+        return ok("Test notification sent successfully", result or {})
 
     except ValueError as e:
         logger.error(f"Invalid notification configuration: {e}")
@@ -163,345 +393,5 @@ def test_notification(
         return error(
             f"Test notification failed: {str(e)}",
             code="NOTIFICATION_TEST_ERROR",
-            status_code=500,
-        )
-
-
-@router.get(
-    "/notifications",
-    summary="Get all module notifications",
-    description="Retrieve all configured module notifications from configuration.",
-    responses={
-        200: {
-            "description": "Notifications retrieved successfully",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "success": True,
-                        "message": "Notifications retrieved successfully",
-                        "data": {
-                            "notifications": {
-                                "sync_gdrive": {
-                                    "discord": {
-                                        "bot_name": "CHUB",
-                                        "color": "#ff7300",
-                                        "webhook": "https://discord.com/api/webhooks/...",
-                                    }
-                                }
-                            }
-                        },
-                    }
-                }
-            },
-        }
-    },
-)
-async def get_all_notifications(
-    config: ChubConfig = Depends(get_config), logger: Any = Depends(get_logger)
-) -> JSONResponse:
-    """
-    Retrieve all configured module notifications.
-
-    Returns the complete notification configuration for all modules.
-    Used by the UI for notification management interface.
-
-    Returns:
-        Complete notification configuration dictionary
-    """
-    try:
-        logger.debug("Serving GET /api/notifications")
-        notifications_data = redact_secrets(config.notifications.model_dump())
-
-        return ok(
-            "Notifications retrieved successfully",
-            {"notifications": notifications_data},
-        )
-
-    except Exception as e:
-        logger.error(f"Error retrieving notifications: {e}")
-        return error(
-            f"Error retrieving notifications: {str(e)}",
-            code="NOTIFICATIONS_RETRIEVAL_ERROR",
-            status_code=500,
-        )
-
-
-@router.get(
-    "/notifications/{module_id}",
-    summary="Get module notifications",
-    description="Retrieve the notifications for a specific module.",
-    responses={
-        200: {
-            "description": "Module notifications retrieved successfully",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "success": True,
-                        "message": "Notifications for 'sync_gdrive' retrieved successfully",
-                        "data": {
-                            "module": "sync_gdrive",
-                            "notifications": {
-                                "discord": {
-                                    "bot_name": "CHUB",
-                                    "color": "#ff7300",
-                                    "webhook": "https://discord.com/api/webhooks/...",
-                                }
-                            },
-                        },
-                    }
-                }
-            },
-        },
-        404: {"description": "Module notifications not found"},
-    },
-)
-async def get_module_notifications(
-    module_id: str,
-    config: ChubConfig = Depends(get_config),
-    logger: Any = Depends(get_logger),
-) -> JSONResponse:
-    """
-    Retrieve the notifications for a specific module.
-
-    Returns the notification configuration for the requested module, or null
-    if no notifications are configured.
-
-    Args:
-        module_id: Module name (e.g., "sync_gdrive", "poster_renamerr")
-
-    Returns:
-        Module notification configuration
-    """
-    try:
-        logger.debug(f"Serving GET /api/notifications/{module_id}")
-
-        # Get notifications for the module (may be None)
-        module_notifications = getattr(config.notifications, module_id, None)
-
-        # Convert to dict if it exists (it's a dict already per the Pydantic model)
-        # ConfigNotifications fields are already Dict[str, Any]
-        if module_notifications is None:
-            module_notifications = {}
-
-        return ok(
-            f"Notifications for '{module_id}' retrieved successfully",
-            {
-                "module": module_id,
-                "notifications": redact_secrets(module_notifications),
-            },
-        )
-
-    except Exception as e:
-        logger.error(f"Error retrieving notifications for module {module_id}: {e}")
-        return error(
-            f"Error retrieving notifications: {str(e)}",
-            code="NOTIFICATIONS_RETRIEVAL_ERROR",
-            status_code=500,
-        )
-
-
-@router.post(
-    "/notifications",
-    summary="Create or update module notification",
-    description="Create or update the notification configuration for a specific module and service type.",
-    responses={
-        200: {
-            "description": "Notification created/updated successfully",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "success": True,
-                        "message": "Notification for 'sync_gdrive' (discord) updated successfully",
-                        "data": {
-                            "module": "sync_gdrive",
-                            "service_type": "discord",
-                            "config": {
-                                "bot_name": "CHUB",
-                                "color": "#ff7300",
-                                "webhook": "https://discord.com/api/webhooks/...",
-                            },
-                        },
-                    }
-                }
-            },
-        },
-        400: {"description": "Invalid module name or service type"},
-        500: {"description": "Configuration save failed"},
-    },
-)
-async def update_module_notification(
-    data: NotificationUpdateRequest, logger: Any = Depends(get_logger)
-) -> JSONResponse:
-    """
-    Create or update a module notification configuration.
-
-    Validates that the module name exists in the available modules list
-    and that the service type is valid, then updates the notification
-    configuration and persists to config.yml.
-
-    Args:
-        data: Module name, service type, and notification configuration
-
-    Returns:
-        Success confirmation with updated notification details
-    """
-    try:
-        module_name = data.module
-        service_type = data.service_type
-        notification_config = data.config
-
-        logger.info(
-            f"Updating notification for module: {module_name}, service: {service_type}"
-        )
-
-        # Validate module exists in MODULES registry
-        if module_name not in MODULES:
-            available_modules = ", ".join(sorted(MODULES.keys()))
-            return error(
-                f"Invalid module name: '{module_name}'. "
-                f"Available modules: {available_modules}",
-                code="INVALID_MODULE_NAME",
-                status_code=400,
-            )
-
-        # Validate service type
-        allowed_service_types = ["discord", "notifiarr"]
-        if service_type not in allowed_service_types:
-            return error(
-                f"Invalid service type: '{service_type}'. "
-                f"Allowed types: {', '.join(allowed_service_types)}",
-                code="INVALID_SERVICE_TYPE",
-                status_code=400,
-            )
-
-        # Load current config
-        config = load_config()
-
-        # Update notification for the module and service type, preserving any
-        # secret the UI sent back as the redaction placeholder ("********")
-        # instead of clobbering the stored value with the placeholder.
-        module_notifications = get_notification_section(config, module_name)
-        existing_service = module_notifications.get(service_type) or {}
-        merged_config = strip_redacted_placeholders(
-            notification_config, existing_service
-        )
-        module_notifications[service_type] = merged_config
-        set_notification_section(config, module_name, module_notifications)
-
-        # Save updated configuration
-        save_config(config)
-
-        logger.info(
-            f"Successfully updated notification for module: {module_name}, service: {service_type}"
-        )
-        return ok(
-            f"Notification for '{module_name}' ({service_type}) updated successfully",
-            {
-                "module": module_name,
-                "service_type": service_type,
-                "config": redact_secrets(merged_config),
-            },
-        )
-
-    except Exception as e:
-        logger.error(
-            f"Failed to update notification for module {data.module}, service {data.service_type}: {e}"
-        )
-        return error(
-            f"Failed to update notification: {str(e)}",
-            code="NOTIFICATION_UPDATE_ERROR",
-            status_code=500,
-        )
-
-
-@router.delete(
-    "/notifications/{module_id}/{service_type}",
-    summary="Delete module notification",
-    description="Remove the notification configuration for a specific module and service type from configuration.",
-    responses={
-        200: {
-            "description": "Notification deleted successfully",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "success": True,
-                        "message": "Notification for 'sync_gdrive' (discord) deleted successfully",
-                        "data": {"module": "sync_gdrive", "service_type": "discord"},
-                    }
-                }
-            },
-        },
-        404: {"description": "Module notification not found"},
-        500: {"description": "Configuration save failed"},
-    },
-)
-async def delete_module_notification(
-    module_id: str, service_type: str, logger: Any = Depends(get_logger)
-) -> JSONResponse:
-    """
-    Delete a module notification configuration.
-
-    Removes the notification entry for the specified module and service type
-    from config.yml. This operation is permanent. If the module has no other
-    notifications after deletion, the module key is also removed.
-
-    Args:
-        module_id: Module name to remove notification for
-        service_type: Service type to remove (discord, notifiarr)
-
-    Returns:
-        Success confirmation with deleted module name and service type
-    """
-    try:
-        logger.info(
-            f"Deleting notification for module: {module_id}, service: {service_type}"
-        )
-
-        # Load current config
-        config = load_config()
-
-        module_notifications = get_notification_section(config, module_id)
-
-        # Check if module has any notifications configured
-        if not module_notifications:
-            return error(
-                f"No notifications found for module '{module_id}'",
-                code="NOTIFICATION_NOT_FOUND",
-                status_code=404,
-            )
-
-        # Check if service type exists for this module
-        if service_type not in module_notifications:
-            return error(
-                f"No '{service_type}' notification found for module '{module_id}'",
-                code="NOTIFICATION_NOT_FOUND",
-                status_code=404,
-            )
-
-        # Remove the notification
-        del module_notifications[service_type]
-
-        # ConfigNotifications has fixed module fields, so an empty dict is the
-        # durable representation of "no notifications for this module."
-        set_notification_section(config, module_id, module_notifications)
-
-        # Save updated configuration
-        save_config(config)
-
-        logger.info(
-            f"Successfully deleted notification for module: {module_id}, service: {service_type}"
-        )
-        return ok(
-            f"Notification for '{module_id}' ({service_type}) deleted successfully",
-            {"module": module_id, "service_type": service_type},
-        )
-
-    except Exception as e:
-        logger.error(
-            f"Failed to delete notification for module {module_id}, service {service_type}: {e}"
-        )
-        return error(
-            f"Failed to delete notification: {str(e)}",
-            code="NOTIFICATION_DELETE_ERROR",
             status_code=500,
         )

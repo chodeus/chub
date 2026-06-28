@@ -659,3 +659,130 @@ def test_cleanarr_flatten_then_split_real_daps_shape():
     assert sec["orphan_instances"] == ["radarr-uhd"]
     assert all(isinstance(i, str) for i in sec["instances"])
     assert is_legacy_config(out) is False  # fully migrated, no second pass needed
+
+
+# ─── Notifications: per-module → per-destination ─────────────────────────
+
+
+def test_notifications_per_module_to_destinations():
+    raw = {
+        "notifications": {
+            "poster_renamerr": {
+                "discord": {
+                    "webhook": "https://discord.com/api/webhooks/1/a",
+                    "bot_name": "CHUB",
+                    "color": "#ff7300",
+                },
+            },
+            "asset_renamerr": {
+                "discord": {
+                    "webhook": "https://discord.com/api/webhooks/1/a",
+                    "bot_name": "CHUB",
+                    "color": "#ff7300",
+                },
+            },
+            "health_checkarr": {
+                "notifiarr": {
+                    "webhook": "https://notifiarr.com/api/v1/x",
+                    "channel_id": 123,
+                },
+            },
+            "main": {
+                "discord": {"webhook": "https://discord.com/api/webhooks/9/err"},
+            },
+        }
+    }
+    assert is_legacy_config(raw) is True
+    out, notes = migrate(raw)
+
+    notif = out["notifications"]
+    assert set(notif.keys()) == {"destinations"}
+    dests = notif["destinations"]
+
+    # Shared webhook coalesces into ONE discord destination spanning both modules.
+    shared = [
+        d
+        for d in dests
+        if d["method"] == "discord" and "webhooks/1/a" in d["config"]["webhook"]
+    ]
+    assert len(shared) == 1
+    assert sorted(shared[0]["modules"]) == ["asset_renamerr", "poster_renamerr"]
+    assert shared[0]["events"] == {"success": True, "failure": False}
+    assert shared[0]["enabled"] is True
+
+    nd = [d for d in dests if d["method"] == "notifiarr"]
+    assert len(nd) == 1
+    assert nd[0]["modules"] == ["health_checkarr"]
+    assert nd[0]["config"]["channel_id"] == 123
+
+    # main → failure-only, every module via the sentinel.
+    errd = [
+        d
+        for d in dests
+        if d["method"] == "discord" and "webhooks/9/err" in d["config"]["webhook"]
+    ]
+    assert len(errd) == 1
+    assert errd[0]["events"] == {"success": False, "failure": True}
+    assert errd[0]["modules"] == ["__ALL__"]
+
+    assert any(n.rule == "convert:notifications-to-destinations" for n in notes)
+
+    # Idempotent + validates against the live schema.
+    _again, notes2 = migrate(out)
+    assert not any(n.rule == "convert:notifications-to-destinations" for n in notes2)
+    assert is_legacy_config(out) is False
+    from backend.util.config import ChubConfig
+
+    ChubConfig.model_validate(out)
+
+
+def test_notifications_main_coalesces_with_module_webhook():
+    # Same webhook for a module summary AND the global error channel → one
+    # destination reporting that scope's successes and all failures.
+    raw = {
+        "notifications": {
+            "poster_renamerr": {
+                "discord": {"webhook": "https://discord.com/api/webhooks/1/a"}
+            },
+            "main": {"discord": {"webhook": "https://discord.com/api/webhooks/1/a"}},
+        }
+    }
+    out, _ = migrate(raw)
+    dests = out["notifications"]["destinations"]
+    assert len(dests) == 1
+    assert dests[0]["events"] == {"success": True, "failure": True}
+    assert dests[0]["modules"] == ["__ALL__"]
+
+
+def test_notifications_already_destinations_is_noop():
+    raw = {
+        "notifications": {
+            "destinations": [
+                {
+                    "id": "d1",
+                    "method": "discord",
+                    "enabled": True,
+                    "events": {"success": True, "failure": False},
+                    "modules": ["nohl"],
+                    "config": {"webhook": "https://discord.com/api/webhooks/2/b"},
+                },
+            ]
+        }
+    }
+    assert is_legacy_config(raw) is False
+    out, notes = migrate(raw)
+    assert out["notifications"]["destinations"] == raw["notifications"]["destinations"]
+    assert not any(n.rule == "convert:notifications-to-destinations" for n in notes)
+
+
+def test_notifications_empty_webhook_entries_skipped():
+    raw = {
+        "notifications": {
+            "poster_renamerr": {"discord": {}},
+            "labelarr": {"discord": {"webhook": ""}},
+        }
+    }
+    assert is_legacy_config(raw) is True
+    out, _ = migrate(raw)
+    assert out["notifications"]["destinations"] == []
+    assert is_legacy_config(out) is False

@@ -753,24 +753,45 @@ class FanartConfig(BaseModel):
 # extra="allow" keeps notification sections owned by self-registering
 # extensions (backend/extensions) — unknown module keys round-trip instead of
 # being dropped on parse.
-class ConfigNotifications(BaseModel):
+class NotificationEvents(BaseModel):
+    """Which run outcomes a destination reports on. `success` = run-completion
+    summaries (fired by the per-module dispatch calls); `failure` = error alerts
+    (fired by the global ERROR-log handler)."""
+
+    success: bool = True
+    failure: bool = False
+
+
+# Sentinel stored in a destination's `modules` list meaning "every module".
+ALL_MODULES_SENTINEL = "__ALL__"
+
+
+class NotificationDestination(BaseModel):
+    """One outbound notification channel. A single Discord webhook / Notifiarr
+    alert fans out to every module listed in `modules` (or all of them via the
+    `__ALL__` sentinel), reporting on the outcomes enabled in `events`.
+
+    `config` holds the method-specific credentials (Discord: webhook/bot_name/
+    color; Notifiarr: webhook/channel_id/color) — same leaf shape as the old
+    per-module structure, so `redact_secrets` still masks `webhook` by name."""
+
     model_config = ConfigDict(extra="allow")
 
-    poster_renamerr: Optional[Dict[str, Any]] = Field(default_factory=dict)
-    asset_renamerr: Optional[Dict[str, Any]] = Field(default_factory=dict)
-    unmatched_assets: Optional[Dict[str, Any]] = Field(default_factory=dict)
-    health_checkarr: Optional[Dict[str, Any]] = Field(default_factory=dict)
-    labelarr: Optional[Dict[str, Any]] = Field(default_factory=dict)
-    upgradinatorr: Optional[Dict[str, Any]] = Field(default_factory=dict)
-    renameinatorr: Optional[Dict[str, Any]] = Field(default_factory=dict)
-    nohl: Optional[Dict[str, Any]] = Field(default_factory=dict)
-    jduparr: Optional[Dict[str, Any]] = Field(default_factory=dict)
-    nestarr: Optional[Dict[str, Any]] = Field(default_factory=dict)
-    poster_cleanarr: Optional[Dict[str, Any]] = Field(default_factory=dict)
-    plex_maintenance: Optional[Dict[str, Any]] = Field(default_factory=dict)
-    border_replacerr: Optional[Dict[str, Any]] = Field(default_factory=dict)
-    sync_gdrive: Optional[Dict[str, Any]] = Field(default_factory=dict)
-    main: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    id: str = ""
+    method: str = "discord"  # "discord" | "notifiarr"
+    name: str = ""
+    enabled: bool = True
+    events: NotificationEvents = Field(default_factory=NotificationEvents)
+    modules: List[str] = Field(default_factory=list)
+    config: Dict[str, Any] = Field(default_factory=dict)
+
+
+class ConfigNotifications(BaseModel):
+    # extra="allow" preserves any legacy/extension keys that slip through before
+    # the migrator reshapes them into `destinations`.
+    model_config = ConfigDict(extra="allow")
+
+    destinations: List[NotificationDestination] = Field(default_factory=list)
 
 
 # ==== ROOT CONFIG MODEL ====

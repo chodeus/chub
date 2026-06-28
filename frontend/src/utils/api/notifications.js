@@ -1,116 +1,66 @@
 /**
  * CHUB Notifications API Module
  *
- * Handles notification configuration management for CHUB modules:
- * - Notification service configuration (Discord, Notifiarr)
- * - Notification testing and validation
- * - Per-module notification settings
- * - Service-specific configuration management
+ * Notifications are modelled as a list of **destinations** (per-channel). Each
+ * destination fans out to the modules it should report on:
+ *   { id, method: "discord"|"notifiarr", name, enabled,
+ *     events: { success, failure }, modules: string[], config: {...} }
+ *
+ * `modules` holds module keys; the sentinel "__ALL__" means every module.
+ * `config` holds method-specific credentials (Discord: webhook/bot_name/color;
+ * Notifiarr: webhook/channel_id/color). Secrets round-trip as "********".
  */
 
 import { apiCore } from './core.js';
 
-/**
- * Notifications API client for notification service management
- */
+/** Sentinel stored in a destination's `modules` meaning "every module". */
+export const ALL_MODULES = '__ALL__';
+
 export const notificationsAPI = {
     /**
-     * Fetch all notification configurations for all modules
-     * @param {Object} options - Request options
-     * @param {boolean} options.useCache - Use cached data (default: true)
-     * @returns {Promise<Object>} All notification configurations
-     *
-     * Response format:
-     * {
-     *   module_name: {
-     *     discord: { bot_name, color, webhook },
-     *     notifiarr: { color, webhook, channel_id }
-     *   }
-     * }
+     * Fetch all notification destinations.
+     * @returns {Promise<Object>} { data: { destinations: [...] } }
      */
     fetchNotifications: (options = {}) => {
         return apiCore.get('/notifications', {
             useCache: true,
-            cacheTTL: 5 * 60 * 1000, // 5 minutes cache
+            cacheTTL: 5 * 60 * 1000,
             ...options,
         });
     },
 
     /**
-     * Create or update notification configuration for a module
-     * @param {Object} data - Notification configuration data
-     * @param {string} data.module - Module name
-     * @param {string} data.service_type - Service type ("discord" | "notifiarr")
-     * @param {Object} data.config - Service-specific configuration
-     * @returns {Promise<Object>} Updated notification configuration
-     *
-     * Request body format:
-     * {
-     *   module: "sync_gdrive",
-     *   service_type: "discord",
-     *   config: {
-     *     bot_name: "My Bot",
-     *     color: "#ff7300",
-     *     webhook: "https://discord.com/api/webhooks/..."
-     *   }
-     * }
-     *
-     * Response format:
-     * {
-     *   module: "sync_gdrive",
-     *   service_type: "discord",
-     *   config: { ... }
-     * }
+     * Create a new destination.
+     * @param {Object} destination - { method, name, enabled, events, modules, config }
      */
-    updateNotification: data => {
-        return apiCore.post('/notifications', data);
+    createDestination: destination => {
+        return apiCore.post('/notifications/destinations', destination);
     },
 
     /**
-     * Delete notification service configuration for a module
-     * @param {string} moduleId - Module identifier
-     * @param {string} serviceType - Service type to delete ("discord" | "notifiarr")
-     * @returns {Promise<Object>} Deletion confirmation
-     *
-     * Response format:
-     * {
-     *   module: "module_name",
-     *   service_type: "discord"
-     * }
+     * Update an existing destination. Secrets sent back as "********" are
+     * preserved server-side (not overwritten).
+     * @param {string} id - Destination id
+     * @param {Object} destination - Full destination payload
      */
-    deleteNotification: (moduleId, serviceType) => {
-        return apiCore.delete(`/notifications/${moduleId}/${serviceType}`);
+    updateDestination: (id, destination) => {
+        return apiCore.put(`/notifications/destinations/${id}`, destination);
     },
 
     /**
-     * Test notification configuration without saving
-     * @param {Object} data - Notification test data
-     * @param {string} data.module - Module name
-     * @param {Object} data.notifications - Notification configurations to test
-     * @returns {Promise<Object>} Test result
-     *
-     * Request body format:
-     * {
-     *   module: "sync_gdrive",
-     *   notifications: {
-     *     discord: {
-     *       bot_name: "Test Bot",
-     *       color: "#ff7300",
-     *       webhook: "https://discord.com/api/webhooks/..."
-     *     }
-     *   }
-     * }
-     *
-     * Response format:
-     * {
-     *   success: true,
-     *   message: "Test notification sent successfully",
-     *   results: {
-     *     discord: { success: true, message: "..." }
-     *   }
-     * }
+     * Delete a destination by id.
+     * @param {string} id - Destination id
      */
-    testNotification: data => {
+    deleteDestination: id => {
+        return apiCore.delete(`/notifications/destinations/${id}`);
+    },
+
+    /**
+     * Send a test message for one method + config. Passing `id` lets the server
+     * resolve redacted secrets against the saved destination.
+     * @param {Object} data - { method, config, id? }
+     */
+    testDestination: data => {
         return apiCore.post('/notifications/test', data);
     },
 };

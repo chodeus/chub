@@ -9,6 +9,10 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import requests
 from ratelimit import limits, sleep_and_retry
 
+# Mirror of config.ALL_MODULES_SENTINEL — a destination whose `modules` list
+# contains this reports on every module.
+ALL_MODULES_SENTINEL = "__ALL__"
+
 
 @dataclass
 class NotifiarrConfig:
@@ -56,23 +60,92 @@ class NotificationManager:
             return config.get(module_name, config)
         return config
 
-    def _get_notification_targets(self) -> Dict[str, Any]:
-        raw_targets = None
+    def _iter_destinations(self) -> List[Dict[str, Any]]:
+        """All configured destinations as plain dicts."""
         if isinstance(self.config, dict):
             raw_targets = self.config.get("notifications", {})
         else:
             raw_targets = getattr(self.config, "notifications", {})
-
         targets = self._as_dict(raw_targets)
-        module_targets = targets.get(self.module_name)
-        if isinstance(module_targets, dict):
-            return module_targets
+        dests = targets.get("destinations")
+        if isinstance(dests, list):
+            return [self._as_dict(d) for d in dests]
+        return []
 
-        service_keys = set(self.SEND_HANDLERS)
-        if any(key in targets for key in service_keys):
-            return targets
+    @staticmethod
+    def _dest_matches_module(dest: Dict[str, Any], module_name: str) -> bool:
+        mods = dest.get("modules")
+        if not isinstance(mods, list):
+            return False
+        return ALL_MODULES_SENTINEL in mods or module_name in mods
 
-        return {}
+    @staticmethod
+    def _event_enabled(dest: Dict[str, Any], event: str) -> bool:
+        events = dest.get("events")
+        return bool(events.get(event, False)) if isinstance(events, dict) else False
+
+    def _validate_target(
+        self, method: str, cfg: Dict[str, Any]
+    ) -> Union[str, Dict[str, Any]]:
+        """Validate one destination's credentials. Returns a normalized config
+        dict, or an ``"Invalid ..."`` string the caller can surface/log."""
+        if not isinstance(cfg, dict):
+            return f"Invalid config for {method}"
+        if method == "discord":
+            hook = str(cfg.get("webhook") or "").rstrip("/")
+            if hook:
+                return {
+                    "webhook": hook,
+                    "bot_name": cfg.get("bot_name") or None,
+                    "color": cfg.get("color") or None,
+                }
+            return "Invalid Discord configuration"
+        if method == "notifiarr":
+            hook = str(cfg.get("webhook") or "").rstrip("/")
+            cid = cfg.get("channel_id")
+            # channel_id can arrive as int or str (typed UI input vs hand-edited
+            # yaml). Cast defensively — a non-numeric string here would otherwise
+            # crash the whole notification dispatch with an unhandled ValueError.
+            cid_int: Optional[int] = None
+            if cid is not None:
+                try:
+                    cid_int = int(cid)
+                except (TypeError, ValueError):
+                    cid_int = None
+            if hook and cid_int is not None:
+                return {
+                    "webhook": hook,
+                    "channel_id": cid_int,
+                    "color": cfg.get("color") or None,
+                }
+            return "Invalid Notifiarr configuration"
+        return f"Invalid - Unknown notification type: {method}"
+
+    def _resolve_targets(
+        self, event: str, match_module: str
+    ) -> List[Tuple[str, Dict[str, Any]]]:
+        """Validated (method, config) pairs for enabled destinations whose
+        `events` include ``event`` and whose module list covers
+        ``match_module`` (directly or via the ``__ALL__`` sentinel)."""
+        resolved: List[Tuple[str, Dict[str, Any]]] = []
+        for dest in self._iter_destinations():
+            if not dest.get("enabled", True):
+                continue
+            if not self._event_enabled(dest, event):
+                continue
+            if not self._dest_matches_module(dest, match_module):
+                continue
+            method = dest.get("method")
+            validated = self._validate_target(method, dest.get("config") or {})
+            if isinstance(validated, str):
+                self.logger.warning(
+                    "[Notification] skipping destination %s: %s",
+                    dest.get("id") or dest.get("name") or method,
+                    validated,
+                )
+                continue
+            resolved.append((method, validated))
+        return resolved
 
     @staticmethod
     def format_module_title(name: str) -> str:
@@ -318,7 +391,12 @@ class NotificationManager:
         success = True
         messages = []
         for payload in self.build_discord_payload(
-            module_title, data, timestamp, dry_run=dry_run, color=color, bot_name=bot_name
+            module_title,
+            data,
+            timestamp,
+            dry_run=dry_run,
+            color=color,
+            bot_name=bot_name,
         ):
             ok, msg = self.send_and_log_response("Discord", hook, payload)
             if not ok:
@@ -326,99 +404,41 @@ class NotificationManager:
             messages.append(msg)
         return success, "; ".join(messages)
 
-    def collect_valid_targets(
-        self, test: bool = False
-    ) -> Dict[str, Union[str, Dict[str, Any]]]:
-
-        logger = self.logger
-        target_data: Dict[str, Union[str, Dict[str, Any]]] = {}
-        notification_targets = self._get_notification_targets()
-        try:
-            for ttype, target in notification_targets.items():
-                if not isinstance(target, dict):
-                    logger.warning(
-                        f"Invalid config structure for {ttype}: expected dict."
-                    )
-                    target_data[ttype] = f"Invalid config for {ttype}"
-                    continue
-                if ttype == "discord":
-                    hook = target.get("webhook", "").rstrip("/")
-                    if hook:
-                        target_data[ttype] = {
-                            "webhook": hook,
-                            "bot_name": target.get("bot_name") or None,
-                            "color": target.get("color") or None,
-                        }
-                    else:
-                        msg = "Invalid Discord configuration"
-                        logger.warning(msg)
-                        target_data[ttype] = msg
-                elif ttype == "notifiarr":
-                    hook = target.get("webhook", "").rstrip("/")
-                    cid = target.get("channel_id")
-                    # channel_id can arrive as int or str depending on whether
-                    # config was set via the UI (typed input) or hand-edited
-                    # in yaml. Cast defensively — a non-numeric string here
-                    # would otherwise crash the whole notification dispatch
-                    # with an unhandled ValueError.
-                    cid_int: Optional[int] = None
-                    if cid is not None:
-                        try:
-                            cid_int = int(cid)
-                        except (TypeError, ValueError):
-                            cid_int = None
-                    if hook and cid_int is not None:
-                        target_data["notifiarr"] = {
-                            "webhook": hook,
-                            "channel_id": cid_int,
-                            "color": target.get("color") or None,
-                        }
-                    else:
-                        logger.warning("Invalid Notifiarr configuration")
-                        target_data["notifiarr"] = "Invalid Notifiarr configuration"
-                else:
-                    target_data[ttype] = f"Invalid - Unknown notification type: {ttype}"
-        except Exception as e:
-            logger.error(f"[Notification] Error collecting targets: {e}", exc_info=True)
-            target_data = {}
-        return target_data
-
-    def send_notification(self, output: Any) -> Dict[str, Any]:
-        """Send notifications to all configured targets. Returns standardized result."""
+    def send_notification(
+        self, output: Any, event: str = "success", match_module: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Dispatch to every enabled destination that reports on ``match_module``
+        (defaults to this manager's module) for the given ``event``
+        ("success" | "failure"). Returns a standardized result."""
         results = []
-        target_data = self.collect_valid_targets()
+        module = match_module or self.module_name
         module_title = self.format_module_title(self.module_name)
-        for target, data in target_data.items():
-            entry = {
-                "type": target,
-                "ok": False,
-                "message": None,
-                "error": None,
-            }
-            handler = self.SEND_HANDLERS.get(target)
+        for method, data in self._resolve_targets(event, module):
+            entry = {"type": method, "ok": False, "message": None, "error": None}
+            handler = self.SEND_HANDLERS.get(method)
             try:
                 if handler:
-                    if target == "notifiarr":
+                    if method == "notifiarr":
                         cfg = NotifiarrConfig(**data)
                         ok, msg = handler(cfg, module_title, output)
-                    elif target == "discord":
+                    elif method == "discord":
                         cfg = DiscordConfig(**data)
                         ok, msg = handler(cfg, module_title, output)
                     else:
-                        ok, msg = False, f"Unknown handler for {target}"
+                        ok, msg = False, f"Unknown handler for {method}"
                     entry["ok"] = ok
                     entry["message"] = msg
                     if not ok:
                         entry["error"] = msg
                 else:
-                    entry["error"] = f"Unknown notification target: {target}"
+                    entry["error"] = f"Unknown notification target: {method}"
                 results.append(entry)
             except Exception as ex:
                 tb_str = traceback.format_exc()
-                entry["error"] = f"Exception for {target}: {ex}\n{tb_str}"
+                entry["error"] = f"Exception for {method}: {ex}\n{tb_str}"
                 results.append(entry)
                 self.logger.error(
-                    f"Exception for {target}: {ex}\n{tb_str}", exc_info=True
+                    f"Exception for {method}: {ex}\n{tb_str}", exc_info=True
                 )
         success = any(r.get("ok") for r in results)
         out = {"success": success, "results": results}
@@ -427,54 +447,45 @@ class NotificationManager:
             out["error"] = "; ".join(errors)
         return out
 
-    def send_test_notification(self) -> Dict[str, Any]:
-        """Send test notifications to all configured targets. Standardized result."""
-        results = []
-        target_data = self.collect_valid_targets(test=True)
+    def send_test_to(self, method: str, config: Dict[str, Any]) -> Dict[str, Any]:
+        """Send a single test notification for one method + credentials. Used by
+        the API test button — bypasses the enabled/event/module filtering."""
         module_title = self.format_module_title(self.module_name)
-        for target, data in target_data.items():
-            entry = {
-                "type": target,
-                "ok": False,
-                "message": None,
-                "error": None,
-            }
-            if not data or (isinstance(data, str) and data.startswith("Invalid")):
-                entry["message"] = (
-                    data
-                    if isinstance(data, str)
-                    else f"No valid config for '{target.upper()}'"
+        entry: Dict[str, Any] = {
+            "type": method,
+            "ok": False,
+            "message": None,
+            "error": None,
+        }
+        validated = self._validate_target(method, config)
+        if isinstance(validated, str):
+            entry["message"] = validated
+            entry["error"] = validated
+            return {"success": False, "results": [entry], "error": validated}
+        try:
+            if method == "notifiarr":
+                cfg = NotifiarrConfig(**validated)
+                ok, msg = self.send_notifiarr_notification(
+                    cfg, module_title, None, test=True
                 )
-                entry["error"] = entry["message"]
-                results.append(entry)
-                continue
-            try:
-                if target == "notifiarr":
-                    cfg = NotifiarrConfig(**data)
-                    ok, msg = self.send_notifiarr_notification(
-                        cfg, module_title, None, test=True
-                    )
-                elif target == "discord":
-                    cfg = DiscordConfig(**data)
-                    ok, msg = self.send_discord_notification(
-                        cfg, module_title, None, test=True
-                    )
-                else:
-                    ok, msg = False, f"Unknown notification target: {target}"
-                entry["ok"] = ok
-                entry["message"] = msg
-                if not ok:
-                    entry["error"] = msg
-            except Exception as ex:
-                tb_str = traceback.format_exc()
-                entry["message"] = f"Exception while testing {target}: {ex}\n{tb_str}"
-                entry["error"] = f"{ex}\n{tb_str}"
-            results.append(entry)
-        success = any(r.get("ok") for r in results)
-        out = {"success": success, "results": results}
-        if not success:
-            errors = [r.get("error") for r in results if r.get("error")]
-            out["error"] = "; ".join(errors)
+            elif method == "discord":
+                cfg = DiscordConfig(**validated)
+                ok, msg = self.send_discord_notification(
+                    cfg, module_title, None, test=True
+                )
+            else:
+                ok, msg = False, f"Unknown notification target: {method}"
+            entry["ok"] = ok
+            entry["message"] = msg
+            if not ok:
+                entry["error"] = msg
+        except Exception as ex:
+            tb_str = traceback.format_exc()
+            entry["message"] = f"Exception while testing {method}: {ex}\n{tb_str}"
+            entry["error"] = f"{ex}\n{tb_str}"
+        out: Dict[str, Any] = {"success": bool(entry["ok"]), "results": [entry]}
+        if not entry["ok"]:
+            out["error"] = entry["error"] or entry["message"]
         return out
 
     def format_notification_error(
@@ -488,9 +499,11 @@ class NotificationManager:
 class ErrorNotifyHandler(logging.Handler):
     """Custom logging handler to send errors to Discord/Notifiarr via notifications.
 
-    Reads the notification config from the `main` section but renders using the
-    `error_notify` formatter. Uses a thread-local re-entry guard so log calls made
-    by the notification machinery itself don't recursively trigger more notifications.
+    Dispatches the "failure" event to destinations that report on the failing
+    module (matched by the record's `source_module`, or `__ALL__`), rendering via
+    the `error_notify` formatter. Uses a thread-local re-entry guard so log calls
+    made by the notification machinery itself don't recursively trigger more
+    notifications.
     """
 
     _reentry = threading.local()
@@ -526,14 +539,17 @@ class ErrorNotifyHandler(logging.Handler):
 
             error_msg = f"{msg}\n{error_type_msg}" if error_type_msg else msg
 
+            source_module = getattr(record, "module", None) or self.manager.module_name
             output = {
                 "error_message": error_msg,
                 "traceback": tb,
                 "color": "FF0000",
-                "source_module": getattr(record, "module", self.manager.module_name),
+                "source_module": source_module,
             }
 
-            self.manager.send_notification(output)
+            self.manager.send_notification(
+                output, event="failure", match_module=source_module
+            )
         except Exception as e:
             if self.manager.logger:
                 self.manager.logger.error(
@@ -545,7 +561,8 @@ class ErrorNotifyHandler(logging.Handler):
 
 
 def install_error_notify_handler(config, logger=None) -> Optional[ErrorNotifyHandler]:
-    """Attach ErrorNotifyHandler to the root logger if notifications.main is configured.
+    """Attach ErrorNotifyHandler to the root logger if any enabled destination
+    reports on failures.
 
     Returns the handler instance (or None if not installed). Safe to call multiple
     times — subsequent calls are no-ops once a handler is attached.
@@ -555,21 +572,30 @@ def install_error_notify_handler(config, logger=None) -> Optional[ErrorNotifyHan
         if isinstance(existing, ErrorNotifyHandler):
             return existing
 
-    main_targets: Dict[str, Any] = {}
     raw = getattr(config, "notifications", None)
-    if raw is not None:
-        if hasattr(raw, "model_dump"):
-            raw = raw.model_dump(mode="python")
-        if isinstance(raw, dict):
-            section = raw.get("main")
-            if isinstance(section, dict):
-                main_targets = section
+    if raw is not None and hasattr(raw, "model_dump"):
+        raw = raw.model_dump(mode="python")
+    destinations = raw.get("destinations") if isinstance(raw, dict) else None
 
-    if not any(k in main_targets for k in ("discord", "notifiarr")):
+    has_failure_target = False
+    if isinstance(destinations, list):
+        for dest in destinations:
+            if hasattr(dest, "model_dump"):
+                dest = dest.model_dump(mode="python")
+            if not isinstance(dest, dict):
+                continue
+            events = dest.get("events")
+            if (
+                dest.get("enabled", True)
+                and isinstance(events, dict)
+                and events.get("failure")
+            ):
+                has_failure_target = True
+                break
+
+    if not has_failure_target:
         return None
 
     handler = ErrorNotifyHandler(config, module_name="main", logger=logger)
     root.addHandler(handler)
     return handler
-
-

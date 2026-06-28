@@ -27,6 +27,11 @@ class MigrationNote:
     level: str = "info"  # "info" | "warning"
 
 
+# Mirror of config.ALL_MODULES_SENTINEL — kept local to avoid a circular import
+# (config.py imports this module).
+ALL_SENTINEL = "__ALL__"
+
+
 # ─── Detection ──────────────────────────────────────────────────────────
 
 
@@ -74,6 +79,11 @@ def is_legacy_config(raw: Dict[str, Any]) -> bool:
     for section in ("main", "discord"):
         if section in raw:
             return True
+
+    # Old per-module notifications shape (`{module: {discord|notifiarr: ...}}`)
+    # rather than the current `{destinations: [...]}` list.
+    if _has_legacy_notification_modules(raw.get("notifications")):
+        return True
 
     # Legacy-only keys nested under known sections
     legacy_keys = [
@@ -528,6 +538,105 @@ def _rule_border_holidays_dict_to_list(
     )
 
 
+def _has_legacy_notification_modules(notif: Dict[str, Any]) -> bool:
+    """True iff `notifications` still holds per-module service maps (the old
+    `{module: {discord|notifiarr: {...}}}` shape) rather than only the new
+    `destinations` list."""
+    if not isinstance(notif, dict):
+        return False
+    for key, val in notif.items():
+        if key == "destinations":
+            continue
+        if isinstance(val, dict) and ("discord" in val or "notifiarr" in val):
+            return True
+    return False
+
+
+def _rule_notifications_to_destinations(
+    raw: Dict[str, Any], notes: List[MigrationNote]
+) -> None:
+    """`notifications: {module: {discord|notifiarr: {...}}}` → `notifications:
+    {destinations: [...]}`.
+
+    Coalesces by (method, webhook): one webhook used across many modules
+    collapses into a single destination spanning them. Per-module entries set
+    `events.success`; the global `main` error channel sets `events.failure`
+    with the `__ALL__` module sentinel — reproducing today's behaviour exactly.
+    """
+    notif = raw.get("notifications")
+    if not isinstance(notif, dict):
+        return
+    if not _has_legacy_notification_modules(notif):
+        return  # Already the new shape (or empty) — no-op / idempotent.
+
+    SERVICES = ("discord", "notifiarr")
+    existing = notif.get("destinations")
+    coalesced: Dict[Tuple[str, str], Dict[str, Any]] = {}
+
+    for mod_key, mod_val in notif.items():
+        if mod_key == "destinations" or not isinstance(mod_val, dict):
+            continue
+        for method in SERVICES:
+            svc = mod_val.get(method)
+            if not isinstance(svc, dict):
+                continue
+            webhook = str(svc.get("webhook") or "").strip().rstrip("/")
+            if not webhook:
+                continue  # Empty/placeholder entry — was never functional.
+            ckey = (method, webhook)
+            dest = coalesced.get(ckey)
+            if dest is None:
+                dest = {
+                    "id": f"{method[0]}{len(coalesced) + 1}",
+                    "method": method,
+                    "name": "",
+                    "enabled": True,
+                    "events": {"success": False, "failure": False},
+                    "modules": [],
+                    "config": dict(svc),
+                }
+                coalesced[ckey] = dest
+            if mod_key == "main":
+                dest["events"]["failure"] = True
+                if ALL_SENTINEL not in dest["modules"]:
+                    dest["modules"].append(ALL_SENTINEL)
+            else:
+                dest["events"]["success"] = True
+                if mod_key not in dest["modules"]:
+                    dest["modules"].append(mod_key)
+
+    if not coalesced:
+        # Legacy module keys existed but none carried a usable webhook; still
+        # normalise to the new shape so detection won't keep firing.
+        raw["notifications"] = {
+            "destinations": existing if isinstance(existing, list) else []
+        }
+        return
+
+    dest_list: List[Dict[str, Any]] = (
+        list(existing) if isinstance(existing, list) else []
+    )
+    for dest in coalesced.values():
+        if ALL_SENTINEL in dest["modules"]:
+            dest["modules"] = [ALL_SENTINEL]
+        if not dest["name"]:
+            dest["name"] = dest["config"].get("bot_name") or (
+                "Discord webhook" if dest["method"] == "discord" else "Notifiarr alert"
+            )
+        dest_list.append(dest)
+
+    raw["notifications"] = {"destinations": dest_list}
+    notes.append(
+        MigrationNote(
+            rule="convert:notifications-to-destinations",
+            message=(
+                f"Reshaped per-module notifications into {len(coalesced)} "
+                f"destination(s)."
+            ),
+        )
+    )
+
+
 # ─── Public entry point ─────────────────────────────────────────────────
 
 
@@ -606,5 +715,8 @@ def migrate(raw: Dict[str, Any]) -> Tuple[Dict[str, Any], List[MigrationNote]]:
     # Type conversions
     _rule_cleanarr_drytun_to_mode(out, notes)
     _rule_border_holidays_dict_to_list(out, notes)
+
+    # Notifications: per-module service maps → per-destination list
+    _rule_notifications_to_destinations(out, notes)
 
     return out, notes
