@@ -328,3 +328,79 @@ def test_is_under_empty_inputs_are_false():
     assert not _is_under("", "/kometa/posters/CL2K/Chodeus")
     assert not _is_under("/kometa/posters/CL2K/Chodeus/x.jpg", "")
     assert not _is_under(None, "/base")
+
+
+# --- season formatting is not drift (Season 1 == Season 01, Specials, year) ---
+
+
+def test_season_padding_only_is_not_drift():
+    # Identical ids/title/year; only "Season 1" vs canonical "Season 01" differs.
+    r = _resolve(
+        poster(
+            "Breaking Bad (2008) {tmdb-1396} {tvdb-81189} - Season 1.jpg",
+            "show",
+            "Breaking Bad",
+            2008,
+            tmdb=1396,
+            tvdb=81189,
+            season=1,
+        ),
+        [media("show", "Breaking Bad", 2008, tmdb=1396, tvdb=81189)],
+        {1396: {"verified": True, "title": "Breaking Bad", "year": 2008}},
+    )
+    assert r is None
+
+
+def test_specials_equivalent_to_season_zero():
+    # "- Season 0" vs canonical "- Specials" — same season, not drift.
+    r = _resolve(
+        poster(
+            "Breaking Bad (2008) {tmdb-1396} {tvdb-81189} - Season 0.jpg",
+            "show",
+            "Breaking Bad",
+            2008,
+            tmdb=1396,
+            tvdb=81189,
+            season=0,
+        ),
+        [media("show", "Breaking Bad", 2008, tmdb=1396, tvdb=81189)],
+        {1396: {"verified": True, "title": "Breaking Bad", "year": 2008}},
+    )
+    assert r is None
+
+
+def test_year_based_season_canonical_is_not_drift():
+    # A year-numbered season (e.g. Formula 1: 2026) already canonical → no-op.
+    r = _resolve(
+        poster(
+            "Formula 1 (2024) {tmdb-100} - Season 2026.jpg",
+            "show",
+            "Formula 1",
+            2024,
+            tmdb=100,
+            season=2026,
+        ),
+        [media("show", "Formula 1", 2024, tmdb=100)],
+        {100: {"verified": True, "title": "Formula 1", "year": 2024}},
+    )
+    assert r is None
+
+
+def test_id_drift_still_proposed_despite_season_padding():
+    # A real id backfill (missing tvdb) must still propose — and the proposed
+    # name carries the canonical padded season.
+    r = _resolve(
+        poster(
+            "Breaking Bad (2008) {tmdb-1396} - Season 1.jpg",
+            "show",
+            "Breaking Bad",
+            2008,
+            tmdb=1396,
+            season=1,
+        ),
+        [media("show", "Breaking Bad", 2008, tmdb=1396, tvdb=81189)],
+        {1396: {"verified": True, "title": "Breaking Bad", "year": 2008}},
+    )
+    assert r is not None
+    assert "tvdb" in r["drift_type"]
+    assert r["proposed_filename"].endswith(" - Season 01.jpg")

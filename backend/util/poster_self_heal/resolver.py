@@ -18,6 +18,7 @@ import os
 from typing import Any, Dict, List, Optional, Tuple
 
 from backend.util.cl2k.naming import build_poster_filename
+from backend.util.constants import season_number_regex
 from backend.util.normalization import normalize_titles
 
 YEAR_TOLERANCE = 1
@@ -55,6 +56,18 @@ def _season_int(value: Any) -> Optional[int]:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _season_collapsed(name: str) -> str:
+    """Collapse a filename's season tag to a padding-insensitive, year-safe key:
+    'Season 1' / 'Season 01' / 'Specials' (= Season 0) / 'Season 2026' all reduce
+    to their integer value. Lets the resolver tell a real rename from a
+    season-format-only difference — CHUB/Plex parse the season to an int and match
+    identically, so reformatting it alone isn't worth a Drive rename."""
+    return season_number_regex.sub(
+        lambda m: f" - Season {int(m.group(1)) if m.group(1) is not None else 0}",
+        name,
+    )
 
 
 def _imdb(value: Any) -> str:
@@ -242,6 +255,13 @@ def resolve_poster(
         changed.append("title")
     if year_new and old_year != year_new:
         changed.append("year")
+
+    # When no id/title/year actually changed, a leftover filename difference that
+    # is ONLY the season tag's formatting (Season 1 ≡ Season 01, Specials ≡
+    # Season 0, year seasons like Season 2026) is not real drift — the matcher
+    # keys on the parsed integer season — so skip the pointless rename.
+    if not changed and _season_collapsed(cur_name) == _season_collapsed(new_name):
+        return None
     drift_type = "+".join(changed) or "rename"
 
     return {
