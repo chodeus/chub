@@ -179,7 +179,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             if handler and log:
                 log.info(
                     "ErrorNotifyHandler attached to root logger — ERROR-level logs "
-                    "will be forwarded to the 'main' notification target."
+                    "will be forwarded to notification destinations with the "
+                    "'On failure' trigger enabled."
                 )
         except ConfigError as exc:
             if log:
