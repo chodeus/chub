@@ -647,7 +647,9 @@ class SyncGDrive(ChubModule):
                 size_bytes=size_bytes,
                 last_updated=last_updated,
             )
-            self.logger.info(
+            # debug, not info — one per Drive folder (~45 lines) is routine
+            # bookkeeping noise; the run's counter summary covers the outcome.
+            self.logger.debug(
                 f"Updated gdrive_stats for {sync_location}: {file_count} files, "
                 f"{size_bytes} bytes, last updated {last_updated}"
             )

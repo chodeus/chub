@@ -178,8 +178,10 @@ class ModuleOrchestrator:
                         origin,
                     )
                 else:
+                    # debug, not info — the API enqueue path already logs an
+                    # "Enqueued module: … (job …)" line; this was a duplicate.
                     self._log(
-                        "info",
+                        "debug",
                         f"Enqueued async module run: {module_name} (job {job_id})",
                         origin,
                     )
