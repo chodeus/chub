@@ -46,19 +46,12 @@ async def list_logs(logger: Any = Depends(get_logger)) -> Dict[str, Any]:
                 {"modules": []},
             )
 
-        # Modules with log directories on disk
-        disk_modules = set()
-        if os.path.exists(LOG_BASE_DIR):
-            disk_modules = {
-                module
-                for module in os.listdir(LOG_BASE_DIR)
-                if os.path.isdir(os.path.join(LOG_BASE_DIR, module))
-                and module != "debug"
-            }
-
-        # Union with all known modules so they appear even before first run
-        known_modules = set(MODULES.keys()) | {"general"}
-        modules = sorted(disk_modules | known_modules)
+        # List every known module (so they appear even before first run). We
+        # intentionally do NOT surface arbitrary on-disk dirs: list_logs_for_module
+        # only serves VALID_LOG_MODULES, so a stale/unknown dir left by an older
+        # build (e.g. an 'orphan-dryrun' leftover) would otherwise show as a dead
+        # entry that 404s when opened.
+        modules = sorted(set(MODULES.keys()) | {"general"})
 
         logger.debug("Log modules listed: %s", modules)
         return ok(
