@@ -207,6 +207,7 @@ def _resolve_and_render(
     logo_scale: float = 1.0,
     logo_y_offset: int = 0,
     logo_flip_bytes: Optional[bytes] = None,  # B/W touch-up regions (mask PNG)
+    logo_erase_bytes: Optional[bytes] = None,  # erase regions (mask PNG, white=erase)
     whiten: Optional[bool] = None,  # None = module config (whiten_logo)
     flat_white: bool = False,  # paint the logo a flat pure-white silhouette
     invert: bool = False,  # plate logo -> clearlogo (white->transparent, black->white)
@@ -352,6 +353,7 @@ def _resolve_and_render(
         logo_scale=logo_scale,
         logo_y_offset=logo_y_offset,
         logo_flip_bytes=logo_flip_bytes,
+        logo_erase_bytes=logo_erase_bytes,
         whiten=cfg.whiten_logo if whiten is None else whiten,
         flat_white=flat_white,
         invert=invert,
@@ -409,6 +411,7 @@ def generate_for_item(
     logo_scale: float = 1.0,
     logo_y_offset: int = 0,
     logo_flip_bytes: Optional[bytes] = None,  # B/W touch-up regions (mask PNG)
+    logo_erase_bytes: Optional[bytes] = None,  # erase regions (mask PNG, white=erase)
     whiten: Optional[bool] = None,  # None = module config (whiten_logo)
     flat_white: bool = False,  # paint the logo a flat pure-white silhouette
     invert: bool = False,  # plate logo -> clearlogo (white->transparent, black->white)
@@ -476,6 +479,7 @@ def generate_for_item(
         logo_scale=logo_scale,
         logo_y_offset=logo_y_offset,
         logo_flip_bytes=logo_flip_bytes,
+        logo_erase_bytes=logo_erase_bytes,
         whiten=whiten,
         flat_white=flat_white,
         invert=invert,
@@ -691,6 +695,7 @@ def generate_logo_asset(
     flat_white: bool = False,  # paint the logo a flat pure-white silhouette
     invert: bool = False,  # plate logo -> clearlogo (white->transparent, black->white)
     flip_mask_bytes: Optional[bytes] = None,  # B/W touch-up regions (mask PNG)
+    erase_mask_bytes: Optional[bytes] = None,  # erase regions (mask PNG, white=erase)
     save_local: bool = True,
     upload_gdrive: Optional[bool] = None,
 ) -> Dict[str, Any]:
@@ -726,6 +731,7 @@ def generate_logo_asset(
         whiten=whiten,
         flat_white=flat_white,
         flip_mask_bytes=flip_mask_bytes,
+        erase_mask_bytes=erase_mask_bytes,
         invert=invert,
     )
     return _persist_poster(

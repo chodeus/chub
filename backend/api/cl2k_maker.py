@@ -93,6 +93,9 @@ class GenerateRequest(BaseModel):
     # B/W touch-up: regions brushed over the PROCESSED logo whose black/white is
     # inverted (for interior accents the two-tone keymap can't decide).
     logo_flip_b64: Optional[str] = None
+    # Eraser: regions brushed over the PROCESSED logo made transparent (clean up
+    # stray extracted/whitened bits a logo shouldn't have).
+    logo_erase_b64: Optional[str] = None
     mask_b64: Optional[str] = None  # user-brushed mask (PNG, white=remove) for AI
     remove_text: bool = False  # run AI text removal (OpenAI can do it mask-less)
     focus_x: float = 0.5  # crop focal point (0..1); 0.5 = centre (cover mode)
@@ -316,6 +319,7 @@ class LogoProcessRequest(BaseModel):
     )
     invert: bool = False  # plate logo -> clearlogo
     flip_b64: Optional[str] = None  # B/W touch-up regions (mask PNG, white=flip)
+    erase_b64: Optional[str] = None  # erase regions (mask PNG, white=erase)
 
 
 @router.post("/logo-processed", summary="Trimmed + whitened logo for the live overlay")
@@ -342,6 +346,7 @@ def logo_processed(
             whiten=cfg.whiten_logo if req.whiten is None else req.whiten,
             flat_white=req.flat_white,
             flip_mask_bytes=_b64_to_bytes(req.flip_b64),
+            erase_mask_bytes=_b64_to_bytes(req.erase_b64),
             invert=req.invert,
         )
     except Exception as exc:
@@ -390,6 +395,7 @@ def preview(
         logo_scale=req.logo_scale,
         logo_y_offset=req.logo_y_offset,
         logo_flip_bytes=_b64_to_bytes(req.logo_flip_b64),
+        logo_erase_bytes=_b64_to_bytes(req.logo_erase_b64),
         whiten=req.whiten,
         flat_white=req.flat_white,
         invert=req.invert,
@@ -435,6 +441,7 @@ def generate(
         logo_scale=req.logo_scale,
         logo_y_offset=req.logo_y_offset,
         logo_flip_bytes=_b64_to_bytes(req.logo_flip_b64),
+        logo_erase_bytes=_b64_to_bytes(req.logo_erase_b64),
         whiten=req.whiten,
         flat_white=req.flat_white,
         invert=req.invert,
@@ -489,6 +496,7 @@ class LogoAssetRequest(BaseModel):
     flat_white: bool = False  # pure-white silhouette (no keylines); wins over whiten
     invert: bool = False  # plate logo -> clearlogo (white->transparent, black->white)
     flip_b64: Optional[str] = None  # B/W touch-up regions (mask PNG, white=flip)
+    erase_b64: Optional[str] = None  # erase regions (mask PNG, white=erase)
     save_local: bool = True
     upload_gdrive: Optional[bool] = None
 
@@ -678,6 +686,7 @@ def logo_asset_preview(
         whiten=req.whiten,
         flat_white=req.flat_white,
         flip_mask_bytes=_b64_to_bytes(req.flip_b64),
+        erase_mask_bytes=_b64_to_bytes(req.erase_b64),
         invert=req.invert,
     )
     return Response(
@@ -707,6 +716,7 @@ def logo_asset_generate(
         flat_white=req.flat_white,
         invert=req.invert,
         flip_mask_bytes=_b64_to_bytes(req.flip_b64),
+        erase_mask_bytes=_b64_to_bytes(req.erase_b64),
         save_local=req.save_local,
         upload_gdrive=req.upload_gdrive,
     )

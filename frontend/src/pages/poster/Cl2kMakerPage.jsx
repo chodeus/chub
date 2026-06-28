@@ -1155,8 +1155,17 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
         b64 => setLogoFlip(b64 ? { key: flipKey, b64 } : null),
         [flipKey]
     );
+    // Eraser strokes are keyed to the LOGO only (erasing is geometric — it survives
+    // colour-mode switches, unlike the colour-dependent B/W flip).
+    const eraseKey = customSig(customLogo) || logo;
+    const [logoErase, setLogoErase] = useState(null); // { key, b64 }
+    const logoEraseB64 = logoErase && logoErase.key === eraseKey ? logoErase.b64 : null;
+    const setLogoEraseB64 = useCallback(
+        b64 => setLogoErase(b64 ? { key: eraseKey, b64 } : null),
+        [eraseKey]
+    );
     const [processedBase, setProcessedBase] = useState(null);
-    const [processedFlipped, setProcessedFlipped] = useState(null); // { forB64, data }
+    const [processedEdited, setProcessedEdited] = useState(null); // { forKey, data } — flip+erase
     const logoReq = useCallback(
         extra =>
             cl2kMakerAPI
@@ -1194,27 +1203,27 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             cancelled = true;
         };
     }, [hasLogo, logoReq]);
+    const editKey = `${logoFlipB64 || ''}|${logoEraseB64 || ''}`;
+    const hasEdit = !!(logoFlipB64 || logoEraseB64);
     useEffect(() => {
-        if (!logoFlipB64) return undefined; // overlay derives to the base below
+        if (!hasEdit) return undefined; // overlay derives to the base below
         let cancelled = false;
-        logoReq({ flip_b64: logoFlipB64 })
+        logoReq({ flip_b64: logoFlipB64, erase_b64: logoEraseB64 })
             .then(d => {
-                if (!cancelled) setProcessedFlipped({ forB64: logoFlipB64, data: d });
+                if (!cancelled) setProcessedEdited({ forKey: editKey, data: d });
             })
             .catch(() => {
-                if (!cancelled) setProcessedFlipped(null);
+                if (!cancelled) setProcessedEdited(null);
             });
         return () => {
             cancelled = true;
         };
-    }, [logoFlipB64, logoReq]);
+    }, [editKey, hasEdit, logoFlipB64, logoEraseB64, logoReq]);
     // Only show the overlay while a logo is selected (the fetched bytes may lag a
     // deselect by a tick). Derived, so no reset-setState in the effects above; the
-    // flipped variant is used only while it matches the current mask.
+    // edited variant is used only while it matches the current masks.
     const processedLogo =
-        logoFlipB64 && processedFlipped?.forB64 === logoFlipB64
-            ? processedFlipped.data
-            : processedBase;
+        hasEdit && processedEdited?.forKey === editKey ? processedEdited.data : processedBase;
     const overlayLogo = hasLogo ? processedLogo : null;
 
     const isSeasonPoster = item.kind === 'show' && String(seasonNumber).trim() !== '';
@@ -1318,6 +1327,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             flat_white: flatWhite,
             invert: invertLogo,
             logo_flip_b64: logoFlipB64,
+            logo_erase_b64: logoEraseB64,
             // AI text-removal is an explicit step now — the "Send to AI" button
             // erases the masked text and bakes the cleaned art into the backdrop.
             // Render/generate must NEVER run AI themselves, or a checked box with
@@ -1356,6 +1366,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             flatWhite,
             invertLogo,
             logoFlipB64,
+            logoEraseB64,
             fitMode,
             crop,
             vPos,
@@ -1728,6 +1739,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                     setInvertLogo={setInvertLogo}
                     logoTouchUpUrl={processedBase?.dataUrl || null}
                     onLogoFlip={setLogoFlipB64}
+                    onLogoErase={setLogoEraseB64}
                     processedLogo={overlayLogo}
                     fitMode={fitMode}
                     setFitMode={setFitMode}
@@ -1889,6 +1901,7 @@ const RenderPanel = ({
     setInvertLogo,
     logoTouchUpUrl,
     onLogoFlip,
+    onLogoErase,
     processedLogo,
     fitMode,
     setFitMode,
@@ -3084,6 +3097,32 @@ const RenderPanel = ({
                             </StudioAccordion>
                         )}
 
+                        {/* ACCORDION: Eraser (brush parts of the logo to transparent) */}
+                        {logoTouchUpUrl && (
+                            <StudioAccordion title="Erase logo parts">
+                                <p className="text-xs text-fg-subtle mb-2">
+                                    Brush over anything the extraction kept that shouldn&apos;t be
+                                    there (a stray glyph, a ® mark, edge speckle) to make it
+                                    transparent. Use the square brush for straight edges. Everything
+                                    you don&apos;t paint is left exactly as shown.
+                                </p>
+                                <div
+                                    className="rounded p-1 inline-block max-w-full"
+                                    style={{
+                                        backgroundImage:
+                                            'repeating-conic-gradient(#3a3a4a 0% 25%, #2a2a38 0% 50%)',
+                                        backgroundSize: '22px 22px',
+                                    }}
+                                >
+                                    <BrushMask
+                                        imageUrl={logoTouchUpUrl}
+                                        brushSize={10}
+                                        onMaskChange={onLogoErase}
+                                    />
+                                </div>
+                            </StudioAccordion>
+                        )}
+
                         {/* ACCORDION: Bulk seasons (shows only) */}
                         {item.kind === 'show' && (
                             <StudioAccordion title="Bulk seasons">
@@ -3404,6 +3443,10 @@ const AiPanel = ({
 const BrushMask = ({ imageUrl, brushSize, onMaskChange, initialMask = null }) => {
     const canvasRef = useRef(null);
     const drawing = useRef(false);
+    // Brush footprint: round (soft, default) or square (sharp corners — handy for
+    // erasing straight logo edges). Purely a drawing concern, kept local here so
+    // every BrushMask instance gets the toggle for free.
+    const [brushShape, setBrushShape] = useState('round');
 
     // Size the canvas to the displayed image, then re-paint any existing mask onto
     // it so a freshly-mounted instance (e.g. the pop-out editor, or the inline one
@@ -3445,11 +3488,15 @@ const BrushMask = ({ imageUrl, brushSize, onMaskChange, initialMask = null }) =>
         p => {
             const ctx = canvasRef.current.getContext('2d');
             ctx.fillStyle = '#ffffff';
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, brushSize, 0, Math.PI * 2);
-            ctx.fill();
+            if (brushShape === 'square') {
+                ctx.fillRect(p.x - brushSize, p.y - brushSize, brushSize * 2, brushSize * 2);
+            } else {
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, brushSize, 0, Math.PI * 2);
+                ctx.fill();
+            }
         },
-        [brushSize]
+        [brushSize, brushShape]
     );
 
     const emit = useCallback(() => {
@@ -3507,7 +3554,7 @@ const BrushMask = ({ imageUrl, brushSize, onMaskChange, initialMask = null }) =>
                     onTouchEnd={onUp}
                 />
             </div>
-            <div>
+            <div className="flex items-center gap-2">
                 <button
                     type="button"
                     onClick={clear}
@@ -3515,6 +3562,22 @@ const BrushMask = ({ imageUrl, brushSize, onMaskChange, initialMask = null }) =>
                 >
                     Clear mask
                 </button>
+                <div className="flex gap-1 p-0.5 rounded-[7px] bg-surface-inset border border-border">
+                    {['round', 'square'].map(shape => (
+                        <button
+                            key={shape}
+                            type="button"
+                            onClick={() => setBrushShape(shape)}
+                            className={`px-2.5 h-[26px] rounded-[5px] text-xs capitalize ${
+                                brushShape === shape
+                                    ? 'bg-primary text-white font-semibold'
+                                    : 'text-fg-muted hover:text-fg'
+                            }`}
+                        >
+                            {shape}
+                        </button>
+                    ))}
+                </div>
             </div>
         </div>
     );
@@ -5323,9 +5386,19 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
     const [flip, setFlip] = useState(null); // { key, b64 }
     const flipB64 = flip && flip.key === flipKey ? flip.b64 : null;
     const setFlipB64 = useCallback(b64 => setFlip(b64 ? { key: flipKey, b64 } : null), [flipKey]);
+    // Eraser strokes are keyed to the LOGO only (erasing is geometric — it survives
+    // colour-mode switches, unlike the colour-dependent B/W flip).
+    const eraseKey = customSig(customLogo) || logo;
+    const [erase, setErase] = useState(null); // { key, b64 }
+    const eraseB64 = erase && erase.key === eraseKey ? erase.b64 : null;
+    const setEraseB64 = useCallback(
+        b64 => setErase(b64 ? { key: eraseKey, b64 } : null),
+        [eraseKey]
+    );
     // The B/W touch-up brush now lives in a StudioAccordion (its own open state),
-    // so no separate showTouchUp toggle is needed.
-    const [flipped, setFlipped] = useState(null); // { forB64, url } — flipped preview
+    // so no separate showTouchUp toggle is needed. `edited` is the preview with the
+    // flip + erase masks applied (what the box shows and Export files).
+    const [edited, setEdited] = useState(null); // { forKey, url }
 
     const setCustomExclusive = useCallback(c => {
         setCustomLogo(c);
@@ -5405,6 +5478,7 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
             flat_white: flatWhite,
             invert,
             flip_b64: flipB64,
+            erase_b64: eraseB64,
             save_local: saveTargets.saveLocal,
             upload_gdrive: saveTargets.uploadGdrive,
         }),
@@ -5416,6 +5490,7 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
             flatWhite,
             invert,
             flipB64,
+            eraseB64,
             saveTargets.saveLocal,
             saveTargets.uploadGdrive,
         ]
@@ -5425,8 +5500,9 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
         reqRef.current = req;
     }, [req]);
 
-    // Brush base: the processed logo WITHOUT the flip — it must stay stable as
+    // Brush base: the processed logo WITHOUT any mask — it must stay stable as
     // strokes land, or the accumulated mask would be drawn over a moving target.
+    // Both the touch-up and eraser brushes draw over this.
     const sig = `${customSig(customLogo) || logo}|${whiten}|${flatWhite}|${invert}`;
     useEffect(() => {
         if (!hasLogo) return undefined;
@@ -5437,6 +5513,7 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                 const blob = await cl2kMakerAPI.logoAssetPreview({
                     ...reqRef.current,
                     flip_b64: null,
+                    erase_b64: null,
                 });
                 if (!cancelled)
                     setPreviewUrl(prev => {
@@ -5461,17 +5538,19 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
         },
         [previewUrl]
     );
-    // Flipped variant for the preview box (and what Export files).
+    // Edited variant (flip + erase masks applied) for the preview box and Export.
+    const editKey = `${flipB64 || ''}|${eraseB64 || ''}`;
+    const hasEdit = !!(flipB64 || eraseB64);
     useEffect(() => {
-        if (!flipB64) return undefined;
+        if (!hasEdit) return undefined;
         let cancelled = false;
         (async () => {
             try {
                 const blob = await cl2kMakerAPI.logoAssetPreview(reqRef.current);
                 if (!cancelled)
-                    setFlipped(prev => {
+                    setEdited(prev => {
                         if (prev?.url) URL.revokeObjectURL(prev.url);
-                        return { forB64: flipB64, url: URL.createObjectURL(blob) };
+                        return { forKey: editKey, url: URL.createObjectURL(blob) };
                     });
             } catch {
                 /* quiet — the base preview still shows */
@@ -5480,14 +5559,14 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
         return () => {
             cancelled = true;
         };
-    }, [flipB64]);
+    }, [editKey, hasEdit]);
     useEffect(
         () => () => {
-            if (flipped?.url) URL.revokeObjectURL(flipped.url);
+            if (edited?.url) URL.revokeObjectURL(edited.url);
         },
-        [flipped]
+        [edited]
     );
-    const displayUrl = flipB64 && flipped?.forB64 === flipB64 ? flipped.url : previewUrl;
+    const displayUrl = hasEdit && edited?.forKey === editKey ? edited.url : previewUrl;
 
     const onExport = async () => {
         setBusy(true);
@@ -5759,6 +5838,32 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                                 imageUrl={previewUrl}
                                 brushSize={10}
                                 onMaskChange={setFlipB64}
+                            />
+                        </div>
+                    </StudioAccordion>
+                )}
+
+                {/* ACCORDION: Eraser (brush parts of the logo to transparent) */}
+                {hasLogo && previewUrl && (
+                    <StudioAccordion title="Erase logo parts">
+                        <p className="text-xs text-fg-subtle mb-2">
+                            Brush over anything the extraction kept that shouldn&apos;t be there (a
+                            stray glyph, a ® mark, edge speckle) to make it transparent. Use the
+                            square brush for straight edges. Everything you don&apos;t paint is left
+                            exactly as shown; applies to the preview and the saved logo.
+                        </p>
+                        <div
+                            className="rounded p-1 inline-block max-w-full"
+                            style={{
+                                backgroundImage:
+                                    'repeating-conic-gradient(#3a3a4a 0% 25%, #2a2a38 0% 50%)',
+                                backgroundSize: '22px 22px',
+                            }}
+                        >
+                            <BrushMask
+                                imageUrl={previewUrl}
+                                brushSize={10}
+                                onMaskChange={setEraseB64}
                             />
                         </div>
                     </StudioAccordion>
