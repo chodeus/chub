@@ -47,7 +47,7 @@ def db():
         try:
             os.unlink(path)
         except OSError:
-            pass
+            pass  # temp DB already removed or still locked — nothing to clean up
 
 
 def _seed(db, title):

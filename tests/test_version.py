@@ -3,7 +3,6 @@
 import subprocess
 from unittest.mock import MagicMock, patch
 
-import backend.util.version as version_mod
 from backend.util.version import _read_base_version, check_for_update, get_version
 
 
@@ -47,10 +46,9 @@ def test_get_version_falls_back_to_base_when_git_fails(monkeypatch):
 
 
 def test_check_for_update_reports_available():
-    with patch.object(version_mod, "get_version", return_value="3.0.0.main50"):
-        with patch.object(
-            version_mod,
-            "_check_remote_version",
+    with patch("backend.util.version.get_version", return_value="3.0.0.main50"):
+        with patch(
+            "backend.util.version._check_remote_version",
             return_value=("3.0.0.main55", 55, True),
         ):
             result = check_for_update(MagicMock())
@@ -62,9 +60,10 @@ def test_check_for_update_reports_available():
 
 
 def test_check_for_update_handles_network_failure():
-    with patch.object(version_mod, "get_version", return_value="3.0.0.develop12"):
-        with patch.object(
-            version_mod, "_check_remote_version", return_value=(None, None, False)
+    with patch("backend.util.version.get_version", return_value="3.0.0.develop12"):
+        with patch(
+            "backend.util.version._check_remote_version",
+            return_value=(None, None, False),
         ):
             result = check_for_update(MagicMock())
     assert result["update_available"] is False
