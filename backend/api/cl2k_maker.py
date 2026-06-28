@@ -85,6 +85,9 @@ class GenerateRequest(BaseModel):
     # Per-render CL2K-whiten override; None falls back to the module config
     # (whiten_logo). True = two-tone white, False = the original colored logo.
     whiten: Optional[bool] = None
+    # Flat white: paint the logo a pure-white silhouette (no two-tone keylines) —
+    # for already-stylised/outline logos the two-tone whiten mangles. Wins over whiten.
+    flat_white: bool = False
     # Invert logo: plate-style art -> clearlogo (white->transparent, black->white).
     invert: bool = False
     # B/W touch-up: regions brushed over the PROCESSED logo whose black/white is
@@ -308,6 +311,9 @@ class LogoProcessRequest(BaseModel):
     # Per-render whiten override so the live overlay matches the Builder toggle;
     # None falls back to the module config (whiten_logo).
     whiten: Optional[bool] = None
+    flat_white: bool = (
+        False  # pure-white silhouette (no two-tone keylines); wins over whiten
+    )
     invert: bool = False  # plate logo -> clearlogo
     flip_b64: Optional[str] = None  # B/W touch-up regions (mask PNG, white=flip)
 
@@ -334,6 +340,7 @@ def logo_processed(
         png, width, height = process_logo(
             raw,
             whiten=cfg.whiten_logo if req.whiten is None else req.whiten,
+            flat_white=req.flat_white,
             flip_mask_bytes=_b64_to_bytes(req.flip_b64),
             invert=req.invert,
         )
@@ -384,6 +391,7 @@ def preview(
         logo_y_offset=req.logo_y_offset,
         logo_flip_bytes=_b64_to_bytes(req.logo_flip_b64),
         whiten=req.whiten,
+        flat_white=req.flat_white,
         invert=req.invert,
         place_logo=req.place_logo,
     )
@@ -428,6 +436,7 @@ def generate(
         logo_y_offset=req.logo_y_offset,
         logo_flip_bytes=_b64_to_bytes(req.logo_flip_b64),
         whiten=req.whiten,
+        flat_white=req.flat_white,
         invert=req.invert,
         force=req.force,
         save_local=req.save_local,
@@ -477,6 +486,7 @@ class LogoAssetRequest(BaseModel):
     logo_path: Optional[str] = None
     logo_b64: Optional[str] = None
     whiten: bool = False  # True = CL2K-whitened; False = original (colored) clear logo
+    flat_white: bool = False  # pure-white silhouette (no keylines); wins over whiten
     invert: bool = False  # plate logo -> clearlogo (white->transparent, black->white)
     flip_b64: Optional[str] = None  # B/W touch-up regions (mask PNG, white=flip)
     save_local: bool = True
@@ -666,6 +676,7 @@ def logo_asset_preview(
     png, _w, _h = process_logo(
         raw,
         whiten=req.whiten,
+        flat_white=req.flat_white,
         flip_mask_bytes=_b64_to_bytes(req.flip_b64),
         invert=req.invert,
     )
@@ -693,6 +704,7 @@ def logo_asset_generate(
         logo_path=req.logo_path,
         logo_bytes=_b64_to_bytes(req.logo_b64),
         whiten=req.whiten,
+        flat_white=req.flat_white,
         invert=req.invert,
         flip_mask_bytes=_b64_to_bytes(req.flip_b64),
         save_local=req.save_local,
@@ -769,6 +781,7 @@ def psd_export(
         v_pos=req.v_pos,
         zoom=req.zoom,
         whiten=req.whiten,
+        flat_white=req.flat_white,
         invert=req.invert,
     )
     if blob is None:
@@ -808,6 +821,7 @@ class SeasonsRequest(BaseModel):
     logo_scale: float = Field(1.0, ge=geo.LOGO_SCALE_MIN, le=geo.LOGO_SCALE_MAX)
     logo_y_offset: int = Field(0, ge=geo.LOGO_Y_OFFSET_MIN, le=geo.LOGO_Y_OFFSET_MAX)
     whiten: Optional[bool] = None  # None = module config (whiten_logo)
+    flat_white: bool = False  # pure-white silhouette (no keylines); wins over whiten
     invert: bool = False  # plate logo -> clearlogo
     force: bool = False
     # Save destinations (mirror GenerateRequest): honour the same targets the
@@ -902,6 +916,7 @@ def _run_seasons_job(jid: int, db: ChubDB, logger: Any, req: SeasonsRequest) -> 
             logo_scale=req.logo_scale,
             logo_y_offset=req.logo_y_offset,
             whiten=req.whiten,
+            flat_white=req.flat_white,
             invert=req.invert,
             force=req.force,
             save_local=req.save_local,

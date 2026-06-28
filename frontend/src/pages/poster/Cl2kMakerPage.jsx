@@ -1058,6 +1058,9 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
     // Per-render whiten override; null = the module config (whiten_logo).
     const [whitenLogo, setWhitenLogo] = useState(saved.whitenLogo ?? null);
     const effectiveWhiten = whitenLogo === null ? (config?.whiten_logo ?? true) : whitenLogo;
+    // Flat white: paint the logo a pure-white silhouette (no two-tone keylines) —
+    // for already-stylised/outline logos the CL2K-white pass mangles. Wins over whiten.
+    const [flatWhite, setFlatWhite] = useState(saved.flatWhite ?? false);
     // Invert logo: white -> transparent, black -> white (plate/sticker art).
     const [invertLogo, setInvertLogo] = useState(saved.invertLogo ?? false);
 
@@ -1097,6 +1100,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             logoScale,
             logoYOffset,
             whitenLogo,
+            flatWhite,
             invertLogo,
             seasonNumber,
             bulkSeasons,
@@ -1118,6 +1122,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
         logoScale,
         logoYOffset,
         whitenLogo,
+        flatWhite,
         invertLogo,
         seasonNumber,
         bulkSeasons,
@@ -1143,7 +1148,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
     const hasLogo = !!(logo || customLogo);
     // Strokes are keyed to the (logo, whiten, invert) they were drawn over: a
     // stale key makes the mask a derived no-op instead of needing a reset-in-effect.
-    const flipKey = `${customSig(customLogo) || logo}|${effectiveWhiten}|${invertLogo}`;
+    const flipKey = `${customSig(customLogo) || logo}|${effectiveWhiten}|${flatWhite}|${invertLogo}`;
     const [logoFlip, setLogoFlip] = useState(null); // { key, b64 }
     const logoFlipB64 = logoFlip && logoFlip.key === flipKey ? logoFlip.b64 : null;
     const setLogoFlipB64 = useCallback(
@@ -1158,6 +1163,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                 .logoProcessed({
                     ...(customLogo?.b64 ? { logo_b64: customLogo.b64 } : { logo_path: logo }),
                     whiten: effectiveWhiten,
+                    flat_white: flatWhite,
                     invert: invertLogo,
                     ...extra,
                 })
@@ -1172,7 +1178,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                           }
                         : null;
                 }),
-        [customLogo, logo, effectiveWhiten, invertLogo]
+        [customLogo, logo, effectiveWhiten, flatWhite, invertLogo]
     );
     useEffect(() => {
         if (!hasLogo) return undefined; // no fetch; `overlayLogo` below hides it
@@ -1309,6 +1315,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             logo_scale: logoScale,
             logo_y_offset: logoYOffset,
             whiten: whitenLogo,
+            flat_white: flatWhite,
             invert: invertLogo,
             logo_flip_b64: logoFlipB64,
             // AI text-removal is an explicit step now — the "Send to AI" button
@@ -1346,6 +1353,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             logoScale,
             logoYOffset,
             whitenLogo,
+            flatWhite,
             invertLogo,
             logoFlipB64,
             fitMode,
@@ -1530,6 +1538,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                 logo_path: logo,
                 logo_b64: customLogo?.b64 || null,
                 whiten: whitenLogo,
+                flat_white: flatWhite,
                 invert: invertLogo,
                 fit_mode: fitMode,
                 focus_x: focusX,
@@ -1593,6 +1602,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
         logo,
         customLogo,
         whitenLogo,
+        flatWhite,
         invertLogo,
         saveTargets,
         fitMode,
@@ -1712,6 +1722,8 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                     setLogoYOffset={setLogoYOffset}
                     whitenLogo={effectiveWhiten}
                     setWhitenLogo={setWhitenLogo}
+                    flatWhite={flatWhite}
+                    setFlatWhite={setFlatWhite}
                     invertLogo={invertLogo}
                     setInvertLogo={setInvertLogo}
                     logoTouchUpUrl={processedBase?.dataUrl || null}
@@ -1871,6 +1883,8 @@ const RenderPanel = ({
     setLogoYOffset,
     whitenLogo,
     setWhitenLogo,
+    flatWhite,
+    setFlatWhite,
     invertLogo,
     setInvertLogo,
     logoTouchUpUrl,
@@ -2739,6 +2753,8 @@ const RenderPanel = ({
                             onYOffset={setLogoYOffset}
                             whiten={whitenLogo}
                             onWhiten={setWhitenLogo}
+                            flat={flatWhite}
+                            onFlat={setFlatWhite}
                             invert={invertLogo}
                             onInvert={setInvertLogo}
                             touchUpUrl={logoTouchUpUrl}
@@ -2959,6 +2975,8 @@ const RenderPanel = ({
                                 onYOffset={setLogoYOffset}
                                 whiten={whitenLogo}
                                 onWhiten={setWhitenLogo}
+                                flat={flatWhite}
+                                onFlat={setFlatWhite}
                                 invert={invertLogo}
                                 onInvert={setInvertLogo}
                                 touchUpUrl={logoTouchUpUrl}
@@ -3054,6 +3072,8 @@ const RenderPanel = ({
                                     onYOffset={setLogoYOffset}
                                     whiten={whitenLogo}
                                     onWhiten={setWhitenLogo}
+                                    flat={flatWhite}
+                                    onFlat={setFlatWhite}
                                     invert={invertLogo}
                                     onInvert={setInvertLogo}
                                     touchUpUrl={logoTouchUpUrl}
@@ -4180,6 +4200,8 @@ const LogoSelector = ({
     onYOffset,
     whiten, // effective CL2K-whiten state (config default until overridden)
     onWhiten,
+    flat, // flat pure-white silhouette (no two-tone keylines); wins over whiten
+    onFlat,
     invert, // invert logo: white -> transparent, black -> white (plate/sticker art)
     onInvert,
     touchUpUrl, // processed (un-flipped) logo for the B/W touch-up brush
@@ -4214,28 +4236,47 @@ const LogoSelector = ({
             });
         reader.readAsDataURL(f);
     };
+    const tabCls = active =>
+        `flex-1 text-center px-3 py-1.5 rounded-md text-xs ${
+            active ? 'bg-primary text-white font-semibold' : 'text-fg-muted hover:text-fg'
+        }`;
     const colorTabs = onWhiten && (
         <div className="flex gap-1 p-1 rounded-lg bg-surface-inset border border-border">
             <button
                 type="button"
-                className={`flex-1 text-center px-3 py-1.5 rounded-md text-xs ${
-                    whiten ? 'bg-primary text-white font-semibold' : 'text-fg-muted hover:text-fg'
-                }`}
-                onClick={() => onWhiten(true)}
+                className={tabCls(whiten && !flat)}
+                onClick={() => {
+                    onWhiten(true);
+                    onFlat?.(false);
+                }}
                 title="CL2K two-tone: white fills, black keylines"
             >
                 CL2K white
             </button>
             <button
                 type="button"
-                className={`flex-1 text-center px-3 py-1.5 rounded-md text-xs ${
-                    !whiten ? 'bg-primary text-white font-semibold' : 'text-fg-muted hover:text-fg'
-                }`}
-                onClick={() => onWhiten(false)}
+                className={tabCls(!whiten && !flat)}
+                onClick={() => {
+                    onWhiten(false);
+                    onFlat?.(false);
+                }}
                 title="Keep the logo's original colors"
             >
                 Original
             </button>
+            {onFlat && (
+                <button
+                    type="button"
+                    className={tabCls(flat)}
+                    onClick={() => {
+                        onFlat(true);
+                        onWhiten(false);
+                    }}
+                    title="Flat pure-white silhouette (no keylines) — for outline/stylised logos"
+                >
+                    Flat white
+                </button>
+            )}
         </div>
     );
     const cardCls = variant
@@ -5266,6 +5307,9 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
         [artBySource, logoSource]
     );
     const [whiten, setWhiten] = useState(false);
+    // Flat white: paint the logo a pure-white silhouette (no two-tone keylines) —
+    // for already-stylised/outline logos the CL2K-white pass mangles.
+    const [flatWhite, setFlatWhite] = useState(false);
     // Invert logo: white -> transparent, black -> white (plate/sticker art).
     const [invert, setInvert] = useState(false);
     const [previewUrl, setPreviewUrl] = useState(null); // UN-flipped (brush base)
@@ -5273,9 +5317,9 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
     const [busy, setBusy] = useState(false);
     const hasLogo = !!(logo || customLogo);
 
-    // B/W touch-up strokes are keyed to the (logo, whiten, invert) they were
+    // B/W touch-up strokes are keyed to the (logo, whiten, flat, invert) they were
     // drawn over so a stale mask becomes a derived no-op (same as the Builder).
-    const flipKey = `${customSig(customLogo) || logo}|${whiten}|${invert}`;
+    const flipKey = `${customSig(customLogo) || logo}|${whiten}|${flatWhite}|${invert}`;
     const [flip, setFlip] = useState(null); // { key, b64 }
     const flipB64 = flip && flip.key === flipKey ? flip.b64 : null;
     const setFlipB64 = useCallback(b64 => setFlip(b64 ? { key: flipKey, b64 } : null), [flipKey]);
@@ -5358,6 +5402,7 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
             logo_path: customLogo ? null : logo,
             logo_b64: customLogo?.b64 || null,
             whiten,
+            flat_white: flatWhite,
             invert,
             flip_b64: flipB64,
             save_local: saveTargets.saveLocal,
@@ -5368,6 +5413,7 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
             logo,
             customLogo,
             whiten,
+            flatWhite,
             invert,
             flipB64,
             saveTargets.saveLocal,
@@ -5381,7 +5427,7 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
 
     // Brush base: the processed logo WITHOUT the flip — it must stay stable as
     // strokes land, or the accumulated mask would be drawn over a moving target.
-    const sig = `${customSig(customLogo) || logo}|${whiten}|${invert}`;
+    const sig = `${customSig(customLogo) || logo}|${whiten}|${flatWhite}|${invert}`;
     useEffect(() => {
         if (!hasLogo) return undefined;
         let cancelled = false;
@@ -5553,25 +5599,43 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                     <div className="flex items-center gap-2">
                         <button
                             type="button"
-                            className={seg(!whiten)}
-                            onClick={() => setWhiten(false)}
+                            className={seg(!whiten && !flatWhite)}
+                            onClick={() => {
+                                setWhiten(false);
+                                setFlatWhite(false);
+                            }}
                         >
                             Original
                         </button>
                         <button
                             type="button"
-                            className={seg(whiten)}
-                            onClick={() => setWhiten(true)}
+                            className={seg(whiten && !flatWhite)}
+                            onClick={() => {
+                                setWhiten(true);
+                                setFlatWhite(false);
+                            }}
                         >
                             CL2K white
+                        </button>
+                        <button
+                            type="button"
+                            className={seg(flatWhite)}
+                            onClick={() => {
+                                setFlatWhite(true);
+                                setWhiten(false);
+                            }}
+                        >
+                            Flat white
                         </button>
                     </div>
                     <p className="text-xs text-fg-subtle">
                         Original keeps the clear logo&apos;s colours (the usual Plex/Kometa logo
                         asset). CL2K white recolours it to the CL2K two-tone — white fills, black
-                        keylines — like a CL2K poster logo.
+                        keylines — like a CL2K poster logo. Flat white paints the whole logo pure
+                        white (no keylines) — best for outline or already-stylised logos the
+                        two-tone pass mangles.
                     </p>
-                    {whiten && (
+                    {whiten && !flatWhite && (
                         <label className="flex items-center gap-2 text-xs text-fg-muted cursor-pointer">
                             <input
                                 type="checkbox"

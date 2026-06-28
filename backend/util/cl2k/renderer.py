@@ -412,6 +412,18 @@ def _invert_to_clear(logo: Image) -> None:
         logo.composite(blackness, operator=_COPY_ALPHA)
 
 
+def _flat_white(logo: Image) -> None:
+    """Paint every opaque pixel pure white, keeping alpha — a flat silhouette.
+
+    Unlike :func:`_whiten` (the two-tone key + keyline pass), this does no
+    keying: it is the right tool for already-stylised logos the two-tone pass
+    mangles — outline wordmarks and rings, where thin strokes are almost all
+    "edge" so the keyline pass blackens them instead of leaving clean fills.
+    The result is exactly :func:`_whiten`'s mostly-black fallback, forced.
+    """
+    logo.colorize(color=Color("white"), alpha=Color("white"))  # RGB only
+
+
 def _read_logo_image(logo_bytes: bytes) -> Image:
     """Decode logo bytes, rasterizing SVG sources at high density.
 
@@ -441,6 +453,7 @@ def process_logo(
     logo_bytes: bytes,
     *,
     whiten: bool = True,
+    flat_white: bool = False,
     flip_mask_bytes: Optional[bytes] = None,
     invert: bool = False,
 ) -> Tuple[bytes, int, int]:
@@ -458,11 +471,13 @@ def process_logo(
     with _read_logo_image(logo_bytes) as logo:
         logo.background_color = Color("transparent")
         logo.trim(color=Color("transparent"))
-        if whiten:
+        if flat_white:
+            _flat_white(logo)
+        elif whiten:
             _whiten(logo, flat_fallback=not invert)
         if flip_mask_bytes:
             _flip_regions(logo, flip_mask_bytes)
-        if invert:
+        if invert and not flat_white:
             _invert_to_clear(logo)
         logo.format = "png"
         return logo.make_blob(), logo.width, logo.height
@@ -496,6 +511,7 @@ def _place_logo(
     logo_y_offset: int = 0,
     flip_mask_bytes: Optional[bytes] = None,
     invert: bool = False,
+    flat_white: bool = False,
 ) -> None:
     """Whiten, size and bottom-align the clear logo onto ``base``.
 
@@ -523,13 +539,15 @@ def _place_logo(
     with _read_logo_image(logo_bytes) as logo:
         logo.background_color = Color("transparent")
         logo.trim(color=Color("transparent"))  # drop padding -> width == content
-        if whiten:
+        if flat_white:
+            _flat_white(logo)
+        elif whiten:
             _whiten(logo, flat_fallback=not invert)
         if flip_mask_bytes:
             # Same trimmed/whitened space the touch-up brush was drawn over
             # (process_logo's output) — applied before the resize below.
             _flip_regions(logo, flip_mask_bytes)
-        if invert:
+        if invert and not flat_white:
             _invert_to_clear(logo)
         target_w = min(max_width, geo.LOGO_WIDTH_MAX)  # the guide box width
         target_h = int(round(logo.height * target_w / logo.width))
@@ -859,6 +877,7 @@ def render_cl2k(
     logo_y_offset: int = 0,
     logo_flip_bytes: Optional[bytes] = None,  # B/W touch-up regions (mask PNG)
     whiten: bool = True,
+    flat_white: bool = False,  # paint the logo a flat pure-white silhouette
     invert: bool = False,  # plate logo -> clearlogo (white->transparent, black->white)
     font_path: Optional[str] = None,
     focus_x: float = 0.5,
@@ -936,6 +955,7 @@ def render_cl2k(
                     logo_y_offset,
                     flip_mask_bytes=logo_flip_bytes,
                     invert=invert,
+                    flat_white=flat_white,
                 )
 
         label_kerning = geo.tracking_to_kerning(geo.LABEL_TRACKING)
@@ -1033,6 +1053,7 @@ def overlay_logo(
     logo_scale: float = 1.0,
     logo_y_offset: int = 0,
     whiten: bool = True,
+    flat_white: bool = False,
     invert: bool = False,
 ) -> bytes:
     """Composite a clear logo onto a finished poster at the locked CL2K baseline.
@@ -1055,6 +1076,7 @@ def overlay_logo(
             logo_scale,
             logo_y_offset,
             invert=invert,
+            flat_white=flat_white,
         )
         return _encode_jpeg(base)
 
