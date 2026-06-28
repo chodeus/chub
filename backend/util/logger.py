@@ -182,8 +182,14 @@ class Logger:
 
         self._logger.setLevel(getattr(logging, log_level, logging.INFO))
 
-        # Setup handlers only if not already done
-        if not self._logger.hasHandlers():
+        # Attach this module's own file handler if it doesn't have one yet.
+        # Check the logger's OWN handlers, NOT hasHandlers() — the latter is true
+        # when any ancestor (the root logger) has a handler, e.g. once the
+        # failure-notification ErrorNotifyHandler is installed on root. That made
+        # a module logger first created at run time (extensions like
+        # poster_self_heal) skip its file handler, so its run logs only
+        # propagated to root and never reached <module>.log.
+        if not self._logger.handlers:
             self._setup_handlers(log_file_path, max_logs)
 
         # Log startup message
