@@ -2,7 +2,6 @@ import os
 from typing import Any, Dict, List, Tuple
 
 
-
 def format_for_discord(
     config: Any, output: Any
 ) -> Tuple[Dict[int, List[Dict[str, Any]]], bool]:
@@ -701,17 +700,13 @@ def format_for_discord(
             ("Renamed", "renamed"),
         ):
             if agg.get(key):
-                fields.append(
-                    {"name": label, "value": str(agg[key]), "inline": True}
-                )
+                fields.append({"name": label, "value": str(agg[key]), "inline": True})
 
         items = o.get("items") or []
         # Only surface folders that actually had activity. Folders that
         # were already in sync would otherwise crowd out the meaningful
         # rows and inflate the truncation count.
-        active = [
-            it for it in items if any((it.get("counters") or {}).values())
-        ]
+        active = [it for it in items if any((it.get("counters") or {}).values())]
         if active:
             lines = []
             for it in active[:15]:
@@ -725,9 +720,7 @@ def format_for_discord(
                 ):
                     if c.get(key):
                         parts.append(f"{c[key]} {label}")
-                lines.append(
-                    f"• **{it.get('owner', '?')}** — {', '.join(parts)}"
-                )
+                lines.append(f"• **{it.get('owner', '?')}** — {', '.join(parts)}")
             if len(active) > 15:
                 lines.append(f"…and {len(active) - 15} more with activity")
             fields.append(
@@ -771,9 +764,7 @@ def format_for_discord(
                 lines.append(f"{mark} {disp}{suffix} — {e.get('reason', '')}")
             had_any = True
             text = "\n".join(lines)
-            fields.append(
-                {"name": image_type.capitalize(), "value": f"```{text}```"}
-            )
+            fields.append({"name": image_type.capitalize(), "value": f"```{text}```"})
 
         if not had_any:
             fields = [{"name": "No assets were applied.", "value": ""}]
@@ -796,6 +787,11 @@ def format_for_discord(
         "version_check": {"formatter": fmt_version_check, "type": "embedded"},
         "error_notify": {"formatter": fmt_error_notify, "type": "embedded"},
     }
+    # Extension modules contribute their own formatters (empty on main). Lazy
+    # import: this module loads during core init, before extensions are ready.
+    from backend.extensions import extension_notification_formatters
+
+    registry.update(extension_notification_formatters())
     formatter_entry = registry.get(config.module_name)
     if not formatter_entry:
         return {}, True

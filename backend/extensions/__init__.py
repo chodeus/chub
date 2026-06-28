@@ -72,3 +72,15 @@ def extension_config_fields() -> Dict[str, Tuple[type, Any]]:
 
 def extension_tables() -> List[Any]:
     return [table for tables in _collect("tables") for table in tables]
+
+
+def extension_notification_formatters() -> Dict[str, Any]:
+    """Per-module Discord formatters contributed by extensions, keyed by module
+    name. Each manifest's ``notification_formatters()`` returns
+    ``{module_key: {"formatter": fn, "type": "embedded"|"flat"}}``. Merged into
+    format_for_discord's registry so an extension module can format its own
+    notification. Empty on main (no extensions)."""
+    merged: Dict[str, Any] = {}
+    for entry in _collect("notification_formatters"):
+        merged.update(entry)
+    return merged
