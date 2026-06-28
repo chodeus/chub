@@ -27,3 +27,9 @@ class PosterSelfHealConfig(BaseModel):
     # The one genuinely-optional behaviour: whether to also ADD ids to a poster
     # that has none (backfill), vs only correcting posters that already carry one.
     backfill_ids: bool = True
+
+    # When True, confident proposals are applied automatically during the run
+    # (renamed on Drive + locally) instead of waiting for manual review. Ambiguous
+    # matches (multiple library items share a title) ALWAYS go to the review queue
+    # regardless — they have no single safe rename to auto-apply.
+    auto_apply: bool = False

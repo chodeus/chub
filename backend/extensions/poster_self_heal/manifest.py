@@ -36,3 +36,11 @@ def tables():
     from backend.util.database.poster_heal_review import poster_heal_review_table
 
     return [poster_heal_review_table()]
+
+
+def notification_formatters():
+    from backend.util.poster_self_heal.notify import format_poster_self_heal
+
+    return {
+        "poster_self_heal": {"formatter": format_poster_self_heal, "type": "embedded"},
+    }

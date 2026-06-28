@@ -13,17 +13,16 @@ dismiss it.
 Module settings are read/saved through the generic /api/config endpoints.
 """
 
-import os
 from typing import Any
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 
 from backend.api.utils import error, get_database, get_module_logger, ok
-from backend.util.cl2k.gdrive_upload import move_file
 from backend.util.config import load_config
 from backend.util.database import ChubDB
 from backend.util.database.poster_heal_review import poster_heal_review_for
+from backend.util.poster_self_heal.apply import apply_proposal
 
 router = APIRouter(
     prefix="/api/poster-self-heal",
@@ -86,32 +85,10 @@ def apply_review(
             "NO_PROPOSAL",
         )
 
-    old_path = row.get("poster_file") or ""
-    new_path = os.path.join(os.path.dirname(old_path), proposed)
-
-    # Drive first: if it fails, nothing has changed yet (clean failure). The user
-    # owns the Drive folder, so this is the canonical copy.
-    folder_id = row.get("drive_folder_id")
-    if folder_id:
-        try:
-            move_file(current, proposed, folder_id, load_config().sync_gdrive, logger)
-        except Exception as exc:
-            return error(f"Google Drive rename failed: {exc}", "DRIVE_RENAME")
-
-    # Then the local source copy (the poster_renamerr source dir). Best-effort:
-    # the Drive is already correct, and a missing/failed local file is reconciled
-    # by the next poster_renamerr scan.
-    local_note = ""
     try:
-        if old_path and os.path.exists(old_path):
-            os.replace(old_path, new_path)
-            logger.info(f"renamed local {current} -> {proposed}")
-        elif old_path:
-            local_note = " (local copy was missing; it will refresh on the next scan)"
-            logger.warning(f"local file missing, skipped local rename: {old_path}")
-    except OSError as exc:
-        local_note = f" (local rename failed: {exc}; it will refresh on the next scan)"
-        logger.warning(f"local rename failed for {old_path}: {exc}")
+        note = apply_proposal(row, load_config().sync_gdrive, logger)
+    except Exception as exc:
+        return error(f"Google Drive rename failed: {exc}", "DRIVE_RENAME")
 
     reviews.set_status(review_id, "applied")
-    return ok(f"Applied{local_note}", {"new_filename": proposed})
+    return ok(f"Applied{note}", {"new_filename": proposed})
