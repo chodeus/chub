@@ -26,7 +26,9 @@ def make_manager(config=None):
 
 
 def test_format_module_title():
-    assert NotificationManager.format_module_title("poster_renamerr") == "Poster Renamerr"
+    assert (
+        NotificationManager.format_module_title("poster_renamerr") == "Poster Renamerr"
+    )
     assert NotificationManager.format_module_title("nohl") == "Nohl"
 
 
@@ -118,41 +120,61 @@ def test_build_discord_payload_handles_dict_data():
     assert any("Part" in t for t in titles)
 
 
-# --- _get_notification_targets ---
+# --- destination resolution: _resolve_targets ---
 
 
-def test_notification_targets_returns_module_specific():
-    cfg = SimpleNamespace(
-        notifications={
-            "poster_renamerr": {"discord": {"webhook": "x"}},
-            "other": {},
-        }
+def _cfg_with_destinations(destinations):
+    return SimpleNamespace(notifications={"destinations": destinations})
+
+
+def test_resolve_targets_returns_module_specific():
+    cfg = _cfg_with_destinations(
+        [
+            {
+                "id": "d1",
+                "method": "discord",
+                "enabled": True,
+                "events": {"success": True, "failure": False},
+                "modules": ["poster_renamerr"],
+                "config": {"webhook": "https://discord.com/api/webhooks/1/a"},
+            },
+            {
+                "id": "d2",
+                "method": "discord",
+                "enabled": True,
+                "events": {"success": True, "failure": False},
+                "modules": ["nohl"],
+                "config": {"webhook": "https://discord.com/api/webhooks/2/b"},
+            },
+        ]
     )
-    m = make_manager(cfg)
-    assert m._get_notification_targets() == {"discord": {"webhook": "x"}}
+    resolved = make_manager(cfg)._resolve_targets("success", "poster_renamerr")
+    assert [t[1]["webhook"] for t in resolved] == [
+        "https://discord.com/api/webhooks/1/a"
+    ]
 
 
-def test_notification_targets_returns_top_level_when_service_keys_present():
-    """If notifications dict has service keys but no module key, return whole dict."""
-    cfg = SimpleNamespace(notifications={"discord": {"webhook": "x"}})
-    m = make_manager(cfg)
-    assert m._get_notification_targets() == {"discord": {"webhook": "x"}}
-
-
-def test_notification_targets_empty_when_no_match():
-    cfg = SimpleNamespace(notifications={"other_module": {"discord": {}}})
-    m = make_manager(cfg)
-    assert m._get_notification_targets() == {}
+def test_resolve_targets_empty_when_no_module_match():
+    cfg = _cfg_with_destinations(
+        [
+            {
+                "id": "d1",
+                "method": "discord",
+                "enabled": True,
+                "events": {"success": True, "failure": False},
+                "modules": ["nohl"],
+                "config": {"webhook": "https://discord.com/api/webhooks/1/a"},
+            }
+        ]
+    )
+    assert make_manager(cfg)._resolve_targets("success", "poster_renamerr") == []
 
 
 # --- resolve_color: output > config > default ---
 
 
 def test_resolve_color_output_wins():
-    assert (
-        NotificationManager.resolve_color({"color": "FF0000"}, "00FF00")
-        == "FF0000"
-    )
+    assert NotificationManager.resolve_color({"color": "FF0000"}, "00FF00") == "FF0000"
 
 
 def test_resolve_color_falls_back_to_config():
@@ -168,58 +190,45 @@ def test_resolve_color_empty_output_color_does_not_override():
     assert NotificationManager.resolve_color({"color": ""}, "FF7300") == "FF7300"
 
 
-# --- collect_valid_targets: bot_name + color survive into the dispatch dict ---
+# --- _validate_target: bot_name + color survive; channel_id coerced ---
 
 
-def _cfg_with_discord(**discord_fields):
-    return SimpleNamespace(
-        notifications={"poster_renamerr": {"discord": discord_fields}}
+def test_validate_target_discord_preserves_bot_name_and_color():
+    out = make_manager()._validate_target(
+        "discord",
+        {
+            "webhook": "https://discord.com/api/webhooks/123/abc",
+            "bot_name": "My Bot",
+            "color": "#5865F2",
+        },
     )
+    assert out == {
+        "webhook": "https://discord.com/api/webhooks/123/abc",
+        "bot_name": "My Bot",
+        "color": "#5865F2",
+    }
 
 
-def _cfg_with_notifiarr(**fields):
-    return SimpleNamespace(
-        notifications={"poster_renamerr": {"notifiarr": fields}}
+def test_validate_target_notifiarr_coerces_channel_id_and_omits_bot_name():
+    out = make_manager()._validate_target(
+        "notifiarr",
+        {
+            "webhook": "https://notifiarr.com/api/v1/notification/passthrough/KEY",
+            "channel_id": "1234567890",
+            "color": "#FF7300",
+        },
     )
-
-
-def test_collect_targets_discord_preserves_bot_name_and_color():
-    cfg = _cfg_with_discord(
-        webhook="https://discord.com/api/webhooks/123/abc",
-        bot_name="My Bot",
-        color="#5865F2",
-    )
-    m = make_manager(cfg)
-    targets = m.collect_valid_targets()
-    assert targets["discord"]["webhook"] == "https://discord.com/api/webhooks/123/abc"
-    assert targets["discord"]["bot_name"] == "My Bot"
-    assert targets["discord"]["color"] == "#5865F2"
-
-
-def test_collect_targets_discord_test_path_returns_same_shape_as_prod():
-    """Regression: test mode used to convert webhook → apprise URL string, diverging from prod."""
-    cfg = _cfg_with_discord(webhook="https://discord.com/api/webhooks/123/abc")
-    m = make_manager(cfg)
-    prod = m.collect_valid_targets(test=False)
-    test = m.collect_valid_targets(test=True)
-    assert isinstance(prod["discord"], dict)
-    assert isinstance(test["discord"], dict)
-    assert prod["discord"]["webhook"] == test["discord"]["webhook"]
-
-
-def test_collect_targets_notifiarr_preserves_color_and_channel():
-    cfg = _cfg_with_notifiarr(
-        webhook="https://notifiarr.com/api/v1/notification/passthrough/KEY",
-        channel_id="1234567890",
-        color="#FF7300",
-    )
-    m = make_manager(cfg)
-    targets = m.collect_valid_targets()
-    assert targets["notifiarr"]["channel_id"] == 1234567890
-    assert targets["notifiarr"]["color"] == "#FF7300"
+    assert out["channel_id"] == 1234567890
+    assert out["color"] == "#FF7300"
     # Notifiarr has no per-notification bot override, so we don't carry bot_name
     # through (the UI form doesn't accept it either).
-    assert "bot_name" not in targets["notifiarr"]
+    assert "bot_name" not in out
+
+
+def test_validate_target_invalid_returns_error_string():
+    m = make_manager()
+    assert isinstance(m._validate_target("discord", {}), str)
+    assert isinstance(m._validate_target("notifiarr", {"webhook": "x"}), str)
 
 
 # --- build_discord_payload: bot_name reaches the Discord username field ---
@@ -283,9 +292,12 @@ def test_send_discord_prod_uses_config_color_then_output_override():
         webhook="https://discord.com/api/webhooks/1/tok",
         color="00FF00",
     )
-    with patch.object(NotificationManager, "safe_post") as post, patch(
-        "backend.util.notification_formatting.format_for_discord",
-        return_value=([{"embed": True, "fields": []}], True),
+    with (
+        patch.object(NotificationManager, "safe_post") as post,
+        patch(
+            "backend.util.notification_formatting.format_for_discord",
+            return_value=([{"embed": True, "fields": []}], True),
+        ),
     ):
         post.return_value = SimpleNamespace(status_code=204, text="")
         m.send_discord_notification(cfg, "Mod", {"color": "FF0000"})
@@ -322,27 +334,57 @@ def teardown_function(_):
             root.removeHandler(h)
 
 
-def test_install_error_notify_handler_noop_without_main_target():
-    cfg = SimpleNamespace(notifications={})
+def _failure_dest_cfg():
+    return SimpleNamespace(
+        notifications={
+            "destinations": [
+                {
+                    "id": "e1",
+                    "method": "discord",
+                    "enabled": True,
+                    "events": {"success": False, "failure": True},
+                    "modules": ["__ALL__"],
+                    "config": {"webhook": "https://discord.com/api/webhooks/1/t"},
+                }
+            ]
+        }
+    )
+
+
+def test_install_error_notify_handler_noop_without_failure_target():
+    cfg = SimpleNamespace(notifications={"destinations": []})
     assert install_error_notify_handler(cfg) is None
     assert not any(
         isinstance(h, ErrorNotifyHandler) for h in logging.getLogger().handlers
     )
 
 
-def test_install_error_notify_handler_attaches_when_main_configured():
+def test_install_error_notify_handler_noop_when_only_success_targets():
     cfg = SimpleNamespace(
-        notifications={"main": {"discord": {"webhook": "https://discord.com/api/webhooks/1/t"}}}
+        notifications={
+            "destinations": [
+                {
+                    "id": "d1",
+                    "method": "discord",
+                    "enabled": True,
+                    "events": {"success": True, "failure": False},
+                    "modules": ["__ALL__"],
+                    "config": {"webhook": "https://discord.com/api/webhooks/1/t"},
+                }
+            ]
+        }
     )
-    handler = install_error_notify_handler(cfg)
+    assert install_error_notify_handler(cfg) is None
+
+
+def test_install_error_notify_handler_attaches_when_failure_configured():
+    handler = install_error_notify_handler(_failure_dest_cfg())
     assert isinstance(handler, ErrorNotifyHandler)
     assert handler in logging.getLogger().handlers
 
 
 def test_install_error_notify_handler_idempotent():
-    cfg = SimpleNamespace(
-        notifications={"main": {"discord": {"webhook": "https://discord.com/api/webhooks/1/t"}}}
-    )
+    cfg = _failure_dest_cfg()
     h1 = install_error_notify_handler(cfg)
     h2 = install_error_notify_handler(cfg)
     assert h1 is h2
@@ -360,21 +402,31 @@ def test_send_notification_resolves_targets_from_chubconfig_root():
     full_config = ChubConfig.model_validate(
         {
             "notifications": {
-                "upgradinatorr": {
-                    "discord": {
-                        "webhook": "https://discord.com/api/webhooks/1/tok",
-                        "bot_name": "ChubBot",
-                        "color": "00FF00",
+                "destinations": [
+                    {
+                        "id": "u1",
+                        "method": "discord",
+                        "enabled": True,
+                        "events": {"success": True, "failure": False},
+                        "modules": ["upgradinatorr"],
+                        "config": {
+                            "webhook": "https://discord.com/api/webhooks/1/tok",
+                            "bot_name": "ChubBot",
+                            "color": "00FF00",
+                        },
                     }
-                }
+                ]
             }
         }
     )
 
     manager = NotificationManager(full_config, MagicMock(), module_name="upgradinatorr")
-    with patch.object(NotificationManager, "safe_post") as post, patch(
-        "backend.util.notification_formatting.format_for_discord",
-        return_value=([{"embed": True, "fields": []}], True),
+    with (
+        patch.object(NotificationManager, "safe_post") as post,
+        patch(
+            "backend.util.notification_formatting.format_for_discord",
+            return_value=([{"embed": True, "fields": []}], True),
+        ),
     ):
         post.return_value = SimpleNamespace(status_code=204, text="")
         result = manager.send_notification({"anything": "here"})
@@ -388,22 +440,31 @@ def test_send_notification_resolves_targets_from_chubconfig_root():
 def test_send_notification_silent_noop_when_given_module_subsection():
     """Guard against the historical regression: if a caller passes the
     per-module config (no `.notifications` attribute), targets resolve to
-    {} and no post is attempted. This must not raise — it just silently
+    [] and no post is attempted. This must not raise — it just silently
     sends nothing — which is exactly why the bug went unnoticed."""
     from backend.util.config import ChubConfig
 
     full_config = ChubConfig.model_validate(
         {
             "notifications": {
-                "upgradinatorr": {
-                    "discord": {"webhook": "https://discord.com/api/webhooks/1/tok"}
-                }
+                "destinations": [
+                    {
+                        "id": "u1",
+                        "method": "discord",
+                        "enabled": True,
+                        "events": {"success": True, "failure": False},
+                        "modules": ["upgradinatorr"],
+                        "config": {"webhook": "https://discord.com/api/webhooks/1/tok"},
+                    }
+                ]
             }
         }
     )
     wrong_config = full_config.upgradinatorr  # what modules used to pass
 
-    manager = NotificationManager(wrong_config, MagicMock(), module_name="upgradinatorr")
+    manager = NotificationManager(
+        wrong_config, MagicMock(), module_name="upgradinatorr"
+    )
     with patch.object(NotificationManager, "safe_post") as post:
         result = manager.send_notification({"anything": "here"})
 
