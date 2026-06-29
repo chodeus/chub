@@ -332,6 +332,15 @@ def _process_media_record(media: dict, asset_type: str) -> list:
         for season in media.get("seasons", []):
             season_entry = dict(media)
             season_entry["season_number"] = season.get("season_number")
+            # Override the inherited show-level has_content + monitored with each
+            # season's own values (mirrors connector._process_arr_media). Without
+            # this, a webhook upsert clobbers a correct full sync: an unaired
+            # season with no files would inherit the show's any-season-has-files
+            # rollup (has_content=True) and a per-season unmonitored flag would be
+            # lost — re-flagging it as in-library / release-ready.
+            season_entry["has_content"] = (season.get("season_has_episodes") or 0) > 0
+            if season.get("monitored") is not None:
+                season_entry["monitored"] = season.get("monitored")
             processed_items.append(season_entry)
     else:
         # For movies, just add the single item
