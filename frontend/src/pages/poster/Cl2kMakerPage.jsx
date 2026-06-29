@@ -3322,15 +3322,17 @@ const AiPanel = ({
                         )}
                         {backdropUrl && (
                             <>
-                                <label className="flex flex-col gap-1 text-sm text-fg-muted">
-                                    <span>AI prompt (defaults to module settings)</span>
-                                    <textarea
-                                        value={aiPrompt}
-                                        onChange={e => setAiPrompt(e.target.value)}
-                                        rows={2}
-                                        className="bg-surface border border-border rounded px-2 py-1 text-sm text-fg"
-                                    />
-                                </label>
+                                {provider !== 'lama_sidecar' && (
+                                    <label className="flex flex-col gap-1 text-sm text-fg-muted">
+                                        <span>AI prompt (defaults to module settings)</span>
+                                        <textarea
+                                            value={aiPrompt}
+                                            onChange={e => setAiPrompt(e.target.value)}
+                                            rows={2}
+                                            className="bg-surface border border-border rounded px-2 py-1 text-sm text-fg"
+                                        />
+                                    </label>
+                                )}
                                 <LoadingButton
                                     onClick={onSendToAi}
                                     loading={aiBusy}
@@ -3408,15 +3410,17 @@ const AiPanel = ({
                                         {brushSize}px
                                     </span>
                                 </label>
-                                <label className="flex flex-col gap-1 text-sm text-fg-muted">
-                                    <span>AI prompt</span>
-                                    <textarea
-                                        value={aiPrompt}
-                                        onChange={e => setAiPrompt(e.target.value)}
-                                        rows={3}
-                                        className="bg-surface border border-border rounded px-2 py-1 text-sm text-fg"
-                                    />
-                                </label>
+                                {provider !== 'lama_sidecar' && (
+                                    <label className="flex flex-col gap-1 text-sm text-fg-muted">
+                                        <span>AI prompt</span>
+                                        <textarea
+                                            value={aiPrompt}
+                                            onChange={e => setAiPrompt(e.target.value)}
+                                            rows={3}
+                                            className="bg-surface border border-border rounded px-2 py-1 text-sm text-fg"
+                                        />
+                                    </label>
+                                )}
                                 {aiBlock && <div className="text-xs text-warning">{aiBlock}</div>}
                                 <div className="flex-1" />
                                 <LoadingButton
