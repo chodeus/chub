@@ -3385,6 +3385,7 @@ const AiPanel = ({
                                         brushSize={brushSize}
                                         onMaskChange={onMaskChange}
                                         initialMask={mask}
+                                        imgClassName="max-h-[calc(90vh_-_11rem)]"
                                     />
                                 </div>
                             </div>
@@ -3441,7 +3442,13 @@ const AiPanel = ({
  * opacity only dims the display, so toDataURL still yields a clean mask that the
  * backend resizes to the backdrop and feeds to the AI inpainter.
  */
-const BrushMask = ({ imageUrl, brushSize, onMaskChange, initialMask = null }) => {
+const BrushMask = ({
+    imageUrl,
+    brushSize,
+    onMaskChange,
+    initialMask = null,
+    imgClassName = '',
+}) => {
     const canvasRef = useRef(null);
     const drawing = useRef(false);
     // Brush footprint: round (soft, default) or square (sharp corners — handy for
@@ -3539,7 +3546,7 @@ const BrushMask = ({ imageUrl, brushSize, onMaskChange, initialMask = null }) =>
                     src={imageUrl}
                     alt="Backdrop to mask"
                     onLoad={e => sizeToImage(e.target)}
-                    className="block max-w-full rounded"
+                    className={`block max-w-full rounded ${imgClassName}`}
                     draggable={false}
                 />
                 <canvas
@@ -3673,6 +3680,7 @@ const MaskBrushEditor = ({
                                         brushSize={brushSize}
                                         onMaskChange={onMaskChange}
                                         initialMask={mask}
+                                        imgClassName="max-h-[calc(90vh_-_11rem)]"
                                     />
                                 </div>
                             </div>
