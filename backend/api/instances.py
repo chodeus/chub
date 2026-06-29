@@ -866,6 +866,16 @@ async def create_instance(
                 status_code=400,
             )
 
+        # A new instance has no stored key to fall back on — the redacted
+        # placeholder is never a valid API key here.
+        if api_key == REDACTED_PLACEHOLDER:
+            return error(
+                "A real API key is required for a new instance (received the "
+                "redacted placeholder).",
+                code="INVALID_API_KEY",
+                status_code=400,
+            )
+
         # Load current config
         config = load_config()
 
@@ -974,6 +984,14 @@ async def update_instance(
                 code="INSTANCE_NOT_FOUND",
                 status_code=404,
             )
+
+        # Preserve the stored API key when the frontend sent the redacted
+        # placeholder (an edit that didn't retype the key) — otherwise we'd
+        # clobber the real key with "********" and break the connection.
+        if api_key == REDACTED_PLACEHOLDER:
+            stored = service_instances.get(instance_id)
+            if stored:
+                api_key = stored.api if hasattr(stored, "api") else stored.get("api")
 
         # Handle renaming: if new name differs from instance_id
         if new_name != instance_id:
