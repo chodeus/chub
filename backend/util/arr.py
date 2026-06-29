@@ -1661,9 +1661,7 @@ class LidarrClient(BaseARRClient):
                     aid, albums = future.result()
                     result[aid] = albums
                 except Exception as e:
-                    self.logger.warning(
-                        f"Failed to fetch albums for artist {aid}: {e}"
-                    )
+                    self.logger.warning(f"Failed to fetch albums for artist {aid}: {e}")
                     result[aid] = []
         return result
 
@@ -2083,6 +2081,7 @@ def normalize_arr_media(
         if include_episode and episode_lookup:
             albums_raw = episode_lookup(item.get("id")) or []
             for idx, album in enumerate(albums_raw):
+                album_stats = album.get("statistics") or {}
                 album_list.append(
                     {
                         "season_number": idx,  # Position index for compatibility
@@ -2090,6 +2089,13 @@ def normalize_arr_media(
                         "album_title": album.get("title", ""),
                         "foreign_album_id": album.get("foreignAlbumId", ""),
                         "monitored": album.get("monitored", False),
+                        # Album is "in library" when any track file is present —
+                        # the Lidarr analogue of a movie's hasFile / a season's
+                        # episodeFileCount. Drives has_content on the album row.
+                        "has_content": bool(
+                            album_stats.get("trackFileCount")
+                            or album_stats.get("sizeOnDisk")
+                        ),
                         "episode_data": [],  # Albums don't have sub-items to search
                     }
                 )
@@ -2136,6 +2142,13 @@ def normalize_arr_media(
             "folder": folder,
             "normalized_folder": normalize_titles(folder or ""),
             "has_file": None,
+            # Artist is "in library" when it has any track files on disk
+            # (statistics aggregate over all its albums). Per-album presence is
+            # carried separately on each album row via the album_list above.
+            "has_content": bool(
+                (item.get("statistics") or {}).get("trackFileCount")
+                or (item.get("statistics") or {}).get("sizeOnDisk")
+            ),
             "tags": tag_names,
             "seasons": album_list if album_list else None,
             "season_numbers": None,
