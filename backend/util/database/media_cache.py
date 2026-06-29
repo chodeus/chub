@@ -887,8 +887,10 @@ class MediaCache(DatabaseBase):
         #   in_library = item's file is present (has_content)
         #   missing    = monitored but no file yet — the real "still need" count
         #   monitored  = tracked by the *arr
-        # Lidarr artists carry no has_content, so they contribute to neither
-        # in_library nor missing; album rows supply the music signal.
+        # has_content is derived from file presence per asset type: hasFile
+        # (movies), episodeFileCount (show seasons), and trackFileCount /
+        # sizeOnDisk (Lidarr artists + albums). A row with no files present is
+        # therefore counted as missing only when it is also monitored.
         rows = (
             self.execute_query(
                 f"""
