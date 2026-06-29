@@ -177,7 +177,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             startup_config = load_config()
             handler = install_error_notify_handler(startup_config, logger=logger)
             if handler and log:
-                log.info(
+                log.debug(
                     "ErrorNotifyHandler attached to root logger — ERROR-level logs "
                     "will be forwarded to notification destinations with the "
                     "'On failure' trigger enabled."

@@ -470,3 +470,18 @@ def test_send_notification_silent_noop_when_given_module_subsection():
 
     post.assert_not_called()
     assert result["success"] is False
+
+
+def test_validate_target_rejects_redacted_placeholder_webhook():
+    """A webhook that is the redacted '********' placeholder (or any non-URL)
+    must be rejected, not sent — otherwise dispatch hits the SSRF guard every run
+    and notifications silently fail."""
+    m = make_manager()
+    assert isinstance(m._validate_target("discord", {"webhook": "********"}), str)
+    assert isinstance(m._validate_target("discord", {"webhook": "discord.com/api/webhooks/1/x"}), str)
+    assert isinstance(
+        m._validate_target("notifiarr", {"webhook": "********", "channel_id": 5}), str
+    )
+    # a real https webhook still validates
+    ok = m._validate_target("discord", {"webhook": "https://discord.com/api/webhooks/1/x"})
+    assert isinstance(ok, dict) and ok["webhook"].startswith("https://")
