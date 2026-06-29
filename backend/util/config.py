@@ -908,26 +908,35 @@ def redact_secrets(data: Any, _parent_key: str = "") -> Any:
     return data
 
 
-def strip_redacted_placeholders(incoming: dict, current: dict) -> dict:
+def strip_redacted_placeholders(incoming: Any, current: Any) -> Any:
     """
-    Merge *incoming* config over *current*, but preserve current values
-    wherever incoming still contains the redacted placeholder.
-    Returns a new dict.
+    Merge *incoming* config over *current*, but preserve the real *current* value
+    wherever *incoming* still carries the redacted placeholder. Recurses through
+    nested dicts AND lists (element-wise by position). Returns a new structure.
+
+    List recursion matters: the notifications ``destinations`` list holds a
+    per-destination ``webhook`` secret. Without it, a round-trip save of the
+    redacted config would persist the ``********`` placeholder over the real
+    webhook (breaking notification dispatch). The old per-module shape was all
+    nested dicts, so this only surfaced once destinations became a list.
     """
-    merged = {}
-    for k, v in incoming.items():
-        cur_v = current.get(k)
-        if isinstance(v, dict) and isinstance(cur_v, dict):
-            merged[k] = strip_redacted_placeholders(v, cur_v)
-        elif v == REDACTED_PLACEHOLDER and isinstance(cur_v, str):
-            merged[k] = cur_v  # keep the real secret
-        else:
-            merged[k] = v
-    # include keys only present in current (not overwritten)
-    for k, v in current.items():
-        if k not in merged:
-            merged[k] = v
-    return merged
+    if isinstance(incoming, dict) and isinstance(current, dict):
+        merged = {
+            k: strip_redacted_placeholders(v, current.get(k))
+            for k, v in incoming.items()
+        }
+        for k, v in current.items():  # keys only present in current
+            if k not in merged:
+                merged[k] = v
+        return merged
+    if isinstance(incoming, list) and isinstance(current, list):
+        return [
+            strip_redacted_placeholders(item, current[i] if i < len(current) else None)
+            for i, item in enumerate(incoming)
+        ]
+    if incoming == REDACTED_PLACEHOLDER and isinstance(current, str):
+        return current  # keep the real secret
+    return incoming
 
 
 # ==== CONFIG EXCEPTIONS ====

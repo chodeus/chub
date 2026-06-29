@@ -230,3 +230,34 @@ def test_save_and_load_config_round_trip(tmp_path):
     reloaded = load_config(str(path))
     assert reloaded.general.max_logs == 5
     assert reloaded.auth.username == "tester"
+
+
+def test_strip_placeholder_recurses_into_destinations_list():
+    """Regression: the per-destination notifications config is a LIST of dicts,
+    each holding a webhook secret. A round-trip save sends the redacted
+    placeholder; strip must recurse into the list and restore each real webhook
+    (the old dict-only recursion clobbered them, breaking notification dispatch).
+    """
+    current = {
+        "destinations": [
+            {"id": "d1", "method": "discord", "config": {"webhook": "https://discord.com/api/webhooks/1/real", "bot_name": "CHUB"}},
+            {"id": "n1", "method": "notifiarr", "config": {"webhook": "https://notifiarr.com/api/v1/x", "channel_id": 5}},
+        ]
+    }
+    incoming = {
+        "destinations": [
+            {"id": "d1", "method": "discord", "config": {"webhook": REDACTED_PLACEHOLDER, "bot_name": "CHUB"}},
+            {"id": "n1", "method": "notifiarr", "config": {"webhook": REDACTED_PLACEHOLDER, "channel_id": 5}},
+        ]
+    }
+    merged = strip_redacted_placeholders(incoming, current)
+    assert merged["destinations"][0]["config"]["webhook"] == "https://discord.com/api/webhooks/1/real"
+    assert merged["destinations"][1]["config"]["webhook"] == "https://notifiarr.com/api/v1/x"
+
+
+def test_strip_placeholder_list_keeps_real_edits_alongside_secret():
+    current = {"destinations": [{"config": {"webhook": "https://d/1/real", "color": "#000"}}]}
+    incoming = {"destinations": [{"config": {"webhook": REDACTED_PLACEHOLDER, "color": "#fff"}}]}
+    merged = strip_redacted_placeholders(incoming, current)
+    assert merged["destinations"][0]["config"]["webhook"] == "https://d/1/real"  # secret kept
+    assert merged["destinations"][0]["config"]["color"] == "#fff"  # edit applied

@@ -93,7 +93,10 @@ class NotificationManager:
             return f"Invalid config for {method}"
         if method == "discord":
             hook = str(cfg.get("webhook") or "").rstrip("/")
-            if hook:
+            # Require a real http(s) URL — rejects an empty webhook AND the
+            # redacted "********" placeholder (no scheme), so a corrupted config
+            # is skipped + logged rather than raising an SSRF error every run.
+            if hook.startswith(("http://", "https://")):
                 return {
                     "webhook": hook,
                     "bot_name": cfg.get("bot_name") or None,
@@ -112,7 +115,7 @@ class NotificationManager:
                     cid_int = int(cid)
                 except (TypeError, ValueError):
                     cid_int = None
-            if hook and cid_int is not None:
+            if hook.startswith(("http://", "https://")) and cid_int is not None:
                 return {
                     "webhook": hook,
                     "channel_id": cid_int,
