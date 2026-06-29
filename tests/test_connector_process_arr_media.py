@@ -152,7 +152,9 @@ def test_genres_and_cast_preserved_per_season(connector):
             "monitored": True,
             "genres": ["Drama", "Romance"],
             "cast_data": [{"name": "Lead"}],
-            "seasons": [{"season_number": 1, "monitored": True, "season_has_episodes": 6}],
+            "seasons": [
+                {"season_number": 1, "monitored": True, "season_has_episodes": 6}
+            ],
         }
     ]
     result = connector._process_arr_media(shows, "show")
@@ -228,3 +230,42 @@ def test_artist_without_albums_yields_only_artist_row(connector):
     assert result[0]["season_number"] is None
 
 
+def test_album_rows_carry_per_album_has_content(connector):
+    """Each album row's has_content reflects THAT album's own track-file
+    presence (set in arr normalize), not the artist-level rollup it copies.
+    Regression: every Lidarr row had has_content unset, so the Statistics
+    page showed 0 in-library and counted every monitored album as missing."""
+    artists = [
+        {
+            "title": "REZZ",
+            "musicbrainz_id": "artist-mbid-1",
+            "monitored": True,
+            "has_content": True,  # artist-level rollup (has some music)
+            "seasons": [
+                {
+                    "season_number": 0,
+                    "album_id": 101,
+                    "album_title": "Mass Manipulation",
+                    "foreign_album_id": "album-mbid-1",
+                    "monitored": True,
+                    "has_content": True,  # this album is on disk
+                },
+                {
+                    "season_number": 1,
+                    "album_id": 102,
+                    "album_title": "Certain Kind of Magic",
+                    "foreign_album_id": "album-mbid-2",
+                    "monitored": True,
+                    "has_content": False,  # this album has no files
+                },
+            ],
+        }
+    ]
+    result = connector._process_arr_media(artists, "artist")
+    albums = {r["title"]: r for r in result if r.get("asset_type") == "album"}
+    assert albums["Mass Manipulation"]["has_content"] is True
+    assert albums["Certain Kind of Magic"]["has_content"] is False, (
+        "empty album must not inherit the artist's has_content=True rollup"
+    )
+    # Artist row keeps its own aggregate rollup.
+    assert result[0]["has_content"] is True
