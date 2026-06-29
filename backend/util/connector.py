@@ -551,6 +551,10 @@ class Connector:
                     album_row["parent_title"] = artist_title
                     album_row["arr_id"] = season.get("album_id")
                     album_row["monitored"] = season.get("monitored")
+                    # Override the inherited artist-level has_content with this
+                    # album's own track-file presence (set in arr normalize), so
+                    # each album row reflects whether *that* album is on disk.
+                    album_row["has_content"] = season.get("has_content")
                     # Album titles don't share the artist's alternate titles.
                     album_row["alternate_titles"] = None
                     album_row["normalized_alternate_titles"] = None

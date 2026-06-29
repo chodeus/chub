@@ -131,3 +131,74 @@ def test_missing_statistics_defaults_safely():
     }
     result = normalize_arr_media(item, tags=[], arr_type="sonarr")
     assert result["seasons"][0]["season_has_episodes"] == 0
+
+
+# --- Lidarr: has_content from track-file presence (artist + album) ---
+
+
+def test_lidarr_artist_has_content_from_statistics():
+    """A Lidarr artist is in-library when its aggregate statistics show any
+    track files (or bytes) on disk."""
+    item = {
+        "id": 1,
+        "artistName": "REZZ",
+        "monitored": True,
+        "path": "/data/music/REZZ",
+        "statistics": {"trackFileCount": 12, "sizeOnDisk": 123456},
+    }
+    result = normalize_arr_media(item, tags=[], arr_type="lidarr")
+    assert result["has_content"] is True
+
+
+def test_lidarr_artist_no_files_has_content_false():
+    """An artist with zero track files is not in-library."""
+    item = {
+        "id": 1,
+        "artistName": "REZZ",
+        "monitored": True,
+        "path": "/data/music/REZZ",
+        "statistics": {"trackFileCount": 0, "sizeOnDisk": 0},
+    }
+    result = normalize_arr_media(item, tags=[], arr_type="lidarr")
+    assert result["has_content"] is False
+
+
+def test_lidarr_artist_missing_statistics_safe():
+    """No statistics block (newly added artist) must not crash; defaults to
+    not-in-library."""
+    item = {"id": 1, "artistName": "REZZ", "monitored": True, "path": "/data/music/REZZ"}
+    result = normalize_arr_media(item, tags=[], arr_type="lidarr")
+    assert result["has_content"] is False
+
+
+def test_lidarr_album_has_content_captured_per_album():
+    """Each album's own track-file presence is captured on its album_list
+    entry so the exploded album row can carry the right has_content —
+    regression for the all-zero in-library Lidarr stats."""
+    item = {"id": 1, "artistName": "REZZ", "monitored": True, "path": "/data/music/REZZ"}
+    albums = [
+        {
+            "id": 101,
+            "title": "Mass Manipulation",
+            "foreignAlbumId": "alb1",
+            "monitored": True,
+            "statistics": {"trackFileCount": 10, "sizeOnDisk": 999},
+        },
+        {
+            "id": 102,
+            "title": "Certain Kind of Magic",
+            "foreignAlbumId": "alb2",
+            "monitored": True,
+            "statistics": {"trackFileCount": 0, "sizeOnDisk": 0},
+        },
+    ]
+    result = normalize_arr_media(
+        item,
+        tags=[],
+        arr_type="lidarr",
+        include_episode=True,
+        episode_lookup=lambda _artist_id: albums,
+    )
+    by_title = {s["album_title"]: s for s in result["seasons"]}
+    assert by_title["Mass Manipulation"]["has_content"] is True
+    assert by_title["Certain Kind of Magic"]["has_content"] is False
