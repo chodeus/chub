@@ -436,7 +436,12 @@ class Connector:
                     for row_asset_type in types_to_sync:
                         self.db.media.sync_for_instance(
                             instance_config.name,
-                            client.instance_type,
+                            # Stored as media_cache.source — must be the lowercase
+                            # service type (matches sync_state.scope and
+                            # /instances/types), NOT client.instance_type which is
+                            # title-cased ("Sonarr"); the mismatch broke the
+                            # snapshot-age lookup and the by-instance type labels.
+                            instance_config.type,
                             row_asset_type,
                             rows_by_type.get(row_asset_type, []),
                             logger,
