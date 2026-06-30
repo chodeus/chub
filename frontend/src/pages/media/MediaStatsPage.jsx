@@ -1,6 +1,5 @@
 import React, { useMemo } from 'react';
 import { useApiData } from '../../hooks/useApiData.js';
-import { useToast } from '../../contexts/ToastContext.jsx';
 import { mediaAPI } from '../../utils/api/media.js';
 import Spinner from '../../components/ui/Spinner.jsx';
 import { formatSecondsAgo } from '../../utils/schedule';
@@ -23,17 +22,23 @@ const StatCard = ({ label, value, subtext, color = 'text-fg' }) => (
 /** Completeness % for a health row: of monitored items, how many have their file.
  *  Falls back to in-library/total when nothing is monitored (e.g. all unmonitored). */
 const completenessPct = row => {
-    const monitored = row.monitored || 0;
+    // Of the RELEASED monitored items (upcoming aren't acquirable yet), how
+    // many are present.
+    const released = (row.monitored || 0) - (row.upcoming || 0);
     const missing = row.missing || 0;
-    if (monitored > 0) return Math.round(((monitored - missing) / monitored) * 100);
+    if (released > 0) return Math.round(((released - missing) / released) * 100);
     const total = row.total || 0;
     return total > 0 ? Math.round(((row.in_library || 0) / total) * 100) : 0;
 };
 
-/** Per-type / per-instance library-health card. */
-const HealthCard = ({ title, badge, row, footer }) => {
+/** Per-type / per-instance library-health card. ``container`` rows (e.g. Lidarr
+ *  artists) have no per-item file state — their children carry it — so they show
+ *  just total + monitored. */
+const HealthCard = ({ title, badge, row, footer, container = false }) => {
     const missing = row.missing || 0;
+    const upcoming = row.upcoming || 0;
     const inLibrary = row.in_library || 0;
+    const monitored = row.monitored || 0;
     const pct = completenessPct(row);
     const hasMissing = missing > 0;
     return (
@@ -60,16 +65,29 @@ const HealthCard = ({ title, badge, row, footer }) => {
                 <span className="font-mono text-2xl font-bold text-fg">
                     {(row.total || 0).toLocaleString()}
                 </span>
-                <span className="font-mono text-sm text-success">
-                    {inLibrary.toLocaleString()} in library
-                </span>
-                {hasMissing && (
-                    <span className="font-mono text-sm text-warning">
-                        {missing.toLocaleString()} missing
+                {container ? (
+                    <span className="font-mono text-sm text-fg-muted">
+                        {monitored.toLocaleString()} monitored
                     </span>
+                ) : (
+                    <>
+                        <span className="font-mono text-sm text-success">
+                            {inLibrary.toLocaleString()} in library
+                        </span>
+                        {hasMissing && (
+                            <span className="font-mono text-sm text-warning">
+                                {missing.toLocaleString()} missing
+                            </span>
+                        )}
+                        {upcoming > 0 && (
+                            <span className="font-mono text-sm text-fg-muted">
+                                {upcoming.toLocaleString()} upcoming
+                            </span>
+                        )}
+                    </>
                 )}
             </div>
-            {(row.monitored > 0 || inLibrary > 0) && (
+            {!container && (monitored > 0 || inLibrary > 0) && (
                 <div className="mt-2 h-1.5 bg-border rounded-full overflow-hidden">
                     <div
                         className="h-full rounded-full transition-all bg-success"
@@ -78,7 +96,7 @@ const HealthCard = ({ title, badge, row, footer }) => {
                 </div>
             )}
             <p className="text-xs text-fg-subtle mt-2" style={{ minHeight: '1rem' }}>
-                {footer || `${pct}% complete`}
+                {footer || (container ? ' ' : `${pct}% complete`)}
             </p>
         </div>
     );
@@ -312,13 +330,7 @@ const RecentlyAdded = ({ data }) => {
 };
 
 const MediaStatsPage = () => {
-    const toast = useToast();
-
-    const {
-        data: statsData,
-        isLoading,
-        refresh: refreshStats,
-    } = useApiData({
+    const { data: statsData, isLoading } = useApiData({
         apiFunction: mediaAPI.fetchDetailedStatistics,
         options: { showErrorToast: false },
     });
@@ -332,51 +344,37 @@ const MediaStatsPage = () => {
     const unmonitoredCount = monitored.unmonitored || 0;
     const inLibrary = stats.in_library || 0;
     const missing = stats.missing || 0;
+    const upcoming = stats.upcoming || 0;
     const completeness = completenessPct({
         monitored: monitoredCount,
         missing,
+        upcoming,
         total: stats.total,
         in_library: inLibrary,
     });
-
-    const handleRefresh = () => {
-        refreshStats();
-        toast.success('Statistics refreshed');
-    };
 
     if (isLoading) return <Spinner size="large" text="Loading statistics..." center />;
 
     return (
         <div className="flex flex-col gap-5">
-            {/* Toolbar */}
-            <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="min-w-0">
-                    <h1 className="font-display text-[26px] font-bold tracking-[-0.3px] text-fg m-0">
-                        Library Statistics
-                    </h1>
-                    <p className="text-fg-subtle text-[13.5px] mt-1 mb-0">
-                        Library health across Radarr, Sonarr, Lidarr and Plex.
-                    </p>
-                </div>
-                <button
-                    type="button"
-                    onClick={handleRefresh}
-                    className="inline-flex items-center gap-1.5 h-[38px] px-3.5 rounded-lg bg-surface border border-border text-fg-muted text-[13.5px] font-medium hover:bg-surface-elevated transition-colors"
-                >
-                    <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
-                        refresh
-                    </span>
-                    Refresh
-                </button>
+            {/* Header — the page reflects the cache, which the instance syncs
+                keep fresh; there's no manual refresh. */}
+            <div className="min-w-0">
+                <h1 className="font-display text-[26px] font-bold tracking-[-0.3px] text-fg m-0">
+                    Library Statistics
+                </h1>
+                <p className="text-fg-subtle text-[13.5px] mt-1 mb-0">
+                    Library health across Radarr, Sonarr, Lidarr and Plex.
+                </p>
             </div>
 
             {/* Summary Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                 <StatCard label="Total Media" value={stats.total || 0} />
                 <StatCard
                     label="In Library"
                     value={inLibrary}
-                    subtext={`${completeness}% of monitored present`}
+                    subtext={`${completeness}% of released present`}
                     color="text-success"
                 />
                 <StatCard
@@ -387,9 +385,10 @@ const MediaStatsPage = () => {
                 <StatCard
                     label="Missing"
                     value={missing}
-                    subtext="monitored, no file yet"
+                    subtext="monitored, released, no file"
                     color={missing > 0 ? 'text-warning' : 'text-fg'}
                 />
+                <StatCard label="Upcoming" value={upcoming} subtext="monitored, not released yet" />
             </div>
 
             {/* Recently Added */}
@@ -407,6 +406,7 @@ const MediaStatsPage = () => {
                                     title={row.asset_type}
                                     badge={`${row.instances} instance${row.instances !== 1 ? 's' : ''}`}
                                     row={row}
+                                    container={row.asset_type === 'artist'}
                                 />
                             ))}
                         </div>
