@@ -1,7 +1,9 @@
 import React, { useMemo } from 'react';
 import { useApiData } from '../../hooks/useApiData.js';
 import { mediaAPI } from '../../utils/api/media.js';
+import { instancesAPI } from '../../utils/api/instances.js';
 import Spinner from '../../components/ui/Spinner.jsx';
+import { ServiceIcon } from '../../components/ui/ServiceIcon.jsx';
 import { formatSecondsAgo } from '../../utils/schedule';
 
 /** Reusable stat card — always reserves the subtext row so sibling cards align */
@@ -28,75 +30,141 @@ const completenessPct = row => {
     return denom > 0 ? Math.round((have / denom) * 100) : 100;
 };
 
-/** Per-type / per-instance library-health card. Content rows show numbers in
- *  units (episodes for Sonarr, movies/albums elsewhere). ``container`` rows
- *  (Lidarr artists) have no per-item file state — their children carry it — so
- *  they show just the row count + monitored. */
-const HealthCard = ({ title, badge, row, footer, container = false }) => {
-    const missing = row.missing || 0;
-    const upcoming = row.upcoming || 0;
-    const inLibrary = row.in_library || 0;
-    const monitored = row.monitored || 0;
-    const primary = container ? row.total || 0 : row.units || 0;
-    const pct = completenessPct(row);
-    const hasMissing = missing > 0;
+/** One labelled stat inside an instance row (e.g. Series / Seasons / Episodes).
+ *  ``bar`` adds a completeness bar under the value for content metrics. */
+const Metric = ({ label, value, sub, bar }) => (
+    <div className="min-w-0">
+        <p className="font-mono text-[10px] tracking-[1px] uppercase text-fg-subtle mb-1">
+            {label}
+        </p>
+        <div className="flex items-baseline gap-2 flex-wrap">
+            <span className="font-mono text-xl font-bold text-fg leading-none">
+                {(value || 0).toLocaleString()}
+            </span>
+            {sub}
+        </div>
+        {bar != null && (
+            <div
+                className="mt-1.5 h-1.5 bg-border rounded-full overflow-hidden"
+                style={{ minWidth: '130px' }}
+            >
+                <div
+                    className="h-full rounded-full bg-success"
+                    style={{ width: `${Math.max(2, bar)}%` }}
+                />
+            </div>
+        )}
+    </div>
+);
+
+/** Full-width instance row (mirrors the Instances page list): identity on the
+ *  left, then the instance's stat breakdown — Sonarr shows series + seasons +
+ *  episodes, Lidarr artists + albums, Radarr movies, Plex item count + the
+ *  per-library breakdown. Content metrics carry the in-library/missing/upcoming
+ *  health; container metrics (series/artists) carry their monitored count. */
+const InstanceRow = ({ inst }) => {
+    const isPlex = inst.source === 'plex';
+    const pct = completenessPct(inst);
+    const synced =
+        inst.snapshot_age_seconds != null
+            ? `Synced ${formatSecondsAgo(inst.snapshot_age_seconds)}`
+            : null;
+
+    const healthSub = (
+        <span className="font-mono text-xs flex items-baseline gap-2 flex-wrap">
+            <span className="text-success">
+                {(inst.in_library || 0).toLocaleString()} in library
+            </span>
+            {(inst.missing || 0) > 0 && (
+                <span className="text-warning">{inst.missing.toLocaleString()} missing</span>
+            )}
+            {(inst.upcoming || 0) > 0 && (
+                <span className="text-fg-muted">{inst.upcoming.toLocaleString()} upcoming</span>
+            )}
+        </span>
+    );
+    const monitoredSub = n =>
+        n ? (
+            <span className="font-mono text-xs text-fg-muted">{n.toLocaleString()} monitored</span>
+        ) : null;
+
+    const metrics = [];
+    if (inst.source === 'sonarr') {
+        if (inst.show_count)
+            metrics.push({
+                key: 'series',
+                label: 'Series',
+                value: inst.show_count,
+                sub: monitoredSub(inst.monitored_shows),
+            });
+        if (inst.season_count)
+            metrics.push({ key: 'seasons', label: 'Seasons', value: inst.season_count });
+        metrics.push({
+            key: 'episodes',
+            label: 'Episodes',
+            value: inst.units,
+            sub: healthSub,
+            bar: pct,
+        });
+    } else if (inst.source === 'lidarr') {
+        if (inst.artist_count)
+            metrics.push({
+                key: 'artists',
+                label: 'Artists',
+                value: inst.artist_count,
+                sub: monitoredSub(inst.monitored_artists),
+            });
+        metrics.push({
+            key: 'albums',
+            label: 'Albums',
+            value: inst.units,
+            sub: healthSub,
+            bar: pct,
+        });
+    } else if (!isPlex) {
+        metrics.push({
+            key: 'movies',
+            label: 'Movies',
+            value: inst.units,
+            sub: healthSub,
+            bar: pct,
+        });
+    }
+
     return (
-        <div
-            className="p-4 rounded-lg bg-surface border border-border flex flex-col"
-            title={
-                hasMissing
-                    ? `${missing} monitored item${missing !== 1 ? 's' : ''} with no file yet`
-                    : undefined
-            }
-        >
-            <p className="text-sm font-medium text-fg mb-2 flex items-center gap-2 capitalize">
-                <span className="truncate">{title}</span>
-                {badge && (
-                    <span
-                        className="uppercase tracking-wider px-1.5 py-0.5 rounded bg-surface-alt text-fg-subtle shrink-0"
-                        style={{ fontSize: '10px' }}
-                    >
-                        {badge}
+        <div className="rounded-xl bg-surface border border-warning/30 px-[18px] py-[15px]">
+            <div className="flex items-start gap-4">
+                <div className="w-[150px] shrink-0 min-w-0">
+                    <span className="font-display text-[15px] font-semibold text-fg truncate">
+                        {inst.instance_name}
                     </span>
-                )}
-            </p>
-            <div className="flex items-baseline gap-3 flex-wrap">
-                <span className="font-mono text-2xl font-bold text-fg">
-                    {primary.toLocaleString()}
-                </span>
-                {container ? (
-                    <span className="font-mono text-sm text-fg-muted">
-                        {monitored.toLocaleString()} monitored
-                    </span>
+                </div>
+
+                {isPlex ? (
+                    <div className="flex-1 min-w-0 flex flex-col gap-2">
+                        <Metric label="Items" value={inst.total || 0} />
+                        <BreakdownBars items={inst.libraries || []} labelKey="library_name" />
+                    </div>
                 ) : (
-                    <>
-                        <span className="font-mono text-sm text-success">
-                            {inLibrary.toLocaleString()} in library
-                        </span>
-                        {hasMissing && (
-                            <span className="font-mono text-sm text-warning">
-                                {missing.toLocaleString()} missing
-                            </span>
-                        )}
-                        {upcoming > 0 && (
-                            <span className="font-mono text-sm text-fg-muted">
-                                {upcoming.toLocaleString()} upcoming
-                            </span>
-                        )}
-                    </>
+                    <div className="flex-1 flex flex-wrap items-start gap-x-10 gap-y-3 min-w-0">
+                        {metrics.map(m => (
+                            <Metric
+                                key={m.key}
+                                label={m.label}
+                                value={m.value}
+                                sub={m.sub}
+                                bar={m.bar}
+                            />
+                        ))}
+                    </div>
+                )}
+
+                {synced && (
+                    <span className="hidden sm:block text-xs text-fg-subtle shrink-0 whitespace-nowrap">
+                        {synced}
+                    </span>
                 )}
             </div>
-            {!container && (monitored > 0 || inLibrary > 0) && (
-                <div className="mt-2 h-1.5 bg-border rounded-full overflow-hidden">
-                    <div
-                        className="h-full rounded-full transition-all bg-success"
-                        style={{ width: `${Math.max(2, pct)}%` }}
-                    />
-                </div>
-            )}
-            <p className="text-xs text-fg-subtle mt-2" style={{ minHeight: '1rem' }}>
-                {footer || (container ? ' ' : `${pct}% complete`)}
-            </p>
         </div>
     );
 };
@@ -232,48 +300,6 @@ const BreakdownTabs = ({ stats }) => {
     );
 };
 
-/** Plex section — per-instance library item counts (Plex has no monitored/missing). */
-const PlexSection = ({ plex }) => {
-    const instances = plex?.instances || [];
-    if (instances.length === 0) return null;
-    return (
-        <section>
-            <h3 className="text-lg font-semibold text-fg mb-1">Plex Libraries</h3>
-            <p className="text-sm text-fg-muted mb-3">
-                Item counts per Plex library. Plex tracks presence only — no monitored or missing
-                state.
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {instances.map(inst => (
-                    <div
-                        key={inst.instance_name}
-                        className="p-4 rounded-lg bg-surface border border-border flex flex-col"
-                    >
-                        <p className="text-sm font-medium text-fg mb-2 flex items-center gap-2">
-                            <span className="truncate">{inst.instance_name}</span>
-                            <span
-                                className="uppercase tracking-wider px-1.5 py-0.5 rounded bg-surface-alt text-fg-subtle shrink-0"
-                                style={{ fontSize: '10px' }}
-                            >
-                                plex
-                            </span>
-                        </p>
-                        <span className="text-2xl font-bold text-fg mb-2">
-                            {(inst.total || 0).toLocaleString()}
-                        </span>
-                        <BreakdownBars items={inst.libraries || []} labelKey="library_name" />
-                        {inst.snapshot_age_seconds != null && (
-                            <p className="text-xs text-fg-subtle mt-2">
-                                Synced {formatSecondsAgo(inst.snapshot_age_seconds)}
-                            </p>
-                        )}
-                    </div>
-                ))}
-            </div>
-        </section>
-    );
-};
-
 /** Recently Added — newest library items by first-seen time (created_at).
  *  Populates going forward only; pre-existing items have no first-seen stamp. */
 const RecentlyAdded = ({ data }) => {
@@ -328,33 +354,62 @@ const RecentlyAdded = ({ data }) => {
     );
 };
 
-/** Order both columns by the same service sequence (Radarr → Sonarr → Lidarr)
- *  so each type card sits in the same vertical region as its instance. */
-const TYPE_RANK = { movie: 0, show: 1, artist: 2, album: 3 };
-const SOURCE_RANK = { radarr: 0, sonarr: 1, lidarr: 2 };
+/** Fallback service order if the /instances/types endpoint is unavailable —
+ *  matches the Instances page default (Plex first). */
+const FALLBACK_ORDER = ['plex', 'radarr', 'sonarr', 'lidarr'];
+const TYPE_LABEL = { plex: 'Plex', radarr: 'Radarr', sonarr: 'Sonarr', lidarr: 'Lidarr' };
 
 const MediaStatsPage = () => {
     const { data: statsData, isLoading } = useApiData({
         apiFunction: mediaAPI.fetchDetailedStatistics,
         options: { showErrorToast: false },
     });
+    // Same source the Instances page orders by, so the two never drift.
+    const { data: typesData } = useApiData({
+        apiFunction: instancesAPI.fetchSupportedTypes,
+        options: { showErrorToast: false },
+    });
 
     const stats = useMemo(() => statsData?.data || {}, [statsData]);
-    const byType = useMemo(
-        () =>
-            [...(stats.by_type || [])].sort(
-                (a, b) => (TYPE_RANK[a.asset_type] ?? 99) - (TYPE_RANK[b.asset_type] ?? 99)
-            ),
-        [stats]
-    );
-    const byInstance = useMemo(
-        () =>
-            [...(stats.by_instance || [])].sort((a, b) => {
-                const r = (SOURCE_RANK[a.source] ?? 99) - (SOURCE_RANK[b.source] ?? 99);
-                return r !== 0 ? r : (a.instance_name || '').localeCompare(b.instance_name || '');
-            }),
-        [stats]
-    );
+
+    const orderRank = useMemo(() => {
+        const types = typesData?.data?.types || typesData?.data;
+        const names = Array.isArray(types)
+            ? types.map(t => (typeof t === 'string' ? t : t.name || t.type))
+            : FALLBACK_ORDER;
+        const rank = {};
+        names.forEach((n, i) => {
+            if (n) rank[String(n).toLowerCase()] = i;
+        });
+        return rank;
+    }, [typesData]);
+
+    // One list: *arr instances (library-health) + Plex instances (item counts),
+    // ordered like the Instances page, then by name within a service.
+    const instances = useMemo(() => {
+        const arr = stats.by_instance || [];
+        const plex = (stats.plex?.instances || []).map(r => ({ ...r, source: 'plex' }));
+        return [...arr, ...plex].sort((a, b) => {
+            const ra = orderRank[a.source] ?? 99;
+            const rb = orderRank[b.source] ?? 99;
+            return ra !== rb
+                ? ra - rb
+                : (a.instance_name || '').localeCompare(b.instance_name || '');
+        });
+    }, [stats, orderRank]);
+
+    // Group instances by service type, in Instances-page order; a type's
+    // instances (e.g. radarr + radarr4k) become consecutive rows in its group.
+    const instanceGroups = useMemo(() => {
+        const groups = {};
+        for (const inst of instances) {
+            (groups[inst.source] ||= []).push(inst);
+        }
+        return Object.entries(groups).sort(
+            (a, b) => (orderRank[a[0]] ?? 99) - (orderRank[b[0]] ?? 99)
+        );
+    }, [instances, orderRank]);
+
     const monitored = useMemo(() => stats.monitored || {}, [stats]);
 
     const monitoredCount = monitored.monitored || 0;
@@ -408,80 +463,27 @@ const MediaStatsPage = () => {
                 <StatCard label="Upcoming" value={upcoming} subtext="monitored, not released yet" />
             </div>
 
-            {/* Recently Added */}
-            <RecentlyAdded data={stats.recently_added} />
-
-            {/* By type + By instance — two columns, both ordered by service so
-                each type aligns with its instance(s). */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
-                {byType.length > 0 && (
-                    <section>
-                        <h3 className="font-display text-lg font-semibold text-fg mb-3">By type</h3>
-                        <div className="grid grid-cols-1 gap-3">
-                            {byType.flatMap(row => {
-                                const badge = `${row.instances} instance${
-                                    row.instances !== 1 ? 's' : ''
-                                }`;
-                                // Sonarr covers Series AND Episodes — render both,
-                                // parallel to Lidarr's artist + album cards.
-                                if (row.asset_type === 'show') {
-                                    return [
-                                        <HealthCard
-                                            key="series"
-                                            title="series"
-                                            badge={badge}
-                                            container
-                                            row={{
-                                                total: row.show_count,
-                                                monitored: row.monitored_shows,
-                                            }}
-                                            footer={`${(row.season_count || 0).toLocaleString()} seasons`}
-                                        />,
-                                        <HealthCard key="episodes" title="episodes" row={row} />,
-                                    ];
-                                }
-                                return [
-                                    <HealthCard
-                                        key={row.asset_type}
-                                        title={row.asset_type}
-                                        badge={badge}
-                                        row={row}
-                                        container={row.asset_type === 'artist'}
-                                    />,
-                                ];
-                            })}
-                        </div>
-                    </section>
-                )}
-                {byInstance.length > 0 && (
-                    <section>
-                        <h3 className="font-display text-lg font-semibold text-fg mb-3">
-                            By instance
-                        </h3>
-                        <div className="grid grid-cols-1 gap-3">
-                            {byInstance.map(row => (
-                                <HealthCard
-                                    key={`${row.instance_name}:${row.source || ''}`}
-                                    title={row.instance_name}
-                                    badge={row.source}
-                                    row={row}
-                                    footer={
-                                        row.snapshot_age_seconds != null
-                                            ? `Synced ${formatSecondsAgo(row.snapshot_age_seconds)}`
-                                            : undefined
-                                    }
-                                />
-                            ))}
-                        </div>
-                    </section>
-                )}
-            </div>
+            {/* By instance — grouped by service (Instances-page order), each a
+                vertical list of full-width rows. */}
+            {instanceGroups.map(([type, insts]) => (
+                <section key={type}>
+                    <h3 className="font-display text-[17px] font-semibold text-fg mb-3 flex items-center gap-2">
+                        <ServiceIcon service={type} size="medium" />
+                        {TYPE_LABEL[type] || type}
+                    </h3>
+                    <div className="flex flex-col gap-3">
+                        {insts.map(inst => (
+                            <InstanceRow key={`${inst.source}:${inst.instance_name}`} inst={inst} />
+                        ))}
+                    </div>
+                </section>
+            ))}
 
             {/* Breakdowns */}
             <BreakdownTabs stats={stats} />
 
-            {/* Plex */}
-            <PlexSection plex={stats.plex} />
+            {/* Recently Added */}
+            <RecentlyAdded data={stats.recently_added} />
         </div>
     );
 };
