@@ -19,26 +19,25 @@ const StatCard = ({ label, value, subtext, color = 'text-fg' }) => (
     </div>
 );
 
-/** Completeness % for a health row: of monitored items, how many have their file.
- *  Falls back to in-library/total when nothing is monitored (e.g. all unmonitored). */
+/** Completeness %: of the acquirable units (have + still-missing), how many are
+ *  present. Counted in content units (episodes/movies/albums); upcoming units
+ *  aren't acquirable yet so they're excluded. */
 const completenessPct = row => {
-    // Of the RELEASED monitored items (upcoming aren't acquirable yet), how
-    // many are present.
-    const released = (row.monitored || 0) - (row.upcoming || 0);
-    const missing = row.missing || 0;
-    if (released > 0) return Math.round(((released - missing) / released) * 100);
-    const total = row.total || 0;
-    return total > 0 ? Math.round(((row.in_library || 0) / total) * 100) : 0;
+    const have = row.in_library || 0;
+    const denom = have + (row.missing || 0);
+    return denom > 0 ? Math.round((have / denom) * 100) : 100;
 };
 
-/** Per-type / per-instance library-health card. ``container`` rows (e.g. Lidarr
- *  artists) have no per-item file state — their children carry it — so they show
- *  just total + monitored. */
+/** Per-type / per-instance library-health card. Content rows show numbers in
+ *  units (episodes for Sonarr, movies/albums elsewhere). ``container`` rows
+ *  (Lidarr artists) have no per-item file state — their children carry it — so
+ *  they show just the row count + monitored. */
 const HealthCard = ({ title, badge, row, footer, container = false }) => {
     const missing = row.missing || 0;
     const upcoming = row.upcoming || 0;
     const inLibrary = row.in_library || 0;
     const monitored = row.monitored || 0;
+    const primary = container ? row.total || 0 : row.units || 0;
     const pct = completenessPct(row);
     const hasMissing = missing > 0;
     return (
@@ -63,7 +62,7 @@ const HealthCard = ({ title, badge, row, footer, container = false }) => {
             </p>
             <div className="flex items-baseline gap-3 flex-wrap">
                 <span className="font-mono text-2xl font-bold text-fg">
-                    {(row.total || 0).toLocaleString()}
+                    {primary.toLocaleString()}
                 </span>
                 {container ? (
                     <span className="font-mono text-sm text-fg-muted">
@@ -403,10 +402,17 @@ const MediaStatsPage = () => {
                             {byType.map(row => (
                                 <HealthCard
                                     key={row.asset_type}
-                                    title={row.asset_type}
+                                    title={row.asset_type === 'show' ? 'episodes' : row.asset_type}
                                     badge={`${row.instances} instance${row.instances !== 1 ? 's' : ''}`}
                                     row={row}
                                     container={row.asset_type === 'artist'}
+                                    footer={
+                                        row.asset_type === 'show'
+                                            ? `${(row.show_count || 0).toLocaleString()} shows · ${(
+                                                  row.season_count || 0
+                                              ).toLocaleString()} seasons`
+                                            : undefined
+                                    }
                                 />
                             ))}
                         </div>
