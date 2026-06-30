@@ -189,7 +189,13 @@ class MediaCache(DatabaseBase):
         record = {k: item.get(k) for k in required_keys}
         record["asset_type"] = asset_type
         record["instance_name"] = instance_name
-        record["source"] = instance_type
+        # source == lowercase service type (must match sync_state.scope and
+        # /instances/types). Normalize here so no caller can store it
+        # title-cased — the webhook path passed "Sonarr", which nulled the
+        # freshness lookup and broke the by-instance type labels/order.
+        record["source"] = (
+            instance_type.lower() if isinstance(instance_type, str) else instance_type
+        )
         if asset_type == "movie":
             record["season_number"] = None
 
@@ -308,7 +314,7 @@ class MediaCache(DatabaseBase):
                 record["season_number"],
                 0,
                 instance_name,
-                instance_type,
+                record["source"],
                 record.get("poster_url") or None,
                 record.get("arr_id") or None,
                 record.get("status") or None,
