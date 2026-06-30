@@ -555,6 +555,8 @@ class Connector:
                     # album's own track-file presence (set in arr normalize), so
                     # each album row reflects whether *that* album is on disk.
                     album_row["has_content"] = season.get("has_content")
+                    # Per-album release date drives missing-vs-upcoming in stats.
+                    album_row["release_date"] = season.get("release_date")
                     # Album titles don't share the artist's alternate titles.
                     album_row["alternate_titles"] = None
                     album_row["normalized_alternate_titles"] = None
