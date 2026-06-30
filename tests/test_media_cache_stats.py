@@ -135,8 +135,12 @@ def _season(title, season_number, files, aired, total, monitored=True):
 def _seed_show(db):
     # One show: container row + 3 season rows with episode counts.
     db.media.upsert(_item("Test Show", season_number=None), "show", "sonarr", "sonarr")
-    db.media.upsert(_season("Test Show", 1, 8, 10, 10), "show", "sonarr", "sonarr")  # 2 missing
-    db.media.upsert(_season("Test Show", 2, 4, 4, 10), "show", "sonarr", "sonarr")  # 6 upcoming
+    db.media.upsert(
+        _season("Test Show", 1, 8, 10, 10), "show", "sonarr", "sonarr"
+    )  # 2 missing
+    db.media.upsert(
+        _season("Test Show", 2, 4, 4, 10), "show", "sonarr", "sonarr"
+    )  # 6 upcoming
     db.media.upsert(
         _season("Test Show", 0, 2, 5, 5, monitored=False), "show", "sonarr", "sonarr"
     )  # unmonitored
@@ -152,6 +156,7 @@ def test_show_stats_are_episode_level(db):
     assert show["upcoming"] == 6  # S2 not-yet-aired; S0 unmonitored
     assert show["total"] == 4  # rows: 1 container + 3 seasons
     assert show["show_count"] == 1
+    assert show["monitored_shows"] == 1  # the container row is monitored
     assert show["season_count"] == 3
 
 
