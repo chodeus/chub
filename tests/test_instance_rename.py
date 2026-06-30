@@ -17,6 +17,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 from backend.api import instances as inst  # noqa: E402
 from backend.api.instances import _rename_config_instance_refs  # noqa: E402
 from backend.util.config import (  # noqa: E402
+    REDACTED_PLACEHOLDER,
     ChubConfig,
     InstanceDetail,
     LabelarrMapping,
@@ -191,3 +192,42 @@ def test_rename_endpoint_end_to_end(db, monkeypatch):
     }
     assert ("sonarr", "Sonarr") in rows
     assert not any(name == "sonarr" for _, name in rows)
+
+
+def test_test_endpoint_resolves_redacted_key_by_url_on_rename(monkeypatch):
+    # Renaming sends the new name + the redacted key. The stored key must still
+    # resolve (by URL, since the new name isn't in config yet) so the *arr isn't
+    # tested with the literal placeholder and 401s ("Authentication required").
+    cfg = ChubConfig()
+    cfg.instances.sonarr["sonarr"] = InstanceDetail(url="http://s:8989", api="REALKEY")
+    monkeypatch.setattr(inst, "load_config", lambda: cfg)
+    monkeypatch.setattr("backend.util.ssrf_guard.is_safe_url", lambda u: (True, ""))
+
+    captured = {}
+
+    class _Resp:
+        ok = True
+        status_code = 200
+
+    def fake_get(url, headers=None, timeout=None):
+        captured["headers"] = headers or {}
+        return _Resp()
+
+    monkeypatch.setattr(inst.requests, "get", fake_get)
+
+    app = FastAPI()
+    app.state.logger = StubLogger()
+    app.state.db = None
+    app.include_router(inst.router)
+
+    resp = TestClient(app).post(
+        "/api/instances/test",
+        json={
+            "service": "sonarr",
+            "name": "Sonarr",  # new name, not yet in config
+            "url": "http://s:8989",
+            "api": REDACTED_PLACEHOLDER,
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    assert captured["headers"].get("X-Api-Key") == "REALKEY"
