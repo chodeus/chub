@@ -2096,6 +2096,10 @@ def normalize_arr_media(
                             album_stats.get("trackFileCount")
                             or album_stats.get("sizeOnDisk")
                         ),
+                        # ISO date portion of the album's releaseDate — gates
+                        # "missing" vs "upcoming" in stats (a future album isn't
+                        # missing, it's not out yet). None when Lidarr has no date.
+                        "release_date": (album.get("releaseDate") or "")[:10] or None,
                         "episode_data": [],  # Albums don't have sub-items to search
                     }
                 )

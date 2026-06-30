@@ -6,6 +6,37 @@ from backend.util.normalization import normalize_titles
 
 from .db_base import DatabaseBase
 
+# Library-health SQL fragments, shared across the stats queries so by_type,
+# totals and by_instance can't drift.
+#   in_library = the item's file(s) are present (has_content)
+#   missing    = monitored, no file, AND released — the real "go get it" count
+#   upcoming   = monitored, no file, but NOT released yet (future album / an
+#                announced/upcoming movie or show) — wanted, just not out
+# "released" gates missing so unreleased items aren't miscounted: Lidarr albums
+# use their own release_date (absent = treat as released), everything else uses
+# the *arr `status` (mirrors release_readiness.UNRELEASED_STATUSES). Artist rows
+# are containers, not content units, so they're excluded from in_library /
+# missing / upcoming (their albums carry the signal) — this keeps the per-
+# instance "missing" aligned with Lidarr's album-level wanted/missing. Artists
+# still count toward total + monitored.
+_RELEASED_SQL = (
+    "CASE WHEN asset_type='album' "
+    "THEN (release_date IS NULL OR release_date <= date('now')) "
+    "ELSE (status IS NULL OR status NOT IN "
+    "('announced','deleted','tba','upcoming')) END"
+)
+_NOT_ARTIST = "asset_type != 'artist'"
+_IN_LIBRARY_SQL = f"SUM(CASE WHEN has_content=1 AND {_NOT_ARTIST} THEN 1 ELSE 0 END)"
+_MISSING_SQL = (
+    "SUM(CASE WHEN monitored=1 AND COALESCE(has_content,0)=0 "
+    f"AND {_NOT_ARTIST} AND {_RELEASED_SQL} THEN 1 ELSE 0 END)"
+)
+_UPCOMING_SQL = (
+    "SUM(CASE WHEN monitored=1 AND COALESCE(has_content,0)=0 "
+    f"AND {_NOT_ARTIST} AND NOT ({_RELEASED_SQL}) THEN 1 ELSE 0 END)"
+)
+_MONITORED_SQL = "SUM(CASE WHEN monitored=1 THEN 1 ELSE 0 END)"
+
 
 class MediaCache(DatabaseBase):
     """
@@ -116,6 +147,7 @@ class MediaCache(DatabaseBase):
             "language",
             "monitored",
             "has_content",
+            "release_date",
             "genre",
         ]
         record = {k: item.get(k) for k in required_keys}
@@ -169,9 +201,10 @@ class MediaCache(DatabaseBase):
                 parent_musicbrainz_id, parent_title,
                 folder, root_folder, media_file, tags,
                 season_number, matched, instance_name, source, poster_url, arr_id,
-                status, rating, studio, edition, runtime, language, monitored, has_content, genre,
+                status, rating, studio, edition, runtime, language, monitored, has_content,
+                release_date, genre,
                 created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                 CURRENT_TIMESTAMP)
             ON CONFLICT(identity_key)
             DO UPDATE SET
@@ -206,6 +239,7 @@ class MediaCache(DatabaseBase):
                 language=excluded.language,
                 monitored=excluded.monitored,
                 has_content=excluded.has_content,
+                release_date=excluded.release_date,
                 genre=excluded.genre
                 -- Preserve: matched, original_file, renamed_file, file_hash, plex_mapping_id,
                 -- created_at (stamped once on first insert = first-seen time; re-syncs
@@ -244,6 +278,7 @@ class MediaCache(DatabaseBase):
                 record.get("language") or None,
                 record.get("monitored", True),  # Default to True if not specified
                 int(bool(record.get("has_content", True))),
+                record.get("release_date") or None,
                 record.get("genre") or None,
             ),
         )
@@ -883,22 +918,16 @@ class MediaCache(DatabaseBase):
         where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
         params = tuple(params)
 
-        # Library-health metrics (NOT poster matching):
-        #   in_library = item's file is present (has_content)
-        #   missing    = monitored but no file yet — the real "still need" count
-        #   monitored  = tracked by the *arr
-        # has_content is derived from file presence per asset type: hasFile
-        # (movies), episodeFileCount (show seasons), and trackFileCount /
-        # sizeOnDisk (Lidarr artists + albums). A row with no files present is
-        # therefore counted as missing only when it is also monitored.
+        # Library-health metrics — see the module-level _*_SQL fragments.
         rows = (
             self.execute_query(
                 f"""
                 SELECT asset_type,
                        COUNT(*) as total,
-                       SUM(CASE WHEN has_content=1 THEN 1 ELSE 0 END) as in_library,
-                       SUM(CASE WHEN monitored=1 AND COALESCE(has_content,0)=0 THEN 1 ELSE 0 END) as missing,
-                       SUM(CASE WHEN monitored=1 THEN 1 ELSE 0 END) as monitored,
+                       {_IN_LIBRARY_SQL} as in_library,
+                       {_MISSING_SQL} as missing,
+                       {_UPCOMING_SQL} as upcoming,
+                       {_MONITORED_SQL} as monitored,
                        COUNT(DISTINCT instance_name) as instances
                 FROM media_cache {where}
                 GROUP BY asset_type
@@ -912,9 +941,10 @@ class MediaCache(DatabaseBase):
         totals = self.execute_query(
             f"""
             SELECT COUNT(*) as total,
-                   SUM(CASE WHEN has_content=1 THEN 1 ELSE 0 END) as in_library,
-                   SUM(CASE WHEN monitored=1 AND COALESCE(has_content,0)=0 THEN 1 ELSE 0 END) as missing,
-                   SUM(CASE WHEN monitored=1 THEN 1 ELSE 0 END) as monitored
+                   {_IN_LIBRARY_SQL} as in_library,
+                   {_MISSING_SQL} as missing,
+                   {_UPCOMING_SQL} as upcoming,
+                   {_MONITORED_SQL} as monitored
             FROM media_cache {where}
             """,
             params,
@@ -926,6 +956,7 @@ class MediaCache(DatabaseBase):
             "total": totals["total"] if totals else 0,
             "in_library": (totals["in_library"] or 0) if totals else 0,
             "missing": (totals["missing"] or 0) if totals else 0,
+            "upcoming": (totals["upcoming"] or 0) if totals else 0,
             "monitored": (totals["monitored"] or 0) if totals else 0,
         }
 
@@ -952,9 +983,10 @@ class MediaCache(DatabaseBase):
         by_instance = (
             self.execute_query(
                 f"""SELECT instance_name, source, COUNT(*) as total,
-                       SUM(CASE WHEN has_content=1 THEN 1 ELSE 0 END) as in_library,
-                       SUM(CASE WHEN monitored=1 AND COALESCE(has_content,0)=0 THEN 1 ELSE 0 END) as missing,
-                       SUM(CASE WHEN monitored=1 THEN 1 ELSE 0 END) as monitored
+                       {_IN_LIBRARY_SQL} as in_library,
+                       {_MISSING_SQL} as missing,
+                       {_UPCOMING_SQL} as upcoming,
+                       {_MONITORED_SQL} as monitored
                 FROM media_cache {where}
                 GROUP BY instance_name, source ORDER BY total DESC""",
                 params,

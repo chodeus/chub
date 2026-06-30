@@ -143,9 +143,7 @@ class SchemaManager:
                 # Stamped on every upsert; lets callers judge cache freshness
                 # (TTL guard) before deciding to re-walk Plex. Additive default
                 # so it auto-migrates on existing databases.
-                ColumnDefinition(
-                    "updated_at", "TEXT", default="CURRENT_TIMESTAMP"
-                ),
+                ColumnDefinition("updated_at", "TEXT", default="CURRENT_TIMESTAMP"),
             ],
             constraints=["UNIQUE (plex_id, instance_name)"],
         )
@@ -218,6 +216,11 @@ class SchemaManager:
                 # No default — rows that predate this column read as NULL
                 # and rely on the *arr `status` field as a fallback gate.
                 ColumnDefinition("genre", "TEXT"),  # JSON array of genres
+                ColumnDefinition(
+                    "release_date", "TEXT"
+                ),  # ISO date (YYYY-MM-DD) — Lidarr album release date; gates
+                # "missing" vs "upcoming" in Library Statistics. NULL = treat
+                # as released (pre-column rows / non-album types).
                 ColumnDefinition(
                     "created_at", "TEXT"
                 ),  # ISO timestamp when item was first cached
@@ -800,9 +803,7 @@ class SchemaManager:
             columns=[
                 ColumnDefinition("scope", "TEXT", nullable=False),
                 ColumnDefinition("instance_name", "TEXT", nullable=False),
-                ColumnDefinition(
-                    "synced_at", "TEXT", default="CURRENT_TIMESTAMP"
-                ),
+                ColumnDefinition("synced_at", "TEXT", default="CURRENT_TIMESTAMP"),
             ],
             constraints=["PRIMARY KEY (scope, instance_name)"],
         )
