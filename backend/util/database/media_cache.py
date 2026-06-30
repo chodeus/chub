@@ -64,6 +64,10 @@ _MONITORED_SHOWS_SQL = (
 _SEASON_COUNT_SQL = (
     "SUM(CASE WHEN asset_type='show' AND season_number IS NOT NULL THEN 1 ELSE 0 END)"
 )
+_ARTIST_COUNT_SQL = "SUM(CASE WHEN asset_type='artist' THEN 1 ELSE 0 END)"
+_MONITORED_ARTISTS_SQL = (
+    "SUM(CASE WHEN asset_type='artist' AND monitored=1 THEN 1 ELSE 0 END)"
+)
 
 
 class MediaCache(DatabaseBase):
@@ -1033,7 +1037,12 @@ class MediaCache(DatabaseBase):
                        {_IN_LIBRARY_SQL} as in_library,
                        {_MISSING_SQL} as missing,
                        {_UPCOMING_SQL} as upcoming,
-                       {_MONITORED_SQL} as monitored
+                       {_MONITORED_SQL} as monitored,
+                       {_SHOW_COUNT_SQL} as show_count,
+                       {_MONITORED_SHOWS_SQL} as monitored_shows,
+                       {_SEASON_COUNT_SQL} as season_count,
+                       {_ARTIST_COUNT_SQL} as artist_count,
+                       {_MONITORED_ARTISTS_SQL} as monitored_artists
                 FROM media_cache {where}
                 GROUP BY instance_name, source ORDER BY total DESC""",
                 params,
