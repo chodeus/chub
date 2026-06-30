@@ -42,7 +42,7 @@ const HealthCard = ({ title, badge, row, footer, container = false }) => {
     const hasMissing = missing > 0;
     return (
         <div
-            className={`p-4 rounded-lg bg-surface border ${hasMissing ? 'border-warning/30' : 'border-border'} flex flex-col`}
+            className="p-4 rounded-lg bg-surface border border-border flex flex-col"
             title={
                 hasMissing
                     ? `${missing} monitored item${missing !== 1 ? 's' : ''} with no file yet`
@@ -328,6 +328,11 @@ const RecentlyAdded = ({ data }) => {
     );
 };
 
+/** Order both columns by the same service sequence (Radarr → Sonarr → Lidarr)
+ *  so each type card sits in the same vertical region as its instance. */
+const TYPE_RANK = { movie: 0, show: 1, album: 2, artist: 3 };
+const SOURCE_RANK = { radarr: 0, sonarr: 1, lidarr: 2 };
+
 const MediaStatsPage = () => {
     const { data: statsData, isLoading } = useApiData({
         apiFunction: mediaAPI.fetchDetailedStatistics,
@@ -335,8 +340,21 @@ const MediaStatsPage = () => {
     });
 
     const stats = useMemo(() => statsData?.data || {}, [statsData]);
-    const byType = useMemo(() => stats.by_type || [], [stats]);
-    const byInstance = useMemo(() => stats.by_instance || [], [stats]);
+    const byType = useMemo(
+        () =>
+            [...(stats.by_type || [])].sort(
+                (a, b) => (TYPE_RANK[a.asset_type] ?? 99) - (TYPE_RANK[b.asset_type] ?? 99)
+            ),
+        [stats]
+    );
+    const byInstance = useMemo(
+        () =>
+            [...(stats.by_instance || [])].sort((a, b) => {
+                const r = (SOURCE_RANK[a.source] ?? 99) - (SOURCE_RANK[b.source] ?? 99);
+                return r !== 0 ? r : (a.instance_name || '').localeCompare(b.instance_name || '');
+            }),
+        [stats]
+    );
     const monitored = useMemo(() => stats.monitored || {}, [stats]);
 
     const monitoredCount = monitored.monitored || 0;
@@ -393,9 +411,10 @@ const MediaStatsPage = () => {
             {/* Recently Added */}
             <RecentlyAdded data={stats.recently_added} />
 
-            {/* By type + Breakdowns (side by side) */}
+            {/* By type + By instance — two columns, both ordered by service so
+                each type aligns with its instance(s). */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
-                {byType.length > 0 ? (
+                {byType.length > 0 && (
                     <section>
                         <h3 className="font-display text-lg font-semibold text-fg mb-3">By type</h3>
                         <div className="grid grid-cols-1 gap-3">
@@ -433,33 +452,33 @@ const MediaStatsPage = () => {
                             })}
                         </div>
                     </section>
-                ) : (
-                    <div />
                 )}
-                <BreakdownTabs stats={stats} />
+                {byInstance.length > 0 && (
+                    <section>
+                        <h3 className="font-display text-lg font-semibold text-fg mb-3">
+                            By instance
+                        </h3>
+                        <div className="grid grid-cols-1 gap-3">
+                            {byInstance.map(row => (
+                                <HealthCard
+                                    key={`${row.instance_name}:${row.source || ''}`}
+                                    title={row.instance_name}
+                                    badge={row.source}
+                                    row={row}
+                                    footer={
+                                        row.snapshot_age_seconds != null
+                                            ? `Synced ${formatSecondsAgo(row.snapshot_age_seconds)}`
+                                            : undefined
+                                    }
+                                />
+                            ))}
+                        </div>
+                    </section>
+                )}
             </div>
 
-            {/* By Instance */}
-            {byInstance.length > 0 && (
-                <section>
-                    <h3 className="text-lg font-semibold text-fg mb-3">By Instance</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                        {byInstance.map(row => (
-                            <HealthCard
-                                key={`${row.instance_name}:${row.source || ''}`}
-                                title={row.instance_name}
-                                badge={row.source}
-                                row={row}
-                                footer={
-                                    row.snapshot_age_seconds != null
-                                        ? `Synced ${formatSecondsAgo(row.snapshot_age_seconds)}`
-                                        : undefined
-                                }
-                            />
-                        ))}
-                    </div>
-                </section>
-            )}
+            {/* Breakdowns */}
+            <BreakdownTabs stats={stats} />
 
             {/* Plex */}
             <PlexSection plex={stats.plex} />
