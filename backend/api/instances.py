@@ -774,6 +774,21 @@ def test_instance(
             config = load_config()
             service_instances = getattr(config.instances, service, {})
             stored = service_instances.get(name)
+            if not stored:
+                # An edit may be renaming the instance, so the new name isn't in
+                # config yet — the URL is the stable identity, so resolve the
+                # stored key by matching URL. Without this a rename that keeps
+                # the key tests with the literal placeholder and the *arr 401s.
+                target = (url or "").rstrip("/")
+                for inst_cfg in service_instances.values():
+                    inst_url = (
+                        inst_cfg.url
+                        if hasattr(inst_cfg, "url")
+                        else inst_cfg.get("url")
+                    )
+                    if (inst_url or "").rstrip("/") == target:
+                        stored = inst_cfg
+                        break
             if stored:
                 api = stored.api if hasattr(stored, "api") else stored.get("api")
 
