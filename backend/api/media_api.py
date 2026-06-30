@@ -260,7 +260,9 @@ async def get_media_stats_detailed(
         # so the snapshot age is meaningful. *arr freshness comes from sync_state
         # (media_cache has no per-row sync timestamp); None when never synced.
         for row in stats.get("by_instance", []):
-            src = row.get("source")
+            # sync_state.scope is the lowercase service type; older rows stored
+            # source title-cased ("Sonarr"), so lower() it to match.
+            src = (row.get("source") or "").lower()
             name = row.get("instance_name")
             row["snapshot_age_seconds"] = (
                 db.sync_state.age_seconds(src, name) if src and name else None

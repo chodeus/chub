@@ -385,9 +385,14 @@ const MediaStatsPage = () => {
     }, [typesData]);
 
     // One list: *arr instances (library-health) + Plex instances (item counts),
-    // ordered like the Instances page, then by name within a service.
+    // ordered like the Instances page, then by name within a service. Source is
+    // lower-cased because media_cache historically stored it title-cased
+    // ("Sonarr"), which must still match the lowercase order/label keys.
     const instances = useMemo(() => {
-        const arr = stats.by_instance || [];
+        const arr = (stats.by_instance || []).map(r => ({
+            ...r,
+            source: (r.source || '').toLowerCase(),
+        }));
         const plex = (stats.plex?.instances || []).map(r => ({ ...r, source: 'plex' }));
         return [...arr, ...plex].sort((a, b) => {
             const ra = orderRank[a.source] ?? 99;
