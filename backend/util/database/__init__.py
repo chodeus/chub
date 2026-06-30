@@ -307,6 +307,59 @@ class ChubDB:
             )
             raise
 
+    def rename_instance(self, old_name: str, new_name: str, service: str) -> int:
+        """Migrate cached rows from one instance name to another after a config
+        rename, so the rename is invisible to stats/freshness/progress.
+
+        Type-scoped: tables that record the service (media_cache.source,
+        system_health_snapshots.service, sync_state.scope) only have their
+        rows for ``service`` touched, and single-service tables are gated by
+        service — a same-named instance of another service is left untouched.
+        Returns the number of rows migrated.
+        """
+        self._ensure_initialized()
+        if not old_name or not new_name or old_name == new_name:
+            return 0
+
+        # (table, type_column) — type_column None means single-service; which
+        # services those apply to is in single_service below.
+        tables = [
+            ("media_cache", "source"),
+            ("system_health_snapshots", "service"),
+            ("sync_state", "scope"),
+            ("plex_media_cache", None),
+            ("collections_cache", None),
+            ("upgradinatorr_progress", None),
+        ]
+        single_service = {
+            "plex_media_cache": {"plex"},
+            "collections_cache": {"plex"},
+            "upgradinatorr_progress": {"radarr", "sonarr"},
+        }
+
+        total = 0
+        for table, type_col in tables:
+            allowed = single_service.get(table)
+            if allowed is not None and service not in allowed:
+                continue
+            if type_col:
+                sql = (
+                    f"UPDATE {table} SET instance_name = ? "  # noqa: S608 (table is a fixed literal)
+                    f"WHERE instance_name = ? AND {type_col} = ?"
+                )
+                params: tuple = (new_name, old_name, service)
+            else:
+                sql = f"UPDATE {table} SET instance_name = ? WHERE instance_name = ?"  # noqa: S608
+                params = (new_name, old_name)
+            total += self.media.execute_query(sql, params) or 0
+
+        if not self.quiet:
+            self.logger.get_adapter("DATABASE").info(
+                f"rename_instance: migrated {total} cached row(s) from "
+                f"'{old_name}' to '{new_name}' ({service})"
+            )
+        return total
+
     def close(self) -> None:
         """
         Manually close the database context.
