@@ -115,6 +115,8 @@ def test_by_instance_lidarr_excludes_artists(db):
     assert lidarr["missing"] == 2
     assert lidarr["upcoming"] == 1
     assert lidarr["in_library"] == 1
+    # Container count surfaced per-instance for the row's "N artists" stat.
+    assert lidarr["artist_count"] == 2
 
 
 # --- Sonarr: episode-level units (seasons expand to episodes) ---
@@ -168,6 +170,9 @@ def test_show_by_instance_episode_level(db):
     assert son["in_library"] == 14
     assert son["missing"] == 2
     assert son["upcoming"] == 6
+    # Container counts surfaced per-instance for the row's series/seasons stats.
+    assert son["show_count"] == 1
+    assert son["season_count"] == 3
 
 
 def test_missing_excludes_unmonitored_artist_albums(db):
