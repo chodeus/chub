@@ -330,7 +330,7 @@ const RecentlyAdded = ({ data }) => {
 
 /** Order both columns by the same service sequence (Radarr → Sonarr → Lidarr)
  *  so each type card sits in the same vertical region as its instance. */
-const TYPE_RANK = { movie: 0, show: 1, album: 2, artist: 3 };
+const TYPE_RANK = { movie: 0, show: 1, artist: 2, album: 3 };
 const SOURCE_RANK = { radarr: 0, sonarr: 1, lidarr: 2 };
 
 const MediaStatsPage = () => {
