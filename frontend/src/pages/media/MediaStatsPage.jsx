@@ -399,22 +399,38 @@ const MediaStatsPage = () => {
                     <section>
                         <h3 className="font-display text-lg font-semibold text-fg mb-3">By type</h3>
                         <div className="grid grid-cols-1 gap-3">
-                            {byType.map(row => (
-                                <HealthCard
-                                    key={row.asset_type}
-                                    title={row.asset_type === 'show' ? 'episodes' : row.asset_type}
-                                    badge={`${row.instances} instance${row.instances !== 1 ? 's' : ''}`}
-                                    row={row}
-                                    container={row.asset_type === 'artist'}
-                                    footer={
-                                        row.asset_type === 'show'
-                                            ? `${(row.show_count || 0).toLocaleString()} shows · ${(
-                                                  row.season_count || 0
-                                              ).toLocaleString()} seasons`
-                                            : undefined
-                                    }
-                                />
-                            ))}
+                            {byType.flatMap(row => {
+                                const badge = `${row.instances} instance${
+                                    row.instances !== 1 ? 's' : ''
+                                }`;
+                                // Sonarr covers Series AND Episodes — render both,
+                                // parallel to Lidarr's artist + album cards.
+                                if (row.asset_type === 'show') {
+                                    return [
+                                        <HealthCard
+                                            key="series"
+                                            title="series"
+                                            badge={badge}
+                                            container
+                                            row={{
+                                                total: row.show_count,
+                                                monitored: row.monitored_shows,
+                                            }}
+                                            footer={`${(row.season_count || 0).toLocaleString()} seasons`}
+                                        />,
+                                        <HealthCard key="episodes" title="episodes" row={row} />,
+                                    ];
+                                }
+                                return [
+                                    <HealthCard
+                                        key={row.asset_type}
+                                        title={row.asset_type}
+                                        badge={badge}
+                                        row={row}
+                                        container={row.asset_type === 'artist'}
+                                    />,
+                                ];
+                            })}
                         </div>
                     </section>
                 ) : (
