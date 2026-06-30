@@ -43,6 +43,51 @@ router = APIRouter(
 
 _PLEX_CATALOG_TTL = 300.0
 
+# Config fields that hold an instance-name reference, used to keep module
+# cross-references (upgradinatorr/labelarr/nestarr/renameinatorr/… instance
+# pointers) in sync when an instance is renamed.
+_REF_STR_FIELDS = {"instance", "app_instance", "arr_instance"}
+_REF_LIST_FIELDS = {"instances"}
+
+
+def _rename_config_instance_refs(config: ChubConfig, old: str, new: str) -> int:
+    """Recursively rewrite instance-name references across the config tree so a
+    rename doesn't strand the modules that point at the instance by name.
+
+    Walks pydantic models only; the ``instances`` Dict on InstancesConfig is a
+    mapping (not a list of names) so it's skipped — the key rename is handled by
+    the caller. Returns the number of references updated. The caller must ensure
+    ``old`` is unambiguous (not also another service's instance) before calling,
+    since matching is by exact name across every service's references.
+    """
+
+    def walk(node: Any) -> int:
+        if not isinstance(node, BaseModel):
+            return 0
+        n = 0
+        for fname in type(node).model_fields:
+            val = getattr(node, fname, None)
+            if fname in _REF_STR_FIELDS and isinstance(val, str):
+                if val == old:
+                    setattr(node, fname, new)
+                    n += 1
+            elif (
+                fname in _REF_LIST_FIELDS
+                and isinstance(val, list)
+                and all(isinstance(x, str) for x in val)
+            ):
+                if old in val:
+                    setattr(node, fname, [new if x == old else x for x in val])
+                    n += val.count(old)
+            elif isinstance(val, BaseModel):
+                n += walk(val)
+            elif isinstance(val, list):
+                for item in val:
+                    n += walk(item)
+        return n
+
+    return walk(config)
+
 
 class TestInstanceRequest(BaseModel):
     """Request schema for testing a service instance."""
@@ -940,7 +985,10 @@ async def create_instance(
     },
 )
 async def update_instance(
-    instance_id: str, data: UpdateInstanceRequest, logger: Any = Depends(get_logger)
+    instance_id: str,
+    data: UpdateInstanceRequest,
+    logger: Any = Depends(get_logger),
+    db: ChubDB = Depends(get_database),
 ) -> JSONResponse:
     """
     Update an existing service instance configuration.
@@ -994,7 +1042,8 @@ async def update_instance(
                 api_key = stored.api if hasattr(stored, "api") else stored.get("api")
 
         # Handle renaming: if new name differs from instance_id
-        if new_name != instance_id:
+        renaming = new_name != instance_id
+        if renaming:
             # Check if new name already exists
             if new_name in service_instances:
                 return error(
@@ -1007,6 +1056,24 @@ async def update_instance(
             del service_instances[instance_id]
             logger.info(f"Renaming instance from '{instance_id}' to '{new_name}'")
 
+            # Rewrite module cross-references (upgradinatorr/labelarr/nestarr/…
+            # instance pointers) — but only when the old name is unambiguous, so
+            # a same-named instance of another service isn't caught by the
+            # exact-name rewrite.
+            others = [t for t in ("plex", "radarr", "sonarr", "lidarr") if t != service]
+            if any(instance_id in getattr(config.instances, t) for t in others):
+                logger.warning(
+                    f"'{instance_id}' is also another service's instance name; "
+                    f"skipping config cross-reference rewrite to avoid touching it"
+                )
+            else:
+                refs = _rename_config_instance_refs(config, instance_id, new_name)
+                if refs:
+                    logger.info(
+                        f"Updated {refs} config reference(s) from '{instance_id}' "
+                        f"to '{new_name}'"
+                    )
+
         # Create/update instance with new values
         updated_instance = InstanceDetail(
             url=url,
@@ -1018,6 +1085,20 @@ async def update_instance(
         # Save updated configuration
         save_config(config)
         plex_library_cache.invalidate()
+
+        # Migrate cached DB rows (stats/freshness/progress) to the new name so
+        # the rename is seamless. Config is the source of truth and already
+        # saved, so a migration hiccup is logged but doesn't fail the request
+        # (a re-sync would repopulate under the new name).
+        if renaming:
+            try:
+                migrated = db.rename_instance(instance_id, new_name, service)
+                logger.info(
+                    f"Migrated {migrated} cached row(s) from '{instance_id}' to "
+                    f"'{new_name}'"
+                )
+            except Exception as e:
+                logger.error(f"Cache migration after rename failed: {e}")
 
         logger.info(f"Successfully updated {service} instance: {new_name}")
         return ok(
