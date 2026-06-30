@@ -936,10 +936,24 @@ def strip_redacted_placeholders(incoming: Any, current: Any) -> Any:
                 merged[k] = v
         return merged
     if isinstance(incoming, list) and isinstance(current, list):
-        return [
-            strip_redacted_placeholders(item, current[i] if i < len(current) else None)
-            for i, item in enumerate(incoming)
-        ]
+        # Prefer matching by a stable ``id`` so a reordered/edited secret-bearing
+        # list (e.g. notification destinations) resolves each redacted secret
+        # against the SAME item — not whatever now sits at that position, which
+        # would leak one item's secret onto another. Fall back to positional
+        # matching for id-less lists.
+        current_by_id = {
+            item["id"]: item
+            for item in current
+            if isinstance(item, dict) and item.get("id")
+        }
+        merged_list = []
+        for i, item in enumerate(incoming):
+            if isinstance(item, dict) and item.get("id") in current_by_id:
+                match = current_by_id[item["id"]]
+            else:
+                match = current[i] if i < len(current) else None
+            merged_list.append(strip_redacted_placeholders(item, match))
+        return merged_list
     if incoming == REDACTED_PLACEHOLDER and isinstance(current, str):
         return current  # keep the real secret
     return incoming
