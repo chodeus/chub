@@ -2195,15 +2195,27 @@ def normalize_arr_media(
                     "totalEpisodeCount", 0
                 )
                 season_stats = stats.get("episodeFileCount", 0)
+                # Episode-unit counts for Library Statistics:
+                #   episode_files  = downloaded (on disk)
+                #   aired_episodes = aired/available (Sonarr's episodeCount)
+                #   total_episodes = all incl. unaired (totalEpisodeCount)
+                # missing = aired - downloaded; upcoming = total - aired.
+                aired_episodes = stats.get("episodeCount", 0)
+                total_episodes = stats.get("totalEpisodeCount", 0)
             except Exception:
                 status = False
                 season_stats = 0
+                aired_episodes = 0
+                total_episodes = 0
             season_list.append(
                 {
                     "season_number": season_number,
                     "monitored": season.get("monitored"),
                     "season_pack": status,
                     "season_has_episodes": season_stats,
+                    "episode_files": season_stats,
+                    "aired_episodes": aired_episodes,
+                    "total_episodes": total_episodes,
                     "episode_data": episode_list,
                 }
             )
