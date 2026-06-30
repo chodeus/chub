@@ -128,12 +128,6 @@ export const InstanceCard = ({
                         <span className="font-display text-[15px] font-semibold text-fg truncate">
                             {name}
                         </span>
-                        <span
-                            className="shrink-0 font-mono text-[9px] uppercase tracking-[0.4px] px-1.5 py-0.5 rounded-[5px]"
-                            style={{ color, background: tint }}
-                        >
-                            {serviceType}
-                        </span>
                     </div>
                     <div
                         className="font-mono text-[11.5px] text-fg-data mt-1 truncate"
