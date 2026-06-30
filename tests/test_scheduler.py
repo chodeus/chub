@@ -396,3 +396,45 @@ def test_scheduler_schedule_blocks_merge_overrides_last_wins(monkeypatch):
     assert len(orch.calls) == 1
     _, kwargs = orch.calls[0]
     assert kwargs["overrides"] == {"mode": "remove", "orphan_assets_enabled": True}
+
+
+# --- media_sync scheduled from Instances settings ---
+
+
+def _media_sync_scheduler(enq):
+    """A ChubScheduler whose orchestrator.db.worker records enqueue_job calls."""
+    worker = SimpleNamespace(
+        enqueue_job=lambda table, payload, job_type: (
+            enq.append((table, payload, job_type)) or {"success": True}
+        )
+    )
+    orch = SimpleNamespace(db=SimpleNamespace(worker=worker))
+    sch = object.__new__(ChubScheduler)
+    sch.module_orchestrator = orch
+    sch.logger = None
+    return sch
+
+
+def test_tick_media_sync_enqueues_job_when_due(monkeypatch):
+    """When the Instances-page sync schedule is due, a `media_sync` JOB is
+    enqueued (not a module run) — it logs to General, not a module log."""
+    monkeypatch.setattr(scheduler, "datetime", FixedNow)  # Mon 09:00
+    enq = []
+    _media_sync_scheduler(enq)._tick_media_sync("daily(09:00)")
+    assert any(job_type == "media_sync" for (_t, _p, job_type) in enq)
+
+
+def test_tick_media_sync_skips_when_schedule_empty(monkeypatch):
+    """Empty sync_schedule = disabled — nothing is enqueued."""
+    monkeypatch.setattr(scheduler, "datetime", FixedNow)
+    enq = []
+    _media_sync_scheduler(enq)._tick_media_sync("")
+    assert enq == []
+
+
+def test_tick_media_sync_skips_when_not_due(monkeypatch):
+    """A schedule that doesn't match the current time enqueues nothing."""
+    monkeypatch.setattr(scheduler, "datetime", FixedNow)  # 09:00
+    enq = []
+    _media_sync_scheduler(enq)._tick_media_sync("daily(03:00)")
+    assert enq == []

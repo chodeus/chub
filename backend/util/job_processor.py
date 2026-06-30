@@ -87,6 +87,8 @@ def process_job(job: Dict[str, Any], logger, db: ChubDB = None) -> Dict[str, Any
             return _process_upload_posters_job(payload, logger, job_id, db)
         elif job_type == "module_run":
             return _process_module_run_job(payload, logger, job_id, db)
+        elif job_type == "media_sync":
+            return _process_media_sync_job(payload, logger, job_id, db)
         elif job_type == "cache_refresh":
             return _process_cache_refresh_job(payload, logger, job_id, db)
         elif job_type == "plex_metadata_scan":
@@ -608,6 +610,101 @@ def _check_plex_upload_enabled(config) -> bool:
         return False
     except Exception:
         return False
+
+
+def _process_media_sync_job(
+    payload: Dict[str, Any], logger, job_id: int, db: ChubDB = None
+) -> Dict[str, Any]:
+    """Background media-cache reconciliation.
+
+    Steps through each configured *arr instance SEQUENTIALLY (Connector already
+    syncs one instance at a time), refreshing media_cache, then refreshes Plex
+    via the TTL-guarded path (``refresh_plex_cache_if_stale`` — one instance at a
+    time, per-library, deduped against a recent walk) rather than a forced full
+    walk, then collections + Plex mappings. Logs to General via ``get_adapter``
+    on the shared worker logger — this is NOT a module, so it never gets its own
+    log file or a Modules-page entry. Stepping sequentially + the gentle Plex
+    path keep this pass from spiking resources.
+    """
+    log = logger.get_adapter("media_sync")
+    lock = _get_module_lock("media_sync")
+    if not lock.acquire(blocking=False):
+        log.info(f"[JOB:{job_id}] media_sync already running; skipping this trigger")
+        return {
+            "status": 200,
+            "success": True,
+            "deferred": True,
+            "message": "media_sync already in flight",
+        }
+    try:
+        from backend.util.config import load_config
+        from backend.util.connector import Connector, build_instance_map
+        from backend.util.plex_refresh import refresh_plex_cache_if_stale
+
+        start = time.time()
+        cfg = load_config()
+        instance_map = build_instance_map(cfg)
+        log.info("Media-cache reconciliation starting (arr + plex + collections)")
+
+        owns_db = db is None
+        db_ctx = db if db is not None else ChubDB(logger=logger)
+        if owns_db:
+            db_ctx.__enter__()
+        try:
+            connector = Connector(db=db_ctx, logger=logger, instance_map=instance_map)
+            try:
+                arr_results = connector.update_arr_database()
+
+                # Plex: gentle, TTL-guarded refresh (walks only stale libraries,
+                # one instance at a time) — NOT the forced full walk, so a daily
+                # cadence can't hammer a large library. Empty list = all
+                # libraries of that instance.
+                enabled_plex = {
+                    name: []
+                    for name, detail in (
+                        getattr(cfg.instances, "plex", {}) or {}
+                    ).items()
+                    if getattr(detail, "enabled", True)
+                }
+                if enabled_plex:
+                    try:
+                        refresh_plex_cache_if_stale(db_ctx, cfg, logger, enabled_plex)
+                    except Exception as exc:
+                        log.warning(f"Plex refresh failed: {exc}")
+
+                connector.update_collections_database()
+                try:
+                    connector.update_media_plex_mappings()
+                except Exception as exc:
+                    log.warning(f"Plex mapping update failed: {exc}")
+            finally:
+                connector.connection_manager.close_all_connections()
+        finally:
+            if owns_db:
+                db_ctx.__exit__(None, None, None)
+
+        succeeded = len([r for r in arr_results if r.success])
+        elapsed = time.time() - start
+        log.info(
+            f"Media-cache reconciliation complete: {succeeded}/{len(arr_results)} "
+            f"instances in {elapsed:.1f}s"
+        )
+        return {
+            "status": 200,
+            "success": True,
+            "message": f"Synced {succeeded}/{len(arr_results)} instances",
+            "data": {"synced": succeeded, "attempted": len(arr_results)},
+        }
+    except Exception as e:
+        log.error(f"[JOB:{job_id}] media_sync failed: {e}", exc_info=True)
+        return {
+            "status": 500,
+            "success": False,
+            "message": f"media_sync failed: {e}",
+            "error_code": "MEDIA_SYNC_FAILED",
+        }
+    finally:
+        lock.release()
 
 
 def _process_module_run_job(

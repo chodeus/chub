@@ -36,7 +36,7 @@ const formatTimestamp = timestamp => {
 
 /**
  * Compact instance row — service avatar, name + type pill, URL · masked key,
- * health dot + ping/media, and Test / Sync / Edit / Delete / enable-toggle.
+ * health dot + ping, and Test / Sync / Edit / Delete / enable-toggle.
  * A chevron expands a detail panel with last-tested time, snapshot freshness,
  * and (for Plex) the per-library breakdown + libraries catalog with refresh.
  */
@@ -94,15 +94,10 @@ export const InstanceCard = ({
                 : 'text-fg-muted';
     const ping = healthStatus?.response_time_ms;
 
+    // Connection/health meta only — library totals & missing counts live on the
+    // Statistics page, not here.
     const metaBits = [];
     if (ping != null) metaBits.push(`${ping} ms`);
-    if (instanceStats?.total_media != null) {
-        let m = `${instanceStats.total_media} total`;
-        if (!isPlex && instanceStats.wanted_missing != null) {
-            m += ` · ${instanceStats.wanted_missing} missing`;
-        }
-        metaBits.push(m);
-    }
 
     const libraries = instanceStats?.libraries || {};
     const libEntries = Object.entries(libraries);

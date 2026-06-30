@@ -109,3 +109,91 @@ def test_process_media_record_movie_passthrough():
     movie = {"title": "The Matrix", "year": 1999, "has_content": True}
     rows = jp._process_media_record(movie, "movie")
     assert rows == [movie]
+
+
+# --- media_sync job: sequential arr + gentle Plex + collections + mappings ---
+
+
+def _media_sync_conn(calls):
+    import types
+
+    class _Conn:
+        def __init__(self, *a, **k):
+            self.connection_manager = types.SimpleNamespace(
+                close_all_connections=lambda: calls.append("close")
+            )
+
+        def update_arr_database(self):
+            calls.append("arr")
+            return [
+                types.SimpleNamespace(success=True),
+                types.SimpleNamespace(success=False),
+            ]
+
+        def update_plex_database(self):  # the FORCED full walk — must NOT be used
+            calls.append("plex_FORCED")
+            return []
+
+        def update_collections_database(self):
+            calls.append("coll")
+            return []
+
+        def update_media_plex_mappings(self):
+            calls.append("map")
+            return {}
+
+    return _Conn
+
+
+def _cfg_with_plex(plex):
+    import types
+
+    return types.SimpleNamespace(instances=types.SimpleNamespace(plex=plex))
+
+
+def test_media_sync_uses_gentle_plex_refresh_not_forced_walk(monkeypatch):
+    import types
+
+    calls = []
+    refresh_args = []
+    monkeypatch.setattr("backend.util.connector.Connector", _media_sync_conn(calls))
+    monkeypatch.setattr("backend.util.connector.build_instance_map", lambda cfg: {})
+    monkeypatch.setattr(
+        "backend.util.plex_refresh.refresh_plex_cache_if_stale",
+        lambda db, cfg, logger, enabled, **k: refresh_args.append(enabled) or True,
+    )
+    cfg = _cfg_with_plex({"Chodeus": types.SimpleNamespace(enabled=True)})
+    monkeypatch.setattr("backend.util.config.load_config", lambda *a, **k: cfg)
+
+    res = jp._process_media_sync_job({}, _logger(), 1, db=object())
+
+    assert res["success"] is True
+    assert "arr" in calls and "coll" in calls and "map" in calls
+    assert "plex_FORCED" not in calls, (
+        "must use the TTL-guarded refresh, not the forced walk"
+    )
+    assert refresh_args == [{"Chodeus": []}], (
+        "gentle Plex refresh called for the enabled instance"
+    )
+    assert calls[-1] == "close"
+    assert res["data"]["synced"] == 1 and res["data"]["attempted"] == 2
+
+
+def test_media_sync_skips_plex_refresh_when_none_configured(monkeypatch):
+    calls = []
+    refresh_args = []
+    monkeypatch.setattr("backend.util.connector.Connector", _media_sync_conn(calls))
+    monkeypatch.setattr("backend.util.connector.build_instance_map", lambda cfg: {})
+    monkeypatch.setattr(
+        "backend.util.plex_refresh.refresh_plex_cache_if_stale",
+        lambda db, cfg, logger, enabled, **k: refresh_args.append(enabled) or True,
+    )
+    monkeypatch.setattr(
+        "backend.util.config.load_config", lambda *a, **k: _cfg_with_plex({})
+    )
+
+    res = jp._process_media_sync_job({}, _logger(), 1, db=object())
+
+    assert res["success"] is True
+    assert "arr" in calls
+    assert refresh_args == [], "no Plex instances -> no refresh call"
