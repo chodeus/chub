@@ -54,6 +54,10 @@ _MONITORED_SQL = "SUM(CASE WHEN monitored=1 THEN 1 ELSE 0 END)"
 _SHOW_COUNT_SQL = (
     "SUM(CASE WHEN asset_type='show' AND season_number IS NULL THEN 1 ELSE 0 END)"
 )
+_MONITORED_SHOWS_SQL = (
+    "SUM(CASE WHEN asset_type='show' AND season_number IS NULL AND monitored=1 "
+    "THEN 1 ELSE 0 END)"
+)
 _SEASON_COUNT_SQL = (
     "SUM(CASE WHEN asset_type='show' AND season_number IS NOT NULL THEN 1 ELSE 0 END)"
 )
@@ -960,6 +964,7 @@ class MediaCache(DatabaseBase):
                        {_UPCOMING_SQL} as upcoming,
                        {_MONITORED_SQL} as monitored,
                        {_SHOW_COUNT_SQL} as show_count,
+                       {_MONITORED_SHOWS_SQL} as monitored_shows,
                        {_SEASON_COUNT_SQL} as season_count,
                        COUNT(DISTINCT instance_name) as instances
                 FROM media_cache {where}
