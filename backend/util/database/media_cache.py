@@ -33,6 +33,9 @@ _UNITS_TOTAL_SQL = (
     f"SUM(CASE WHEN {_IS_SEASON} THEN COALESCE(total_episodes,0) "
     f"WHEN {_IS_SIMPLE} THEN 1 ELSE 0 END)"
 )
+# An album under an UNMONITORED artist isn't "wanted" — Lidarr's Wanted page
+# excludes it, so missing/upcoming do too. NULL (pre-column rows) = monitored.
+_ALBUM_ARTIST_OK = "(asset_type != 'album' OR COALESCE(artist_monitored, 1) = 1)"
 _IN_LIBRARY_SQL = (
     f"SUM(CASE WHEN {_IS_SEASON} THEN COALESCE(episode_files,0) "
     f"WHEN {_IS_SIMPLE} AND has_content=1 THEN 1 ELSE 0 END)"
@@ -41,13 +44,13 @@ _MISSING_SQL = (
     f"SUM(CASE WHEN {_IS_SEASON} AND monitored=1 "
     "THEN MAX(0, COALESCE(aired_episodes,0) - COALESCE(episode_files,0)) "
     f"WHEN {_IS_SIMPLE} AND monitored=1 AND COALESCE(has_content,0)=0 "
-    f"AND {_RELEASED_SQL} THEN 1 ELSE 0 END)"
+    f"AND {_RELEASED_SQL} AND {_ALBUM_ARTIST_OK} THEN 1 ELSE 0 END)"
 )
 _UPCOMING_SQL = (
     f"SUM(CASE WHEN {_IS_SEASON} AND monitored=1 "
     "THEN MAX(0, COALESCE(total_episodes,0) - COALESCE(aired_episodes,0)) "
     f"WHEN {_IS_SIMPLE} AND monitored=1 AND COALESCE(has_content,0)=0 "
-    f"AND NOT ({_RELEASED_SQL}) THEN 1 ELSE 0 END)"
+    f"AND NOT ({_RELEASED_SQL}) AND {_ALBUM_ARTIST_OK} THEN 1 ELSE 0 END)"
 )
 # Row-count fragments (containers): for the artist/show context cards.
 _MONITORED_SQL = "SUM(CASE WHEN monitored=1 THEN 1 ELSE 0 END)"
@@ -176,6 +179,7 @@ class MediaCache(DatabaseBase):
             "episode_files",
             "aired_episodes",
             "total_episodes",
+            "artist_monitored",
             "genre",
         ]
         record = {k: item.get(k) for k in required_keys}
@@ -230,9 +234,10 @@ class MediaCache(DatabaseBase):
                 folder, root_folder, media_file, tags,
                 season_number, matched, instance_name, source, poster_url, arr_id,
                 status, rating, studio, edition, runtime, language, monitored, has_content,
-                release_date, episode_files, aired_episodes, total_episodes, genre,
+                release_date, episode_files, aired_episodes, total_episodes,
+                artist_monitored, genre,
                 created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                 CURRENT_TIMESTAMP)
             ON CONFLICT(identity_key)
             DO UPDATE SET
@@ -271,6 +276,7 @@ class MediaCache(DatabaseBase):
                 episode_files=excluded.episode_files,
                 aired_episodes=excluded.aired_episodes,
                 total_episodes=excluded.total_episodes,
+                artist_monitored=excluded.artist_monitored,
                 genre=excluded.genre
                 -- Preserve: matched, original_file, renamed_file, file_hash, plex_mapping_id,
                 -- created_at (stamped once on first insert = first-seen time; re-syncs
@@ -313,6 +319,7 @@ class MediaCache(DatabaseBase):
                 record.get("episode_files"),
                 record.get("aired_episodes"),
                 record.get("total_episodes"),
+                record.get("artist_monitored"),
                 record.get("genre") or None,
             ),
         )
