@@ -59,7 +59,10 @@ export const InstancesPage = () => {
         configAPI
             .fetchSection('instances')
             .then(resp => {
-                if (!cancelled) setSyncSchedule(resp?.data?.sync_schedule ?? '');
+                // A sectioned GET nests under the section name
+                // (data.instances.*); tolerate a flat shape too.
+                const inst = resp?.data?.instances ?? resp?.data ?? {};
+                if (!cancelled) setSyncSchedule(inst.sync_schedule ?? '');
             })
             .catch(() => {})
             .finally(() => {
