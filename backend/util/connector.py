@@ -562,6 +562,10 @@ class Connector:
                     album_row["has_content"] = season.get("has_content")
                     # Per-album release date drives missing-vs-upcoming in stats.
                     album_row["release_date"] = season.get("release_date")
+                    # Parent artist's monitored flag — Library Statistics excludes
+                    # albums under an unmonitored artist from "missing" (album_row's
+                    # own `monitored` is the album's flag, set below).
+                    album_row["artist_monitored"] = artist.get("monitored")
                     # Album titles don't share the artist's alternate titles.
                     album_row["alternate_titles"] = None
                     album_row["normalized_alternate_titles"] = None
