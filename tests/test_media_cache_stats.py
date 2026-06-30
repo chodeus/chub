@@ -168,3 +168,21 @@ def test_show_by_instance_episode_level(db):
     assert son["in_library"] == 14
     assert son["missing"] == 2
     assert son["upcoming"] == 6
+
+
+def test_missing_excludes_unmonitored_artist_albums(db):
+    # Released, monitored albums with no file: one under a monitored artist
+    # (counts), one under an unmonitored artist (excluded — Lidarr's behaviour).
+    db.media.upsert(
+        _item("Mon Artist Album", release_date="2020-01-01", artist_monitored=True),
+        "album",
+        "lidarr",
+        "Lidarr",
+    )
+    db.media.upsert(
+        _item("Unmon Artist Album", release_date="2020-01-01", artist_monitored=False),
+        "album",
+        "lidarr",
+        "Lidarr",
+    )
+    assert db.media.get_stats()["missing"] == 1

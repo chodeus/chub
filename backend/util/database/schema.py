@@ -226,6 +226,10 @@ class SchemaManager:
                 ColumnDefinition("episode_files", "INTEGER"),
                 ColumnDefinition("aired_episodes", "INTEGER"),
                 ColumnDefinition("total_episodes", "INTEGER"),
+                # Parent artist's monitored flag on Lidarr album rows — so
+                # "missing" can exclude albums under an unmonitored artist
+                # (matches Lidarr's Wanted page). NULL = treat as monitored.
+                ColumnDefinition("artist_monitored", "BOOLEAN"),
                 ColumnDefinition(
                     "created_at", "TEXT"
                 ),  # ISO timestamp when item was first cached
