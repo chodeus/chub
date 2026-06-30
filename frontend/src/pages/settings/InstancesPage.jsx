@@ -10,8 +10,19 @@ import { ServiceIcon } from '../../components/ui/ServiceIcon';
 import { useApiData } from '../../hooks/useApiData';
 import { useToast } from '../../contexts/ToastContext';
 import { instancesAPI } from '../../utils/api/instances';
+import { configAPI } from '../../utils/api/config';
 import { INSTANCE_SCHEMA } from '../../utils/constants/instance_schema';
 import { humanize } from '../../utils/tools';
+
+// Friendly presets for the background media-cache reconciliation cadence
+// (config.instances.sync_schedule). Cron form so the scheduler's per-name
+// next-run guard prevents double-firing.
+const SYNC_PRESETS = [
+    { key: 'off', label: 'Off', value: '' },
+    { key: '6h', label: 'Every 6 hours', value: 'cron(0 */6 * * *)' },
+    { key: 'daily', label: 'Daily', value: 'cron(0 4 * * *)' },
+    { key: 'weekly', label: 'Weekly', value: 'cron(0 4 * * 0)' },
+];
 
 /**
  * Instances Management page
@@ -36,6 +47,48 @@ export const InstancesPage = () => {
 
     // Syncing state
     const [syncingInstances, setSyncingInstances] = useState(new Set());
+
+    // Auto-sync cadence (config.instances.sync_schedule). A small, secondary
+    // control — the cron strings are mapped to a few friendly presets.
+    const [syncSchedule, setSyncSchedule] = useState('');
+    const [syncScheduleLoaded, setSyncScheduleLoaded] = useState(false);
+    const [syncScheduleSaving, setSyncScheduleSaving] = useState(false);
+
+    useEffect(() => {
+        let cancelled = false;
+        configAPI
+            .fetchSection('instances')
+            .then(resp => {
+                if (!cancelled) setSyncSchedule(resp?.data?.sync_schedule ?? '');
+            })
+            .catch(() => {})
+            .finally(() => {
+                if (!cancelled) setSyncScheduleLoaded(true);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    const handleSyncPresetChange = useCallback(
+        async value => {
+            const prev = syncSchedule;
+            setSyncSchedule(value);
+            setSyncScheduleSaving(true);
+            try {
+                // Send only this field; the backend merge preserves the instance
+                // entries (and their redacted keys) under `instances`.
+                await configAPI.updateConfig({ instances: { sync_schedule: value } });
+                toast.success('Auto-sync schedule updated');
+            } catch (err) {
+                setSyncSchedule(prev);
+                toast.error(`Couldn't update auto-sync: ${err.message}`);
+            } finally {
+                setSyncScheduleSaving(false);
+            }
+        },
+        [syncSchedule, toast]
+    );
 
     // Health, stats, logs, and libraries state
     const [healthData, setHealthData] = useState({});
@@ -561,6 +614,35 @@ export const InstancesPage = () => {
                     />
                 ))}
             </StatGrid>
+
+            {/* Auto-sync cadence — small, secondary control. Reconciles the
+                media cache from these instances (a safety-net behind webhooks);
+                full library stats live on the Statistics page. */}
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-fg-subtle">
+                <span className="material-symbols-outlined text-[16px]" aria-hidden="true">
+                    sync
+                </span>
+                <span>Auto-sync library from instances</span>
+                <select
+                    className="bg-surface border border-border rounded-md px-2 py-1 text-fg text-[13px] disabled:opacity-50"
+                    value={(SYNC_PRESETS.find(p => p.value === syncSchedule) || {}).key ?? 'custom'}
+                    disabled={!syncScheduleLoaded || syncScheduleSaving}
+                    onChange={e => {
+                        const preset = SYNC_PRESETS.find(p => p.key === e.target.value);
+                        if (preset) handleSyncPresetChange(preset.value);
+                    }}
+                >
+                    {SYNC_PRESETS.map(p => (
+                        <option key={p.key} value={p.key}>
+                            {p.label}
+                        </option>
+                    ))}
+                    {!SYNC_PRESETS.some(p => p.value === syncSchedule) && (
+                        <option value="custom">Custom ({syncSchedule})</option>
+                    )}
+                </select>
+                {syncScheduleSaving && <span>saving…</span>}
+            </div>
 
             {/* Service Sections */}
             {services.map(service => (
