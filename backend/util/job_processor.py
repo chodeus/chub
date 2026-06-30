@@ -366,7 +366,9 @@ def _update_media_record(
         logger: Logger instance
     """
     instance_name = instance_info["name"]
-    instance_type = instance_info["type"].capitalize()
+    # Lowercase service type — stored as media_cache.source, which must match
+    # sync_state.scope / /instances/types (upsert normalizes too, belt-and-braces).
+    instance_type = instance_info["type"].lower()
 
     for item in processed_media:
         try:

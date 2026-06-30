@@ -191,3 +191,20 @@ def test_missing_excludes_unmonitored_artist_albums(db):
         "Lidarr",
     )
     assert db.media.get_stats()["missing"] == 1
+
+
+def test_upsert_normalizes_source_to_lowercase(db):
+    # Any caller (e.g. the webhook path) may pass a title-cased service type;
+    # it must be stored lowercase so it matches sync_state.scope / the stats
+    # type labels and the freshness lookup.
+    db.media.upsert(_item("Show A", season_number=None), "show", "Sonarr", "sonarr")
+    db.media.upsert(_item("Movie A"), "movie", "RADARR", "radarr")
+    sources = {
+        r["source"]
+        for r in db.media.execute_query(
+            "SELECT source FROM media_cache", fetch_all=True
+        )
+    }
+    assert sources == {"sonarr", "radarr"}
+    by_inst = db.media.get_detailed_stats()["by_instance"]
+    assert all(r["source"] == r["source"].lower() for r in by_inst)
