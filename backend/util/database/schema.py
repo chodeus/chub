@@ -221,6 +221,11 @@ class SchemaManager:
                 ),  # ISO date (YYYY-MM-DD) — Lidarr album release date; gates
                 # "missing" vs "upcoming" in Library Statistics. NULL = treat
                 # as released (pre-column rows / non-album types).
+                # Per-season episode unit counts (Sonarr) for episode-level stats:
+                # downloaded / aired / total. NULL for non-season rows.
+                ColumnDefinition("episode_files", "INTEGER"),
+                ColumnDefinition("aired_episodes", "INTEGER"),
+                ColumnDefinition("total_episodes", "INTEGER"),
                 ColumnDefinition(
                     "created_at", "TEXT"
                 ),  # ISO timestamp when item was first cached
