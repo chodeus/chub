@@ -767,7 +767,6 @@ export const InstancesPage = () => {
                                     onChange={value => handleFieldChange(field.key, value)}
                                     errorMessage={formErrors[field.key]}
                                     highlightInvalid={!!formErrors[field.key]}
-                                    disabled={field.key === 'name'} // Disable name field in edit mode
                                 />
                             );
                         })}
