@@ -74,6 +74,12 @@ class InstancesConfig(BaseModel):
     sonarr: Dict[str, InstanceDetail] = Field(default_factory=dict)
     lidarr: Dict[str, InstanceDetail] = Field(default_factory=dict)
     plex: Dict[str, InstanceDetail] = Field(default_factory=dict)
+    # How often CHUB reconciles its media cache from these instances (the
+    # background media_sync job — steps through instances sequentially). A
+    # safety-net behind real-time webhooks, so daily is plenty; "" disables it.
+    # Set from the Instances page dropdown. Cron form so the scheduler's
+    # per-name next-run guard prevents double-firing within the trigger minute.
+    sync_schedule: str = "cron(0 4 * * *)"
 
 
 class PlexScope(BaseModel):

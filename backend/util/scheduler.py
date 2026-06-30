@@ -325,10 +325,11 @@ class ChubScheduler:
             # Hard-disabled modules (Modules page) never auto-run.
             from backend.util.config import load_config
 
+            inst_sync_schedule = ""
             try:
-                disabled = set(
-                    getattr(load_config().general, "disabled_modules", None) or []
-                )
+                cfg = load_config()
+                disabled = set(getattr(cfg.general, "disabled_modules", None) or [])
+                inst_sync_schedule = getattr(cfg.instances, "sync_schedule", "") or ""
             except Exception:
                 disabled = set()
 
@@ -375,6 +376,7 @@ class ChubScheduler:
 
             self._tick_upgradinatorr_profiles(queued_modules)
             self._tick_schedule_blocks(queued_modules)
+            self._tick_media_sync(inst_sync_schedule)
 
         except Exception as e:
             if self.logger:
@@ -384,6 +386,38 @@ class ChubScheduler:
             else:
                 print(f"[SCHEDULER] Exception in tick(): {e}")
             raise
+
+    def _tick_media_sync(self, sync_schedule: str) -> None:
+        """Queue the background media-cache reconciliation when its
+        Instances-page schedule (config.instances.sync_schedule) is due.
+
+        It runs as a plain ``media_sync`` job — stepping through each instance
+        sequentially and logging to General — NOT as a user module, so it never
+        appears on the Modules/Logs pages. A cron schedule string is used so
+        check_schedule's per-name next-run guard prevents double-firing.
+        """
+        if not sync_schedule:
+            return
+        log_adapter = self.logger.get_adapter("SCHEDULER") if self.logger else None
+        try:
+            if not check_schedule("media_sync", sync_schedule, log_adapter):
+                return
+            db = getattr(self.module_orchestrator, "db", None)
+            if db is None:
+                return
+            result = db.worker.enqueue_job(
+                "jobs", {"origin": "scheduled"}, job_type="media_sync"
+            )
+            if log_adapter:
+                if result.get("success"):
+                    log_adapter.info("Queued media-cache reconciliation (media_sync)")
+                else:
+                    log_adapter.error(
+                        f"Failed to queue media_sync: {result.get('message')}"
+                    )
+        except Exception as e:
+            if log_adapter:
+                log_adapter.error(f"media_sync tick failed: {e}", exc_info=True)
 
     def _tick_upgradinatorr_profiles(self, queued_modules: set) -> None:
         """Queue Upgradinatorr profile-specific schedules."""
