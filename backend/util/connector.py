@@ -501,6 +501,11 @@ class Connector:
                     season_row["has_content"] = (
                         season.get("season_has_episodes") or 0
                     ) > 0
+                    # Per-season episode unit counts drive episode-level stats
+                    # (Sonarr's native unit) — see media_cache stats fragments.
+                    season_row["episode_files"] = season.get("episode_files")
+                    season_row["aired_episodes"] = season.get("aired_episodes")
+                    season_row["total_episodes"] = season.get("total_episodes")
                     # Override monitored with the per-season flag — Sonarr
                     # tracks this per season (e.g. user unmonitors Specials
                     # but keeps the main seasons monitored). Without this

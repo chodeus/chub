@@ -7,35 +7,56 @@ from backend.util.normalization import normalize_titles
 from .db_base import DatabaseBase
 
 # Library-health SQL fragments, shared across the stats queries so by_type,
-# totals and by_instance can't drift.
-#   in_library = the item's file(s) are present (has_content)
-#   missing    = monitored, no file, AND released — the real "go get it" count
-#   upcoming   = monitored, no file, but NOT released yet (future album / an
-#                announced/upcoming movie or show) — wanted, just not out
-# "released" gates missing so unreleased items aren't miscounted: Lidarr albums
-# use their own release_date (absent = treat as released), everything else uses
-# the *arr `status` (mirrors release_readiness.UNRELEASED_STATUSES). Artist rows
-# are containers, not content units, so they're excluded from in_library /
-# missing / upcoming (their albums carry the signal) — this keeps the per-
-# instance "missing" aligned with Lidarr's album-level wanted/missing. Artists
-# still count toward total + monitored.
+# totals and by_instance can't drift. Everything is counted in CONTENT UNITS —
+# a movie, an album, or a single TV episode — to match each *arr's native unit:
+#   units      = total content units
+#   in_library = units whose file is present
+#   missing    = monitored units that are released/aired but have no file
+#   upcoming   = monitored units not yet released/aired
+# A Sonarr SEASON row expands to its episode counts; a movie/album is 1 unit;
+# shows, seasons-as-rows... no — shows and artists are CONTAINERS (0 units; the
+# episodes/albums carry the counts), so they fall through to 0 automatically.
+# "released" gates simple (movie/album) units: Lidarr albums use their own
+# release_date (absent = released), movies/shows use the *arr `status` (mirrors
+# release_readiness.UNRELEASED_STATUSES). For seasons, "aired" IS the gate:
+# missing = aired-on-disk shortfall, upcoming = not-yet-aired.
 _RELEASED_SQL = (
     "CASE WHEN asset_type='album' "
     "THEN (release_date IS NULL OR release_date <= date('now')) "
     "ELSE (status IS NULL OR status NOT IN "
     "('announced','deleted','tba','upcoming')) END"
 )
-_NOT_ARTIST = "asset_type != 'artist'"
-_IN_LIBRARY_SQL = f"SUM(CASE WHEN has_content=1 AND {_NOT_ARTIST} THEN 1 ELSE 0 END)"
+_IS_SEASON = "(asset_type='show' AND season_number IS NOT NULL)"
+_IS_SIMPLE = "asset_type IN ('movie','album')"  # 1-unit content types
+
+_UNITS_TOTAL_SQL = (
+    f"SUM(CASE WHEN {_IS_SEASON} THEN COALESCE(total_episodes,0) "
+    f"WHEN {_IS_SIMPLE} THEN 1 ELSE 0 END)"
+)
+_IN_LIBRARY_SQL = (
+    f"SUM(CASE WHEN {_IS_SEASON} THEN COALESCE(episode_files,0) "
+    f"WHEN {_IS_SIMPLE} AND has_content=1 THEN 1 ELSE 0 END)"
+)
 _MISSING_SQL = (
-    "SUM(CASE WHEN monitored=1 AND COALESCE(has_content,0)=0 "
-    f"AND {_NOT_ARTIST} AND {_RELEASED_SQL} THEN 1 ELSE 0 END)"
+    f"SUM(CASE WHEN {_IS_SEASON} AND monitored=1 "
+    "THEN MAX(0, COALESCE(aired_episodes,0) - COALESCE(episode_files,0)) "
+    f"WHEN {_IS_SIMPLE} AND monitored=1 AND COALESCE(has_content,0)=0 "
+    f"AND {_RELEASED_SQL} THEN 1 ELSE 0 END)"
 )
 _UPCOMING_SQL = (
-    "SUM(CASE WHEN monitored=1 AND COALESCE(has_content,0)=0 "
-    f"AND {_NOT_ARTIST} AND NOT ({_RELEASED_SQL}) THEN 1 ELSE 0 END)"
+    f"SUM(CASE WHEN {_IS_SEASON} AND monitored=1 "
+    "THEN MAX(0, COALESCE(total_episodes,0) - COALESCE(aired_episodes,0)) "
+    f"WHEN {_IS_SIMPLE} AND monitored=1 AND COALESCE(has_content,0)=0 "
+    f"AND NOT ({_RELEASED_SQL}) THEN 1 ELSE 0 END)"
 )
+# Row-count fragments (containers): for the artist/show context cards.
 _MONITORED_SQL = "SUM(CASE WHEN monitored=1 THEN 1 ELSE 0 END)"
+_SHOW_COUNT_SQL = (
+    "SUM(CASE WHEN asset_type='show' AND season_number IS NULL THEN 1 ELSE 0 END)"
+)
+_SEASON_COUNT_SQL = (
+    "SUM(CASE WHEN asset_type='show' AND season_number IS NOT NULL THEN 1 ELSE 0 END)"
+)
 
 
 class MediaCache(DatabaseBase):
@@ -148,6 +169,9 @@ class MediaCache(DatabaseBase):
             "monitored",
             "has_content",
             "release_date",
+            "episode_files",
+            "aired_episodes",
+            "total_episodes",
             "genre",
         ]
         record = {k: item.get(k) for k in required_keys}
@@ -202,9 +226,9 @@ class MediaCache(DatabaseBase):
                 folder, root_folder, media_file, tags,
                 season_number, matched, instance_name, source, poster_url, arr_id,
                 status, rating, studio, edition, runtime, language, monitored, has_content,
-                release_date, genre,
+                release_date, episode_files, aired_episodes, total_episodes, genre,
                 created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                 CURRENT_TIMESTAMP)
             ON CONFLICT(identity_key)
             DO UPDATE SET
@@ -240,6 +264,9 @@ class MediaCache(DatabaseBase):
                 monitored=excluded.monitored,
                 has_content=excluded.has_content,
                 release_date=excluded.release_date,
+                episode_files=excluded.episode_files,
+                aired_episodes=excluded.aired_episodes,
+                total_episodes=excluded.total_episodes,
                 genre=excluded.genre
                 -- Preserve: matched, original_file, renamed_file, file_hash, plex_mapping_id,
                 -- created_at (stamped once on first insert = first-seen time; re-syncs
@@ -279,6 +306,9 @@ class MediaCache(DatabaseBase):
                 record.get("monitored", True),  # Default to True if not specified
                 int(bool(record.get("has_content", True))),
                 record.get("release_date") or None,
+                record.get("episode_files"),
+                record.get("aired_episodes"),
+                record.get("total_episodes"),
                 record.get("genre") or None,
             ),
         )
@@ -924,10 +954,13 @@ class MediaCache(DatabaseBase):
                 f"""
                 SELECT asset_type,
                        COUNT(*) as total,
+                       {_UNITS_TOTAL_SQL} as units,
                        {_IN_LIBRARY_SQL} as in_library,
                        {_MISSING_SQL} as missing,
                        {_UPCOMING_SQL} as upcoming,
                        {_MONITORED_SQL} as monitored,
+                       {_SHOW_COUNT_SQL} as show_count,
+                       {_SEASON_COUNT_SQL} as season_count,
                        COUNT(DISTINCT instance_name) as instances
                 FROM media_cache {where}
                 GROUP BY asset_type
@@ -940,7 +973,7 @@ class MediaCache(DatabaseBase):
 
         totals = self.execute_query(
             f"""
-            SELECT COUNT(*) as total,
+            SELECT {_UNITS_TOTAL_SQL} as total,
                    {_IN_LIBRARY_SQL} as in_library,
                    {_MISSING_SQL} as missing,
                    {_UPCOMING_SQL} as upcoming,
@@ -953,7 +986,8 @@ class MediaCache(DatabaseBase):
 
         return {
             "by_type": rows,
-            "total": totals["total"] if totals else 0,
+            # Headline numbers are in content units (movies + episodes + albums).
+            "total": (totals["total"] or 0) if totals else 0,
             "in_library": (totals["in_library"] or 0) if totals else 0,
             "missing": (totals["missing"] or 0) if totals else 0,
             "upcoming": (totals["upcoming"] or 0) if totals else 0,
@@ -983,6 +1017,7 @@ class MediaCache(DatabaseBase):
         by_instance = (
             self.execute_query(
                 f"""SELECT instance_name, source, COUNT(*) as total,
+                       {_UNITS_TOTAL_SQL} as units,
                        {_IN_LIBRARY_SQL} as in_library,
                        {_MISSING_SQL} as missing,
                        {_UPCOMING_SQL} as upcoming,
