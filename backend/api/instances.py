@@ -1296,52 +1296,10 @@ def test_existing_instance(
         return error("Connection test failed", code="TEST_ERROR", status_code=500)
 
 
-def _arr_wanted_missing_count(
-    config: ChubConfig, instance_id: str, logger: Any
-) -> Optional[int]:
-    """Return the *arr wanted/missing total for an instance, or None.
-
-    Hits the service's ``/wanted/missing`` with ``pageSize=1`` and reads
-    ``totalRecords`` — the same count the *arr Wanted page shows (episode-level
-    for Sonarr, album-level for Lidarr). Best-effort: any failure (unreachable,
-    auth, unexpected shape) returns None so the stats card degrades gracefully
-    instead of erroring on a single down instance.
-    """
-    service, details = _find_instance(config, instance_id)
-    if not details or service == "plex":
-        return None
-    url = (details.url or "").rstrip("/")
-    api = details.api or ""
-    if not url or not api:
-        return None
-
-    from backend.util.ssrf_guard import is_safe_url
-
-    api_ver = "v1" if service == "lidarr" else "v3"
-    endpoint = f"{url}/api/{api_ver}/wanted/missing"
-    safe, reason = is_safe_url(endpoint)
-    if not safe:
-        logger.debug(f"wanted/missing URL refused for {instance_id}: {reason}")
-        return None
-    try:
-        resp = requests.get(
-            endpoint,
-            headers={"X-Api-Key": api},
-            params={"page": 1, "pageSize": 1, "monitored": "true"},
-            timeout=4,
-        )
-        if not resp.ok:
-            return None
-        return resp.json().get("totalRecords")
-    except (requests.exceptions.RequestException, ValueError) as exc:
-        logger.debug(f"wanted/missing fetch failed for {instance_id}: {exc}")
-        return None
-
-
 @router.get(
     "/instances/{instance_id}/stats",
     summary="Get instance statistics",
-    description="Retrieve media statistics for a specific service instance.",
+    description="Retrieve cached media counts + snapshot freshness for an instance.",
     responses={
         200: {
             "description": "Instance statistics retrieved successfully",
@@ -1353,7 +1311,7 @@ def _arr_wanted_missing_count(
                         "data": {
                             "instance": "radarr_hd",
                             "total_media": 150,
-                            "wanted_missing": 8,
+                            "snapshot_age_seconds": 320,
                         },
                     }
                 }
@@ -1368,16 +1326,14 @@ async def get_instance_stats(
     ),
     logger: Any = Depends(get_logger),
     db: ChubDB = Depends(get_database),
-    config: ChubConfig = Depends(get_config),
 ) -> JSONResponse:
     """
-    Retrieve media statistics for a specific service instance.
+    Retrieve cached media counts + snapshot freshness for an instance.
 
-    For ARR instances (radarr/sonarr/lidarr): returns the cached total media
-    count plus a live ``wanted_missing`` count read straight from the service's
-    Wanted page (monitored items released/aired with no file yet).
-    For Plex instances: queries plex_media_cache and returns total items
-    with a per-library breakdown.
+    For ARR instances (radarr/sonarr/lidarr): cached total row count +
+    sync_state age. For Plex: plex_media_cache total + per-library breakdown +
+    snapshot age. No live *arr calls — library-health counts (missing/upcoming)
+    live on the Library Statistics page.
 
     Args:
         instance_id: Name of the instance to get statistics for
@@ -1415,8 +1371,14 @@ async def get_instance_stats(
                 },
             )
         else:
-            media = db.media.get_by_instance(instance_id)
-            total = len(media)
+            # Count rows cheaply rather than loading the whole library to len()
+            # it (a Lidarr instance is tens of thousands of rows).
+            row = db.media.execute_query(
+                "SELECT COUNT(*) AS n FROM media_cache WHERE instance_name=?",
+                (instance_id,),
+                fetch_one=True,
+            )
+            total = row["n"] if row else 0
             # ARR freshness comes from sync_state (written when the ARR sync
             # completes), not media_cache.updated_at — the latter only moves on
             # changed rows, so it would read "stale" right after a fresh sync of
@@ -1426,15 +1388,14 @@ async def get_instance_stats(
                 if service_type
                 else None
             )
-            # Live wanted/missing straight from the *arr — the authoritative
-            # count its own Wanted page shows. Best-effort; None if unreachable.
-            wanted_missing = _arr_wanted_missing_count(config, instance_id, logger)
+            # No live wanted/missing here — the Instances page doesn't show it,
+            # and Library Statistics is the place for library-health counts. The
+            # live per-instance *arr call was removed to keep this page light.
             return ok(
                 f"Stats for instance '{instance_id}'",
                 {
                     "instance": instance_id,
                     "total_media": total,
-                    "wanted_missing": wanted_missing,
                     "snapshot_age_seconds": snapshot_age,
                 },
             )
