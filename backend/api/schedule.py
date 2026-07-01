@@ -18,6 +18,7 @@ from backend.util.scheduler import (
     _profile_value,
     _upgradinatorr_profile_label,
     cron_next_run,
+    validate_schedule,
 )
 
 router = APIRouter(
@@ -298,6 +299,17 @@ async def update_module_schedule(
                 status_code=400,
             )
 
+        # Reject a malformed schedule up front — otherwise it persists and then
+        # silently never fires (check_schedule swallows the parse error).
+        try:
+            validate_schedule(schedule_string)
+        except ValueError as exc:
+            return error(
+                f"Invalid schedule '{schedule_string}': {exc}",
+                code="INVALID_SCHEDULE",
+                status_code=400,
+            )
+
         # Load current config
         config = load_config()
 
@@ -345,6 +357,16 @@ async def update_module_schedule_blocks(
                 code="INVALID_MODULE_NAME",
                 status_code=400,
             )
+
+        for b in data.blocks:
+            try:
+                validate_schedule(b.schedule)
+            except ValueError as exc:
+                return error(
+                    f"Invalid schedule in block '{b.label}': {exc}",
+                    code="INVALID_SCHEDULE",
+                    status_code=400,
+                )
 
         config = load_config()
         blocks = [
