@@ -327,3 +327,131 @@ def test_validate_schedule_rejects_malformed_accepts_valid():
     ):
         with pytest.raises(ValueError):
             validate_schedule(bad)
+
+
+# --- Round 2: secrets-at-rest + authz/fail-open audit ---
+
+
+# 12. AuthMiddleware must fail CLOSED (deny) when config can't load, not pass
+#     the request through unauthenticated.
+def test_auth_middleware_fails_closed_on_config_error(monkeypatch):
+    import backend.api.main as apimain
+    from backend.util.config import ConfigError
+
+    def boom():
+        raise ConfigError("corrupt config")
+
+    monkeypatch.setattr(apimain, "load_config", boom)
+
+    app = FastAPI()
+    app.add_middleware(apimain.AuthMiddleware)
+
+    @app.get("/api/media/1")
+    def protected():
+        return {"ok": True}
+
+    @app.get("/api/health")
+    def health():
+        return {"ok": True}
+
+    client = TestClient(app)
+    # Protected route denied (503), NOT passed through unauthenticated.
+    assert client.get("/api/media/1").status_code == 503
+    # Exempt route (checked before load_config) still works.
+    assert client.get("/api/health").status_code == 200
+
+
+# 13. verify_webhook_secret must fail CLOSED on config error — the exempt webhook
+#     endpoints rely solely on it.
+def test_verify_webhook_secret_fails_closed_on_config_error(monkeypatch):
+    import backend.api.webhooks as wh
+    from fastapi import HTTPException
+
+    from backend.util.config import ConfigError
+
+    def boom():
+        raise ConfigError("corrupt config")
+
+    monkeypatch.setattr(wh, "load_config", boom)
+
+    class _Req:
+        headers = {}
+        query_params = {}
+
+    with pytest.raises(HTTPException) as ei:
+        wh.verify_webhook_secret(_Req())
+    assert ei.value.status_code == 503
+
+
+# 14. GET /api/modules/{name} must redact secrets in the returned config section.
+def test_module_config_section_is_redacted():
+    import inspect
+
+    import backend.api.modules as mod
+    from backend.util.config import REDACTED_PLACEHOLDER, redact_secrets
+
+    src = inspect.getsource(mod)
+    assert "redact_secrets(config_data.get(name" in src, "get_module must redact"
+    # And redaction actually masks the sync_gdrive OAuth leaves.
+    red = redact_secrets(
+        {
+            "client_secret": "GOCSPX-secretvalue",
+            "token": {"refresh_token": "r" * 40, "access_token": "a" * 40},
+        }
+    )
+    assert red["client_secret"] == REDACTED_PLACEHOLDER
+    assert red["token"]["refresh_token"] == REDACTED_PLACEHOLDER
+    assert red["token"]["access_token"] == REDACTED_PLACEHOLDER
+
+
+# 15. The log formatter must redact secrets in the exc_info traceback, which the
+#     record-level filter (msg/args only) never sees.
+def test_formatter_redacts_secret_in_traceback():
+    import logging
+    import sys
+
+    from backend.util.logger import SafeFormatter
+
+    fmt = SafeFormatter("%(message)s")
+    try:
+        raise ValueError(
+            "http://plex:32400/library?X-Plex-Token=SECRETTOKEN1234567890"
+        )
+    except ValueError:
+        rec = logging.LogRecord(
+            "m", logging.ERROR, __file__, 1, "upload failed", None, sys.exc_info()
+        )
+    out = fmt.format(rec)
+    assert "SECRETTOKEN1234567890" not in out
+    assert "[redacted]" in out
+
+
+# 16. The redaction filter must mask a Notifiarr passthrough API key (URL path,
+#     not a query param).
+def test_redact_notifiarr_passthrough_key():
+    from backend.util.logger import SmartRedactionFilter
+
+    s = (
+        "ConnectionError: HTTPSConnectionPool ... url: "
+        "https://notifiarr.com/api/v1/notification/passthrough/abcd1234efgh5678ijkl"
+    )
+    out = SmartRedactionFilter.redact(s)
+    assert "abcd1234efgh5678ijkl" not in out
+    assert "passthrough/[redacted]" in out
+
+
+# 17. OAuth tokens in yaml/unquoted key:value form must redact too — a dumped
+#     gdrive config leaked access_token / refresh_token to sync_gdrive.log.
+def test_redact_oauth_tokens_in_yaml_form():
+    from backend.util.logger import SmartRedactionFilter
+
+    s = (
+        "token:\n"
+        "  access_token: ya29.a0AfB_verylongsecretvalue1234567890\n"
+        "  refresh_token: 1//0gLongRefreshTokenValue1234567890abcd\n"
+    )
+    out = SmartRedactionFilter.redact(s)
+    assert "ya29.a0AfB_verylongsecretvalue1234567890" not in out
+    assert "1//0gLongRefreshTokenValue1234567890abcd" not in out
+    assert "access_token: [redacted]" in out
+    assert "refresh_token: [redacted]" in out
