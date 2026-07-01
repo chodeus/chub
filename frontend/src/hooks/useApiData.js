@@ -16,6 +16,7 @@ export const useApiData = ({ apiFunction, options = {}, dependencies = [] }) => 
         retryAttempts = 0,
         retryDelay = 1000,
         shouldRetry = null,
+        onSuccess = null,
     } = options;
 
     const toast = useToast();
@@ -100,6 +101,7 @@ export const useApiData = ({ apiFunction, options = {}, dependencies = [] }) => 
                     if (showSuccessToast && toast && toast.success) {
                         toast.success(successMessage);
                     }
+                    if (onSuccess) onSuccess(finalData);
                 })
                 .catch(err => {
                     if (!isMountedRef.current || seq !== requestSeqRef.current) return;
@@ -144,6 +146,7 @@ export const useApiData = ({ apiFunction, options = {}, dependencies = [] }) => 
             retryDelay,
             toast,
             cleanup,
+            onSuccess,
         ]
     );
 

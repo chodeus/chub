@@ -105,6 +105,16 @@ const apiCore = {
         });
     },
 
+    // Invalidate a mutated resource AND its parent list (e.g. /media/123 ->
+    // /media, /media/collections/5 -> /media/collections) so lists/searches
+    // don't keep showing a stale entry after a create/update/delete.
+    clearCacheForMutation(url) {
+        const path = url.split('?')[0];
+        this.clearCache(path);
+        const parent = path.replace(/\/[^/]+\/?$/, '');
+        if (parent && parent !== path) this.clearCache(parent);
+    },
+
     /**
      * Get cache key for request
      * @param {string} url - Request URL
@@ -323,8 +333,8 @@ const apiCore = {
             ...options,
         });
 
-        // Clear related cache entries
-        this.clearCache(url.split('?')[0]);
+        // Clear the resource + its parent list cache.
+        this.clearCacheForMutation(url);
 
         return response;
     },
@@ -344,8 +354,8 @@ const apiCore = {
             ...options,
         });
 
-        // Clear related cache entries
-        this.clearCache(url.split('?')[0]);
+        // Clear the resource + its parent list cache.
+        this.clearCacheForMutation(url);
 
         return response;
     },
@@ -362,8 +372,8 @@ const apiCore = {
             ...options,
         });
 
-        // Clear related cache entries
-        this.clearCache(url.split('?')[0]);
+        // Clear the resource + its parent list cache.
+        this.clearCacheForMutation(url);
 
         return response;
     },
@@ -382,8 +392,8 @@ const apiCore = {
             ...options,
         });
 
-        // Clear related cache entries
-        this.clearCache(url.split('?')[0]);
+        // Clear the resource + its parent list cache.
+        this.clearCacheForMutation(url);
 
         return response;
     },

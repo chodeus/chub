@@ -75,6 +75,15 @@ AUTH_EXEMPT_PREFIXES = (
     "/posters/",
 )
 
+# Routes a scope="stream" token may reach (GET only): image/preview/SSE endpoints
+# whose URLs carry the token because <img>/EventSource can't send an auth header.
+STREAM_PATH_PREFIXES = (
+    "/api/media/",
+    "/api/posters/",
+    "/api/border-replacerr/preview/",
+    "/api/modules/events",
+)
+
 
 class AuthMiddleware(BaseHTTPMiddleware):
     """
@@ -149,6 +158,22 @@ class AuthMiddleware(BaseHTTPMiddleware):
                     "success": False,
                     "message": "Invalid or expired token",
                     "error_code": "AUTH_TOKEN_INVALID",
+                },
+            )
+
+        # A scope-limited stream token (URL-embedded auth for images/SSE) is only
+        # valid for GET requests on the stream allowlist — never for mutations or
+        # general API access, so a leaked image/SSE URL can't do more than that.
+        if payload.get("scope") == "stream" and (
+            request.method != "GET" or not path.startswith(STREAM_PATH_PREFIXES)
+        ):
+            self._log_unauthorized(request, "stream token off stream route", path)
+            return JSONResponse(
+                status_code=403,
+                content={
+                    "success": False,
+                    "message": "Token not valid for this route",
+                    "error_code": "AUTH_SCOPE_INVALID",
                 },
             )
 

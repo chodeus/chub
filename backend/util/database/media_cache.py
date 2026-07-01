@@ -905,16 +905,11 @@ class MediaCache(DatabaseBase):
             conditions.append("CAST(year AS INTEGER) <= ?")
             params.append(year_max)
 
-        if rating_min is not None:
-            conditions.append(
-                "rating IS NOT NULL AND rating != '' AND CAST(rating AS REAL) >= ?"
-            )
-            params.append(rating_min)
-        if rating_max is not None:
-            conditions.append(
-                "rating IS NOT NULL AND rating != '' AND CAST(rating AS REAL) <= ?"
-            )
-            params.append(rating_max)
+        # `rating` stores a TEXT content certification (PG, TV-MA, …), not a
+        # numeric score: CAST(rating AS REAL) is always 0.0, so a numeric range
+        # would silently drop every certified row. No numeric column exists to
+        # filter on, so the range is intentionally not applied.
+        _ = (rating_min, rating_max)
 
         if instance_name:
             conditions.append("instance_name = ?")

@@ -20,6 +20,10 @@ SCHEDULER_HEALTH_RETENTION_DAYS = 30
 # Persistent cache for cron next-run times (must survive across check_schedule calls)
 _next_run_times: Dict[str, datetime] = {}
 
+# Last minute a non-cron schedule fired per script, so the tick (which can run
+# several times within the matched minute) triggers it at most once per window.
+_last_fired: Dict[str, datetime] = {}
+
 _WEEKDAY_ALIASES = {
     "0": "sunday",
     "7": "sunday",
@@ -350,6 +354,14 @@ class ChubScheduler:
                     self.logger.get_adapter("scheduler") if self.logger else None
                 )
                 if check_schedule(name, sched, log_adapter):
+                    # check_schedule is a pure match and stays True for the whole
+                    # minute; the tick can run several times within it, so fire
+                    # each module at most once per matched minute.
+                    minute_now = datetime.now().replace(second=0, microsecond=0)
+                    if _last_fired.get(name) == minute_now:
+                        continue
+                    _last_fired[name] = minute_now
+
                     if self.logger:
                         self.logger.get_adapter("SCHEDULER").info(
                             f"Running scheduled module: {name}"

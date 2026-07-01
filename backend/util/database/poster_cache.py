@@ -402,8 +402,11 @@ class PosterCache(DatabaseBase):
         a leaf name can't accidentally clobber each other.
         """
         prefix = path_prefix.rstrip("/") + "/"
+        # Escape LIKE metacharacters so a folder named e.g. `My_Movies` can't
+        # match siblings via the `_`/`%` wildcards.
+        like = prefix.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         return self.execute_query(
-            "DELETE FROM poster_cache WHERE file LIKE ?", (prefix + "%",)
+            "DELETE FROM poster_cache WHERE file LIKE ? ESCAPE '\\'", (like + "%",)
         )
 
     def delete_asset_rows_by_path_prefix(self, path_prefix: str) -> int:
@@ -414,9 +417,11 @@ class PosterCache(DatabaseBase):
         shared poster_cache.
         """
         prefix = path_prefix.rstrip("/") + "/"
+        like = prefix.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         return self.execute_query(
-            "DELETE FROM poster_cache WHERE file LIKE ? AND image_type != 'poster'",
-            (prefix + "%",),
+            "DELETE FROM poster_cache WHERE file LIKE ? ESCAPE '\\' "
+            "AND image_type != 'poster'",
+            (like + "%",),
         )
 
     def get_by_integer_id(self, poster_id: int) -> Optional[dict]:

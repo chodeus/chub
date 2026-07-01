@@ -9,6 +9,7 @@
  */
 
 import { apiCore } from './core.js';
+import { streamTokenParam } from './streamAuth.js';
 
 /**
  * Posters API client for artwork management
@@ -582,7 +583,7 @@ export const postersAPI = {
         const params = new URLSearchParams();
         if (location) params.set('location', location);
         if (path) params.set('path', path);
-        const token = localStorage.getItem('chub-auth-token');
+        const token = streamTokenParam();
         if (token) params.set('token', token);
         return `/api/posters/preview?${params.toString()}`;
     },
@@ -596,7 +597,7 @@ export const postersAPI = {
     getThumbnailUrl: (posterId, width = 300) => {
         const params = new URLSearchParams();
         params.set('width', width);
-        const token = localStorage.getItem('chub-auth-token');
+        const token = streamTokenParam();
         if (token) params.set('token', token);
         return `/api/posters/${posterId}/thumbnail?${params.toString()}`;
     },
@@ -664,7 +665,7 @@ export const postersAPI = {
     getPlexVariantUrl: path => {
         const params = new URLSearchParams();
         params.set('path', path);
-        const token = localStorage.getItem('chub-auth-token');
+        const token = streamTokenParam();
         if (token) params.set('token', token);
         return `/api/posters/plex-metadata/variant-thumbnail?${params.toString()}`;
     },
