@@ -194,7 +194,9 @@ const DuplicatesSection = ({ duplicates, onResolve, onRefresh }) => {
     const [loadingKeys, setLoadingKeys] = useState(() => new Set());
     // id -> size_bytes, so the bulk bar can total the space freed.
     const [selected, setSelected] = useState({});
-    const [deleteFiles, setDeleteFiles] = useState(true);
+    // Off by default; disk deletion is opt-in and confirmed in the modal.
+    const [deleteFiles, setDeleteFiles] = useState(false);
+    const [confirmOpen, setConfirmOpen] = useState(false);
     const [busy, setBusy] = useState(false);
     const [filter, setFilter] = useState('');
 
@@ -231,6 +233,7 @@ const DuplicatesSection = ({ duplicates, onResolve, onRefresh }) => {
     const freed = selectedIds.reduce((sum, id) => sum + (selected[id] || 0), 0);
 
     const doDelete = async () => {
+        setConfirmOpen(false);
         setBusy(true);
         try {
             const res = await mediaAPI.bulkDeleteMedia(selectedIds, { deleteFiles });
@@ -299,15 +302,6 @@ const DuplicatesSection = ({ duplicates, onResolve, onRefresh }) => {
                     <span className="font-mono text-[12px] text-fg-muted">
                         frees {fmtBytes(freed)}
                     </span>
-                    <label className="flex items-center gap-1.5 text-[12px] text-fg-muted cursor-pointer select-none">
-                        <input
-                            type="checkbox"
-                            checked={deleteFiles}
-                            onChange={e => setDeleteFiles(e.target.checked)}
-                            style={{ accentColor: 'var(--primary)' }}
-                        />
-                        delete files from disk
-                    </label>
                     <div className="ml-auto flex gap-2">
                         <Button variant="ghost" size="small" onClick={() => setSelected({})}>
                             Clear
@@ -318,7 +312,7 @@ const DuplicatesSection = ({ duplicates, onResolve, onRefresh }) => {
                             variant="danger"
                             size="small"
                             icon="delete"
-                            onClick={doDelete}
+                            onClick={() => setConfirmOpen(true)}
                         >
                             Delete copies
                         </LoadingButton>
@@ -344,6 +338,48 @@ const DuplicatesSection = ({ duplicates, onResolve, onRefresh }) => {
                     );
                 })}
             </div>
+
+            <Modal isOpen={confirmOpen} onClose={() => setConfirmOpen(false)} size="small">
+                <Modal.Header>Delete Duplicate Copies</Modal.Header>
+                <Modal.Body>
+                    <p className="text-fg-muted">
+                        Delete{' '}
+                        <span className="font-semibold text-fg">
+                            {selectedIds.length} cop{selectedIds.length === 1 ? 'y' : 'ies'}
+                        </span>
+                        ? This action cannot be undone.
+                    </p>
+                    <label className="flex items-center gap-2 mt-3 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            checked={deleteFiles}
+                            onChange={e => setDeleteFiles(e.target.checked)}
+                            className="rounded border-border"
+                        />
+                        <span className="text-sm text-fg-muted">Also delete files from disk</span>
+                    </label>
+                    {deleteFiles && (
+                        <p className="text-xs text-warning mt-1">
+                            Warning: This will permanently remove the media files from your ARR
+                            instance and disk.
+                        </p>
+                    )}
+                </Modal.Body>
+                <Modal.Footer align="right">
+                    <Button variant="ghost" onClick={() => setConfirmOpen(false)}>
+                        Cancel
+                    </Button>
+                    <LoadingButton
+                        loading={busy}
+                        loadingText="Deleting…"
+                        variant="danger"
+                        icon="delete"
+                        onClick={doDelete}
+                    >
+                        Delete copies
+                    </LoadingButton>
+                </Modal.Footer>
+            </Modal>
         </section>
     );
 };
@@ -401,7 +437,8 @@ const MediaManagePage = () => {
     );
 
     const { execute: updateCollectionMutation, isLoading: isUpdatingCollection } = useApiMutation(
-        (id, data) => mediaAPI.updateCollection(id, data),
+        // execute() forwards a single arg — take one object, not (id, data).
+        ({ id, data }) => mediaAPI.updateCollection(id, data),
         {
             successMessage: 'Collection updated',
             onSuccess: () => {
@@ -1324,8 +1361,9 @@ const MediaManagePage = () => {
                         variant="primary"
                         icon="save"
                         onClick={() =>
-                            updateCollectionMutation(editCollection.id, {
-                                name: editCollectionName.trim(),
+                            updateCollectionMutation({
+                                id: editCollection.id,
+                                data: { name: editCollectionName.trim() },
                             })
                         }
                         disabled={isUpdatingCollection || !editCollectionName.trim()}
