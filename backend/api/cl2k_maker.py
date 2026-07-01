@@ -286,12 +286,20 @@ def test_drive(
     """Upload a tiny marker file to ``gdrive_folder_id`` then delete it, proving
     write access with the Sync GDrive OAuth token. Powers the per-destination
     Test button in the CL2K settings."""
-    from backend.util.cl2k.gdrive_upload import test_drive_access
+    from backend.util.cl2k.gdrive_upload import has_upload_token, test_drive_access
 
     folder_id = (req.gdrive_folder_id or "").strip()
     if not folder_id:
         return error("A Google Drive folder ID is required", "GDRIVE_FOLDER_REQUIRED")
     cfg = load_config()
+    # Missing token is a config precondition (400), distinct from a genuine
+    # rclone/Drive failure below (502).
+    if not has_upload_token(cfg.sync_gdrive):
+        return error(
+            "No Google Drive OAuth token configured — set one under Sync GDrive "
+            "(a service account cannot own files in a personal Drive).",
+            "GDRIVE_NO_TOKEN",
+        )
     try:
         detail = test_drive_access(folder_id, cfg.sync_gdrive, logger)
     except ValueError as exc:

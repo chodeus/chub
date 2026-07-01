@@ -442,8 +442,12 @@ def generate_for_item(
     )
     # output_dir is only required when actually saving locally; a Drive-only save
     # uploads from a temp copy and never touches output_dir.
-    if save_local and not cfg.output_dir:
-        return {"status": "error", "reason": "cl2k_maker.output_dir is not configured"}
+    if save_local and not _has_local_output(cfg):
+        return {
+            "status": "error",
+            "reason": "cl2k_maker.output_dir is not configured (set it, or add a "
+            "destination with an output directory)",
+        }
 
     if (
         cfg.skip_existing
@@ -554,8 +558,12 @@ def generate_square_art(
         tvdb_id=tvdb_id,
         imdb_id=imdb_id,
     )
-    if save_local and not cfg.output_dir:
-        return {"status": "error", "reason": "cl2k_maker.output_dir is not configured"}
+    if save_local and not _has_local_output(cfg):
+        return {
+            "status": "error",
+            "reason": "cl2k_maker.output_dir is not configured (set it, or add a "
+            "destination with an output directory)",
+        }
     if backdrop_bytes is None:
         if not backdrop_path:
             return {"status": "error", "reason": "no source art selected"}
@@ -639,8 +647,12 @@ def generate_background_art(
         tvdb_id=tvdb_id,
         imdb_id=imdb_id,
     )
-    if save_local and not cfg.output_dir:
-        return {"status": "error", "reason": "cl2k_maker.output_dir is not configured"}
+    if save_local and not _has_local_output(cfg):
+        return {
+            "status": "error",
+            "reason": "cl2k_maker.output_dir is not configured (set it, or add a "
+            "destination with an output directory)",
+        }
     if backdrop_bytes is None:
         if not backdrop_path:
             return {"status": "error", "reason": "no source art selected"}
@@ -719,8 +731,12 @@ def generate_logo_asset(
         tvdb_id=tvdb_id,
         imdb_id=imdb_id,
     )
-    if save_local and not cfg.output_dir:
-        return {"status": "error", "reason": "cl2k_maker.output_dir is not configured"}
+    if save_local and not _has_local_output(cfg):
+        return {
+            "status": "error",
+            "reason": "cl2k_maker.output_dir is not configured (set it, or add a "
+            "destination with an output directory)",
+        }
     raw = logo_bytes
     if raw is None and logo_path:
         raw = image_fetch.download(logo_path)
@@ -765,6 +781,17 @@ def _match_destination(cfg, image_type: str):
         if image_type in (getattr(dest, "image_types", None) or []):
             return dest
     return None
+
+
+def _has_local_output(cfg) -> bool:
+    """True when a local save has somewhere to go: the global ``output_dir`` or
+    at least one destination with its own ``output_dir``. Lets a routing-only
+    config (per-type dirs, blank global) pass the pre-render guard."""
+    if getattr(cfg, "output_dir", ""):
+        return True
+    return any(
+        getattr(d, "output_dir", "") for d in (getattr(cfg, "destinations", None) or [])
+    )
 
 
 def _persist_poster(
@@ -821,12 +848,24 @@ def _persist_poster(
         else cfg.gdrive_folder_id
     )
     if upload_gdrive is None:
-        upload_gdrive = (
-            bool(dest.upload_to_gdrive) if dest else bool(cfg.upload_to_gdrive)
+        # Additive: the global switch is the default; a matched destination can
+        # additionally enable upload for its types. A destination created only
+        # to redirect the local dir therefore keeps uploading via the global
+        # setting instead of silently turning it off.
+        upload_gdrive = bool(cfg.upload_to_gdrive) or bool(
+            getattr(dest, "upload_to_gdrive", False)
         )
     do_upload = bool(upload_gdrive)
     if not save_local and not do_upload:
         return {"status": "error", "reason": "no save destination selected"}
+    if save_local and not out_dir:
+        return {
+            "status": "error",
+            "reason": (
+                f"no output directory for image_type '{image_type}' "
+                "(set cl2k_maker.output_dir or a destination output directory)"
+            ),
+        }
     if do_upload and not folder_id:
         if not save_local:
             return {
@@ -1075,8 +1114,12 @@ def save_finished_poster(
         tvdb_id=tvdb_id,
         imdb_id=imdb_id,
     )
-    if save_local and not cfg.output_dir:
-        return {"status": "error", "reason": "cl2k_maker.output_dir is not configured"}
+    if save_local and not _has_local_output(cfg):
+        return {
+            "status": "error",
+            "reason": "cl2k_maker.output_dir is not configured (set it, or add a "
+            "destination with an output directory)",
+        }
     blob = _normalize_poster(image_bytes)
     if logo_bytes:
         from backend.util.cl2k.renderer import overlay_logo
