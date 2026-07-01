@@ -255,3 +255,75 @@ def test_rename_instance_migrates_title_cased_source(db):
         )
     }
     assert names == {"Radarr"}  # no ghost "radarr" left behind
+
+
+# 9. Worker startup reset must be scoped to this worker's job partition, so a
+#    catch-all worker can't revert a webhook job the webhook worker just claimed.
+def test_worker_startup_reset_scoped_to_partition(db):
+    db.worker.enqueue_job("jobs", {}, job_type="webhook")
+    db.worker.enqueue_job("jobs", {}, job_type="module_run")  # no module_name → no dedup
+    db.worker.execute_query("UPDATE jobs SET status='running'")
+
+    def status_by_type():
+        rows = db.worker.execute_query("SELECT type, status FROM jobs", fetch_all=True)
+        return {r["type"]: r["status"] for r in (rows or [])}
+
+    # Catch-all (background) worker resets only non-webhook jobs.
+    db.create_worker(worker_name="bg", job_type_filter=None)._reset_stuck_jobs("jobs")
+    st = status_by_type()
+    assert st["webhook"] == "running"  # sibling's in-flight job untouched
+    assert st["module_run"] == "pending"
+
+    # Webhook worker resets only webhook jobs.
+    db.worker.execute_query("UPDATE jobs SET status='running'")
+    db.create_worker(worker_name="wh", job_type_filter="webhook")._reset_stuck_jobs("jobs")
+    st = status_by_type()
+    assert st["webhook"] == "pending"
+    assert st["module_run"] == "running"
+
+
+# 10. Every SSRF-validated instance probe must disable redirects, else a 302 to a
+#     metadata endpoint bypasses is_safe_url.
+def test_instance_probes_disable_redirects():
+    import inspect
+
+    import backend.api.instances as inst
+
+    src = inspect.getsource(inst)
+    for bad in (
+        "requests.get(test_url, headers=headers, timeout=2)",
+        "requests.get(test_url, headers=headers, timeout=5)",
+        "requests.get(url, headers=headers, timeout=5)",
+    ):
+        assert bad not in src, f"probe follows redirects: {bad}"
+    # All external probes now opt out of redirects.
+    assert src.count("allow_redirects=False") >= 4
+
+
+# 11. A malformed schedule string must be rejected, not persisted (it would then
+#     silently never fire).
+def test_validate_schedule_rejects_malformed_accepts_valid():
+    from backend.util.scheduler import validate_schedule
+
+    for good in (
+        "",
+        "hourly(30)",
+        "daily(07:00|19:00)",
+        "weekly(mon@09:00|fri@18:30)",
+        "monthly(1@09:00|15@21:00)",
+        "cron(0 2 * * *)",
+    ):
+        validate_schedule(good)
+
+    for bad in (
+        "daily(2am)",
+        "daily(25:00)",
+        "hourly(99)",
+        "weekly(someday@09:00)",
+        "monthly(40@09:00)",
+        "cron(not a valid cron)",
+        "banana(1)",
+        "daily(07:00",
+    ):
+        with pytest.raises(ValueError):
+            validate_schedule(bad)
