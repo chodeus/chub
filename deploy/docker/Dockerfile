@@ -34,14 +34,15 @@ RUN pip3 install --no-cache-dir -r requirements.txt
 COPY requirements-cl2k.txt .
 RUN pip3 install --no-cache-dir -r requirements-cl2k.txt
 
-# Install rclone: pinned version + checksum-verified against the official
+# Install rclone: fetch the current release and verify it against the official
 # SHA256SUMS, instead of piping an unpinned install script into a root shell.
-ARG RCLONE_VERSION=v1.68.2
+# Always-latest (like the old install.sh) but with integrity + no remote code.
 RUN set -eux; \
     arch="$(dpkg --print-architecture)"; \
-    curl -fsSL -o /tmp/rclone.zip "https://downloads.rclone.org/${RCLONE_VERSION}/rclone-${RCLONE_VERSION}-linux-${arch}.zip"; \
-    curl -fsSL -o /tmp/rclone.sha "https://downloads.rclone.org/${RCLONE_VERSION}/SHA256SUMS"; \
-    (cd /tmp && grep "rclone-${RCLONE_VERSION}-linux-${arch}.zip" rclone.sha | sha256sum -c -); \
+    ver="$(curl -fsSL https://downloads.rclone.org/version.txt | awk '{print $2}')"; \
+    curl -fsSL -o /tmp/rclone.zip "https://downloads.rclone.org/${ver}/rclone-${ver}-linux-${arch}.zip"; \
+    curl -fsSL -o /tmp/rclone.sha "https://downloads.rclone.org/${ver}/SHA256SUMS"; \
+    (cd /tmp && grep "rclone-${ver}-linux-${arch}.zip" rclone.sha | sha256sum -c -); \
     unzip -j /tmp/rclone.zip "*/rclone" -d /usr/bin; \
     chmod 0755 /usr/bin/rclone; \
     rclone --version; \
