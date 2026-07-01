@@ -618,7 +618,7 @@ async def get_module(
     try:
         logger.debug(f"Serving GET /api/modules/{name}")
         from backend.modules import MODULES
-        from backend.util.config import load_config
+        from backend.util.config import load_config, redact_secrets
 
         if name not in MODULES:
             return error(
@@ -640,7 +640,9 @@ async def get_module(
             "schedule": schedule_val,
             "running": status.get("running", False),
             "run_state": run_state,
-            "config": config_data.get(name, {}),
+            # Redact secrets (e.g. sync_gdrive client_secret / OAuth tokens);
+            # the parallel GET /api/config path redacts, this must too.
+            "config": redact_secrets(config_data.get(name, {})),
         }
 
         return ok(f"Module '{name}' details retrieved", module_info)

@@ -122,9 +122,17 @@ class AuthMiddleware(BaseHTTPMiddleware):
         try:
             config = load_config()
         except ConfigError:
-            # If config can't be loaded, let the request through —
-            # downstream handlers will return their own errors.
-            return await call_next(request)
+            # Auth state is indeterminate when config can't load — fail CLOSED,
+            # not open. Exempt paths (health/setup/static) already returned above.
+            self._log_unauthorized(request, "config unavailable", path)
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "success": False,
+                    "message": "Configuration unavailable",
+                    "error_code": "CONFIG_UNAVAILABLE",
+                },
+            )
 
         if not config.auth.username or not config.auth.password_hash:
             # Auth not set up yet — allow all requests (first-run state)
@@ -200,6 +208,23 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
         try:
             startup_config = load_config()
+            # The webhook ingest endpoints are auth-exempt and gated only by the
+            # optional shared secret. If it's unset they accept unauthenticated
+            # POSTs — fine on a trusted LAN, but a reverse-proxied / internet-
+            # exposed instance would take job-injection from anyone. Warn loudly.
+            if (
+                log
+                and not (
+                    getattr(startup_config.general, "webhook_secret", "") or ""
+                ).strip()
+            ):
+                log.warning(
+                    "SECURITY: webhook ingest endpoints (/api/webhooks/poster/add, "
+                    "/api/webhooks/unmatched/process) are UNAUTHENTICATED — no "
+                    "general.webhook_secret is set. Safe on a trusted LAN, but if "
+                    "CHUB is behind a reverse proxy or otherwise reachable off-LAN, "
+                    "set a webhook_secret and add it to your *arr webhook URLs."
+                )
             handler = install_error_notify_handler(startup_config, logger=logger)
             if handler and log:
                 log.debug(
