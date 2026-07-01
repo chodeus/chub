@@ -101,7 +101,71 @@ export const CL2K_MAKER_SCHEMA = {
             type: 'text',
             section: 'Google Drive Upload',
             description:
-                'Destination Google Drive folder ID for uploads. The folder is written to as you (via the Sync GDrive OAuth token), so the posters are owned by you.',
+                'Destination Google Drive folder ID for uploads. The folder is written to as you (via the Sync GDrive OAuth token), so the posters are owned by you. Used for any artwork type not routed by a Destination below.',
+        },
+        // ─── Destinations (optional per-type routing) ──────────────
+        {
+            key: 'destinations',
+            label: 'Destinations',
+            type: 'object_array',
+            displayType: 'destinations',
+            alwaysExpanded: true,
+            section: 'Destinations (optional)',
+            required: false,
+            description:
+                'Optional. Route generated art to different local folders and Drive folders by type — e.g. a "Posters" destination and an "Assets" destination for logos/backgrounds/square art. Each destination handles the types you select; anything not covered falls back to the single Output Directory and Upload Folder ID above. Leave empty to send everything to those single fields.',
+            fields: [
+                {
+                    key: 'name',
+                    label: 'Name',
+                    type: 'text',
+                    required: true,
+                    description: 'What this destination is for (e.g. Posters, Assets).',
+                },
+                {
+                    key: 'image_types',
+                    label: 'Artwork Types',
+                    type: 'multiselect',
+                    options: [
+                        { value: 'poster', label: 'Poster' },
+                        { value: 'logo', label: 'Logo' },
+                        { value: 'background', label: 'Background (16:9)' },
+                        { value: 'squareart', label: 'Square Art (1:1)' },
+                    ],
+                    description: 'Which generated artwork types route to this destination.',
+                },
+                {
+                    key: 'output_dir',
+                    label: 'Output Directory',
+                    type: 'dir',
+                    description:
+                        'Local folder these types are written to. Make it a Poster Renamerr or Asset Renamerr source directory so CHUB picks them up.',
+                },
+                {
+                    key: 'upload_to_gdrive',
+                    label: 'Upload to Google Drive',
+                    type: 'check_box',
+                    description: 'Also upload these types to the Drive folder below.',
+                },
+                {
+                    key: 'gdrive_folder_id',
+                    label: 'Upload Folder ID',
+                    type: 'text',
+                    description: 'Destination Google Drive folder ID for these types.',
+                },
+                {
+                    key: 'test',
+                    label: 'Test upload',
+                    type: 'action_button',
+                    buttonText: 'Test upload',
+                    endpoint: '/cl2k-maker/test-drive',
+                    payloadFields: ['gdrive_folder_id'],
+                    requireFields: ['gdrive_folder_id'],
+                    requireHint: 'Enter a Folder ID above to test',
+                    description:
+                        'Uploads a tiny file to the folder above and deletes it, confirming CHUB can upload there.',
+                },
+            ],
         },
         // ─── AI text removal ───────────────────────────────────────
         {

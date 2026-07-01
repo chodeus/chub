@@ -757,6 +757,16 @@ def generate_logo_asset(
     )
 
 
+def _match_destination(cfg, image_type: str):
+    """First configured cl2k destination whose ``image_types`` includes
+    ``image_type``, else None. Empty ``destinations`` (the default) means every
+    file falls back to the single ``output_dir`` / ``gdrive_folder_id``."""
+    for dest in getattr(cfg, "destinations", None) or []:
+        if image_type in (getattr(dest, "image_types", None) or []):
+            return dest
+    return None
+
+
 def _persist_poster(
     db: ChubDB,
     cfg,
@@ -800,12 +810,24 @@ def _persist_poster(
     uploaded from a temporary copy and is recorded only in provenance, NOT in
     poster_cache (nothing local for CHUB to match).
     """
+    # Optional per-image-type routing: a matching destination overrides the
+    # default output_dir / Drive folder for this file's image_type. No match
+    # (or no destinations configured) => the single default fields.
+    dest = _match_destination(cfg, image_type)
+    out_dir = dest.output_dir if dest and dest.output_dir else cfg.output_dir
+    folder_id = (
+        dest.gdrive_folder_id
+        if dest and dest.gdrive_folder_id
+        else cfg.gdrive_folder_id
+    )
     if upload_gdrive is None:
-        upload_gdrive = bool(cfg.upload_to_gdrive)
+        upload_gdrive = (
+            bool(dest.upload_to_gdrive) if dest else bool(cfg.upload_to_gdrive)
+        )
     do_upload = bool(upload_gdrive)
     if not save_local and not do_upload:
         return {"status": "error", "reason": "no save destination selected"}
-    if do_upload and not cfg.gdrive_folder_id:
+    if do_upload and not folder_id:
         if not save_local:
             return {
                 "status": "error",
@@ -831,13 +853,13 @@ def _persist_poster(
 
     out_path = None
     if save_local:
-        os.makedirs(cfg.output_dir, exist_ok=True)
-        out_path = os.path.join(cfg.output_dir, filename)
+        os.makedirs(out_dir, exist_ok=True)
+        out_path = os.path.join(out_dir, filename)
         with open(out_path, "wb") as fh:
             fh.write(blob)
         # Logged before the DB writes below so a failure there still leaves a
         # record that the file exists on disk.
-        logger.info(f"CL2K saved {filename} to {cfg.output_dir}")
+        logger.info(f"CL2K saved {filename} to {out_dir}")
 
         # poster_cache so CHUB's matching/upload picks it up
         db.poster.bulk_upsert(
@@ -850,7 +872,7 @@ def _persist_poster(
                     "tvdb_id": tvdb_id,
                     "imdb_id": imdb_id,
                     "season_number": season_number,
-                    "folder": os.path.basename(cfg.output_dir.rstrip("/")),
+                    "folder": os.path.basename(out_dir.rstrip("/")),
                     "file": out_path,
                     "style": cfg.style,
                     "priority": cfg.priority,
@@ -885,9 +907,7 @@ def _persist_poster(
     if do_upload:
         from backend.util.cl2k.gdrive_upload import upload_file
 
-        logger.info(
-            f"CL2K uploading {filename} to Drive folder {cfg.gdrive_folder_id}…"
-        )
+        logger.info(f"CL2K uploading {filename} to Drive folder {folder_id}…")
         # rclone needs a real on-disk file named with the DAPS filename. Reuse the
         # local save when present; otherwise stage a temp copy just for the upload.
         tmpdir = None
@@ -899,7 +919,7 @@ def _persist_poster(
                 src_path = os.path.join(tmpdir, filename)
                 with open(src_path, "wb") as fh:
                     fh.write(blob)
-            upload_file(src_path, cfg.gdrive_folder_id, sync_cfg, logger)
+            upload_file(src_path, folder_id, sync_cfg, logger)
             uploaded = True
             logger.info(f"CL2K uploaded {filename} to Drive")
         except Exception as exc:
