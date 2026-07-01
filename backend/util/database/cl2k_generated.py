@@ -9,6 +9,9 @@ class Cl2kGenerated(DatabaseBase):
 
     def record(self, rec: Dict[str, Any]) -> None:
         """Upsert a generated-poster record (keyed on the output file path)."""
+        # Never persist a Plex admin token at rest; download() re-mints it on read.
+        from backend.util.cl2k.image_fetch import strip_plex_token
+
         now = datetime.datetime.now(datetime.timezone.utc).isoformat()
         self.execute_query(
             """
@@ -33,7 +36,7 @@ class Cl2kGenerated(DatabaseBase):
                 rec.get("title"),
                 rec.get("year"),
                 rec.get("file"),
-                rec.get("backdrop_path"),
+                strip_plex_token(rec.get("backdrop_path")),
                 rec.get("logo_source"),
                 int(rec.get("uploaded", 0)),
                 now,

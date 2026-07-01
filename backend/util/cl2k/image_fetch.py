@@ -149,6 +149,55 @@ def _is_allowed_image_host(url: str) -> bool:
     return (parsed.netloc or "").lower() in _plex_netlocs()
 
 
+def strip_plex_token(value: Optional[str]) -> Optional[str]:
+    """Drop the X-Plex-Token query param so the admin token is never persisted at
+    rest (e.g. in cl2k_generated.backdrop_path). download() re-mints it on fetch."""
+    if not isinstance(value, str) or "x-plex-token" not in value.lower():
+        return value
+    from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
+    parts = urlsplit(value)
+    kept = [
+        (k, v)
+        for k, v in parse_qsl(parts.query, keep_blank_values=True)
+        if k.lower() != "x-plex-token"
+    ]
+    return urlunsplit(parts._replace(query=urlencode(kept)))
+
+
+def _plex_token_for(netloc: str) -> Optional[str]:
+    """The X-Plex-Token (Plex instance api key) for the configured Plex server
+    matching ``netloc``."""
+    from urllib.parse import urlparse
+
+    try:
+        from backend.util.config import load_config
+
+        plex = getattr(load_config().instances, "plex", {}) or {}
+        for cfg in plex.values():
+            if (urlparse(getattr(cfg, "url", "") or "").netloc or "").lower() == netloc:
+                return getattr(cfg, "api", None) or None
+    except Exception:
+        return None
+    return None
+
+
+def _with_plex_token(url: str) -> str:
+    """Re-mint the X-Plex-Token for a tokenless Plex-server URL (a persisted
+    backdrop_path has it stripped). No-op for non-Plex hosts or already-tokened URLs."""
+    from urllib.parse import urlparse
+
+    if "x-plex-token" in url.lower():
+        return url
+    netloc = (urlparse(url).netloc or "").lower()
+    if netloc not in _plex_netlocs():
+        return url
+    token = _plex_token_for(netloc)
+    if not token:
+        return url
+    return f"{url}{'&' if '?' in url else '?'}X-Plex-Token={token}"
+
+
 # Recently downloaded originals, keyed by final URL. Live-preview slider tweaks
 # re-render the same backdrop/logo over and over; without this every /preview
 # request re-pulled the multi-MB original from the CDN, dominating preview
@@ -199,6 +248,8 @@ def download(file_path: str, session=None) -> bytes:
         raise ValueError(
             f"refusing to fetch image from disallowed host: {urlparse(url).hostname!r}"
         )
+    # Re-mint the Plex token for a persisted (token-stripped) backdrop_path.
+    url = _with_plex_token(url)
     if session is None:
         cached = _dl_cache_get(url)
         if cached is not None:
