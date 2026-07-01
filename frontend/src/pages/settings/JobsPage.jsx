@@ -23,8 +23,14 @@ const TRIGGER_STYLE = {
     manual: 'bg-surface-inset text-fg-data',
     webhook: 'bg-accent/12 text-accent',
 };
-const triggerOf = job =>
-    job.trigger || (job.type === 'webhook' || job.job_type === 'webhook' ? 'webhook' : 'manual');
+const triggerOf = job => {
+    const raw =
+        job.trigger ||
+        (job.type === 'webhook' || job.job_type === 'webhook' ? 'webhook' : 'manual');
+    // A composite trigger ("scheduled:upgradinatorr_profiles") styles + reads as
+    // its base ("scheduled"); the module column already carries the detail.
+    return String(raw).split(':')[0];
+};
 
 // A job type can carry a trigger prefix (e.g. "scheduled:upgradinatorr_profiles").
 // The trigger is already shown as its own pill, so drop the prefix and humanize.
