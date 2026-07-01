@@ -20,7 +20,7 @@ from backend.api.utils import error, get_database, get_logger, ok
 from backend.util.arr import create_arr_client
 from backend.util.config import load_config
 from backend.util.database import ChubDB
-from backend.util.ssrf_guard import is_safe_url
+from backend.util.ssrf_guard import is_safe_url, safe_external_get
 
 router = APIRouter(
     prefix="/api/media",
@@ -1874,16 +1874,23 @@ def get_media_poster(
         # Trusted ARR instance on the LAN — private addresses are expected.
         is_external = False
 
-    safe, reason = is_safe_url(fetch_url, allow_private=not is_external)
-    if not safe:
-        logger.warning(f"Refused poster fetch for id={media_id}: {reason}")
-        return Response(status_code=403)
-
     try:
-        resp = requests.get(
-            fetch_url, headers=headers, timeout=10, allow_redirects=not is_external
-        )
+        if is_external:
+            # Untrusted user-set URL: validate + pin to the resolved IP (no
+            # DNS-rebinding window), redirects off.
+            resp = safe_external_get(fetch_url, timeout=10, headers=headers)
+        else:
+            safe, reason = is_safe_url(fetch_url, allow_private=True)
+            if not safe:
+                logger.warning(f"Refused poster fetch for id={media_id}: {reason}")
+                return Response(status_code=403)
+            resp = requests.get(
+                fetch_url, headers=headers, timeout=10, allow_redirects=True
+            )
         resp.raise_for_status()
+    except ValueError as e:
+        logger.warning(f"Refused poster fetch for id={media_id}: {e}")
+        return Response(status_code=403)
     except requests.RequestException as e:
         logger.debug(f"Poster fetch failed for id={media_id}: {e}")
         return Response(status_code=502)

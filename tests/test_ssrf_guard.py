@@ -105,11 +105,11 @@ def test_hostname_resolving_to_metadata_ip_blocked():
         assert "169.254" in reason or "blocked" in reason or "link-local" in reason
 
 
-def test_unresolvable_hostname_passes_through_safely():
-    """If resolution fails, ssrf_guard does not block on IP class; result is structural."""
+def test_unresolvable_hostname_fails_closed():
+    """An unresolvable host must fail closed — otherwise a rebinding/blip host
+    skips the IP checks and slips through."""
     with patch(
         "backend.util.ssrf_guard.socket.getaddrinfo", side_effect=socket.gaierror()
     ):
-        # No IP -> only host-name + scheme checks apply; non-blocked host passes
         ok, _ = is_safe_url("http://unresolvable-host.invalid/")
-        assert ok is True
+        assert ok is False
