@@ -318,6 +318,26 @@ class DBWorker(DatabaseBase):
             "num_workers": self.num_workers,
         }
 
+    def _reset_stuck_jobs(self, table_name: str) -> int:
+        """Revert THIS worker's stuck 'running' jobs to 'pending' on startup.
+
+        Clears timing and gives back the attempt a hard-kill consumed. Scoped to
+        this worker's job partition (mirrors claim_next_job) so a shared-table
+        sibling never reverts a job the other worker already claimed.
+        """
+        sql = (
+            f"UPDATE {table_name} SET status='pending', started_at=NULL, "
+            f"completed_at=NULL, attempts=MAX(attempts - 1, 0) WHERE status='running'"
+        )
+        params = []
+        if self.job_type_filter is not None:
+            sql += " AND type=?"
+            params.append(self.job_type_filter)
+        else:
+            sql += " AND type!=?"
+            params.append("webhook")
+        return self.execute_query(sql, tuple(params)) or 0
+
     def start(
         self,
         table_name: str = "jobs",
@@ -341,16 +361,9 @@ class DBWorker(DatabaseBase):
             log.info("Already running.")
             return
 
-        # Reset stuck 'running' jobs from a prior dead process — clear timing so
-        # the next claim records a fresh started_at, and give back the attempt
-        # the claim consumed (a hard kill increments attempts with no error
-        # handler, so a few restarts would otherwise exhaust max_attempts). Run
-        # AFTER the already-running guard so we never revert jobs this worker is
-        # actively processing.
-        reset = self.execute_query(
-            f"UPDATE {table_name} SET status='pending', started_at=NULL, "
-            f"completed_at=NULL, attempts=MAX(attempts - 1, 0) WHERE status='running'"
-        )
+        # Run AFTER the already-running guard so we never revert jobs this
+        # worker is actively processing.
+        reset = self._reset_stuck_jobs(table_name)
         if reset:
             log.info(f"Reset {reset} 'running' jobs to 'pending' on startup.")
 
