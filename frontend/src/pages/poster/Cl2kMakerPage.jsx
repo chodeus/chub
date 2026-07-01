@@ -1136,6 +1136,14 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
     const [busy, setBusy] = useState(false);
     // Live "n/total" readout while a background season batch runs (see runBulkSeasons).
     const [bulkProgress, setBulkProgress] = useState('');
+    // Cleared on unmount so the season poll loop below stops (no setState leak).
+    const bulkMountedRef = useRef(true);
+    useEffect(
+        () => () => {
+            bulkMountedRef.current = false;
+        },
+        []
+    );
 
     // A real (chosen/custom) logo is drawn as a live overlay on the logo-less base
     // so the size/position sliders move it without a server render. No logo = a
@@ -1281,7 +1289,10 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
         return () => {
             cancelled = true;
         };
-    }, [item]);
+        // Only the identity fields drive the fetch — editing other item fields
+        // must not re-storm the art APIs (plexImages is uncached).
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [item.tmdb_id, item.tvdb_id, item.imdb_id, item.kind]);
 
     // Season posters: TMDB has portrait 2:3 season-level key-art, a better source
     // than fitting a show backdrop. Fetch it when building a season poster.
@@ -1577,6 +1588,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             let fails = 0;
             while (true) {
                 await new Promise(r => setTimeout(r, 1500));
+                if (!bulkMountedRef.current) return; // unmounted — stop polling
                 let d;
                 try {
                     d = (await cl2kMakerAPI.seasonsStatus(jobId))?.data;
@@ -3496,7 +3508,9 @@ const BrushMask = ({
         };
     }, []);
 
-    const paint = useCallback(
+    const lastPoint = useRef(null);
+
+    const stamp = useCallback(
         p => {
             const ctx = canvasRef.current.getContext('2d');
             ctx.fillStyle = '#ffffff';
@@ -3511,6 +3525,26 @@ const BrushMask = ({
         [brushSize, brushShape]
     );
 
+    const paint = useCallback(
+        p => {
+            // Interpolate from the previous point so a fast stroke leaves no gaps.
+            const prev = lastPoint.current;
+            if (prev) {
+                const dist = Math.hypot(p.x - prev.x, p.y - prev.y);
+                const n = Math.ceil(dist / Math.max(brushSize / 2, 1));
+                for (let i = 1; i < n; i++) {
+                    stamp({
+                        x: prev.x + ((p.x - prev.x) * i) / n,
+                        y: prev.y + ((p.y - prev.y) * i) / n,
+                    });
+                }
+            }
+            stamp(p);
+            lastPoint.current = p;
+        },
+        [stamp, brushSize]
+    );
+
     const emit = useCallback(() => {
         const data = canvasRef.current.toDataURL('image/png').split(',')[1];
         onMaskChange(data);
@@ -3520,6 +3554,7 @@ const BrushMask = ({
         e => {
             e.preventDefault();
             drawing.current = true;
+            lastPoint.current = null;
             paint(pointFor(e));
         },
         [paint, pointFor]
@@ -3534,6 +3569,7 @@ const BrushMask = ({
     const onUp = useCallback(() => {
         if (!drawing.current) return;
         drawing.current = false;
+        lastPoint.current = null;
         emit();
     }, [emit]);
 
