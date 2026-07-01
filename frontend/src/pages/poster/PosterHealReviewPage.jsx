@@ -101,6 +101,7 @@ export const PosterHealReviewPage = () => {
 
     const handleApply = useCallback(
         async review => {
+            if (busyId != null) return; // another apply/dismiss is in flight
             setBusyId(review.id);
             try {
                 const res = await posterSelfHealAPI.apply(review.id);
@@ -112,11 +113,12 @@ export const PosterHealReviewPage = () => {
                 setBusyId(null);
             }
         },
-        [toast]
+        [toast, busyId]
     );
 
     const handleDismiss = useCallback(
         async review => {
+            if (busyId != null) return; // another apply/dismiss is in flight
             setBusyId(review.id);
             try {
                 await posterSelfHealAPI.dismiss(review.id);
@@ -127,7 +129,7 @@ export const PosterHealReviewPage = () => {
                 setBusyId(null);
             }
         },
-        [toast]
+        [toast, busyId]
     );
 
     return (

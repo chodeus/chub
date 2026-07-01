@@ -6,7 +6,7 @@ the module (auto-apply)."""
 import os
 from typing import Any, Dict
 
-from backend.util.cl2k.gdrive_upload import move_file
+from backend.util.cl2k.gdrive_upload import list_files, move_file
 
 
 def apply_proposal(row: Dict[str, Any], sync_cfg: Any, logger) -> str:
@@ -23,23 +23,37 @@ def apply_proposal(row: Dict[str, Any], sync_cfg: Any, logger) -> str:
     old_path = row.get("poster_file") or ""
     folder_id = row.get("drive_folder_id")
 
+    # Nothing to rename.
+    if not proposed or proposed == current:
+        return ""
+
     if folder_id:
+        # moveto/os.replace overwrite the destination permanently (Drive trash is
+        # off) — refuse if a different file already holds the target name.
+        if proposed in list_files(folder_id, sync_cfg, logger):
+            raise RuntimeError(
+                f"refusing to apply: '{proposed}' already exists in Drive folder "
+                f"{folder_id}; renaming '{current}' onto it would overwrite a "
+                "different poster."
+            )
         move_file(current, proposed, folder_id, sync_cfg, logger)
 
-    # A live-Drive-only poster carries just its bare filename (no directory) —
-    # there's no local copy to touch, so the Drive rename above is the whole job.
+    # Live-Drive-only poster: bare filename, no local copy to touch.
     if not old_path or not os.path.isabs(old_path):
         return ""
 
     note = ""
     new_path = os.path.join(os.path.dirname(old_path), proposed)
     try:
-        if os.path.exists(old_path):
-            os.replace(old_path, new_path)
-            logger.info(f"renamed local {current} -> {proposed}")
-        else:
+        if not os.path.exists(old_path):
             note = " (local copy was missing; it will refresh on the next scan)"
             logger.warning(f"local file missing, skipped local rename: {old_path}")
+        elif os.path.exists(new_path) and not os.path.samefile(old_path, new_path):
+            note = f" (local '{proposed}' already exists; left both to avoid clobber)"
+            logger.warning(f"local rename target exists, skipped: {new_path}")
+        else:
+            os.replace(old_path, new_path)
+            logger.info(f"renamed local {current} -> {proposed}")
     except OSError as exc:
         note = f" (local rename failed: {exc}; it will refresh on the next scan)"
         logger.warning(f"local rename failed for {old_path}: {exc}")
