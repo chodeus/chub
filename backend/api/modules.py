@@ -896,7 +896,12 @@ async def update_module_config(
     try:
         payload = await request.json()
         logger.debug(f"Serving PUT /api/modules/{name}/config")
-        from backend.util.config import ChubConfig, load_config, save_config
+        from backend.util.config import (
+            ChubConfig,
+            load_config,
+            save_config,
+            strip_redacted_placeholders,
+        )
 
         if name not in ChubConfig.model_fields:
             return error(
@@ -905,9 +910,28 @@ async def update_module_config(
                 status_code=404,
             )
 
+        # Credential/secret sections have dedicated guarded endpoints; blocking
+        # them here stops an empty PUT blanking auth or wiping instances.
+        reserved_sections = {"auth", "instances", "notifications"}
+        if name in reserved_sections:
+            logger.warning(
+                f"Refused PUT /api/modules/{name}/config — '{name}' is managed "
+                "only via its dedicated endpoint."
+            )
+            return error(
+                f"Section '{name}' cannot be updated through this endpoint; "
+                "use its dedicated endpoint.",
+                code="RESERVED_SECTION",
+                status_code=403,
+            )
+
         config = load_config()
         config_dict = config.model_dump(mode="python")
-        config_dict[name] = payload
+        # Keep real secrets when the UI echoes the redacted placeholder.
+        if isinstance(payload, dict) and isinstance(config_dict.get(name), dict):
+            config_dict[name] = strip_redacted_placeholders(payload, config_dict[name])
+        else:
+            config_dict[name] = payload
 
         updated = ChubConfig.model_validate(config_dict)
         save_config(updated)

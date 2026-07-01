@@ -209,7 +209,7 @@ def test_test_endpoint_resolves_redacted_key_by_url_on_rename(monkeypatch):
         ok = True
         status_code = 200
 
-    def fake_get(url, headers=None, timeout=None):
+    def fake_get(url, headers=None, timeout=None, **kwargs):
         captured["headers"] = headers or {}
         return _Resp()
 
