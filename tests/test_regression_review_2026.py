@@ -364,22 +364,22 @@ def test_auth_middleware_fails_closed_on_config_error(monkeypatch):
 # 13. verify_webhook_secret must fail CLOSED on config error — the exempt webhook
 #     endpoints rely solely on it.
 def test_verify_webhook_secret_fails_closed_on_config_error(monkeypatch):
-    import backend.api.webhooks as wh
     from fastapi import HTTPException
 
+    from backend.api.webhooks import verify_webhook_secret
     from backend.util.config import ConfigError
 
     def boom():
         raise ConfigError("corrupt config")
 
-    monkeypatch.setattr(wh, "load_config", boom)
+    monkeypatch.setattr("backend.api.webhooks.load_config", boom)
 
     class _Req:
         headers = {}
         query_params = {}
 
     with pytest.raises(HTTPException) as ei:
-        wh.verify_webhook_secret(_Req())
+        verify_webhook_secret(_Req())
     assert ei.value.status_code == 503
 
 
