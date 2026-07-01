@@ -221,3 +221,37 @@ def test_stream_token_rejected_off_allowlist(monkeypatch):
         client.get("/api/other", headers={"Authorization": f"Bearer {full}"}).status_code
         == 200
     )
+
+
+# 8. Renaming an instance must migrate rows even when the historical `source` is
+#    title-cased (the doubled-instance bug).
+def test_rename_instance_migrates_title_cased_source(db):
+    db.media.upsert(
+        dict(
+            title="M",
+            normalized_title=normalize_titles("M"),
+            year=2020,
+            alternate_titles=[],
+            normalized_alternate_titles=[],
+            tmdb_id=1,
+        ),
+        "movie",
+        "radarr",
+        "radarr",  # old instance_name
+    )
+    # Simulate a pre-normalization row whose source is title-cased.
+    db.media.execute_query("UPDATE media_cache SET source='Radarr'")
+
+    migrated = db.rename_instance("radarr", "Radarr", "radarr")
+    assert migrated >= 1
+
+    names = {
+        r["instance_name"]
+        for r in (
+            db.media.execute_query(
+                "SELECT DISTINCT instance_name FROM media_cache", fetch_all=True
+            )
+            or []
+        )
+    }
+    assert names == {"Radarr"}  # no ghost "radarr" left behind
