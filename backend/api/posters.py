@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, File, Query, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
+from starlette.background import BackgroundTask
 from starlette.concurrency import run_in_threadpool
 
 from backend.api.utils import error, get_database, get_logger, get_module_logger, ok
@@ -1104,7 +1105,25 @@ def _optimize_posters_sync(
                         if new_size < original_size:
                             import shutil
 
-                            shutil.move(tmp.name, full_path)
+                            # Convert changes the container, so write the new
+                            # extension and drop the original — else a .png would
+                            # hold JPEG bytes.
+                            base, _ = os.path.splitext(full_path)
+                            dest_path = (
+                                base + target_ext if needs_convert else full_path
+                            )
+                            shutil.move(tmp.name, dest_path)
+                            if dest_path != full_path:
+                                if os.path.exists(full_path):
+                                    os.remove(full_path)
+                                poster["file"] = os.path.basename(dest_path)
+                                try:
+                                    db.poster.upsert(poster)
+                                except Exception as ce:
+                                    logger.warning(
+                                        f"optimized {dest_path}; cache update "
+                                        f"failed: {ce}"
+                                    )
                             bytes_saved += original_size - new_size
                             processed += 1
                         else:
@@ -2298,8 +2317,15 @@ async def analyze_poster_directory(
                     status_code=400,
                 )
 
-        # Restrict to configured allowed roots
-        if config is not None and not is_path_allowed(location, config):
+        # Restrict to configured allowed roots. Fail closed if config is
+        # unavailable — otherwise the allow-list check is skipped entirely.
+        if config is None:
+            return error(
+                "Configuration unavailable — cannot verify allowed directories",
+                code="CONFIG_UNAVAILABLE",
+                status_code=503,
+            )
+        if not is_path_allowed(location, config):
             return error(
                 "Access denied — path outside allowed directories",
                 code="PATH_NOT_ALLOWED",
@@ -3572,6 +3598,8 @@ async def download_poster(
             tmp.name,
             media_type=media_types.get(pil_format, "image/jpeg"),
             filename=f"poster_{poster_id}{target_ext}",
+            # FileResponse doesn't delete what it serves — clean up the temp file.
+            background=BackgroundTask(os.unlink, tmp.name),
         )
 
     except Exception as e:

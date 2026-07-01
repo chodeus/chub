@@ -108,15 +108,22 @@ def _run_once(config, logger) -> None:
 def start_maintenance(config, logger, interval: int = 86400) -> threading.Thread:
     """Start the daily maintenance daemon thread and return it.
 
-    `config` is read fresh-ish each pass via the captured object; callers pass
-    the startup config. The first pass runs after `interval` so startup stays
-    fast and a just-restarted container doesn't back up on every boot.
+    Config is loaded fresh each pass (the reference on config-reload is replaced,
+    not mutated) so settings changes take effect without a restart. The first
+    pass runs after `interval` so a just-restarted container doesn't back up on
+    every boot.
     """
 
     def loop():
         while True:
             time.sleep(interval)
-            _run_once(config, logger)
+            try:
+                from backend.util.config import load_config
+
+                current = load_config()
+            except Exception:
+                current = config
+            _run_once(current, logger)
 
     thread = threading.Thread(target=loop, name="maintenance", daemon=True)
     thread.start()

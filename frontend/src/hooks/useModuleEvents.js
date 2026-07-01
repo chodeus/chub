@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 
-const TOKEN_STORAGE_KEY = 'chub-auth-token';
+import { ensureStreamToken } from '../utils/api/streamAuth.js';
 
 /**
  * useModuleEvents - SSE-based hook for real-time module status updates
@@ -33,20 +33,21 @@ export function useModuleEvents({ onStatusChange, enabled = true } = {}) {
         onStatusChangeRef.current = onStatusChange;
     }, [onStatusChange]);
 
-    const connect = useCallback(() => {
+    const connect = useCallback(async () => {
         if (eventSourceRef.current) {
             eventSourceRef.current.close();
         }
 
-        // EventSource can't send Authorization headers — pass token via query param
+        // EventSource can't send Authorization headers — pass a short-lived,
+        // scope-limited stream token via query param, not the session JWT.
         let sseUrl = '/api/modules/events';
         try {
-            const token = localStorage.getItem(TOKEN_STORAGE_KEY);
+            const token = await ensureStreamToken();
             if (token) {
                 sseUrl += `?token=${encodeURIComponent(token)}`;
             }
         } catch {
-            // localStorage unavailable — connect without token
+            // token unavailable — connect without (middleware will 401)
         }
 
         const es = new EventSource(sseUrl);

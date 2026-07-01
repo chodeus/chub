@@ -217,17 +217,16 @@ export const ScheduleField = React.memo(
             }
         };
 
-        // Initialize from incoming value (only when fundamentally different)
+        // Sync from value on every change (not just type change), or a saved
+        // schedule matching the 'daily' default never loads its data. Equality
+        // guards prevent re-render loops.
         useEffect(() => {
             const parsed = parseScheduleValue(value);
-
-            // Only update if the schedule type changed to prevent infinite loops
-            // Data changes within the same type should not trigger re-initialization
-            if (parsed.type !== scheduleType) {
-                setScheduleType(parsed.type);
-                setScheduleData(parsed.data);
-            }
-        }, [value, parseScheduleValue, scheduleType]);
+            setScheduleType(prev => (prev === parsed.type ? prev : parsed.type));
+            setScheduleData(prev =>
+                JSON.stringify(prev) === JSON.stringify(parsed.data) ? prev : parsed.data
+            );
+        }, [value, parseScheduleValue]);
 
         // Handle schedule type change
         const handleTypeChange = useCallback(

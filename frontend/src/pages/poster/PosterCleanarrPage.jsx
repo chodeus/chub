@@ -369,6 +369,13 @@ const LiveLogModal = ({ jobId, onClose, onCompleted }) => {
         setStatus('running');
     }
 
+    // Ref so the poll effect doesn't restart (refetching from offset 0) when the
+    // parent passes a new onCompleted identity each render.
+    const onCompletedRef = useRef(onCompleted);
+    useEffect(() => {
+        onCompletedRef.current = onCompleted;
+    }, [onCompleted]);
+
     useEffect(() => {
         if (!jobId) return undefined;
         let cancelled = false;
@@ -391,9 +398,9 @@ const LiveLogModal = ({ jobId, onClose, onCompleted }) => {
                     }
                     if (data.status) setStatus(data.status);
                     if (TERMINAL_STATUSES.includes(data.status)) {
-                        if (!completedFiredRef.current && onCompleted) {
+                        if (!completedFiredRef.current && onCompletedRef.current) {
                             completedFiredRef.current = true;
-                            onCompleted(jobId, data.status);
+                            onCompletedRef.current(jobId, data.status);
                         }
                         return;
                     }
@@ -407,7 +414,7 @@ const LiveLogModal = ({ jobId, onClose, onCompleted }) => {
             cancelled = true;
             if (timer) clearTimeout(timer);
         };
-    }, [jobId, onCompleted]);
+    }, [jobId]);
 
     const terminal = TERMINAL_STATUSES.includes(status);
 
