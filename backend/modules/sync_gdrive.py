@@ -873,3 +873,6 @@ class SyncGDrive(ChubModule):
             self.logger.error(f"\n\nAn error occurred: {exc}\n", exc_info=True)
             progress_cb(100)
             self._report_progress(100)
+            # Propagate so the run is marked failed — otherwise a sync where every
+            # folder failed (the RuntimeError above) still records success.
+            raise

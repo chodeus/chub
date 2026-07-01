@@ -521,7 +521,8 @@ def _rule_border_holidays_dict_to_list(
         new_list.append(
             {
                 "name": name,
-                "schedule": body.get("schedule"),
+                # schedule is a required str; None fails the model's validation.
+                "schedule": body.get("schedule") or "",
                 "colors": colors,
                 "borders": [],
             }
