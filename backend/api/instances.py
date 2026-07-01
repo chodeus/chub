@@ -438,7 +438,7 @@ def check_all_health(
             service, name, test_url, headers = probe
             start = time.time()
             try:
-                resp = requests.get(test_url, headers=headers, timeout=2)
+                resp = requests.get(test_url, headers=headers, timeout=2, allow_redirects=False)
                 elapsed = round((time.time() - start) * 1000)
                 return name, {
                     "service": service,
@@ -586,7 +586,7 @@ def _fetch_plex_libraries(plex_data: Any) -> list:
     if not safe:
         raise _PlexFetchError(f"URL refused: {reason}", "URL_BLOCKED", 400)
     try:
-        res = requests.get(url, headers=headers, timeout=5)
+        res = requests.get(url, headers=headers, timeout=5, allow_redirects=False)
     except requests.exceptions.RequestException as req_exc:
         raise _PlexFetchError(
             f"Failed to connect to Plex server: {req_exc}",
@@ -1377,7 +1377,9 @@ def test_existing_instance(
             )
 
         start = time.time()
-        resp = requests.get(test_url, headers=headers, timeout=5)
+        resp = requests.get(
+            test_url, headers=headers, timeout=5, allow_redirects=False
+        )
         elapsed = round((time.time() - start) * 1000)
 
         if resp.ok:
@@ -1908,7 +1910,7 @@ def check_instance_health(
 
         start = time.time()
         try:
-            resp = requests.get(test_url, headers=headers, timeout=2)
+            resp = requests.get(test_url, headers=headers, timeout=2, allow_redirects=False)
             elapsed = round((time.time() - start) * 1000)
             health_data = {
                 "name": instance_id,
