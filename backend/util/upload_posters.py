@@ -872,19 +872,19 @@ class PosterUploader:
                     self._throttle()
 
             if uploaded_libs:
-                # Grow (backfill) or reset (new bytes) the covered-library set.
-                # Never persisted in dry-run — a pretend upload must not let a
-                # later real run think the library is already done.
-                base = set() if reset_record else recorded_libs
-                covered = base | set(uploaded_libs)
-                self._update_asset_database(
-                    asset,
-                    current_file_hash,
-                    current_mtime,
-                    uploaded_libraries=(
-                        json.dumps(sorted(covered)) if not dry_run else None
-                    ),
-                )
+                # Never persist in dry-run — a pretend upload must not write the
+                # hash/mtime or covered-library set, or a later real run would
+                # skip the asset as already done.
+                if not dry_run:
+                    # Grow (backfill) or reset (new bytes) the covered set.
+                    base = set() if reset_record else recorded_libs
+                    covered = base | set(uploaded_libs)
+                    self._update_asset_database(
+                        asset,
+                        current_file_hash,
+                        current_mtime,
+                        uploaded_libraries=json.dumps(sorted(covered)),
+                    )
 
                 self._note_year_discrepancy(asset, matched_entries, match_type)
 
