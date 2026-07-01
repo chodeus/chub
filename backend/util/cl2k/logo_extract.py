@@ -121,6 +121,18 @@ def _background_distance(arr: np.ndarray, mask: Optional[np.ndarray]) -> np.ndar
     return np.sqrt((diff * diff).sum(axis=-1)).min(axis=-1)
 
 
+# Cap the input so the (H×W×N×3) float buffers below can't OOM the worker on an
+# oversized/decompression-bomb image. Posters are well under this.
+_MAX_SIDE = 3000
+
+
+def _open_rgb_bounded(image_bytes: bytes) -> Image.Image:
+    img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    if max(img.size) > _MAX_SIDE:
+        img.thumbnail((_MAX_SIDE, _MAX_SIDE), Image.LANCZOS)
+    return img
+
+
 def extract_subject_logo(
     image_bytes: bytes,
     mask_bytes: Optional[bytes] = None,
@@ -143,7 +155,7 @@ def extract_subject_logo(
     so the backdrop palette is sampled from real backdrop, not other artwork.
     lo/hi: colour-distance smoothstep band; raise lo to reject more background.
     """
-    img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    img = _open_rgb_bounded(image_bytes)
     arr = np.asarray(img).astype(np.float32)
     mask = _load_mask(mask_bytes, img.size)
 
@@ -181,7 +193,7 @@ def extract_title_logo(
     mask_bytes: optional PNG mask, white = keep region (resized to the image).
     lo/hi: min-channel smoothstep band; raise lo to reject more background.
     """
-    img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    img = _open_rgb_bounded(image_bytes)
     arr = np.asarray(img).astype(np.float32)
     mn = np.minimum(np.minimum(arr[..., 0], arr[..., 1]), arr[..., 2])
     t = np.clip((mn - lo) / max(hi - lo, 1.0), 0.0, 1.0)
