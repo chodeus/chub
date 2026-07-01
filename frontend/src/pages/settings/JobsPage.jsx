@@ -26,6 +26,15 @@ const TRIGGER_STYLE = {
 const triggerOf = job =>
     job.trigger || (job.type === 'webhook' || job.job_type === 'webhook' ? 'webhook' : 'manual');
 
+// A job type can carry a trigger prefix (e.g. "scheduled:upgradinatorr_profiles").
+// The trigger is already shown as its own pill, so drop the prefix and humanize.
+const prettyType = raw => {
+    if (!raw) return '-';
+    const s = String(raw);
+    const name = s.includes(':') ? s.split(':').pop() : s;
+    return name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+};
+
 // Status-dot colour for the table's STATUS cell.
 const STATUS_DOT = {
     pending: 'bg-warning',
@@ -421,7 +430,7 @@ export const JobsPage = () => {
                 <div className="flex flex-col gap-2">
                     {jobs.map(job => {
                         const isOpen = expandedJobId === job.id;
-                        const typeLabel = job.module_name || job.job_type || job.type || '-';
+                        const typeLabel = prettyType(job.module_name || job.job_type || job.type);
                         return (
                             <div
                                 key={job.id}
@@ -543,7 +552,9 @@ export const JobsPage = () => {
                                             #{job.id}
                                         </td>
                                         <td className="px-2 sm:px-4 py-3 text-fg text-sm font-semibold break-all">
-                                            {job.module_name || job.job_type || job.type || '-'}
+                                            {prettyType(
+                                                job.module_name || job.job_type || job.type
+                                            )}
                                         </td>
                                         <td className="hidden sm:table-cell px-4 py-3">
                                             <span
