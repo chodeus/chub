@@ -215,10 +215,25 @@ def test_endpoint_requires_folder_id():
     assert json.loads(resp.body)["error_code"] == "GDRIVE_FOLDER_REQUIRED"
 
 
+def test_endpoint_no_token_is_400(monkeypatch):
+    from backend.api import cl2k_maker as api
+
+    # Default config carries no OAuth token -> config precondition, not 502.
+    monkeypatch.setattr(api, "load_config", lambda: ChubConfig())
+    resp = api.test_drive(
+        api.TestDriveRequest(gdrive_folder_id="ABC123"), db=None, logger=StubLogger()
+    )
+    assert resp.status_code == 400
+    assert json.loads(resp.body)["error_code"] == "GDRIVE_NO_TOKEN"
+
+
 def test_endpoint_success(monkeypatch):
     from backend.api import cl2k_maker as api
 
     monkeypatch.setattr(api, "load_config", lambda: ChubConfig())
+    monkeypatch.setattr(
+        "backend.util.cl2k.gdrive_upload.has_upload_token", lambda sync_cfg: True
+    )
     monkeypatch.setattr(
         "backend.util.cl2k.gdrive_upload.test_drive_access",
         lambda folder_id, sync_cfg, logger: "Uploaded and removed a test file — upload works.",
@@ -237,12 +252,98 @@ def test_endpoint_failure_maps_to_502(monkeypatch):
     from backend.api import cl2k_maker as api
 
     def boom(folder_id, sync_cfg, logger):
-        raise RuntimeError("no usable Google Drive OAuth token configured")
+        raise RuntimeError("rclone copy failed: googleapi: Error 404")
 
     monkeypatch.setattr(api, "load_config", lambda: ChubConfig())
+    monkeypatch.setattr(
+        "backend.util.cl2k.gdrive_upload.has_upload_token", lambda sync_cfg: True
+    )
     monkeypatch.setattr("backend.util.cl2k.gdrive_upload.test_drive_access", boom)
     resp = api.test_drive(
         api.TestDriveRequest(gdrive_folder_id="ABC123"), db=None, logger=StubLogger()
     )
     assert resp.status_code == 502
     assert json.loads(resp.body)["error_code"] == "GDRIVE_TEST_FAILED"
+
+
+def test_has_local_output():
+    from backend.modules.cl2k_maker import _has_local_output
+
+    assert _has_local_output(_cfg(output_dir="/x")) is True
+    assert (
+        _has_local_output(
+            _cfg(
+                output_dir="",
+                destinations=[Cl2kDestination(name="A", image_types=["logo"], output_dir="/y")],
+            )
+        )
+        is True
+    )
+    assert _has_local_output(_cfg(output_dir="")) is False
+
+
+def test_additive_upload_inherits_global(db, tmp_path, monkeypatch):
+    """A destination created only to redirect the local dir (upload unchecked)
+    must NOT disable Drive upload when the global switch is on."""
+    from backend.modules.cl2k_maker import _persist_poster
+
+    captured = {}
+    monkeypatch.setattr(
+        "backend.util.cl2k.gdrive_upload.upload_file",
+        lambda src, folder_id, sync_cfg, logger: captured.__setitem__("folder_id", folder_id),
+    )
+
+    cfg = _cfg(
+        gdrive_folder_id="GLOBALFOLDER",
+        upload_to_gdrive=True,  # global upload ON
+        destinations=[
+            # A destination that redirects logos but leaves upload at its False
+            # default must NOT turn the (global) upload off for logos.
+            Cl2kDestination(name="Assets", image_types=["logo"]),
+        ],
+    )
+    # Drive-only + upload_gdrive=None (the UI/batch default) must still upload.
+    _persist_poster(
+        db,
+        cfg,
+        StubLogger(),
+        blob=b"logo",
+        title="Foo",
+        year=2020,
+        tmdb_id=1,
+        save_local=False,
+        upload_gdrive=None,
+        image_type="logo",
+        asset_suffix=" - Logo",
+        ext=".png",
+        **PERSIST_ARGS,
+    )
+    assert captured.get("folder_id") == "GLOBALFOLDER"
+
+
+def test_persist_errors_when_no_output_dir(db):
+    """Uncovered type + blank global output_dir returns a clean error, not a crash."""
+    from backend.modules.cl2k_maker import _persist_poster
+
+    cfg = _cfg(
+        output_dir="",
+        destinations=[Cl2kDestination(name="A", image_types=["logo"], output_dir="/tmp/a")],
+    )
+    # squareart is not covered by any destination and global is blank.
+    res = _persist_poster(
+        db,
+        cfg,
+        StubLogger(),
+        blob=b"x",
+        title="Foo",
+        year=2020,
+        tmdb_id=1,
+        save_local=True,
+        upload_gdrive=False,
+        image_type="squareart",
+        asset_suffix=" - SquareArt",
+        ext=".jpg",
+        **PERSIST_ARGS,
+    )
+    assert res["status"] == "error"
+    assert "output directory" in res["reason"].lower()
