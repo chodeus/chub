@@ -99,7 +99,13 @@ export const FloatField = React.memo(
                         id={inputId}
                         type="text"
                         name={field.key}
-                        value={typeof value === 'string' ? value : percentageValue || ''}
+                        value={
+                            typeof value === 'string'
+                                ? value
+                                : value === null || value === undefined
+                                  ? ''
+                                  : percentageValue
+                        }
                         onChange={handleInputChange}
                         disabled={disabled}
                         required={field.required}
