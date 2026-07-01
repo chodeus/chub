@@ -1292,7 +1292,6 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
         };
         // Only the identity fields drive the fetch — editing other item fields
         // must not re-storm the art APIs (plexImages is uncached).
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [item.tmdb_id, item.tvdb_id, item.imdb_id, item.kind]);
 
     // Season posters: TMDB has portrait 2:3 season-level key-art, a better source
