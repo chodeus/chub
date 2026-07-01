@@ -370,6 +370,15 @@ class ChubApplication:
             self.config = new_config
             if self.scheduler:
                 self.scheduler.config = new_config
+            # Rebuild the failure-notify handler so notification changes (incl. a
+            # newly added failure destination) apply without a restart.
+            try:
+                from backend.util.notification import refresh_error_notify_handler
+
+                refresh_error_notify_handler(new_config, self.logger)
+            except Exception as exc:
+                if log:
+                    log.warning(f"Failed to refresh error-notify handler: {exc}")
             if log:
                 log.info("Configuration reloaded successfully")
         except ConfigValidationError as e:

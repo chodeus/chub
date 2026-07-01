@@ -337,23 +337,22 @@ class DBWorker(DatabaseBase):
             process_fn = process_job
             log.debug("Using dedicated job processor from backend.util.job_processor")
 
-        # Reset any stuck running jobs — clear timing so the next claim
-        # records a fresh started_at instead of leaving the prior value. Also
-        # give back the attempt the claim consumed: a hard process kill (SIGKILL
-        # / OOM / container restart) leaves the job 'running' with attempts
-        # already incremented but no error handler ever ran, so without this a
-        # few restarts would exhaust max_attempts and the claim filter would
-        # exclude the job forever — never having truly failed once.
+        if self._threads and all(t.is_alive() for t in self._threads):
+            log.info("Already running.")
+            return
+
+        # Reset stuck 'running' jobs from a prior dead process — clear timing so
+        # the next claim records a fresh started_at, and give back the attempt
+        # the claim consumed (a hard kill increments attempts with no error
+        # handler, so a few restarts would otherwise exhaust max_attempts). Run
+        # AFTER the already-running guard so we never revert jobs this worker is
+        # actively processing.
         reset = self.execute_query(
             f"UPDATE {table_name} SET status='pending', started_at=NULL, "
             f"completed_at=NULL, attempts=MAX(attempts - 1, 0) WHERE status='running'"
         )
         if reset:
             log.info(f"Reset {reset} 'running' jobs to 'pending' on startup.")
-
-        if self._threads and all(t.is_alive() for t in self._threads):
-            log.info("Already running.")
-            return
 
         self.running = True
         self._shutdown_event.clear()

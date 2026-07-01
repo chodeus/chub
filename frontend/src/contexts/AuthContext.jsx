@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import PropTypes from 'prop-types';
+import { ensureStreamToken, clearStreamToken } from '../utils/api/streamAuth.js';
 
 const TOKEN_STORAGE_KEY = 'chub-auth-token';
 const AuthContext = createContext();
@@ -136,8 +137,18 @@ export const AuthProvider = ({ children }) => {
         return data;
     }, []);
 
+    // Keep a short-lived stream token warm while authenticated so image/SSE URLs
+    // never carry the full session token (see utils/api/streamAuth).
+    useEffect(() => {
+        if (!token) return undefined;
+        ensureStreamToken();
+        const id = setInterval(ensureStreamToken, 4 * 60 * 1000);
+        return () => clearInterval(id);
+    }, [token]);
+
     const logout = useCallback(() => {
         localStorage.removeItem(TOKEN_STORAGE_KEY);
+        clearStreamToken();
         setToken(null);
         setUser(null);
     }, []);

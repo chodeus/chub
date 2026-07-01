@@ -34,8 +34,18 @@ RUN pip3 install --no-cache-dir -r requirements.txt
 COPY requirements-cl2k.txt .
 RUN pip3 install --no-cache-dir -r requirements-cl2k.txt
 
-# Install rclone (jdupes is installed via apt in the runtime stage).
-RUN curl https://rclone.org/install.sh | bash
+# Install rclone: pinned version + checksum-verified against the official
+# SHA256SUMS, instead of piping an unpinned install script into a root shell.
+ARG RCLONE_VERSION=v1.68.2
+RUN set -eux; \
+    arch="$(dpkg --print-architecture)"; \
+    curl -fsSL -o /tmp/rclone.zip "https://downloads.rclone.org/${RCLONE_VERSION}/rclone-${RCLONE_VERSION}-linux-${arch}.zip"; \
+    curl -fsSL -o /tmp/rclone.sha "https://downloads.rclone.org/${RCLONE_VERSION}/SHA256SUMS"; \
+    (cd /tmp && grep "rclone-${RCLONE_VERSION}-linux-${arch}.zip" rclone.sha | sha256sum -c -); \
+    unzip -j /tmp/rclone.zip "*/rclone" -d /usr/bin; \
+    chmod 0755 /usr/bin/rclone; \
+    rclone --version; \
+    rm -f /tmp/rclone.zip /tmp/rclone.sha
 
 # Copy full app source (including frontend)
 COPY . .

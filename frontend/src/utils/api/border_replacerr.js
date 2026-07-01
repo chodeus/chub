@@ -14,12 +14,13 @@
  */
 
 import { apiCore } from './core.js';
+import { streamTokenParam } from './streamAuth.js';
 
 const ENCODE = encodeURIComponent;
 
 const withAuthQuery = () => {
     const params = new URLSearchParams();
-    const jwt = localStorage.getItem('chub-auth-token');
+    const jwt = streamTokenParam();
     if (jwt) params.set('token', jwt);
     return params.toString();
 };

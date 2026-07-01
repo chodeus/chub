@@ -211,7 +211,10 @@ class NotificationManager:
         bot_name: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         if isinstance(color, str):
-            color = int(color.lstrip("#"), 16)
+            try:
+                color = int(color.lstrip("#"), 16)
+            except ValueError:
+                color = 0x00FF00  # malformed colour must not drop the notification
         payloads: List[Dict[str, Any]] = []
         if isinstance(data, dict):
             data = [
@@ -542,6 +545,14 @@ class ErrorNotifyHandler(logging.Handler):
 
             error_msg = f"{msg}\n{error_type_msg}" if error_type_msg else msg
 
+            # The redaction filter never sees the exception text/traceback, so
+            # scrub secrets (e.g. tokens in a request URL) before they leave.
+            from backend.util.logger import SmartRedactionFilter
+
+            error_msg = SmartRedactionFilter.redact(error_msg)
+            if tb:
+                tb = SmartRedactionFilter.redact(tb)
+
             source_module = getattr(record, "module", None) or self.manager.module_name
             output = {
                 "error_message": error_msg,
@@ -602,3 +613,16 @@ def install_error_notify_handler(config, logger=None) -> Optional[ErrorNotifyHan
     handler = ErrorNotifyHandler(config, module_name="main", logger=logger)
     root.addHandler(handler)
     return handler
+
+
+def refresh_error_notify_handler(
+    config, logger=None
+) -> Optional["ErrorNotifyHandler"]:
+    """Re-evaluate the handler against current config on reload: drop the old one
+    (stale snapshot) and re-install if a failure destination is now configured —
+    so changes take effect without a restart."""
+    root = logging.getLogger()
+    for existing in list(root.handlers):
+        if isinstance(existing, ErrorNotifyHandler):
+            root.removeHandler(existing)
+    return install_error_notify_handler(config, logger=logger)

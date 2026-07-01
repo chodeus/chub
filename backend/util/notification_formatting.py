@@ -80,7 +80,18 @@ def format_for_discord(
             content = (
                 val[3:-3] if val.startswith("```") and val.endswith("```") else val
             )
-            lines = content.split("\n")
+            # Hard-split any single line longer than the field budget (leave room
+            # for the ``` fence + newline) so one long unbroken line can't produce
+            # a chunk over Discord's 1024 value limit.
+            max_line = DISCORD_FIELD_CHAR_LIMIT - 10
+            lines = []
+            for ln in content.split("\n"):
+                if len(ln) > max_line:
+                    lines.extend(
+                        ln[i : i + max_line] for i in range(0, len(ln), max_line)
+                    )
+                else:
+                    lines.append(ln)
             buffer = ""
             first = True
             for line in lines:

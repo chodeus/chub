@@ -6,7 +6,9 @@ import jwt
 
 from backend.util.auth import (
     JWT_ALGORITHM,
+    STREAM_TOKEN_EXPIRY_MINUTES,
     create_access_token,
+    create_stream_token,
     decode_access_token,
     generate_jwt_secret,
     hash_password,
@@ -76,3 +78,20 @@ def test_decode_malformed_token_returns_none():
     secret = generate_jwt_secret()
     assert decode_access_token("not.a.jwt", secret) is None
     assert decode_access_token("", secret) is None
+
+
+def test_stream_token_has_stream_scope_and_short_expiry():
+    secret = generate_jwt_secret()
+    payload = decode_access_token(create_stream_token("alice", secret), secret)
+    assert payload is not None
+    assert payload["sub"] == "alice"
+    assert payload["scope"] == "stream"
+    # Minutes-long TTL, far under the 24h session token.
+    assert 0 < payload["exp"] - payload["iat"] <= STREAM_TOKEN_EXPIRY_MINUTES * 60 + 5
+
+
+def test_session_token_has_no_stream_scope():
+    # Full session tokens must not carry the stream scope (they are unrestricted).
+    secret = generate_jwt_secret()
+    payload = decode_access_token(create_access_token("bob", secret), secret)
+    assert payload.get("scope") is None
