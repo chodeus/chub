@@ -82,7 +82,7 @@ const ReelPosterCard = ({ poster }) => {
                 )}
                 {styleTag && (
                     <span
-                        className="absolute bottom-1.5 left-1.5 font-mono text-[8px] font-bold tracking-[0.4px] px-1.5 py-0.5 rounded-[4px]"
+                        className="absolute top-1.5 left-1.5 font-mono text-[8px] font-bold tracking-[0.4px] px-1.5 py-0.5 rounded-[4px]"
                         style={{ color: styleTag[0], background: styleTag[1] }}
                     >
                         {poster.style}
