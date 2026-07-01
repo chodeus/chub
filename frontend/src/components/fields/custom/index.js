@@ -15,6 +15,7 @@ export { ArrayObjectField } from './ArrayObjectField.jsx';
 
 // Working custom implementations
 export { DirPickerField } from './DirPickerField.jsx';
+export { ActionButtonField } from './ActionButtonField.jsx';
 
 // Placeholder implementations
 export {

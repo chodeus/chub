@@ -274,6 +274,10 @@ export const ArrayObjectField = ({
                                 // field key so that lookup hits.
                                 additionalProps.moduleConfig = { [field.key]: value };
                             }
+                            // Action buttons act on the whole row being edited.
+                            if (subField.type === 'action_button') {
+                                additionalProps.rowData = editingData;
+                            }
 
                             // Enhanced dropdown with API integration
                             let enhancedField = subField;
@@ -369,6 +373,11 @@ export const ArrayObjectField = ({
                 const additionalProps = {};
                 if (subField.type === 'presets') {
                     additionalProps.moduleConfig = { [field.key]: value };
+                }
+                // Action buttons act on the whole row (e.g. test this row's
+                // connection), so hand them the row object.
+                if (subField.type === 'action_button') {
+                    additionalProps.rowData = item;
                 }
                 let enhancedField = subField;
                 if (subField.options_source === 'api_instances') {
@@ -985,6 +994,17 @@ const DISPLAY_TEMPLATES = {
             secondary: item.location || 'No location specified',
             badge: item.id ? `ID: ${item.id.substring(0, 8)}...` : null,
         }),
+    },
+    destinations: {
+        itemName: 'Destination',
+        display: item => {
+            const types = Array.isArray(item.image_types) ? item.image_types : [];
+            return {
+                primary: item.name || 'Unnamed destination',
+                secondary: item.output_dir || 'No output directory',
+                badge: types.length ? `${types.length} type${types.length !== 1 ? 's' : ''}` : null,
+            };
+        },
     },
     replacerr: {
         itemName: 'Holiday Mapping',
