@@ -2254,6 +2254,147 @@ async def sync_gdrive_folders(
         )
 
 
+@router.post(
+    "/gdrive/delete-local",
+    summary="Delete a GDrive drive's local synced folder",
+    description=(
+        "Remove the on-disk folder a configured GDrive drive syncs into and "
+        "purge its cached poster rows. Only deletes a folder that matches a "
+        "currently-configured gdrive_list location; refuses anything else."
+    ),
+    responses={
+        200: {"description": "Local folder removed and cache rows purged"},
+        400: {"description": "Missing/invalid location or not a configured drive"},
+        503: {"description": "Configuration unavailable"},
+    },
+)
+async def delete_gdrive_local(
+    request: Request,
+    logger: Any = Depends(get_logger),
+    db: ChubDB = Depends(get_database),
+) -> JSONResponse:
+    """
+    Delete the local synced folder for a removed GDrive drive and purge
+    its poster_cache rows.
+
+    Guardrails (defense in depth):
+      - the location must be a non-empty string without null bytes and must
+        not look like a CLI flag;
+      - it must match (by realpath) the ``location`` of a currently
+        configured ``gdrive_list`` entry — so only a real drive folder is
+        ever deleted, never an arbitrary path. ``realpath`` collapses any
+        ``..``/symlink games before the match, so traversal can't escape the
+        configured set;
+      - it must not resolve to the filesystem root.
+
+    Membership is the authorization: a configured drive location is by
+    definition an allowed root, so we don't also gate on ``is_path_allowed``
+    — that check keys off roots that *exist on disk*, which would wrongly
+    refuse (and skip the row purge for) a drive whose folder was already
+    deleted manually. Purging works even when the folder is gone, so a
+    partially cleaned-up drive still leaves no stale rows behind.
+    """
+    try:
+        logger.debug("Serving POST /api/posters/gdrive/delete-local")
+
+        try:
+            body = await request.json()
+        except Exception:  # noqa: S110 — malformed body handled as missing
+            body = {}
+        location = body.get("location") if isinstance(body, dict) else None
+
+        if (
+            not location
+            or not isinstance(location, str)
+            or "\x00" in location
+            or location.startswith("-")
+        ):
+            return error(
+                "A valid 'location' is required",
+                code="GDRIVE_LOCATION_REQUIRED",
+                status_code=400,
+            )
+
+        from backend.util.config import load_config
+
+        # Fail closed: without config we can't verify the path is a real drive.
+        try:
+            config = load_config()
+        except Exception:  # noqa: S110 — treated as unavailable below
+            config = None
+        if config is None:
+            return error(
+                "Configuration unavailable — cannot verify the drive folder",
+                code="CONFIG_UNAVAILABLE",
+                status_code=503,
+            )
+
+        # Must match a currently-configured gdrive_list location (by realpath),
+        # so only an actual drive folder is ever deleted — never an arbitrary
+        # path a caller invents.
+        req_real = os.path.realpath(location)
+        gdrive_list = getattr(config.sync_gdrive, "gdrive_list", None) or []
+        matched = next(
+            (
+                e
+                for e in gdrive_list
+                if e.location and os.path.realpath(e.location) == req_real
+            ),
+            None,
+        )
+        if matched is None:
+            return error(
+                "Location is not a configured Google Drive folder",
+                code="GDRIVE_LOCATION_NOT_CONFIGURED",
+                status_code=400,
+            )
+
+        # Never delete the filesystem root, even if it were (pathologically)
+        # configured as a drive location.
+        if req_real == os.path.realpath(os.sep):
+            return error(
+                "Refusing to delete a filesystem root",
+                code="GDRIVE_LOCATION_UNSAFE",
+                status_code=400,
+            )
+
+        # Delete the folder (if still present) then purge cache rows. Rows are
+        # indexed under the configured location string, so purge that; also
+        # purge the realpath when it differs (symlinked mounts) so nothing is
+        # left behind either way.
+        import shutil
+
+        folder_removed = False
+        if os.path.isdir(req_real):
+            shutil.rmtree(req_real)
+            folder_removed = True
+
+        deleted_rows = db.poster.delete_by_path_prefix(matched.location)
+        if req_real != matched.location:
+            deleted_rows += db.poster.delete_by_path_prefix(req_real)
+
+        logger.info(
+            f"Deleted local GDrive folder '{matched.name or matched.location}' "
+            f"(removed={folder_removed}, {deleted_rows} cache rows purged)"
+        )
+        return ok(
+            "Removed local drive folder and purged cached posters",
+            {
+                "folder_removed": folder_removed,
+                "deleted_rows": deleted_rows,
+                "location": matched.location,
+            },
+        )
+
+    except Exception as e:
+        logger.error(f"Error deleting local GDrive folder: {e}")
+        return error(
+            f"Error deleting local GDrive folder: {str(e)}",
+            code="GDRIVE_DELETE_LOCAL_ERROR",
+            status_code=500,
+        )
+
+
 @router.get(
     "/analyze",
     summary="Analyze poster directory",
