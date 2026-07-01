@@ -21,13 +21,20 @@ import { useToast } from '../../../contexts/ToastContext.jsx';
  */
 export const ActionButtonField = ({ field, rowData = null, disabled = false }) => {
     const [busy, setBusy] = useState(false);
-    const [result, setResult] = useState(null); // { ok, message }
+    const [result, setResult] = useState(null); // { ok, message, forKey }
     const toast = useToast();
 
     const missing = (field.requireFields || []).filter(
         k => !((rowData || {})[k] ?? '').toString().trim()
     );
     const canRun = !disabled && !busy && !!field.endpoint && missing.length === 0;
+
+    // A result is tagged with the payload it was produced for and only shown
+    // while that payload is unchanged. That drops a stale "success" after the
+    // folder id is edited, or (with array rows keyed by index) after a row above
+    // is removed and this instance is reused to render a different row.
+    const payloadKey = (field.payloadFields || []).map(k => (rowData || {})[k] ?? '').join(' ');
+    const shown = result && result.forKey === payloadKey ? result : null;
 
     const run = useCallback(async () => {
         setBusy(true);
@@ -40,16 +47,16 @@ export const ActionButtonField = ({ field, rowData = null, disabled = false }) =
             });
             const res = await apiCore.post(field.endpoint, payload);
             const msg = res?.message || 'Success';
-            setResult({ ok: true, message: msg });
+            setResult({ ok: true, message: msg, forKey: payloadKey });
             toast.success(msg);
         } catch (e) {
             const msg = e?.message || 'Request failed';
-            setResult({ ok: false, message: msg });
+            setResult({ ok: false, message: msg, forKey: payloadKey });
             toast.error(msg);
         } finally {
             setBusy(false);
         }
-    }, [field.endpoint, field.payloadFields, rowData, toast]);
+    }, [field.endpoint, field.payloadFields, rowData, payloadKey, toast]);
 
     const inputId = `field-${field.key}`;
     return (
@@ -59,12 +66,12 @@ export const ActionButtonField = ({ field, rowData = null, disabled = false }) =
                 <Button variant="surface" size="small" onClick={run} disabled={!canRun}>
                     {busy ? 'Testing…' : field.buttonText || 'Test'}
                 </Button>
-                {result && (
-                    <span className={`text-xs ${result.ok ? 'text-success' : 'text-error'}`}>
-                        {result.message}
+                {shown && (
+                    <span className={`text-xs ${shown.ok ? 'text-success' : 'text-error'}`}>
+                        {shown.message}
                     </span>
                 )}
-                {!result && missing.length > 0 && (
+                {!shown && missing.length > 0 && (
                     <span className="text-xs text-fg-subtle">
                         {field.requireHint || 'Fill the required fields first'}
                     </span>
