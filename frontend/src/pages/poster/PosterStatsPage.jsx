@@ -346,7 +346,15 @@ const PosterStatsPage = () => {
     // / reducing that downstream threw "x is not iterable" (the page crash).
     const matchedStats = useMemo(() => {
         const d = matchedDetailData?.data;
-        const candidate = d?.matched_stats ?? d ?? stats.matched_stats;
+        // The detail endpoint keys this `matched_posters_stats`; /api/posters/stats
+        // uses `matched_stats`. Read either (or a bare array) so the Top-contributors
+        // list + matched table don't silently vanish on a key mismatch.
+        const candidate =
+            d?.matched_posters_stats ??
+            d?.matched_stats ??
+            (Array.isArray(d) ? d : null) ??
+            stats.matched_posters_stats ??
+            stats.matched_stats;
         return Array.isArray(candidate) ? candidate : [];
     }, [matchedDetailData, stats]);
     const gdriveStats = useMemo(() => {
