@@ -86,3 +86,27 @@ def test_logo_picks_highest_resolution_not_vote():
         ]
     )
     assert out == "/sharp.png"
+
+
+def test_strip_and_reinject_plex_token(monkeypatch):
+    from types import SimpleNamespace
+
+    from backend.util.cl2k import image_fetch as imf
+
+    url = "http://plex.local:32400/library/metadata/1/thumb/2?X-Plex-Token=SECRET"
+    stripped = imf.strip_plex_token(url)
+    assert "X-Plex-Token" not in stripped and "SECRET" not in stripped
+
+    cfg = SimpleNamespace(
+        instances=SimpleNamespace(
+            plex={"p": SimpleNamespace(url="http://plex.local:32400", api="SECRET")}
+        )
+    )
+    monkeypatch.setattr("backend.util.config.load_config", lambda: cfg)
+    # Re-minted for the matching Plex host…
+    assert "X-Plex-Token=SECRET" in imf._with_plex_token(stripped)
+    # …but a non-Plex host is left untouched.
+    assert (
+        imf._with_plex_token("http://image.tmdb.org/x.jpg")
+        == "http://image.tmdb.org/x.jpg"
+    )
