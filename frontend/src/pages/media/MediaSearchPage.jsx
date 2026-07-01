@@ -3,6 +3,7 @@ import PropTypes from 'prop-types';
 import { useSearch, SEARCH_TYPES } from '../../contexts/SearchCoordinatorContext.jsx';
 import { useToast } from '../../contexts/ToastContext.jsx';
 import { useApiMutation } from '../../hooks/useApiData.js';
+import { useStreamToken } from '../../hooks/useStreamToken.js';
 import { mediaAPI } from '../../utils/api/media.js';
 import { Modal } from '../../components/modals/Modal';
 import { Button, IconButton, Pagination, SegmentedControl } from '../../components/ui/index.js';
@@ -95,6 +96,7 @@ const TYPE_OPTIONS = [
 
 const MediaSearchPage = () => {
     const toast = useToast();
+    useStreamToken(); // re-render thumbnails once the stream token is ready
 
     const saved = useMemo(() => loadSavedFilters(), []);
     const [filters, setFilters] = useState({
