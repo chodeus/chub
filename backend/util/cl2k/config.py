@@ -7,7 +7,30 @@ core module sections. Lives here (not backend/util/config.py) because the
 CL2K maker is a develop-only extension.
 """
 
+from typing import List
+
 from pydantic import BaseModel, Field
+
+# Image types the CL2K maker can emit; a destination routes any subset of these.
+CL2K_IMAGE_TYPES = ("poster", "logo", "background", "squareart")
+
+
+class Cl2kDestination(BaseModel):
+    """One optional named routing target.
+
+    Generated art whose ``image_type`` is in ``image_types`` is written to this
+    ``output_dir`` and (when ``upload_to_gdrive``) uploaded to this
+    ``gdrive_folder_id`` — instead of the single default fields on
+    ``Cl2kMakerConfig``. Purely additive: an empty ``destinations`` list keeps
+    the original single-dir / single-folder behaviour.
+    """
+
+    name: str = ""
+    # Any of CL2K_IMAGE_TYPES. Empty = matches nothing (an inert row).
+    image_types: List[str] = Field(default_factory=list)
+    output_dir: str = ""
+    upload_to_gdrive: bool = False
+    gdrive_folder_id: str = ""
 
 
 class Cl2kMakerConfig(BaseModel):
@@ -31,6 +54,11 @@ class Cl2kMakerConfig(BaseModel):
     # per-module SA option here.
     upload_to_gdrive: bool = False
     gdrive_folder_id: str = ""
+    # Optional per-image-type routing. When a generated file's image_type
+    # matches a destination, that destination's output_dir + Drive folder are
+    # used instead of the single default fields above. Empty = default
+    # behaviour (everything to output_dir / gdrive_folder_id). Opt-in only.
+    destinations: List[Cl2kDestination] = Field(default_factory=list)
     # AI text removal (provider-agnostic; off by default = textless-art strategy).
     # Requires a user-brushed mask. lama_sidecar = free/local; openai = paid;
     # huggingface = free tier (rate-limited). Firefly/ChatGPT-free have no usable

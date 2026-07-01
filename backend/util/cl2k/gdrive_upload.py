@@ -11,7 +11,10 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
+import tempfile
+import uuid
 from shutil import which
 from typing import Any, List, Optional
 
@@ -251,6 +254,71 @@ def list_files(folder_id: str, sync_cfg: Any, logger) -> List[str]:
         )
         return []
     return [ln.strip() for ln in result.stdout.splitlines() if ln.strip()]
+
+
+def delete_file(name: str, folder_id: str, sync_cfg: Any, logger) -> None:
+    """Delete the single file ``name`` from Drive folder ``folder_id`` via
+    ``rclone deletefile``. ``name`` is relative to ``folder_id`` (the rclone
+    root). Authenticated with the Sync GDrive OAuth token. Raises on a missing
+    token or non-zero rclone exit."""
+    _reject_unsafe_id(folder_id, "gdrive_folder_id")
+    _reject_unsafe(name, "gdrive_name")
+    auth = _upload_auth_args(sync_cfg)
+    if not auth:
+        raise RuntimeError("no usable Google Drive OAuth token configured")
+    rclone = _rclone_path()
+    _ensure_remote(rclone)
+    cmd = [
+        rclone,
+        "deletefile",
+        f"posters:{name}",
+        "--drive-root-folder-id",
+        folder_id,
+        "--drive-use-trash=false",
+        *auth,
+    ]
+    result = subprocess.run(cmd, check=False, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"rclone deletefile failed: {_rclone_error_detail(result.stderr)}"
+        )
+
+
+def test_drive_access(folder_id: str, sync_cfg: Any, logger) -> str:
+    """Verify CHUB can UPLOAD to Drive folder ``folder_id``.
+
+    Copies a tiny marker file into the folder (proving write access as the
+    user), then deletes it. Raises ``RuntimeError`` with a clear reason on any
+    failure (no token / bad folder id / auth / rclone error). Returns a short
+    success detail string. The marker is a ``.txt`` (never a poster image type)
+    so a concurrent sync would ignore it even in the rare window before delete.
+    """
+    _reject_unsafe_id(folder_id, "gdrive_folder_id")
+    if not has_upload_token(sync_cfg):
+        raise RuntimeError(
+            "no usable Google Drive OAuth token configured — set a token under "
+            "Sync GDrive (a service account cannot own files in a personal Drive)"
+        )
+    marker = f".chub_upload_test_{uuid.uuid4().hex}.txt"
+    tmpdir = tempfile.mkdtemp(prefix="cl2k_test_")
+    local = os.path.join(tmpdir, marker)
+    try:
+        with open(local, "w", encoding="utf-8") as fh:
+            fh.write("CHUB upload connectivity test — safe to delete.\n")
+        upload_file(local, folder_id, sync_cfg, logger)
+        try:
+            delete_file(marker, folder_id, sync_cfg, logger)
+            return "Uploaded and removed a test file — upload works."
+        except Exception as exc:
+            # Write already succeeded (the real thing we're testing); only the
+            # cleanup failed. Report success but flag the leftover.
+            logger.warning(f"cl2k test-drive: cleanup of {marker} failed: {exc}")
+            return (
+                "Upload works, but the temporary test file could not be removed "
+                f"({marker}) — you may want to delete it manually."
+            )
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
 
 
 def _rclone_error_detail(stderr: str) -> str:

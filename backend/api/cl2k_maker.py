@@ -271,6 +271,38 @@ def upload_status(
     )
 
 
+class TestDriveRequest(BaseModel):
+    gdrive_folder_id: str = ""
+
+
+@router.post(
+    "/test-drive", summary="Verify CHUB can upload to a given Drive folder"
+)
+def test_drive(
+    req: TestDriveRequest,
+    db: ChubDB = Depends(get_database),
+    logger: Any = Depends(get_cl2k_logger),
+) -> JSONResponse:
+    """Upload a tiny marker file to ``gdrive_folder_id`` then delete it, proving
+    write access with the Sync GDrive OAuth token. Powers the per-destination
+    Test button in the CL2K settings."""
+    from backend.util.cl2k.gdrive_upload import test_drive_access
+
+    folder_id = (req.gdrive_folder_id or "").strip()
+    if not folder_id:
+        return error("A Google Drive folder ID is required", "GDRIVE_FOLDER_REQUIRED")
+    cfg = load_config()
+    try:
+        detail = test_drive_access(folder_id, cfg.sync_gdrive, logger)
+    except ValueError as exc:
+        return error(f"Invalid folder ID: {exc}", "GDRIVE_FOLDER_INVALID")
+    except Exception as exc:
+        return error(
+            f"Upload test failed: {exc}", "GDRIVE_TEST_FAILED", status_code=502
+        )
+    return ok(detail, {"folder_id": folder_id})
+
+
 @router.get(
     "/external-ids", summary="TMDB external ids (tvdb_id + imdb_id) for a title"
 )
