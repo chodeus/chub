@@ -238,6 +238,38 @@ export const WebhooksPage = () => {
                 />
             </div>
 
+            {/* Unauthenticated-webhook banner — the ingest endpoints are
+                auth-exempt and gated only by the optional shared secret. */}
+            {wiringData?.data && !wiring.secret_configured && (
+                <div
+                    role="alert"
+                    className="flex items-start gap-3 px-4 py-3.5 rounded-xl border border-warning/40 bg-warning/10"
+                >
+                    <span
+                        className="material-symbols-outlined text-warning text-[20px] shrink-0 mt-0.5"
+                        aria-hidden="true"
+                    >
+                        warning
+                    </span>
+                    <div className="text-[13.5px] text-fg leading-relaxed">
+                        <strong className="text-warning">
+                            Webhook endpoints are unauthenticated.
+                        </strong>{' '}
+                        No <code>general.webhook_secret</code> is set, so anyone who can reach{' '}
+                        <code>/api/webhooks/*</code> can enqueue jobs. Fine on a trusted LAN — but
+                        if CHUB is behind a reverse proxy or otherwise reachable off-LAN, set a
+                        secret on the{' '}
+                        <Link
+                            className="text-accent hover:underline font-semibold"
+                            to="/settings/general"
+                        >
+                            General Settings
+                        </Link>{' '}
+                        page and add it to your *arr webhook URLs.
+                    </div>
+                </div>
+            )}
+
             {/* BASE URL strip */}
             <div className="flex items-center gap-3 px-4 py-3.5 rounded-xl bg-surface border border-border">
                 <span className="font-mono text-[10px] tracking-wider text-fg-subtle shrink-0">
