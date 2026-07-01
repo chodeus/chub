@@ -203,6 +203,84 @@ def cron_next_run(
         return None
 
 
+def validate_schedule(schedule: str) -> None:
+    """Raise ValueError if `schedule` is not a parseable schedule string.
+
+    Structural check only (independent of the current time). Empty means 'no
+    schedule' and is allowed. Mirrors the formats check_schedule parses, so a
+    malformed schedule is rejected at the API instead of being persisted and
+    then silently never firing.
+    """
+    if schedule is None:
+        raise ValueError("schedule must be a string")
+    s = schedule.strip()
+    if not s:
+        return
+    if "(" not in s or not s.endswith(")"):
+        raise ValueError(f"invalid schedule format: {schedule!r}")
+    frequency, data = s.split("(", 1)
+    data = data[:-1]
+
+    def _hhmm(t: str) -> None:
+        hour, minute = map(int, t.split(":"))
+        if not (0 <= hour <= 23 and 0 <= minute <= 59):
+            raise ValueError(f"time out of range: {t!r}")
+
+    if frequency == "cron":
+        expr = data.strip()
+        if not expr:
+            raise ValueError("empty cron expression")
+        try:
+            croniter(expr)
+        except Exception as exc:
+            raise ValueError(f"invalid cron expression: {expr!r}") from exc
+        return
+    if frequency == "hourly":
+        minute = int(data)
+        if not 0 <= minute <= 59:
+            raise ValueError(f"hourly minute out of range: {minute}")
+        return
+    if frequency == "daily":
+        times = [t for t in data.split("|") if t]
+        if not times:
+            raise ValueError("daily schedule has no times")
+        for t in times:
+            _hhmm(t)
+        return
+    if frequency == "weekly":
+        entries = list(_iter_weekly_entries(data))
+        if not entries:
+            raise ValueError("weekly schedule has no valid entries")
+        valid_days = set(_WEEKDAY_ALIASES.values())
+        for day, t in entries:
+            if day not in valid_days:
+                raise ValueError(f"unknown weekday: {day!r}")
+            _hhmm(t)
+        return
+    if frequency == "monthly":
+        entries = list(_iter_monthly_entries(data))
+        if not entries:
+            raise ValueError("monthly schedule has no valid entries")
+        for day_str, t in entries:
+            day = int(day_str)
+            if not 1 <= day <= 31:
+                raise ValueError(f"month day out of range: {day}")
+            _hhmm(t)
+        return
+    if frequency == "range":
+        ranges = [r for r in data.split("|") if r]
+        if not ranges:
+            raise ValueError("range schedule has no entries")
+        for start_end in ranges:
+            start, end = start_end.split("-")
+            sm, sd = map(int, start.split("/"))
+            em, ed = map(int, end.split("/"))
+            _safe_md_date(2000, sm, sd)
+            _safe_md_date(2000, em, ed)
+        return
+    raise ValueError(f"unknown schedule frequency: {frequency!r}")
+
+
 def print_schedule_table(logger: Optional[Any], schedule: Dict[str, str]) -> None:
     """Print scheduled modules in a table and list unscheduled ones on a single line."""
     if logger is None:
