@@ -13,7 +13,9 @@ from pydantic import BaseModel
 
 from backend.api.utils import error, get_logger, ok
 from backend.util.auth import (
+    STREAM_TOKEN_EXPIRY_MINUTES,
     create_access_token,
+    create_stream_token,
     generate_jwt_secret,
     hash_password,
     verify_password,
@@ -89,6 +91,31 @@ async def current_user(request: Request) -> JSONResponse:
 async def logout() -> JSONResponse:
     """Acknowledge logout. Token removal happens client-side."""
     return ok("Logout successful")
+
+
+@router.post(
+    "/stream-token",
+    summary="Mint a short-lived stream token",
+    description="Scope-limited token for URL-embedded auth on image/SSE routes, "
+    "so the full session token never rides in a URL.",
+)
+async def stream_token(request: Request) -> JSONResponse:
+    """Return a short-lived (scope=stream) token. Requires a full session token
+    (enforced by AuthMiddleware); the stream token itself can't mint another."""
+    username = getattr(request.state, "user", "") or ""
+    try:
+        config = load_config()
+    except ConfigError:
+        return error("Auth unavailable", code="AUTH_UNAVAILABLE", status_code=503)
+    # First-run: no auth configured, nothing to scope — client falls back cleanly.
+    if not config.auth.username or not config.auth.jwt_secret:
+        return ok("Auth not configured", {"token": "", "expires_in": 0})
+    token = create_stream_token(
+        username or config.auth.username, config.auth.jwt_secret
+    )
+    return ok(
+        "ok", {"token": token, "expires_in": STREAM_TOKEN_EXPIRY_MINUTES * 60}
+    )
 
 
 @router.post(

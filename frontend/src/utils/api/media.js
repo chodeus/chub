@@ -9,16 +9,16 @@
  */
 
 import { apiCore } from './core.js';
+import { streamTokenParam } from './streamAuth.js';
 
 /**
  * Media API client for library management
  */
 export const mediaAPI = {
     /**
-     * Build an authenticated URL for a media item's poster image. The JWT
-     * travels as a query param so `<img src>` (which can't send the
-     * Authorization header) still clears the auth middleware, matching the
-     * pattern used by posters.getThumbnailUrl and the SSE endpoint.
+     * Build an authenticated URL for a media item's poster image. Carries a
+     * short-lived, scope-limited stream token (not the session JWT) as a query
+     * param, since `<img src>` can't send the Authorization header.
      *
      * @param {number|string} mediaId
      * @returns {string|null} URL, or null if mediaId is missing.
@@ -28,7 +28,7 @@ export const mediaAPI = {
             return null;
         }
         const params = new URLSearchParams();
-        const token = localStorage.getItem('chub-auth-token');
+        const token = streamTokenParam();
         if (token) params.set('token', token);
         const qs = params.toString();
         return qs ? `/api/media/${mediaId}/poster?${qs}` : `/api/media/${mediaId}/poster`;

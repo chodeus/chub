@@ -15,6 +15,8 @@ import jwt
 # JWT configuration
 JWT_ALGORITHM = "HS256"
 DEFAULT_TOKEN_EXPIRY_HOURS = 24
+STREAM_TOKEN_EXPIRY_MINUTES = 5
+STREAM_SCOPE = "stream"
 
 
 def hash_password(password: str) -> str:
@@ -42,6 +44,20 @@ def create_access_token(
         "sub": username,
         "exp": datetime.now(timezone.utc) + timedelta(hours=expires_hours),
         "iat": datetime.now(timezone.utc),
+    }
+    return jwt.encode(payload, jwt_secret, algorithm=JWT_ALGORITHM)
+
+
+def create_stream_token(username: str, jwt_secret: str) -> str:
+    """Short-lived, scope-limited token for URL-embedded auth (images, SSE) where
+    the Authorization header can't be sent — so a leaked URL exposes only a
+    read-only, minutes-long token, not the full session token."""
+    now = datetime.now(timezone.utc)
+    payload = {
+        "sub": username,
+        "scope": STREAM_SCOPE,
+        "exp": now + timedelta(minutes=STREAM_TOKEN_EXPIRY_MINUTES),
+        "iat": now,
     }
     return jwt.encode(payload, jwt_secret, algorithm=JWT_ALGORITHM)
 
