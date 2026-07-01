@@ -343,9 +343,13 @@ class ChubDB:
             if allowed is not None and service not in allowed:
                 continue
             if type_col:
+                # Match the type column case-insensitively: historical rows may
+                # carry a title-cased source (e.g. "Radarr") from before source
+                # normalization, and an exact match would skip them — leaving a
+                # ghost instance behind after a rename.
                 sql = (
                     f"UPDATE {table} SET instance_name = ? "  # noqa: S608 (table is a fixed literal)
-                    f"WHERE instance_name = ? AND {type_col} = ?"
+                    f"WHERE instance_name = ? AND lower({type_col}) = lower(?)"
                 )
                 params: tuple = (new_name, old_name, service)
             else:

@@ -614,17 +614,36 @@ def _rule_notifications_to_destinations(
         }
         return
 
+    def _named(d: Dict[str, Any]) -> Dict[str, Any]:
+        if not d["name"]:
+            d["name"] = d["config"].get("bot_name") or (
+                "Discord webhook" if d["method"] == "discord" else "Notifiarr alert"
+            )
+        return d
+
     dest_list: List[Dict[str, Any]] = (
         list(existing) if isinstance(existing, list) else []
     )
     for dest in coalesced.values():
-        if ALL_SENTINEL in dest["modules"]:
+        has_all = ALL_SENTINEL in dest["modules"]
+        specific = [m for m in dest["modules"] if m != ALL_SENTINEL]
+        # A webhook shared by the global error channel (failure → ALL modules)
+        # and a specific module (success) must not broadcast success to every
+        # module. Split into two destinations so each event keeps its scope.
+        if has_all and specific and dest["events"].get("success"):
+            fail_dest = dict(dest)
+            fail_dest["modules"] = [ALL_SENTINEL]
+            fail_dest["events"] = {"success": False, "failure": True}
+            ok_dest = dict(dest)
+            ok_dest["id"] = f"{dest['id']}s"
+            ok_dest["modules"] = specific
+            ok_dest["events"] = {"success": True, "failure": False}
+            dest_list.append(_named(fail_dest))
+            dest_list.append(_named(ok_dest))
+            continue
+        if has_all:
             dest["modules"] = [ALL_SENTINEL]
-        if not dest["name"]:
-            dest["name"] = dest["config"].get("bot_name") or (
-                "Discord webhook" if dest["method"] == "discord" else "Notifiarr alert"
-            )
-        dest_list.append(dest)
+        dest_list.append(_named(dest))
 
     raw["notifications"] = {"destinations": dest_list}
     notes.append(
