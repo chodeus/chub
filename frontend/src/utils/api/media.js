@@ -257,8 +257,12 @@ export const mediaAPI = {
      * @param {boolean} resolution.deleteFiles - Delete files from disk
      * @returns {Promise<Object>} Resolution response
      */
-    resolveDuplicates: (duplicateGroupId, resolution) => {
-        return apiCore.post(`/media/duplicates/${duplicateGroupId}/resolve`, resolution);
+    resolveDuplicates: async (duplicateGroupId, resolution) => {
+        const res = await apiCore.post(`/media/duplicates/${duplicateGroupId}/resolve`, resolution);
+        // The nested .../resolve path's auto-invalidation can't reach the
+        // /media/duplicates list cache key — clear it so the group doesn't linger.
+        apiCore.clearCache('/media/duplicates');
+        return res;
     },
 
     /**

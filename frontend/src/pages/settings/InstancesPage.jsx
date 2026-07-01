@@ -99,24 +99,26 @@ export const InstancesPage = () => {
     const [logsData, setLogsData] = useState({});
     const [librariesData, setLibrariesData] = useState({});
 
-    const handleFetchLogs = useCallback(instanceName => {
+    const handleFetchLogs = useCallback((service, instanceName) => {
+        const key = `${service}:${instanceName}`;
         instancesAPI
             .fetchInstanceLogs(instanceName, { limit: 50 })
             .then(res => {
                 setLogsData(prev => ({
                     ...prev,
-                    [instanceName]: res?.data?.logs || [],
+                    [key]: res?.data?.logs || [],
                 }));
             })
             .catch(() => {});
     }, []);
 
-    const handleFetchLibraries = useCallback(instanceName => {
+    const handleFetchLibraries = useCallback((service, instanceName) => {
+        const key = `${service}:${instanceName}`;
         instancesAPI
             .fetchPlexLibraries(instanceName)
             .then(res => {
                 const libs = res?.data?.libraries || res?.data || [];
-                setLibrariesData(prev => ({ ...prev, [instanceName]: libs }));
+                setLibrariesData(prev => ({ ...prev, [key]: libs }));
             })
             .catch(() => {});
     }, []);
@@ -677,16 +679,16 @@ export const InstancesPage = () => {
                                 connectionStatus={connectionStatus[`${service.type}:${name}`]}
                                 healthStatus={healthData[`${service.type}:${name}`]}
                                 instanceStats={statsData[`${service.type}:${name}`]}
-                                instanceLogs={logsData[name]}
-                                plexLibraries={librariesData[name]}
+                                instanceLogs={logsData[`${service.type}:${name}`]}
+                                plexLibraries={librariesData[`${service.type}:${name}`]}
                                 isTesting={testingInstances.has(`${service.type}:${name}`)}
                                 isSyncing={syncingInstances.has(`${service.type}:${name}`)}
                                 onTest={() => handleTest(service.type, name, data)}
                                 onSync={() => handleSync(service.type, name)}
                                 onEdit={() => handleEdit(service.type, name, data.url)}
                                 onDelete={() => handleDelete(service.type, name, data.url)}
-                                onFetchLogs={handleFetchLogs}
-                                onFetchLibraries={handleFetchLibraries}
+                                onFetchLogs={() => handleFetchLogs(service.type, name)}
+                                onFetchLibraries={() => handleFetchLibraries(service.type, name)}
                                 onToggle={handleToggleInstance}
                                 onRefresh={handleRefreshInstance}
                             />
