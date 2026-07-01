@@ -2,6 +2,68 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.37.0](https://github.com/chodeus/chub/compare/v2.36.0...v2.37.0) (2026-07-01)
+
+
+### Features
+
+* **auth:** short-lived scoped stream tokens for image/SSE URLs ([1b5e8e4](https://github.com/chodeus/chub/commit/1b5e8e46daafad2d349d0b9b1b65cebce7eba5fd))
+* **fields:** add generic action_button settings field type ([b4ec1e2](https://github.com/chodeus/chub/commit/b4ec1e2c403fa9f12f156493551f35f037609ebf))
+* **gdrive:** confirm drive removal and optionally delete local folder + cache rows ([5182971](https://github.com/chodeus/chub/commit/5182971a3e4083fa683e56d349598ab51611ef5c))
+* **instances:** support renaming an instance end to end ([49c65ed](https://github.com/chodeus/chub/commit/49c65ed3d9e7b60230e125dba6f70d90445a200b))
+* **posters:** unified, readable CL2K/MM2K provenance stamp ([9ff36a6](https://github.com/chodeus/chub/commit/9ff36a6aa622460a5da446c07c3ff56f795b570c))
+* **stats:** count Sonarr at the episode level (shows/seasons as context) ([00044c8](https://github.com/chodeus/chub/commit/00044c8213653051e64f40e1097900c382b5782b))
+* **stats:** order Artist above Album in By type ([dc9d94e](https://github.com/chodeus/chub/commit/dc9d94e819fcd8bbbb92b1e6da2b411cd1c0ecef))
+* **stats:** pair By type with By instance, consistent card borders ([df45aa7](https://github.com/chodeus/chub/commit/df45aa7d29318618a30fe8ea1bcbd418bc39f6f2))
+* **stats:** regroup Library Statistics by synced instance ([e1853ac](https://github.com/chodeus/chub/commit/e1853ac2bbbb8a7f4b57a59c1c89319c3d2791a0))
+* **stats:** show Sonarr Series AND Episodes as separate cards ([ac3fa0e](https://github.com/chodeus/chub/commit/ac3fa0e74ef3a70e8f8380f885f02ba24da7104d))
+* **sync:** background instance reconciliation from the Instances page ([0618712](https://github.com/chodeus/chub/commit/06187121d53097caf9f05c838b2dbfc06a9c1839))
+* **webhooks:** banner when ingest endpoints are unauthenticated ([8177c90](https://github.com/chodeus/chub/commit/8177c900a77ebdee954fd8c1de81a6838c5b04b2))
+
+
+### Bug Fixes
+
+* **auth:** keep the stream token warm + rebuild image URLs when it lands ([ac0758b](https://github.com/chodeus/chub/commit/ac0758bf92a0e4d27638a8683dc0f277ab86af60))
+* backend correctness and reliability fixes ([03191ea](https://github.com/chodeus/chub/commit/03191ead5422f7871ee4d1c2aa86a5a17a18cefa))
+* **config:** split a shared-webhook notification destination by event ([1908da5](https://github.com/chodeus/chub/commit/1908da560ef49fbb52fd1617135155dc956ad53f))
+* **data-loss:** guard destructive poster/nohl/upload paths ([274588c](https://github.com/chodeus/chub/commit/274588ce7b7d0df4cef43d871bbf0d6c9298dd9d))
+* **docker:** download rclone to its checksummed filename so sha256sum -c passes ([10dddfa](https://github.com/chodeus/chub/commit/10dddfad573968b6e160876c3eb530bc5785b1f0))
+* **fields:** action_button ignores a stale result after its row changes ([89b3586](https://github.com/chodeus/chub/commit/89b35865286446686a90c6fc68d7d555643b935e))
+* **frontend:** cache invalidation, callbacks, and falsy-value bugs ([5219923](https://github.com/chodeus/chub/commit/52199231c1f01a6430a0a7c35caa6a6d1e48d4cd))
+* **frontend:** FloatField 0-value, duplicates-resolve cache, instance keys ([583bb7e](https://github.com/chodeus/chub/commit/583bb7ebb090dbc7fbd65a4a6168c30138f25d92))
+* **instances:** case-insensitive source on rename + composite UI-state keys ([079bdce](https://github.com/chodeus/chub/commit/079bdce8252738a56783a9a625cc47efd5ea1b8a))
+* **instances:** disable redirects on SSRF-validated health/test probes ([184ffd9](https://github.com/chodeus/chub/commit/184ffd97d99dfde95c6c93a24c6a0a00b217478e))
+* **instances:** don't clobber stored API key with the redacted placeholder ([3878d05](https://github.com/chodeus/chub/commit/3878d058b7d2e7b993fff812e2cddc7e2b022997))
+* **instances:** read sync_schedule from the nested section response ([4d1666e](https://github.com/chodeus/chub/commit/4d1666e93f9131d0c0a75b6348d0d3d056718060))
+* **instances:** resolve redacted API key by URL when renaming ([837e23b](https://github.com/chodeus/chub/commit/837e23bc02db20d432f989ac78f89ef4b36248ae))
+* **jobs:** collapse a composite trigger to its readable base ([876e854](https://github.com/chodeus/chub/commit/876e854cada3229f99090df15a234a9d05c91cbd))
+* **jobs:** humanize the job-type label ([28967b8](https://github.com/chodeus/chub/commit/28967b8129c6b4a7183c5b8d205a575453e13f4f))
+* **logger:** redact secrets in tracebacks, yaml OAuth tokens, and the Notifiarr key ([05ef9df](https://github.com/chodeus/chub/commit/05ef9df8eddbe233efe2aab86a459faa3327dffa))
+* **modules:** redact secrets in GET /api/modules/{name} ([8dc024c](https://github.com/chodeus/chub/commit/8dc024c4f341debc8d277963f1b983f1e6827c96))
+* **notify:** stop redacted placeholder clobbering destination webhooks ([b38a128](https://github.com/chodeus/chub/commit/b38a1289fa17418f0ca24e2ef9aa17c7e12d22e2))
+* **schedule:** reject malformed schedule strings at the API ([40e2233](https://github.com/chodeus/chub/commit/40e22334899a2d3fef2fe996f6606d9e3e8039d1))
+* **security:** fail closed on config error + warn on unauthenticated webhook ingest ([23336ef](https://github.com/chodeus/chub/commit/23336ef7f488ca3fd991276aeac440950294b019))
+* **security:** fail-closed SSRF guard, key-exfil + redirect guards, auth-section write block ([012ce45](https://github.com/chodeus/chub/commit/012ce4563b04fdbcae94482e30a23b7d45accaad))
+* **stats:** derive Lidarr has_content from track files for accurate library stats ([28dfaff](https://github.com/chodeus/chub/commit/28dfaff77ac7adb7504d8a5b0a57f5b0b24df433))
+* **stats:** exclude unmonitored-artist albums from Lidarr Missing ([a4e6eab](https://github.com/chodeus/chub/commit/a4e6eabf726189efcca898bf229a3b0c1900a645))
+* **stats:** normalize instance source case (title-cased source broke labels/order/freshness) ([3b4165e](https://github.com/chodeus/chub/commit/3b4165ee504391a5d9492ef45fbbe1d72a7dd9fb))
+* **stats:** normalize media_cache.source at the write boundary ([5236831](https://github.com/chodeus/chub/commit/52368316db4f284708b21f1ae3d8e6c702e7264e))
+* **stats:** read the matched_posters_stats key so Top contributors renders ([ae30605](https://github.com/chodeus/chub/commit/ae30605394ebbd262a8fc10af6b8523f0e46fba0))
+* **stats:** release-gate Missing + add Upcoming; drop Statistics refresh ([a46a416](https://github.com/chodeus/chub/commit/a46a4160a2b675e5a92222063a89a157a70342dc))
+* **unmatched:** move recently-matched provenance stamp to the poster top-left ([3f04e25](https://github.com/chodeus/chub/commit/3f04e258c7b9981808b1e368a4d6b1c9b9da81be))
+* **webhooks:** stop clobbering per-season has_content/monitored on upsert ([5ab982c](https://github.com/chodeus/chub/commit/5ab982cfe701ad003f9ca134ba72e56a24014672))
+* **worker:** scope startup job reset to the worker's own partition ([982a7b1](https://github.com/chodeus/chub/commit/982a7b15cdd92ef774ec79b275be1b7271e46aa5))
+
+
+### Performance
+
+* **instances:** drop the live wanted/missing call from the Instances page ([cc5a075](https://github.com/chodeus/chub/commit/cc5a07561db2f1843789d1d845d2a6c091344c12))
+
+
+### Refactoring
+
+* **instances:** drop the service-type badge from instance rows ([838dab5](https://github.com/chodeus/chub/commit/838dab5976f2ea79ab6671a7a1cead4894bbb189))
+
 ## [2.36.0](https://github.com/chodeus/chub/compare/v2.35.0...v2.36.0) (2026-06-28)
 
 
