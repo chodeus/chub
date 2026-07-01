@@ -60,6 +60,7 @@ const FIELD_RESOLVERS = {
     media_display: () => CustomFields.MediaDisplayField,
     dir_picker: () => CustomFields.DirPickerField,
     poster: () => CustomFields.PosterField,
+    action_button: () => CustomFields.ActionButtonField,
 };
 
 const FIELD_COMPONENTS = {};
@@ -136,6 +137,7 @@ const IMPLEMENTED_FIELD_TYPES = new Set([
     'tag_input',
     'tag_display',
     'schedule',
+    'action_button',
 ]);
 
 /**
