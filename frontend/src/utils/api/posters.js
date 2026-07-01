@@ -11,6 +11,11 @@
 import { apiCore } from './core.js';
 import { streamTokenParam } from './streamAuth.js';
 
+// 1x1 transparent GIF — returned by the token-gated image builders below when
+// the stream token isn't ready yet, so no token-less request fires (which would
+// 401). useStreamToken re-renders the grid with the real URL once it lands.
+const BLANK_IMAGE = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
+
 /**
  * Posters API client for artwork management
  */
@@ -584,7 +589,8 @@ export const postersAPI = {
         if (location) params.set('location', location);
         if (path) params.set('path', path);
         const token = streamTokenParam();
-        if (token) params.set('token', token);
+        if (!token) return BLANK_IMAGE;
+        params.set('token', token);
         return `/api/posters/preview?${params.toString()}`;
     },
 
@@ -595,10 +601,11 @@ export const postersAPI = {
      * @returns {string} Authenticated URL for poster thumbnail
      */
     getThumbnailUrl: (posterId, width = 300) => {
+        const token = streamTokenParam();
+        if (!token) return BLANK_IMAGE;
         const params = new URLSearchParams();
         params.set('width', width);
-        const token = streamTokenParam();
-        if (token) params.set('token', token);
+        params.set('token', token);
         return `/api/posters/${posterId}/thumbnail?${params.toString()}`;
     },
 
@@ -666,7 +673,8 @@ export const postersAPI = {
         const params = new URLSearchParams();
         params.set('path', path);
         const token = streamTokenParam();
-        if (token) params.set('token', token);
+        if (!token) return BLANK_IMAGE;
+        params.set('token', token);
         return `/api/posters/plex-metadata/variant-thumbnail?${params.toString()}`;
     },
 

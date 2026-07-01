@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useApiData } from '../../hooks/useApiData.js';
+import { useStreamToken } from '../../hooks/useStreamToken.js';
 import { useToast } from '../../contexts/ToastContext.jsx';
 import { postersAPI } from '../../utils/api/posters.js';
 import { systemAPI } from '../../utils/api/system.js';
@@ -1827,6 +1828,7 @@ const ResetControl = ({ assetClass, onComplete }) => {
 };
 
 const UnmatchedAssetsPage = () => {
+    useStreamToken(); // re-render thumbnails once the stream token is ready
     const { data, isLoading, refresh } = useApiData({
         apiFunction: postersAPI.fetchUnmatchedDetails,
         options: { showErrorToast: false },
