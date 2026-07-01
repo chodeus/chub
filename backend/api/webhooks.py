@@ -28,8 +28,12 @@ def verify_webhook_secret(request: Request) -> None:
     """
     try:
         cfg = load_config()
-    except ConfigError:
-        return  # Config unavailable — let the endpoint fail naturally.
+    except ConfigError as exc:
+        # These endpoints are AuthMiddleware-exempt and gated ONLY by this
+        # secret; if config can't load we can't verify it — fail CLOSED.
+        raise HTTPException(
+            status_code=503, detail="Configuration unavailable"
+        ) from exc
 
     expected = (cfg.general.webhook_secret or "").strip()
     if not expected:

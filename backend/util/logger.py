@@ -11,15 +11,15 @@ from backend.util.version import get_version
 
 
 class SafeFormatter(logging.Formatter):
-    """Custom formatter that handles source tags properly."""
+    """Formatter that sets the source tag and redacts secrets from the FULL
+    rendered line — including the exc_info traceback, which the record-level
+    filter (msg/args only) never sees, so a secret embedded in an exception
+    (e.g. a Plex/Notifiarr URL) would otherwise leak to the log verbatim."""
 
     def format(self, record):
         source = getattr(record, "source", None)
-        if source:
-            record.source_tag = f"[{source}]"
-        else:
-            record.source_tag = ""
-        return super().format(record)
+        record.source_tag = f"[{source}]" if source else ""
+        return SmartRedactionFilter.redact(super().format(record))
 
 
 class SmartRedactionFilter(logging.Filter):
@@ -85,6 +85,13 @@ class SmartRedactionFilter(logging.Filter):
                 r"webhook_secret\s*[:=]\s*['\"]?[A-Za-z0-9_\-]{8,}['\"]?",
                 "webhook_secret: [redacted]",
             ),
+            # OAuth tokens in yaml/unquoted key:value form (e.g. a dumped
+            # SyncGDriveToken: `access_token: ya29...`). The JSON-quoted rules
+            # above only match the `"access_token": "..."` form.
+            (
+                r"(access_token|refresh_token|token)\s*[:=]\s*['\"]?[A-Za-z0-9._\-/~+]{20,}['\"]?",
+                r"\1: [redacted]",
+            ),
             (r"webhook\s*[:=]\s*['\"]?https://[^'\"\s]+['\"]?", "webhook: [redacted]"),
             # API keys - short form keys (min 16) plus legacy long form (32+)
             (
@@ -103,6 +110,12 @@ class SmartRedactionFilter(logging.Filter):
             # or key: value forms, not ?key=value.
             (
                 r"([?&](?:x-plex-token|client_key|access_token|refresh_token|token|secret)=)[^&\s'\"]+",
+                r"\1[redacted]",
+            ),
+            # Notifiarr passthrough API key lives in the URL PATH, not a query
+            # param, so the rule above misses it (exceptions embed the full URL).
+            (
+                r"(notifiarr\.com/api/v\d+/notification/passthrough/)[A-Za-z0-9_\-]{8,}",
                 r"\1[redacted]",
             ),
         ]
@@ -266,7 +279,7 @@ class Logger:
                 else self._logger.level
             )
             console.addFilter(lambda record: record.levelno < logging.ERROR)
-            console.setFormatter(logging.Formatter("%(message)s"))
+            console.setFormatter(SafeFormatter("%(message)s"))
             console.addFilter(redaction_filter)
             self._logger.addHandler(console)
 
@@ -274,7 +287,7 @@ class Logger:
         error_console = logging.StreamHandler()
         error_console.setLevel(logging.ERROR)
         error_console.setFormatter(
-            logging.Formatter(
+            SafeFormatter(
                 f"%(levelname)s [{self.module_name.upper()}]: %(message)s"
             )
         )
