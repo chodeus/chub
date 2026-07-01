@@ -2,6 +2,7 @@ import React, { useState, useMemo, useRef, useCallback } from 'react';
 import PropTypes from 'prop-types';
 import { useLocation } from 'react-router-dom';
 import { useApiData, useApiMutation } from '../../hooks/useApiData.js';
+import { useStreamToken } from '../../hooks/useStreamToken.js';
 import { useDebounce } from '../../hooks/useDebounce.js';
 import { useModuleExecution } from '../../hooks/useModuleExecution.js';
 import { useToast } from '../../contexts/ToastContext.jsx';
@@ -119,6 +120,7 @@ function saveFilters(filters) {
 
 const PosterAssetsSearchPage = () => {
     const toast = useToast();
+    useStreamToken(); // re-render thumbnails once the stream token is ready
     const location = useLocation();
     const { isRunning } = useModuleExecution();
     const fileInputRef = useRef(null);
