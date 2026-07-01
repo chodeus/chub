@@ -566,9 +566,9 @@ def test_sync_dry_run_does_not_persist_libraries(tmp_path):
     )
 
     assert result.success is True
-    # DB updated, but uploaded_libraries stays None in dry-run.
-    assert len(updates) == 1
-    assert updates[0]["uploaded_libraries"] is None
+    # Dry-run must not touch the DB at all — writing the hash/mtime would make a
+    # later real run skip the asset as already uploaded.
+    assert len(updates) == 0
 
 
 def test_parse_uploaded_libraries_tolerant():
