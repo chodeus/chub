@@ -406,20 +406,21 @@ class Nohl(ChubModule):
                         results.get("id") if isinstance(results, dict) else None
                     )
                     ready = bool(command_id and app.wait_for_command(command_id))
-                    if ready:
-                        logger.debug(
-                            f" Initiating search for movie: '{title}' ({year}), media_id: {item['media_id']}"
-                        )
-                        app.search_media(item["media_id"])
-                        searched_for.append(item)
-                        searches += 1
-                        per_item_info_logs.append(
-                            f" Searched: '{title}' ({year}) [media_id={item['media_id']}]"
-                        )
-                    else:
+                    if not ready:
                         logger.warning(
-                            f" Command for '{title}' ({year}) was not ready in time."
+                            f" Refresh for '{title}' ({year}) was not confirmed in "
+                            "time; searching anyway so the deleted file is not left "
+                            "permanently missing."
                         )
+                    logger.debug(
+                        f" Initiating search for movie: '{title}' ({year}), media_id: {item['media_id']}"
+                    )
+                    app.search_media(item["media_id"])
+                    searched_for.append(item)
+                    searches += 1
+                    per_item_info_logs.append(
+                        f" Searched: '{title}' ({year}) [media_id={item['media_id']}]"
+                    )
             elif instance_type == "sonarr":
                 seasons = item["seasons"]
                 if not seasons:
@@ -475,19 +476,18 @@ class Nohl(ChubModule):
                             ready = bool(
                                 command_id and app.wait_for_command(command_id)
                             )
-                            if ready:
-                                logger.debug(
-                                    f" Initiating season pack search for: '{title}' ({year}) Season {snum} [media_id={item['media_id']}]"
-                                )
-                                app.search_season(item["media_id"], snum)
-                                per_item_info_logs.append(
-                                    f" Searched season pack: '{title}' ({year}) Season {snum} [media_id={item['media_id']}]"
-                                )
-                                searched_this_item = True
-                            else:
+                            if not ready:
                                 logger.warning(
-                                    f" Command for season pack '{title}' ({year}) Season {snum} was not ready in time."
+                                    f" Refresh for season pack '{title}' ({year}) Season {snum} was not confirmed in time; searching anyway so the deleted files are not left permanently missing."
                                 )
+                            logger.debug(
+                                f" Initiating season pack search for: '{title}' ({year}) Season {snum} [media_id={item['media_id']}]"
+                            )
+                            app.search_season(item["media_id"], snum)
+                            per_item_info_logs.append(
+                                f" Searched season pack: '{title}' ({year}) Season {snum} [media_id={item['media_id']}]"
+                            )
+                            searched_this_item = True
                     else:
                         if config.dry_run:
                             logger.debug(
@@ -517,19 +517,18 @@ class Nohl(ChubModule):
                             ready = bool(
                                 command_id and app.wait_for_command(command_id)
                             )
-                            if ready:
-                                logger.debug(
-                                    f" Initiating episode search for: '{title}' ({year}) Episodes {episode_ids} in Season {snum} [media_id={item['media_id']}]"
-                                )
-                                app.search_episodes(episode_ids)
-                                per_item_info_logs.append(
-                                    f" Searched episodes {episode_numbers} of '{title}' ({year}) Season {snum} [media_id={item['media_id']}]"
-                                )
-                                searched_this_item = True
-                            else:
+                            if not ready:
                                 logger.warning(
-                                    f" Command for episodes '{title}' ({year}) Season {snum} was not ready in time."
+                                    f" Refresh for episodes '{title}' ({year}) Season {snum} was not confirmed in time; searching anyway so the deleted files are not left permanently missing."
                                 )
+                            logger.debug(
+                                f" Initiating episode search for: '{title}' ({year}) Episodes {episode_ids} in Season {snum} [media_id={item['media_id']}]"
+                            )
+                            app.search_episodes(episode_ids)
+                            per_item_info_logs.append(
+                                f" Searched episodes {episode_numbers} of '{title}' ({year}) Season {snum} [media_id={item['media_id']}]"
+                            )
+                            searched_this_item = True
                 if searched_this_item:
                     searched_for.append(item)
                     searches += 1
@@ -606,13 +605,35 @@ class Nohl(ChubModule):
                 )
             else:
                 if file_season.get("season_pack"):
-                    episode_data = [
+                    # season_pack = non-hardlinked files with unparseable episode
+                    # numbers. Only delete the whole season when every on-disk
+                    # episode is non-hardlinked; else skip so hardlinked (seeding)
+                    # files are not destroyed too.
+                    nohl_count = len(file_season.get("nohl") or [])
+                    ondisk_episodes = [
                         episode
                         for episode in media_season.get("episode_data", [])
-                        if episode.get("monitored")
-                        and episode.get("episode_file_id")
-                        and episode.get("episode_id")
+                        if episode.get("episode_file_id")
                     ]
+                    if nohl_count < len(ondisk_episodes):
+                        logger.warning(
+                            f"Season {media_season['season_number']} of "
+                            f"'{media_item.get('title', '')}' has {nohl_count} "
+                            f"non-hardlinked file(s) but {len(ondisk_episodes)} "
+                            "episode file(s) on disk and no parseable episode "
+                            "numbers — skipping to avoid deleting hardlinked "
+                            "(seeding) episodes. Rename files to SxxExx or handle "
+                            "this season manually."
+                        )
+                        episode_data = []
+                    else:
+                        episode_data = [
+                            episode
+                            for episode in media_season.get("episode_data", [])
+                            if episode.get("monitored")
+                            and episode.get("episode_file_id")
+                            and episode.get("episode_id")
+                        ]
                     filtered_episodes = [
                         episode
                         for episode in media_season.get("episode_data", [])

@@ -1189,7 +1189,9 @@ class Upgradinatorr(ChubModule):
                 "Now reconciling grabbed downloads and current queue..."
             )
             searched_ids = [item["media_id"] for item in searched_items]
-            queue = app.get_queue()
+            # get_queue() returns None on an API failure — don't discard this
+            # instance's already-completed searches over a crash on None.
+            queue = app.get_queue() or {}
             self.logger.debug(f"Queue item count: {len(queue.get('records', []))}")
             queue_dict: List[Dict[str, Any]] = self.process_queue(
                 queue, instance_type, searched_ids

@@ -71,7 +71,13 @@ export const NumberField = React.memo(
                     type="text"
                     inputMode="numeric"
                     name={field.key}
-                    value={typeof finalValue === 'string' ? finalValue : numValue || ''}
+                    value={
+                        typeof finalValue === 'string'
+                            ? finalValue
+                            : Number.isFinite(numValue)
+                              ? numValue
+                              : ''
+                    }
                     onChange={handleInputChange}
                     onBlur={finalOnBlur}
                     disabled={disabled}

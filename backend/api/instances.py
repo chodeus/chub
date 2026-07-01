@@ -769,27 +769,30 @@ def test_instance(
         url = data.url
         api = data.api
 
-        # If the frontend sent the redacted placeholder, resolve the real key from config
+        # Resolve the redacted placeholder to the stored key ONLY for the instance
+        # whose stored URL matches the target — never send a stored key to an
+        # arbitrary URL, which would exfiltrate it to an attacker-controlled host.
         if api == REDACTED_PLACEHOLDER:
             config = load_config()
             service_instances = getattr(config.instances, service, {})
+            target = (url or "").rstrip("/")
             stored = service_instances.get(name)
-            if not stored:
-                # An edit may be renaming the instance, so the new name isn't in
-                # config yet — the URL is the stable identity, so resolve the
-                # stored key by matching URL. Without this a rename that keeps
-                # the key tests with the literal placeholder and the *arr 401s.
-                target = (url or "").rstrip("/")
+            stored_url = ""
+            if stored is not None:
+                stored_url = (
+                    stored.url if hasattr(stored, "url") else stored.get("url")
+                ) or ""
+            # Not under this name (e.g. a rename): match on the stable URL identity.
+            if stored is None or stored_url.rstrip("/") != target:
+                stored = None
                 for inst_cfg in service_instances.values():
                     inst_url = (
-                        inst_cfg.url
-                        if hasattr(inst_cfg, "url")
-                        else inst_cfg.get("url")
-                    )
-                    if (inst_url or "").rstrip("/") == target:
+                        inst_cfg.url if hasattr(inst_cfg, "url") else inst_cfg.get("url")
+                    ) or ""
+                    if inst_url.rstrip("/") == target:
                         stored = inst_cfg
                         break
-            if stored:
+            if stored is not None:
                 api = stored.api if hasattr(stored, "api") else stored.get("api")
 
         logger.info(f"Testing connection to {name.upper()} - URL: {url}")
@@ -823,7 +826,11 @@ def test_instance(
                 status_code=400,
             )
 
-        resp = requests.get(test_url, headers=headers, timeout=5)
+        # No redirects: is_safe_url validated this exact host, but a public URL
+        # could 302 onto an internal address (SSRF) if we followed them.
+        resp = requests.get(
+            test_url, headers=headers, timeout=5, allow_redirects=False
+        )
 
         if resp.ok:
             logger.info(f"Connection test successful for {name}")
