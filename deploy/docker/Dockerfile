@@ -40,13 +40,14 @@ RUN pip3 install --no-cache-dir -r requirements-cl2k.txt
 RUN set -eux; \
     arch="$(dpkg --print-architecture)"; \
     ver="$(curl -fsSL https://downloads.rclone.org/version.txt | awk '{print $2}')"; \
-    curl -fsSL -o /tmp/rclone.zip "https://downloads.rclone.org/${ver}/rclone-${ver}-linux-${arch}.zip"; \
-    curl -fsSL -o /tmp/rclone.sha "https://downloads.rclone.org/${ver}/SHA256SUMS"; \
-    (cd /tmp && grep "rclone-${ver}-linux-${arch}.zip" rclone.sha | sha256sum -c -); \
-    unzip -j /tmp/rclone.zip "*/rclone" -d /usr/bin; \
+    zip="rclone-${ver}-linux-${arch}.zip"; \
+    curl -fsSL -o "/tmp/${zip}" "https://downloads.rclone.org/${ver}/${zip}"; \
+    curl -fsSL -o /tmp/SHA256SUMS "https://downloads.rclone.org/${ver}/SHA256SUMS"; \
+    (cd /tmp && grep "${zip}" SHA256SUMS | sha256sum -c -); \
+    unzip -j "/tmp/${zip}" "*/rclone" -d /usr/bin; \
     chmod 0755 /usr/bin/rclone; \
     rclone --version; \
-    rm -f /tmp/rclone.zip /tmp/rclone.sha
+    rm -f "/tmp/${zip}" /tmp/SHA256SUMS
 
 # Copy full app source (including frontend)
 COPY . .
