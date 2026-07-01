@@ -9,6 +9,7 @@ import { useToast } from '../../contexts/ToastContext.jsx';
 import { Button, LoadingButton, PageHeader, Toggle } from '../../components/ui/index.js';
 import SegmentedControl from '../../components/ui/SegmentedControl.jsx';
 import Spinner from '../../components/ui/Spinner.jsx';
+import { StyleStamp } from '../../components/ui/StyleStamp.jsx';
 
 // Small self-contained badge: shows "N posters need review" linking to the
 // Poster Healer review page, only when the healer has open proposals. Lives here
@@ -2716,12 +2717,10 @@ const RenderPanel = ({
                                                     className="w-full h-full object-cover"
                                                 />
                                                 {p.style && (
-                                                    <span
-                                                        className="absolute top-1.5 left-1.5 z-10 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-black/65 text-white backdrop-blur-sm pointer-events-none"
-                                                        title={`Style: ${p.style}`}
-                                                    >
-                                                        {p.style}
-                                                    </span>
+                                                    <StyleStamp
+                                                        style={p.style}
+                                                        className="absolute top-1.5 left-1.5 z-10 text-[10px] pointer-events-none"
+                                                    />
                                                 )}
                                             </button>
                                         ))}
