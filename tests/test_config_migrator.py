@@ -737,8 +737,9 @@ def test_notifications_per_module_to_destinations():
 
 
 def test_notifications_main_coalesces_with_module_webhook():
-    # Same webhook for a module summary AND the global error channel → one
-    # destination reporting that scope's successes and all failures.
+    # Same webhook for a module summary AND the global error channel. Must split:
+    # the module's SUCCESS stays scoped to that module, failures go to ALL —
+    # otherwise success would broadcast to every module (over-broadening).
     raw = {
         "notifications": {
             "poster_renamerr": {
@@ -749,9 +750,15 @@ def test_notifications_main_coalesces_with_module_webhook():
     }
     out, _ = migrate(raw)
     dests = out["notifications"]["destinations"]
-    assert len(dests) == 1
-    assert dests[0]["events"] == {"success": True, "failure": True}
-    assert dests[0]["modules"] == ["__ALL__"]
+    assert len(dests) == 2
+    by_event = {(d["events"]["success"], d["events"]["failure"]): d for d in dests}
+    assert by_event[(False, True)]["modules"] == ["__ALL__"]  # failures → ALL
+    assert by_event[(True, False)]["modules"] == ["poster_renamerr"]  # success → scoped
+    # both are the same webhook
+    assert (
+        by_event[(False, True)]["config"]["webhook"]
+        == by_event[(True, False)]["config"]["webhook"]
+    )
 
 
 def test_notifications_already_destinations_is_noop():
