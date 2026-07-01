@@ -123,7 +123,7 @@ def poster_from_filename(filename: str) -> Optional[Dict[str, Any]]:
 def index_media(media_rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Build id + title indexes over matched media_cache rows. First write wins
     per id (media_cache is deduped per identity already)."""
-    by_tmdb: Dict[int, Dict[str, Any]] = {}
+    by_tmdb: Dict[Tuple[str, int], Dict[str, Any]] = {}
     by_tvdb: Dict[int, Dict[str, Any]] = {}
     by_imdb: Dict[str, Dict[str, Any]] = {}
     by_title: Dict[str, List[Dict[str, Any]]] = {}
@@ -131,8 +131,10 @@ def index_media(media_rows: List[Dict[str, Any]]) -> Dict[str, Any]:
         if not m.get("matched"):
             continue
         t = _as_int(m.get("tmdb_id"))
-        if t and t not in by_tmdb:
-            by_tmdb[t] = m
+        # TMDB movie and TV ids are separate namespaces that collide numerically.
+        tk = (_media_type(m.get("asset_type")), t) if t else None
+        if tk and tk not in by_tmdb:
+            by_tmdb[tk] = m
         v = _as_int(m.get("tvdb_id"))
         if v and v not in by_tvdb:
             by_tvdb[v] = m
@@ -155,8 +157,9 @@ def _find_media(
     hit), or "". ``ambiguous`` is True when title+year matched >1 row.
     """
     t = _as_int(poster.get("tmdb_id"))
-    if t and t in idx["tmdb"]:
-        return idx["tmdb"][t], "id", False
+    tk = (_media_type(poster.get("asset_type") or "movie"), t) if t else None
+    if tk and tk in idx["tmdb"]:
+        return idx["tmdb"][tk], "id", False
     v = _as_int(poster.get("tvdb_id"))
     if v and v in idx["tvdb"]:
         return idx["tvdb"][v], "id", False
@@ -166,6 +169,10 @@ def _find_media(
 
     nt = poster.get("normalized_title") or _norm(poster.get("title"))
     candidates = idx["title"].get(nt, []) if nt else []
+    # Same media type only — a movie poster must not match a show of the same
+    # title/year (and get the show's ids backfilled onto it).
+    pt = _media_type(poster.get("asset_type") or "movie")
+    candidates = [m for m in candidates if _media_type(m.get("asset_type")) == pt]
     poster_year = _as_int(poster.get("year"))
     if poster_year is not None:
         yeared = [
