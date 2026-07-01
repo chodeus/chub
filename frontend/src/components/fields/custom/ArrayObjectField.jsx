@@ -13,7 +13,9 @@ import { useInstancesData } from '../../../hooks/useInstancesData';
 import { scheduleToHuman } from '../../../utils/schedule';
 import Toggle from '../../ui/Toggle.jsx';
 import SegmentedControl from '../../ui/SegmentedControl.jsx';
-import { Modal } from '../../ui';
+import { Modal, Button, LoadingButton } from '../../ui';
+import { postersAPI } from '../../../utils/api/posters';
+import { useToast } from '../../../contexts/ToastContext.jsx';
 
 /**
  * Unified ArrayObjectField - Handles dynamic array of objects with configurable schemas
@@ -38,6 +40,12 @@ export const ArrayObjectField = ({
     const [editingData, setEditingData] = useState({});
     // Which gdrive-table row has its folder-picker modal open (bespoke gdrive view).
     const [gdrivePickerRow, setGdrivePickerRow] = useState(null);
+    // Gdrive remove-confirmation modal: which row is pending removal, whether to
+    // also delete its local folder + cached posters, and the in-flight flag.
+    const [gdriveRemoveRow, setGdriveRemoveRow] = useState(null);
+    const [gdriveDeleteLocal, setGdriveDeleteLocal] = useState(false);
+    const [gdriveDeleting, setGdriveDeleting] = useState(false);
+    const toast = useToast();
 
     // Load instances data for conditional field evaluation and dynamic dropdowns
     const { instancesData } = useInstancesData();
@@ -115,6 +123,40 @@ export const ArrayObjectField = ({
         },
         [value, onChange, expandedIndex]
     );
+
+    // Gdrive drive removal is confirmed via a modal so it's not accidental, and
+    // can optionally delete the drive's local synced folder + cached rows. The
+    // delete fires now (the drive is still in the saved config, so the backend
+    // can validate it); the list removal itself stages until the user Saves.
+    const closeGdriveRemove = useCallback(() => {
+        if (gdriveDeleting) return;
+        setGdriveRemoveRow(null);
+        setGdriveDeleteLocal(false);
+    }, [gdriveDeleting]);
+
+    const confirmGdriveRemove = useCallback(async () => {
+        if (gdriveRemoveRow === null) return;
+        const index = gdriveRemoveRow;
+        const entry = value[index] || {};
+        if (gdriveDeleteLocal && entry.location) {
+            setGdriveDeleting(true);
+            try {
+                const res = await postersAPI.deleteGdriveLocal({
+                    location: entry.location,
+                });
+                const rows = res?.data?.deleted_rows ?? 0;
+                toast.success(`Deleted local folder — ${rows} cached poster row(s) purged`);
+            } catch (e) {
+                toast.error(`Couldn't delete local files: ${e?.message || 'unknown error'}`);
+                setGdriveDeleting(false);
+                return; // keep the row so the user can retry or uncheck
+            }
+            setGdriveDeleting(false);
+        }
+        handleRemove(index);
+        setGdriveRemoveRow(null);
+        setGdriveDeleteLocal(false);
+    }, [gdriveRemoveRow, gdriveDeleteLocal, value, handleRemove, toast]);
 
     const handleFieldChange = useCallback((fieldKey, fieldValue) => {
         setEditingData(prev => ({
@@ -657,7 +699,10 @@ export const ArrayObjectField = ({
                                     </div>
                                     <button
                                         type="button"
-                                        onClick={() => handleRemove(index)}
+                                        onClick={() => {
+                                            setGdriveDeleteLocal(false);
+                                            setGdriveRemoveRow(index);
+                                        }}
                                         disabled={disabled}
                                         aria-label={`Remove drive ${index + 1}`}
                                         title={`Remove drive ${index + 1}`}
@@ -711,6 +756,62 @@ export const ArrayObjectField = ({
                         >
                             Close
                         </button>
+                    </Modal.Footer>
+                </Modal>
+                <Modal isOpen={gdriveRemoveRow !== null} onClose={closeGdriveRemove} size="small">
+                    <Modal.Header>Remove this drive?</Modal.Header>
+                    <Modal.Body>
+                        {gdriveRemoveRow !== null && (
+                            <div className="flex flex-col gap-3">
+                                <p className="text-sm text-fg-muted">
+                                    <span className="font-medium text-fg">
+                                        {value[gdriveRemoveRow]?.name || 'This drive'}
+                                    </span>{' '}
+                                    is removed from the list when you click{' '}
+                                    <span className="font-medium text-fg">Save</span>.
+                                </p>
+                                <label className="flex items-start gap-2.5 text-sm text-fg-muted cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={gdriveDeleteLocal}
+                                        onChange={e => setGdriveDeleteLocal(e.target.checked)}
+                                        disabled={
+                                            gdriveDeleting || !value[gdriveRemoveRow]?.location
+                                        }
+                                        className="mt-0.5"
+                                    />
+                                    <span>
+                                        Also delete the local folder{' '}
+                                        {value[gdriveRemoveRow]?.location && (
+                                            <code className="text-xs text-fg">
+                                                {value[gdriveRemoveRow].location}
+                                            </code>
+                                        )}{' '}
+                                        and its cached posters.{' '}
+                                        <span className="text-fg-subtle">
+                                            Happens immediately and can&apos;t be undone.
+                                        </span>
+                                    </span>
+                                </label>
+                            </div>
+                        )}
+                    </Modal.Body>
+                    <Modal.Footer align="right">
+                        <Button
+                            variant="ghost"
+                            onClick={closeGdriveRemove}
+                            disabled={gdriveDeleting}
+                        >
+                            Cancel
+                        </Button>
+                        <LoadingButton
+                            loading={gdriveDeleting}
+                            loadingText="Deleting..."
+                            variant="danger"
+                            onClick={confirmGdriveRemove}
+                        >
+                            {gdriveDeleteLocal ? 'Delete & remove' : 'Remove'}
+                        </LoadingButton>
                     </Modal.Footer>
                 </Modal>
             </>

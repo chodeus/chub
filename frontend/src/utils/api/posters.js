@@ -303,6 +303,18 @@ export const postersAPI = {
     },
 
     /**
+     * Delete a GDrive drive's local synced folder and purge its cached
+     * poster rows. Backend only deletes a folder matching a currently
+     * configured gdrive_list location.
+     * @param {Object} options
+     * @param {string} options.location - Local folder of the drive to remove
+     * @returns {Promise<Object>} { folder_removed, deleted_rows, location }
+     */
+    deleteGdriveLocal: (options = {}) => {
+        return apiCore.post('/posters/gdrive/delete-local', options);
+    },
+
+    /**
      * Auto-match posters to media
      * @param {Object} options - Matching options
      * @param {string} options.mediaId - Specific media ID (optional)
