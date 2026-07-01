@@ -119,7 +119,16 @@ class TMDBClient:
                 self._memo[key] = cached
             return cached
 
-        tmdb_id = self._fetch(ext_str, source, media_type)
+        result = self._fetch(ext_str, source, media_type)
+
+        # Never cache a transient failure (None) as a negative "no match" — it
+        # would suppress a valid id for days. Only cache a real answer.
+        if result is None:
+            with self._memo_lock:
+                self._memo[key] = None
+            return None
+
+        tmdb_id = None if result is _TMDB_NOT_FOUND else result
         try:
             self.db.tmdb_id_cache.put(ext_str, source, media_type, tmdb_id)
         except Exception as exc:
@@ -232,9 +241,15 @@ class TMDBClient:
 
         return None
 
-    def _fetch(
-        self, external_id: str, source: str, media_type: str
-    ) -> Optional[int]:
+    def _fetch(self, external_id: str, source: str, media_type: str) -> Any:
+        """Look up a TMDB id for an external id via GET /3/find/{external_id}.
+
+        Returns one of:
+          - an int            (id resolved)
+          - _TMDB_NOT_FOUND   (TMDB answered but has no match — negative-cacheable)
+          - None              (TRANSIENT failure: network / 5xx / rate-limit /
+                               open breaker / auth / bad JSON — must NOT be cached)
+        """
         url = f"{self.BASE}/find/{external_id}"
         params = {
             "api_key": self.cfg.apikey,
@@ -259,7 +274,9 @@ class TMDBClient:
         results = data.get(bucket) or []
         if results and isinstance(results[0].get("id"), int):
             return results[0]["id"]
-        return None
+        # 2xx + empty results = genuine no-match (cacheable); transient failures
+        # returned None above.
+        return _TMDB_NOT_FOUND
 
     def get_details(self, tmdb_id: int, media_type: str) -> Optional[dict]:
         """Fetch canonical title/original_title/year/alternative_titles for a

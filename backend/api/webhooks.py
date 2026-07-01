@@ -61,6 +61,10 @@ _ACCEPTED_EVENT_TYPES = frozenset(
     }
 )
 
+# Import-phase events (a file now exists on disk); the rest of the accepted set
+# is the pre-download "added" phase.
+_IMPORT_EVENTS = frozenset({"Download", "EpisodeFileImported", "MovieFileImported"})
+
 router = APIRouter(
     prefix="/api/webhooks",
     tags=["Webhooks"],
@@ -227,11 +231,13 @@ def _is_duplicate_webhook(data: Dict[str, Any], db: ChubDB, logger: Any = None) 
     if not item_type:
         return False
 
-    # Hash on media identity only — NOT eventType. Sonarr v4 fires both
-    # `Download` and `EpisodeFileImported` for the same import; including
-    # eventType in the hash would make the second event a different
-    # fingerprint and run the pipeline twice for one on-disk change.
+    # Hash on media identity + phase (added vs import), NOT the raw eventType.
+    # Import-phase events (Download / *FileImported) share one fingerprint so a
+    # single import isn't run twice, but the pre-download MovieAdded / SeriesAdd
+    # stays distinct so it can't debounce the later import for the same media.
+    phase = "import" if data.get("eventType", "") in _IMPORT_EVENTS else "added"
     hash_fields = {
+        "phase": phase,
         "title": media_block.get("title", ""),
         "year": str(media_block.get("year", "")),
         "tmdb_id": str(media_block.get("tmdbId", "")),
