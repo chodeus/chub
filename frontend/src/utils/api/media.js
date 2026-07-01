@@ -11,6 +11,11 @@
 import { apiCore } from './core.js';
 import { streamTokenParam } from './streamAuth.js';
 
+// 1x1 transparent GIF — returned when the stream token isn't ready so no
+// token-less request fires (would 401); useStreamToken re-renders with the real
+// URL once it lands.
+const BLANK_IMAGE = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
+
 /**
  * Media API client for library management
  */
@@ -27,11 +32,9 @@ export const mediaAPI = {
         if (mediaId === undefined || mediaId === null || mediaId === '') {
             return null;
         }
-        const params = new URLSearchParams();
         const token = streamTokenParam();
-        if (token) params.set('token', token);
-        const qs = params.toString();
-        return qs ? `/api/media/${mediaId}/poster?${qs}` : `/api/media/${mediaId}/poster`;
+        if (!token) return BLANK_IMAGE;
+        return `/api/media/${mediaId}/poster?token=${encodeURIComponent(token)}`;
     },
 
     /**

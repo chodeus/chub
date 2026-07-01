@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useApiData } from '../../hooks/useApiData.js';
+import { useStreamToken } from '../../hooks/useStreamToken.js';
 import { useToast } from '../../contexts/ToastContext.jsx';
 import { postersAPI } from '../../utils/api/posters.js';
 import { Modal } from '../../components/modals/Modal';
@@ -501,6 +502,7 @@ const VariantPreviewModal = ({ target, onClose, onDelete, onSetActive }) => {
 // ---------------------------------------------------------------------------
 const PosterCleanarrPage = () => {
     const toast = useToast();
+    useStreamToken(); // re-render thumbnails once the stream token is ready
     const persisted = useMemo(() => loadPersistedState(), []);
     const isMobile = useIsMobile();
 
