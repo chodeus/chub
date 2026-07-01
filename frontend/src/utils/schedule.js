@@ -219,8 +219,12 @@ export function scheduleToNextFire(schedule, from = new Date()) {
         const candidates = [];
         for (let offset = 0; offset < 2; offset++) {
             const month = new Date(base.getFullYear(), base.getMonth() + offset, 1);
+            // Clamp day-of-month to the last valid day so 29-31 don't overflow
+            // into the next month (JS Date(y, m, 31) rolls forward).
+            const daysInMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
             entries.forEach(e => {
-                const t = atTime(new Date(month.getFullYear(), month.getMonth(), e.day), e.h, e.m);
+                const day = Math.min(e.day, daysInMonth);
+                const t = atTime(new Date(month.getFullYear(), month.getMonth(), day), e.h, e.m);
                 if (t > base) candidates.push(t);
             });
         }
