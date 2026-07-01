@@ -164,25 +164,25 @@ export const InstancesPage = () => {
     const statistics = useMemo(() => {
         if (!instances) return [];
 
-        const allInstanceNames = [
-            ...Object.keys(instances?.radarr || {}),
-            ...Object.keys(instances?.sonarr || {}),
-            ...Object.keys(instances?.lidarr || {}),
-            ...Object.keys(instances?.plex || {}),
+        // Composite service:name keys so a name shared across services (e.g. a
+        // radarr and a sonarr both called "main") doesn't collide in the status maps.
+        const allInstanceKeys = [
+            ...Object.keys(instances?.radarr || {}).map(n => `radarr:${n}`),
+            ...Object.keys(instances?.sonarr || {}).map(n => `sonarr:${n}`),
+            ...Object.keys(instances?.lidarr || {}).map(n => `lidarr:${n}`),
+            ...Object.keys(instances?.plex || {}).map(n => `plex:${n}`),
         ];
 
-        const connectedCount = allInstanceNames.filter(
-            name => connectionStatus[name]?.success
-        ).length;
+        const connectedCount = allInstanceKeys.filter(key => connectionStatus[key]?.success).length;
 
-        const failedCount = allInstanceNames.filter(
-            name => connectionStatus[name]?.success === false
+        const failedCount = allInstanceKeys.filter(
+            key => connectionStatus[key]?.success === false
         ).length;
 
         return [
             {
                 label: 'Total Instances',
-                value: allInstanceNames.length,
+                value: allInstanceKeys.length,
                 colorClass: 'text-fg',
             },
             { label: 'Connected', value: connectedCount, colorClass: 'text-success' },
@@ -414,7 +414,7 @@ export const InstancesPage = () => {
     const handleTest = useCallback(
         async (serviceType, instanceName, instanceData, isBulkTest = false) => {
             // Add to testing set
-            setTestingInstances(prev => new Set([...prev, instanceName]));
+            setTestingInstances(prev => new Set([...prev, `${serviceType}:${instanceName}`]));
 
             try {
                 const result = await instancesAPI.testInstanceConfig({
@@ -430,7 +430,7 @@ export const InstancesPage = () => {
 
                 setConnectionStatus(prev => ({
                     ...prev,
-                    [instanceName]: {
+                    [`${serviceType}:${instanceName}`]: {
                         success: true,
                         message: successMessage,
                         timestamp: Date.now(),
@@ -460,7 +460,7 @@ export const InstancesPage = () => {
 
                 setConnectionStatus(prev => ({
                     ...prev,
-                    [instanceName]: {
+                    [`${serviceType}:${instanceName}`]: {
                         success: false,
                         message: errorMessage,
                         timestamp: Date.now(),
@@ -475,7 +475,7 @@ export const InstancesPage = () => {
                 // Remove from testing set
                 setTestingInstances(prev => {
                     const next = new Set(prev);
-                    next.delete(instanceName);
+                    next.delete(`${serviceType}:${instanceName}`);
                     return next;
                 });
             }
@@ -491,7 +491,7 @@ export const InstancesPage = () => {
     const handleSync = useCallback(
         async (serviceType, instanceName) => {
             // Add to syncing set
-            setSyncingInstances(prev => new Set([...prev, instanceName]));
+            setSyncingInstances(prev => new Set([...prev, `${serviceType}:${instanceName}`]));
 
             try {
                 await instancesAPI.syncInstance(instanceName);
@@ -504,7 +504,7 @@ export const InstancesPage = () => {
             } finally {
                 setSyncingInstances(prev => {
                     const next = new Set(prev);
-                    next.delete(instanceName);
+                    next.delete(`${serviceType}:${instanceName}`);
                     return next;
                 });
             }
@@ -546,7 +546,10 @@ export const InstancesPage = () => {
                 .fetchHealthStatus(instanceName)
                 .then(res => {
                     if (res?.data) {
-                        setHealthData(prev => ({ ...prev, [instanceName]: res.data }));
+                        setHealthData(prev => ({
+                            ...prev,
+                            [`${serviceType}:${instanceName}`]: res.data,
+                        }));
                     }
                 })
                 .catch(() => {});
@@ -554,7 +557,10 @@ export const InstancesPage = () => {
                 .fetchStatistics(instanceName, { service_type: serviceType })
                 .then(res => {
                     if (res?.data) {
-                        setStatsData(prev => ({ ...prev, [instanceName]: res.data }));
+                        setStatsData(prev => ({
+                            ...prev,
+                            [`${serviceType}:${instanceName}`]: res.data,
+                        }));
                     }
                 })
                 .catch(() => {});
@@ -668,13 +674,13 @@ export const InstancesPage = () => {
                                 key={name}
                                 instance={{ name, ...data }}
                                 serviceType={service.type}
-                                connectionStatus={connectionStatus[name]}
-                                healthStatus={healthData[name]}
-                                instanceStats={statsData[name]}
+                                connectionStatus={connectionStatus[`${service.type}:${name}`]}
+                                healthStatus={healthData[`${service.type}:${name}`]}
+                                instanceStats={statsData[`${service.type}:${name}`]}
                                 instanceLogs={logsData[name]}
                                 plexLibraries={librariesData[name]}
-                                isTesting={testingInstances.has(name)}
-                                isSyncing={syncingInstances.has(name)}
+                                isTesting={testingInstances.has(`${service.type}:${name}`)}
+                                isSyncing={syncingInstances.has(`${service.type}:${name}`)}
                                 onTest={() => handleTest(service.type, name, data)}
                                 onSync={() => handleSync(service.type, name)}
                                 onEdit={() => handleEdit(service.type, name, data.url)}
