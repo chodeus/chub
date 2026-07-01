@@ -9,6 +9,7 @@ import { buildPosterRequestText, formatId } from '../../utils/posterRequest.js';
 import { extensionCapability } from '../../extensions/index.js';
 import { Button, IconButton, Modal } from '../../components/ui/index.js';
 import Spinner from '../../components/ui/Spinner.jsx';
+import { StyleStamp } from '../../components/ui/StyleStamp.jsx';
 
 // Optional extension hook: (item) => { to, title, ariaLabel, icon } | null.
 // Renders an extra per-row action link (e.g. a poster-maker shortcut) when an
@@ -46,19 +47,16 @@ const REEL_FILTERS = [
 ];
 const REEL_PAGE_SIZE = 10;
 
-// CL2K / MM2K are the *built* poster styles whose provenance matters — they
-// carry a real author. Other styles (GDrive / local fetches) get no tag.
-const BUILT_STYLE_TAG = {
-    CL2K: ['#a99eff', 'rgba(135,103,247,.32)'],
-    MM2K: ['#ffc944', 'rgba(255,201,68,.22)'],
-};
+// CL2K / MM2K are the *built* poster styles whose provenance matters (they
+// carry a real author); other styles (GDrive / local fetches) get no tag.
+const BUILT_STYLES = new Set(['CL2K', 'MM2K']);
 
 /** A single poster in the reel: thumbnail + (for CL2K/MM2K) a source tag and
  *  the builder it came from. */
 const ReelPosterCard = ({ poster }) => {
     const [failed, setFailed] = useState(false);
-    const styleTag = BUILT_STYLE_TAG[poster.style];
-    const builtBy = styleTag ? poster.folder : null;
+    const isBuilt = BUILT_STYLES.has(poster.style);
+    const builtBy = isBuilt ? poster.folder : null;
     return (
         <div className="shrink-0" style={{ width: 112 }}>
             <div
@@ -80,13 +78,11 @@ const ReelPosterCard = ({ poster }) => {
                         onError={() => setFailed(true)}
                     />
                 )}
-                {styleTag && (
-                    <span
-                        className="absolute top-1.5 left-1.5 font-mono text-[8px] font-bold tracking-[0.4px] px-1.5 py-0.5 rounded-[4px]"
-                        style={{ color: styleTag[0], background: styleTag[1] }}
-                    >
-                        {poster.style}
-                    </span>
+                {isBuilt && (
+                    <StyleStamp
+                        style={poster.style}
+                        className="absolute top-1.5 left-1.5 text-[8px]"
+                    />
                 )}
             </div>
             <p className="mt-1.5 text-xs font-medium text-fg-muted text-center truncate">

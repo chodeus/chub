@@ -10,6 +10,7 @@ import { postersAPI } from '../../utils/api/posters.js';
 import { Modal } from '../../components/modals/Modal';
 import { Button, LoadingButton, IconButton, Pagination } from '../../components/ui/index.js';
 import Spinner from '../../components/ui/Spinner.jsx';
+import { StyleStamp } from '../../components/ui/StyleStamp.jsx';
 
 // Compact "5d ago" relative time for the GDrive last-sync stat.
 const relTime = ts => {
@@ -713,12 +714,10 @@ const PosterAssetsSearchPage = () => {
                                         </button>
                                     )}
                                     {item.style && (
-                                        <span
-                                            className="absolute top-1.5 left-1.5 z-10 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-black/65 text-white backdrop-blur-sm pointer-events-none"
-                                            title={`Style: ${item.style}`}
-                                        >
-                                            {item.style}
-                                        </span>
+                                        <StyleStamp
+                                            style={item.style}
+                                            className="absolute top-1.5 left-1.5 z-10 text-[10px] pointer-events-none"
+                                        />
                                     )}
                                     <div className="absolute top-1.5 right-1.5 z-10 flex items-center gap-0.5 rounded-lg bg-black/55 backdrop-blur-sm p-0.5 opacity-0 group-hover:opacity-100 transition-fast">
                                         <IconButton
