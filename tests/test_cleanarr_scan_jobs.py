@@ -52,6 +52,26 @@ def test_plex_metadata_scan_job_warms_cache(tmp_path):
     assert pm.get_cached_transcoder(plex_path) == {"count": 0, "size_bytes": 0}
 
 
+def test_scan_with_posters_but_no_db_is_unavailable_and_not_cached(tmp_path):
+    from backend.util import plex_metadata as pm
+
+    pm.invalidate_cache()
+    plex_path = str(tmp_path)
+    # A real uploaded poster on disk (extension-less hash under a .bundle/Uploads/),
+    # but NO Plex DB to copy — so the scan can't tell what's in use. It must NOT flag
+    # every poster as deletable bloat and cache that: a transient DB blip would then
+    # drive the (unguarded) per-variant delete to remove active artwork for the TTL.
+    uploads = tmp_path / "Metadata" / "Movies" / "a" / "x.bundle" / "Uploads" / "posters"
+    uploads.mkdir(parents=True)
+    (uploads / "abc123").write_bytes(b"posterdata")  # extension-less = a real upload variant
+
+    res = pm.scan_bundles(plex_path, force=True)
+    assert res.get("unavailable") is True
+    # A transient DB failure is not negative-cached — a re-scan once the DB is
+    # readable returns the real answer.
+    assert pm.get_cached_scan(plex_path) is None
+
+
 def test_plex_metadata_scan_job_requires_plex_path():
     from backend.util.job_processor import _process_plex_metadata_scan_job
 

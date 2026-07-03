@@ -562,6 +562,28 @@ def scan_bundles(plex_path: str, *, force: bool = False) -> Dict[str, Any]:
             "scanned_at": time.time(),
         },
     }
+    # A failed Plex DB copy leaves in_use empty, so every poster on disk looks like
+    # deletable bloat with a blank title. When that happens WITH posters present,
+    # return an unavailable result and DON'T cache it: a transient DB blip must not
+    # be negative-cached (the per-variant delete has no in-use guard, so a poisoned
+    # cache could delete active artwork). An empty tree can't misclassify anything,
+    # so it still caches normally.
+    if db_path is None and bundles:
+        return {
+            "bundles": [],
+            "libraries": [],
+            "media_types": [],
+            "variant_kinds": [],
+            "unavailable": True,
+            "reason": "Could not read Plex's database (it may be busy); run the scan again.",
+            "stats": {
+                "bundle_count": 0,
+                "variant_count": 0,
+                "bloat_count": 0,
+                "bloat_size": 0,
+                "scanned_at": time.time(),
+            },
+        }
     _cache_put(cache_key, result)
     return result
 
