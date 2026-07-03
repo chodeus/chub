@@ -45,7 +45,7 @@ export const InputBase = ({
         <input
             id={id}
             type={type}
-            value={value || ''}
+            value={value ?? ''}
             onChange={onChange}
             disabled={disabled}
             required={required}

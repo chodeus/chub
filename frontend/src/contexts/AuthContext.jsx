@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import PropTypes from 'prop-types';
 import { ensureStreamToken, clearStreamToken } from '../utils/api/streamAuth.js';
+import { apiCore } from '../utils/api/core.js';
 
 const TOKEN_STORAGE_KEY = 'chub-auth-token';
 const AuthContext = createContext();
@@ -149,6 +150,9 @@ export const AuthProvider = ({ children }) => {
     const logout = useCallback(() => {
         localStorage.removeItem(TOKEN_STORAGE_KEY);
         clearStreamToken();
+        // Drop the in-memory GET cache so a later login in the same tab can't be
+        // served the previous session's cached config/media/list responses.
+        apiCore.clearCache();
         setToken(null);
         setUser(null);
     }, []);
