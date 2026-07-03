@@ -1112,6 +1112,17 @@ def _optimize_posters_sync(
                             dest_path = (
                                 base + target_ext if needs_convert else full_path
                             )
+                            # Don't clobber a different pre-existing file at the
+                            # converted extension (e.g. a Kometa .jpg beside a
+                            # Plex .png) — leave both, mirror poster_self_heal.
+                            if dest_path != full_path and os.path.exists(dest_path):
+                                os.unlink(tmp.name)
+                                logger.warning(
+                                    f"optimize target exists, skipped to avoid "
+                                    f"clobber: {dest_path}"
+                                )
+                                skipped += 1
+                                continue
                             shutil.move(tmp.name, dest_path)
                             if dest_path != full_path:
                                 if os.path.exists(full_path):
@@ -3832,10 +3843,18 @@ async def delete_poster(
             try:
                 # Find media items that were matched to this poster by original_file
                 if full_path:
+                    # Escape LIKE metacharacters so a basename with %/_ can't
+                    # unmatch the wrong media rows (mirror poster_cache).
+                    basename_like = (
+                        os.path.basename(full_path)
+                        .replace("\\", "\\\\")
+                        .replace("%", "\\%")
+                        .replace("_", "\\_")
+                    )
                     media_items = (
                         db.media.execute_query(
-                            "SELECT id, title, instance_name, asset_type, year, season_number FROM media_cache WHERE original_file LIKE ?",
-                            (f"%{os.path.basename(full_path)}%",),
+                            "SELECT id, title, instance_name, asset_type, year, season_number FROM media_cache WHERE original_file LIKE ? ESCAPE '\\'",
+                            (f"%{basename_like}%",),
                             fetch_all=True,
                         )
                         or []
