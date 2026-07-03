@@ -5,6 +5,10 @@ on:
     - cron: '0 5 * * *'  # daily
   workflow_dispatch:
 
+permissions:
+  issues: write
+  pull-requests: write
+
 jobs:
   stale:
     uses: chodeus/chodeus-ops/.github/workflows/stale-issues.yml@44b9463f55b6d28ca72a126bdc3a89ce6b472166 # main

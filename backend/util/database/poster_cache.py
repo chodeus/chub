@@ -92,8 +92,14 @@ class PosterCache(DatabaseBase):
             ]
             sub_params: list = [norm_pat, raw_pat]
         else:
-            sub = ["normalized_title LIKE ?", "title LIKE ?"]
-            sub_params = [f"%{normalize_titles(query)}%", f"%{query}%"]
+            sub = [
+                "normalized_title LIKE ? ESCAPE '\\'",
+                "title LIKE ? ESCAPE '\\'",
+            ]
+            sub_params = [
+                f"%{esc(normalize_titles(query))}%",
+                f"%{esc(query)}%",
+            ]
 
         tmdb, tvdb, imdb = parse_search_id(query)
         if tmdb is not None:
