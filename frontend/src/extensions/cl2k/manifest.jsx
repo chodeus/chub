@@ -1,9 +1,22 @@
 // CL2K poster maker — self-registration manifest (develop-only extension).
 // Discovered by src/extensions/index.js; see that file for the contract.
 import React from 'react';
+import { FieldRegistry } from '../../components/fields/FieldRegistry.jsx';
 import { CL2K_MAKER_SCHEMA, CL2K_MAKER_MODULE_ENTRY } from './settings_schema.js';
+import {
+    Cl2kCoverageField,
+    Cl2kGdriveUploadsField,
+    Cl2kLocalFoldersField,
+} from './SaveLocationsFields.jsx';
 
 const Cl2kMakerPage = React.lazy(() => import('../../pages/poster/Cl2kMakerPage.jsx'));
+
+// Custom field types for the Save Locations redesign. Registered at module
+// scope — manifests are eagerly imported at app init (src/extensions/index.js),
+// so the types exist before ModuleSettingsPage first resolves them.
+FieldRegistry.register('cl2k_local_folders', Cl2kLocalFoldersField);
+FieldRegistry.register('cl2k_gdrive_uploads', Cl2kGdriveUploadsField);
+FieldRegistry.register('cl2k_coverage', Cl2kCoverageField);
 
 export default {
     routes: [

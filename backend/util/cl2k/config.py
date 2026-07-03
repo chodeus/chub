@@ -9,35 +9,40 @@ CL2K maker is a develop-only extension.
 
 from typing import List
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
-# Image types the CL2K maker can emit; a destination routes any subset of these.
+# Image types the CL2K maker can emit; a save location claims any subset of these.
 CL2K_IMAGE_TYPES = ("poster", "logo", "background", "squareart")
 
 
-class Cl2kDestination(BaseModel):
-    """One optional named routing target.
+class Cl2kLocalFolder(BaseModel):
+    """One named local save target.
 
-    Generated art whose ``image_type`` is in ``image_types`` is written to this
-    ``output_dir`` and (when ``upload_to_gdrive``) uploaded to this
-    ``gdrive_folder_id`` — instead of the single default fields on
-    ``Cl2kMakerConfig``. Purely additive: an empty ``destinations`` list keeps
-    the original single-dir / single-folder behaviour.
+    Generated art whose ``image_type`` is in ``types`` is written into ``path``.
+    A type may be claimed by any number of folders (every claimer gets a copy);
+    a type nobody claims isn't auto-saved and stays downloadable from the maker
+    page. Empty ``types`` = an inert row (keeps the path visible, saves nothing).
     """
 
     name: str = ""
-    # Any of CL2K_IMAGE_TYPES. Empty = matches nothing (an inert row).
-    image_types: List[str] = Field(default_factory=list)
-    output_dir: str = ""
-    upload_to_gdrive: bool = False
-    gdrive_folder_id: str = ""
+    path: str = ""
+    # Any of CL2K_IMAGE_TYPES.
+    types: List[str] = Field(default_factory=list)
+
+
+class Cl2kGdriveUpload(BaseModel):
+    """One named Google Drive upload target (same claim semantics as
+    :class:`Cl2kLocalFolder`). Uploads use the Sync GDrive OAuth token — a
+    service account can't own files in a personal Drive, so there is no
+    per-entry SA option."""
+
+    name: str = ""
+    folder_id: str = ""
+    types: List[str] = Field(default_factory=list)
 
 
 class Cl2kMakerConfig(BaseModel):
     log_level: str = "info"
-    # Local source_dir where generated CL2K posters land (then matched by
-    # poster_renamerr). Should be one of poster_renamerr.source_dirs.
-    output_dir: str = ""
     language: str = "en"
     whiten_logo: bool = True
     text_logo_fallback: bool = True  # synth a typeset wordmark when no real logo
@@ -48,17 +53,12 @@ class Cl2kMakerConfig(BaseModel):
     skip_existing: bool = True
     style: str = "CL2K"  # poster_cache style tag
     priority: int = 0
-    # Google Drive upload (rclone copy) — optional, off by default. Uploads use
-    # the Sync GDrive OAuth token (a service account can't own files in a personal
-    # Drive — "Service Accounts do not have storage quota"), so there is no
-    # per-module SA option here.
-    upload_to_gdrive: bool = False
-    gdrive_folder_id: str = ""
-    # Optional per-image-type routing. When a generated file's image_type
-    # matches a destination, that destination's output_dir + Drive folder are
-    # used instead of the single default fields above. Empty = default
-    # behaviour (everything to output_dir / gdrive_folder_id). Opt-in only.
-    destinations: List[Cl2kDestination] = Field(default_factory=list)
+    # Save locations — two routed lists, nothing mandatory. Each entry claims a
+    # subset of CL2K_IMAGE_TYPES; a type may route to any number of locations
+    # (every claimer gets a copy). Zero locations is valid: unrouted types
+    # simply aren't auto-saved and stay downloadable from the maker page.
+    local_folders: List[Cl2kLocalFolder] = Field(default_factory=list)
+    gdrive_uploads: List[Cl2kGdriveUpload] = Field(default_factory=list)
     # AI text removal (provider-agnostic; off by default = textless-art strategy).
     # Requires a user-brushed mask. lama_sidecar = free/local; openai = paid;
     # huggingface = free tier (rate-limited). Firefly/ChatGPT-free have no usable
@@ -78,3 +78,117 @@ class Cl2kMakerConfig(BaseModel):
         "Seamlessly reconstruct the underlying artwork and background where the "
         "text was. Do not change anything else."
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _migrate_legacy_save_fields(cls, data):
+        """Migrate the pre-redesign save fields to the two routed lists.
+
+        Old shape: a mandatory ``output_dir``, a single ``upload_to_gdrive`` /
+        ``gdrive_folder_id`` pair, and optional ``destinations`` rows where the
+        FIRST destination claiming an image_type won (per-field fallback to the
+        top-level dir/folder; upload was additive: global switch OR the matched
+        destination's own flag).
+
+        This rewrites that into ``local_folders`` / ``gdrive_uploads`` claims
+        that route each type exactly where the old first-match logic sent it.
+        Paths/folder-ids the old config carried but never routed anywhere (e.g.
+        a folder id with uploads switched off) are kept as inert ``types: []``
+        entries so nothing the user typed is lost.
+
+        Runs on every validate (load and POST /api/config merge), so it must be
+        idempotent: it no-ops as soon as either new list is present-and-truthy,
+        and never resurrects entries the user has since deleted (a post-redesign
+        save strips the legacy keys from disk — ``extra='ignore'`` drops them at
+        validation, so they can't reappear).
+        """
+        if not isinstance(data, dict):
+            return data
+        if data.get("local_folders") or data.get("gdrive_uploads"):
+            return data
+
+        def _get(obj, key):
+            val = obj.get(key) if isinstance(obj, dict) else getattr(obj, key, None)
+            return val
+
+        def _text(obj, key):
+            return (_get(obj, key) or "").strip() if obj is not None else ""
+
+        out_dir = (data.get("output_dir") or "").strip()
+        folder_id = (data.get("gdrive_folder_id") or "").strip()
+        upload_on = bool(data.get("upload_to_gdrive"))
+        dests = data.get("destinations") or []
+        if not (out_dir or folder_id or dests):
+            return data
+
+        def first_dest(image_type):
+            for d in dests:
+                if image_type in (_get(d, "image_types") or []):
+                    return d
+            return None
+
+        def claim(entries, id_key, id_value, name, image_type):
+            for entry in entries:
+                if entry[id_key] == id_value:
+                    if image_type and image_type not in entry["types"]:
+                        entry["types"].append(image_type)
+                    return
+            entries.append(
+                {
+                    "name": name,
+                    id_key: id_value,
+                    "types": [image_type] if image_type else [],
+                }
+            )
+
+        folders: List[dict] = []
+        drives: List[dict] = []
+        for image_type in CL2K_IMAGE_TYPES:
+            dest = first_dest(image_type)
+            dest_dir = _text(dest, "output_dir")
+            dest_fid = _text(dest, "gdrive_folder_id")
+            dest_name = _text(dest, "name")
+            eff_dir = dest_dir or out_dir
+            if eff_dir:
+                claim(
+                    folders,
+                    "path",
+                    eff_dir,
+                    dest_name if dest_dir else "Output",
+                    image_type,
+                )
+            upload_active = upload_on or bool(
+                dest is not None and _get(dest, "upload_to_gdrive")
+            )
+            eff_fid = dest_fid or folder_id
+            if upload_active and eff_fid:
+                claim(
+                    drives,
+                    "folder_id",
+                    eff_fid,
+                    dest_name if dest_fid else "Drive",
+                    image_type,
+                )
+
+        # Inert leftovers: keep every path / folder id the old config named, even
+        # if the routing above never used it, so nothing silently disappears.
+        if out_dir:
+            claim(folders, "path", out_dir, "Output", None)
+        if folder_id:
+            claim(drives, "folder_id", folder_id, "Drive", None)
+        for d in dests:
+            if _text(d, "output_dir"):
+                claim(folders, "path", _text(d, "output_dir"), _text(d, "name"), None)
+            if _text(d, "gdrive_folder_id"):
+                claim(
+                    drives,
+                    "folder_id",
+                    _text(d, "gdrive_folder_id"),
+                    _text(d, "name"),
+                    None,
+                )
+
+        data = dict(data)
+        data["local_folders"] = folders
+        data["gdrive_uploads"] = drives
+        return data

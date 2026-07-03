@@ -2,10 +2,11 @@
 """poster_self_heal module — scheduled drift detection for CL2K posters.
 
 The run() scans the CL2K maker's OWN posters from two sources — locally-saved
-ones in poster_cache scoped to its ``output_dir`` (other owners' synced-in CL2K
-drives share the style tag but are skipped), and a live listing of the linked
-``gdrive_folder_id`` (the source of truth for a Drive-only setup, where posters
-were never recorded in poster_cache). It re-resolves each against
+ones in poster_cache scoped to its ``local_folders`` paths (other owners'
+synced-in CL2K drives share the style tag but are skipped), and live listings
+of every linked ``gdrive_uploads`` folder (the source of truth for a Drive-only
+setup, where posters were never recorded in poster_cache). It re-resolves each
+against
 TMDB (bridging stale ids through media_cache), and upserts proposals into
 poster_heal_review. By default it only DETECTS (proposals wait for manual review
 via backend/api/poster_self_heal.py). With ``auto_apply`` on, confident proposals
@@ -33,7 +34,7 @@ _HEAL_KINDS = ("movie", "show")
 
 def _is_under(path: str, base_dir: str) -> bool:
     """True if ``path`` lives inside ``base_dir`` (or equals it). Scopes the heal
-    to the CL2K maker's own ``output_dir`` so synced-in CL2K posters from other
+    to the CL2K maker's own ``local_folders`` so synced-in CL2K posters from other
     owners' drives (same ``style`` tag, different folder) are left alone."""
     if not path or not base_dir:
         return False
@@ -55,15 +56,36 @@ class PosterSelfHeal(ChubModule):
             return
 
         style = (getattr(cl2k, "style", "") or "CL2K").strip()
-        folder_id = (getattr(cl2k, "gdrive_folder_id", "") or "").strip() or None
-        output_dir = (getattr(cl2k, "output_dir", "") or "").strip()
-        if not output_dir and not folder_id:
+        local_dirs: list = []
+        for folder in getattr(cl2k, "local_folders", None) or []:
+            p = (getattr(folder, "path", "") or "").strip()
+            if p and p not in local_dirs:
+                local_dirs.append(p)
+        drive_ids: list = []
+        poster_twin_id = None
+        for drive in getattr(cl2k, "gdrive_uploads", None) or []:
+            fid = (getattr(drive, "folder_id", "") or "").strip()
+            if not fid:
+                continue
+            if fid not in drive_ids:
+                drive_ids.append(fid)
+            # Where a locally-saved poster's Drive twin lives: the first Drive
+            # that receives posters (fall back to the first Drive at all, which
+            # matches the pre-redesign behaviour of healing the linked folder
+            # even with uploads off).
+            if poster_twin_id is None and "poster" in (
+                getattr(drive, "types", None) or []
+            ):
+                poster_twin_id = fid
+        if poster_twin_id is None and drive_ids:
+            poster_twin_id = drive_ids[0]
+        if not local_dirs and not drive_ids:
             self.logger.error(
-                "CL2K maker has neither output_dir nor gdrive_folder_id set — "
+                "CL2K maker has no local folders or Drive uploads configured — "
                 "poster_self_heal heals the CL2K posters it can see: locally-saved "
-                "ones (tracked in poster_cache under output_dir) and/or ones in the "
-                "linked Drive folder. Set at least one under Settings → Modules → "
-                "CL2K Maker. Nothing scanned."
+                "ones (tracked in poster_cache under a local folder) and/or ones "
+                "in a linked Drive folder. Add at least one under Settings → "
+                "Modules → CL2K Maker. Nothing scanned."
             )
             return
 
@@ -79,48 +101,58 @@ class PosterSelfHeal(ChubModule):
                 )
                 return
 
-            # LOCAL source — the user's OWN CL2K output (output_dir), NOT every
-            # poster carrying the shared "CL2K" style tag (that also covers other
-            # owners' "CL2K <name>" drives synced into the cache).
+            # LOCAL source — the user's OWN CL2K output (any configured local
+            # folder), NOT every poster carrying the shared "CL2K" style tag
+            # (that also covers other owners' "CL2K <name>" drives synced into
+            # the cache).
             local_posters = (
                 [
                     p
                     for p in db.poster.get_all()
                     if p.get("style") == style
                     and p.get("asset_type") in _HEAL_KINDS
-                    and _is_under(p.get("file"), output_dir)
+                    and any(_is_under(p.get("file"), d) for d in local_dirs)
                 ]
-                if output_dir
+                if local_dirs
                 else []
             )
             local_names = {os.path.basename(p.get("file") or "") for p in local_posters}
 
-            # LIVE-DRIVE source — posters that live in the linked Drive folder. The
-            # source of truth for a Drive-only setup (no local copy in poster_cache).
-            # Skip names a local row already covers (its apply renames the Drive copy
-            # too). A listing failure logs a warning and yields [].
+            # LIVE-DRIVE source — posters living in any linked Drive folder. The
+            # source of truth for a Drive-only setup (no local copy in
+            # poster_cache). Skip names a local row already covers (its apply
+            # renames the Drive copy too) and names an earlier folder already
+            # yielded (one proposal per filename). A listing failure logs a
+            # warning and yields []. Each poster keeps the folder it was found
+            # in so apply renames the right Drive copy.
             drive_posters = []
-            if folder_id:
-                for name in list_files(folder_id, sync_cfg, self.logger):
+            seen_names = set(local_names)
+            for fid in drive_ids:
+                for name in list_files(fid, sync_cfg, self.logger):
                     base = os.path.basename(name)
-                    if base in local_names:
+                    if base in seen_names:
                         continue
                     parsed = poster_from_filename(base)
                     if parsed:
-                        drive_posters.append(parsed)
+                        seen_names.add(base)
+                        drive_posters.append((parsed, fid))
 
-            posters = local_posters + drive_posters
+            # Local posters heal their Drive twin (if any) in poster_twin_id.
+            posters = [(p, poster_twin_id) for p in local_posters] + drive_posters
             media_index = index_media(db.media.get_all())
             reviews = poster_heal_review_for(db)
 
             # Drop open proposals from an earlier, broader scan — absolute local
-            # paths outside output_dir (e.g. other owners' synced posters). Live-
-            # Drive proposals carry a bare filename (not absolute), so they're kept.
+            # paths outside every configured folder (e.g. other owners' synced
+            # posters, or a folder since removed). Live-Drive proposals carry a
+            # bare filename (not absolute), so they're kept.
             pruned = 0
-            if output_dir:
+            if local_dirs:
                 for row in reviews.list_open(limit=1_000_000):
                     pf = row.get("poster_file") or ""
-                    if os.path.isabs(pf) and not _is_under(pf, output_dir):
+                    if os.path.isabs(pf) and not any(
+                        _is_under(pf, d) for d in local_dirs
+                    ):
                         reviews.delete(row["id"])
                         pruned += 1
             if pruned:
@@ -132,18 +164,18 @@ class PosterSelfHeal(ChubModule):
             self.logger.info(
                 f"poster_self_heal: scanning {total} CL2K posters "
                 f"({len(local_posters)} local"
-                f"{f' under {output_dir}' if output_dir else ''}, "
+                f"{f' under {len(local_dirs)} folder(s)' if local_dirs else ''}, "
                 f"{len(drive_posters)} on Drive)"
                 f"{' [auto-apply ON]' if auto else ''}"
             )
             proposed = pending = applied = failed = 0
-            for idx, poster in enumerate(posters, 1):
+            for idx, (poster, heal_folder_id) in enumerate(posters, 1):
                 if self.is_cancelled():
                     self.logger.info("poster_self_heal cancelled.")
                     break
                 try:
                     prop = resolve_poster(
-                        poster, media_index, folder_id, tmdb_client, self.config
+                        poster, media_index, heal_folder_id, tmdb_client, self.config
                     )
                 except Exception as exc:
                     self.logger.warning(

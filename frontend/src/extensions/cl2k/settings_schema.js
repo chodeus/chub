@@ -19,29 +19,20 @@ export const CL2K_MAKER_SCHEMA = {
             description:
                 '"debug" prints per-poster art/logo resolution; "info" is the normal cron-friendly level.',
         },
-        // ─── Output ────────────────────────────────────────────────
-        {
-            key: 'output_dir',
-            label: 'Output Directory',
-            type: 'dir',
-            section: 'Output',
-            required: true,
-            description:
-                'Where generated CL2K posters are written. Make this one of Poster Renamerr’s source directories so the rest of CHUB picks them up.',
-        },
+        // ─── Generation ────────────────────────────────────────────
         {
             key: 'skip_existing',
             label: 'Skip Existing',
             type: 'check_box',
-            section: 'Output',
+            section: 'Generation',
             description:
-                'Skip items that already have a generated CL2K poster (the duplicate guard). The page’s force option overrides this per generation.',
+                'Skip items that already have a generated CL2K poster. The maker page’s force option overrides this per generation.',
         },
         {
             key: 'style',
             label: 'Style Tag',
             type: 'text',
-            section: 'Output',
+            section: 'Generation',
             placeholder: 'CL2K',
             description: 'poster_cache style tag recorded for generated posters.',
         },
@@ -49,9 +40,38 @@ export const CL2K_MAKER_SCHEMA = {
             key: 'priority',
             label: 'Priority',
             type: 'number',
-            section: 'Output',
+            section: 'Generation',
             placeholder: '0',
             description: 'poster_cache priority for generated posters (higher wins on match).',
+        },
+        // ─── Save locations (routed cards + coverage, option 2a) ──
+        // Custom field types registered by manifest.jsx from
+        // SaveLocationsFields.jsx; each card renders its own description, add
+        // button, entry list and empty state. Nothing here is required — zero
+        // locations is valid (unrouted art stays downloadable from the maker
+        // page).
+        {
+            key: 'local_folders',
+            label: 'Local Folders',
+            type: 'cl2k_local_folders',
+            section: 'Local Folders',
+            required: false,
+        },
+        {
+            key: 'gdrive_uploads',
+            label: 'Google Drives',
+            type: 'cl2k_gdrive_uploads',
+            section: 'Google Drives',
+            required: false,
+        },
+        {
+            // Read-only, live-computed strip — carries no config value of its
+            // own (never calls onChange, so the key never lands in formData).
+            key: 'save_coverage',
+            label: 'Coverage',
+            type: 'cl2k_coverage',
+            section: 'Coverage',
+            required: false,
         },
         // ─── Logo & text ───────────────────────────────────────────
         {
@@ -85,87 +105,6 @@ export const CL2K_MAKER_SCHEMA = {
             section: 'Logo & Text',
             placeholder: 'en',
             description: 'ISO-639-1 language preferred for logo selection.',
-        },
-        // ─── Google Drive upload ───────────────────────────────────
-        {
-            key: 'upload_to_gdrive',
-            label: 'Upload to Google Drive',
-            type: 'check_box',
-            section: 'Google Drive Upload',
-            description:
-                'After saving, copy the generated poster to a Drive folder via rclone. Uploads use your Sync GDrive OAuth token — set one under Sync GDrive (a service account can’t own files in a personal Drive, so it has no usable upload path).',
-        },
-        {
-            key: 'gdrive_folder_id',
-            label: 'Upload Folder ID',
-            type: 'text',
-            section: 'Google Drive Upload',
-            description:
-                'Destination Google Drive folder ID for uploads. The folder is written to as you (via the Sync GDrive OAuth token), so the posters are owned by you. Used for any artwork type not routed by a Destination below.',
-        },
-        // ─── Destinations (optional per-type routing) ──────────────
-        {
-            key: 'destinations',
-            label: 'Destinations',
-            type: 'object_array',
-            displayType: 'destinations',
-            alwaysExpanded: true,
-            section: 'Destinations (optional)',
-            required: false,
-            description:
-                'Optional. Route generated art to different local folders and Drive folders by type — e.g. a "Posters" destination and an "Assets" destination for logos/backgrounds/square art. Each destination handles the types you select; anything not covered falls back to the single Output Directory and Upload Folder ID above. Leave empty to send everything to those single fields.',
-            fields: [
-                {
-                    key: 'name',
-                    label: 'Name',
-                    type: 'text',
-                    required: true,
-                    description: 'What this destination is for (e.g. Posters, Assets).',
-                },
-                {
-                    key: 'image_types',
-                    label: 'Artwork Types',
-                    type: 'multiselect',
-                    options: [
-                        { value: 'poster', label: 'Poster' },
-                        { value: 'logo', label: 'Logo' },
-                        { value: 'background', label: 'Background (16:9)' },
-                        { value: 'squareart', label: 'Square Art (1:1)' },
-                    ],
-                    description: 'Which generated artwork types route to this destination.',
-                },
-                {
-                    key: 'output_dir',
-                    label: 'Output Directory',
-                    type: 'dir',
-                    description:
-                        'Local folder these types are written to. Make it a Poster Renamerr or Asset Renamerr source directory so CHUB picks them up.',
-                },
-                {
-                    key: 'upload_to_gdrive',
-                    label: 'Upload to Google Drive',
-                    type: 'check_box',
-                    description: 'Also upload these types to the Drive folder below.',
-                },
-                {
-                    key: 'gdrive_folder_id',
-                    label: 'Upload Folder ID',
-                    type: 'text',
-                    description: 'Destination Google Drive folder ID for these types.',
-                },
-                {
-                    key: 'test',
-                    label: 'Test upload',
-                    type: 'action_button',
-                    buttonText: 'Test upload',
-                    endpoint: '/cl2k-maker/test-drive',
-                    payloadFields: ['gdrive_folder_id'],
-                    requireFields: ['gdrive_folder_id'],
-                    requireHint: 'Enter a Folder ID above to test',
-                    description:
-                        'Uploads a tiny file to the folder above and deletes it, confirming CHUB can upload there.',
-                },
-            ],
         },
         // ─── AI text removal ───────────────────────────────────────
         {
@@ -250,5 +189,5 @@ export const CL2K_MAKER_MODULE_ENTRY = {
     name: 'CL2K Maker',
     key: 'cl2k_maker',
     description:
-        'Generate DAPS-named CL2K posters from TMDB/fanart art, .psd sources, or uploads. Configure output, logo, AI text-removal, and .psd source drives here; build posters on the CL2K Poster Maker page.',
+        'Generate DAPS-named CL2K posters from TMDB/fanart art, .psd sources, or uploads. Build posters on the CL2K Poster Maker page.',
 };

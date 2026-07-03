@@ -3,7 +3,7 @@
 import os
 import shutil
 import tempfile
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from backend.util.cl2k import color
 from backend.util.cl2k import geometry as geo
@@ -440,14 +440,6 @@ def generate_for_item(
         tvdb_id=tvdb_id,
         imdb_id=imdb_id,
     )
-    # output_dir is only required when actually saving locally; a Drive-only save
-    # uploads from a temp copy and never touches output_dir.
-    if save_local and not _has_local_output(cfg):
-        return {
-            "status": "error",
-            "reason": "cl2k_maker.output_dir is not configured (set it, or add a "
-            "destination with an output directory)",
-        }
 
     if (
         cfg.skip_existing
@@ -558,12 +550,6 @@ def generate_square_art(
         tvdb_id=tvdb_id,
         imdb_id=imdb_id,
     )
-    if save_local and not _has_local_output(cfg):
-        return {
-            "status": "error",
-            "reason": "cl2k_maker.output_dir is not configured (set it, or add a "
-            "destination with an output directory)",
-        }
     if backdrop_bytes is None:
         if not backdrop_path:
             return {"status": "error", "reason": "no source art selected"}
@@ -647,12 +633,6 @@ def generate_background_art(
         tvdb_id=tvdb_id,
         imdb_id=imdb_id,
     )
-    if save_local and not _has_local_output(cfg):
-        return {
-            "status": "error",
-            "reason": "cl2k_maker.output_dir is not configured (set it, or add a "
-            "destination with an output directory)",
-        }
     if backdrop_bytes is None:
         if not backdrop_path:
             return {"status": "error", "reason": "no source art selected"}
@@ -731,12 +711,6 @@ def generate_logo_asset(
         tvdb_id=tvdb_id,
         imdb_id=imdb_id,
     )
-    if save_local and not _has_local_output(cfg):
-        return {
-            "status": "error",
-            "reason": "cl2k_maker.output_dir is not configured (set it, or add a "
-            "destination with an output directory)",
-        }
     raw = logo_bytes
     if raw is None and logo_path:
         raw = image_fetch.download(logo_path)
@@ -773,25 +747,33 @@ def generate_logo_asset(
     )
 
 
-def _match_destination(cfg, image_type: str):
-    """First configured cl2k destination whose ``image_types`` includes
-    ``image_type``, else None. Empty ``destinations`` (the default) means every
-    file falls back to the single ``output_dir`` / ``gdrive_folder_id``."""
-    for dest in getattr(cfg, "destinations", None) or []:
-        if image_type in (getattr(dest, "image_types", None) or []):
-            return dest
-    return None
+def _local_targets(cfg, image_type: str) -> List[str]:
+    """Paths of the configured local folders that claim ``image_type`` (config
+    order, deduped, blank paths skipped). Every claimer receives a copy; an
+    empty result means the type isn't auto-saved locally."""
+    seen, out = set(), []
+    for folder in getattr(cfg, "local_folders", None) or []:
+        path = (getattr(folder, "path", "") or "").strip()
+        if not path or path in seen:
+            continue
+        if image_type in (getattr(folder, "types", None) or []):
+            seen.add(path)
+            out.append(path)
+    return out
 
 
-def _has_local_output(cfg) -> bool:
-    """True when a local save has somewhere to go: the global ``output_dir`` or
-    at least one destination with its own ``output_dir``. Lets a routing-only
-    config (per-type dirs, blank global) pass the pre-render guard."""
-    if getattr(cfg, "output_dir", ""):
-        return True
-    return any(
-        getattr(d, "output_dir", "") for d in (getattr(cfg, "destinations", None) or [])
-    )
+def _drive_targets(cfg, image_type: str) -> List[str]:
+    """Folder ids of the configured Drive uploads that claim ``image_type``
+    (config order, deduped, blank ids skipped)."""
+    seen, out = set(), []
+    for drive in getattr(cfg, "gdrive_uploads", None) or []:
+        folder_id = (getattr(drive, "folder_id", "") or "").strip()
+        if not folder_id or folder_id in seen:
+            continue
+        if image_type in (getattr(drive, "types", None) or []):
+            seen.add(folder_id)
+            out.append(folder_id)
+    return out
 
 
 def _persist_poster(
@@ -816,7 +798,7 @@ def _persist_poster(
     asset_suffix: str = "",
     ext: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Write a finished poster to the selected destinations + provenance.
+    """Write a finished poster to every claiming save location + provenance.
 
     ``image_type`` / ``asset_suffix`` / ``ext`` let this same sink file the
     additional-asset types the maker produces — ``squareart`` (``- SquareArt.jpg``)
@@ -828,52 +810,20 @@ def _persist_poster(
     (:func:`save_finished_poster`) and .psd-flattened posters. ``backdrop_path``
     is None for posters that didn't go through the renderer.
 
-    Destinations are independent: ``save_local`` writes the poster into
-    ``output_dir`` and registers it in poster_cache (so the rest of CHUB
-    matches/uploads it); ``upload_gdrive`` copies it to the configured Drive
-    folder. ``upload_gdrive=None`` falls back to ``cfg.upload_to_gdrive`` (the
-    batch ``run()`` default). At least one destination must be selected. A
-    Drive-only save (``save_local=False``) has no persistent local file, so it is
-    uploaded from a temporary copy and is recorded only in provenance, NOT in
-    poster_cache (nothing local for CHUB to match).
+    Routing: the file is written into every ``cfg.local_folders`` entry claiming
+    its ``image_type`` (one poster_cache row per copy) and uploaded to every
+    claiming ``cfg.gdrive_uploads`` folder. Nothing is mandatory — when no
+    location claims the type, nothing is auto-saved and the result carries
+    ``not_routed: True`` (the art stays downloadable from the maker page).
+    ``save_local=False`` skips the local writes; ``upload_gdrive=False`` skips
+    the uploads (``None``/``True`` both mean "upload wherever routed"). An
+    upload with no local copy is staged from a temp file and is recorded only in
+    provenance, NOT in poster_cache (nothing local for CHUB to match).
     """
-    # Optional per-image-type routing: a matching destination overrides the
-    # default output_dir / Drive folder for this file's image_type. No match
-    # (or no destinations configured) => the single default fields.
-    dest = _match_destination(cfg, image_type)
-    out_dir = dest.output_dir if dest and dest.output_dir else cfg.output_dir
-    folder_id = (
-        dest.gdrive_folder_id
-        if dest and dest.gdrive_folder_id
-        else cfg.gdrive_folder_id
-    )
-    if upload_gdrive is None:
-        # Additive: the global switch is the default; a matched destination can
-        # additionally enable upload for its types. A destination created only
-        # to redirect the local dir therefore keeps uploading via the global
-        # setting instead of silently turning it off.
-        upload_gdrive = bool(cfg.upload_to_gdrive) or bool(
-            getattr(dest, "upload_to_gdrive", False)
-        )
-    do_upload = bool(upload_gdrive)
-    if not save_local and not do_upload:
-        return {"status": "error", "reason": "no save destination selected"}
-    if save_local and not out_dir:
-        return {
-            "status": "error",
-            "reason": (
-                f"no output directory for image_type '{image_type}' "
-                "(set cl2k_maker.output_dir or a destination output directory)"
-            ),
-        }
-    if do_upload and not folder_id:
-        if not save_local:
-            return {
-                "status": "error",
-                "reason": "Google Drive selected but gdrive_folder_id is not configured",
-            }
-        # Local save still proceeds; just skip the (unconfigured) upload.
-        do_upload = False
+    out_dirs = _local_targets(cfg, image_type) if save_local else []
+    # Explicit False turns Drive upload off for this save; True and None (the
+    # UI/module default) both upload to every configured Drive claiming the type.
+    folder_ids = _drive_targets(cfg, image_type) if upload_gdrive is not False else []
 
     filename = build_poster_filename(
         kind=kind,
@@ -887,20 +837,44 @@ def _persist_poster(
         asset_suffix=asset_suffix,
     )
     # build_poster_filename already strips path-illegal chars, but basename makes it
-    # provably impossible for a crafted title to escape output_dir (path-injection).
+    # provably impossible for a crafted title to escape the save dirs (path-injection).
     filename = os.path.basename(filename)
 
-    out_path = None
-    if save_local:
-        os.makedirs(out_dir, exist_ok=True)
-        out_path = os.path.join(out_dir, filename)
-        with open(out_path, "wb") as fh:
-            fh.write(blob)
+    # Nothing claims this type: a valid outcome by design — no auto-save, the
+    # caller offers the art as a download instead.
+    if not out_dirs and not folder_ids:
+        logger.info(
+            f"CL2K generated {filename} — no save location claims "
+            f"'{image_type}', not auto-saved (downloadable only)"
+        )
+        return {
+            "status": "generated",
+            "file": filename,
+            "logo_source": logo_source,
+            "saved_local": False,
+            "uploaded": False,
+            "not_routed": True,
+        }
+
+    written: List[str] = []
+    write_errors: List[str] = []
+    for out_dir in out_dirs:
+        try:
+            os.makedirs(out_dir, exist_ok=True)
+            out_path = os.path.join(out_dir, filename)
+            with open(out_path, "wb") as fh:
+                fh.write(blob)
+        except OSError as exc:
+            write_errors.append(f"{out_dir}: {exc}")
+            logger.warning(f"CL2K local save failed in {out_dir}: {exc}")
+            continue
+        written.append(out_path)
         # Logged before the DB writes below so a failure there still leaves a
         # record that the file exists on disk.
         logger.info(f"CL2K saved {filename} to {out_dir}")
 
-        # poster_cache so CHUB's matching/upload picks it up
+    if written:
+        # poster_cache so CHUB's matching/upload picks it up — one row per copy.
         db.poster.bulk_upsert(
             [
                 {
@@ -911,19 +885,21 @@ def _persist_poster(
                     "tvdb_id": tvdb_id,
                     "imdb_id": imdb_id,
                     "season_number": season_number,
-                    "folder": os.path.basename(out_dir.rstrip("/")),
+                    "folder": os.path.basename(os.path.dirname(out_path).rstrip("/")),
                     "file": out_path,
                     "style": cfg.style,
                     "priority": cfg.priority,
                     "image_type": image_type,
                     "search_only": 0,
                 }
+                for out_path in written
             ]
         )
 
         # Provenance / "already generated" tracking is poster-only — an asset
         # (squareart / logo) shares the media's tmdb_id and must not make the batch
-        # poster run think a poster exists for it.
+        # poster run think a poster exists for it. One row per generation, keyed
+        # on the first local copy.
         if image_type == "poster":
             cl2k_generated_for(db).record(
                 {
@@ -934,43 +910,47 @@ def _persist_poster(
                     "season_number": season_number,
                     "title": title,
                     "year": year,
-                    "file": out_path,
+                    "file": written[0],
                     "backdrop_path": backdrop_path,
                     "logo_source": logo_source,
                     "uploaded": 0,
                 }
             )
 
-    upload_error = None
-    uploaded = False
-    if do_upload:
+    uploaded_folders: List[str] = []
+    upload_errors: List[str] = []
+    if folder_ids:
         from backend.util.cl2k.gdrive_upload import upload_file
 
-        logger.info(f"CL2K uploading {filename} to Drive folder {folder_id}…")
-        # rclone needs a real on-disk file named with the DAPS filename. Reuse the
+        # rclone needs a real on-disk file named with the DAPS filename. Reuse a
         # local save when present; otherwise stage a temp copy just for the upload.
         tmpdir = None
         try:
-            if out_path:
-                src_path = out_path
+            if written:
+                src_path = written[0]
             else:
                 tmpdir = tempfile.mkdtemp(prefix="cl2k_")
                 src_path = os.path.join(tmpdir, filename)
                 with open(src_path, "wb") as fh:
                     fh.write(blob)
-            upload_file(src_path, folder_id, sync_cfg, logger)
-            uploaded = True
-            logger.info(f"CL2K uploaded {filename} to Drive")
-        except Exception as exc:
-            upload_error = str(exc)
-            logger.warning(f"CL2K gdrive upload failed for {filename}: {exc}")
+            for folder_id in folder_ids:
+                logger.info(f"CL2K uploading {filename} to Drive folder {folder_id}…")
+                try:
+                    upload_file(src_path, folder_id, sync_cfg, logger)
+                    uploaded_folders.append(folder_id)
+                    logger.info(f"CL2K uploaded {filename} to Drive {folder_id}")
+                except Exception as exc:
+                    upload_errors.append(f"{folder_id}: {exc}")
+                    logger.warning(
+                        f"CL2K gdrive upload to {folder_id} failed for {filename}: {exc}"
+                    )
         finally:
             if tmpdir:
                 shutil.rmtree(tmpdir, ignore_errors=True)
 
-        if uploaded:
-            if out_path:
-                cl2k_generated_for(db).mark_uploaded(out_path)
+        if uploaded_folders:
+            if written:
+                cl2k_generated_for(db).mark_uploaded(written[0])
             elif image_type == "poster":
                 # Drive-only: no persistent local file, so record provenance keyed
                 # on the basename (poster_cache is skipped — nothing local to match).
@@ -991,27 +971,34 @@ def _persist_poster(
                     }
                 )
 
-    # A Drive-only save whose upload failed saved nothing — report it as an error
+    # Every routed target failed => nothing was saved anywhere — report an error
     # instead of a misleading success.
-    if not save_local and not uploaded:
+    if not written and not uploaded_folders:
         return {
             "status": "error",
-            "reason": f"Drive upload failed: {upload_error}",
+            "reason": "; ".join(
+                [f"local save failed: {e}" for e in write_errors]
+                + [f"Drive upload failed: {e}" for e in upload_errors]
+            ),
             "logo_source": logo_source,
         }
 
     logger.info(f"CL2K poster generated: {filename} (logo: {logo_source})")
     result = {
         "status": "generated",
-        "file": out_path or filename,
+        "file": written[0] if written else filename,
         "logo_source": logo_source,
-        "saved_local": bool(save_local),
-        "uploaded": uploaded,
+        "saved_local": bool(written),
+        "saved_paths": written,
+        "uploaded": bool(uploaded_folders),
+        "uploaded_folders": uploaded_folders,
     }
-    # Surface a non-fatal upload failure so the caller can tell the user the file
-    # saved locally but didn't reach Drive (generation still succeeds).
-    if upload_error:
-        result["upload_error"] = upload_error
+    # Surface non-fatal failures so the caller can tell the user which targets
+    # missed while the generation still succeeded elsewhere.
+    if upload_errors:
+        result["upload_error"] = "; ".join(upload_errors)
+    if write_errors:
+        result["save_error"] = "; ".join(write_errors)
     return result
 
 
@@ -1114,12 +1101,6 @@ def save_finished_poster(
         tvdb_id=tvdb_id,
         imdb_id=imdb_id,
     )
-    if save_local and not _has_local_output(cfg):
-        return {
-            "status": "error",
-            "reason": "cl2k_maker.output_dir is not configured (set it, or add a "
-            "destination with an output directory)",
-        }
     blob = _normalize_poster(image_bytes)
     if logo_bytes:
         from backend.util.cl2k.renderer import overlay_logo
