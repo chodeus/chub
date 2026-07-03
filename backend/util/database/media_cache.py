@@ -872,8 +872,22 @@ class MediaCache(DatabaseBase):
             # whose normalized form has the punctuation stripped. Raw
             # title LIKE is the case-insensitive fallback for exact
             # stored substrings. Same fix as poster_cache.search.
-            sub = ["normalized_title LIKE ?", "title LIKE ?"]
-            sub_params: List[Any] = [f"%{normalize_titles(query)}%", f"%{query}%"]
+            # Escape LIKE metacharacters so a query with %/_ matches literally
+            # (mirrors poster_cache.delete_by_path_prefix).
+            norm_esc = (
+                normalize_titles(query)
+                .replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_")
+            )
+            raw_esc = (
+                query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            )
+            sub = [
+                "normalized_title LIKE ? ESCAPE '\\'",
+                "title LIKE ? ESCAPE '\\'",
+            ]
+            sub_params: List[Any] = [f"%{norm_esc}%", f"%{raw_esc}%"]
             # Also match an id pasted from a filename tag ({tmdb-…}/{tvdb-…}/
             # {imdb-tt…}) or a bare IMDb id, so users can search by id.
             tmdb, tvdb, imdb = parse_search_id(query)
@@ -894,9 +908,14 @@ class MediaCache(DatabaseBase):
             params.append(asset_type)
 
         if genres:
-            genre_conditions = ["genre LIKE ?" for _ in genres]
+            genre_conditions = ["genre LIKE ? ESCAPE '\\'" for _ in genres]
             conditions.append(f"({' OR '.join(genre_conditions)})")
-            params.extend(f"%{g}%" for g in genres)
+            params.extend(
+                "%"
+                + g.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+                + "%"
+                for g in genres
+            )
 
         if year_min is not None:
             conditions.append("CAST(year AS INTEGER) >= ?")
