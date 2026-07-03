@@ -44,8 +44,10 @@ const HealReviewLink = () => {
  *   4. Output — generate (write + cache), export a layered .psd, download the
  *      backdrop for an external clean-up handoff, or browse history.
  *
- * Non-visual knobs (logo width, whiten, language, AI provider, output_dir) live
- * in Module Settings → CL2K Maker; this page reads them and links back to edit.
+ * Non-visual knobs (logo width, whiten, language, AI provider, save locations)
+ * live in Module Settings → CL2K Maker; this page reads them and links back to
+ * edit. Saves route by artwork type: every configured local folder / Drive that
+ * claims the type gets a copy; nothing routed = downloadable only.
  */
 
 const KIND_OPTIONS = [
@@ -558,24 +560,30 @@ const Cl2kMakerPage = () => {
 
 const ConfigBanner = ({ config, uploadStatus }) => {
     if (config === null) return null;
-    const missingDir = !config.output_dir;
-    // Upload is enabled but there's no usable Sync GDrive OAuth token, so every
-    // upload will fail (a service account can't own files in a personal Drive).
-    const uploadNoToken = uploadStatus?.upload_to_gdrive && uploadStatus?.token_ok === false;
+    // Entries that actually route something (a claimed type + a real target).
+    const folderCount = (config.local_folders || []).filter(
+        f => (f?.path || '').trim() && (f?.types || []).length
+    ).length;
+    const driveCount = (config.gdrive_uploads || []).filter(
+        d => (d?.folder_id || '').trim() && (d?.types || []).length
+    ).length;
+    const noLocations = folderCount === 0 && driveCount === 0;
+    // Drive uploads are configured but there's no usable Sync GDrive OAuth
+    // token, so every upload will fail (a service account can't own files in a
+    // personal Drive).
+    const uploadNoToken = uploadStatus?.gdrive_configured && uploadStatus?.token_ok === false;
     return (
         <>
             {/* Config strip — the non-visual knobs live in Module Settings; the
-                output dir is shown read-only (styled like the mock's field) since
-                there's no inline-save backend, with a link back to edit it. */}
+                save locations are shown read-only since there's no inline-save
+                backend, with a link back to edit them. */}
             <section className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 px-4 py-[11px] bg-surface border border-border rounded-[10px] text-[12.5px]">
                 <span className="flex items-center gap-[7px] text-fg-subtle">
-                    Output dir
-                    <span
-                        className={`inline-flex items-center h-7 px-2.5 rounded-md bg-surface-inset border font-mono text-[11.5px] ${
-                            missingDir ? 'border-error text-error' : 'border-border text-fg-muted'
-                        }`}
-                    >
-                        {config.output_dir || 'not set'}
+                    Save locations
+                    <span className="inline-flex items-center h-7 px-2.5 rounded-md bg-surface-inset border border-border font-mono text-[11.5px] text-fg-muted">
+                        {noLocations
+                            ? 'none — download only'
+                            : `${folderCount} folder${folderCount === 1 ? '' : 's'} · ${driveCount} Drive${driveCount === 1 ? '' : 's'}`}
                     </span>
                 </span>
                 <span className="text-fg-subtle">
@@ -597,18 +605,19 @@ const ConfigBanner = ({ config, uploadStatus }) => {
                 </Link>
             </section>
 
-            {missingDir && (
-                <div className="mt-2.5 flex items-center gap-2.5 px-3.5 py-2.5 rounded-[9px] bg-error/10 border border-error/30">
-                    <span className="material-symbols-outlined text-error text-[17px] shrink-0">
-                        warning
+            {noLocations && (
+                <div className="mt-2.5 flex items-center gap-2.5 px-3.5 py-2.5 rounded-[9px] bg-surface border border-border">
+                    <span className="material-symbols-outlined text-accent text-[17px] shrink-0">
+                        info
                     </span>
                     <span className="text-[12.5px] text-fg-muted">
-                        Output directory not set — saves will fail.{' '}
+                        No save locations configured — generated art isn&apos;t auto-saved but stays
+                        downloadable here.{' '}
                         <Link
                             to="/settings/modules/cl2k_maker"
-                            className="text-error hover:underline"
+                            className="text-accent hover:underline"
                         >
-                            Set it in Module Settings.
+                            Add folders or Drives in Module Settings.
                         </Link>
                     </span>
                 </div>
@@ -619,8 +628,8 @@ const ConfigBanner = ({ config, uploadStatus }) => {
                         warning
                     </span>
                     <span className="text-[12.5px] text-fg-muted">
-                        Google Drive upload enabled but no OAuth token — uploads will fail, local
-                        save still works.{' '}
+                        Google Drive uploads configured but no OAuth token — uploads will fail,
+                        local saves still work.{' '}
                         <Link
                             to="/settings/modules/cl2k_maker"
                             className="text-warning hover:underline"
@@ -636,10 +645,12 @@ const ConfigBanner = ({ config, uploadStatus }) => {
 
 // ─── Save destinations (shared across every save flow) ──────────────────────
 
-// Hook owning the two independent save-target toggles. Drive defaults ON only
-// when the module has Drive upload enabled AND a usable folder + token; output
-// directory defaults ON. The default is applied once `uploadStatus` arrives so
-// it never clobbers a user toggle.
+// Hook owning the two independent save-medium toggles. Each medium defaults ON
+// only when the module config actually routes something through it (an entry
+// with a claimed type; Drive additionally needs a usable OAuth token). The
+// defaults are applied once `uploadStatus` arrives so they never clobber a
+// user toggle. Both off (or nothing routed) is valid — the art stays
+// downloadable from this page.
 const useSaveTargets = uploadStatus => {
     const [saveLocal, setSaveLocal] = useState(true);
     const [uploadGdrive, setUploadGdrive] = useState(false);
@@ -647,11 +658,8 @@ const useSaveTargets = uploadStatus => {
     useEffect(() => {
         if (!uploadStatus || initRef.current) return;
         initRef.current = true;
-        setUploadGdrive(
-            !!uploadStatus.upload_to_gdrive &&
-                !!uploadStatus.folder_id_set &&
-                uploadStatus.token_ok !== false
-        );
+        setSaveLocal(!!uploadStatus.local_configured);
+        setUploadGdrive(!!uploadStatus.gdrive_configured && uploadStatus.token_ok !== false);
     }, [uploadStatus]);
     const noTarget = !saveLocal && !uploadGdrive;
     return {
@@ -666,55 +674,77 @@ const useSaveTargets = uploadStatus => {
     };
 };
 
-// The two tick boxes. Drive is disabled (with a hint) when no folder is
-// configured; an enabled-but-tokenless Drive choice warns it will fail.
+// The two tick boxes — which save MEDIUMS this generation uses; the module
+// config routes each artwork type to its claiming folders/Drives within them.
+// A medium with nothing routed is disabled (with a hint); both off is valid
+// (download only).
 const SaveTargets = ({ targets }) => {
     const { saveLocal, setSaveLocal, uploadGdrive, setUploadGdrive, uploadStatus, noTarget } =
         targets;
-    const folderSet = !!uploadStatus?.folder_id_set;
+    const localConfigured = !!uploadStatus?.local_configured;
+    const gdriveConfigured = !!uploadStatus?.gdrive_configured;
     const tokenOk = uploadStatus?.token_ok !== false;
     return (
         <div className="border-t border-border-subtle pt-2 mt-1 flex flex-col gap-1">
             <span className="text-xs font-medium text-fg-muted">Save to</span>
             <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
-                <label className="flex items-center gap-2 text-sm text-fg">
+                <label
+                    className={`flex items-center gap-2 text-sm text-fg ${
+                        localConfigured ? '' : 'opacity-60'
+                    }`}
+                >
                     <input
                         type="checkbox"
                         checked={saveLocal}
+                        disabled={!localConfigured}
                         onChange={e => setSaveLocal(e.target.checked)}
                     />
-                    Output directory
+                    Local folders
                 </label>
                 <label
                     className={`flex items-center gap-2 text-sm text-fg ${
-                        folderSet ? '' : 'opacity-60'
+                        gdriveConfigured ? '' : 'opacity-60'
                     }`}
                 >
                     <input
                         type="checkbox"
                         checked={uploadGdrive}
-                        disabled={!folderSet}
+                        disabled={!gdriveConfigured}
                         onChange={e => setUploadGdrive(e.target.checked)}
                     />
                     Google Drive
                 </label>
             </div>
-            {!folderSet && (
+            {!localConfigured && !gdriveConfigured && (
                 <p className="text-xs text-fg-subtle">
-                    Set a Drive folder under{' '}
+                    No save locations routed — every generation stays downloadable here. Add folders
+                    or Drives under{' '}
+                    <Link to="/settings/modules/cl2k_maker" className="text-fg underline">
+                        Module Settings
+                    </Link>
+                    .
+                </p>
+            )}
+            {!gdriveConfigured && localConfigured && (
+                <p className="text-xs text-fg-subtle">
+                    Add a Drive upload under{' '}
                     <Link to="/settings/modules/cl2k_maker" className="text-fg underline">
                         Module Settings
                     </Link>{' '}
                     to enable Drive upload.
                 </p>
             )}
-            {uploadGdrive && folderSet && !tokenOk && (
+            {uploadGdrive && gdriveConfigured && !tokenOk && (
                 <p className="text-xs text-warning">
                     No usable Sync GDrive OAuth token — the Drive upload will fail (the poster still
                     saves locally if that box is ticked).
                 </p>
             )}
-            {noTarget && <p className="text-xs text-error">Select at least one destination.</p>}
+            {noTarget && (
+                <p className="text-xs text-fg-subtle">
+                    Nothing selected — this generation won&apos;t be auto-saved, just downloadable.
+                </p>
+            )}
         </div>
     );
 };
@@ -6134,13 +6164,21 @@ const downloadBlob = (blob, filename) => {
     URL.revokeObjectURL(url);
 };
 
-// Toast for a save/generate that also surfaces a non-fatal Drive-upload failure
-// (the poster still saved locally) so the user isn't left guessing why nothing
-// reached Drive. Backend returns data.upload_error on the save response.
+// Toast for a save/generate that also surfaces partial-target failures (some
+// folder/Drive copies missed while others landed) so the user isn't left
+// guessing. Backend returns data.upload_error / data.save_error on the save
+// response, and data.not_routed when no configured location claims the type.
 const savedToast = (toast, data, verb = 'Saved') => {
     const file = data?.file || 'poster';
-    if (data?.upload_error) {
-        toast.error(`${verb} ${file} locally, but Drive upload failed: ${data.upload_error}`);
+    if (data?.not_routed) {
+        toast.info(
+            'Not auto-saved — nothing is routed to receive this artwork type. Use Download, or adjust save locations in Module Settings.'
+        );
+        return;
+    }
+    if (data?.upload_error || data?.save_error) {
+        const missed = [data.save_error, data.upload_error].filter(Boolean).join('; ');
+        toast.error(`${verb} ${file}, but some targets failed: ${missed}`);
         return;
     }
     const local = data?.saved_local;

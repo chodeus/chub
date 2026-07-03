@@ -6,7 +6,7 @@ against TMDB and proposes rewriting a stale embedded id, a changed title, or a
 missing id. Proposals are applied only after manual review (rclone moveto on the
 user's Drive via cl2k.gdrive_upload, os.replace for the local source copy).
 
-Operates on the CL2K maker's own output: it reads ``cl2k_maker.output_dir`` and
-``cl2k_maker.gdrive_folder_id`` from the loaded config rather than defining its
-own source.
+Operates on the CL2K maker's own output: it reads ``cl2k_maker.local_folders``
+and ``cl2k_maker.gdrive_uploads`` from the loaded config rather than defining
+its own source.
 """

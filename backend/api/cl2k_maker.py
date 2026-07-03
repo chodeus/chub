@@ -3,7 +3,8 @@
 Powers the CL2K Poster Maker page. Entry points (TMDB search, ID/URL paste,
 unmatched-asset links) all resolve to a tmdb_id + kind; the art picker lists
 every logo/backdrop; preview renders without saving; generate writes the poster
-into the configured source_dir and records provenance.
+into every configured save location claiming its type (local folders and/or
+Drive uploads; none = downloadable only) and records provenance.
 
     GET  /api/cl2k-maker/search?q=&type=         TMDB title search (entry point)
     GET  /api/cl2k-maker/resolve?external_id=&source=&type=   tvdb/imdb -> tmdb
@@ -126,8 +127,9 @@ class GenerateRequest(BaseModel):
     # then move the logo without a server render per drag. Always True on generate
     # (the logo is baked into the saved poster).
     place_logo: bool = True
-    # Save destinations (independent). upload_gdrive=None falls back to the module
-    # config flag; at least one must be selected at save time.
+    # Save mediums (independent). save_local writes to every local folder that
+    # claims the image type; upload_gdrive=None/True uploads to every claiming
+    # Drive (False skips). Nothing selected/routed = downloadable only.
     save_local: bool = True
     upload_gdrive: Optional[bool] = None
 
@@ -252,20 +254,28 @@ def season_images(
 
 
 @router.get(
-    "/upload-status", summary="Whether CL2K Drive upload has a usable OAuth token"
+    "/upload-status", summary="Configured CL2K save locations + Drive OAuth state"
 )
 def upload_status(
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
+    """Feeds the maker page's save-target defaults: whether any local folder /
+    Drive upload actually routes something (an entry with no claimed types is
+    inert), and whether Drive uploads have a usable OAuth token."""
     from backend.util.cl2k.gdrive_upload import has_upload_token
 
     cfg = load_config()
     return ok(
         "ok",
         {
-            "upload_to_gdrive": bool(cfg.cl2k_maker.upload_to_gdrive),
-            "folder_id_set": bool(cfg.cl2k_maker.gdrive_folder_id),
+            "local_configured": any(
+                (f.path or "").strip() and f.types for f in cfg.cl2k_maker.local_folders
+            ),
+            "gdrive_configured": any(
+                (d.folder_id or "").strip() and d.types
+                for d in cfg.cl2k_maker.gdrive_uploads
+            ),
             "token_ok": has_upload_token(cfg.sync_gdrive),
         },
     )
@@ -275,9 +285,7 @@ class TestDriveRequest(BaseModel):
     gdrive_folder_id: str = ""
 
 
-@router.post(
-    "/test-drive", summary="Verify CHUB can upload to a given Drive folder"
-)
+@router.post("/test-drive", summary="Verify CHUB can upload to a given Drive folder")
 def test_drive(
     req: TestDriveRequest,
     db: ChubDB = Depends(get_database),

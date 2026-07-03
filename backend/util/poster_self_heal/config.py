@@ -7,7 +7,7 @@ module sections. Lives here (not backend/util/config.py) because poster_self_hea
 is a develop-only extension.
 
 Deliberately has NO source/drive fields: the healer operates on the CL2K maker's
-output, reading ``cl2k_maker.output_dir`` + ``cl2k_maker.gdrive_folder_id`` (and
+output, reading ``cl2k_maker.local_folders`` + ``cl2k_maker.gdrive_uploads`` (and
 ``cl2k_maker.style``) from the loaded config at run time.
 """
 
