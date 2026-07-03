@@ -340,28 +340,6 @@ def scan_bundles(plex_path: str, *, force: bool = False) -> Dict[str, Any]:
         working_dir = tempfile.mkdtemp(prefix="chub-plex-cache-")
     db_copy = os.path.join(working_dir, "plex_scan.db")
     db_path = copy_plex_db(plex_path, db_copy) or None
-    if db_path is None:
-        # The Plex DB copy failed (DB locked mid-write, target briefly
-        # unwritable, or DB missing) — we can't tell which variants Plex is
-        # actively using, so classifying now would flag every upload as bloat
-        # with blank titles. Return a distinct 'unavailable' result and DON'T
-        # cache it: a transient blip must not be negative-cached for the TTL.
-        return {
-            "bundles": [],
-            "libraries": [],
-            "media_types": [],
-            "variant_kinds": [],
-            "unavailable": True,
-            "reason": "Could not read Plex's database (it may be busy); "
-            "run the scan again.",
-            "stats": {
-                "bundle_count": 0,
-                "variant_count": 0,
-                "bloat_count": 0,
-                "bloat_size": 0,
-                "scanned_at": time.time(),
-            },
-        }
 
     in_use: Set[str] = get_in_use_hashes(db_path) if db_path else set()
     anchor_index = _load_metadata_item_index(db_path) if db_path else {}
