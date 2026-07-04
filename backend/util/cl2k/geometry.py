@@ -30,9 +30,10 @@ LOGO_WIDTH_RECOMMENDED = 700  # creator's own extra guide (x150->850) — "the o
 LOGO_WIDTH_MAX = 800  # guide "Max Logo Width" (x100->900) — hard cap
 # CL2K rule: "only leave the Main-Logo *text* area if the logo is too small or
 # unreadable". A clear logo whose trimmed content is narrower than this would need
-# heavy upscaling to reach the ~600px box and render fuzzy, so we reject it and
-# draw the title wordmark instead. ~0.67x the standard box (so up to ~1.5x upscale
-# is allowed).
+# heavy upscaling to reach the logo box and render fuzzy, so we reject it and draw
+# the title wordmark instead. ~0.57x the default 700px box, i.e. up to ~1.75x
+# plain upscale; below the gate the sidecar's super-resolution rescue
+# (ai_logo_upscale) gets a shot before the text fallback.
 LOGO_MIN_WIDTH = 400
 # Verified against the PSDs in refs/ (template + 3 finished posters, 2026-06-13):
 # all four embed identical guides — y = 1100 ("Main Logo Height"), 1319
@@ -108,13 +109,19 @@ TITLE_CENTER_Y = 1319  # centre of the MM2K "MIDDLE BOTTOM" band (1284-1354)
 TEXT_COLOR = "white"
 
 # Real-Arial candidates, first existing wins (mscorefonts in-container, macOS dev).
+# Liberation Sans is Arial-metric-compatible — a guaranteed last resort so a host
+# without mscorefonts doesn't silently render ImageMagick's default typeface.
 _ARIAL_REGULAR_CANDIDATES = (
     "/usr/share/fonts/truetype/msttcorefonts/Arial.ttf",
     "/System/Library/Fonts/Supplemental/Arial.ttf",
+    "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+    "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf",
 )
 _ARIAL_BOLD_CANDIDATES = (
     "/usr/share/fonts/truetype/msttcorefonts/Arial_Bold.ttf",
     "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+    "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+    "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf",
 )
 
 

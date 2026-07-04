@@ -4,13 +4,13 @@ Default is ``none`` (the textless-art strategy needs no AI). When a provider is
 configured AND a user-brushed mask is supplied, the masked regions are erased by
 the chosen backend:
 
-- ``lama_sidecar`` — POST image+mask to a self-hosted IOPaint/LaMa server. FREE,
-  private, the recommended default. ``ai_endpoint`` = the inpaint URL. (LaMa is
-  what we benchmarked; excellent over texture, weaker over faces.)
+- ``lama_sidecar`` — POST image+mask to a self-hosted lama-sidecar/IOPaint
+  server. FREE, private, the recommended default. ``ai_endpoint`` = the inpaint
+  URL; ``api_key`` is sent as X-API-Key when set (for a sidecar running with
+  LAMA_API_KEY). (LaMa is what we benchmarked; excellent over texture, weaker
+  over faces.)
 - ``openai`` — OpenAI ``images.edit`` (gpt-image-1). PAID; better over faces, can
   hallucinate. ``api_key`` (+ optional ``ai_model``).
-- ``huggingface`` — HF inference API inpainting. Free tier, rate-limited.
-  ``ai_endpoint`` = model URL, ``api_key`` = HF token.
 
 Mask convention here is **white (255) = remove**, black = keep (what the brush UI
 and LaMa/IOPaint use). Each backend takes the original image + mask and returns
@@ -44,15 +44,22 @@ def unavailable_reason(config) -> Optional[str]:
     provider = getattr(config, "ai_provider", "none") if config else "none"
     if provider in ("", "none"):
         return "AI provider is 'none' — set one in Module Settings → CL2K Maker."
-    if provider in ("openai", "huggingface") and not getattr(config, "api_key", ""):
+    if provider == "openai" and not getattr(config, "api_key", ""):
         return (
-            f"No API key set for the '{provider}' provider — "
+            "No API key set for the 'openai' provider — "
             "add one in Module Settings → CL2K Maker."
         )
     if provider == "lama_sidecar" and not getattr(config, "ai_endpoint", ""):
         return (
             "No AI Endpoint set for the LaMa sidecar — "
             "add your container URL in Module Settings → CL2K Maker."
+        )
+    if provider not in ("lama_sidecar", "openai"):
+        # e.g. a leftover 'huggingface' config from before that provider was
+        # dropped (its payload never matched a real HF API).
+        return (
+            f"Unknown AI provider '{provider}' — "
+            "choose one in Module Settings → CL2K Maker."
         )
     return None
 
@@ -90,10 +97,6 @@ def remove_text(
         if not mask_bytes:
             return image_bytes
         result = _lama_sidecar(image_bytes, mask_bytes, config)
-    elif provider == "huggingface":
-        if not mask_bytes:
-            return image_bytes
-        result = _huggingface(image_bytes, mask_bytes, config)
     elif provider == "openai":
         result = _openai(image_bytes, mask_bytes, config, prompt=prompt, logger=logger)
     else:
@@ -102,9 +105,12 @@ def remove_text(
     # Generative providers (OpenAI, and Firefly via handoff) re-render the WHOLE
     # canvas, which alters faces. When a mask is supplied, keep their fill ONLY
     # inside the masked region and restore the original pixels everywhere else,
-    # so the artwork outside the text is preserved exactly. (LaMa already
-    # preserves; compositing is harmless for it.)
-    if mask_bytes and result is not image_bytes:
+    # so the artwork outside the text is preserved exactly. NEVER do this for
+    # the LaMa sidecar: it dilates the mask server-side to erase the logo's
+    # anti-aliased fringe/glow, so re-compositing with our tight brush mask
+    # would paint that fringe right back (and it already guarantees only masked
+    # pixels change).
+    if mask_bytes and result is not image_bytes and provider != "lama_sidecar":
         result = _composite_masked(image_bytes, result, mask_bytes)
     return result
 
@@ -159,12 +165,19 @@ def _timeout(config) -> int:
 
 
 def _lama_url(endpoint: str) -> str:
-    """Resolve the IOPaint inpaint URL from whatever the user typed.
+    """Resolve the sidecar inpaint URL (see :func:`_lama_route`)."""
+    return _lama_route(endpoint, "/api/v1/inpaint")
+
+
+def _lama_route(endpoint: str, path: str) -> str:
+    """Resolve a sidecar route URL from whatever the user typed.
 
     Users set ``ai_endpoint`` to their container's address — ``host:8080`` or
-    ``http://host:8080`` — and we fill in IOPaint's ``/api/v1/inpaint`` path so
-    they don't have to know it. A scheme is added when missing; an endpoint that
-    already carries a path (custom sidecar) is left as-is.
+    ``http://host:8080`` — and we fill in the sidecar ``path`` so they don't have
+    to know it. A scheme is added when missing; an endpoint that already carries
+    a path (custom sidecar behind a proxy) is left as-is. Every route (inpaint,
+    upscale, detect) resolves the same way, so a custom path is honoured
+    consistently instead of only for inpaint.
     """
     from urllib.parse import urlparse, urlunparse
 
@@ -173,8 +186,15 @@ def _lama_url(endpoint: str) -> str:
         return raw
     parsed = urlparse(raw if "://" in raw else f"http://{raw}")
     if parsed.path in ("", "/"):
-        parsed = parsed._replace(path="/api/v1/inpaint")
+        parsed = parsed._replace(path=path)
     return urlunparse(parsed)
+
+
+def _lama_headers(config) -> dict:
+    """X-API-Key for a sidecar running with LAMA_API_KEY; empty when keyless
+    (the sidecar ignores the header unless it has a key configured)."""
+    key = getattr(config, "api_key", "")
+    return {"X-API-Key": key} if key else {}
 
 
 def _lama_sidecar(image_bytes: bytes, mask_bytes: bytes, config) -> bytes:
@@ -188,9 +208,66 @@ def _lama_sidecar(image_bytes: bytes, mask_bytes: bytes, config) -> bytes:
         "image": base64.b64encode(image_bytes).decode(),
         "mask": base64.b64encode(mask_bytes).decode(),
     }
-    resp = requests.post(url, json=payload, timeout=_timeout(config))
+    # Per-request dilation override (>=0); -1 leaves the sidecar's own default.
+    # Older sidecars ignore unknown JSON fields, so this is backwards-compatible.
+    # 0 is a real value (dilation OFF) — only None falls back, never `or`.
+    raw_dilate = getattr(config, "ai_mask_dilate", -1)
+    dilate = -1 if raw_dilate is None else int(raw_dilate)
+    if dilate >= 0:
+        payload["dilate"] = dilate
+    resp = requests.post(
+        url, json=payload, headers=_lama_headers(config), timeout=_timeout(config)
+    )
     resp.raise_for_status()
     return resp.content
+
+
+def upscale_image(
+    image_bytes: bytes, config, scale: int = 0, logger=None
+) -> Optional[bytes]:
+    """2x/4x super-resolution via the sidecar's /api/v1/upscale (logos only).
+
+    Best-effort: returns the upscaled PNG bytes, or None on ANY failure —
+    provider not lama_sidecar, endpoint unset, an older sidecar without the
+    endpoint (404), timeout, or a server error — so callers can fall back to
+    exactly the behaviour they had before this endpoint existed.
+    ``scale`` 0 picks automatically: 4x for very small art, else 2x.
+    """
+    import requests
+
+    if getattr(config, "ai_provider", "none") != "lama_sidecar":
+        return None
+    endpoint = getattr(config, "ai_endpoint", "")
+    if not endpoint:
+        return None
+    url = _lama_route(endpoint, "/api/v1/upscale")
+    if scale not in (2, 4):
+        try:
+            from PIL import Image
+
+            with Image.open(io.BytesIO(image_bytes)) as im:
+                scale = 4 if im.width < 200 else 2
+        except Exception:
+            scale = 2
+    try:
+        resp = requests.post(
+            url,
+            json={"image": base64.b64encode(image_bytes).decode(), "scale": scale},
+            headers=_lama_headers(config),
+            timeout=_timeout(config),
+        )
+        if resp.status_code != 200:
+            if logger:
+                logger.info(
+                    f"CL2K AI: logo upscale unavailable ({resp.status_code}) — "
+                    "using the original"
+                )
+            return None
+        return resp.content
+    except Exception as exc:
+        if logger:
+            logger.info(f"CL2K AI: logo upscale failed ({exc}) — using the original")
+        return None
 
 
 def _openai(
@@ -289,22 +366,3 @@ def _openai(
     return base64.b64decode(resp.json()["data"][0]["b64_json"])
 
 
-def _huggingface(image_bytes: bytes, mask_bytes: bytes, config) -> bytes:
-    """HF inference API inpainting (free tier, rate-limited)."""
-    import requests
-
-    endpoint = getattr(config, "ai_endpoint", "")
-    if not endpoint:
-        return image_bytes
-    key = getattr(config, "api_key", "")
-    headers = {"Authorization": f"Bearer {key}"} if key else {}
-    payload = {
-        "inputs": base64.b64encode(image_bytes).decode(),
-        "mask": base64.b64encode(mask_bytes).decode(),
-        "parameters": {"prompt": "clean background, no text"},
-    }
-    resp = requests.post(
-        endpoint, headers=headers, json=payload, timeout=_timeout(config)
-    )
-    resp.raise_for_status()
-    return resp.content

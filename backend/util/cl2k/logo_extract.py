@@ -1,16 +1,20 @@
 """Extract a title/logo from a poster into a transparent PNG.
 
-Two keys, both confined by a brushed ``mask`` (white = look here), both pure
-Pillow + numpy, both finishing with a 3x3 morphological despeckle + trim:
+Three keys, all confined by a brushed ``mask`` (white = look here), all pure
+Pillow + numpy, all finishing with an area-filter despeckle + trim:
 
 - :func:`extract_title_logo` — for *white* titles: keys bright / near-white pixels
   via the minimum RGB channel (high only for white/grey). Outputs white pixels.
 - :func:`extract_subject_logo` — for *coloured* titles the brightness key can't
-  catch: keys each pixel by its colour distance from the backdrop (sampled just
-  outside the brush), and keeps the title's ORIGINAL colours so the downstream
-  CL2K whiten pass can recolour it like any fetched logo.
+  catch: keys each pixel by its Lab colour distance from the backdrop (sampled
+  just outside the brush), and keeps the title's ORIGINAL colours so the
+  downstream CL2K whiten pass can recolour it like any fetched logo.
+- :func:`extract_logo_by_diff` — after an AI erase: keys wherever the original
+  and the cleaned result differ inside the erase mask. The most faithful of the
+  three (it catches glows/soft shadows no colour key can), but only usable once
+  an erase has run.
 
-Both are best-effort fallbacks for titles with no official clearlogo — a title
+All are best-effort fallbacks for titles with no official clearlogo — a title
 baked into poster art can't be recovered pixel-perfect, so prefer a real
 TMDB/fanart/Plex logo when one exists.
 """
@@ -24,18 +28,80 @@ import numpy as np
 from PIL import Image, ImageFilter
 
 
-def _despeckle(alpha: np.ndarray) -> np.ndarray:
-    """Drop isolated specks via a 3x3 opening on the binary alpha.
+def _despeckle(alpha: np.ndarray, min_area: int = 12) -> np.ndarray:
+    """Drop isolated specks by connected-component area on the binary alpha.
 
-    The opening (erode then dilate) removes tiny bright bits the key caught in the
-    background while leaving the title strokes (>=3px) intact. Anti-aliased edges
-    survive because the soft alpha is only *masked* by the opened binary, not
-    replaced by it.
+    A morphological opening erases any stroke under its kernel width — serif
+    hairlines and thin connectors died with the old 3x3 version. Area filtering
+    instead labels the 8-connected components of ``alpha > 40`` (run-based
+    union-find, no scipy/cv2) and zeroes only components under ``min_area`` px:
+    a 1-2px hairline survives as long as it touches its glyph, while isolated
+    speckle dies. Kept components retain their original soft alpha.
     """
-    binary = Image.fromarray(((alpha > 40) * 255).astype(np.uint8))
-    opened = binary.filter(ImageFilter.MinFilter(3)).filter(ImageFilter.MaxFilter(3))
-    keep = np.asarray(opened) > 0
+    binary = alpha > 40
+    h, _w = binary.shape
+    parent: dict = {}
+
+    def find(a):
+        while parent[a] != a:
+            parent[a] = parent[parent[a]]
+            a = parent[a]
+        return a
+
+    def union(a, b):
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[rb] = ra
+
+    next_id = 0
+    prev_runs = []  # (col_start, col_end_inclusive, label)
+    all_runs = []  # (row, col_start, col_end_inclusive, label)
+    for y in range(h):
+        idx = np.flatnonzero(binary[y])
+        if idx.size == 0:
+            prev_runs = []
+            continue
+        breaks = np.flatnonzero(np.diff(idx) > 1)
+        starts = np.concatenate(([0], breaks + 1))
+        ends = np.concatenate((breaks, [idx.size - 1]))
+        cur_runs = []
+        for s, e in zip(starts, ends):
+            cs, ce = int(idx[s]), int(idx[e])
+            lbl = next_id
+            next_id += 1
+            parent[lbl] = lbl
+            for ps, pe, plbl in prev_runs:  # 8-connectivity: overlap within 1 col
+                if pe >= cs - 1 and ps <= ce + 1:
+                    union(lbl, plbl)
+            cur_runs.append((cs, ce, lbl))
+            all_runs.append((y, cs, ce, lbl))
+        prev_runs = cur_runs
+
+    area: dict = {}
+    for _y, cs, ce, lbl in all_runs:
+        r = find(lbl)
+        area[r] = area.get(r, 0) + (ce - cs + 1)
+    keep = np.zeros_like(binary)
+    for y, cs, ce, lbl in all_runs:
+        if area[find(lbl)] >= min_area:
+            keep[y, cs : ce + 1] = True
     return (alpha * keep).astype(np.uint8)
+
+
+def _dilate(mask: np.ndarray, radius: int) -> np.ndarray:
+    """Binary dilation by ``radius`` px (square kernel) via separable shifted
+    ORs — pad + shift, no scipy/cv2."""
+    w = mask.shape[1]
+    padded = np.pad(mask, ((0, 0), (radius, radius)))
+    out = np.zeros_like(mask)
+    for d in range(2 * radius + 1):
+        out |= padded[:, d : d + w]
+    h = mask.shape[0]
+    padded = np.pad(out, ((radius, radius), (0, 0)))
+    out = np.zeros_like(mask)
+    for d in range(2 * radius + 1):
+        out |= padded[d : d + h, :]
+    return out
 
 
 def _load_mask(mask_bytes: Optional[bytes], size) -> Optional[np.ndarray]:
@@ -46,6 +112,54 @@ def _load_mask(mask_bytes: Optional[bytes], size) -> Optional[np.ndarray]:
     if m.size != size:
         m = m.resize(size, Image.NEAREST)
     return np.asarray(m) > 127
+
+
+def _srgb_to_lab(rgb: np.ndarray) -> np.ndarray:
+    """sRGB (0-255, shape ``[..., 3]``) -> CIE Lab, D65. Euclidean distance in
+    this space is ΔE76 — roughly perceptual, unlike raw RGB distance which
+    over-weights luminance shifts and under-weights hue flips at low light."""
+    c = rgb.astype(np.float32) / 255.0
+    lin = np.where(c > 0.04045, ((c + 0.055) / 1.055) ** 2.4, c / 12.92)
+    m = np.array(
+        [
+            [0.4124564, 0.3575761, 0.1804375],
+            [0.2126729, 0.7151522, 0.0721750],
+            [0.0193339, 0.1191920, 0.9503041],
+        ],
+        dtype=np.float32,
+    )
+    xyz = lin @ m.T
+    xyz = xyz / np.array([0.95047, 1.0, 1.08883], dtype=np.float32)  # D65 white
+    f = np.where(xyz > 0.008856, np.cbrt(xyz), 7.787 * xyz + 16.0 / 116.0)
+    lab = np.empty_like(xyz)
+    lab[..., 0] = 116.0 * f[..., 1] - 16.0
+    lab[..., 1] = 500.0 * (f[..., 0] - f[..., 1])
+    lab[..., 2] = 200.0 * (f[..., 1] - f[..., 2])
+    return lab
+
+
+def _otsu(values: np.ndarray) -> Optional[float]:
+    """Otsu threshold over 1-D samples, or None when the split is degenerate —
+    too few samples, a flat histogram, or one class near-empty. None means the
+    brushed region isn't really bimodal and a fixed band is safer."""
+    v = values.astype(np.float32).ravel()
+    if v.size < 256:
+        return None
+    vmin, vmax = float(v.min()), float(v.max())
+    if vmax - vmin < 1e-3:
+        return None
+    hist, edges = np.histogram(v, bins=128, range=(vmin, vmax))
+    p = hist / hist.sum()
+    centers = ((edges[:-1] + edges[1:]) / 2.0).astype(np.float64)
+    omega = np.cumsum(p)
+    mu = np.cumsum(p * centers)
+    denom = omega * (1.0 - omega)
+    denom[denom < 1e-9] = np.inf
+    between = (mu[-1] * omega - mu) ** 2 / denom
+    k = int(np.argmax(between))
+    if not 0.05 <= omega[k] <= 0.95:
+        return None
+    return float(centers[k])
 
 
 def _local_background(arr: np.ndarray, mask: Optional[np.ndarray]) -> np.ndarray:
@@ -113,11 +227,12 @@ def _background_colors(arr: np.ndarray, mask: Optional[np.ndarray]) -> np.ndarra
 
 
 def _background_distance(arr: np.ndarray, mask: Optional[np.ndarray]) -> np.ndarray:
-    """Per-pixel colour distance to the *nearest* backdrop colour (see
+    """Per-pixel ΔE76 (Lab) to the *nearest* backdrop colour (see
     :func:`_background_colors`) — small where a pixel matches the backdrop, large
-    on the title."""
+    on the title. Lab, not raw RGB: a dark-red title on a dark backdrop is a hue
+    flip RGB distance barely scores, while ΔE tracks what the eye separates."""
     bg = _background_colors(arr, mask)
-    diff = arr[..., None, :] - bg[None, None]
+    diff = _srgb_to_lab(arr)[..., None, :] - _srgb_to_lab(bg)[None, None]
     return np.sqrt((diff * diff).sum(axis=-1)).min(axis=-1)
 
 
@@ -153,13 +268,21 @@ def extract_subject_logo(
 
     mask_bytes: brush PNG, white = the title region; brush close around the title
     so the backdrop palette is sampled from real backdrop, not other artwork.
-    lo/hi: colour-distance smoothstep band; raise lo to reject more background.
+    lo/hi: ΔE76 smoothstep band; raise lo to reject more background. Left at the
+    defaults, the band is fitted per poster: Otsu over the in-brush distance
+    histogram splits backdrop-like from title-like, and the ramp straddles that
+    split — a degenerate histogram (no real bimodality, or a split outside the
+    plausible ΔE range) falls back to the fixed 40/90.
     """
     img = _open_rgb_bounded(image_bytes)
     arr = np.asarray(img).astype(np.float32)
     mask = _load_mask(mask_bytes, img.size)
 
     dist = _background_distance(arr, mask)
+    if (lo, hi) == (40.0, 90.0):  # untouched defaults -> fit the band per poster
+        split = _otsu(dist[mask] if mask is not None else dist)
+        if split is not None and 8.0 <= split <= 80.0:
+            lo, hi = 0.7 * split, 1.3 * split
     t = np.clip((dist - lo) / max(hi - lo, 1.0), 0.0, 1.0)
     alpha = (t * t * (3.0 - 2.0 * t) * 255.0).astype(np.uint8)  # smoothstep soft edges
 
@@ -191,11 +314,23 @@ def extract_title_logo(
     """Poster bytes -> transparent white logo PNG bytes, trimmed to content.
 
     mask_bytes: optional PNG mask, white = keep region (resized to the image).
-    lo/hi: min-channel smoothstep band; raise lo to reject more background.
+    lo/hi: min-channel smoothstep band; raise lo to reject more background. Left
+    at the defaults, ``lo`` is fitted per poster: Otsu over the brushed pixels'
+    min-channel histogram splits background from title, clamped to 120-200 so a
+    cream/ivory title (min channel below the fixed 165) isn't holed out; a
+    degenerate histogram keeps the fixed 165. Output stays forced-white — the
+    downstream whiten/flip passes and the "original colours" toggle expect this
+    mode to already BE the white logo (subject mode is the keep-colours path).
     """
     img = _open_rgb_bounded(image_bytes)
     arr = np.asarray(img).astype(np.float32)
     mn = np.minimum(np.minimum(arr[..., 0], arr[..., 1]), arr[..., 2])
+    if (lo, hi) == (165.0, 215.0):  # untouched defaults -> fit lo per poster
+        m = _load_mask(mask_bytes, img.size)
+        split = _otsu(mn[m] if m is not None else mn)
+        if split is not None:
+            lo = float(np.clip(split, 120.0, 200.0))
+            hi = lo + 50.0  # keep the band width (edge softness) of 165/215
     t = np.clip((mn - lo) / max(hi - lo, 1.0), 0.0, 1.0)
     alpha = (t * t * (3.0 - 2.0 * t) * 255.0).astype(np.uint8)  # smoothstep keeps soft edges
 
@@ -209,6 +344,58 @@ def extract_title_logo(
 
     out = np.zeros((img.height, img.width, 4), dtype=np.uint8)
     out[..., 0:3] = 255
+    out[..., 3] = alpha
+    logo = Image.fromarray(out)
+    bbox = logo.getbbox()
+    if bbox:
+        logo = logo.crop(bbox)
+
+    buf = io.BytesIO()
+    logo.save(buf, "PNG")
+    return buf.getvalue()
+
+
+def extract_logo_by_diff(
+    original_bytes: bytes,
+    cleaned_bytes: bytes,
+    mask_bytes: Optional[bytes] = None,
+    *,
+    lo: float = 12.0,
+    hi: float = 45.0,
+) -> bytes:
+    """Original + AI-erased poster -> transparent original-colour logo PNG.
+
+    Keys wherever the cleaned result differs from the original: the eraser only
+    repaints the title (plus its glow/soft shadow), so the per-pixel RGB
+    distance IS the title's footprint — no brightness or colour model to fool.
+    Confined to the erase mask dilated ~6px (the sidecar dilates its mask too,
+    so the repaint bleeds slightly past the brush); any difference outside that
+    is inpainting drift, not title.
+
+    lo/hi: RGB-distance smoothstep band — below ``lo`` reads as encoder/inpaint
+    jitter (transparent), above ``hi`` is confidently title (opaque). RGB keeps
+    original colours; the CL2K whiten pass recolours downstream, as with
+    :func:`extract_subject_logo`.
+    """
+    orig_img = _open_rgb_bounded(original_bytes)
+    clean_img = _open_rgb_bounded(cleaned_bytes)
+    if clean_img.size != orig_img.size:
+        clean_img = clean_img.resize(orig_img.size, Image.LANCZOS)
+    orig = np.asarray(orig_img).astype(np.float32)
+    clean = np.asarray(clean_img).astype(np.float32)
+    mask = _load_mask(mask_bytes, orig_img.size)
+
+    diff = orig - clean
+    dist = np.sqrt((diff * diff).sum(axis=-1))
+    t = np.clip((dist - lo) / max(hi - lo, 1.0), 0.0, 1.0)
+    alpha = (t * t * (3.0 - 2.0 * t) * 255.0).astype(np.uint8)  # smoothstep soft edges
+    if mask is not None:
+        alpha = (alpha * _dilate(mask, 6)).astype(np.uint8)
+
+    alpha = _despeckle(alpha)
+
+    out = np.zeros((orig_img.height, orig_img.width, 4), dtype=np.uint8)
+    out[..., 0:3] = orig.astype(np.uint8)  # keep ORIGINAL colours; whiten happens later
     out[..., 3] = alpha
     logo = Image.fromarray(out)
     bbox = logo.getbbox()

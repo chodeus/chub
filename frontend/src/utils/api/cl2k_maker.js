@@ -193,6 +193,12 @@ export const cl2kMakerAPI = {
      */
     retext: req => apiCore.post('/cl2k-maker/retext', req, { timeout: AI_TIMEOUT_MS }),
 
+    /** Detect text regions on a poster for mask prefill. `req` = { image_b64,
+     *  min_score }; returns { regions: [{polygon, score}...], mask: b64 PNG
+     *  (white = text, image dims) }. Long timeout — detection runs on the AI
+     *  sidecar and a 4K poster upload + OCR can outlast the default 30s. */
+    detectText: req => apiCore.post('/cl2k-maker/detect-text', req, { timeout: AI_TIMEOUT_MS }),
+
     /** Start a background File-as-is season batch (one source poster, re-filed per
      *  season with that season's band). Returns { job_id, total }; poll seasonsStatus. */
     retextSeasons: req => apiCore.post('/cl2k-maker/retext-seasons', req),
