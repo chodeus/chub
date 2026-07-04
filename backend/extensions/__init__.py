@@ -16,6 +16,9 @@ functions; each is optional and called at most once:
         (consumed by backend/util/config.py).
     tables()        -> list[TableDefinition]
         Extra database tables (consumed by SchemaManager.__init__).
+    stream_prefixes() -> Iterable[str]
+        URL path prefixes whose GET routes accept a scope="stream" token
+        (merged into AuthMiddleware's STREAM_PATH_PREFIXES allowlist).
 
 Hook functions should import their payloads lazily (inside the function
 body, not at manifest import time): manifests are imported while core
@@ -84,3 +87,14 @@ def extension_notification_formatters() -> Dict[str, Any]:
     for entry in _collect("notification_formatters"):
         merged.update(entry)
     return merged
+
+
+def extension_stream_prefixes() -> Tuple[str, ...]:
+    """URL path prefixes on which an extension's GET routes accept a
+    scope="stream" token, merged into AuthMiddleware's STREAM_PATH_PREFIXES so an
+    extension can serve <img>/SSE endpoints authenticated by a short-lived stream
+    token instead of a header. Each manifest's ``stream_prefixes()`` returns an
+    iterable of str prefixes. Empty on main (no extensions)."""
+    return tuple(
+        prefix for prefixes in _collect("stream_prefixes") for prefix in prefixes
+    )

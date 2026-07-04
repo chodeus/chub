@@ -14,6 +14,7 @@ def test_aggregates_have_correct_empty_types():
     assert isinstance(extensions.extension_modules(), dict)
     assert isinstance(extensions.extension_config_fields(), dict)
     assert isinstance(extensions.extension_tables(), list)
+    assert isinstance(extensions.extension_stream_prefixes(), tuple)
 
 
 def test_core_module_registry_intact():
@@ -31,3 +32,14 @@ def test_config_builds_with_extension_fields_applied():
 def test_schema_builds_with_extension_tables():
     manager = SchemaManager()
     assert "media_cache" in manager.tables
+
+
+def test_stream_prefixes_collects_and_flattens(monkeypatch):
+    # A manifest's stream_prefixes() is flattened into the aggregate tuple.
+    class _FakeManifest:
+        @staticmethod
+        def stream_prefixes():
+            return ("/api/ut-ext/",)
+
+    monkeypatch.setattr(extensions, "_manifests", lambda: (_FakeManifest,))
+    assert extensions.extension_stream_prefixes() == ("/api/ut-ext/",)
