@@ -2,6 +2,19 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.38.0](https://github.com/chodeus/chub/compare/v2.37.0...v2.38.0) (2026-07-04)
+
+
+### Features
+
+* **extensions:** add stream_prefixes() hook for extension stream routes ([7ce6841](https://github.com/chodeus/chub/commit/7ce684101687a3060d68b1938a98ffbc9d86078d))
+
+
+### Bug Fixes
+
+* LIKE escaping, optimize clobber-guard, transient-cache, 0-is-falsy, logout cache, CI perms ([01237f6](https://github.com/chodeus/chub/commit/01237f6adbcffc6381d97fca45ff2a76256742c9))
+* **plex_metadata:** don't cache a bloat scan when the Plex DB copy failed ([0518256](https://github.com/chodeus/chub/commit/0518256751ebf691571bf35fc433b3890f7b7647))
+
 ## [2.37.0](https://github.com/chodeus/chub/compare/v2.36.0...v2.37.0) (2026-07-01)
 
 
