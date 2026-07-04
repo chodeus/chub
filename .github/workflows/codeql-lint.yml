@@ -15,6 +15,10 @@ on:
       - 'backend/**'
       - 'main.py'
       - 'requirements.txt'
+      - 'requirements-*.txt'
+      - 'pyproject.toml'
+      - 'Makefile'
+      - 'deploy/docker/compose.yaml'
       - 'frontend/package-lock.json'
       - 'deploy/docker/Dockerfile'
       - '.dockerignore'
@@ -32,6 +36,10 @@ on:
       - 'backend/**'
       - 'main.py'
       - 'requirements.txt'
+      - 'requirements-*.txt'
+      - 'pyproject.toml'
+      - 'Makefile'
+      - 'deploy/docker/compose.yaml'
       - 'frontend/package-lock.json'
       - 'deploy/docker/Dockerfile'
       - '.dockerignore'
@@ -165,7 +173,8 @@ jobs:
   # named after a develop-only extension may exist anywhere in the tree.
   branch-isolation-guard:
     name: Branch Isolation Guard
-    if: github.ref == 'refs/heads/main' || github.base_ref == 'main'
+    # Always runs (no job-level if) so it stays a satisfiable needs: dependency for
+    # the docker jobs on every ref; the step below no-ops on non-main-bound refs.
     runs-on: ubuntu-latest
 
     steps:
@@ -175,6 +184,11 @@ jobs:
       - name: Fail if develop-only extension code is present
         run: |
           set -eu
+          # Only main-bound refs must be extension-free; pass on any other ref.
+          if [ "${GITHUB_REF}" != "refs/heads/main" ] && [ "${GITHUB_BASE_REF:-}" != "main" ]; then
+            echo "Not a main-bound ref — branch-isolation check not applicable."
+            exit 0
+          fi
           leaks=$(git ls-files -- '*cl2k*' \
             'backend/extensions/*' ':!backend/extensions/__init__.py' \
             'frontend/src/extensions/*' ':!frontend/src/extensions/index.js')
@@ -189,7 +203,7 @@ jobs:
   docker-validate:
     name: Docker Validate (PR)
     if: github.event_name == 'pull_request'
-    needs: [codeql-python, codeql-javascript, backend-lint, backend-smoke, frontend-lint]
+    needs: [codeql-python, codeql-javascript, backend-lint, backend-smoke, frontend-lint, branch-isolation-guard]
     runs-on: ubuntu-latest
 
     steps:
@@ -226,7 +240,7 @@ jobs:
   docker-push:
     name: Docker Build & Push
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    needs: [codeql-python, codeql-javascript, backend-lint, backend-smoke, frontend-lint]
+    needs: [codeql-python, codeql-javascript, backend-lint, backend-smoke, frontend-lint, branch-isolation-guard]
     runs-on: ubuntu-latest
     # Serialize with the release-please docker-version job so concurrent pushes
     # to the same :latest tag don't race on GHCR auth. cancel-in-progress is
@@ -289,7 +303,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
 
   notify-failure:
-    needs: [codeql-python, codeql-javascript, backend-lint, backend-smoke, frontend-lint, docker-push]
+    needs: [codeql-python, codeql-javascript, backend-lint, backend-smoke, frontend-lint, branch-isolation-guard, docker-push]
     if: failure() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     uses: chodeus/chodeus-ops/.github/workflows/notify-discord.yml@44b9463f55b6d28ca72a126bdc3a89ce6b472166 # main
     with:
