@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import quote
 
 # Plex stores TV shows under asset_type "show"; tolerate "tvshow" defensively.
 _TV_TYPES = {"show", "tvshow"}
@@ -80,15 +81,28 @@ def _resolve(
     return None, None
 
 
-def _img_url(server, key: Optional[str]) -> Optional[str]:
-    """Resolve a plexapi resource ``.key`` to a loadable URL. Remote-provider
-    keys (themoviedb/gracenote) are already absolute https; local/uploaded keys
-    (``/library/metadata/...``) need the server base + the X-Plex-Token."""
+def _proxy_url(src: str) -> str:
+    """Browser-facing URL for a local Plex image: the CL2K proxy fetches it
+    server-side (re-minting the token) so the X-Plex-Token never reaches the
+    client. The <img> appends a short-lived stream token when loading it."""
+    return f"/api/cl2k-maker/plex-art?src={quote(src, safe='')}"
+
+
+def _img_urls(server, key: Optional[str]) -> Tuple[Optional[str], Optional[str]]:
+    """Resolve a plexapi resource ``.key`` to ``(file_path, url)``. Remote-provider
+    keys (themoviedb/gracenote) are already absolute, tokenless https — both are
+    that URL. Local/uploaded keys (``/library/metadata/...``) would leak the
+    X-Plex-Token, so BOTH become the CL2K proxy path carrying the tokenless Plex
+    URL in ``?src=``: the browser loads it token-free (the proxy fetches
+    server-side) and ``image_fetch.download`` unwraps ``?src=`` and re-mints the
+    token. Using one value for both means every consumer — picker <img>, selected
+    art previews, and the backend generate fetch — is handled uniformly."""
     if not key:
-        return None
+        return None, None
     if key.startswith("http://") or key.startswith("https://"):
-        return key
-    return server.url(key, includeToken=True)
+        return key, key
+    proxy = _proxy_url(server.url(key, includeToken=False))
+    return proxy, proxy
 
 
 def plex_images(
@@ -149,12 +163,12 @@ def plex_images(
             logger.debug(f"cl2k: Plex {method}() failed: {exc}")
             continue
         for res in candidates:
-            url = _img_url(server, getattr(res, "key", None))
-            if not url:
+            file_path, url = _img_urls(server, getattr(res, "key", None))
+            if not file_path:
                 continue
             out[bucket].append(
                 {
-                    "file_path": url,
+                    "file_path": file_path,
                     "url": url,
                     "provider": getattr(res, "provider", None),
                     "selected": bool(getattr(res, "selected", False)),

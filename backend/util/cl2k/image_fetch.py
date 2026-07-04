@@ -207,6 +207,19 @@ def _with_plex_token(url: str) -> str:
     return f"{url}{'&' if '?' in url else '?'}X-Plex-Token={token}"
 
 
+def _unwrap_proxy(file_path: str) -> str:
+    """A CL2K plex-art proxy path (``/api/cl2k-maker/plex-art?src=<url>``) is the
+    browser-facing form of local Plex art; when the frontend posts the chosen art
+    back for a render, unwrap ``?src=`` to the real (tokenless) Plex URL so the
+    server-side fetch hits Plex directly (and re-mints the token). No-op otherwise."""
+    if not file_path.startswith("/api/cl2k-maker/plex-art?"):
+        return file_path
+    from urllib.parse import parse_qs, urlparse
+
+    src = parse_qs(urlparse(file_path).query).get("src", [""])[0]
+    return src or file_path
+
+
 # Recently downloaded originals, keyed by final URL. Live-preview slider tweaks
 # re-render the same backdrop/logo over and over; without this every /preview
 # request re-pulled the multi-MB original from the CDN, dominating preview
@@ -250,6 +263,7 @@ def download(file_path: str, session=None) -> bytes:
     """
     import requests
 
+    file_path = _unwrap_proxy(file_path)
     url = file_path if file_path.startswith("http") else TMDB_IMAGE_CDN + file_path
     if not _is_allowed_image_host(url):
         from urllib.parse import urlparse
@@ -263,10 +277,26 @@ def download(file_path: str, session=None) -> bytes:
         cached = _dl_cache_get(url)
         if cached is not None:
             return cached
-    resp = (session or requests).get(url, timeout=15)
+    getter = session or requests
+    cache_key = url
+    # Don't auto-follow redirects: an allowed host that 3xx-redirects to an internal
+    # address would defeat _is_allowed_image_host. Re-validate the host every hop.
+    resp = getter.get(url, timeout=15, allow_redirects=False)
+    hops = 0
+    while getattr(resp, "is_redirect", False) and hops < 4:
+        from urllib.parse import urljoin, urlparse
+
+        nxt = urljoin(url, resp.headers.get("Location", ""))
+        if not _is_allowed_image_host(nxt):
+            raise ValueError(
+                f"refusing to follow redirect to disallowed host: {urlparse(nxt).hostname!r}"
+            )
+        url = _with_plex_token(nxt)
+        resp = getter.get(url, timeout=15, allow_redirects=False)
+        hops += 1
     resp.raise_for_status()
     if session is None:
-        _dl_cache_put(url, resp.content)
+        _dl_cache_put(cache_key, resp.content)
     return resp.content
 
 

@@ -5,6 +5,8 @@ import { cl2kMakerAPI } from '../../utils/api/cl2k_maker.js';
 import { configAPI } from '../../utils/api/config.js';
 import { postersAPI } from '../../utils/api/posters.js';
 import { posterSelfHealAPI } from '../../utils/api/posterSelfHeal.js';
+import { streamTokenParam, ensureStreamToken } from '../../utils/api/streamAuth.js';
+import { useStreamToken } from '../../hooks/useStreamToken.js';
 import { useToast } from '../../contexts/ToastContext.jsx';
 import { Button, LoadingButton, PageHeader, Toggle } from '../../components/ui/index.js';
 import SegmentedControl from '../../components/ui/SegmentedControl.jsx';
@@ -359,6 +361,8 @@ const PreviewRefreshing = ({ active }) => {
 };
 
 const Cl2kMakerPage = () => {
+    // Keep every proxied Plex-art <img>/fetch URL fresh as the stream token rotates.
+    useStreamToken();
     const toast = useToast();
     const [searchParams] = useSearchParams();
 
@@ -2124,15 +2128,20 @@ const RenderPanel = ({
 
     // The source poster as a data URL — /retext decodes it and draws the new label.
     const asisDataUrlFromSource = useCallback(async () => {
-        if (!backdropUrl) return null;
-        const blob = await (await fetch(backdropUrl)).blob();
+        if (!backdrop && !customBackdrop) return null;
+        // Mint the stream token before building the proxy URL so the client fetch
+        // of local Plex art carries it (rather than racing render / BLANK_IMAGE).
+        await ensureStreamToken();
+        const url = customBackdrop?.url || urlForPath(backdrop);
+        if (!url) return null;
+        const blob = await (await fetch(url)).blob();
         return new Promise((resolve, reject) => {
             const fr = new FileReader();
             fr.onload = () => resolve(fr.result);
             fr.onerror = reject;
             fr.readAsDataURL(blob);
         });
-    }, [backdropUrl]);
+    }, [backdrop, customBackdrop]);
 
     // Send to AI — erase the masked text from the backdrop via the configured
     // inpainter, then adopt the cleaned image as the (custom) backdrop so the
@@ -4381,7 +4390,7 @@ const Picker = ({
                                 }
                             >
                                 <img
-                                    src={it.url || urlForPath(path)}
+                                    src={urlForPath(it.url || path)}
                                     alt=""
                                     loading="lazy"
                                     className="absolute inset-0 w-full h-full object-contain"
@@ -4717,7 +4726,7 @@ const LogoSelector = ({
                                         title={it.width ? `${it.width}×${it.height}` : path}
                                     >
                                         <img
-                                            src={it.url || urlForPath(path)}
+                                            src={urlForPath(it.url || path)}
                                             alt=""
                                             loading="lazy"
                                             className="absolute inset-0 w-full h-full object-contain"
@@ -6241,7 +6250,22 @@ const HistorySection = ({ toast }) => {
 // ─── helpers ────────────────────────────────────────────────────────────────
 
 const TMDB_CDN = 'https://image.tmdb.org/t/p/original';
-const urlForPath = path => (path?.startsWith('http') ? path : `${TMDB_CDN}${path}`);
+// 1x1 transparent gif shown until the stream token arrives (see useStreamToken).
+const BLANK_IMAGE = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
+
+// Turn a stored art path into a browser <img>/fetch URL. Local Plex art is a
+// token-free CL2K proxy path (/api/cl2k-maker/plex-art?src=...); append the
+// short-lived stream token (BLANK_IMAGE until it's minted, then useStreamToken
+// re-renders). Absolute URLs (fanart / remote Plex) pass through; bare paths are
+// TMDB CDN keys.
+const urlForPath = path => {
+    if (!path) return path;
+    if (path.startsWith('/api/')) {
+        const token = streamTokenParam();
+        return token ? `${path}&token=${encodeURIComponent(token)}` : BLANK_IMAGE;
+    }
+    return path.startsWith('http') ? path : `${TMDB_CDN}${path}`;
+};
 
 const slugify = s =>
     (s || '')

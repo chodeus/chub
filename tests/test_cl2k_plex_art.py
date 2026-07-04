@@ -7,6 +7,8 @@ real surface (fetchItem → item.logos()/arts()/posters(), server.url()).
 
 from types import SimpleNamespace
 
+import pytest
+
 import backend.util.cl2k.image_fetch as image_fetch
 from backend.util.cl2k.plex_art import _matches, _resolve, plex_images
 
@@ -145,13 +147,22 @@ def test_plex_images_extracts_logos_arts_posters(monkeypatch):
         and len(res["backdrops"]) == 1
         and len(res["posters"]) == 1
     )
-    # local key → base + token; remote provider key → passthrough.
-    assert (
-        res["logos"][0]["url"]
-        == "http://plex:32400/library/metadata/9/clearLogos/local?X-Plex-Token=secret"
+    # Local key → BOTH file_path and url become the token-free CL2K proxy path
+    # (the browser loads it token-free; the backend unwraps ?src= and re-mints).
+    # Remote provider key → passthrough on both. X-Plex-Token never appears.
+    logo = res["logos"][0]
+    proxy = (
+        "/api/cl2k-maker/plex-art"
+        "?src=http%3A%2F%2Fplex%3A32400%2Flibrary%2Fmetadata%2F9%2FclearLogos%2Flocal"
     )
-    assert res["logos"][0]["selected"] is True
-    assert res["backdrops"][0]["url"] == "https://image.tmdb.org/t/p/original/bg.jpg"
+    assert logo["file_path"] == proxy
+    assert logo["url"] == proxy
+    assert "X-Plex-Token" not in logo["file_path"]
+    assert "X-Plex-Token" not in logo["url"]
+    assert logo["selected"] is True
+    backdrop = res["backdrops"][0]
+    assert backdrop["file_path"] == "https://image.tmdb.org/t/p/original/bg.jpg"
+    assert backdrop["url"] == "https://image.tmdb.org/t/p/original/bg.jpg"
     assert "reason" not in res
 
 
@@ -201,3 +212,142 @@ def test_ssrf_allows_plex_tv_cdn():
     # lookalike domains stay blocked
     assert not image_fetch._is_allowed_image_host("https://evilplex.tv/x.png")
     assert not image_fetch._is_allowed_image_host("https://plex.tv.attacker.io/x.png")
+
+
+# --------------------------------------------------------------------------
+# /plex-art proxy route
+# --------------------------------------------------------------------------
+
+
+def test_img_media_type_from_magic_bytes():
+    from backend.api.cl2k_maker import _img_media_type
+
+    assert _img_media_type(b"\x89PNG\r\n\x1a\n....") == "image/png"
+    assert _img_media_type(b"\xff\xd8\xff\xe0abc") == "image/jpeg"
+    assert _img_media_type(b"RIFF\x00\x00\x00\x00WEBPvp8 ") == "image/webp"
+    assert _img_media_type(b"garbage") == "image/jpeg"
+
+
+def test_plex_art_proxy_streams_bytes_without_token(monkeypatch):
+    import backend.api.cl2k_maker as api
+
+    seen = {}
+
+    def _fake_download(src):
+        seen["src"] = src
+        return b"\x89PNG\r\n\x1a\nDATA"
+
+    monkeypatch.setattr(api, "download_image", _fake_download)
+    resp = api.plex_art_proxy(
+        src="http://plex:32400/library/metadata/9/thumb/1699", logger=_logger()
+    )
+    assert resp.status_code == 200
+    assert resp.media_type == "image/png"
+    assert resp.body == b"\x89PNG\r\n\x1a\nDATA"
+    # The proxy fetches the tokenless src server-side (download re-mints the token).
+    assert "X-Plex-Token" not in seen["src"]
+
+
+def test_plex_art_proxy_rejects_non_artwork_src(monkeypatch):
+    # A leaked <img> URL carries a live stream token + the Plex host in src; that
+    # src must not be rewritable to a non-artwork Plex endpoint (the /:/prefs
+    # response leaks the account-level PlexOnlineToken).
+    import backend.api.cl2k_maker as api
+    from fastapi import HTTPException
+
+    called = {"n": 0}
+    monkeypatch.setattr(
+        api, "download_image", lambda src: called.__setitem__("n", called["n"] + 1)
+    )
+    for bad in (
+        "http://plex:32400/:/prefs",
+        "http://plex:32400/myplex/account",
+        "http://plex:32400/library/sections/1/all",
+        "http://plex:32400/photo/:/transcode?url=http://169.254.169.254/",
+        "http://plex:32400/library/metadata/9/children",
+        # dot-segment traversal (raw + percent-encoded) — requests/Plex collapse
+        # ../ downstream to /:/prefs, so a string-only regex on the raw path is
+        # defeated. This is the round-2 blocker; must be rejected pre-fetch.
+        "http://plex:32400/library/metadata/1/art/../../../../:/prefs",
+        "http://plex:32400/library/metadata/1/art/%2e%2e/%2e%2e/%2e%2e/:/prefs",
+        "http://plex:32400/library/metadata/1/art/..%2f..%2f..%2f:/prefs",
+        "http://plex:32400/library/metadata/1/art//../:/prefs",
+    ):
+        with pytest.raises(HTTPException) as excinfo:
+            api.plex_art_proxy(src=bad, logger=_logger())
+        assert excinfo.value.status_code == 400
+    assert called["n"] == 0  # never reached the fetch
+
+
+def test_plex_art_proxy_404_on_fetch_failure(monkeypatch):
+    import backend.api.cl2k_maker as api
+    from fastapi import HTTPException
+
+    def _boom(src):
+        raise ValueError("refusing to fetch image from disallowed host")
+
+    monkeypatch.setattr(api, "download_image", _boom)
+    with pytest.raises(HTTPException) as excinfo:
+        api.plex_art_proxy(
+            src="http://plex:32400/library/metadata/9/art/1", logger=_logger()
+        )
+    assert excinfo.value.status_code == 404
+
+
+# --------------------------------------------------------------------------
+# download() proxy-unwrap + redirect SSRF
+# --------------------------------------------------------------------------
+
+
+def test_unwrap_proxy_extracts_src():
+    unwrap = image_fetch._unwrap_proxy
+    assert (
+        unwrap("/api/cl2k-maker/plex-art?src=http%3A%2F%2Fplex%3A32400%2Fx")
+        == "http://plex:32400/x"
+    )
+    # ordinary paths / URLs pass through untouched
+    assert unwrap("/t/p/original/x.jpg") == "/t/p/original/x.jpg"
+    assert unwrap("https://image.tmdb.org/x.jpg") == "https://image.tmdb.org/x.jpg"
+
+
+class _Resp:
+    def __init__(self, *, redirect_to=None, content=b"img"):
+        self.is_redirect = redirect_to is not None
+        self.headers = {"Location": redirect_to} if redirect_to else {}
+        self.content = content
+
+    def raise_for_status(self):
+        pass
+
+
+class _Session:
+    def __init__(self, responses):
+        self._responses = list(responses)
+
+    def get(self, url, timeout=None, allow_redirects=None):
+        return self._responses.pop(0)
+
+
+def test_download_blocks_redirect_to_disallowed_host(monkeypatch):
+    monkeypatch.setattr(image_fetch, "_plex_netlocs", lambda: {"192.168.2.206:32400"})
+    monkeypatch.setattr(image_fetch, "_with_plex_token", lambda u: u)
+    sess = _Session([_Resp(redirect_to="http://169.254.169.254/latest/meta-data/")])
+    with pytest.raises(ValueError, match="disallowed host"):
+        image_fetch.download(
+            "http://192.168.2.206:32400/library/metadata/9/art/1", session=sess
+        )
+
+
+def test_download_follows_redirect_to_allowed_host(monkeypatch):
+    monkeypatch.setattr(image_fetch, "_plex_netlocs", lambda: {"192.168.2.206:32400"})
+    monkeypatch.setattr(image_fetch, "_with_plex_token", lambda u: u)
+    sess = _Session(
+        [
+            _Resp(redirect_to="https://image.tmdb.org/t/p/original/x.jpg"),
+            _Resp(content=b"redirected-img"),
+        ]
+    )
+    out = image_fetch.download(
+        "http://192.168.2.206:32400/library/metadata/9/art/1", session=sess
+    )
+    assert out == b"redirected-img"
