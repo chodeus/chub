@@ -2207,6 +2207,32 @@ const RenderPanel = ({
         toast,
     ]);
 
+    // Detect text — OCR the current backdrop into a prefill mask for the brush
+    // canvas. Bytes come the same way /retext gets them (the upload's b64 when we
+    // hold it, else fetch the displayed backdrop), but /detect-text takes b64 only.
+    // Returns the white-on-black mask PNG (b64) for BrushMask to composite in, or
+    // null after toasting — it never runs the removal itself.
+    const runDetectText = useCallback(async () => {
+        if (!backdropUrl) return null;
+        try {
+            let imageB64 = customBackdrop?.b64 || null;
+            if (!imageB64) {
+                const dataUrl = await asisDataUrlFromSource();
+                imageB64 = dataUrl?.split(',')[1] || null;
+            }
+            if (!imageB64) return null;
+            const resp = await cl2kMakerAPI.detectText({ image_b64: imageB64, min_score: 0.5 });
+            if (!resp?.data?.regions?.length) {
+                toast.info('No text found');
+                return null;
+            }
+            return resp?.data?.mask || null;
+        } catch (err) {
+            toast.error(err.message || 'Text detection failed');
+            return null;
+        }
+    }, [backdropUrl, customBackdrop, asisDataUrlFromSource, toast]);
+
     // Identity passed to /retext (filename + Plex match). Season info comes from
     // the Poster tab's own season controls, so there's no separate field here.
     const asisIds = useMemo(
@@ -3106,6 +3132,7 @@ const RenderPanel = ({
                                 onSendToAi={runBackdropErase}
                                 aiPrompt={aiPrompt}
                                 setAiPrompt={setAiPrompt}
+                                onDetectText={runDetectText}
                             />
                         </StudioAccordion>
 
@@ -3278,6 +3305,7 @@ const AiPanel = ({
     onSendToAi,
     aiPrompt,
     setAiPrompt,
+    onDetectText,
 }) => {
     // UI-only: the large pop-out mask editor (mock cl2k-09). Reuses the same
     // BrushMask + onMaskChange pipeline — no new mask handlers. Both the inline
@@ -3292,7 +3320,7 @@ const AiPanel = ({
     const aiBlock =
         provider === 'none'
             ? 'AI provider is “none” — enable one in Module Settings or this has no effect.'
-            : (provider === 'openai' || provider === 'huggingface') && !config?.api_key
+            : provider === 'openai' && !config?.api_key
               ? 'No API key set for this provider — add one in Module Settings.'
               : provider === 'lama_sidecar' && !config?.ai_endpoint
                 ? 'No AI Endpoint set — add your LaMa container URL in Module Settings.'
@@ -3342,6 +3370,7 @@ const AiPanel = ({
                                 brushSize={brushSize}
                                 onMaskChange={onMaskChange}
                                 initialMask={mask}
+                                onDetectText={onDetectText}
                             />
                         ) : (
                             <div className="text-xs text-fg-subtle">
@@ -3428,6 +3457,7 @@ const AiPanel = ({
                                         onMaskChange={onMaskChange}
                                         initialMask={mask}
                                         imgClassName="max-h-[calc(90vh_-_11rem)]"
+                                        onDetectText={onDetectText}
                                     />
                                 </div>
                             </div>
@@ -3480,6 +3510,11 @@ const AiPanel = ({
     );
 };
 
+// Long-edge cap for the brush canvas backing store — full 4K backing would cost
+// ~33MB RGBA per mounted canvas (inline + pop-out), and the backend resizes the
+// mask to the image anyway.
+const MASK_BACKING_MAX = 2048;
+
 /**
  * Brush a white-on-black mask over the backdrop. White = remove. The canvas
  * backing store holds opaque white strokes on a transparent background; CSS
@@ -3492,25 +3527,37 @@ const BrushMask = ({
     onMaskChange,
     initialMask = null,
     imgClassName = '',
+    onDetectText = null,
 }) => {
     const canvasRef = useRef(null);
     const drawing = useRef(false);
+    // Backing px per CSS px (refreshed from the live rect on every pointer
+    // mapping) — pointer coords and the brush radius both scale by it, so the
+    // on-screen brush feels identical at any backing resolution.
+    const displayScale = useRef(1);
+    const [detecting, setDetecting] = useState(false);
     // Brush footprint: round (soft, default) or square (sharp corners — handy for
     // erasing straight logo edges). Purely a drawing concern, kept local here so
     // every BrushMask instance gets the toggle for free.
     const [brushShape, setBrushShape] = useState('round');
 
-    // Size the canvas to the displayed image, then re-paint any existing mask onto
-    // it so a freshly-mounted instance (e.g. the pop-out editor, or the inline one
-    // after the pop-out closes) shows the strokes already made. drawImage scales
-    // the prior mask to this canvas, so the inline ↔ pop-out size difference is
-    // handled — and emit() captures the union when painting continues.
+    // Back the canvas with the image's NATIVE resolution (long edge capped) rather
+    // than its CSS size, so the exported mask can hug edges the display grid can't
+    // resolve — the element itself stays stretched over the image (w-full h-full),
+    // so the UI is unchanged. Then re-paint any existing mask onto it so a
+    // freshly-mounted instance (e.g. the pop-out editor, or the inline one after
+    // the pop-out closes) shows the strokes already made. drawImage scales the
+    // prior mask to this canvas, so backing-size differences are handled — and
+    // emit() captures the union when painting continues.
     const sizeToImage = useCallback(
         img => {
             const c = canvasRef.current;
             if (!c) return;
-            c.width = img.clientWidth;
-            c.height = img.clientHeight;
+            const nw = img.naturalWidth || img.clientWidth;
+            const nh = img.naturalHeight || img.clientHeight;
+            const cap = Math.min(1, MASK_BACKING_MAX / Math.max(nw, nh, 1));
+            c.width = Math.max(1, Math.round(nw * cap));
+            c.height = Math.max(1, Math.round(nh * cap));
             if (initialMask) {
                 const m = new Image();
                 m.onload = () => {
@@ -3528,6 +3575,7 @@ const BrushMask = ({
     const pointFor = useCallback(e => {
         const c = canvasRef.current;
         const rect = c.getBoundingClientRect();
+        displayScale.current = rect.width ? c.width / rect.width : 1;
         const clientX = e.touches?.[0]?.clientX ?? e.clientX;
         const clientY = e.touches?.[0]?.clientY ?? e.clientY;
         return {
@@ -3542,11 +3590,12 @@ const BrushMask = ({
         p => {
             const ctx = canvasRef.current.getContext('2d');
             ctx.fillStyle = '#ffffff';
+            const r = brushSize * displayScale.current;
             if (brushShape === 'square') {
-                ctx.fillRect(p.x - brushSize, p.y - brushSize, brushSize * 2, brushSize * 2);
+                ctx.fillRect(p.x - r, p.y - r, r * 2, r * 2);
             } else {
                 ctx.beginPath();
-                ctx.arc(p.x, p.y, brushSize, 0, Math.PI * 2);
+                ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
                 ctx.fill();
             }
         },
@@ -3559,7 +3608,8 @@ const BrushMask = ({
             const prev = lastPoint.current;
             if (prev) {
                 const dist = Math.hypot(p.x - prev.x, p.y - prev.y);
-                const n = Math.ceil(dist / Math.max(brushSize / 2, 1));
+                const r = brushSize * displayScale.current;
+                const n = Math.ceil(dist / Math.max(r / 2, 1));
                 for (let i = 1; i < n; i++) {
                     stamp({
                         x: prev.x + ((p.x - prev.x) * i) / n,
@@ -3607,6 +3657,48 @@ const BrushMask = ({
         onMaskChange(null);
     }, [onMaskChange]);
 
+    // Detect-text prefill: the endpoint returns a white-on-BLACK mask PNG, but the
+    // canvas convention is opaque white on TRANSPARENT — pixel-convert through a
+    // temp canvas (luminance → alpha) so the black background doesn't paint over
+    // strokes already made, then composite it in ADDITIVELY and emit like a stroke.
+    const runDetect = useCallback(async () => {
+        if (!onDetectText || detecting) return;
+        setDetecting(true);
+        try {
+            const maskPng = await onDetectText();
+            const c = canvasRef.current;
+            if (!maskPng || !c) return;
+            const img = new Image();
+            await new Promise((resolve, reject) => {
+                img.onload = resolve;
+                img.onerror = reject;
+                img.src = maskPng.startsWith('data:')
+                    ? maskPng
+                    : `data:image/png;base64,${maskPng}`;
+            });
+            const t = document.createElement('canvas');
+            t.width = c.width;
+            t.height = c.height;
+            const tctx = t.getContext('2d');
+            tctx.drawImage(img, 0, 0, t.width, t.height);
+            const d = tctx.getImageData(0, 0, t.width, t.height);
+            const px = d.data;
+            for (let i = 0; i < px.length; i += 4) {
+                px[i + 3] = px[i] >= 128 ? 255 : 0;
+                px[i] = 255;
+                px[i + 1] = 255;
+                px[i + 2] = 255;
+            }
+            tctx.putImageData(d, 0, 0);
+            c.getContext('2d').drawImage(t, 0, 0);
+            emit();
+        } catch {
+            /* onDetectText surfaces its own errors; a bad mask image just no-ops */
+        } finally {
+            setDetecting(false);
+        }
+    }, [onDetectText, detecting, emit]);
+
     return (
         <div className="flex flex-col gap-2">
             <div className="relative inline-block leading-none select-none">
@@ -3619,7 +3711,7 @@ const BrushMask = ({
                 />
                 <canvas
                     ref={canvasRef}
-                    className="absolute inset-0 cursor-crosshair rounded"
+                    className="absolute inset-0 w-full h-full cursor-crosshair rounded"
                     style={{ opacity: 0.5, touchAction: 'none' }}
                     onMouseDown={onDown}
                     onMouseMove={onMove}
@@ -3638,6 +3730,16 @@ const BrushMask = ({
                 >
                     Clear mask
                 </button>
+                {onDetectText && (
+                    <button
+                        type="button"
+                        onClick={runDetect}
+                        disabled={detecting}
+                        className="inline-flex items-center self-start h-[30px] px-[11px] rounded-[7px] bg-surface-inset border border-border text-fg-muted text-xs font-semibold transition-colors hover:border-border-light"
+                    >
+                        {detecting ? 'Detecting…' : 'Detect text'}
+                    </button>
+                )}
                 <div className="flex gap-1 p-0.5 rounded-[7px] bg-surface-inset border border-border">
                     {['round', 'square'].map(shape => (
                         <button

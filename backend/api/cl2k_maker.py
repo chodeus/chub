@@ -38,7 +38,11 @@ from backend.modules.cl2k_maker import (
 )
 from backend.util.cl2k import geometry as geo, text_removal, tmdb_art
 from backend.util.cl2k.image_fetch import TMDB_IMAGE_CDN, download as download_image
-from backend.util.cl2k.logo_extract import extract_subject_logo, extract_title_logo
+from backend.util.cl2k.logo_extract import (
+    extract_logo_by_diff,
+    extract_subject_logo,
+    extract_title_logo,
+)
 from backend.util.cl2k.renderer import (
     process_logo,
     render_framed_art,
@@ -135,12 +139,15 @@ class GenerateRequest(BaseModel):
 
 
 def _mask_bytes(b64: Optional[str]) -> Optional[bytes]:
-    return base64.b64decode(b64) if b64 else None
+    """Strict decode for brush masks: malformed base64 raises here (validate=True)
+    so the endpoint can 400 with a readable message instead of handing garbage
+    bytes to the renderer to crash on deep inside a render."""
+    return _b64_to_bytes(b64, validate=True)
 
 
-def _b64_to_bytes(b64: Optional[str]) -> Optional[bytes]:
+def _b64_to_bytes(b64: Optional[str], validate: bool = False) -> Optional[bytes]:
     """Decode a base64 image, tolerating a ``data:...;base64,`` URL prefix."""
-    return base64.b64decode(b64.split(",")[-1]) if b64 else None
+    return base64.b64decode(b64.split(",")[-1], validate=validate) if b64 else None
 
 
 def _crop_tuple(req: Any):
@@ -417,6 +424,10 @@ def preview(
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_cl2k_logger),
 ):
+    try:
+        mask_bytes = _mask_bytes(req.mask_b64)
+    except Exception:
+        return error("invalid mask data", "BAD_MASK")
     blob = render_preview(
         db,
         load_config(),
@@ -431,7 +442,7 @@ def preview(
         custom_logo_bytes=_b64_to_bytes(req.logo_b64),
         tvdb_id=req.tvdb_id,
         imdb_id=req.imdb_id,
-        mask_bytes=_mask_bytes(req.mask_b64),
+        mask_bytes=mask_bytes,
         apply_ai=req.remove_text,
         focus_x=req.focus_x,
         focus_y=req.focus_y,
@@ -462,6 +473,10 @@ def generate(
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
+    try:
+        mask_bytes = _mask_bytes(req.mask_b64)
+    except Exception:
+        return error("invalid mask data", "BAD_MASK")
     result = generate_for_item(
         db=db,
         full_config=load_config(),
@@ -477,7 +492,7 @@ def generate(
         backdrop_bytes=_b64_to_bytes(req.backdrop_b64),
         logo_path=req.logo_path,
         custom_logo_bytes=_b64_to_bytes(req.logo_b64),
-        mask_bytes=_mask_bytes(req.mask_b64),
+        mask_bytes=mask_bytes,
         apply_ai=req.remove_text,
         focus_x=req.focus_x,
         focus_y=req.focus_y,
@@ -558,10 +573,16 @@ class ExtractLogoRequest(BaseModel):
     # the title can't leak in; without it the whole image is keyed.
     mask_b64: Optional[str] = None
     # "white" keys a white/near-white title by brightness; "subject" keys a
-    # coloured title by its colour distance from the local background.
+    # coloured title by its colour distance from the local background; "diff"
+    # keys wherever the original differs from an AI-erased result (needs
+    # cleaned_b64 — the most faithful key, it catches glows no colour key can).
     mode: str = "white"
+    # AI-erased result (base64/data-url) for mode="diff": the frontend already
+    # holds it after a retext preview, alongside the original and the brush.
+    cleaned_b64: Optional[str] = None
     # Smoothstep band, interpreted per mode (white: min-channel 0-255; subject:
-    # colour distance 0-441). None lets each mode use its own default.
+    # ΔE76 0-~150; diff: RGB distance 0-441). None lets each mode use its own
+    # default — white/subject then fit the band to the poster (Otsu).
     lo: Optional[float] = Field(None, ge=0.0, le=441.0)
     hi: Optional[float] = Field(None, ge=0.0, le=441.0)
 
@@ -785,7 +806,10 @@ def extract_logo(
     logger: Any = Depends(get_cl2k_logger),
 ):
     if req.image_b64:
-        raw = _b64_to_bytes(req.image_b64)
+        try:
+            raw = _b64_to_bytes(req.image_b64)
+        except Exception:
+            return error("invalid image data", "BAD_IMAGE")
     elif req.image_path:
         try:
             raw = download_image(req.image_path)
@@ -796,9 +820,25 @@ def extract_logo(
         raw = None
     if not raw:
         return error("No poster image provided", "NO_IMAGE")
+    try:
+        mask = _mask_bytes(req.mask_b64)
+    except Exception:
+        return error("invalid mask data", "BAD_MASK")
     band = {k: v for k, v in (("lo", req.lo), ("hi", req.hi)) if v is not None}
-    extract = extract_subject_logo if req.mode == "subject" else extract_title_logo
-    png = extract(raw, _mask_bytes(req.mask_b64), **band)
+    if req.mode == "diff":
+        try:
+            cleaned = _b64_to_bytes(req.cleaned_b64)
+        except Exception:
+            return error("invalid cleaned-image data", "BAD_IMAGE")
+        if not cleaned:
+            return error(
+                "Diff extraction needs the AI-erased result (cleaned_b64)",
+                "NO_CLEANED",
+            )
+        png = extract_logo_by_diff(raw, cleaned, mask, **band)
+    else:
+        extract = extract_subject_logo if req.mode == "subject" else extract_title_logo
+        png = extract(raw, mask, **band)
     return Response(
         content=png, media_type="image/png", headers={"Cache-Control": "no-store"}
     )
@@ -1259,6 +1299,10 @@ def retext(
             return error(f"could not fetch the source image: {exc}", "CL2K_RETEXT")
     else:
         return error("no image provided", "CL2K_RETEXT")
+    try:
+        mask_bytes = _mask_bytes(req.mask_b64)
+    except Exception:
+        return error("invalid mask data", "CL2K_RETEXT")
     logger.info(
         f"CL2K retext: {'preview' if req.preview else 'save'} "
         f"(apply_ai={req.apply_ai}, mask={'yes' if req.mask_b64 else 'no'}, "
@@ -1279,7 +1323,7 @@ def retext(
             full_config=cfg,
             logger=logger,
             image_bytes=image_bytes,
-            mask_bytes=_mask_bytes(req.mask_b64),
+            mask_bytes=mask_bytes,
             apply_ai=req.apply_ai,
             prompt=req.prompt,
             label_text=req.label_text,
@@ -1310,3 +1354,72 @@ def retext(
         out.get("reason", "retext failed") if isinstance(out, dict) else "retext failed"
     )
     return error(reason, "CL2K_RETEXT", data=out if isinstance(out, dict) else None)
+
+
+class DetectTextRequest(BaseModel):
+    # The poster to scan: uploaded bytes (base64) OR a TMDB/fanart/Plex path we
+    # fetch server-side (mirrors RetextRequest — the browser can't fetch
+    # image.tmdb.org itself, no CORS, so remote art must come through the
+    # host-allowlisted downloader).
+    image_b64: Optional[str] = None  # base64; data-URL prefix allowed
+    image_path: Optional[str] = None  # remote art path/URL, fetched via download_image
+    min_score: float = Field(0.5, ge=0.0, le=1.0)  # detector confidence floor
+
+
+@router.post(
+    "/detect-text", summary="Detect text regions on a poster via the LaMa sidecar"
+)
+def detect_text(
+    req: DetectTextRequest,
+    db: ChubDB = Depends(get_database),
+    logger: Any = Depends(get_cl2k_logger),
+) -> JSONResponse:
+    """Proxy the sidecar's /api/v1/detect so the frontend can pre-fill the erase
+    brush: returns its body verbatim — {regions: [polygons], mask: b64 PNG
+    (white=text)}. Sidecar-only; OpenAI has no detection endpoint."""
+    if req.image_b64:
+        try:
+            image_bytes = base64.b64decode(req.image_b64.split(",")[-1])
+        except Exception:
+            return error("invalid image data", "CL2K_DETECT")
+    elif req.image_path:
+        try:
+            image_bytes = download_image(req.image_path)
+        except Exception as exc:  # disallowed host / fetch failure
+            logger.warning(f"CL2K detect-text: source image fetch failed — {exc}")
+            return error(f"could not fetch the source image: {exc}", "CL2K_DETECT")
+    else:
+        return error("no image provided", "CL2K_DETECT")
+    cfg = load_config().cl2k_maker
+    reason = text_removal.unavailable_reason(cfg)
+    if reason is None and cfg.ai_provider != "lama_sidecar":
+        reason = (
+            "Text detection needs the LaMa sidecar provider — "
+            "select it in Module Settings → CL2K Maker."
+        )
+    if reason:
+        logger.warning(f"CL2K detect-text: unavailable — {reason}")
+        return error(reason, "CL2K_AI_UNAVAILABLE")
+    import requests
+
+    # Shared route derivation with inpaint/upscale so a custom endpoint path is
+    # honoured the same way for every sidecar route.
+    url = text_removal._lama_route(cfg.ai_endpoint, "/api/v1/detect")
+    try:
+        resp = requests.post(
+            url,
+            json={
+                "image": base64.b64encode(image_bytes).decode(),
+                "min_score": req.min_score,
+            },
+            headers=text_removal._lama_headers(cfg),
+            timeout=text_removal._timeout(cfg),
+        )
+        resp.raise_for_status()
+        body = resp.json()
+    except Exception as exc:
+        # Mirror /retext: a timeout/5xx/older-sidecar 404 comes back readable,
+        # not as a bare 500 with nothing in the logs.
+        logger.error(f"CL2K detect-text failed: {exc}", exc_info=True)
+        return error(f"text detection failed: {exc}", "CL2K_DETECT")
+    return ok("ok", body)

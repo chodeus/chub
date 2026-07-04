@@ -268,22 +268,34 @@ def _resolve_and_render(
         canvas_bytes, extend_mask = renderer.fit_extend_canvas(
             backdrop_bytes, crop, zoom=zoom, v_pos=v_pos
         )
-        # AI runs only on a real generate (allow_ai_extend) AND when a provider is
-        # configured. Previews (allow_ai_extend=False) and provider-less renders fall
-        # back to the free edge-extend fit, so we never spend AI on every preview.
-        if extend_mask is not None and allow_ai_extend and text_removal.is_enabled(cfg):
-            backdrop_bytes = text_removal.remove_text(
+        # AI runs only on a real generate (allow_ai_extend) AND when the provider
+        # is fully configured — unavailable_reason(), not is_enabled(): a provider
+        # with a missing endpoint/key silently passes the canvas through, and
+        # covering that would bake the black band into the saved poster. Previews
+        # (allow_ai_extend=False) and unconfigured renders fall back to the free
+        # edge-extend fit, so we never spend AI on every preview.
+        ai_ready = allow_ai_extend and text_removal.unavailable_reason(cfg) is None
+        extended = None
+        if extend_mask is not None and ai_ready:
+            extended = text_removal.remove_text(
                 canvas_bytes,
                 config=cfg,
                 mask_bytes=extend_mask,
                 prompt=_EXTEND_PROMPT,
                 logger=logger,
             )
+        if extended is not None and extended is not canvas_bytes:
+            backdrop_bytes = extended
             fit_mode, crop = "cover", None
         else:
             if extend_mask is not None and logger:
                 reason = (
-                    "preview" if not allow_ai_extend else "no AI provider configured"
+                    "preview"
+                    if not allow_ai_extend
+                    else (
+                        text_removal.unavailable_reason(cfg)
+                        or "AI returned the canvas unchanged"
+                    )
                 )
                 logger.info(
                     f"cl2k: extend — {reason}; using the free edge-extend fit instead"
@@ -335,11 +347,24 @@ def _resolve_and_render(
         and logo_source in ("tmdb", "fanart")
         and not logo_is_usable(logo_bytes)
     ):
-        logger.debug(
-            f"cl2k: {logo_source} logo too small for the logo box — using title text"
-        )
-        logo_bytes = None
-        logo_source = "text" if cfg.text_logo_fallback else "none"
+        # Rescue a too-small real logo via the sidecar's super-resolution before
+        # surrendering to the typeset wordmark; best-effort — upscale_image
+        # returns None on any failure (older sidecar, timeout, misconfig) and we
+        # fall back exactly as before.
+        rescued = None
+        if getattr(cfg, "ai_logo_upscale", True):
+            rescued = text_removal.upscale_image(logo_bytes, cfg, logger=logger)
+        if rescued and logo_is_usable(rescued):
+            logger.debug(
+                f"cl2k: {logo_source} logo too small — upscaled via the sidecar"
+            )
+            logo_bytes = rescued
+        else:
+            logger.debug(
+                f"cl2k: {logo_source} logo too small for the logo box — using title text"
+            )
+            logo_bytes = None
+            logo_source = "text" if cfg.text_logo_fallback else "none"
 
     if kind == "season" and not season_text and season_number is not None:
         season_text = season_band_text(season_number)

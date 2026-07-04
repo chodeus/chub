@@ -111,15 +111,15 @@ export const CL2K_MAKER_SCHEMA = {
             key: 'ai_provider',
             label: 'AI Provider',
             type: 'dropdown',
-            options: ['none', 'lama_sidecar', 'openai', 'huggingface'],
+            options: ['none', 'lama_sidecar', 'openai'],
             section: 'AI Text Removal',
             required: true,
             description:
-                'Inpainter used when "Remove text" is enabled with a brushed mask. "none" disables it; "lama_sidecar" is free/local; "openai" is paid; "huggingface" is a rate-limited free tier.',
+                'Inpainter used when "Remove text" is enabled with a brushed mask. "none" disables it; "lama_sidecar" is free/local; "openai" is paid.',
         },
         {
-            // Only LaMa sidecar / Hugging Face use an endpoint URL; OpenAI's
-            // endpoint is built in, so this is hidden for openai/none.
+            // Only the LaMa sidecar uses an endpoint URL; OpenAI's endpoint is
+            // built in, so this is hidden for openai/none.
             key: 'ai_endpoint',
             label: 'AI Endpoint',
             type: 'text',
@@ -127,11 +127,11 @@ export const CL2K_MAKER_SCHEMA = {
             conditional: {
                 field: 'ai_provider',
                 condition: 'in',
-                value: ['lama_sidecar', 'huggingface'],
+                value: ['lama_sidecar'],
             },
-            placeholder: 'http://<host>:8080',
+            placeholder: 'http://<host>:8418',
             description:
-                'LaMa (IOPaint): just your sidecar container’s address — http://<host>:<port>, where <port> is the IOPaint container’s mapped port (not CHUB’s). CHUB adds the /api/v1/inpaint path for you. Hugging Face: the full model inference URL.',
+                'Just your lama-sidecar container’s address — http://<host>:<port>, where <port> is the sidecar container’s mapped port (not CHUB’s). CHUB adds the /api/v1/... paths for you.',
         },
         {
             key: 'api_key',
@@ -141,9 +141,10 @@ export const CL2K_MAKER_SCHEMA = {
             conditional: {
                 field: 'ai_provider',
                 condition: 'in',
-                value: ['openai', 'huggingface'],
+                value: ['openai', 'lama_sidecar'],
             },
-            description: 'OpenAI / Hugging Face token. (LaMa sidecar needs no key.)',
+            description:
+                'OpenAI token. For the LaMa sidecar this is optional: set it only if the sidecar runs with LAMA_API_KEY (sent as X-API-Key).',
         },
         {
             key: 'ai_model',
@@ -153,9 +154,9 @@ export const CL2K_MAKER_SCHEMA = {
             conditional: {
                 field: 'ai_provider',
                 condition: 'in',
-                value: ['openai', 'huggingface'],
+                value: ['openai'],
             },
-            description: 'OpenAI model id (default gpt-image-1) or Hugging Face model id.',
+            description: 'OpenAI model id (default gpt-image-1).',
         },
         {
             key: 'ai_prompt',
@@ -165,9 +166,36 @@ export const CL2K_MAKER_SCHEMA = {
             conditional: {
                 field: 'ai_provider',
                 condition: 'in',
-                value: ['openai', 'huggingface'],
+                value: ['openai'],
             },
-            description: 'Prompt sent to OpenAI / Hugging Face when removing text.',
+            description: 'Prompt sent to OpenAI when removing text.',
+        },
+        {
+            key: 'ai_mask_dilate',
+            label: 'Mask Dilation (px)',
+            type: 'number',
+            section: 'AI Text Removal',
+            conditional: {
+                field: 'ai_provider',
+                condition: 'in',
+                value: ['lama_sidecar'],
+            },
+            placeholder: '-1',
+            description:
+                'How far the sidecar grows your brush strokes before erasing, so a logo’s anti-aliased fringe/glow goes too. -1 uses the sidecar’s default (5). Raise to 7–8 for glowing/beveled logos if a faint outline survives; lower to 2–3 if you brush generously.',
+        },
+        {
+            key: 'ai_logo_upscale',
+            label: 'Upscale Small Logos',
+            type: 'check_box',
+            section: 'AI Text Removal',
+            conditional: {
+                field: 'ai_provider',
+                condition: 'in',
+                value: ['lama_sidecar'],
+            },
+            description:
+                'When an auto-sourced clear logo is too small for the poster’s logo box, upscale it 2–4x on the sidecar (Real-ESRGAN) instead of falling back to a plain text wordmark. Any sidecar failure quietly falls back to the old behaviour.',
         },
         {
             key: 'ai_timeout',

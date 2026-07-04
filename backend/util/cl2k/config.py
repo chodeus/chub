@@ -60,18 +60,27 @@ class Cl2kMakerConfig(BaseModel):
     local_folders: List[Cl2kLocalFolder] = Field(default_factory=list)
     gdrive_uploads: List[Cl2kGdriveUpload] = Field(default_factory=list)
     # AI text removal (provider-agnostic; off by default = textless-art strategy).
-    # Requires a user-brushed mask. lama_sidecar = free/local; openai = paid;
-    # huggingface = free tier (rate-limited). Firefly/ChatGPT-free have no usable
-    # API — use the manual export/import handoff for those.
-    ai_provider: str = "none"  # none | lama_sidecar | openai | huggingface
-    ai_endpoint: str = ""  # lama sidecar URL, or HF model inference URL
-    # openai / huggingface token. Named ``api_key`` (not ``ai_api_key``) so the
-    # core secret-redaction list — which matches on exact leaf key names — masks
-    # it on GET /api/config like every other secret. Don't re-prefix it.
+    # Requires a user-brushed mask. lama_sidecar = free/local; openai = paid.
+    # Firefly/ChatGPT-free have no usable API — use the manual export/import
+    # handoff for those.
+    ai_provider: str = "none"  # none | lama_sidecar | openai
+    ai_endpoint: str = ""  # lama sidecar URL
+    # openai token, or the optional LAMA_API_KEY of a locked-down sidecar (sent
+    # as X-API-Key). Named ``api_key`` (not ``ai_api_key``) so the core
+    # secret-redaction list — which matches on exact leaf key names — masks it
+    # on GET /api/config like every other secret. Don't re-prefix it.
     api_key: str = ""
-    ai_model: str = ""  # openai model id (default gpt-image-1) / HF model id
+    ai_model: str = ""  # openai model id (default gpt-image-1)
     ai_timeout: int = 120
-    # OpenAI/HF prompt. OpenAI can remove text from this prompt ALONE (no mask);
+    # Per-request mask dilation sent to the lama sidecar; -1 = the sidecar's own
+    # default (5). The ghost-fringe knob: raise for glowing/beveled logos, lower
+    # when masks are already generous — tunable here without a container restart.
+    ai_mask_dilate: int = Field(default=-1, ge=-1, le=64)
+    # Rescue auto-sourced logos that are too small for the logo box by 2x/4x
+    # super-resolution on the sidecar (/api/v1/upscale) before falling back to
+    # the typeset text wordmark. Best-effort: any failure keeps old behaviour.
+    ai_logo_upscale: bool = True
+    # OpenAI prompt. OpenAI can remove text from this prompt ALONE (no mask);
     # a brushed mask, when present, restricts the edit to that region.
     ai_prompt: str = (
         "Remove all text, titles, credits, logos and watermarks from this image. "

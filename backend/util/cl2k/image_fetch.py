@@ -75,15 +75,24 @@ def select_logo(
     logos: List[Dict[str, Any]],
     lang: str = "en",
 ) -> Optional[str]:
-    """Return the highest-*resolution* logo ``file_path`` (lang + PNG preferred).
+    """Return the highest-*resolution* logo ``file_path`` (lang preferred).
 
-    Resolution drives sharpness, so we rank by width (vote as tiebreaker) rather
-    than by popularity.
+    Resolution drives sharpness, so vectors outrank everything (an SVG is
+    rasterized at ~2000px content width downstream — sharper than any raster),
+    then the widest PNG (vote as tiebreaker) rather than popularity.
     """
     if not logos:
         return None
     in_lang = [lg for lg in logos if lg.get("iso_639_1") == lang]
     base = in_lang or logos
+    svg = [lg for lg in base if str(lg.get("file_path", "")).lower().endswith(".svg")]
+    if svg:
+        svg = sorted(
+            svg,
+            key=lambda lg: (lg.get("vote_average", 0), lg.get("width", 0)),
+            reverse=True,
+        )
+        return svg[0].get("file_path")
     png = [lg for lg in base if str(lg.get("file_path", "")).lower().endswith(".png")]
     pool = png or base
     pool = sorted(
