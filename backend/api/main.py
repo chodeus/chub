@@ -36,7 +36,7 @@ from backend.api import (
     webhooks as webhooks_router,
 )
 from backend.api.utils import error, get_logger
-from backend.extensions import extension_routers
+from backend.extensions import extension_routers, extension_stream_prefixes
 from backend.util.auth import decode_access_token
 from backend.util.config import (
     ConfigError,
@@ -173,7 +173,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
         # valid for GET requests on the stream allowlist — never for mutations or
         # general API access, so a leaked image/SSE URL can't do more than that.
         if payload.get("scope") == "stream" and (
-            request.method != "GET" or not path.startswith(STREAM_PATH_PREFIXES)
+            request.method != "GET"
+            or not path.startswith(STREAM_PATH_PREFIXES + extension_stream_prefixes())
         ):
             self._log_unauthorized(request, "stream token off stream route", path)
             return JSONResponse(
