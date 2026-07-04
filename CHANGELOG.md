@@ -2,6 +2,13 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.38.1](https://github.com/chodeus/chub/compare/v2.38.0...v2.38.1) (2026-07-04)
+
+
+### Bug Fixes
+
+* **posters:** delete the configured gdrive folder, not the request path ([743a087](https://github.com/chodeus/chub/commit/743a087230f9e60a487571c8ff968af209d39e04))
+
 ## [2.38.0](https://github.com/chodeus/chub/compare/v2.37.0...v2.38.0) (2026-07-04)
 
 
