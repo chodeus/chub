@@ -118,8 +118,10 @@ COPY --from=builder /usr/bin/rclone /usr/bin/rclone
 # Copy built frontend assets
 COPY --from=builder /app/frontend/dist ./frontend/dist
 
-# Copy app source files excluding node_modules etc (already filtered by .dockerignore)
+# Copy app source from the builder. .dockerignore only filters the host context,
+# not --from=builder, so drop the builder's npm-ci node_modules to stay lean.
 COPY --from=builder /app .
+RUN rm -rf /app/frontend/node_modules
 
 # Copy frontend build output into /app/public (served via STATIC_DIR env var)
 RUN mkdir -p /app/public && \
