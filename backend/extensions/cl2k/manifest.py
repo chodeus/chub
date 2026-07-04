@@ -33,3 +33,9 @@ def tables():
     from backend.util.database.cl2k_generated import cl2k_generated_table
 
     return [cl2k_generated_table()]
+
+
+def stream_prefixes():
+    # The /plex-art proxy is loaded by <img>, which can only authenticate with a
+    # short-lived stream token in the URL — so its route joins the allowlist.
+    return ("/api/cl2k-maker/plex-art",)

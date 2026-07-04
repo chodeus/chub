@@ -17,10 +17,13 @@ Module settings are read/saved through the generic /api/config endpoints.
 """
 
 import base64
+import posixpath
+import re
 import threading
 from typing import Any, Dict, List, Optional
+from urllib.parse import unquote, urlparse
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 
@@ -1233,10 +1236,10 @@ def plex_images_endpoint(
 ) -> JSONResponse:
     """Read-only Plex artwork for the picker: resolves the item to a ratingKey
     via the synced plex_media_cache and returns its clearLogos / backgrounds /
-    posters. Returned URLs carry the user's own X-Plex-Token (the standard Plex
-    image mechanism — their own server on their own network); ``file_path`` ==
-    ``url`` since both image_fetch.download and the browser load them directly.
-    Never writes to Plex, so it can't affect Poster Cleanarr's in-use set."""
+    posters. ``file_path`` is a tokenless Plex URL the backend downloader re-mints
+    the token for; ``url`` routes the browser through /plex-art so the
+    X-Plex-Token never reaches the client. Never writes to Plex, so it can't
+    affect Poster Cleanarr's in-use set."""
     from backend.util.cl2k.plex_art import plex_images
 
     res = plex_images(
@@ -1249,6 +1252,72 @@ def plex_images_endpoint(
         imdb_id=imdb_id,
     )
     return ok("ok", res)
+
+
+# Plex artwork keys look like /library/metadata/<id>/<arttype>/<name>. The proxy
+# only fetches these — never arbitrary Plex endpoints. Without it, a leaked <img>
+# URL (which carries a live stream token + the Plex host in ?src=) could be
+# repointed at /:/prefs and leak the PlexOnlineToken (the account token), read
+# /myplex/account or listings, or pivot via /photo/:/transcode (internal SSRF).
+_PLEX_ART_PATH = re.compile(
+    r"^/library/metadata/\d+/"
+    r"(?:art|thumb|posters?|clearlogos?|banner|theme|composite|image)(?:/|$)",
+    re.IGNORECASE,
+)
+
+
+def _valid_plex_art_src(src: str) -> bool:
+    """True only for a clean Plex artwork-key URL. Decodes percent-encoding and
+    rejects any ``..`` / ``%2e%2e`` dot-segment (or ``//``) BEFORE matching: a
+    string-only regex on the raw path is defeated because requests/Plex collapse
+    ``../`` downstream — ``/library/metadata/1/art/../../:/prefs`` becomes
+    ``/:/prefs``, which leaks the account-level PlexOnlineToken. Validating the
+    normalized path guarantees what we check is what actually gets fetched."""
+    path = unquote(urlparse(src).path or "")
+    if ".." in path.split("/") or path != posixpath.normpath(path):
+        return False
+    return bool(_PLEX_ART_PATH.match(path))
+
+
+def _img_media_type(blob: bytes) -> str:
+    """Content-Type from magic bytes so PNG logos (transparency) aren't
+    mislabeled as JPEG."""
+    if blob[:8] == b"\x89PNG\r\n\x1a\n":
+        return "image/png"
+    if blob[:4] == b"RIFF" and blob[8:12] == b"WEBP":
+        return "image/webp"
+    return "image/jpeg"
+
+
+@router.get(
+    "/plex-art",
+    summary="Proxy Plex artwork server-side (X-Plex-Token stays off the browser)",
+)
+def plex_art_proxy(
+    src: str = Query(..., description="Tokenless Plex image URL from /plex-images"),
+    logger: Any = Depends(get_cl2k_logger),
+) -> Response:
+    """Fetch a Plex ARTWORK image server-side and stream the bytes back, so the
+    browser's <img> never carries the user's long-lived X-Plex-Token. ``src`` is
+    constrained to Plex artwork-key paths (_PLEX_ART_PATH) and ``download_image``
+    re-mints the token + SSRF-gates the host, so a stream token minted to load one
+    poster can't be repointed at other Plex endpoints or hosts. Loaded by <img>
+    with a short-lived stream token in the URL (see the manifest's
+    ``stream_prefixes``)."""
+    if not _valid_plex_art_src(src):
+        raise HTTPException(status_code=400, detail="not a Plex artwork URL")
+    try:
+        blob = download_image(src)
+    except Exception as exc:
+        logger.debug(f"cl2k: plex-art proxy fetch failed: {exc}")
+        raise HTTPException(status_code=404, detail="image unavailable") from exc
+    if not blob:
+        raise HTTPException(status_code=404, detail="image unavailable")
+    return Response(
+        content=blob,
+        media_type=_img_media_type(blob),
+        headers={"Cache-Control": "private, max-age=3600"},
+    )
 
 
 class RetextRequest(BaseModel):
