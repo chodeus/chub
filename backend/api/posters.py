@@ -2375,9 +2375,13 @@ async def delete_gdrive_local(
         # left behind either way.
         import shutil
 
+        # Delete the CONFIGURED folder (re-resolved), authorized by the membership
+        # match above — never the raw request path, so a validated request string
+        # can't reach rmtree. target == req_real by that match.
+        target = os.path.realpath(matched.location)
         folder_removed = False
-        if os.path.isdir(req_real):
-            shutil.rmtree(req_real)
+        if os.path.isdir(target):
+            shutil.rmtree(target)
             folder_removed = True
 
         deleted_rows = db.poster.delete_by_path_prefix(matched.location)
