@@ -2217,20 +2217,18 @@ const RenderPanel = ({
     ]);
 
     // Detect text — OCR the current backdrop into a prefill mask for the brush
-    // canvas. Bytes come the same way /retext gets them (the upload's b64 when we
-    // hold it, else fetch the displayed backdrop), but /detect-text takes b64 only.
+    // canvas. Source bytes go the same way /retext gets them: the upload's b64
+    // when we hold it, else the stored art path for the backend to fetch — the
+    // browser can't fetch image.tmdb.org directly (no CORS header).
     // Returns the white-on-black mask PNG (b64) for BrushMask to composite in, or
     // null after toasting — it never runs the removal itself.
     const runDetectText = useCallback(async () => {
         if (!backdropUrl) return null;
         try {
-            let imageB64 = customBackdrop?.b64 || null;
-            if (!imageB64) {
-                const dataUrl = await asisDataUrlFromSource();
-                imageB64 = dataUrl?.split(',')[1] || null;
-            }
-            if (!imageB64) return null;
-            const resp = await cl2kMakerAPI.detectText({ image_b64: imageB64, min_score: 0.5 });
+            const source = customBackdrop?.b64
+                ? { image_b64: customBackdrop.b64 }
+                : { image_path: backdrop };
+            const resp = await cl2kMakerAPI.detectText({ ...source, min_score: 0.5 });
             if (!resp?.data?.regions?.length) {
                 toast.info('No text found');
                 return null;
@@ -2240,7 +2238,7 @@ const RenderPanel = ({
             toast.error(err.message || 'Text detection failed');
             return null;
         }
-    }, [backdropUrl, customBackdrop, asisDataUrlFromSource, toast]);
+    }, [backdropUrl, backdrop, customBackdrop, toast]);
 
     // Identity passed to /retext (filename + Plex match). Season info comes from
     // the Poster tab's own season controls, so there's no separate field here.
