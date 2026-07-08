@@ -4,3 +4,9 @@
 # locally to run the cl2k tests.
 psd-tools[composite]==1.17.4
 Wand==0.7.2
+# CPU ONNX runtime for the PP-OCRv4 DBNet text detector (models/ppocr_v4_det.onnx)
+# — powers the polarity-agnostic "tighten to letters" anchor. Fail-soft: if the
+# import or model load fails, tighten falls back to the colour-key. Needs cp313
+# wheels for the python:3.13-slim image (>=1.20); the InferenceSession/run API is
+# version-stable (verified locally against 1.19.2 on py3.9).
+onnxruntime==1.27.0

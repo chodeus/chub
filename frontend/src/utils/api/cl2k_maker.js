@@ -199,6 +199,14 @@ export const cl2kMakerAPI = {
      *  AI sidecar and a 4K poster upload + OCR can outlast the default 30s. */
     detectText: req => apiCore.post('/cl2k-maker/detect-text', req, { timeout: AI_TIMEOUT_MS }),
 
+    /** Shrink a brushed block erase-mask down to the title glyph strokes so the
+     *  inpainter fills thin gaps (sharp) instead of one big block (blurry).
+     *  `req` = { image_b64 | image_path, mask_b64, color_tol? }; returns
+     *  { tightened: bool, mask: b64 PNG (white = remove) | null }. Pure local
+     *  compute (no AI provider), but a 4K poster upload can outlast the 30s
+     *  default, so use the long timeout. */
+    tightenMask: req => apiCore.post('/cl2k-maker/tighten-mask', req, { timeout: AI_TIMEOUT_MS }),
+
     /** Start a background File-as-is season batch (one source poster, re-filed per
      *  season with that season's band). Returns { job_id, total }; poll seasonsStatus. */
     retextSeasons: req => apiCore.post('/cl2k-maker/retext-seasons', req),
