@@ -457,9 +457,10 @@ def _detect_title(image_bytes, arr, lab, block, width):
     box = (prob > 0.3) & block
     if int(box.sum()) < 100:
         return None
-    bg_cent = _outside_background(lab, block, width)
-    if bg_cent is None:
+    bg = _outside_background(lab, block, width)
+    if bg is None:
         return None
+    bg_cent, _bg_frac = bg
 
     # Ink = box pixels farthest from that background; dominant cluster = ink colour.
     box_lab = lab[box]
@@ -471,8 +472,8 @@ def _detect_title(image_bytes, arr, lab, block, width):
     cent, counts = _kmeans(ink, 3)
     title_lab = cent[int(np.argmax(counts))]
 
-    if _matches_background(title_lab, bg_cent):
-        return None  # ink == background -> no real title; fall through to colour-key
+    if _matches_background(title_lab, bg):
+        return None  # ink == a dominant background -> no real title; use colour-key
     return title_lab
 
 
@@ -492,13 +493,22 @@ def _outside_background(lab, block, width):
         return None
     obg = obg.astype(np.float32)[:: max(1, len(obg) // 4000)]
     bg_cent, bg_counts = _kmeans(obg, 5)
-    return bg_cent[bg_counts > 0]
+    keep = bg_counts > 0
+    return bg_cent[keep], bg_counts[keep] / int(bg_counts.sum())
 
 
-def _matches_background(title_lab, bg_cent, tol=20.0):
-    """True if an anchor colour is within ``tol`` ΔE of the nearest background —
-    i.e. it's the plate, not the title (a would-be inversion)."""
-    return float(np.sqrt(((title_lab - bg_cent) ** 2).sum(axis=1)).min()) < tol
+def _matches_background(title_lab, bg, tol=20.0, min_frac=0.15):
+    """True if the anchor is within ``tol`` ΔE of a DOMINANT background cluster.
+
+    A plate (an inversion) is a large fraction of the background outside the
+    brush; a title whose colour merely resembles a MINOR background element (a
+    small window reflection, a shadow) is not — so only clusters covering at
+    least ``min_frac`` of the outside area count. ``bg`` is ``(centroids, frac)``
+    from :func:`_outside_background`.
+    """
+    bg_cent, bg_frac = bg
+    de = np.sqrt(((title_lab - bg_cent) ** 2).sum(axis=1))
+    return bool(((de < tol) & (bg_frac >= min_frac)).any())
 
 
 def tighten_text_mask(
@@ -557,11 +567,11 @@ def tighten_text_mask(
         if int(conf.sum()) < 200:
             return None
         title_lab = np.median(lab[conf], axis=0)
-        # A fallback anchor that equals the background outside the brush IS the
-        # plate, not the title — this is how the colour-key inverts on a light
-        # title over saturated colour when the block clips the letters. Reject it.
-        bg_cent = _outside_background(lab, block, width)
-        if bg_cent is not None and _matches_background(title_lab, bg_cent):
+        # A fallback anchor that equals the DOMINANT background outside the brush
+        # IS the plate, not the title — this is how the colour-key inverts on a
+        # light title over saturated colour when the block clips the letters.
+        bg = _outside_background(lab, block, width)
+        if bg is not None and _matches_background(title_lab, bg):
             return None
 
     # 2. Colour-distance segmentation (shared).

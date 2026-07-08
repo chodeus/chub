@@ -187,20 +187,28 @@ def test_detect_title_rejects_when_ink_matches_background(monkeypatch):
     assert logo_extract._detect_title(_jpeg(img), arr, lab, block, 400) is None
 
 
-def test_matches_background_rejects_plate_colour():
-    # The distinctness check: an anchor near a background colour is the plate (an
-    # inversion) and must be rejected; a vivid colour far from the plate passes.
+def test_matches_background_only_rejects_a_dominant_plate():
+    # The distinctness check: reject an anchor near a DOMINANT background cluster
+    # (a plate = inversion); pass a vivid colour far from all; and — the fix for
+    # the blue-on-blue-ish poster — pass an anchor near only a MINOR background
+    # element (a small window reflection), not a real plate.
     import numpy as np
 
     from backend.util.cl2k import logo_extract
 
-    bg = np.array([[50.0, 10.0, -20.0], [82.0, -4.0, 6.0]], np.float32)  # plate colours
+    cent = np.array([[50.0, 10.0, -20.0], [82.0, -4.0, 6.0]], np.float32)
+    big = (cent, np.array([0.5, 0.5], np.float32))  # both dominant
+    small = (cent, np.array([0.02, 0.98], np.float32))  # first is a 2% minority
+
+    near = np.array([51.0, 11.0, -19.0], np.float32)  # near cent[0]
+    vivid = np.array([40.0, 60.0, -55.0], np.float32)  # far from all
     assert logo_extract._matches_background(
-        np.array([51.0, 11.0, -19.0], np.float32), bg
-    )
+        near, big
+    )  # near a dominant plate -> reject
+    assert not logo_extract._matches_background(vivid, big)  # far -> pass
     assert not logo_extract._matches_background(
-        np.array([40.0, 60.0, -55.0], np.float32), bg
-    )
+        near, small
+    )  # near a 2% element -> pass
 
 
 def test_tighten_fallback_rejects_plate_inversion(monkeypatch):
