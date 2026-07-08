@@ -3812,11 +3812,11 @@ const BrushMask = ({
                     onTouchEnd={onUp}
                 />
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
                 <button
                     type="button"
                     onClick={clear}
-                    className="inline-flex items-center self-start h-[30px] px-[11px] rounded-[7px] bg-surface-inset border border-border text-fg-muted text-xs font-semibold transition-colors hover:border-border-light"
+                    className="inline-flex items-center self-start h-[30px] px-[11px] rounded-[7px] bg-surface-inset border border-border text-fg-muted text-xs font-semibold whitespace-nowrap transition-colors hover:border-border-light"
                 >
                     Clear mask
                 </button>
@@ -3825,7 +3825,7 @@ const BrushMask = ({
                         type="button"
                         onClick={runDetect}
                         disabled={detecting}
-                        className="inline-flex items-center self-start h-[30px] px-[11px] rounded-[7px] bg-surface-inset border border-border text-fg-muted text-xs font-semibold transition-colors hover:border-border-light"
+                        className="inline-flex items-center self-start h-[30px] px-[11px] rounded-[7px] bg-surface-inset border border-border text-fg-muted text-xs font-semibold whitespace-nowrap transition-colors hover:border-border-light"
                     >
                         {detecting ? 'Detecting…' : 'Detect text'}
                     </button>
@@ -3835,8 +3835,8 @@ const BrushMask = ({
                         type="button"
                         onClick={runTighten}
                         disabled={tightening}
-                        title="Shrink the mask to just the coloured title letters for a sharper AI erase"
-                        className="inline-flex items-center self-start h-[30px] px-[11px] rounded-[7px] bg-surface-inset border border-border text-fg-muted text-xs font-semibold transition-colors hover:border-border-light"
+                        title="Shrink the mask to just the title letters for a sharper AI erase"
+                        className="inline-flex items-center self-start h-[30px] px-[11px] rounded-[7px] bg-surface-inset border border-border text-fg-muted text-xs font-semibold whitespace-nowrap transition-colors hover:border-border-light"
                     >
                         {tightening ? 'Tightening…' : 'Tighten to letters'}
                     </button>
