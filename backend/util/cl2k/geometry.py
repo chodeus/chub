@@ -70,7 +70,13 @@ ZOOM_MIN, ZOOM_MAX = 0.5, 3.0
 # the gradient) fall back to the flat white silhouette.
 WHITEN_KEY_BLACK = 0.30  # level black point of the max(sat,light) key
 WHITEN_KEY_WHITE = 0.40  # level white point (steep ramp = two-tone)
-WHITEN_DETAIL_SIGMA = 0.025  # neighborhood blur sigma, fraction of logo width
+# Neighborhood blur sigma (fraction of logo width) for the keyline pass. Kept
+# small so the "darker-than-neighborhood" test resolves a CRISP thin keyline; a
+# wide blur (the old 0.025 ≈ 45px) turned every tonal transition on a busy
+# multicoloured logo — e.g. Dragon Ball GT — into a soft muddy black halo. Wide
+# dark BODIES (which a small blur would leave white-cored) are instead filled by
+# logo_extract.fill_dark_bodies, a shape-based post-pass, not by widening this.
+WHITEN_DETAIL_SIGMA = 0.008
 WHITEN_DETAIL_LO = 0.14  # darker-than-neighborhood ramp start (luma delta)
 WHITEN_DETAIL_HI = 0.22  # ...and full-black point
 WHITEN_FALLBACK_MEAN = 0.30  # opaque-area key mean below this -> flat white

@@ -217,10 +217,14 @@ def _background_colors(arr: np.ndarray, mask: Optional[np.ndarray]) -> np.ndarra
     """
     if mask is not None and mask.any():
         m = Image.fromarray((mask.astype(np.uint8)) * 255)
-        ring = (np.asarray(m.filter(ImageFilter.MaxFilter(45))) > 127) & ~mask  # ~22px out
+        ring = (
+            np.asarray(m.filter(ImageFilter.MaxFilter(45))) > 127
+        ) & ~mask  # ~22px out
         pts = arr[ring]
         if len(pts) >= 50:
-            sub = pts.astype(np.float32)[:: max(1, len(pts) // 4000)]  # subsample, cheap
+            sub = pts.astype(np.float32)[
+                :: max(1, len(pts) // 4000)
+            ]  # subsample, cheap
             cent, counts = _kmeans(sub, 5)
             return cent[counts > 0]
     return _local_background(arr, mask)[None, :]
@@ -332,13 +336,17 @@ def extract_title_logo(
             lo = float(np.clip(split, 120.0, 200.0))
             hi = lo + 50.0  # keep the band width (edge softness) of 165/215
     t = np.clip((mn - lo) / max(hi - lo, 1.0), 0.0, 1.0)
-    alpha = (t * t * (3.0 - 2.0 * t) * 255.0).astype(np.uint8)  # smoothstep keeps soft edges
+    alpha = (t * t * (3.0 - 2.0 * t) * 255.0).astype(
+        np.uint8
+    )  # smoothstep keeps soft edges
 
     if mask_bytes:
         m = Image.open(io.BytesIO(mask_bytes)).convert("L")
         if m.size != img.size:
             m = m.resize(img.size, Image.NEAREST)
-        alpha = (alpha.astype(np.float32) * (np.asarray(m).astype(np.float32) / 255.0)).astype(np.uint8)
+        alpha = (
+            alpha.astype(np.float32) * (np.asarray(m).astype(np.float32) / 255.0)
+        ).astype(np.uint8)
 
     alpha = _despeckle(alpha)
 
@@ -404,4 +412,312 @@ def extract_logo_by_diff(
 
     buf = io.BytesIO()
     logo.save(buf, "PNG")
+    return buf.getvalue()
+
+
+def _detect_title(image_bytes, arr, lab, block, width):
+    """Title INK colour (Lab) via the DBNet detector, or ``None``.
+
+    The detector localises the text LINE (colour-agnostic) as a filled box — it
+    does NOT resolve individual strokes, so its band alone can't tell ink from the
+    inter-glyph background. The robust anchor keys the ink against the TRUE
+    background, sampled from just OUTSIDE the user's block (which bounds the
+    title, so outside is real background — unlike a ring around the shrunk band,
+    which the kernel contaminates). Within the box, the pixels FARTHEST from that
+    background palette are the ink; their dominant colour cluster is the title
+    colour — WHITE for white text, blue for blue, black for black, at any brush
+    tightness. Returns ``None`` when the detector is unavailable, finds no text,
+    or the ink is not clearly distinct from the background (no real title to key).
+
+    KNOWN LIMIT (multi-region background): "farthest from the outside-block
+    background" mis-picks the local plate as ink when the title sits on a distinct
+    colour BAND that is itself farther (in Lab) from the surrounding field than
+    the ink is, AND the brush spans both band and field. Then the plate is keyed
+    (an inversion). Narrow and input-dependent; the tighten result is a reviewable
+    prefill so the harm is a visible wrong mask the user re-brushes. Brushing
+    within the band avoids it. Closing it needs an ink cue independent of the
+    outside background (local contrast / inter-glyph cluster) — deliberately left
+    out to avoid re-introducing the fragility of earlier band-based anchors.
+    """
+    from backend.util.cl2k.text_detect import detect_text_probmap
+
+    prob = detect_text_probmap(image_bytes)
+    if prob is None:
+        return None
+    if prob.shape != block.shape:  # e.g. _open_rgb_bounded downscaled a huge image
+        prob = (
+            np.asarray(
+                Image.fromarray((np.clip(prob, 0, 1) * 255).astype(np.uint8)).resize(
+                    (block.shape[1], block.shape[0]), Image.BILINEAR
+                ),
+                dtype=np.float32,
+            )
+            / 255.0
+        )
+    box = (prob > 0.3) & block
+    if int(box.sum()) < 100:
+        return None
+    bg_cent = _outside_background(lab, block, width)
+    if bg_cent is None:
+        return None
+
+    # Ink = box pixels farthest from that background; dominant cluster = ink colour.
+    box_lab = lab[box]
+    dmin = np.sqrt(((box_lab[:, None, :] - bg_cent[None]) ** 2).sum(-1)).min(axis=1)
+    ink = box_lab[dmin > np.median(dmin)]
+    if ink.shape[0] < 50:
+        return None
+    ink = ink.astype(np.float32)[:: max(1, len(ink) // 4000)]
+    cent, counts = _kmeans(ink, 3)
+    title_lab = cent[int(np.argmax(counts))]
+
+    if _matches_background(title_lab, bg_cent):
+        return None  # ink == background -> no real title; fall through to colour-key
+    return title_lab
+
+
+def _outside_background(lab, block, width):
+    """k-means Lab palette of the background sampled just OUTSIDE the brush.
+
+    The block bounds the title, so a ring outside it is real background at any
+    brush tightness. Returns ``None`` when there's no usable outside (a block that
+    fills the frame). Used to key the title INK against — and to reject an anchor
+    (detector or colour-key) that merely IS the background, i.e. an inversion.
+    """
+    outside = _dilate(block, max(8, round(0.02 * width))) & ~block
+    if int(outside.sum()) < 50:
+        outside = ~block
+    obg = lab[outside]
+    if obg.shape[0] < 50:
+        return None
+    obg = obg.astype(np.float32)[:: max(1, len(obg) // 4000)]
+    bg_cent, bg_counts = _kmeans(obg, 5)
+    return bg_cent[bg_counts > 0]
+
+
+def _matches_background(title_lab, bg_cent, tol=20.0):
+    """True if an anchor colour is within ``tol`` ΔE of the nearest background —
+    i.e. it's the plate, not the title (a would-be inversion)."""
+    return float(np.sqrt(((title_lab - bg_cent) ** 2).sum(axis=1)).min()) < tol
+
+
+def tighten_text_mask(
+    image_bytes: bytes,
+    mask_bytes: Optional[bytes],
+    *,
+    grow: Optional[int] = None,
+    color_tol: float = 33.0,
+) -> Optional[bytes]:
+    """Shrink a brushed *block* erase-mask down to the title's glyph strokes.
+
+    A filled block hands the inpainter one big contiguous hole it can only fill
+    with low-frequency mush (LaMa blurs the middle of a wide mask). Keying the
+    block down to just the strokes leaves the real backdrop *between* the letters
+    for the inpainter to sample, so the fill stays sharp.
+
+    The title colour is found two ways, best first:
+
+    1. **DBNet text detector** (:func:`_detect_title`) — localises the title by
+       appearance and keys the ink against the background sampled outside the
+       brush, so it isolates white/black/coloured titles the colour-key's
+       most-saturated guess can't (and never inverts onto a saturated plate).
+    2. **Fallback colour-key** — when the detector is unavailable/off, finds no
+       text, or can't separate ink from background: anchor the colour from the
+       most-saturated brushed pixels. Works for coloured titles; guarded by a
+       stroke-shape gate so a plate-shaped result (an inversion) is rejected.
+
+    Either way, every brushed pixel within ``color_tol`` ΔE76 of the title colour
+    is kept — a uniform glyph body fills SOLID, a differently-coloured plate drops
+    out — then ``grow`` re-dilates for anti-aliasing.
+
+    Returns a white-on-black PNG mask (white = remove, image-sized), or ``None``
+    to signal "keep the caller's block": no title could be isolated, or the
+    result was degenerate. It never returns a mask worse than the block.
+    """
+    img = _open_rgb_bounded(image_bytes)
+    width = img.width
+    arr = np.asarray(img).astype(np.float32)
+    block = _load_mask(mask_bytes, img.size)
+    if block is None or int(block.sum()) < 200:
+        return None
+    lab = _srgb_to_lab(arr)
+
+    # 1. Title colour — detector first (polarity-agnostic; keys the ink against
+    #    the background sampled outside the brush). If it can't isolate a title
+    #    (unavailable, no text, or ink == background) it returns None and we fall
+    #    through to the colour-key, which handles a saturated title offline.
+    title_lab = _detect_title(image_bytes, arr, lab, block, width)
+    from_detector = title_lab is not None
+    if not from_detector:
+        chroma = np.sqrt(lab[..., 1] ** 2 + lab[..., 2] ** 2)
+        cthr = float(np.quantile(chroma[block], 0.92))
+        if cthr < 18.0:
+            return None  # no saturated title to key on — keep the block
+        conf = block & (chroma >= cthr)
+        if int(conf.sum()) < 200:
+            return None
+        title_lab = np.median(lab[conf], axis=0)
+        # A fallback anchor that equals the background outside the brush IS the
+        # plate, not the title — this is how the colour-key inverts on a light
+        # title over saturated colour when the block clips the letters. Reject it.
+        bg_cent = _outside_background(lab, block, width)
+        if bg_cent is not None and _matches_background(title_lab, bg_cent):
+            return None
+
+    # 2. Colour-distance segmentation (shared).
+    d = lab - title_lab
+    color_dist = np.sqrt((d * d).sum(axis=-1))
+    letter = block & (color_dist < color_tol)
+    letter = _despeckle((letter.astype(np.uint8)) * 255, min_area=40) > 0
+    if not letter.any():
+        return None
+
+    # 3. Stroke-shape gate — only on the colour-key fallback. That path can key a
+    #    saturated plate (a light title over colour) into a backwards mask; a
+    #    plate survives erosion, letters vanish, so reject a plate-shaped result.
+    #    The detector anchor is validated distinct-from-background, so its path
+    #    skips this (and its false-reject of legitimately bold titles).
+    if not from_detector:
+        er = max(3, round(0.006 * width))
+        strokiness = 1.0 - int(_erode(letter, er).sum()) / int(letter.sum())
+        if strokiness < 0.42:
+            return None
+
+    if grow is None:
+        grow = max(2, round(0.004 * width))
+    grown = _dilate(letter, grow) if grow > 0 else letter
+    grown &= block  # never mask more than the user brushed
+
+    frac = int(grown.sum()) / int(block.sum())
+    if not (0.03 <= frac <= 0.90):
+        return None  # near-empty / near-full -> the model didn't fit; keep block
+
+    out = Image.fromarray((grown.astype(np.uint8)) * 255)  # 2-D uint8 -> L PNG
+    buf = io.BytesIO()
+    out.save(buf, "PNG")
+    return buf.getvalue()
+
+
+# --- Colour-edge inking (a whiten helper, called from renderer.process_logo) ---
+_INK_EDGE_THR = 0.16  # normalized Lab-gradient magnitude that reads as a keyline
+_INK_WHITE_MIN = 0.60  # only ink where the whitened result is at least this light
+_INK_BLACK_MAX = 0.35  # whitened luma below this is an EXISTING keyline
+
+
+def _grad_mag(ch: np.ndarray) -> np.ndarray:
+    """Central-difference gradient magnitude (numpy-only, no scipy/cv2)."""
+    gx = np.zeros_like(ch)
+    gy = np.zeros_like(ch)
+    gx[:, 1:-1] = ch[:, 2:] - ch[:, :-2]
+    gy[1:-1, :] = ch[2:, :] - ch[:-2, :]
+    return np.sqrt(gx * gx + gy * gy)
+
+
+def _erode(mask: np.ndarray, radius: int) -> np.ndarray:
+    """Binary erosion = invert, dilate, invert (reuses :func:`_dilate`)."""
+    return ~_dilate(~mask, radius)
+
+
+def ink_color_edges(whitened_png: bytes, original_png: bytes) -> bytes:
+    """Add crisp black keylines at COLOUR boundaries the two-tone whiten missed.
+
+    The two-tone whiten turns every saturated/light region white, so two
+    differently-*coloured* fills with no black outline between them merge into
+    one white blob (a red swoosh under a white "GT"). This keys the ORIGINAL
+    logo's colour edges — a ΔE gradient in Lab, so a hue flip at equal luma still
+    registers — and inks a thin black line wherever (a) there's a strong interior
+    colour edge and (b) the whitened result is currently white there (NO existing
+    keyline). Edges sitting on the logo's own outlines are suppressed, so an
+    already-outlined logo (Dragon Ball GT) is a NO-OP; only outline-less colour
+    boundaries gain a separator.
+
+    Both PNGs must be the same (trimmed) size. Returns the inked whitened PNG,
+    or the input unchanged when there is nothing to add or on any decode failure
+    (fail open — a bad decode must never break the render).
+    """
+    try:
+        white = Image.open(io.BytesIO(whitened_png)).convert("RGBA")
+        orig = Image.open(io.BytesIO(original_png)).convert("RGBA")
+    except Exception:
+        return whitened_png
+    if white.size != orig.size:
+        white = white.resize(orig.size, Image.LANCZOS)
+    width = orig.width
+
+    lab = _srgb_to_lab(np.asarray(orig.convert("RGB")).astype(np.float32))
+    mag = (
+        _grad_mag(lab[..., 0])
+        + 1.5 * _grad_mag(lab[..., 1])
+        + 1.5 * _grad_mag(lab[..., 2])
+    )
+    peak = float(mag.max())
+    if peak <= 1e-6:
+        return whitened_png  # flat original — nothing to separate
+    edge = (mag / peak) > _INK_EDGE_THR
+
+    opaque = np.asarray(orig)[..., 3] > 128
+    interior = _erode(opaque, max(2, round(0.004 * width)))  # drop silhouette edge
+
+    warr = np.asarray(white)
+    wl = (0.299 * warr[..., 0] + 0.587 * warr[..., 1] + 0.114 * warr[..., 2]) / 255.0
+    wa = warr[..., 3] > 128
+    # Suppress ink near an existing keyline so an outlined logo stays a no-op.
+    near_keyline = _dilate((wl < _INK_BLACK_MAX) & wa, max(3, round(0.006 * width)))
+
+    add = edge & interior & (wl > _INK_WHITE_MIN) & wa & ~near_keyline
+    add = _dilate(add, max(1, round(0.0015 * width))) & wa & ~near_keyline
+    if not add.any():
+        return whitened_png
+
+    out = warr.copy()
+    out[add, 0:3] = 0  # black keyline; alpha untouched
+    buf = io.BytesIO()
+    Image.fromarray(out).save(buf, "PNG")
+    return buf.getvalue()
+
+
+_DARK_BODY_LUMA = 0.20  # original luma below this is a candidate dark body
+_DARK_BODY_CHROMA = 18.0  # ...and only if NEAR-NEUTRAL (vivid darks stay white)
+
+
+def fill_dark_bodies(whitened_png: bytes, original_png: bytes) -> bytes:
+    """Fill wide DARK bodies black — the companion to the small keyline blur.
+
+    The keyline pass uses a small neighbourhood blur so it stays crisp (no muddy
+    halos), but that means it only blackens dark pixels within a few px of an
+    edge — a WIDE dark shape (a dark star body, a thick dark stroke) keeps a white
+    core, because the sat/light key whitens it and nothing pulls the middle back.
+    This fills genuinely dark ORIGINAL regions that are THICK — a morphological
+    opening drops thin outlines and soft halos, so only real bodies fill. An
+    already-crisp logo whose only darks are thin outlines (Dragon Ball GT) is a
+    no-op. Both PNGs same (trimmed) size; input returned unchanged on any decode
+    failure or when there is nothing thick and dark to fill.
+    """
+    try:
+        white = Image.open(io.BytesIO(whitened_png)).convert("RGBA")
+        orig = Image.open(io.BytesIO(original_png)).convert("RGBA")
+    except Exception:
+        return whitened_png
+    if white.size != orig.size:
+        white = white.resize(orig.size, Image.LANCZOS)
+    width = orig.width
+
+    o = np.asarray(orig)
+    rgb = o[..., :3].astype(np.float32)
+    luma = (0.299 * rgb[..., 0] + 0.587 * rgb[..., 1] + 0.114 * rgb[..., 2]) / 255.0
+    lab = _srgb_to_lab(rgb)
+    chroma = np.sqrt(lab[..., 1] ** 2 + lab[..., 2] ** 2)
+    # Only NEAR-NEUTRAL dark shapes fill (a shadow/silhouette that reads black). A
+    # wide dark-but-VIVID fill — navy, maroon, deep teal — is a coloured fill the
+    # two-tone key deliberately whitens, so it is spared here.
+    dark = (luma < _DARK_BODY_LUMA) & (chroma < _DARK_BODY_CHROMA) & (o[..., 3] > 128)
+    r = max(4, round(0.0075 * width))
+    thick = _dilate(_erode(dark, r), r)  # opening: only bodies thicker than ~2r
+    if not thick.any():
+        return whitened_png
+
+    out = np.asarray(white).copy()
+    out[thick, 0:3] = 0  # black fill; alpha untouched
+    buf = io.BytesIO()
+    Image.fromarray(out).save(buf, "PNG")
     return buf.getvalue()

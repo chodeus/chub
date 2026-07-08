@@ -26,6 +26,7 @@ from wand.drawing import Drawing
 from wand.image import COMPOSITE_OPERATORS, Image
 
 from backend.util.cl2k import color, geometry as geo
+from backend.util.cl2k.logo_extract import fill_dark_bodies, ink_color_edges
 
 # ImageMagick 7 renamed CopyOpacity to CopyAlpha; wand exposes whichever the
 # linked library supports (IM6 = Debian/CI runners, IM7 = homebrew dev). Both
@@ -294,7 +295,7 @@ def fit_extend_canvas(
     return canvas_png, mask_png
 
 
-def _whiten(logo: Image, flat_fallback: bool = True) -> None:
+def _whiten(logo: Image, flat_fallback: bool = True) -> bool:
     """Recolour the logo to the CL2K two-tone: white fills, black keylines.
 
     Per-pixel key + a local-contrast pass (constants and rationale in
@@ -302,6 +303,9 @@ def _whiten(logo: Image, flat_fallback: bool = True) -> None:
     that would come out mostly black falls back to the flat white silhouette
     (suppressed via ``flat_fallback=False`` when the invert pass follows — a
     flat silhouette inverts to full transparency, i.e. nothing).
+
+    Returns True when the flat-white fallback fired — the caller then skips the
+    colour-edge / dark-body post-passes, which would re-mark that clean silhouette.
     """
     q = logo.quantum_range
     with logo.clone() as alpha:
@@ -344,11 +348,12 @@ def _whiten(logo: Image, flat_fallback: bool = True) -> None:
                 and k_mean / a_mean < geo.WHITEN_FALLBACK_MEAN
             ):
                 logo.colorize(color=Color("white"), alpha=Color("white"))
-                return
+                return True  # fell back to the flat silhouette
             key.transform_colorspace("srgb")
             key.alpha_channel = "off"
             key.composite(alpha, operator=_COPY_ALPHA)
             logo.composite(key, left=0, top=0, operator="copy")
+            return False
         finally:
             key.close()
 
@@ -457,6 +462,32 @@ def _flat_white(logo: Image) -> None:
     logo.colorize(color=Color("white"), alpha=Color("white"))  # RGB only
 
 
+def _apply_whiten(logo: Image, *, invert: bool) -> None:
+    """Two-tone whiten + colour-edge keylines + dark-body fill, in place.
+
+    :func:`_whiten` whitens saturated/light fills and inks thin luma keylines
+    crisply. Two post-passes finish the two-tone for cases a per-pixel key can't:
+    :func:`ink_color_edges` adds a black separator where two differently-coloured
+    fills meet with no outline (else they merge to one white blob), and
+    :func:`fill_dark_bodies` blacks in a WIDE dark shape the small keyline blur
+    leaves white-cored. Both are no-ops on an already-clean logo (Dragon Ball GT).
+
+    Skipped entirely on the invert path (it makes a clearlogo differently) and
+    when the flat-white fallback fired (the post-passes would re-mark that clean
+    silhouette). The pre-whiten original is captured only when the passes can run.
+    """
+    if invert:
+        _whiten(logo, flat_fallback=False)
+        return
+    original_png = logo.make_blob("png")  # colours the post-passes key against
+    if _whiten(logo, flat_fallback=True):
+        return  # flat-white fallback — leave the clean silhouette untouched
+    stepped = ink_color_edges(logo.make_blob("png"), original_png)
+    stepped = fill_dark_bodies(stepped, original_png)
+    with Image(blob=stepped) as img2:
+        logo.composite(img2, left=0, top=0, operator="copy")
+
+
 def _read_logo_image(logo_bytes: bytes) -> Image:
     """Decode logo bytes, rasterizing SVG sources at high density.
 
@@ -508,7 +539,7 @@ def process_logo(
         if flat_white:
             _flat_white(logo)
         elif whiten:
-            _whiten(logo, flat_fallback=not invert)
+            _apply_whiten(logo, invert=invert)
         if flip_mask_bytes:
             _flip_regions(logo, flip_mask_bytes)
         if invert and not flat_white:
@@ -579,7 +610,7 @@ def _place_logo(
         if flat_white:
             _flat_white(logo)
         elif whiten:
-            _whiten(logo, flat_fallback=not invert)
+            _apply_whiten(logo, invert=invert)
         if flip_mask_bytes:
             # Same trimmed/whitened space the touch-up brush was drawn over
             # (process_logo's output) — applied before the resize below.

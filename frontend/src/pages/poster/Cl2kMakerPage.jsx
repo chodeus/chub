@@ -2240,6 +2240,36 @@ const RenderPanel = ({
         }
     }, [backdropUrl, backdrop, customBackdrop, toast]);
 
+    // Tighten to letters — colour-key the CURRENT brushed block down to just the
+    // title glyph strokes, so the AI erase fills thin gaps (sharp) instead of one
+    // big block (blurry). `maskDataUrl` is BrushMask's live canvas; the backend
+    // returns the tightened white-on-black mask for it to repaint, or a "kept"
+    // flag when no solid-coloured title could be isolated.
+    const runTightenText = useCallback(
+        async maskDataUrl => {
+            if (!backdropUrl || !maskDataUrl) return null;
+            try {
+                const source = customBackdrop?.b64
+                    ? { image_b64: customBackdrop.b64 }
+                    : { image_path: backdrop };
+                const resp = await cl2kMakerAPI.tightenMask({ ...source, mask_b64: maskDataUrl });
+                if (!resp?.data?.tightened) {
+                    toast.info(resp?.data?.reason || 'Couldn’t isolate letters — kept your mask');
+                    return null;
+                }
+                // Tighten REPLACES the brushed block, so signal it: the user
+                // should eyeball the new mask before erasing (it's best on
+                // solid-coloured titles; a light title on busy art can mis-key).
+                toast.success('Tightened to the letters — check the mask before erasing');
+                return resp?.data?.mask || null;
+            } catch (err) {
+                toast.error(err.message || 'Tighten failed');
+                return null;
+            }
+        },
+        [backdropUrl, backdrop, customBackdrop, toast]
+    );
+
     // Identity passed to /retext (filename + Plex match). Season info comes from
     // the Poster tab's own season controls, so there's no separate field here.
     const asisIds = useMemo(
@@ -3140,6 +3170,7 @@ const RenderPanel = ({
                                 aiPrompt={aiPrompt}
                                 setAiPrompt={setAiPrompt}
                                 onDetectText={runDetectText}
+                                onTightenText={runTightenText}
                             />
                         </StudioAccordion>
 
@@ -3313,6 +3344,7 @@ const AiPanel = ({
     aiPrompt,
     setAiPrompt,
     onDetectText,
+    onTightenText,
 }) => {
     // UI-only: the large pop-out mask editor (mock cl2k-09). Reuses the same
     // BrushMask + onMaskChange pipeline — no new mask handlers. Both the inline
@@ -3378,6 +3410,7 @@ const AiPanel = ({
                                 onMaskChange={onMaskChange}
                                 initialMask={mask}
                                 onDetectText={onDetectText}
+                                onTightenText={onTightenText}
                             />
                         ) : (
                             <div className="text-xs text-fg-subtle">
@@ -3465,6 +3498,7 @@ const AiPanel = ({
                                         initialMask={mask}
                                         imgClassName="max-h-[calc(90vh_-_11rem)]"
                                         onDetectText={onDetectText}
+                                        onTightenText={onTightenText}
                                     />
                                 </div>
                             </div>
@@ -3535,6 +3569,7 @@ const BrushMask = ({
     initialMask = null,
     imgClassName = '',
     onDetectText = null,
+    onTightenText = null,
 }) => {
     const canvasRef = useRef(null);
     const drawing = useRef(false);
@@ -3543,6 +3578,7 @@ const BrushMask = ({
     // on-screen brush feels identical at any backing resolution.
     const displayScale = useRef(1);
     const [detecting, setDetecting] = useState(false);
+    const [tightening, setTightening] = useState(false);
     // Brush footprint: round (soft, default) or square (sharp corners — handy for
     // erasing straight logo edges). Purely a drawing concern, kept local here so
     // every BrushMask instance gets the toggle for free.
@@ -3706,6 +3742,53 @@ const BrushMask = ({
         }
     }, [onDetectText, detecting, emit]);
 
+    // Tighten-to-letters: hand the CURRENT canvas (the brushed block) to the
+    // backend, which colour-keys it down to the title strokes. Unlike detect
+    // (additive), this REPLACES the mask — clear the canvas before painting the
+    // returned white-on-BLACK PNG (same luminance → alpha convert as runDetect).
+    // A null result means "kept your mask" (the parent already toasted).
+    const runTighten = useCallback(async () => {
+        if (!onTightenText || tightening) return;
+        const c = canvasRef.current;
+        if (!c) return;
+        setTightening(true);
+        try {
+            const current = c.toDataURL('image/png');
+            const maskPng = await onTightenText(current);
+            if (!maskPng) return;
+            const img = new Image();
+            await new Promise((resolve, reject) => {
+                img.onload = resolve;
+                img.onerror = reject;
+                img.src = maskPng.startsWith('data:')
+                    ? maskPng
+                    : `data:image/png;base64,${maskPng}`;
+            });
+            const t = document.createElement('canvas');
+            t.width = c.width;
+            t.height = c.height;
+            const tctx = t.getContext('2d');
+            tctx.drawImage(img, 0, 0, t.width, t.height);
+            const d = tctx.getImageData(0, 0, t.width, t.height);
+            const px = d.data;
+            for (let i = 0; i < px.length; i += 4) {
+                px[i + 3] = px[i] >= 128 ? 255 : 0;
+                px[i] = 255;
+                px[i + 1] = 255;
+                px[i + 2] = 255;
+            }
+            tctx.putImageData(d, 0, 0);
+            const ctx = c.getContext('2d');
+            ctx.clearRect(0, 0, c.width, c.height); // REPLACE, not additive
+            ctx.drawImage(t, 0, 0);
+            emit();
+        } catch {
+            /* onTightenText surfaces its own errors; a bad mask image just no-ops */
+        } finally {
+            setTightening(false);
+        }
+    }, [onTightenText, tightening, emit]);
+
     return (
         <div className="flex flex-col gap-2">
             <div className="relative inline-block leading-none select-none">
@@ -3745,6 +3828,17 @@ const BrushMask = ({
                         className="inline-flex items-center self-start h-[30px] px-[11px] rounded-[7px] bg-surface-inset border border-border text-fg-muted text-xs font-semibold transition-colors hover:border-border-light"
                     >
                         {detecting ? 'Detecting…' : 'Detect text'}
+                    </button>
+                )}
+                {onTightenText && (
+                    <button
+                        type="button"
+                        onClick={runTighten}
+                        disabled={tightening}
+                        title="Shrink the mask to just the coloured title letters for a sharper AI erase"
+                        className="inline-flex items-center self-start h-[30px] px-[11px] rounded-[7px] bg-surface-inset border border-border text-fg-muted text-xs font-semibold transition-colors hover:border-border-light"
+                    >
+                        {tightening ? 'Tightening…' : 'Tighten to letters'}
                     </button>
                 )}
                 <div className="flex gap-1 p-0.5 rounded-[7px] bg-surface-inset border border-border">

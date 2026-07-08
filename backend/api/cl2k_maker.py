@@ -45,6 +45,7 @@ from backend.util.cl2k.logo_extract import (
     extract_logo_by_diff,
     extract_subject_logo,
     extract_title_logo,
+    tighten_text_mask,
 )
 from backend.util.cl2k.renderer import (
     process_logo,
@@ -1492,3 +1493,64 @@ def detect_text(
         logger.error(f"CL2K detect-text failed: {exc}", exc_info=True)
         return error(f"text detection failed: {exc}", "CL2K_DETECT")
     return ok("ok", body)
+
+
+class TightenMaskRequest(BaseModel):
+    # The poster to key against: uploaded bytes (base64) OR a remote art path we
+    # fetch server-side (same source rules as /detect-text and /retext).
+    image_b64: Optional[str] = None
+    image_path: Optional[str] = None
+    mask_b64: Optional[str] = None  # the brushed BLOCK mask (white = erase)
+    color_tol: float = Field(33.0, ge=5.0, le=120.0)  # ΔE76 title-colour band
+
+
+@router.post(
+    "/tighten-mask",
+    summary="Shrink a brushed block erase-mask down to the title glyph strokes",
+)
+def tighten_mask(
+    req: TightenMaskRequest,
+    db: ChubDB = Depends(get_database),
+    logger: Any = Depends(get_cl2k_logger),
+) -> JSONResponse:
+    """Colour-key the brushed region down to the title strokes so the inpainter
+    fills thin gaps (sharp) instead of one big block (blurry). Pure local
+    compute — no AI provider needed. Returns {tightened: bool, mask: b64 PNG |
+    null}; ``tightened=false`` means no solid-coloured title could be isolated,
+    so the frontend keeps the user's block."""
+    if req.image_b64:
+        try:
+            raw = _b64_to_bytes(req.image_b64)
+        except Exception:
+            return error("invalid image data", "CL2K_TIGHTEN")
+    elif req.image_path:
+        try:
+            raw = download_image(req.image_path)
+        except Exception as exc:  # disallowed host / fetch failure
+            logger.warning(f"CL2K tighten-mask: source image fetch failed — {exc}")
+            return error(f"could not fetch the source image: {exc}", "CL2K_TIGHTEN")
+    else:
+        raw = None
+    if not raw:
+        return error("no image provided", "CL2K_TIGHTEN")
+    try:
+        mask = _mask_bytes(req.mask_b64)
+    except Exception:
+        return error("invalid mask data", "CL2K_TIGHTEN")
+    if not mask:
+        return error("no mask provided — brush over the text first", "CL2K_TIGHTEN")
+    try:
+        tightened = tighten_text_mask(raw, mask, color_tol=req.color_tol)
+    except Exception as exc:
+        logger.error(f"CL2K tighten-mask failed: {exc}", exc_info=True)
+        return error(f"tighten failed: {exc}", "CL2K_TIGHTEN")
+    if tightened is None:
+        return ok(
+            "kept",
+            {
+                "tightened": False,
+                "mask": None,
+                "reason": "No solid-coloured title to isolate — kept your mask.",
+            },
+        )
+    return ok("ok", {"tightened": True, "mask": base64.b64encode(tightened).decode()})
