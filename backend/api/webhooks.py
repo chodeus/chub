@@ -141,6 +141,15 @@ async def process_poster_webhook(
         client_info = {
             "client_host": request.client.host if request.client else None,
             "client_port": request.headers.get("X-Service-Port"),
+            # Optional explicit instance selector. The reliable way to route a
+            # webhook when the peer IP can't identify the sender (reverse proxy,
+            # host networking, or several instances sharing an IP): the user
+            # adds `?instance=<CHUB instance name>` to the webhook URL or an
+            # `X-Chub-Instance` header. Takes precedence over IP auto-matching.
+            "instance_override": (
+                request.query_params.get("instance")
+                or request.headers.get("X-Chub-Instance")
+            ),
             "scheme": getattr(request.url, "scheme", "http"),
             "user_agent": request.headers.get("User-Agent", ""),
         }

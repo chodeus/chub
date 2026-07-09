@@ -1,10 +1,69 @@
 # util/webhook_processor.py
 
+import ipaddress
+import socket
 import time
 from typing import Optional, Tuple
 from urllib.parse import urlparse
 
 from backend.util.config import load_config
+
+# Short-lived DNS cache for resolving a configured instance hostname (e.g. a
+# Docker service name like "sonarr") to IP(s), so an inbound webhook's peer IP
+# can be matched to the instance that sent it. A TTL keeps container-IP churn
+# honest without doing a lookup on every webhook.
+_DNS_CACHE: dict = {}
+_DNS_TTL_SECONDS = 60
+
+
+def _normalize_host(h):
+    if not h:
+        return h
+    h = str(h).lower()
+    if h in ("127.0.0.1", "::1", "localhost"):
+        return "localhost"
+    return h
+
+
+def _resolve_ips(host: Optional[str]) -> frozenset:
+    """Resolve ``host`` to a set of IP strings, with a short TTL cache.
+
+    Returns the host itself when it is already an IP literal, and an empty set
+    when it cannot be resolved — callers treat an empty set as "no match", never
+    a crash, so a DNS blip fails closed rather than mis-routing.
+    """
+    if not host:
+        return frozenset()
+    try:
+        ipaddress.ip_address(host)
+        return frozenset({host})
+    except ValueError:
+        pass
+    now = time.time()
+    cached = _DNS_CACHE.get(host)
+    if cached and cached[0] > now:
+        return cached[1]
+    try:
+        ips = frozenset(info[4][0] for info in socket.getaddrinfo(host, None))
+    except (socket.gaierror, OSError):
+        ips = frozenset()
+    _DNS_CACHE[host] = (now + _DNS_TTL_SECONDS, ips)
+    return ips
+
+
+def _host_matches(url: Optional[str], norm_peer_host) -> bool:
+    """True when the connection's (normalized) peer host is the same machine the
+    configured ``url`` points at — by literal host equality first (IP-configured,
+    same-host, or localhost) and then by DNS-resolving the configured hostname
+    (a Docker service name resolves to the container IP the webhook came from)."""
+    if not url or not norm_peer_host:
+        return False
+    parsed = urlparse(url)
+    if _normalize_host(parsed.hostname) == norm_peer_host:
+        return True
+    return any(
+        _normalize_host(ip) == norm_peer_host for ip in _resolve_ips(parsed.hostname)
+    )
 
 
 class WebhookProcessor:
@@ -50,8 +109,8 @@ class WebhookProcessor:
                 "error_code": "INVALID_WEBHOOK_DATA",
             }
 
-        # Find matching ARR instance
-        instance_info = self._find_arr_instance(client_info)
+        # Find matching ARR instance (scoped to the payload's media type)
+        instance_info = self._find_arr_instance(client_info, media_type)
         if not instance_info["found"]:
             log.error("No matching ARR instance found")
             return {
@@ -111,64 +170,94 @@ class WebhookProcessor:
         except (TypeError, ValueError):
             return None
 
-    def _find_arr_instance(self, client_info: Optional[dict] = None) -> dict:
+    def _find_arr_instance(
+        self, client_info: Optional[dict] = None, media_type: Optional[str] = None
+    ) -> dict:
         """
-        Find matching ARR instance from client info.
+        Resolve which configured *arr instance a webhook came from.
+
+        Ordered and fail-closed:
+          1. Explicit ``?instance=<label>`` / ``X-Chub-Instance`` override →
+             direct lookup. The reliable option behind a reverse proxy, where
+             the peer IP is the proxy's, not the arr's.
+          2. Peer-IP match: resolve each candidate instance's URL host (a Docker
+             service name like ``sonarr`` included) to IP(s) and compare against
+             the connection's peer IP. Exactly one match wins.
+          3. Single-instance fallback: if the payload's media type has exactly
+             one configured instance, use it — covers single-instance
+             reverse-proxy setups the IP match can't see.
+
+        Anything ambiguous (peer IP matches >1 instance, or no match with
+        several candidates) returns not-found: the arr media id is
+        instance-scoped, so mis-routing a webhook would fetch the wrong item or
+        404 rather than fail loudly.
+
+        The old host+port equality check is gone: a connection's *source* port is
+        never the arr's *listen* port, and ``client_port`` was only ever
+        populated from a non-standard ``X-Service-Port`` header, so it could not
+        match a real Sonarr/Radarr webhook.
 
         Args:
-            client_info: Client connection information
+            client_info: Client connection information.
+            media_type: ``"series"`` or ``"movie"`` from the payload; scopes the
+                candidate pool to sonarr / radarr respectively. When ``None``
+                (legacy callers) all buckets are searched.
 
         Returns:
-            dict: Instance lookup result
+            dict: Instance lookup result.
         """
-
-        def normalize_host(h):
-            if not h:
-                return h
-            h = str(h).lower()
-            if h in ("127.0.0.1", "::1", "localhost"):
-                return "localhost"
-            return h
-
-        # Extract client info
-        if client_info:
-            host = client_info.get("client_host")
-            port = client_info.get("client_port")
-            scheme = client_info.get("scheme", "http")
-        else:
+        if not client_info:
             return {"found": False, "error": "No client info provided"}
 
-        norm_host = normalize_host(host)
-        norm_port = int(port) if port is not None else None
+        peer_host = _normalize_host(client_info.get("client_host"))
+        override = (client_info.get("instance_override") or "").strip()
 
-        # Search through configured instances
+        if media_type == "series":
+            buckets = ("sonarr",)
+        elif media_type == "movie":
+            buckets = ("radarr",)
+        else:
+            buckets = ("radarr", "sonarr", "lidarr")
+
         instances_config = self.config.instances
-
-        for media_type in ("radarr", "sonarr", "lidarr"):
-            media_dict = getattr(instances_config, media_type, {})
-            for name, info in media_dict.items():
-                if not info.url:
+        pool = []
+        for bucket in buckets:
+            for name, info in getattr(instances_config, bucket, {}).items():
+                if not info.url or getattr(info, "enabled", True) is False:
                     continue
+                pool.append((name, bucket, info))
 
-                parsed = urlparse(info.url)
-                parsed_host = normalize_host(parsed.hostname)
+        def _resolved(name, bucket, info):
+            return {
+                "found": True,
+                "name": name,
+                "type": bucket,
+                "api": info.api,
+                "url": info.url,
+                "host": client_info.get("client_host"),
+                "scheme": client_info.get("scheme") or "http",
+            }
 
-                try:
-                    parsed_port = int(parsed.port) if parsed.port is not None else None
-                except Exception:
-                    parsed_port = None
+        # 1) Explicit override — fail closed if it names nothing eligible.
+        if override:
+            for name, bucket, info in pool:
+                if name.lower() == override.lower():
+                    return _resolved(name, bucket, info)
+            return {
+                "found": False,
+                "error": f"instance override {override!r} not found",
+            }
 
-                if parsed_host == norm_host and parsed_port == norm_port:
-                    return {
-                        "found": True,
-                        "name": name,
-                        "type": media_type,
-                        "api": info.api,
-                        "url": info.url,
-                        "host": host,
-                        "port": port,
-                        "scheme": scheme or parsed.scheme or "http",
-                    }
+        # 2) Peer-IP match (DNS-resolved). Exactly one candidate must match.
+        matches = [c for c in pool if _host_matches(c[2].url, peer_host)]
+        if len(matches) == 1:
+            return _resolved(*matches[0])
+        if len(matches) > 1:
+            return {"found": False, "error": "peer IP matched multiple instances"}
+
+        # 3) Exactly one instance of this media type → unambiguous target.
+        if len(pool) == 1:
+            return _resolved(*pool[0])
 
         return {"found": False, "error": "No matching instance"}
 
