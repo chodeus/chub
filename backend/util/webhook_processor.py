@@ -15,6 +15,14 @@ from backend.util.config import load_config
 _DNS_CACHE: dict = {}
 _DNS_TTL_SECONDS = 60
 
+# Cache of an instance's self-reported `instanceName` (arr /system/status),
+# keyed by URL. Used only to tell apart several instances that share a peer IP
+# (same host, different listen ports) — the connection can't reveal the listen
+# port, so the payload's instanceName is the disambiguator. Only successful
+# lookups are cached, so a transient arr outage never suppresses a valid name.
+_NAME_CACHE: dict = {}
+_NAME_TTL_SECONDS = 300
+
 
 def _normalize_host(h):
     if not h:
@@ -109,8 +117,11 @@ class WebhookProcessor:
                 "error_code": "INVALID_WEBHOOK_DATA",
             }
 
-        # Find matching ARR instance (scoped to the payload's media type)
-        instance_info = self._find_arr_instance(client_info, media_type)
+        # Find matching ARR instance (scoped to the payload's media type;
+        # instanceName breaks a same-IP, different-port tie).
+        instance_info = self._find_arr_instance(
+            client_info, media_type, webhook_data.get("instanceName")
+        )
         if not instance_info["found"]:
             log.error("No matching ARR instance found")
             return {
@@ -171,7 +182,10 @@ class WebhookProcessor:
             return None
 
     def _find_arr_instance(
-        self, client_info: Optional[dict] = None, media_type: Optional[str] = None
+        self,
+        client_info: Optional[dict] = None,
+        media_type: Optional[str] = None,
+        instance_name: Optional[str] = None,
     ) -> dict:
         """
         Resolve which configured *arr instance a webhook came from.
@@ -183,12 +197,16 @@ class WebhookProcessor:
           2. Peer-IP match: resolve each candidate instance's URL host (a Docker
              service name like ``sonarr`` included) to IP(s) and compare against
              the connection's peer IP. Exactly one match wins.
-          3. Single-instance fallback: if the payload's media type has exactly
+          3. Same peer IP, several instances (same host, *different ports*):
+             the listen port can't be recovered from the connection (its source
+             port is ephemeral), so disambiguate by the payload's ``instanceName``
+             — matched against the CHUB label, then each candidate's live
+             ``instanceName``. A unique name match wins; otherwise fail closed.
+          4. Single-instance fallback: if the payload's media type has exactly
              one configured instance, use it — covers single-instance
              reverse-proxy setups the IP match can't see.
 
-        Anything ambiguous (peer IP matches >1 instance, or no match with
-        several candidates) returns not-found: the arr media id is
+        Anything still ambiguous returns not-found: the arr media id is
         instance-scoped, so mis-routing a webhook would fetch the wrong item or
         404 rather than fail loudly.
 
@@ -202,6 +220,8 @@ class WebhookProcessor:
             media_type: ``"series"`` or ``"movie"`` from the payload; scopes the
                 candidate pool to sonarr / radarr respectively. When ``None``
                 (legacy callers) all buckets are searched.
+            instance_name: The payload's ``instanceName`` (Sonarr/Radarr's own
+                instance name), used only to break a same-IP tie.
 
         Returns:
             dict: Instance lookup result.
@@ -252,14 +272,74 @@ class WebhookProcessor:
         matches = [c for c in pool if _host_matches(c[2].url, peer_host)]
         if len(matches) == 1:
             return _resolved(*matches[0])
+
+        # 3) Same IP, several instances (different ports): break the tie by the
+        # payload's instanceName, since the listen port is unrecoverable.
         if len(matches) > 1:
+            picked = self._disambiguate_by_name(matches, instance_name)
+            if picked is not None:
+                return _resolved(*picked)
             return {"found": False, "error": "peer IP matched multiple instances"}
 
-        # 3) Exactly one instance of this media type → unambiguous target.
+        # 4) Exactly one instance of this media type → unambiguous target.
         if len(pool) == 1:
             return _resolved(*pool[0])
 
         return {"found": False, "error": "No matching instance"}
+
+    def _disambiguate_by_name(self, candidates, instance_name):
+        """Pick the one candidate whose name equals the webhook's ``instanceName``.
+
+        Several instances share the connection's peer IP (same host, different
+        ports) and the listen port can't be read from the socket, so the arr's
+        own instance name is the only automatic signal. Compares against the
+        CHUB label first (free) and then each candidate's live ``instanceName``
+        (cached). Returns the sole match, or ``None`` when the name is missing,
+        matches none, or matches more than one (caller then fails closed).
+        """
+        target = (instance_name or "").strip().lower()
+        if not target:
+            return None
+
+        by_label = [c for c in candidates if c[0].strip().lower() == target]
+        if len(by_label) == 1:
+            return by_label[0]
+
+        by_live = [
+            c
+            for c in candidates
+            if (self._live_instance_name(c[2].url, c[2].api) or "").strip().lower()
+            == target
+        ]
+        return by_live[0] if len(by_live) == 1 else None
+
+    def _live_instance_name(self, url, api):
+        """The arr's self-reported ``instanceName``, briefly cached by URL. Only
+        successful lookups are cached so a transient outage isn't sticky."""
+        if not url or not api:
+            return None
+        now = time.time()
+        cached = _NAME_CACHE.get(url)
+        if cached and cached[0] > now:
+            return cached[1]
+        name = None
+        try:
+            from backend.util.arr import create_arr_client
+
+            client = create_arr_client(url, api, self.logger)
+            if client:
+                name = (
+                    getattr(client, "instance_name", None) or client.get_instance_name()
+                )
+                try:
+                    client.session.close()
+                except Exception:
+                    pass
+        except Exception:
+            name = None
+        if name:
+            _NAME_CACHE[url] = (now + _NAME_TTL_SECONDS, name)
+        return name
 
     @staticmethod
     def _season_present(plex, media_title: str, year, season_number: int) -> bool:
