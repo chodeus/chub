@@ -262,39 +262,58 @@ const instanceDotColor = name => {
     return 'var(--color-source-cl2k)';
 };
 
-/** Gold "missing" chips for the unmatched poster list — a POSTER chip plus a
- *  season-count chip for series. */
+// Cap the number of per-season chips before collapsing the remainder into a
+// "+N" overflow chip (whose tooltip lists the rest), so a show missing many
+// seasons doesn't blow out the row width.
+const SEASON_CHIP_CAP = 8;
+
+/** Format a missing season the way the artwork view does: 0 → Specials, else S03. */
+const formatSeason = n => (n === 0 ? 'Specials' : `S${String(n).padStart(2, '0')}`);
+
+/** Gold "missing" chips for the unmatched poster list — a POSTER chip plus one
+ *  chip per missing season (capped, with a "+N" overflow chip listing the rest). */
 const MissingPosterChips = ({ item }) => {
     const chips = [];
     if (item._type === 'series') {
-        if (item.missing_main_poster) chips.push('Poster');
-        const n = item.missing_seasons?.length || 0;
-        if (n) chips.push(`${n} season${n > 1 ? 's' : ''}`);
+        if (item.missing_main_poster) chips.push({ key: 'poster', label: 'Poster' });
+        const seasons = [...(item.missing_seasons || [])].sort((a, b) => a - b);
+        seasons
+            .slice(0, SEASON_CHIP_CAP)
+            .forEach(s => chips.push({ key: `s${s}`, label: formatSeason(s) }));
+        if (seasons.length > SEASON_CHIP_CAP) {
+            const rest = seasons.slice(SEASON_CHIP_CAP);
+            chips.push({
+                key: 'more',
+                label: `+${rest.length}`,
+                title: rest.map(formatSeason).join(', '),
+            });
+        }
     }
-    if (!chips.length) chips.push('Poster');
+    if (!chips.length) chips.push({ key: 'poster', label: 'Poster' });
     return (
         <span className="flex flex-wrap gap-1.5">
             {chips.map(c => (
                 <span
-                    key={c}
+                    key={c.key}
+                    title={c.title}
                     className="inline-flex items-center px-2 py-[3px] rounded-[5px] font-mono text-[9.5px] font-semibold uppercase whitespace-nowrap bg-warning/15 text-warning"
                 >
-                    {c}
+                    {c.label}
                 </span>
             ))}
         </span>
     );
 };
 
-/** The single primary external-id label + a tooltip listing every id. */
-const externalIdLabel = item =>
-    item.tmdb_id
-        ? `tmdb ${item.tmdb_id}`
-        : item.tvdb_id
-          ? `tvdb ${item.tvdb_id}`
-          : item.imdb_id
-            ? String(item.imdb_id)
-            : null;
+/** Every external id present on the item, as short display labels — tmdb and
+ *  tvdb are shown together (both matter for series); imdb is rendered raw as
+ *  it's self-identifying. */
+const externalIdList = item =>
+    [
+        item.tmdb_id && `tmdb ${item.tmdb_id}`,
+        item.tvdb_id && `tvdb ${item.tvdb_id}`,
+        item.imdb_id && String(item.imdb_id),
+    ].filter(Boolean);
 
 const externalIdTitle = item =>
     [
@@ -487,7 +506,7 @@ const UnmatchedList = ({ items, onRefresh, onPick, typeKey: typeKeyProp, onTypeC
                             <tbody>
                                 {visible.map((item, idx) => {
                                     const action = rowActionFor?.(item);
-                                    const extId = externalIdLabel(item);
+                                    const extIds = externalIdList(item);
                                     return (
                                         <tr
                                             key={`${item._type}-${item.tmdb_id || item.tvdb_id || item.title || idx}`}
@@ -537,10 +556,18 @@ const UnmatchedList = ({ items, onRefresh, onPick, typeKey: typeKeyProp, onTypeC
                                                 <MissingPosterChips item={item} />
                                             </td>
                                             <td
-                                                className="px-4 py-2.5 font-mono text-[12px] text-accent whitespace-nowrap"
+                                                className="px-4 py-2.5 font-mono text-[12px] text-accent whitespace-nowrap align-top"
                                                 title={externalIdTitle(item)}
                                             >
-                                                {extId || '—'}
+                                                {extIds.length ? (
+                                                    <div className="flex flex-col gap-0.5">
+                                                        {extIds.map(id => (
+                                                            <span key={id}>{id}</span>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    '—'
+                                                )}
                                             </td>
                                             <td className="px-4 py-2.5">
                                                 <div className="flex items-center gap-2 justify-end">
