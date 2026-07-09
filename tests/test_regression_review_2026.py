@@ -107,7 +107,7 @@ def test_webhook_dedup_separates_added_and_import_phase():
     movie = {"title": "M", "year": 2020, "tmdbId": 1}
 
     added = {"eventType": "MovieAdded", "movie": movie}
-    imported = {"eventType": "MovieFileImported", "movie": movie}
+    imported = {"eventType": "Download", "movie": movie}
 
     assert _is_duplicate_webhook(added, stub_db) is False
     # Same media, different phase → a fresh fingerprint, not a debounced dup.
@@ -191,9 +191,7 @@ def test_stream_token_rejected_off_allowlist(monkeypatch):
 
     secret = generate_jwt_secret()
     cfg = SimpleNamespace(
-        auth=SimpleNamespace(
-            username="u", password_hash="h", jwt_secret=secret
-        )
+        auth=SimpleNamespace(username="u", password_hash="h", jwt_secret=secret)
     )
     monkeypatch.setattr(apimain, "load_config", lambda: cfg)
 
@@ -218,7 +216,9 @@ def test_stream_token_rejected_off_allowlist(monkeypatch):
     assert client.get(f"/api/media/1/poster?token={stream}").status_code == 200
     # Full session token works everywhere.
     assert (
-        client.get("/api/other", headers={"Authorization": f"Bearer {full}"}).status_code
+        client.get(
+            "/api/other", headers={"Authorization": f"Bearer {full}"}
+        ).status_code
         == 200
     )
 
@@ -261,7 +261,9 @@ def test_rename_instance_migrates_title_cased_source(db):
 #    catch-all worker can't revert a webhook job the webhook worker just claimed.
 def test_worker_startup_reset_scoped_to_partition(db):
     db.worker.enqueue_job("jobs", {}, job_type="webhook")
-    db.worker.enqueue_job("jobs", {}, job_type="module_run")  # no module_name → no dedup
+    db.worker.enqueue_job(
+        "jobs", {}, job_type="module_run"
+    )  # no module_name → no dedup
     db.worker.execute_query("UPDATE jobs SET status='running'")
 
     def status_by_type():
@@ -276,7 +278,9 @@ def test_worker_startup_reset_scoped_to_partition(db):
 
     # Webhook worker resets only webhook jobs.
     db.worker.execute_query("UPDATE jobs SET status='running'")
-    db.create_worker(worker_name="wh", job_type_filter="webhook")._reset_stuck_jobs("jobs")
+    db.create_worker(worker_name="wh", job_type_filter="webhook")._reset_stuck_jobs(
+        "jobs"
+    )
     st = status_by_type()
     assert st["webhook"] == "pending"
     assert st["module_run"] == "running"
@@ -414,9 +418,7 @@ def test_formatter_redacts_secret_in_traceback():
 
     fmt = SafeFormatter("%(message)s")
     try:
-        raise ValueError(
-            "http://plex:32400/library?X-Plex-Token=SECRETTOKEN1234567890"
-        )
+        raise ValueError("http://plex:32400/library?X-Plex-Token=SECRETTOKEN1234567890")
     except ValueError:
         rec = logging.LogRecord(
             "m", logging.ERROR, __file__, 1, "upload failed", None, sys.exc_info()
