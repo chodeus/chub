@@ -156,6 +156,12 @@ def _process_webhook_job(
         instance_info = validation_result["instance_info"]
         media_id = validation_result["media_id"]
         webhook_season = validation_result.get("season_number")
+        # Pre-download adds (SeriesAdd/MovieAdded) have no new file for Plex to
+        # scan, so the availability wait shouldn't burn the full retry budget.
+        is_added_event = webhook_data.get("eventType", "") in (
+            "SeriesAdd",
+            "MovieAdded",
+        )
 
         # Helper function to process the media item
         def _process_media_item(db_context):
@@ -251,6 +257,7 @@ def _process_webhook_job(
             media["title"],
             year=media.get("year"),
             season_number=webhook_season if instance_info["type"] == "sonarr" else None,
+            is_added_event=is_added_event,
         )
 
         # Run poster rename on the stored media. For Sonarr Download /

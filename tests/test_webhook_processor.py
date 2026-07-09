@@ -481,3 +481,115 @@ def test_season_present_false_when_show_absent():
     section = SimpleNamespace(type="show", search=lambda **k: [])
     plex = SimpleNamespace(library=SimpleNamespace(sections=lambda: [section]))
     assert WebhookProcessor._season_present(plex, "Missing Show", None, 1) is False
+
+
+# --- application_url instance resolution ---
+
+
+def test_find_arr_instance_application_url_same_ip_diff_port(monkeypatch):
+    # Two Sonarr on one host, different ports. The peer IP matches both, but the
+    # payload applicationUrl carries the listen port, so it disambiguates.
+    wp = _same_host_two_sonarr_wp(monkeypatch, labels=("Shows", "Anime"))
+    result = wp._find_arr_instance(
+        {"client_host": "192.168.2.206"},
+        "series",
+        application_url="http://192.168.2.206:8990",
+    )
+    assert result["found"] is True
+    assert result["name"] == "Anime"
+
+
+def test_find_arr_instance_application_url_behind_proxy(monkeypatch):
+    # Peer IP is a proxy that matches no instance; applicationUrl (service name)
+    # still identifies the sender.
+    wp = _two_sonarr_wp(
+        monkeypatch,
+        {"sonarr": {"10.200.10.26"}, "sonarr-anime": {"10.200.10.27"}},
+    )
+    result = wp._find_arr_instance(
+        {"client_host": "172.20.0.2"},
+        "series",
+        application_url="http://sonarr-anime:8989",
+    )
+    assert result["found"] is True
+    assert result["name"] == "Anime"
+
+
+# --- wait_for_plex_availability: early-exit + pre-download skip ---
+
+
+def _wp_with_plex(monkeypatch):
+    cfg = ChubConfig(
+        instances=InstancesConfig(
+            plex={"main": InstanceDetail(url="http://plex:32400", api="tok")},
+        ),
+    )
+    monkeypatch.setattr("backend.util.webhook_processor.load_config", lambda: cfg)
+    monkeypatch.setattr(
+        "backend.util.ssrf_guard.is_safe_url", lambda url: (True, "ok")
+    )
+    return WebhookProcessor(logger=StubLogger())
+
+
+def _fake_plex_with_items(items):
+    # items: list of (title, year)
+    def sections():
+        section = SimpleNamespace(
+            type="movie",
+            search=lambda title=None, **k: [
+                SimpleNamespace(title=t, year=y)
+                for (t, y) in items
+                if title is None or t.lower() == title.lower()
+            ],
+        )
+        return [section]
+
+    return SimpleNamespace(library=SimpleNamespace(sections=sections))
+
+
+def _patch_plex(monkeypatch, items, slept):
+    monkeypatch.setattr(
+        "plexapi.server.PlexServer",
+        lambda url, token, timeout=10: _fake_plex_with_items(items),
+    )
+    import time as _time
+
+    monkeypatch.setattr(_time, "sleep", lambda s: slept.append(s))
+
+
+def test_wait_returns_immediately_when_already_present(monkeypatch):
+    wp = _wp_with_plex(monkeypatch)
+    slept = []
+    _patch_plex(monkeypatch, [("The Movie", 2020)], slept)
+    assert wp.wait_for_plex_availability("The Movie", year=2020) is True
+    assert slept == []  # no initial delay, no retries — item was already there
+
+
+def test_wait_skips_for_pre_download_added_event(monkeypatch):
+    wp = _wp_with_plex(monkeypatch)
+    slept = []
+    _patch_plex(monkeypatch, [], slept)  # item NOT in Plex
+    result = wp.wait_for_plex_availability(
+        "New Show", year=2024, is_added_event=True
+    )
+    assert result is False
+    assert slept == []  # a pre-download add doesn't wait for a scan
+
+
+def test_wait_retries_for_genuine_import_not_yet_scanned(monkeypatch):
+    wp = _wp_with_plex(monkeypatch)
+    wp.max_retries = 2
+    slept = []
+    _patch_plex(monkeypatch, [], slept)  # never appears
+    result = wp.wait_for_plex_availability("Imported Movie", year=2021)
+    assert result is False
+    # initial delay + 2 retries (all mocked, so instant)
+    assert len(slept) >= 1
+
+
+def test_item_present_direct_match():
+    plex = _fake_plex_with_items([("The Movie", 2020)])
+    assert WebhookProcessor._item_present(plex, "The Movie", 2020) is True
+    assert WebhookProcessor._item_present(plex, "The Movie", None) is True
+    assert WebhookProcessor._item_present(plex, "Other", 2020) is False
+    assert WebhookProcessor._item_present(plex, "The Movie", 1999) is False
