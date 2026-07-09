@@ -203,6 +203,82 @@ def test_find_arr_instance_ambiguous_shared_ip_fails_closed(monkeypatch):
     assert result["found"] is False
 
 
+def _same_host_two_sonarr_wp(monkeypatch, labels=("Shows", "Anime")):
+    # Two Sonarr instances on the SAME host IP, different listen ports.
+    a, b = labels
+    cfg = ChubConfig(
+        instances=InstancesConfig(
+            sonarr={
+                a: InstanceDetail(url="http://192.168.2.206:8989", api="a"),
+                b: InstanceDetail(url="http://192.168.2.206:8990", api="b"),
+            }
+        ),
+    )
+    monkeypatch.setattr("backend.util.webhook_processor.load_config", lambda: cfg)
+    return WebhookProcessor(logger=StubLogger())
+
+
+def test_find_arr_instance_same_ip_diff_port_by_label(monkeypatch):
+    # Same host IP, different ports: the listen port is unrecoverable, so the
+    # payload instanceName (== the CHUB label here) breaks the tie with no
+    # network call.
+    wp = _same_host_two_sonarr_wp(monkeypatch)
+    result = wp._find_arr_instance(
+        {"client_host": "192.168.2.206", "client_port": 41999},
+        "series",
+        instance_name="Anime",
+    )
+    assert result["found"] is True
+    assert result["name"] == "Anime"
+
+
+def test_find_arr_instance_same_ip_diff_port_by_live_name(monkeypatch):
+    # The CHUB labels differ from the arr instance names, so the tie is broken by
+    # each candidate's live /system/status instanceName.
+    wp = _same_host_two_sonarr_wp(monkeypatch, labels=("A", "B"))
+
+    def fake_client(url, api, logger):
+        name = "ShowsArr" if url.endswith(":8989") else "AnimeArr"
+        return SimpleNamespace(
+            instance_name=name,
+            get_instance_name=lambda: name,
+            session=SimpleNamespace(close=lambda: None),
+        )
+
+    monkeypatch.setattr("backend.util.arr.create_arr_client", fake_client)
+    result = wp._find_arr_instance(
+        {"client_host": "192.168.2.206"}, "series", instance_name="AnimeArr"
+    )
+    assert result["found"] is True
+    assert result["name"] == "B"
+
+
+def test_find_arr_instance_same_ip_same_name_fails_closed(monkeypatch):
+    # Same IP and both report the same instanceName -> genuinely ambiguous ->
+    # fail closed (the explicit ?instance= override is the remedy).
+    wp = _same_host_two_sonarr_wp(monkeypatch, labels=("A", "B"))
+
+    def fake_client(url, api, logger):
+        return SimpleNamespace(
+            instance_name="Sonarr",
+            get_instance_name=lambda: "Sonarr",
+            session=SimpleNamespace(close=lambda: None),
+        )
+
+    monkeypatch.setattr("backend.util.arr.create_arr_client", fake_client)
+    result = wp._find_arr_instance(
+        {"client_host": "192.168.2.206"}, "series", instance_name="Sonarr"
+    )
+    assert result["found"] is False
+
+
+def test_find_arr_instance_same_ip_no_name_fails_closed(monkeypatch):
+    # Same IP, no instanceName in the payload -> nothing to disambiguate on.
+    wp = _same_host_two_sonarr_wp(monkeypatch)
+    result = wp._find_arr_instance({"client_host": "192.168.2.206"}, "series")
+    assert result["found"] is False
+
+
 def test_find_arr_instance_override_wins(monkeypatch):
     # Explicit ?instance= selector routes deterministically, even when the peer
     # IP would auto-match a different instance.
