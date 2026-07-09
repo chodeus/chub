@@ -163,9 +163,12 @@ class WebhookProcessor:
             }
 
         # Find matching ARR instance (scoped to the payload's media type;
-        # instanceName breaks a same-IP, different-port tie).
+        # instanceName / applicationUrl break a same-IP, different-port tie).
         instance_info = self._find_arr_instance(
-            client_info, media_type, webhook_data.get("instanceName")
+            client_info,
+            media_type,
+            webhook_data.get("instanceName"),
+            webhook_data.get("applicationUrl"),
         )
         if not instance_info["found"]:
             log.error("No matching ARR instance found")
@@ -231,6 +234,7 @@ class WebhookProcessor:
         client_info: Optional[dict] = None,
         media_type: Optional[str] = None,
         instance_name: Optional[str] = None,
+        application_url: Optional[str] = None,
     ) -> dict:
         """
         Resolve which configured *arr instance a webhook came from.
@@ -267,6 +271,10 @@ class WebhookProcessor:
                 (legacy callers) all buckets are searched.
             instance_name: The payload's ``instanceName`` (Sonarr/Radarr's own
                 instance name), used only to break a same-IP tie.
+            application_url: The payload's ``applicationUrl`` (the arr's own base
+                URL, when the user has set it). Carries the listen PORT, so it
+                can tell apart same-IP/different-port instances and can identify
+                the sender behind a reverse proxy that masks the peer IP.
 
         Returns:
             dict: Instance lookup result.
@@ -318,19 +326,64 @@ class WebhookProcessor:
         if len(matches) == 1:
             return _resolved(*matches[0])
 
-        # 3) Same IP, several instances (different ports): break the tie by the
-        # payload's instanceName, since the listen port is unrecoverable.
+        # 3) Same IP, several instances (different ports): the listen port isn't
+        # in the connection, but the payload's applicationUrl carries host+port,
+        # so try that first, then the arr's own instanceName.
         if len(matches) > 1:
-            picked = self._disambiguate_by_name(matches, instance_name)
+            picked = self._match_by_application_url(
+                matches, application_url
+            ) or self._disambiguate_by_name(matches, instance_name)
             if picked is not None:
                 return _resolved(*picked)
             return {"found": False, "error": "peer IP matched multiple instances"}
 
-        # 4) Exactly one instance of this media type → unambiguous target.
+        # 4) No peer-IP match (e.g. behind a reverse proxy that masks the peer):
+        # applicationUrl can still identify the sender by host+port.
+        picked = self._match_by_application_url(pool, application_url)
+        if picked is not None:
+            return _resolved(*picked)
+
+        # 5) Exactly one instance of this media type → unambiguous target.
         if len(pool) == 1:
             return _resolved(*pool[0])
 
         return {"found": False, "error": "No matching instance"}
+
+    def _match_by_application_url(self, candidates, application_url):
+        """Pick the sole candidate whose configured URL matches the payload's
+        ``applicationUrl`` (the arr's own base URL). It carries the listen PORT —
+        the one discriminator the raw connection can't provide — so it tells
+        apart instances sharing an IP but differing by port. Ports must agree
+        when both are known; hosts are compared literally and via DNS resolution
+        so a service name matches its container IP. Returns the sole match, or
+        None when it's missing, matches none, or matches more than one."""
+        if not application_url:
+            return None
+        try:
+            au = urlparse(str(application_url))
+            a_port = au.port
+        except ValueError:
+            return None
+        a_host = _normalize_host(au.hostname)
+        if not a_host:
+            return None
+        hits = []
+        for cand in candidates:
+            try:
+                cu = urlparse(cand[2].url or "")
+                c_port = cu.port
+            except ValueError:
+                continue
+            if a_port is not None and c_port is not None and a_port != c_port:
+                continue
+            c_host = _normalize_host(cu.hostname)
+            if (
+                c_host == a_host
+                or _host_matches(cand[2].url, a_host)
+                or _host_matches(str(application_url), c_host)
+            ):
+                hits.append(cand)
+        return hits[0] if len(hits) == 1 else None
 
     def _disambiguate_by_name(self, candidates, instance_name):
         """Pick the one candidate whose name equals the webhook's ``instanceName``.
@@ -415,40 +468,67 @@ class WebhookProcessor:
                     continue
         return False
 
+    @staticmethod
+    def _item_present(plex, media_title: str, year) -> bool:
+        """True when a movie/show titled `media_title` (matching `year` when
+        given) already exists in ANY Plex library section. A direct title search,
+        so an item scanned long ago is found immediately — unlike a
+        `recentlyAdded` scan, which only sees the last N additions and so misses
+        an already-present item, forcing the old code to burn the full retry
+        budget on re-imports and existing shows."""
+        for section in plex.library.sections():
+            try:
+                results = section.search(title=media_title)
+            except Exception:
+                results = []
+            for item in results:
+                try:
+                    if item.title.lower() != media_title.lower():
+                        continue
+                except Exception:
+                    continue
+                if year is None or getattr(item, "year", None) in (None, year):
+                    return True
+        return False
+
     def wait_for_plex_availability(
-        self, media_title: str, year=None, season_number=None
+        self, media_title: str, year=None, season_number=None, is_added_event=False
     ) -> bool:
         """
-        Wait for a media item to appear in Plex before processing its posters.
-        Uses configurable initial delay and retry logic.
+        Ensure a media item is in Plex before processing its posters, without
+        blocking longer than necessary.
+
+        Returns immediately when the item (or the specific season) is ALREADY in
+        Plex — a re-import, quality upgrade, or a long-present show needs no wait.
+        Only a genuinely new import Plex hasn't scanned yet falls through to the
+        initial-delay + retry loop. Previously the non-season path only checked
+        `recentlyAdded`, so an existing item was never "found" and every such
+        webhook waited the full ~5.5 min budget.
+
+        Pre-download "added" events (Sonarr SeriesAdd / Radarr MovieAdded) have
+        no new file to wait for, so when `is_added_event` is set and the item is
+        not already present it returns at once instead of waiting for a scan this
+        event will never trigger.
 
         Args:
-            media_title: Title of the media to look for
-            year: Optional year for matching
-            season_number: When set (Sonarr Download / EpisodeFileImported), wait
-                until that specific season folder is scanned — a webhook often
-                fires before Plex has indexed a freshly-grabbed season, leaving
-                the season poster nowhere to land. When None, falls back to the
-                item-level "recently added" check.
+            media_title: Title of the media to look for.
+            year: Optional year for matching.
+            season_number: When set (Sonarr import), require that specific season
+                folder to be scanned, not just the show.
+            is_added_event: True for pre-download SeriesAdd / MovieAdded events.
 
         Returns:
-            bool: True if the item (or season) was found in Plex
+            bool: True if the item (or season) is present in Plex.
         """
         log = self.logger.get_adapter("WEBHOOK")
 
         try:
             from plexapi.server import PlexServer
 
-            # Get Plex instances from config
             plex_instances = getattr(self.config.instances, "plex", {})
             if not plex_instances:
                 log.debug("No Plex instances configured, skipping availability check")
                 return True  # No Plex to check, proceed anyway
-
-            # Wait initial delay before first check
-            if self.initial_delay > 0:
-                log.debug(f"Waiting {self.initial_delay}s for Plex to scan new media")
-                time.sleep(self.initial_delay)
 
             from backend.util.ssrf_guard import is_safe_url
 
@@ -465,46 +545,52 @@ class WebhookProcessor:
                     continue
                 targets.append((name, url, token))
 
-            # Share ONE retry/sleep budget across all instances: each attempt
-            # tries every instance and returns on the first hit. The retry loop
-            # was previously nested INSIDE the per-instance loop, so M instances
-            # multiplied the wait to M × max_retries × retry_delay — an item that
-            # only ever lands on the last instance blocked the webhook thread for
-            # (M-1) full retry cycles before even checking it.
-            for attempt in range(self.max_retries + 1):
+            if not targets:
+                return True  # Nothing checkable — don't block.
+
+            def _present() -> bool:
+                # One pass across every instance; True on the first hit. Sharing a
+                # single budget (vs a retry loop nested per instance) keeps M
+                # instances from multiplying the wait to M × retries × delay.
                 for name, url, token in targets:
                     try:
                         plex = PlexServer(url, token, timeout=10)
                         if season_number is not None:
-                            # Season-aware: the show usually already exists, so a
-                            # recently-added title check won't fire — verify the
-                            # specific season folder has been scanned instead.
                             if self._season_present(
                                 plex, media_title, year, season_number
                             ):
-                                log.info(
-                                    f"Found '{media_title}' Season {season_number} "
-                                    "in Plex"
-                                )
                                 return True
-                        else:
-                            for section in plex.library.sections():
-                                recent = section.recentlyAdded(maxresults=50)
-                                for item in recent:
-                                    if item.title.lower() == media_title.lower() and (
-                                        year is None
-                                        or getattr(item, "year", None) == year
-                                    ):
-                                        log.info(
-                                            f"Found '{media_title}' in Plex "
-                                            "recently added"
-                                        )
-                                        return True
+                        elif self._item_present(plex, media_title, year):
+                            return True
                     except Exception as e:
-                        log.debug(
-                            f"Plex check attempt {attempt + 1} failed for {name}: {e}"
-                        )
+                        log.debug(f"Plex check failed for {name}: {e}")
+                return False
 
+            label = (
+                f"'{media_title}' Season {season_number}"
+                if season_number is not None
+                else f"'{media_title}'"
+            )
+
+            # Already in Plex → no wait at all.
+            if _present():
+                log.info(f"Found {label} in Plex")
+                return True
+
+            # A pre-download add produces no new scan; don't wait for one.
+            if is_added_event:
+                log.debug(f"{label} not in Plex (pre-download add) — not waiting")
+                return False
+
+            # Genuinely new import Plex hasn't scanned yet: wait, then retry.
+            if self.initial_delay > 0:
+                log.debug(f"Waiting {self.initial_delay}s for Plex to scan new media")
+                time.sleep(self.initial_delay)
+
+            for attempt in range(self.max_retries + 1):
+                if _present():
+                    log.info(f"Found {label} in Plex")
+                    return True
                 if attempt < self.max_retries:
                     log.debug(
                         f"Not found in Plex yet, retrying in {self.retry_delay}s "
@@ -512,12 +598,7 @@ class WebhookProcessor:
                     )
                     time.sleep(self.retry_delay)
 
-            target = (
-                f"'{media_title}' Season {season_number}"
-                if season_number is not None
-                else f"'{media_title}'"
-            )
-            log.debug(f"{target} not found in Plex after {self.max_retries} retries")
+            log.debug(f"{label} not found in Plex after {self.max_retries} retries")
             return False
 
         except ImportError:
