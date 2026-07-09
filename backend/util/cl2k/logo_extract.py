@@ -594,7 +594,13 @@ def tighten_text_mask(
             return None
 
     if grow is None:
-        grow = max(2, round(0.004 * width))
+        # Margin around the colour-keyed strokes. Sized to swallow a title's
+        # anti-aliased / semi-transparent GLOW and drop shadow, which fade a few
+        # px past the solid-colour core — too tight a margin leaves that soft
+        # fringe behind as a faint "ghost" of the title after the erase. A uniform
+        # ring of nearby background is harmless to the inpaint (it fills from
+        # context); the blur we avoid comes from big contiguous holes, not a rim.
+        grow = max(3, round(0.008 * width))
     grown = _dilate(letter, grow) if grow > 0 else letter
     grown &= block  # never mask more than the user brushed
 
