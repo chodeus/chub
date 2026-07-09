@@ -17,7 +17,7 @@ from backend.api.utils import error, get_database, get_logger, ok
 from backend.util.config import ConfigError, load_config
 from backend.util.database import ChubDB
 from backend.util.rate_limiter import webhook_limiter
-from backend.util.webhook_processor import resolve_client_host
+from backend.util.webhook_processor import WebhookProcessor, resolve_client_host
 
 
 def verify_webhook_secret(request: Request) -> None:
@@ -196,7 +196,7 @@ async def process_poster_webhook(
 
         # Deduplicate at API layer before enqueuing — persistent rolling
         # window so Sonarr/Radarr retries are coalesced even across restarts.
-        if _is_duplicate_webhook(data, db, logger):
+        if _is_duplicate_webhook(data, db, logger, client_info):
             return ok(
                 "Duplicate webhook ignored",
                 {"duplicate": True, "status": "debounced"},
@@ -246,27 +246,40 @@ async def process_poster_webhook(
         )
 
 
-def _is_duplicate_webhook(data: Dict[str, Any], db: ChubDB, logger: Any = None) -> bool:
-    """
-    Check if this webhook is a duplicate against the persistent cache.
+def _webhook_dedup_identity(data: Dict[str, Any], client_info: Dict[str, Any] = None):
+    """Build the ``(item_type, item_name)`` dedup identity for a webhook, or
+    ``None`` when the payload has no media block.
 
-    Builds an `item_type` (series/movie) and a SHA-256 of the identifying
-    fields as `item_name`, then asks `db.webhook_cache.is_duplicate` —
-    which sweeps expired rows, checks for a match within the TTL window,
-    and inserts a fresh row when not seen. Restart-safe.
+    The identity hashes media identity + phase + firing instance + season:
+
+    - **phase** (added vs import): a pre-download MovieAdded/SeriesAdd stays
+      distinct from the later import for the same media, so it can't debounce it.
+    - **instance**: two *arr instances (e.g. Radarr-HD and Radarr-4K) that both
+      import the same movie route to different libraries, so they must NOT
+      collapse into one job.
+    - **season**: Sonarr fires one webhook PER EPISODE, so per-episode webhooks
+      for the same season collapse to a single job — but a DIFFERENT season
+      imported in the same window keeps its own identity, so its season poster
+      isn't wrongly debounced away.
     """
     media_block = data.get("series") or data.get("movie") or {}
     item_type = "series" if "series" in data else "movie" if "movie" in data else ""
     if not item_type:
-        return False
+        return None
 
-    # Hash on media identity + phase (added vs import), NOT the raw eventType.
-    # Import-phase events (Download / *FileImported) share one fingerprint so a
-    # single import isn't run twice, but the pre-download MovieAdded / SeriesAdd
-    # stays distinct so it can't debounce the later import for the same media.
+    ci = client_info or {}
+    instance = (
+        ci.get("instance_override")
+        or data.get("instanceName")
+        or ci.get("client_host")
+        or ""
+    )
+    season = WebhookProcessor._extract_season_number(data)
     phase = "import" if data.get("eventType", "") in _IMPORT_EVENTS else "added"
     hash_fields = {
         "phase": phase,
+        "instance": str(instance).strip().lower(),
+        "season": "" if season is None else str(season),
         "title": media_block.get("title", ""),
         "year": str(media_block.get("year", "")),
         "tmdb_id": str(media_block.get("tmdbId", "")),
@@ -276,6 +289,27 @@ def _is_duplicate_webhook(data: Dict[str, Any], db: ChubDB, logger: Any = None) 
     item_name = hashlib.sha256(
         json.dumps(hash_fields, sort_keys=True).encode()
     ).hexdigest()[:16]
+    return item_type, item_name
+
+
+def _is_duplicate_webhook(
+    data: Dict[str, Any],
+    db: ChubDB,
+    logger: Any = None,
+    client_info: Dict[str, Any] = None,
+) -> bool:
+    """
+    Check if this webhook is a duplicate against the persistent cache.
+
+    Builds the ``(item_type, item_name)`` identity (see
+    ``_webhook_dedup_identity``), then asks ``db.webhook_cache.is_duplicate`` —
+    which sweeps expired rows, checks for a match within the TTL window, and
+    inserts a fresh row when not seen. Restart-safe.
+    """
+    identity = _webhook_dedup_identity(data, client_info)
+    if identity is None:
+        return False
+    item_type, item_name = identity
 
     duplicate = db.webhook_cache.is_duplicate(
         item_type=item_type,
