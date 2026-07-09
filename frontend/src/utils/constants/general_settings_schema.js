@@ -101,6 +101,15 @@ export const GENERAL_SETTINGS_SCHEMA = [
                     'Optional shared secret. When set, every inbound webhook must send `X-Webhook-Secret: <value>` (or `?secret=<value>`) or it is rejected with 401. Recommended if your webhook URL is reachable outside your LAN.',
             },
             {
+                key: 'trusted_proxies',
+                label: 'Trusted proxies',
+                type: 'tag_input',
+                allowCustom: true,
+                placeholder: 'e.g. private, 10.0.0.0/8, 192.168.1.5',
+                description:
+                    "Reverse-proxy support for webhooks. When CHUB is behind Traefik/nginx/Caddy, the connection's IP is the proxy's — add the proxy here so CHUB honors X-Forwarded-For and identifies the real arr instance. Entries are IPs or CIDRs; the token “private” trusts any LAN/Docker (RFC1918/loopback) proxy. Default: private. Empty = never trust forwarded headers.",
+            },
+            {
                 key: 'dashboard_modules',
                 label: 'Dashboard Modules',
                 type: 'multiselect',

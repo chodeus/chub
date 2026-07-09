@@ -59,6 +59,51 @@ def _resolve_ips(host: Optional[str]) -> frozenset:
     return ips
 
 
+def _peer_is_trusted(peer_ip: Optional[str], trusted_proxies) -> bool:
+    """True when ``peer_ip`` matches a configured trusted-proxy entry. Entries
+    are IPs/CIDRs, or the token ``"private"`` for any RFC1918 / loopback /
+    link-local address (the safe default for homelab Docker proxies)."""
+    if not peer_ip:
+        return False
+    try:
+        ip = ipaddress.ip_address(peer_ip)
+    except ValueError:
+        return False
+    for entry in trusted_proxies or []:
+        e = (entry or "").strip().lower()
+        if not e:
+            continue
+        if e == "private":
+            if ip.is_private or ip.is_loopback or ip.is_link_local:
+                return True
+            continue
+        try:
+            net = ipaddress.ip_network(e, strict=False)
+        except ValueError:
+            continue
+        if ip.version == net.version and ip in net:
+            return True
+    return False
+
+
+def resolve_client_host(peer_ip, forwarded_for, trusted_proxies):
+    """The effective client IP for instance matching.
+
+    Honors ``X-Forwarded-For`` only when the immediate peer is a trusted proxy,
+    so a reverse proxy (Traefik/nginx/Caddy) forwards the arr's real IP instead
+    of masking every webhook behind the proxy's own IP. Uses the left-most XFF
+    entry (the original client). Falls back to the peer IP when there is no
+    proxy, no XFF header, or the peer is not trusted — so a forged XFF from an
+    untrusted (e.g. public) caller is ignored.
+    """
+    if not peer_ip or not forwarded_for:
+        return peer_ip
+    if not _peer_is_trusted(peer_ip, trusted_proxies):
+        return peer_ip
+    parts = [p.strip() for p in str(forwarded_for).split(",") if p.strip()]
+    return parts[0] if parts else peer_ip
+
+
 def _host_matches(url: Optional[str], norm_peer_host) -> bool:
     """True when the connection's (normalized) peer host is the same machine the
     configured ``url`` points at — by literal host equality first (IP-configured,

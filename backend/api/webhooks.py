@@ -17,6 +17,7 @@ from backend.api.utils import error, get_database, get_logger, ok
 from backend.util.config import ConfigError, load_config
 from backend.util.database import ChubDB
 from backend.util.rate_limiter import webhook_limiter
+from backend.util.webhook_processor import resolve_client_host
 
 
 def verify_webhook_secret(request: Request) -> None:
@@ -138,8 +139,23 @@ async def process_poster_webhook(
         # X-Webhook-Secret (and any Authorization/Cookie), which would then be
         # persisted in cleartext in the jobs table, dumped into backups, and
         # echoed back by GET /api/jobs/{id}.
+        #
+        # Behind a reverse proxy the peer IP is the proxy's, so honor
+        # X-Forwarded-For / X-Real-IP when the peer is a configured trusted
+        # proxy (general.trusted_proxies) — this recovers the arr's real IP for
+        # instance matching. A forged XFF from an untrusted caller is ignored.
+        peer_host = request.client.host if request.client else None
+        try:
+            trusted_proxies = load_config().general.trusted_proxies
+        except Exception:
+            trusted_proxies = []
         client_info = {
-            "client_host": request.client.host if request.client else None,
+            "client_host": resolve_client_host(
+                peer_host,
+                request.headers.get("X-Forwarded-For")
+                or request.headers.get("X-Real-IP"),
+                trusted_proxies,
+            ),
             "client_port": request.headers.get("X-Service-Port"),
             # Optional explicit instance selector. The reliable way to route a
             # webhook when the peer IP can't identify the sender (reverse proxy,
