@@ -108,7 +108,7 @@ def test_extract_season_number_zero_valid():
 
 def test_find_arr_instance_matches_radarr(wp):
     result = wp._find_arr_instance(
-        {"client_host": "192.168.1.10", "client_port": 7878, "scheme": "http"}
+        {"client_host": "192.168.1.10", "scheme": "http"}, "movie"
     )
     assert result["found"] is True
     assert result["type"] == "radarr"
@@ -116,7 +116,17 @@ def test_find_arr_instance_matches_radarr(wp):
 
 
 def test_find_arr_instance_matches_sonarr(wp):
-    result = wp._find_arr_instance({"client_host": "192.168.1.11", "client_port": 8989})
+    result = wp._find_arr_instance({"client_host": "192.168.1.11"}, "series")
+    assert result["found"] is True
+    assert result["type"] == "sonarr"
+
+
+def test_find_arr_instance_ignores_source_port(wp):
+    # The connection's source port is never the arr's listen port, so a
+    # non-8989 port must NOT block a peer-IP match (the old host+port check did).
+    result = wp._find_arr_instance(
+        {"client_host": "192.168.1.11", "client_port": 51234}, "series"
+    )
     assert result["found"] is True
     assert result["type"] == "sonarr"
 
@@ -133,7 +143,7 @@ def test_find_arr_instance_normalizes_localhost(monkeypatch):
     wp = WebhookProcessor(logger=StubLogger())
 
     # 127.0.0.1 normalizes to localhost -> matches
-    result = wp._find_arr_instance({"client_host": "127.0.0.1", "client_port": 7878})
+    result = wp._find_arr_instance({"client_host": "127.0.0.1"}, "movie")
     assert result["found"] is True
 
 
@@ -142,8 +152,118 @@ def test_find_arr_instance_no_client_info_returns_not_found(wp):
     assert result["found"] is False
 
 
-def test_find_arr_instance_port_mismatch(wp):
-    result = wp._find_arr_instance({"client_host": "192.168.1.10", "client_port": 9999})
+def test_find_arr_instance_unknown_host_no_match(wp):
+    # Two candidate buckets, a peer IP matching neither -> fail closed rather
+    # than guess (the single-instance fallback only applies when exactly one
+    # instance of the media type exists).
+    result = wp._find_arr_instance({"client_host": "10.0.0.99"}, media_type=None)
+    assert result["found"] is False
+
+
+def _two_sonarr_wp(monkeypatch, resolver):
+    cfg = ChubConfig(
+        instances=InstancesConfig(
+            sonarr={
+                "Shows": InstanceDetail(url="http://sonarr:8989", api="a"),
+                "Anime": InstanceDetail(url="http://sonarr-anime:8989", api="b"),
+            }
+        ),
+    )
+    monkeypatch.setattr("backend.util.webhook_processor.load_config", lambda: cfg)
+    monkeypatch.setattr(
+        "backend.util.webhook_processor._resolve_ips",
+        lambda host: frozenset(resolver.get(host, set())),
+    )
+    return WebhookProcessor(logger=StubLogger())
+
+
+def test_find_arr_instance_resolves_docker_service_name(monkeypatch):
+    # The reported case: instances configured by Docker service name, webhook
+    # arrives from the container's IP with no usable port. DNS resolution of the
+    # service name disambiguates the two Sonarr instances by IP.
+    wp = _two_sonarr_wp(
+        monkeypatch,
+        {"sonarr": {"10.200.10.26"}, "sonarr-anime": {"10.200.10.27"}},
+    )
+    result = wp._find_arr_instance(
+        {"client_host": "10.200.10.26", "client_port": None}, "series"
+    )
+    assert result["found"] is True
+    assert result["name"] == "Shows"
+
+
+def test_find_arr_instance_ambiguous_shared_ip_fails_closed(monkeypatch):
+    # Host networking: both service names resolve to the same IP -> can't tell
+    # them apart -> must fail closed rather than mis-route.
+    wp = _two_sonarr_wp(
+        monkeypatch,
+        {"sonarr": {"10.200.10.26"}, "sonarr-anime": {"10.200.10.26"}},
+    )
+    result = wp._find_arr_instance({"client_host": "10.200.10.26"}, "series")
+    assert result["found"] is False
+
+
+def test_find_arr_instance_override_wins(monkeypatch):
+    # Explicit ?instance= selector routes deterministically, even when the peer
+    # IP would auto-match a different instance.
+    wp = _two_sonarr_wp(
+        monkeypatch,
+        {"sonarr": {"10.200.10.26"}, "sonarr-anime": {"10.200.10.27"}},
+    )
+    result = wp._find_arr_instance(
+        {"client_host": "10.200.10.26", "instance_override": "Anime"}, "series"
+    )
+    assert result["found"] is True
+    assert result["name"] == "Anime"
+
+
+def test_find_arr_instance_override_unknown_fails_closed(monkeypatch):
+    wp = _two_sonarr_wp(
+        monkeypatch,
+        {"sonarr": {"10.200.10.26"}, "sonarr-anime": {"10.200.10.27"}},
+    )
+    result = wp._find_arr_instance(
+        {"client_host": "10.200.10.26", "instance_override": "Nope"}, "series"
+    )
+    assert result["found"] is False
+
+
+def test_find_arr_instance_single_instance_fallback(monkeypatch):
+    # One Sonarr behind a reverse proxy: peer IP is the proxy (matches nothing),
+    # but a series webhook can only be the one configured Sonarr.
+    cfg = ChubConfig(
+        instances=InstancesConfig(
+            sonarr={"Shows": InstanceDetail(url="http://sonarr:8989", api="a")},
+        ),
+    )
+    monkeypatch.setattr("backend.util.webhook_processor.load_config", lambda: cfg)
+    monkeypatch.setattr(
+        "backend.util.webhook_processor._resolve_ips",
+        lambda host: frozenset({"10.200.10.26"}),
+    )
+    wp = WebhookProcessor(logger=StubLogger())
+    result = wp._find_arr_instance({"client_host": "172.20.0.5"}, "series")
+    assert result["found"] is True
+    assert result["name"] == "Shows"
+
+
+def test_find_arr_instance_disabled_instance_skipped(monkeypatch):
+    cfg = ChubConfig(
+        instances=InstancesConfig(
+            sonarr={
+                "Shows": InstanceDetail(
+                    url="http://sonarr:8989", api="a", enabled=False
+                ),
+            },
+        ),
+    )
+    monkeypatch.setattr("backend.util.webhook_processor.load_config", lambda: cfg)
+    monkeypatch.setattr(
+        "backend.util.webhook_processor._resolve_ips",
+        lambda host: frozenset({"10.200.10.26"}),
+    )
+    wp = WebhookProcessor(logger=StubLogger())
+    result = wp._find_arr_instance({"client_host": "10.200.10.26"}, "series")
     assert result["found"] is False
 
 
@@ -156,7 +276,20 @@ def test_validate_webhook_no_media_block(wp):
     assert result["error_code"] == "INVALID_WEBHOOK_DATA"
 
 
-def test_validate_webhook_no_instance(wp):
+def test_validate_webhook_no_instance(monkeypatch):
+    # Two Sonarr instances, a peer IP matching neither -> ambiguous -> the
+    # single-instance fallback does not apply, so validation fails closed.
+    cfg = ChubConfig(
+        instances=InstancesConfig(
+            sonarr={
+                "Shows": InstanceDetail(url="http://192.168.1.11:8989", api="a"),
+                "Anime": InstanceDetail(url="http://192.168.1.12:8989", api="b"),
+            }
+        ),
+    )
+    monkeypatch.setattr("backend.util.webhook_processor.load_config", lambda: cfg)
+    wp = WebhookProcessor(logger=StubLogger())
+
     payload = {"series": {"id": 1, "title": "Show"}}
     result = wp._validate_webhook(
         payload, client_info={"client_host": "10.0.0.50", "client_port": 1234}

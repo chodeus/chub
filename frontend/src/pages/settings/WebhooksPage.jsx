@@ -172,6 +172,19 @@ const SetupDetails = ({ wiring }) => {
                             Trigger: <em>Recently Added</em>. JSON format.
                         </li>
                         <li>
+                            CHUB matches each webhook to the instance that sent it by the
+                            caller&apos;s IP (a Docker service name like <code>sonarr</code> is
+                            resolved automatically), so no extra setup is normally needed. If CHUB
+                            can&apos;t tell instances apart — behind a reverse proxy, host
+                            networking, or several instances sharing an IP — append{' '}
+                            <code>?instance=&lt;name&gt;</code> to the URL (or send an{' '}
+                            <code>X-Chub-Instance</code> header) with the exact{' '}
+                            <Link className="text-accent hover:underline" to="/settings/instances">
+                                instance
+                            </Link>{' '}
+                            name to route it explicitly.
+                        </li>
+                        <li>
                             Per-instance <code>webhook_force_reupload</code> on the{' '}
                             <Link className="text-accent hover:underline" to="/settings/instances">
                                 Instances
