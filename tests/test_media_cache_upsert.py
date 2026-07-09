@@ -202,3 +202,31 @@ def test_album_identity_is_parent_scoped(db):
         fetch_one=True,
     )
     assert row["n"] == 2
+
+
+def test_source_file_hash_persists_and_survives_resync(db):
+    """source_file_hash (the raw-source signature for the plex skip-unchanged
+    fast-path) must persist via update() and be PRESERVED across an ARR re-sync
+    (same as file_hash), or the fast-path would never fire on the next run."""
+    db.media.upsert(_movie("Film"), "movie", "radarr", "radarr_main")
+    row = db.media.execute_query(
+        "SELECT id FROM media_cache WHERE tmdb_id=949536", fetch_one=True
+    )
+    db.media.update(
+        asset_type="movie",
+        title="Film",
+        year="2026",
+        instance_name="radarr_main",
+        id=row["id"],
+        source_file_hash="deadbeef",
+        uploaded_libraries='["Movies"]',
+    )
+    got = db.media.get_by_id(row["id"])
+    assert got["source_file_hash"] == "deadbeef"
+    assert got["uploaded_libraries"] == '["Movies"]'
+
+    # Re-sync (ARR upsert, same id) must NOT wipe the source hash.
+    db.media.upsert(_movie("Film Renamed"), "movie", "radarr", "radarr_main")
+    got2 = db.media.get_by_id(row["id"])
+    assert got2["source_file_hash"] == "deadbeef"  # preserved
+    assert got2["title"] == "Film Renamed"  # arr fields still refresh

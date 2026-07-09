@@ -1023,3 +1023,70 @@ def test_remove_superseded_ignores_paths_outside_destination(tmp_path):
     outside.write_bytes(b"x")
     m._remove_superseded(str(outside), str(tmp_path / "assets" / "poster.jpg"))
     assert outside.exists()  # untouched
+
+
+# --- skip-unchanged plex fast-path (_is_unchanged_upload / _source_hash) ---
+
+
+def test_source_hash_reads_and_missing_is_none(tmp_path):
+    m = make_module()
+    src = tmp_path / "poster.jpg"
+    src.write_bytes(b"POSTER-BYTES-V1")
+    h = m._source_hash(str(src))
+    assert h and len(h) == 64
+    assert m._source_hash(str(tmp_path / "gone.jpg")) is None
+
+
+def _plex_cfg(**over):
+    base = dict(apply_method="plex", skip_unchanged_uploads=True)
+    base.update(over)
+    return SimpleNamespace(**base)
+
+
+def test_is_unchanged_upload_skips_when_source_matches(tmp_path):
+    m = make_module()
+    m.config = _plex_cfg()
+    src = tmp_path / "p.jpg"
+    src.write_bytes(b"V1")
+    h = m._source_hash(str(src))
+    row = {
+        "original_file": str(src),
+        "source_file_hash": h,
+        "uploaded_libraries": '["Movies"]',
+    }
+    assert m._is_unchanged_upload(row) is True
+
+    # Source changed on disk -> hash mismatch -> not skipped.
+    src.write_bytes(b"V2-different")
+    assert m._is_unchanged_upload(row) is False
+
+
+def test_is_unchanged_upload_fail_safe_cases(tmp_path):
+    m = make_module()
+    src = tmp_path / "p.jpg"
+    src.write_bytes(b"V1")
+    h = m._source_hash(str(src))
+    row = {
+        "original_file": str(src),
+        "source_file_hash": h,
+        "uploaded_libraries": '["L"]',
+    }
+
+    # kometa path never skips (no plex upload record to trust)
+    m.config = _plex_cfg(apply_method="kometa")
+    assert m._is_unchanged_upload(row) is False
+
+    # feature disabled
+    m.config = _plex_cfg(skip_unchanged_uploads=False)
+    assert m._is_unchanged_upload(row) is False
+
+    m.config = _plex_cfg()
+    # never uploaded before (no uploaded_libraries) -> must process
+    assert m._is_unchanged_upload({**row, "uploaded_libraries": None}) is False
+    # no stored source signature -> must process
+    assert m._is_unchanged_upload({**row, "source_file_hash": None}) is False
+    # source file gone -> fail safe, process (never a silent skip)
+    assert (
+        m._is_unchanged_upload({**row, "original_file": str(tmp_path / "x.jpg")})
+        is False
+    )
