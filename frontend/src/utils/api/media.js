@@ -9,7 +9,7 @@
  */
 
 import { apiCore } from './core.js';
-import { streamTokenParam } from './streamAuth.js';
+import { streamTokenParam, streamAuthDisabled } from './streamAuth.js';
 
 // 1x1 transparent GIF — returned when the stream token isn't ready so no
 // token-less request fires (would 401); useStreamToken re-renders with the real
@@ -33,8 +33,13 @@ export const mediaAPI = {
             return null;
         }
         const token = streamTokenParam();
-        if (!token) return BLANK_IMAGE;
-        return `/api/media/${mediaId}/poster?token=${encodeURIComponent(token)}`;
+        // No token yet: only show a blank placeholder while a token is genuinely
+        // pending (auth on). When auth is not configured the token is empty for
+        // good and the route is open, so fire a token-less URL — otherwise
+        // posters render solid blank forever.
+        if (!token && !streamAuthDisabled()) return BLANK_IMAGE;
+        const q = token ? `?token=${encodeURIComponent(token)}` : '';
+        return `/api/media/${mediaId}/poster${q}`;
     },
 
     /**

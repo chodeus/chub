@@ -9,7 +9,7 @@
  */
 
 import { apiCore } from './core.js';
-import { streamTokenParam } from './streamAuth.js';
+import { streamTokenParam, streamAuthDisabled } from './streamAuth.js';
 
 // 1x1 transparent GIF — returned by the token-gated image builders below when
 // the stream token isn't ready yet, so no token-less request fires (which would
@@ -597,12 +597,14 @@ export const postersAPI = {
      * @returns {string} URL for poster preview image
      */
     getPreviewUrl: (location, path) => {
+        const token = streamTokenParam();
+        // Blank only while a token is pending (auth on); when auth is off the
+        // token is permanently empty and the route is open — build it token-less.
+        if (!token && !streamAuthDisabled()) return BLANK_IMAGE;
         const params = new URLSearchParams();
         if (location) params.set('location', location);
         if (path) params.set('path', path);
-        const token = streamTokenParam();
-        if (!token) return BLANK_IMAGE;
-        params.set('token', token);
+        if (token) params.set('token', token);
         return `/api/posters/preview?${params.toString()}`;
     },
 
@@ -614,10 +616,10 @@ export const postersAPI = {
      */
     getThumbnailUrl: (posterId, width = 300) => {
         const token = streamTokenParam();
-        if (!token) return BLANK_IMAGE;
+        if (!token && !streamAuthDisabled()) return BLANK_IMAGE;
         const params = new URLSearchParams();
         params.set('width', width);
-        params.set('token', token);
+        if (token) params.set('token', token);
         return `/api/posters/${posterId}/thumbnail?${params.toString()}`;
     },
 
@@ -682,11 +684,11 @@ export const postersAPI = {
 
     /** Authenticated URL for a variant image preview. */
     getPlexVariantUrl: path => {
+        const token = streamTokenParam();
+        if (!token && !streamAuthDisabled()) return BLANK_IMAGE;
         const params = new URLSearchParams();
         params.set('path', path);
-        const token = streamTokenParam();
-        if (!token) return BLANK_IMAGE;
-        params.set('token', token);
+        if (token) params.set('token', token);
         return `/api/posters/plex-metadata/variant-thumbnail?${params.toString()}`;
     },
 
