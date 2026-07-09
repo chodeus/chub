@@ -3034,7 +3034,11 @@ async def list_plex_metadata_by_media(
 
         plex_path = _get_plex_path(request)
         if not plex_path:
-            logger.error("Scan requested but plex_path is not configured")
+            # Expected state on every Poster Cleanarr page mount before the
+            # user has configured plex_path — not an operational failure, so
+            # this must not be logger.error (the root ErrorNotifyHandler
+            # forwards every ERROR record to Discord/Notifiarr).
+            logger.debug("Scan requested but plex_path is not configured")
             return error(
                 "Plex path is not configured",
                 code="PLEX_PATH_UNSET",
