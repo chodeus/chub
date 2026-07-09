@@ -260,8 +260,8 @@ def _process_webhook_job(
             is_added_event=is_added_event,
         )
 
-        # Run poster rename on the stored media. For Sonarr Download /
-        # EpisodeFileImported events the payload carries the affected
+        # Run poster rename on the stored media. A Sonarr Download event
+        # (On File Import / Upgrade / Import Complete) carries the affected
         # season; narrow `media_items` to (show row + matching season row)
         # so the renamer only re-matches what actually changed.
         media_items = stored_media if isinstance(stored_media, list) else [stored_media]
