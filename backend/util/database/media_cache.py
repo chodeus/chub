@@ -678,6 +678,7 @@ class MediaCache(DatabaseBase):
         file_hash: Optional[Any] = None,
         file_mtime: Optional[Any] = None,
         uploaded_libraries: Optional[Any] = None,
+        source_file_hash: Optional[Any] = None,
         poster_url: Optional[Any] = None,
         arr_id: Optional[Any] = None,
         tmdb_id: Optional[Any] = None,
@@ -727,6 +728,10 @@ class MediaCache(DatabaseBase):
         if uploaded_libraries is not None:
             set_clauses.append("uploaded_libraries=?")
             params.append(uploaded_libraries)
+
+        if source_file_hash is not None:
+            set_clauses.append("source_file_hash=?")
+            params.append(source_file_hash)
 
         if poster_url is not None:
             set_clauses.append("poster_url=?")
