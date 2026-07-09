@@ -271,6 +271,7 @@ class CollectionCache(DatabaseBase):
         file_hash: Optional[Any] = None,
         file_mtime: Optional[Any] = None,
         uploaded_libraries: Optional[Any] = None,
+        source_file_hash: Optional[Any] = None,
         match_status: Optional[Any] = None,
         match_confidence: Optional[Any] = None,
         match_reason: Optional[Any] = None,
@@ -305,6 +306,10 @@ class CollectionCache(DatabaseBase):
         if uploaded_libraries is not None:
             set_clauses.append("uploaded_libraries=?")
             params.append(uploaded_libraries)
+
+        if source_file_hash is not None:
+            set_clauses.append("source_file_hash=?")
+            params.append(source_file_hash)
 
         if match_status is not None:
             set_clauses.append("match_status=?")

@@ -280,6 +280,12 @@ class SchemaManager:
                 # unchanged" check is per-library, not per-file, so a newly-added
                 # library copy is backfilled on the next run without forcing.
                 ColumnDefinition("uploaded_libraries", "TEXT"),
+                # sha256 of the raw SOURCE poster (original_file) at last
+                # successful upload. file_hash above is the STAGED/bordered
+                # output; this tracks the source so the plex path can skip
+                # re-staging (copy + border + upload) a poster whose source is
+                # unchanged since it was last applied. Preserved across ARR sync.
+                ColumnDefinition("source_file_hash", "TEXT"),
             ],
             indexes=[
                 "CREATE INDEX IF NOT EXISTS media_cache_plex_mapping_idx ON media_cache (plex_mapping_id)",
@@ -338,6 +344,9 @@ class SchemaManager:
                 ColumnDefinition("file_mtime", "REAL"),
                 # See media_cache.uploaded_libraries — per-library upload record.
                 ColumnDefinition("uploaded_libraries", "TEXT"),
+                # See media_cache.source_file_hash — raw-source signature for the
+                # plex "skip unchanged" fast-path.
+                ColumnDefinition("source_file_hash", "TEXT"),
             ],
             constraints=["UNIQUE (title, library_name, instance_name)"],
         )

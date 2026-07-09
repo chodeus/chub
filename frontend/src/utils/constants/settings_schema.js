@@ -334,6 +334,14 @@ const CORE_SETTINGS_SCHEMA = [
                 description:
                     'Optional pause after each poster uploaded to Plex, to be gentle on the server during large runs. 0 = no delay (default). Only applied after an actual upload, never after a skip. Try 50 if your Plex struggles under bursts.',
             },
+            {
+                key: 'skip_unchanged_uploads',
+                label: 'Skip unchanged posters',
+                type: 'check_box',
+                section: 'Chained actions',
+                description:
+                    'Plex apply only. Skip re-staging (copy → border → upload) a poster whose source is unchanged since it was last applied, instead of reprocessing every poster each run. Makes a scheduled run a near no-op for a stable library. Note: because it keys on the source file, adding a Plex library or changing border settings won’t re-apply to unchanged posters until their source changes — turn this off (or force a run) once to backfill in that case.',
+            },
             // ─── Logging ───────────────────────────────────────────────
             {
                 key: 'log_level',

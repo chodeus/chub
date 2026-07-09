@@ -757,6 +757,17 @@ class PosterUploader:
                 and float(record_mtime) == float(current_mtime)
             )
 
+            # sha256 of the RAW source poster (original_file, unlike file_hash
+            # which is the staged/bordered output). Persisted alongside the
+            # upload record so the plex apply path can skip re-staging a poster
+            # whose source is unchanged. Computed lazily; never in dry-run.
+            source_path = asset.get("original_file")
+            source_file_hash = (
+                self._compute_file_hash(source_path)
+                if source_path and not dry_run
+                else None
+            )
+
             # reset_record=True means the poster bytes are new (or forced): push
             # to EVERY matched library and reset the covered-library record.
             # reset_record=False means bytes are unchanged: only backfill the
@@ -807,6 +818,7 @@ class PosterUploader:
                                 if not dry_run
                                 else None
                             ),
+                            source_file_hash=source_file_hash,
                         )
                         return UploadResult(
                             asset_title=asset_title,
@@ -884,6 +896,7 @@ class PosterUploader:
                         current_file_hash,
                         current_mtime,
                         uploaded_libraries=json.dumps(sorted(covered)),
+                        source_file_hash=source_file_hash,
                     )
 
                 self._note_year_discrepancy(asset, matched_entries, match_type)
@@ -980,9 +993,11 @@ class PosterUploader:
         file_hash: str,
         file_mtime: Optional[float] = None,
         uploaded_libraries: Optional[str] = None,
+        source_file_hash: Optional[str] = None,
     ):
         """Persist the uploaded poster's hash (and mtime fast-path key), plus
-        the JSON list of libraries this hash has now reached (per-library skip)."""
+        the JSON list of libraries this hash has now reached (per-library skip)
+        and the raw-source hash (for the plex "skip unchanged" fast-path)."""
         try:
             if asset.get("asset_type") == "collection":
                 self.db.collection.update(
@@ -996,6 +1011,7 @@ class PosterUploader:
                     file_hash=file_hash,
                     file_mtime=file_mtime,
                     uploaded_libraries=uploaded_libraries,
+                    source_file_hash=source_file_hash,
                 )
             else:
                 self.db.media.update(
@@ -1010,6 +1026,7 @@ class PosterUploader:
                     file_hash=file_hash,
                     file_mtime=file_mtime,
                     uploaded_libraries=uploaded_libraries,
+                    source_file_hash=source_file_hash,
                 )
         except Exception as e:
             self.logger.error(
