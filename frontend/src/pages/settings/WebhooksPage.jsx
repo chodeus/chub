@@ -174,11 +174,13 @@ const SetupDetails = ({ wiring }) => {
                         <li>
                             CHUB matches each webhook to the instance that sent it by the
                             caller&apos;s IP (a Docker service name like <code>sonarr</code> is
-                            resolved automatically), so no extra setup is normally needed. If CHUB
-                            can&apos;t tell instances apart — behind a reverse proxy, host
-                            networking, or several instances sharing an IP — append{' '}
-                            <code>?instance=&lt;name&gt;</code> to the URL (or send an{' '}
-                            <code>X-Chub-Instance</code> header) with the exact{' '}
+                            resolved automatically), so no extra setup is normally needed. Two
+                            instances on the <em>same</em> IP but different ports are told apart by
+                            the payload&apos;s instance name, so give each Sonarr/Radarr a distinct{' '}
+                            <em>Instance Name</em> (Settings → General). If CHUB still can&apos;t
+                            tell them apart — behind a reverse proxy, host networking, or identical
+                            instance names — append <code>?instance=&lt;name&gt;</code> to the URL
+                            (or send an <code>X-Chub-Instance</code> header) with the exact{' '}
                             <Link className="text-accent hover:underline" to="/settings/instances">
                                 instance
                             </Link>{' '}
