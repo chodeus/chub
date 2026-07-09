@@ -166,6 +166,14 @@ class PosterRenamerrConfig(BaseModel):
     # to be gentle on the server on large runs. 0 = no delay (default; unchanged
     # behaviour). Only sleeps after an actual upload, never after a skip.
     upload_delay_ms: int = Field(default=0, ge=0, le=5000)
+    # Plex apply path only: skip re-staging (copy + border + upload) a poster
+    # whose SOURCE is unchanged since it was last successfully uploaded, instead
+    # of re-copying every poster into the temp staging dir on every run. Makes a
+    # scheduled run a near no-op for a stable library. Caveat: because the skip
+    # keys on the source file, adding a new Plex library or changing border
+    # settings won't re-apply to unchanged posters until their source changes —
+    # run once with this off (or a forced run) to backfill in that case.
+    skip_unchanged_uploads: bool = True
     source_dirs: List[str] = Field(default_factory=list)
     # Source dirs whose contents are custom MUSIC art (artist posters / album
     # covers). Files here are classified as artist/album by folder depth

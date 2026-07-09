@@ -2,6 +2,7 @@
 
 import contextlib
 import filecmp
+import hashlib
 import json
 import os
 import shutil
@@ -828,6 +829,40 @@ class PosterRenamerr(ChubModule):
             )
         return os.path.join(dest_dir, new_file_name)
 
+    @staticmethod
+    def _source_hash(path: str) -> Optional[str]:
+        """sha256 of a source poster file, or None if it can't be read (a missing
+        source means "not unchanged" → re-process, never a silent skip)."""
+        try:
+            with open(path, "rb") as f:
+                return hashlib.sha256(f.read()).hexdigest()
+        except OSError:
+            return None
+
+    def _is_unchanged_upload(self, row: dict) -> bool:
+        """Plex apply path only: True when this matched poster can be skipped
+        entirely (no copy, no border, no upload) because its SOURCE is unchanged
+        since it was last successfully uploaded AND it was uploaded before.
+
+        Mirrors PosterFlow's adopt-existing fast-path. Keyed on the raw source
+        (source_file_hash), NOT the staged/bordered file_hash, so it's correct
+        whether or not border_replacerr runs. Fails safe: any missing signal
+        (no prior upload, no stored hash, unreadable source) → not skipped.
+        """
+        cfg = self.config
+        if getattr(cfg, "apply_method", "kometa") != "plex":
+            return False
+        if not getattr(cfg, "skip_unchanged_uploads", True):
+            return False
+        stored = row.get("source_file_hash")
+        if not stored or not row.get("uploaded_libraries"):
+            return False
+        src = row.get("original_file")
+        if not src:
+            return False
+        current = self._source_hash(src)
+        return bool(current) and current == stored
+
     def _needs_staging(self, row: dict) -> bool:
         """True when a matched asset must be (re)staged: nothing staged yet, the
         staged file is missing, OR it sits at a stale path because the media
@@ -1026,12 +1061,22 @@ class PosterRenamerr(ChubModule):
 
     def get_matched_assets(self, db: ChubDB) -> list:
         matched_assets = []
+        skipped_unchanged = 0
+
+        def _consider(row: dict) -> None:
+            nonlocal skipped_unchanged
+            if not (row.get("matched") and self._needs_staging(row)):
+                return
+            if self._is_unchanged_upload(row):
+                skipped_unchanged += 1
+                return
+            matched_assets.append(row)
+
         for instance_name in self.config.instances:
             if not isinstance(instance_name, str):
                 continue
             for row in db.media.get_by_instance(instance_name):
-                if row.get("matched") and self._needs_staging(row):
-                    matched_assets.append(row)
+                _consider(row)
         for scope in self.config.plex_scope or []:
             if not scope.match_collections:
                 continue
@@ -1042,8 +1087,12 @@ class PosterRenamerr(ChubModule):
                 for row in db.collection.get_by_instance_and_library(
                     scope.instance, library_name
                 ):
-                    if row.get("matched") and self._needs_staging(row):
-                        matched_assets.append(row)
+                    _consider(row)
+        if skipped_unchanged:
+            self.logger.info(
+                f"Skipped {skipped_unchanged} unchanged poster(s) already applied "
+                "to Plex (source unchanged since last upload)"
+            )
         return matched_assets
 
     def _run_match_quality_pass(self, db: ChubDB) -> None:
