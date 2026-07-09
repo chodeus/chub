@@ -14,12 +14,17 @@ import {
  * poster/thumbnail grid; the return value can be ignored.
  */
 export function useStreamToken() {
-    const [token, setToken] = useState(streamTokenSnapshot);
+    // Re-render on EVERY stream-auth change, not just token-value changes: when
+    // auth is not configured the token stays '' permanently, so tracking the
+    // token value alone would never re-render the grid to swap the blank
+    // placeholder for a real (token-less) image URL. A tick forces the re-render
+    // once the auth state resolves.
+    const [, setTick] = useState(0);
     useEffect(() => {
         ensureStreamToken();
-        return subscribeStreamToken(() => setToken(streamTokenSnapshot()));
+        return subscribeStreamToken(() => setTick(t => t + 1));
     }, []);
-    return token;
+    return streamTokenSnapshot();
 }
 
 export default useStreamToken;

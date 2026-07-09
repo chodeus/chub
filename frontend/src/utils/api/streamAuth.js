@@ -19,6 +19,9 @@ const SKEW_MS = 30_000; // refresh this long before expiry
 let cached = null; // { token: string, expMs: number }
 let inflight = null;
 let refreshTimer = null;
+// null = unknown, true = auth on (token required), false = auth not configured
+// (the /stream-token route is open, so image/SSE URLs need no token at all).
+let authConfigured = null;
 const listeners = new Set();
 
 function fullToken() {
@@ -48,6 +51,18 @@ export function streamTokenSnapshot() {
     return (cached && cached.token) || '';
 }
 
+/**
+ * True once we've confirmed auth is NOT configured (the /stream-token endpoint
+ * returned an empty token on a successful response). In that state the image /
+ * SSE routes are open, so callers should build token-less URLs instead of
+ * waiting for a token that will never arrive. Returns false while unknown or
+ * while auth is on — so a blank placeholder is shown until a real token lands
+ * (avoiding a 401 flash) rather than firing a token-less request that 401s.
+ */
+export function streamAuthDisabled() {
+    return authConfigured === false;
+}
+
 function scheduleProactiveRefresh(ttlMs) {
     if (refreshTimer) clearTimeout(refreshTimer);
     // Refresh SKEW before expiry so the token never actually lapses. Force a
@@ -64,6 +79,9 @@ function scheduleProactiveRefresh(ttlMs) {
 export async function ensureStreamToken() {
     const current = fresh();
     if (current) return current;
+    // Auth confirmed off: the token is always empty and the route is open, so
+    // stop re-hitting /stream-token on every render — there is nothing to mint.
+    if (authConfigured === false) return '';
     if (!inflight) {
         const jwt = fullToken();
         inflight = fetch('/api/auth/stream-token', {
@@ -74,6 +92,12 @@ export async function ensureStreamToken() {
             .then(d => {
                 const token = d?.data?.token || '';
                 const ttl = (d?.data?.expires_in || 0) * 1000;
+                // A successful (200) response resolves the auth state: a
+                // non-empty token means auth is on; an empty token means auth
+                // is not configured (the route is open). A failed response
+                // (null) is an auth-on 401/expired-JWT case, so leave the state
+                // unchanged rather than mislabelling it as "not configured".
+                if (d) authConfigured = token !== '';
                 cached = token ? { token, expMs: Date.now() + ttl } : null;
                 if (cached) scheduleProactiveRefresh(ttl);
                 notify();
@@ -96,7 +120,7 @@ export async function ensureStreamToken() {
  */
 export function streamTokenParam() {
     const current = fresh();
-    if (!current) ensureStreamToken();
+    if (!current && authConfigured !== false) ensureStreamToken();
     return current;
 }
 
