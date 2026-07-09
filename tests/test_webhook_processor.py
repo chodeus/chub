@@ -5,7 +5,11 @@ from types import SimpleNamespace
 import pytest
 
 from backend.util.config import ChubConfig, InstanceDetail, InstancesConfig
-from backend.util.webhook_processor import WebhookProcessor
+from backend.util.webhook_processor import (
+    WebhookProcessor,
+    _peer_is_trusted,
+    resolve_client_host,
+)
 
 
 class StubLogger:
@@ -341,6 +345,66 @@ def test_find_arr_instance_disabled_instance_skipped(monkeypatch):
     wp = WebhookProcessor(logger=StubLogger())
     result = wp._find_arr_instance({"client_host": "10.200.10.26"}, "series")
     assert result["found"] is False
+
+
+# --- reverse proxy: trusted proxies + X-Forwarded-For ---
+
+
+def test_peer_is_trusted_private_token():
+    assert _peer_is_trusted("192.168.1.5", ["private"]) is True
+    assert _peer_is_trusted("10.20.30.40", ["private"]) is True
+    assert _peer_is_trusted("127.0.0.1", ["private"]) is True
+    # Public IP is NOT private -> not trusted by the token.
+    assert _peer_is_trusted("8.8.8.8", ["private"]) is False
+
+
+def test_peer_is_trusted_cidr_and_exact():
+    assert _peer_is_trusted("172.20.0.9", ["172.20.0.0/16"]) is True
+    assert _peer_is_trusted("172.21.0.9", ["172.20.0.0/16"]) is False
+    assert _peer_is_trusted("10.0.0.5", ["10.0.0.5"]) is True
+
+
+def test_peer_is_trusted_empty_never_trusts():
+    assert _peer_is_trusted("192.168.1.5", []) is False
+    assert _peer_is_trusted("192.168.1.5", None) is False
+    assert _peer_is_trusted(None, ["private"]) is False
+
+
+def test_resolve_client_host_no_forwarded_returns_peer():
+    assert resolve_client_host("172.20.0.2", None, ["private"]) == "172.20.0.2"
+    assert resolve_client_host("172.20.0.2", "", ["private"]) == "172.20.0.2"
+
+
+def test_resolve_client_host_trusted_proxy_uses_xff():
+    # Traefik (private peer) forwards the arr's real IP.
+    assert (
+        resolve_client_host("172.20.0.2", "10.200.10.26", ["private"]) == "10.200.10.26"
+    )
+    # Chain: left-most is the original client.
+    assert (
+        resolve_client_host("172.20.0.2", "10.200.10.26, 172.20.0.5", ["private"])
+        == "10.200.10.26"
+    )
+
+
+def test_resolve_client_host_untrusted_peer_ignores_xff():
+    # A forged XFF from a public (untrusted) caller must be ignored.
+    assert resolve_client_host("8.8.8.8", "10.200.10.26", ["private"]) == "8.8.8.8"
+    # Empty trusted list -> never honor XFF.
+    assert resolve_client_host("172.20.0.2", "10.200.10.26", []) == "172.20.0.2"
+
+
+def test_find_arr_instance_via_reverse_proxy(monkeypatch):
+    # End to end: proxy peer IP + XFF(real arr IP) -> effective host resolves
+    # to the arr, so peer-IP matching picks the right instance behind Traefik.
+    wp = _two_sonarr_wp(
+        monkeypatch,
+        {"sonarr": {"10.200.10.26"}, "sonarr-anime": {"10.200.10.27"}},
+    )
+    effective = resolve_client_host("172.20.0.2", "10.200.10.27", ["private"])
+    result = wp._find_arr_instance({"client_host": effective}, "series")
+    assert result["found"] is True
+    assert result["name"] == "Anime"
 
 
 # --- _validate_webhook ---

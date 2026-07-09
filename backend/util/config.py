@@ -616,6 +616,16 @@ class GeneralConfig(BaseModel):
     webhook_retry_delay: int = Field(default=30, ge=1, le=3600)
     webhook_max_retries: int = Field(default=10, ge=0, le=100)
     webhook_secret: str = ""
+    # Reverse-proxy trust for inbound webhooks. When CHUB sits behind a proxy
+    # (Traefik/nginx/Caddy), the connection's peer IP is the proxy's, not the
+    # arr's, which defeats peer-IP instance matching. If the immediate peer
+    # matches an entry here, CHUB honors `X-Forwarded-For` and uses the
+    # forwarded client IP to identify the sending instance. Entries are IPs or
+    # CIDRs (e.g. "10.0.0.0/8", "192.168.1.5"); the token "private" trusts any
+    # RFC1918 / loopback / link-local peer (the default — covers homelab Docker
+    # proxies while ignoring forged XFF from public callers). Empty = never
+    # trust XFF (peer IP only).
+    trusted_proxies: List[str] = Field(default_factory=lambda: ["private"])
     duplicate_exclude_groups: List[Any] = Field(default_factory=list)
     # TTL (seconds) for reusing the plex_media_cache snapshot before a re-walk.
     # The "plex" apply path resolves artwork targets from this cache; when it

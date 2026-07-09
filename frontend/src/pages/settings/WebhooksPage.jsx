@@ -177,9 +177,19 @@ const SetupDetails = ({ wiring }) => {
                             resolved automatically), so no extra setup is normally needed. Two
                             instances on the <em>same</em> IP but different ports are told apart by
                             the payload&apos;s instance name, so give each Sonarr/Radarr a distinct{' '}
-                            <em>Instance Name</em> (Settings → General). If CHUB still can&apos;t
-                            tell them apart — behind a reverse proxy, host networking, or identical
-                            instance names — append <code>?instance=&lt;name&gt;</code> to the URL
+                            <em>Instance Name</em> (Settings → General).
+                        </li>
+                        <li>
+                            <strong>Behind a reverse proxy</strong> (Traefik/nginx/Caddy) the
+                            caller&apos;s IP is the proxy&apos;s. CHUB honors{' '}
+                            <code>X-Forwarded-For</code> from any LAN/Docker proxy by default (the{' '}
+                            <em>Trusted proxies</em> setting on{' '}
+                            <Link className="text-accent hover:underline" to="/settings/general">
+                                General
+                            </Link>
+                            ), so IP matching still works — no need to bypass the proxy. If it still
+                            can&apos;t tell instances apart (host networking, identical names, or an
+                            untrusted proxy), append <code>?instance=&lt;name&gt;</code> to the URL
                             (or send an <code>X-Chub-Instance</code> header) with the exact{' '}
                             <Link className="text-accent hover:underline" to="/settings/instances">
                                 instance
