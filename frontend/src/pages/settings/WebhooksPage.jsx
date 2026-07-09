@@ -134,7 +134,7 @@ const SetupDetails = ({ wiring }) => {
                                     <span className="flex-1">
                                         {revealSecret
                                             ? secretUrl
-                                            : buildPosterAddUrl(path, maskedSecret)}
+                                            : `${buildPosterAddUrl(path, '')}?secret=${maskedSecret}`}
                                     </span>
                                     <IconButton
                                         icon="content_copy"
@@ -161,11 +161,14 @@ const SetupDetails = ({ wiring }) => {
                     <ul className="list-disc list-inside text-sm text-fg-muted space-y-1">
                         <li>
                             <strong>Sonarr:</strong> Settings → Connect → + → Webhook. Triggers:{' '}
-                            <em>On Import</em>, <em>On Upgrade</em>, <em>On Series Add</em>.
+                            <em>On File Import</em>, <em>On File Upgrade</em>,{' '}
+                            <em>On Series Add</em> (<em>On Import Complete</em> also works — CHUB
+                            de-duplicates it).
                         </li>
                         <li>
                             <strong>Radarr:</strong> Settings → Connect → + → Webhook. Triggers:{' '}
-                            <em>On Import</em>, <em>On Upgrade</em>, <em>On Movie Added</em>.
+                            <em>On File Import</em>, <em>On File Upgrade</em>,{' '}
+                            <em>On Movie Added</em>.
                         </li>
                         <li>
                             <strong>Tautulli:</strong> Settings → Notification Agents → Webhook.

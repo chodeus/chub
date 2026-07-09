@@ -212,10 +212,10 @@ class WebhookProcessor:
     @staticmethod
     def _extract_season_number(webhook_data: dict) -> Optional[int]:
         """
-        For Sonarr Download / EpisodeFileImported events, pull the season
-        number from `episodes[0].seasonNumber` so downstream processing can
-        focus the asset match on the correct season instead of re-matching
-        the whole show.
+        For a Sonarr Download event (On File Import / Upgrade / Import
+        Complete), pull the season number from `episodes[0].seasonNumber` so
+        downstream processing can focus the asset match on the correct season
+        instead of re-matching the whole show.
 
         Returns None for movies, series-add events, or payloads without an
         episodes list — callers treat None as "not season-scoped".

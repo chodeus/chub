@@ -52,23 +52,26 @@ def verify_webhook_secret(request: Request) -> None:
 # on restart. Backed by the `webhook_cache` table via `db.webhook_cache`.
 _WEBHOOK_DEDUP_TTL_SECONDS = 600
 
-# Sonarr/Radarr fire a wide range of events; only these actually correspond
-# to "new file on disk that needs a poster". `Grab` (download started, file
-# not yet on disk) and lifecycle events (Rename, *FileDelete, HealthIssue,
-# SeriesDelete, MovieDelete) are 200-acknowledged but skipped.
+# Accepted webhook eventType values, per the authoritative Sonarr/Radarr
+# WebhookEventType enums. Both apps emit "Download" for a file import — the UI
+# triggers On File Import, On File Upgrade AND On Import Complete all send it
+# (OnDownload/OnImportComplete, isUpgrade distinguishes import vs upgrade). The
+# pre-download library add is "SeriesAdd" (Sonarr) / "MovieAdded" (Radarr).
+# There is NO "EpisodeFileImported"/"MovieFileImported" event — those never
+# existed in either enum. `Grab` (no file on disk yet) and lifecycle events
+# (Rename, *Delete, Health*, ApplicationUpdate, ManualInteractionRequired) are
+# 200-acknowledged but skipped.
 _ACCEPTED_EVENT_TYPES = frozenset(
     {
-        "Download",  # Sonarr v3 / Radarr — file imported
-        "MovieAdded",  # Radarr — movie added to library (pre-download)
+        "Download",  # Sonarr + Radarr — a file was imported (import/upgrade/import-complete)
         "SeriesAdd",  # Sonarr — series added to library (pre-download)
-        "EpisodeFileImported",  # Sonarr v4+ — episode file imported
-        "MovieFileImported",  # Radarr v5+ — movie file imported
+        "MovieAdded",  # Radarr — movie added to library (pre-download)
     }
 )
 
 # Import-phase events (a file now exists on disk); the rest of the accepted set
 # is the pre-download "added" phase.
-_IMPORT_EVENTS = frozenset({"Download", "EpisodeFileImported", "MovieFileImported"})
+_IMPORT_EVENTS = frozenset({"Download"})
 
 router = APIRouter(
     prefix="/api/webhooks",
