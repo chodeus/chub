@@ -282,10 +282,7 @@ def test_adhoc_rename_attaches_upload_result(monkeypatch):
     assert result["upload_result"]["success"] is False
 
 
-def test_adhoc_rename_suppresses_notification_on_retry(monkeypatch):
-    """The rename notification fires on the first run but is suppressed on an
-    upload-retry re-stage (suppress_notification=True), so repeated upload
-    attempts don't fire duplicate rename notifications."""
+def _outcome_renamer(apply_method="plex"):
     from contextlib import contextmanager
     from types import SimpleNamespace as NS
 
@@ -293,19 +290,19 @@ def test_adhoc_rename_suppresses_notification_on_retry(monkeypatch):
     def _staging():
         yield None
 
-    renamer = NS(
+    return NS(
         apply_staging=_staging,
         run_poster_rename_adhoc=lambda items: {
             "success": True,
             "output": {"movie": [{"title": "Dune"}]},
             "manifest": {"media_cache": [1]},
         },
-        config=NS(apply_method="plex", run_border_replacerr=False),
+        config=NS(apply_method=apply_method, run_border_replacerr=False),
         full_config=None,
     )
 
-    notes = []
 
+def _outcome_notifier(notes):
     class _StubNotifier:
         def __init__(self, *a, **k):
             pass
@@ -313,52 +310,70 @@ def test_adhoc_rename_suppresses_notification_on_retry(monkeypatch):
         def send_notification(self, output):
             notes.append(output)
 
-    class _StubDB:
-        def __init__(self, *a, **k):
-            self.plex = NS(count=lambda: 1)
+    return _StubNotifier
 
-        def __enter__(self):
-            return self
 
-        def __exit__(self, *a):
-            return False
+class _OutcomeDB:
+    def __init__(self, *a, **k):
+        from types import SimpleNamespace as NS
 
-    class _StubUploader:
+        self.plex = NS(count=lambda: 1)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+
+def _uploader_returning(result):
+    class _U:
         def __init__(self, *a, **k):
             pass
 
         def run(self):
-            return {"success": False, "message": "boom"}
+            return result
 
-    monkeypatch.setattr("backend.util.notification.NotificationManager", _StubNotifier)
-    monkeypatch.setattr(jp, "_check_plex_upload_enabled", lambda cfg: True)
-    monkeypatch.setattr(jp, "ChubDB", _StubDB)
-    monkeypatch.setattr("backend.util.upload_posters.PosterUploader", _StubUploader)
-
-    # First run notifies once.
-    jp._adhoc_rename_and_post(renamer, [{}], _logger(), 1)
-    assert len(notes) == 1
-
-    # Upload-retry re-stage is suppressed → no additional notification.
-    jp._adhoc_rename_and_post(renamer, [{}], _logger(), 2, suppress_notification=True)
-    assert len(notes) == 1
+    return _U
 
 
-def test_poster_rename_retry_job_threads_suppress_flag(monkeypatch):
-    """A poster_rename job carrying suppress_notification=True (the upload-retry
-    payload) passes it through to _adhoc_rename_and_post."""
-    captured = {}
-
-    def _fake_adhoc(renamer, media_items, logger, job_id, **kwargs):
-        captured["suppress"] = kwargs.get("suppress_notification")
-        return {"success": True}
-
-    monkeypatch.setattr(jp, "_adhoc_rename_and_post", _fake_adhoc)
+def test_adhoc_rename_notifies_on_upload_success_not_failure(monkeypatch):
+    """The notification fires only on the real OUTCOME: once when the poster
+    actually uploads to Plex, and NOT when the upload fails (terminal failures
+    are reported by the on-failure error handler instead)."""
+    notes = []
     monkeypatch.setattr(
-        "backend.modules.poster_renamerr.PosterRenamerr", lambda **k: object()
+        "backend.util.notification.NotificationManager", _outcome_notifier(notes)
+    )
+    monkeypatch.setattr(jp, "_check_plex_upload_enabled", lambda cfg: True)
+    monkeypatch.setattr(jp, "ChubDB", _OutcomeDB)
+
+    # Successful upload → notify once.
+    monkeypatch.setattr(
+        "backend.util.upload_posters.PosterUploader",
+        _uploader_returning({"success": True}),
+    )
+    jp._adhoc_rename_and_post(_outcome_renamer(), [{}], _logger(), 1)
+    assert len(notes) == 1
+
+    # Failed upload → NO notification (the storm case; failure handled elsewhere).
+    monkeypatch.setattr(
+        "backend.util.upload_posters.PosterUploader",
+        _uploader_returning({"success": False, "message": "boom"}),
+    )
+    jp._adhoc_rename_and_post(_outcome_renamer(), [{}], _logger(), 2)
+    assert len(notes) == 1  # still 1
+
+
+def test_adhoc_rename_kometa_notifies_on_write(monkeypatch):
+    """The kometa apply path has no Plex upload — the write to destination_dir IS
+    the successful outcome, so it still notifies once."""
+    notes = []
+    monkeypatch.setattr(
+        "backend.util.notification.NotificationManager", _outcome_notifier(notes)
     )
 
-    jp._process_poster_rename_job(
-        {"media_items": [{}], "suppress_notification": True}, _logger(), 5
+    jp._adhoc_rename_and_post(
+        _outcome_renamer(apply_method="kometa"), [{}], _logger(), 1
     )
-    assert captured["suppress"] is True
+    assert len(notes) == 1
