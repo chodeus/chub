@@ -24,6 +24,7 @@ from backend.util.webhook_provisioner import (
     deprovision_all,
     normalize_base_url,
     provision_all,
+    status_report,
 )
 
 
@@ -459,26 +460,26 @@ async def get_provision_status(
 ) -> JSONResponse:
     try:
         cfg = load_config()
-        base_url, base_err = _resolve_provision_base_url(
-            cfg, request.query_params.get("base_url")
+        secret = (cfg.general.webhook_secret or "").strip() or None
+        # Resolve the base URL and reconcile in ONE off-loop hop (all arr I/O,
+        # incl. auto-detection, runs in the threadpool so the event loop stays
+        # free for the arr's save-time test callback). Base-URL precedence:
+        # ?base_url= the user typed → saved public_url → a URL auto-detected from
+        # an existing arr webhook → the browser origin hint (last resort).
+        report = await run_in_threadpool(
+            status_report,
+            cfg,
+            secret,
+            explicit=request.query_params.get("base_url"),
+            origin_hint=request.query_params.get("origin_hint"),
+            logger=logger,
         )
         payload: Dict[str, Any] = {
             "notification_name": CHUB_NOTIFICATION_NAME,
             "public_url_configured": bool((cfg.general.public_url or "").strip()),
-            "secret_configured": bool((cfg.general.webhook_secret or "").strip()),
-            "base_url": base_url or "",
+            "secret_configured": bool(secret),
+            **report,
         }
-        if base_err:
-            payload["base_url_error"] = base_err
-            payload["instances"] = []
-        else:
-            secret = (cfg.general.webhook_secret or "").strip() or None
-            # provision_all does blocking network I/O to each *arr; run it OFF the
-            # event loop so CHUB stays responsive to the arr's save-time test
-            # webhook, which calls BACK into CHUB while this runs (else deadlock).
-            payload["instances"] = await run_in_threadpool(
-                provision_all, cfg, base_url, secret, dry_run=True, logger=logger
-            )
         resp = ok("Webhook provisioning status", payload)
         resp.headers["Cache-Control"] = "no-store"
         return resp

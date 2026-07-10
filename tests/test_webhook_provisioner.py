@@ -290,6 +290,7 @@ def test_deprovision_noop_when_absent():
 
 def _fake_config():
     return SimpleNamespace(
+        general=SimpleNamespace(public_url=""),
         instances=SimpleNamespace(
             radarr={
                 "Radarr": SimpleNamespace(url="http://r:7878", api="a", enabled=True),
@@ -301,7 +302,7 @@ def _fake_config():
             lidarr={
                 "Lidarr": SimpleNamespace(url="http://l:8686", api="c", enabled=True),
             },
-        )
+        ),
     )
 
 
@@ -319,3 +320,94 @@ def test_provision_all_skips_lidarr_and_disabled(monkeypatch):
     assert by_name["Sonarr"]["status"] == "connected"
     assert by_name["Lidarr"]["status"] == "skipped"
     assert by_name["Off"]["status"] == "skipped"
+
+
+# --- base-URL auto-detection + resolution ---
+
+
+def test_base_of_extracts_scheme_host_port():
+    assert (
+        wp._base_of("http://192.168.2.206:8060/api/webhooks/poster/add?instance=Radarr")
+        == "http://192.168.2.206:8060"
+    )
+    assert wp._base_of("https://chub.example.com/api/webhooks/poster/add") == (
+        "https://chub.example.com"
+    )
+    assert wp._base_of("not-a-url") is None
+    assert wp._base_of("ftp://x/y") is None
+
+
+def test_detect_base_url_from_existing_webhook(monkeypatch):
+    existing = {
+        "id": 3,
+        "name": "Some Hook",
+        "fields": [
+            {
+                "name": "url",
+                "value": "http://192.168.2.206:8060/api/webhooks/poster/add?instance=Radarr",
+            }
+        ],
+    }
+    clients = {
+        "http://r:7878": StubClient(notifications=[existing]),
+        "http://s:8989": StubClient(notifications=[]),
+    }
+    monkeypatch.setattr(
+        wp, "create_arr_client", lambda url, api, logger: clients.get(url)
+    )
+    assert wp.detect_base_url(_fake_config()) == "http://192.168.2.206:8060"
+
+
+def test_detect_base_url_none_when_no_matching_webhook(monkeypatch):
+    clients = {
+        "http://r:7878": StubClient(notifications=[]),
+        "http://s:8989": StubClient(notifications=[]),
+    }
+    monkeypatch.setattr(
+        wp, "create_arr_client", lambda url, api, logger: clients.get(url)
+    )
+    assert wp.detect_base_url(_fake_config()) is None
+
+
+def test_resolve_base_url_precedence(monkeypatch):
+    cfg = _fake_config()
+    monkeypatch.setattr(wp, "detect_base_url", lambda *a, **k: "http://detected:8060")
+
+    # 1) explicit wins, and detection is skipped
+    base, detected, err = wp.resolve_base_url(
+        cfg, "http://explicit:8060", origin_hint="http://origin:8060"
+    )
+    assert (base, detected, err) == ("http://explicit:8060", "", None)
+
+    # 2) saved public_url beats detection + origin
+    cfg.general.public_url = "http://public:8060"
+    base, detected, err = wp.resolve_base_url(cfg, "", origin_hint="http://origin:8060")
+    assert base == "http://public:8060" and detected == ""
+
+    # 3) detection used when neither explicit nor public_url is set
+    cfg.general.public_url = ""
+    base, detected, err = wp.resolve_base_url(cfg, "", origin_hint="http://origin:8060")
+    assert base == "http://detected:8060" and detected == "http://detected:8060"
+
+    # 4) origin hint is the last resort
+    monkeypatch.setattr(wp, "detect_base_url", lambda *a, **k: None)
+    base, detected, err = wp.resolve_base_url(cfg, "", origin_hint="http://origin:8060")
+    assert base == "http://origin:8060" and detected == ""
+
+
+def test_status_report_reconciles_against_detected_base(monkeypatch):
+    clients = {
+        "http://r:7878": StubClient(notifications=[]),
+        "http://s:8989": StubClient(notifications=[]),
+    }
+    monkeypatch.setattr(
+        wp, "create_arr_client", lambda url, api, logger: clients.get(url)
+    )
+    monkeypatch.setattr(wp, "detect_base_url", lambda *a, **k: "http://detected:8060")
+    report = wp.status_report(
+        _fake_config(), None, explicit="", origin_hint="http://origin:8060"
+    )
+    assert report["base_url"] == "http://detected:8060"
+    assert report["detected_base_url"] == "http://detected:8060"
+    names = {r["name"] for r in report["instances"]}
+    assert {"Radarr", "Sonarr"} <= names
