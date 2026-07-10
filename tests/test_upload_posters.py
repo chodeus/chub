@@ -117,7 +117,9 @@ def test_match_asset_no_match():
 def test_match_asset_skips_missing_values():
     index = {"title:x": [{"data": "x"}]}
     assets, key = PosterUploader.match_asset(
-        index, ["tmdb", "title"], {"title": "x"}  # no tmdb value
+        index,
+        ["tmdb", "title"],
+        {"title": "x"},  # no tmdb value
     )
     assert assets == [{"data": "x"}]
 
@@ -242,7 +244,12 @@ def test_year_discrepancy_recorded_when_guid_match_year_differs():
         "TMDB",
     )
     assert up._year_discrepancies == [
-        {"title": "Michael", "folder_year": 2025, "plex_year": 2027, "match_type": "TMDB"}
+        {
+            "title": "Michael",
+            "folder_year": 2025,
+            "plex_year": 2027,
+            "match_type": "TMDB",
+        }
     ]
 
 
@@ -402,6 +409,114 @@ def test_sync_single_asset_dedupes_same_library(tmp_path):
 
     assert result.success is True
     assert fake_plex.uploads == ["Movies"]
+
+
+def _plex_id_uploader():
+    from types import SimpleNamespace
+
+    class FakePlex:
+        def __init__(self):
+            self.uploads = []
+
+        def upload_poster(self, *, library_name, **kw):
+            self.uploads.append((library_name, kw.get("plex_id")))
+            return True
+
+        def remove_label(self, *a, **k):
+            pass
+
+    up = object.__new__(PosterUploader)
+    up.force = True
+    up.config = SimpleNamespace(upload_delay_ms=0)
+    up.logger = SimpleNamespace(warning=lambda *a, **k: None)
+    up.db = SimpleNamespace(media=SimpleNamespace(update=lambda **kw: None))
+    return up, FakePlex()
+
+
+def test_sync_single_asset_uploads_to_all_unmerged_copies_same_library(tmp_path):
+    """Two un-merged copies in the SAME library carry distinct plex_ids —
+    ratingKey resolution fetches exactly one item, so each copy needs its own
+    upload call (library-only dedupe silently skipped the sibling)."""
+    poster = tmp_path / "Dune (2021).jpg"
+    poster.write_bytes(b"poster-bytes")
+
+    up, fake_plex = _plex_id_uploader()
+    index = {
+        "tmdb:438631": [
+            {
+                "library_name": "Movies",
+                "title": "Dune",
+                "year": "2021",
+                "plex_id": "111",
+            },
+            {
+                "library_name": "Movies",
+                "title": "Dune",
+                "year": "2021",
+                "plex_id": "222",
+            },
+        ]
+    }
+    asset = {
+        "title": "Dune",
+        "asset_type": "movie",
+        "tmdb_id": 438631,
+        "renamed_file": str(poster),
+    }
+
+    result = up._sync_single_asset(
+        asset=asset,
+        plex_client=fake_plex,
+        index=index,
+        priority_keys=["tmdb", "imdb", "title"],
+        dry_run=False,
+    )
+
+    assert result.success is True
+    assert {pid for _, pid in fake_plex.uploads} == {"111", "222"}
+    assert [lib for lib, _ in fake_plex.uploads] == ["Movies", "Movies"]
+    assert result.library_name == "Movies"  # no "Movies, Movies" label
+
+
+def test_sync_single_asset_dedupes_identical_plex_id(tmp_path):
+    """Same library AND same plex_id is one true target — still one upload."""
+    poster = tmp_path / "Dune (2021).jpg"
+    poster.write_bytes(b"poster-bytes")
+
+    up, fake_plex = _plex_id_uploader()
+    index = {
+        "tmdb:438631": [
+            {
+                "library_name": "Movies",
+                "title": "Dune",
+                "year": "2021",
+                "plex_id": "111",
+            },
+            {
+                "library_name": "Movies",
+                "title": "Dune",
+                "year": "2021",
+                "plex_id": "111",
+            },
+        ]
+    }
+    asset = {
+        "title": "Dune",
+        "asset_type": "movie",
+        "tmdb_id": 438631,
+        "renamed_file": str(poster),
+    }
+
+    result = up._sync_single_asset(
+        asset=asset,
+        plex_client=fake_plex,
+        index=index,
+        priority_keys=["tmdb", "imdb", "title"],
+        dry_run=False,
+    )
+
+    assert result.success is True
+    assert fake_plex.uploads == [("Movies", "111")]
 
 
 # --- per-library skip tracking (hybrid: posterflow-style uploaded_libraries) ---
@@ -578,3 +693,68 @@ def test_parse_uploaded_libraries_tolerant():
     assert PosterUploader._parse_uploaded_libraries('["A", "B"]') == {"A", "B"}
     assert PosterUploader._parse_uploaded_libraries(["A", "B"]) == {"A", "B"}
     assert PosterUploader._parse_uploaded_libraries('{"x": 1}') == set()
+
+
+# --- _write_music_sidecar (LMA disk sidecars, atomic overwrite) ---
+
+
+def _sidecar_uploader(warnings=None):
+    from types import SimpleNamespace
+
+    up = object.__new__(PosterUploader)
+    up.logger = SimpleNamespace(
+        debug=lambda *a, **k: None,
+        warning=lambda *a, **k: warnings.append(a) if warnings is not None else None,
+    )
+    return up
+
+
+def _tmp_litter(folder):
+    return [p for p in folder.iterdir() if ".chub-tmp-" in p.name]
+
+
+def test_write_music_sidecar_writes_cover(tmp_path):
+    poster = tmp_path / "poster.jpg"
+    poster.write_bytes(b"poster-bytes")
+    folder = tmp_path / "album"
+    folder.mkdir()
+    entry = {"file_paths": [str(folder)], "title": "X"}
+
+    up = _sidecar_uploader()
+    up._write_music_sidecar("album", str(poster), entry, dry_run=False)
+    assert (folder / "cover.jpg").read_bytes() == b"poster-bytes"
+
+    up._write_music_sidecar("artist", str(poster), entry, dry_run=False)
+    assert (folder / "artist-poster.jpg").read_bytes() == b"poster-bytes"
+
+    assert _tmp_litter(folder) == []
+
+
+def test_write_music_sidecar_failure_preserves_existing_cover(tmp_path, monkeypatch):
+    """A crash mid-copy (partial write + OSError) must leave the user's
+    existing cover untouched, warn instead of raising, and leave no temp
+    litter in the music folder."""
+    import backend.util.upload_posters as up_mod
+
+    poster = tmp_path / "poster.jpg"
+    poster.write_bytes(b"poster-bytes")
+    folder = tmp_path / "album"
+    folder.mkdir()
+    existing = folder / "cover.jpg"
+    existing.write_bytes(b"original")
+    entry = {"file_paths": [str(folder)], "title": "X"}
+
+    def _partial_copy(src, dst):
+        with open(dst, "wb") as fh:
+            fh.write(b"part")
+        raise OSError("disk full")
+
+    monkeypatch.setattr(up_mod.shutil, "copyfile", _partial_copy)
+
+    warnings = []
+    up = _sidecar_uploader(warnings)
+    up._write_music_sidecar("album", str(poster), entry, dry_run=False)
+
+    assert existing.read_bytes() == b"original"
+    assert warnings, "sidecar failure should warn, not pass silently"
+    assert _tmp_litter(folder) == []

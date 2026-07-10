@@ -197,3 +197,86 @@ def test_media_sync_skips_plex_refresh_when_none_configured(monkeypatch):
     assert res["success"] is True
     assert "arr" in calls
     assert refresh_args == [], "no Plex instances -> no refresh call"
+
+
+# --- plex-path upload failure: surfaced instead of swallowed ---
+# _handle_post_rename_actions used to discard PosterUploader.run()'s result, so
+# a failed synchronous webhook upload never failed anything and no retry ran.
+
+
+def test_poster_rename_job_fails_when_upload_fails(monkeypatch):
+    """A poster_rename job whose rename succeeded but whose upload failed must
+    fail (UPLOAD_FAILED) so the worker's backoff retry re-stages + re-uploads."""
+    monkeypatch.setattr(
+        "backend.modules.poster_renamerr.PosterRenamerr", lambda logger: object()
+    )
+    monkeypatch.setattr(
+        jp,
+        "_adhoc_rename_and_post",
+        lambda *a, **k: {
+            "success": True,
+            "output": {"x": 1},
+            "upload_result": {"success": False, "message": "boom"},
+        },
+    )
+
+    res = jp._process_poster_rename_job({"media_items": [{}]}, _logger(), 1)
+    assert res["success"] is False
+    assert res["error_code"] == "UPLOAD_FAILED"
+    assert "boom" in res["message"]
+
+
+def test_adhoc_rename_attaches_upload_result(monkeypatch):
+    """The synchronous plex-path upload result rides along on the rename result
+    (rename success is NOT flipped — each caller decides what a failed upload
+    means for its job)."""
+    from contextlib import contextmanager
+    from types import SimpleNamespace as NS
+
+    @contextmanager
+    def _staging():
+        yield None
+
+    renamer = NS(
+        apply_staging=_staging,
+        run_poster_rename_adhoc=lambda items: {
+            "success": True,
+            "output": {"movie": [{"title": "Dune"}]},
+            "manifest": {"media_cache": [1]},
+        },
+        config=NS(apply_method="plex", run_border_replacerr=False),
+        full_config=None,
+    )
+
+    class _StubNotifier:
+        def __init__(self, *a, **k):
+            pass
+
+        def send_notification(self, *a, **k):
+            pass
+
+    class _StubDB:
+        def __init__(self, *a, **k):
+            self.plex = NS(count=lambda: 1)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    class _StubUploader:
+        def __init__(self, *a, **k):
+            pass
+
+        def run(self):
+            return {"success": False, "message": "boom"}
+
+    monkeypatch.setattr("backend.util.notification.NotificationManager", _StubNotifier)
+    monkeypatch.setattr(jp, "_check_plex_upload_enabled", lambda cfg: True)
+    monkeypatch.setattr(jp, "ChubDB", _StubDB)
+    monkeypatch.setattr("backend.util.upload_posters.PosterUploader", _StubUploader)
+
+    result = jp._adhoc_rename_and_post(renamer, [{}], _logger(), 1)
+    assert result["success"] is True
+    assert result["upload_result"]["success"] is False

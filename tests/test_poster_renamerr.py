@@ -1090,3 +1090,115 @@ def test_is_unchanged_upload_fail_safe_cases(tmp_path):
         m._is_unchanged_upload({**row, "original_file": str(tmp_path / "x.jpg")})
         is False
     )
+
+
+# --- library-aware skip: uploaded_libraries must cover current targets ---
+
+
+def _movie_lib_index(*libraries):
+    from backend.util.plex_index import PlexMediaIndex
+
+    rows = [
+        {
+            "asset_type": "movie",
+            "title": "Dune",
+            "normalized_title": "dune",
+            "library_name": lib,
+            "guids": {"tmdb": "1"},
+        }
+        for lib in libraries
+    ]
+    return PlexMediaIndex(rows)
+
+
+def _unchanged_movie_row(tmp_path, uploaded_libraries):
+    m = make_module()
+    m.config = _plex_cfg()
+    src = tmp_path / "p.jpg"
+    src.write_bytes(b"V1")
+    row = {
+        "asset_type": "movie",
+        "title": "Dune",
+        "tmdb_id": 1,
+        "original_file": str(src),
+        "source_file_hash": m._source_hash(str(src)),
+        "uploaded_libraries": uploaded_libraries,
+    }
+    return m, row
+
+
+def test_is_unchanged_upload_backfills_new_library(tmp_path):
+    """A currently-targeted library the poster hasn't reached (new opt-in or a
+    partial per-library failure) must re-flow to the uploader's backfill; full
+    coverage keeps the fast-path skip."""
+    m, row = _unchanged_movie_row(tmp_path, '["Movies"]')
+    idx = _movie_lib_index("Movies", "Movies 4K")
+    assert m._is_unchanged_upload(row, [idx]) is False
+
+    row["uploaded_libraries"] = '["Movies", "Movies 4K"]'
+    assert m._is_unchanged_upload(row, [idx]) is True
+
+
+def test_is_unchanged_upload_skips_when_item_not_in_snapshot(tmp_path):
+    """Resolver miss (item absent from every enabled snapshot) keeps the skip
+    — the uploader could only fail with 'No matching Plex entry found'."""
+    m, row = _unchanged_movie_row(tmp_path, '["Movies"]')
+    assert m._is_unchanged_upload(row, [_movie_lib_index()]) is True
+    assert m._is_unchanged_upload(row, []) is True
+
+
+def test_is_unchanged_upload_none_indexes_preserves_legacy(tmp_path):
+    m, row = _unchanged_movie_row(tmp_path, '["Movies"]')
+    assert m._is_unchanged_upload(row, None) is True
+    assert m._is_unchanged_upload(row) is True
+
+
+# --- adhoc match runs under the rebuild lock (webhook clear() race) ---
+
+
+def test_adhoc_match_runs_under_rebuild_lock(monkeypatch):
+    """A second webhook worker's clear() must not empty poster_cache mid-match:
+    the adhoc rebuild lock has to still be held while match_item reads it."""
+    import backend.modules.poster_renamerr as pr_mod
+
+    class _StubLogger:
+        def __getattr__(self, _name):
+            return lambda *a, **kw: None
+
+        def get_adapter(self, *a, **kw):
+            return self
+
+    class _StubDB:
+        def __init__(self, *a, **kw):
+            self.poster = SimpleNamespace(clear=lambda: None)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    monkeypatch.setattr(pr_mod, "ChubDB", _StubDB)
+
+    m = object.__new__(PosterRenamerr)
+    m.logger = _StubLogger()
+    m.full_config = None
+    m.ensure_destination_dir = lambda: None
+    m._scan_source_dirs = lambda: []
+    m.merge_assets = lambda **kw: None
+    m.merge_gdrive_search_index = lambda db: None
+
+    observed = []
+
+    def _match_stub(media_item, db, is_collection=False):
+        acquired = pr_mod._POSTER_CACHE_REBUILD_LOCK.acquire(blocking=False)
+        if acquired:
+            pr_mod._POSTER_CACHE_REBUILD_LOCK.release()
+        observed.append(acquired)
+        return {"matched": False}
+
+    m.match_item = _match_stub
+
+    result = m.run_poster_rename_adhoc([{"asset_type": "movie", "id": 1}])
+    assert result["success"] is True
+    assert observed == [False], "match_item ran without the rebuild lock held"
