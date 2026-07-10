@@ -242,6 +242,17 @@ class CollectionCache(DatabaseBase):
         """Delete a single record by its unique integer ID."""
         self.execute_query("DELETE FROM collections_cache WHERE id=?", (id,))
 
+    def clear_library(self, instance_name: str, library_name: str) -> int:
+        """Delete all cached collections for one (instance, library).
+
+        Companion to plex_cache.clear_library: called on library opt-OUT so a
+        de-selected library's collections stop surfacing. Returns rows deleted.
+        """
+        return self.execute_query(
+            "DELETE FROM collections_cache WHERE instance_name=? AND library_name=?",
+            (instance_name, library_name),
+        )
+
     def delete(
         self, item: dict, instance_name: str, logger: Optional[Any] = None
     ) -> None:

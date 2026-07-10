@@ -224,4 +224,24 @@ export const instancesAPI = {
             ...options,
         });
     },
+
+    /**
+     * Replace a Plex instance's opted-in library allow-list. Libraries not in
+     * the list are hidden everywhere CHUB manages content; the backend also
+     * purges their cached rows and prunes stale per-module selections.
+     * @param {string} instanceName - Plex instance name
+     * @param {string[]} enabledLibraries - Library titles to enable
+     * @returns {Promise<Object>} Update response
+     */
+    updateInstanceLibraries: async (instanceName, enabledLibraries) => {
+        const result = await apiCore.patch(`/plex/${instanceName}/libraries`, {
+            enabled_libraries: enabledLibraries,
+        });
+        // The catalog + per-instance library lists are cached under /plex/*,
+        // which the instance-path mutation clear doesn't touch — drop them so
+        // every picker and the opt-in UI refetch the new enabled state.
+        apiCore.clearCache('/plex/libraries');
+        apiCore.clearCache(`/plex/${instanceName}/libraries`);
+        return result;
+    },
 };
