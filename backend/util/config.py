@@ -912,6 +912,11 @@ SENSITIVE_FIELD_NAMES = frozenset(
 
 REDACTED_PLACEHOLDER = "********"
 
+# Secrets that must NEVER be revealed to the frontend, even though they are in
+# SENSITIVE_FIELD_NAMES. The password hash and JWT signing secret are pure
+# server-side credentials with no legitimate "show me the value" use.
+NEVER_REVEAL_FIELD_NAMES = frozenset({"password_hash", "jwt_secret"})
+
 
 def redact_secrets(data: Any, _parent_key: str = "") -> Any:
     """
@@ -975,6 +980,65 @@ def strip_redacted_placeholders(incoming: Any, current: Any) -> Any:
     if incoming == REDACTED_PLACEHOLDER and isinstance(current, str):
         return current  # keep the real secret
     return incoming
+
+
+class SecretNotRevealable(Exception):
+    """The requested path does not point at a revealable secret field."""
+
+
+def resolve_secret_path(data: Any, path: str) -> str:
+    """
+    Resolve a dotted config *path* against an UNREDACTED config dump and return
+    the real secret string at the leaf. Powers the on-demand "reveal" endpoint.
+
+    Traversal supports dict keys and lists. A list segment matches the item
+    whose ``id`` equals the segment (mirroring ``strip_redacted_placeholders``,
+    so a reordered ``notifications.destinations`` list still resolves the right
+    item), falling back to a positional index for id-less lists.
+
+    Defense in depth: the leaf field name must be in ``SENSITIVE_FIELD_NAMES``
+    and not in ``NEVER_REVEAL_FIELD_NAMES`` — so this can only ever surface an
+    actual, revealable secret, never an arbitrary config value.
+
+    Raises ``SecretNotRevealable`` if the leaf is not a revealable secret, and
+    ``KeyError`` if the path does not resolve.
+    """
+    segments = [s for s in path.split(".") if s != ""]
+    if not segments:
+        raise KeyError("empty path")
+
+    leaf = segments[-1]
+    if leaf not in SENSITIVE_FIELD_NAMES or leaf in NEVER_REVEAL_FIELD_NAMES:
+        raise SecretNotRevealable(leaf)
+
+    node: Any = data
+    for seg in segments:
+        if isinstance(node, dict):
+            if seg not in node:
+                raise KeyError(seg)
+            node = node[seg]
+        elif isinstance(node, list):
+            match = next(
+                (
+                    item
+                    for item in node
+                    if isinstance(item, dict) and str(item.get("id")) == seg
+                ),
+                None,
+            )
+            if match is None and seg.isdigit() and int(seg) < len(node):
+                match = node[int(seg)]
+            if match is None:
+                raise KeyError(seg)
+            node = match
+        else:
+            raise KeyError(seg)
+
+    if node is None:
+        return ""
+    if not isinstance(node, str):
+        raise KeyError(f"{leaf} is not a string secret")
+    return node
 
 
 # ==== CONFIG EXCEPTIONS ====

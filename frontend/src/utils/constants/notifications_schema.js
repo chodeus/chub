@@ -52,7 +52,7 @@ export const NOTIFICATIONS_SCHEMA = [
             {
                 key: 'webhook',
                 label: 'Webhook',
-                type: 'text',
+                type: 'password',
                 required: true,
                 placeholder: 'https://discord.com/api/webhooks/...',
                 validate: v => /^https:\/\/discord(app)?\.com\/api\/webhooks\//.test(v),
@@ -73,7 +73,7 @@ export const NOTIFICATIONS_SCHEMA = [
             {
                 key: 'webhook',
                 label: 'Webhook',
-                type: 'text',
+                type: 'password',
                 required: true,
                 placeholder: 'https://notifiarr.com/api/...',
                 validate: v => /^https:\/\/notifiarr\.com\/api\//.test(v),

@@ -48,4 +48,20 @@ export const configAPI = {
     fetchSection: (section, options = {}) => {
         return configAPI.fetchConfig({ section, ...options });
     },
+
+    /**
+     * Reveal one configured secret's real value on demand.
+     *
+     * Every config read redacts secrets to "********"; this hits the dedicated
+     * GET /api/config/secret endpoint (JWT-gated, no-store) to fetch a single
+     * secret when the user clicks the "show" eye toggle. Never cached.
+     *
+     * @param {string} path - Dotted config path, e.g. 'tmdb.apikey'
+     * @returns {Promise<Object>} Response whose data.value is the real secret
+     */
+    revealSecret: path => {
+        return apiCore.get(`/config/secret?path=${encodeURIComponent(path)}`, {
+            useCache: false,
+        });
+    },
 };
