@@ -3,7 +3,7 @@ import json
 import os
 import shutil
 import time
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from typing import Any, Dict, Generator, List, Optional, Tuple
 
@@ -712,19 +712,25 @@ class PosterUploader:
                 )
 
             # The same title can be in more than one enabled library on this
-            # instance (e.g. an HD and a 4K library). Dedupe to one target per
-            # library — upload_poster -> _locate_targets already covers every
-            # unmerged copy *within* a library, so a second call for the same
-            # library would just be redundant.
+            # instance (e.g. an HD and a 4K library) — every library gets the
+            # poster. Within a library: ratingKey resolution fetches exactly
+            # ONE item, so distinct un-merged copies (distinct plex_ids) in the
+            # SAME library each need their own upload call. Only entries
+            # WITHOUT a plex_id resolve via title search, which covers every
+            # copy in the library — those dedupe per library.
             targets: List[Dict] = []
-            seen_libs = set()
+            seen = set()
             for entry in matched_entries:
                 lib = entry.get("library_name")
-                if lib in seen_libs:
+                pid = entry.get("plex_id")
+                key = (lib, pid) if pid else lib
+                if key in seen:
                     continue
-                seen_libs.add(lib)
+                seen.add(key)
                 targets.append(entry)
-            lib_label = ", ".join(str(t.get("library_name")) for t in targets)
+            lib_label = ", ".join(
+                dict.fromkeys(str(t.get("library_name")) for t in targets)
+            )
 
             # Per-library skip: "unchanged" is judged per (file × library), not
             # per file. recorded_libs is the set of libraries this exact hash has
@@ -907,7 +913,7 @@ class PosterUploader:
                     success=True,
                     action="updated",
                     reason="Successfully uploaded",
-                    library_name=", ".join(uploaded_libs),
+                    library_name=", ".join(dict.fromkeys(uploaded_libs)),
                     match_type=match_type,
                 )
             else:
@@ -1202,7 +1208,16 @@ class PosterUploader:
                 if dry_run:
                     self.logger.debug(f"[DRY RUN] Would write music sidecar {dest}")
                     continue
-                shutil.copyfile(poster_path, dest)
+                # Copy to a temp name then os.replace so a crash mid-copy can't
+                # truncate an existing user cover (mirrors process_file).
+                tmp = f"{dest}.chub-tmp-{os.getpid()}"
+                try:
+                    shutil.copyfile(poster_path, tmp)
+                    os.replace(tmp, dest)
+                except OSError:
+                    with suppress(OSError):
+                        os.remove(tmp)
+                    raise
                 self.logger.debug(f"[MUSIC_SIDECAR] {dest}")
         except Exception as e:
             self.logger.warning(

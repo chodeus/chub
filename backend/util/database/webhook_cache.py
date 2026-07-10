@@ -61,6 +61,18 @@ class WebhookCache(DatabaseBase):
                 conn.rollback()
                 return True
 
+    def delete(self, item_type: str, item_name: str) -> None:
+        """Remove a dedup row so the sender's retry can re-enqueue.
+
+        Called when the enqueue that followed a fresh sighting failed;
+        without this the failed webhook stays "seen" for the TTL and the
+        arr's retry is wrongly debounced.
+        """
+        self.execute_query(
+            "DELETE FROM webhook_cache WHERE item_type = ? AND item_name = ?",
+            (item_type, item_name),
+        )
+
     def clear(self) -> None:
         """Drop every row (testing/dev only)."""
         self.execute_query("DELETE FROM webhook_cache")

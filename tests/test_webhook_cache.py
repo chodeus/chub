@@ -47,6 +47,17 @@ def test_expired_row_is_swept_and_not_duplicate(db):
     assert db.webhook_cache.count() == 1
 
 
+def test_delete_reopens_dedup_window(db):
+    assert db.webhook_cache.is_duplicate("movie", "Dune") is False
+    assert db.webhook_cache.is_duplicate("movie", "Dune") is True
+    db.webhook_cache.delete("movie", "Dune")
+    assert db.webhook_cache.count() == 0
+    # retry after enqueue failure is treated as a fresh sighting
+    assert db.webhook_cache.is_duplicate("movie", "Dune") is False
+    # delete of a missing row is a harmless no-op
+    db.webhook_cache.delete("movie", "does-not-exist")
+
+
 def test_clear_and_last_seen(db):
     assert db.webhook_cache.last_seen("movie", "Dune") is None
     db.webhook_cache.is_duplicate("movie", "Dune")
