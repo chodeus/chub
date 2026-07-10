@@ -199,6 +199,9 @@ const ModuleSettingsContent = ({ moduleKey }) => {
                         id: uniqueId,
                         errorId: `${uniqueId}-error`,
                         descId: `${uniqueId}-desc`,
+                        ...(field.type === 'password'
+                            ? { secretPath: `${activeModule.key}.${field.key}` }
+                            : {}),
                     }}
                     value={fieldValue}
                     onChange={value => handleFieldChange(activeModule.key, field.key, value)}

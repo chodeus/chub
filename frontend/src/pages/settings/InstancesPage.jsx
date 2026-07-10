@@ -765,10 +765,20 @@ export const InstancesPage = () => {
                         ).map(field => {
                             const FieldComponent = FieldRegistry.getField(field.type);
                             const isToggle = field.type === 'toggle' || field.type === 'check_box';
+                            // Reveal resolves against the SAVED instance (keyed by
+                            // its stored name), not whatever name is typed in the
+                            // form — the persisted config is what holds the secret.
+                            const secretField =
+                                field.type === 'password' && modalInstanceData?.name
+                                    ? {
+                                          ...field,
+                                          secretPath: `instances.${modalServiceType}.${modalInstanceData.name}.${field.key}`,
+                                      }
+                                    : field;
                             return (
                                 <FieldComponent
                                     key={field.key}
-                                    field={field}
+                                    field={secretField}
                                     value={
                                         isToggle ? !!formData[field.key] : formData[field.key] || ''
                                     }

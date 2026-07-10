@@ -16,8 +16,10 @@ from backend.util.config import (
     ChubConfig,
     REDACTED_PLACEHOLDER,
     SENSITIVE_FIELD_NAMES,
+    SecretNotRevealable,
     load_config,
     redact_secrets,
+    resolve_secret_path,
     save_config,
     strip_redacted_placeholders,
 )
@@ -223,3 +225,56 @@ async def update_config(
             code="CONFIG_UPDATE_ERROR",
             status_code=500,
         )
+
+
+@router.get(
+    "/config/secret",
+    summary="Reveal a single configured secret",
+    description=(
+        "Return the real value of one secret config field, resolved by dotted "
+        "path against the unredacted configuration (e.g. 'tmdb.apikey'). Behind "
+        "the same JWT auth as every config route; only fields whose leaf name is "
+        "a known secret can be revealed, and never password_hash / jwt_secret."
+    ),
+)
+async def reveal_secret(
+    path: str = Query(..., description="Dotted config path, e.g. 'tmdb.apikey'"),
+    config: ChubConfig = Depends(get_config_dep),
+    logger: Any = Depends(get_logger),
+) -> JSONResponse:
+    """
+    Reveal one configured secret on demand.
+
+    Every other read path redacts secrets to ``********``; this is the single,
+    deliberate, authenticated exception the UI's "show" eye-toggle calls. The
+    path (never the value) is logged, the response forbids caching, and the
+    resolver refuses any leaf that isn't a revealable secret.
+    """
+    logger.debug(f"Serving GET /api/config/secret path={path!r}")
+
+    try:
+        value = resolve_secret_path(config.model_dump(mode="python"), path)
+    except SecretNotRevealable:
+        return error(
+            "That field is not a revealable secret",
+            "SECRET_NOT_REVEALABLE",
+            status_code=403,
+        )
+    except KeyError:
+        return error(
+            "Secret path not found",
+            "SECRET_NOT_FOUND",
+            status_code=404,
+        )
+    except ConfigError as e:
+        logger.error(f"Configuration error: {e}")
+        return error(
+            f"Configuration error: {str(e)}",
+            "CONFIG_ERROR",
+            status_code=500,
+        )
+
+    resp = ok("Secret revealed", {"value": value})
+    # The body carries a raw secret by design; keep it out of every cache.
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
