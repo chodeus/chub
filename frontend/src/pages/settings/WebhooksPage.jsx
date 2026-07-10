@@ -240,7 +240,11 @@ const AutoSetupBoard = () => {
     const load = useCallback(async url => {
         setLoading(true);
         try {
-            const resp = await webhooksAPI.getProvisionStatus(url || undefined);
+            const origin = typeof window !== 'undefined' ? window.location.origin : '';
+            const resp = await webhooksAPI.getProvisionStatus({
+                baseUrl: url,
+                originHint: origin,
+            });
             setStatus(resp?.data || {});
         } catch {
             setStatus({
@@ -258,7 +262,7 @@ const AutoSetupBoard = () => {
         let active = true;
         const origin = typeof window !== 'undefined' ? window.location.origin : '';
         webhooksAPI
-            .getProvisionStatus(origin || undefined)
+            .getProvisionStatus({ originHint: origin })
             .then(resp => {
                 if (!active) return;
                 const data = resp?.data || {};
@@ -380,12 +384,18 @@ const AutoSetupBoard = () => {
                     className="h-9 px-3 rounded-lg bg-surface-inset border border-border font-mono text-[13px] text-fg focus:border-accent outline-none"
                 />
                 <span className="text-[11.5px] text-fg-subtle">
-                    Not the browser address — what a Radarr/Sonarr container can reach. Set{' '}
-                    <code>general.public_url</code> on{' '}
+                    {status?.public_url_configured
+                        ? 'From your saved public_url. '
+                        : status?.detected_base_url
+                          ? 'Auto-detected from an existing webhook in your *arrs. '
+                          : 'Auto-filled from your browser address. '}
+                    It must be reachable <em>from your *arr containers</em> — behind a reverse proxy
+                    that&apos;s usually a LAN IP or docker service name, not the public hostname.
+                    Edit it here, then{' '}
                     <Link className="text-accent hover:underline" to="/settings/general">
-                        General
+                        save it on General
                     </Link>{' '}
-                    to make it stick.
+                    to persist.
                 </span>
                 <label className="mt-1.5 flex items-center gap-2 text-[12.5px] text-fg-muted select-none">
                     <input
