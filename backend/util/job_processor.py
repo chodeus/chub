@@ -312,7 +312,7 @@ def _process_webhook_job(
                     if db is not None:
                         db.worker.enqueue_job(
                             "jobs",
-                            {"media_items": media_items},
+                            {"media_items": media_items, "suppress_notification": True},
                             job_type="poster_rename",
                             scheduled_at=retry_at,
                         )
@@ -320,7 +320,10 @@ def _process_webhook_job(
                         with ChubDB(logger=logger, quiet=True) as tdb:
                             tdb.worker.enqueue_job(
                                 "jobs",
-                                {"media_items": media_items},
+                                {
+                                    "media_items": media_items,
+                                    "suppress_notification": True,
+                                },
                                 job_type="poster_rename",
                                 scheduled_at=retry_at,
                             )
@@ -469,8 +472,16 @@ def _process_poster_rename_job(
 
     renamer = PosterRenamerr(logger=logger)
     # apply_staging() + post-rename actions (border + plex/kometa upload policy)
-    # are handled inside the helper.
-    result = _adhoc_rename_and_post(renamer, media_items, logger, job_id)
+    # are handled inside the helper. On an upload-retry re-stage the rename
+    # notification is suppressed (the original run already sent it), so repeated
+    # upload attempts don't fire duplicate rename notifications.
+    result = _adhoc_rename_and_post(
+        renamer,
+        media_items,
+        logger,
+        job_id,
+        suppress_notification=bool(payload.get("suppress_notification", False)),
+    )
     up = result.get("upload_result")
     if result.get("success") and up and not up.get("success"):
         # Fail the job so the worker's backoff retry re-stages (a fresh
@@ -548,7 +559,12 @@ def _process_upload_posters_job(
 
 
 def _adhoc_rename_and_post(
-    renamer, media_items, logger, job_id: int, force_upload: bool = False
+    renamer,
+    media_items,
+    logger,
+    job_id: int,
+    force_upload: bool = False,
+    suppress_notification: bool = False,
 ) -> Dict[str, Any]:
     """Run the webhook/adhoc rename + post-rename actions under the apply_staging
     context so the plex path's temp staging dir lives across rename → border →
@@ -559,7 +575,12 @@ def _adhoc_rename_and_post(
         result = renamer.run_poster_rename_adhoc(media_items)
         if result.get("success") and result.get("output"):
             upload_result = _handle_post_rename_actions(
-                result, renamer, logger, job_id, force_upload=force_upload
+                result,
+                renamer,
+                logger,
+                job_id,
+                force_upload=force_upload,
+                suppress_notification=suppress_notification,
             )
             if upload_result is not None:
                 # The rename itself succeeded; each caller decides how a
@@ -574,6 +595,7 @@ def _handle_post_rename_actions(
     logger,
     job_id: int,
     force_upload: bool = False,
+    suppress_notification: bool = False,
 ) -> Optional[Dict[str, Any]]:
     """
     Handle notifications and uploads after successful rename.
@@ -597,8 +619,11 @@ def _handle_post_rename_actions(
         output = rename_result.get("output", {})
         manifest = rename_result.get("manifest", {})
 
-        # Send notifications if there are results
-        if any(output.values()):
+        # Send notifications if there are results — but NOT on an upload-retry
+        # re-stage. The original run already sent the rename notification; a
+        # retry only re-stages + re-uploads, so re-notifying would fire a
+        # duplicate rename notification per attempt (the storm the user saw).
+        if any(output.values()) and not suppress_notification:
             from backend.util.notification import NotificationManager
 
             manager = NotificationManager(
