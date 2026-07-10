@@ -1744,23 +1744,11 @@ class PosterRenamerr(ChubModule):
                     f"Processed {len(media_items)} media items, {matched_count} matched"
                 )
 
-                # Always notify on webhook/API-driven adhoc imports so
-                # the user has awareness — the trigger is asynchronous
-                # and the UI may not be open. The formatter handles the
-                # empty-output case with a clean "No files were renamed."
-                # field, so a webhook that matched zero new media still
-                # produces a small confirmation message rather than
-                # silence.
-                try:
-                    manager = NotificationManager(
-                        self.full_config,
-                        self.logger,
-                        module_name="poster_renamerr",
-                    )
-                    manager.send_notification(output)
-                except Exception as e:
-                    log.debug(f"adhoc poster_renamerr notification failed: {e}")
-
+                # No notification here. The sole caller (job_processor's
+                # _adhoc_rename_and_post → _handle_post_rename_actions) sends ONE
+                # OUTCOME notification after the poster actually lands in Plex (or
+                # the kometa write). Notifying on the rename step too double-fired
+                # a notification for every webhook.
                 return {
                     "success": True,
                     "output": output,
