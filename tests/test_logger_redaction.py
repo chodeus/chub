@@ -42,3 +42,18 @@ def test_query_param_redaction_stops_at_next_param():
 def test_plain_urls_without_secrets_untouched():
     msg = "Fetched http://radarr:7878/api/v3/movie?page=2&sort=title fine"
     assert _r(msg) == msg
+
+
+def test_short_webhook_secret_json_form_redacted():
+    out = _r('{"webhook_secret": "abc"}')
+    assert "abc" not in out
+    assert "[redacted]" in out
+
+
+def test_short_webhook_secret_kv_form_redacted():
+    assert _r("webhook_secret: abc") == "webhook_secret: [redacted]"
+
+
+def test_empty_webhook_secret_untouched():
+    msg = '{"webhook_secret": ""}'
+    assert _r(msg) == msg

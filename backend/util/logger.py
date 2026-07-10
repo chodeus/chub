@@ -69,7 +69,7 @@ class SmartRedactionFilter(logging.Filter):
             (r'("client_secret":\s*")[^"]{20,}(")', r"\1[redacted]\2"),
             (r'("jwt_secret":\s*")[^"]{20,}(")', r"\1[redacted]\2"),
             (r'("password_hash":\s*")[^"]{20,}(")', r"\1[redacted]\2"),
-            (r'("webhook_secret":\s*")[^"]{8,}(")', r"\1[redacted]\2"),
+            (r'("webhook_secret":\s*")[^"]+(")', r"\1[redacted]\2"),
             (r'("X-Api-Key":\s*")[^"]{8,}(")', r"\1[redacted]\2"),
             (r'("X-Plex-Token":\s*")[^"]{8,}(")', r"\1[redacted]\2"),
             # Configuration field redaction (yaml/kv forms)
@@ -82,7 +82,7 @@ class SmartRedactionFilter(logging.Filter):
                 "jwt_secret: [redacted]",
             ),
             (
-                r"webhook_secret\s*[:=]\s*['\"]?[A-Za-z0-9_\-]{8,}['\"]?",
+                r"webhook_secret\s*[:=]\s*['\"]?[A-Za-z0-9_\-]+['\"]?",
                 "webhook_secret: [redacted]",
             ),
             # OAuth tokens in yaml/unquoted key:value form (e.g. a dumped
@@ -287,9 +287,7 @@ class Logger:
         error_console = logging.StreamHandler()
         error_console.setLevel(logging.ERROR)
         error_console.setFormatter(
-            SafeFormatter(
-                f"%(levelname)s [{self.module_name.upper()}]: %(message)s"
-            )
+            SafeFormatter(f"%(levelname)s [{self.module_name.upper()}]: %(message)s")
         )
         error_console.addFilter(redaction_filter)
         self._logger.addHandler(error_console)

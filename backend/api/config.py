@@ -26,6 +26,23 @@ from backend.util.config import (
 from backend.util.helper import dict_diff
 
 
+def _reject_weak_webhook_secret(old_config: dict, new_config: dict) -> Optional[str]:
+    """Return an error message if the webhook secret is being CHANGED to a new
+    non-empty value shorter than 16 chars. Existing short secrets are left
+    alone so old configs keep loading; empty means webhook auth is off."""
+    gen_new = new_config.get("general")
+    gen_old = old_config.get("general") or {}
+    new_secret = (
+        (gen_new.get("webhook_secret") or "").strip()
+        if isinstance(gen_new, dict)
+        else ""
+    )
+    old_secret = (gen_old.get("webhook_secret") or "").strip()
+    if new_secret and new_secret != old_secret and len(new_secret) < 16:
+        return "webhook_secret must be at least 16 characters (or empty to disable)"
+    return None
+
+
 def get_config_dep() -> ChubConfig:
     """Load and return the current configuration (FastAPI dependency)."""
     return load_config()
@@ -184,6 +201,14 @@ async def update_config(
 
         old_config = current_config.model_dump(mode="python")
         new_config = config_dict
+
+        weak_secret_msg = _reject_weak_webhook_secret(old_config, new_config)
+        if weak_secret_msg:
+            return error(
+                weak_secret_msg,
+                "CONFIG_VALIDATION_ERROR",
+                status_code=400,
+            )
 
         diffs = dict_diff(old_config, new_config)
         config_logger = logger.get_adapter("CONFIG_UPDATE")
