@@ -48,6 +48,7 @@ def db():
         try:
             os.unlink(path)
         except OSError:
+            # Best-effort temp cleanup; the file may already be gone.
             pass
 
 

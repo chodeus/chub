@@ -642,6 +642,50 @@ class BaseARRClient:
                 dict_of_names_and_ids[profile["name"]] = profile["id"]
             return dict_of_names_and_ids
 
+    # ---- notification ("Connect") provisioning --------------------------
+    # Create/update/remove CHUB's own inbound-webhook Connect entry inside
+    # Radarr/Sonarr via the arr's /api/v3/notification API — the same endpoints
+    # the arr UI uses. Consumed by backend/util/webhook_provisioner.py. All reuse
+    # the shared make_*_request retry/auth path; a failed or unreachable call
+    # returns None (or False for delete) so callers surface it without raising.
+
+    def get_notifications(self) -> Optional[List[Dict[str, Any]]]:
+        """List the instance's notification ("Connect") entries."""
+        return self.make_get_request(f"{self.api_base}/notification")
+
+    def get_notification_schema(self) -> Optional[List[Dict[str, Any]]]:
+        """Fetch the per-implementation notification schema templates, used to
+        discover the exact ``fields`` shape for a Webhook connection on this arr
+        version instead of hard-coding field names across app versions."""
+        return self.make_get_request(f"{self.api_base}/notification/schema")
+
+    def add_notification(self, body: Dict[str, Any], force_save: bool = False) -> Any:
+        """Create a notification (POST). The arr runs a LIVE connection test
+        against the receiver before saving unless ``force_save`` is set
+        (``?forceSave=true``); a failed test rejects the save (400 -> None here)."""
+        endpoint = f"{self.api_base}/notification"
+        if force_save:
+            endpoint += "?forceSave=true"
+        return self.make_post_request(endpoint, json=body)
+
+    def update_notification(
+        self, notification_id: int, body: Dict[str, Any], force_save: bool = False
+    ) -> Any:
+        """Update a notification in place (PUT ``/notification/{id}``). Same
+        live-test-before-save rule; never delete+recreate, so the arr keeps the
+        entry's id and any unrelated user edits."""
+        endpoint = f"{self.api_base}/notification/{notification_id}"
+        if force_save:
+            endpoint += "?forceSave=true"
+        return self.make_put_request(endpoint, json=body)
+
+    def delete_notification(self, notification_id: int) -> bool:
+        """Delete a notification by id. True on a 2xx, else False."""
+        resp = self.make_delete_request(
+            f"{self.api_base}/notification/{notification_id}"
+        )
+        return bool(resp is not None and getattr(resp, "status_code", 500) < 300)
+
 
 class RadarrClient(BaseARRClient):
     """Client for interacting with Radarr API."""

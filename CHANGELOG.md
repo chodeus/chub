@@ -2,6 +2,34 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.39.0](https://github.com/chodeus/chub/compare/v2.38.1...v2.39.0) (2026-07-10)
+
+
+### Features
+
+* **config:** reveal saved secrets on demand via the eye toggle ([04bcd9d](https://github.com/chodeus/chub/commit/04bcd9d1f1a032175251e1c3c28655c2adf21296))
+* **instances:** opt-in gate for Plex libraries before they surface in CHUB ([aa12689](https://github.com/chodeus/chub/commit/aa12689ec6c7118a631e0c94180cec0b2e112722))
+* **labelarr:** replace free-text library field with an opt-in picker ([8da6c8c](https://github.com/chodeus/chub/commit/8da6c8c463334a7818f0ffe6881ed3819047ae6a))
+* **webhooks:** honor X-Forwarded-For from trusted proxies for instance matching ([a60e97b](https://github.com/chodeus/chub/commit/a60e97b9c952e835f56ce20189f6dff4099692fd))
+
+
+### Bug Fixes
+
+* **auth:** render posters via token-less URLs when auth is not configured ([4873d40](https://github.com/chodeus/chub/commit/4873d401aa50d8d0a6360a017ce5d5ebba18fec6))
+* **poster_renamerr:** library-aware plex skip-unchanged + lock the match phase ([7a416bb](https://github.com/chodeus/chub/commit/7a416bb8aa0150d76fe42fd17d1d844f6133c508))
+* **posters:** don't send Discord/Notifiarr alert for unconfigured plex_path ([140e19f](https://github.com/chodeus/chub/commit/140e19f8c184e898d030c40e462cf35aae9929b4))
+* **unmatched:** restore per-season detail + secondary external ids ([2554caf](https://github.com/chodeus/chub/commit/2554cafe03c9319f511a536ca3e9020095100ef7))
+* **webhooks,upload:** close webhook + plex-upload reliability gaps ([9e5b967](https://github.com/chodeus/chub/commit/9e5b967641722c20d0099b52651ddd6ca11aa2d1))
+* **webhooks:** differentiate same-IP arr instances by payload instanceName ([0bdf629](https://github.com/chodeus/chub/commit/0bdf629eb56abe6ece6fc901f0a1fbd241ea9c27))
+* **webhooks:** drop phantom import events, align setup docs with Sonarr/Radarr ([45fa5fe](https://github.com/chodeus/chub/commit/45fa5fe70d0ce00969481d27a236cad74147984f))
+* **webhooks:** match arr instance by resolved peer IP, not host+port string ([6ac6247](https://github.com/chodeus/chub/commit/6ac6247254dea3661627474f29b3e98a7975a474))
+
+
+### Performance
+
+* **poster_renamerr:** skip re-staging unchanged posters on the plex path ([3cbb12e](https://github.com/chodeus/chub/commit/3cbb12e12dae67c8c0f4fd962c4c2c49ccb50f3e))
+* **webhooks:** skip the Plex-availability wait when it can't help ([2a6ebd1](https://github.com/chodeus/chub/commit/2a6ebd1d52f1bba9a51621a7227c42cc16afd136))
+
 ## [2.38.1](https://github.com/chodeus/chub/compare/v2.38.0...v2.38.1) (2026-07-04)
 
 

@@ -636,6 +636,14 @@ class GeneralConfig(BaseModel):
     webhook_retry_delay: int = Field(default=30, ge=1, le=3600)
     webhook_max_retries: int = Field(default=10, ge=0, le=100)
     webhook_secret: str = ""
+    # CHUB's own base URL as reachable *from an *arr container* (e.g.
+    # "http://192.168.1.10:8060" or "https://chub.example.com"). Used only when
+    # auto-provisioning the poster webhook into Radarr/Sonarr: it's the address
+    # CHUB writes into each arr's Connect entry, so it must be what the arr can
+    # reach — NOT necessarily the browser origin (a reverse-proxy hostname or a
+    # different docker network can differ). Empty = fall back to the base_url the
+    # provisioning request supplies. Not a secret (never redacted).
+    public_url: str = ""
     # Reverse-proxy trust for inbound webhooks. When CHUB sits behind a proxy
     # (Traefik/nginx/Caddy), the connection's peer IP is the proxy's, not the
     # arr's, which defeats peer-IP instance matching. If the immediate peer

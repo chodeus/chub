@@ -18,6 +18,12 @@ from backend.util.config import ConfigError, load_config
 from backend.util.database import ChubDB
 from backend.util.rate_limiter import webhook_limiter
 from backend.util.webhook_processor import WebhookProcessor, resolve_client_host
+from backend.util.webhook_provisioner import (
+    CHUB_NOTIFICATION_NAME,
+    deprovision_all,
+    normalize_base_url,
+    provision_all,
+)
 
 
 def verify_webhook_secret(request: Request) -> None:
@@ -159,7 +165,6 @@ async def process_poster_webhook(
                 or request.headers.get("X-Real-IP"),
                 trusted_proxies,
             ),
-            "client_port": request.headers.get("X-Service-Port"),
             # Optional explicit instance selector. The reliable way to route a
             # webhook when the peer IP can't identify the sender (reverse proxy,
             # host networking, or several instances sharing an IP): the user
@@ -179,7 +184,7 @@ async def process_poster_webhook(
         # Check for test events and handle them specially
         if _is_test_event(data):
             logger.info(
-                f"Test event received from {client_info['scheme']}://{client_info['client_host']}:{client_info['client_port']}"
+                f"Test event received from {client_info['scheme']}://{client_info['client_host']}"
             )
             return ok(
                 "Test webhook received successfully",
@@ -413,6 +418,180 @@ async def get_webhook_wiring(
         return error(
             f"Error retrieving webhook wiring: {str(e)}",
             code="WEBHOOK_WIRING_ERROR",
+            status_code=500,
+        )
+
+
+def _resolve_provision_base_url(cfg: Any, requested):
+    """Resolve the arr-reachable CHUB base URL: the request's ``base_url`` first,
+    then the saved ``general.public_url``. Returns ``(normalized, error)``."""
+    raw = (requested or "").strip() or (cfg.general.public_url or "").strip()
+    return normalize_base_url(raw)
+
+
+def _normalize_only(value):
+    """A request ``instances`` value → the provisioner's ``only`` list, or None
+    (= all eligible) for None/empty/["all"]."""
+    if (
+        isinstance(value, list)
+        and value
+        and not any(str(v).strip().lower() == "all" for v in value)
+    ):
+        return [str(v) for v in value]
+    return None
+
+
+@router.get(
+    "/provision/status",
+    summary="Poster-webhook provisioning status",
+    description=(
+        "Dry-run reconcile: for each Radarr/Sonarr instance, report whether "
+        "CHUB's poster webhook is set up, drifted, missing, or the instance is "
+        "unreachable/skipped. Returns booleans/drift-field names only — never the "
+        "secret-bearing URL."
+    ),
+    responses={401: {"description": "Authentication required"}},
+)
+async def get_provision_status(
+    request: Request,
+    logger: Any = Depends(get_logger),
+) -> JSONResponse:
+    try:
+        cfg = load_config()
+        base_url, base_err = _resolve_provision_base_url(
+            cfg, request.query_params.get("base_url")
+        )
+        payload: Dict[str, Any] = {
+            "notification_name": CHUB_NOTIFICATION_NAME,
+            "public_url_configured": bool((cfg.general.public_url or "").strip()),
+            "secret_configured": bool((cfg.general.webhook_secret or "").strip()),
+            "base_url": base_url or "",
+        }
+        if base_err:
+            payload["base_url_error"] = base_err
+            payload["instances"] = []
+        else:
+            secret = (cfg.general.webhook_secret or "").strip() or None
+            payload["instances"] = provision_all(
+                cfg, base_url, secret, dry_run=True, logger=logger
+            )
+        resp = ok("Webhook provisioning status", payload)
+        resp.headers["Cache-Control"] = "no-store"
+        return resp
+    except ConfigError as e:
+        return error(
+            f"Configuration unavailable: {e}",
+            code="CONFIG_UNAVAILABLE",
+            status_code=503,
+        )
+    except Exception as e:
+        logger.error(f"Error retrieving provisioning status: {e}", exc_info=True)
+        return error(
+            f"Error retrieving provisioning status: {str(e)}",
+            code="WEBHOOK_PROVISION_STATUS_ERROR",
+            status_code=500,
+        )
+
+
+@router.post(
+    "/provision",
+    summary="Provision the poster webhook into Radarr/Sonarr",
+    description=(
+        "Create or update CHUB's poster webhook (Connect entry) in the selected "
+        "instances via each arr's own API, with ?instance= (and the secret, if "
+        "set) baked into the URL. Idempotent (matched by a fixed notification "
+        "name). Body: {instances?: names|['all'], base_url?, include_upgrade?, "
+        "force_save?}."
+    ),
+    responses={
+        400: {"description": "Invalid base URL"},
+        401: {"description": "Authentication required"},
+    },
+)
+async def provision_webhooks(
+    request: Request,
+    logger: Any = Depends(get_logger),
+) -> JSONResponse:
+    try:
+        cfg = load_config()
+        body = await request.json()
+        base_url, base_err = _resolve_provision_base_url(cfg, body.get("base_url"))
+        if base_err:
+            return error(base_err, code="WEBHOOK_PROVISION_BASE_URL", status_code=400)
+        secret = (cfg.general.webhook_secret or "").strip() or None
+        results = provision_all(
+            cfg,
+            base_url,
+            secret,
+            include_upgrade=bool(body.get("include_upgrade")),
+            force_save=bool(body.get("force_save")),
+            only=_normalize_only(body.get("instances")),
+            logger=logger,
+        )
+        applied = sum(1 for r in results if r.get("action") in ("created", "updated"))
+        logger.info(
+            f"Webhook provisioning: {applied} written across {len(results)} "
+            f"instance(s) at base {base_url}"
+        )
+        resp = ok(
+            "Webhook provisioning complete",
+            {"instances": results, "base_url": base_url},
+        )
+        resp.headers["Cache-Control"] = "no-store"
+        return resp
+    except ConfigError as e:
+        return error(
+            f"Configuration unavailable: {e}",
+            code="CONFIG_UNAVAILABLE",
+            status_code=503,
+        )
+    except Exception as e:
+        logger.error(f"Error provisioning webhooks: {e}", exc_info=True)
+        return error(
+            f"Error provisioning webhooks: {str(e)}",
+            code="WEBHOOK_PROVISION_ERROR",
+            status_code=500,
+        )
+
+
+@router.post(
+    "/provision/remove",
+    summary="Remove CHUB's poster webhook from Radarr/Sonarr",
+    description=(
+        "Delete the CHUB-owned poster webhook (Connect entry) from the selected "
+        "instances. Only CHUB's own fixed-name entry is removed; user-made "
+        "webhooks are left untouched. Body: {instances?: names|['all']}."
+    ),
+    responses={401: {"description": "Authentication required"}},
+)
+async def remove_webhooks(
+    request: Request,
+    logger: Any = Depends(get_logger),
+) -> JSONResponse:
+    try:
+        cfg = load_config()
+        body = await request.json()
+        results = deprovision_all(
+            cfg, only=_normalize_only(body.get("instances")), logger=logger
+        )
+        removed = sum(1 for r in results if r.get("action") == "removed")
+        logger.info(
+            f"Webhook removal: {removed} deleted across {len(results)} instance(s)"
+        )
+        resp = ok("Webhook removal complete", {"instances": results})
+        resp.headers["Cache-Control"] = "no-store"
+        return resp
+    except ConfigError as e:
+        return error(
+            f"Configuration unavailable: {e}",
+            code="CONFIG_UNAVAILABLE",
+            status_code=503,
+        )
+    except Exception as e:
+        logger.error(f"Error removing webhooks: {e}", exc_info=True)
+        return error(
+            f"Error removing webhooks: {str(e)}",
+            code="WEBHOOK_REMOVE_ERROR",
             status_code=500,
         )
 
