@@ -2,6 +2,26 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.40.0](https://github.com/chodeus/chub/compare/v2.39.0...v2.40.0) (2026-07-10)
+
+
+### Features
+
+* **webhooks:** auto-detect the provisioning base URL + fix precedence ([1aa1252](https://github.com/chodeus/chub/commit/1aa1252c9ede4e465be341c91bc7e6b8ba7a1d09))
+* **webhooks:** payload-first routing + auto-provision poster webhook into *arrs ([f218ead](https://github.com/chodeus/chub/commit/f218ead782f2db8181ba1e115ae18baa9f76278e))
+
+
+### Bug Fixes
+
+* **ui:** poll the jobs list while active so the duration timer doesn't overshoot ([24e3f0d](https://github.com/chodeus/chub/commit/24e3f0d063b9c2e0db24343940c73030abae76a1))
+* **upload:** resolve posters against live Plex when absent from the cache ([d87513d](https://github.com/chodeus/chub/commit/d87513d3670ceb5a32500e386e20d03700ff7116))
+* **webhooks:** annotate best-effort empty-except clauses ([92a2cc2](https://github.com/chodeus/chub/commit/92a2cc25baa90d07d30e4bb8213ae1d58b23c35c))
+* **webhooks:** don't re-send the rename notification on upload retries ([a82bff6](https://github.com/chodeus/chub/commit/a82bff6b9c99db6e7febe85c1aed788b271070a6))
+* **webhooks:** drop the duplicate rename-step notification ([54b2f60](https://github.com/chodeus/chub/commit/54b2f60bc4f3ea6a5ce7527e5fd2ce71f3bc4070))
+* **webhooks:** notify on the upload outcome, not the rename step ([481d6a9](https://github.com/chodeus/chub/commit/481d6a9c39ea497dd241a6fb861ba73e89efb6d5))
+* **webhooks:** run auto-provisioning off the event loop ([aa9c747](https://github.com/chodeus/chub/commit/aa9c747482d97cf4b136ddb6331074994ff1225a))
+* **webhooks:** verify-after-write so a landed provision isn't reported failed ([2319803](https://github.com/chodeus/chub/commit/2319803b74a8058e03b408107b8a8f48868266a9))
+
 ## [2.39.0](https://github.com/chodeus/chub/compare/v2.38.1...v2.39.0) (2026-07-10)
 
 
