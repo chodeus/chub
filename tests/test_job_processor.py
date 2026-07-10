@@ -280,3 +280,85 @@ def test_adhoc_rename_attaches_upload_result(monkeypatch):
     result = jp._adhoc_rename_and_post(renamer, [{}], _logger(), 1)
     assert result["success"] is True
     assert result["upload_result"]["success"] is False
+
+
+def test_adhoc_rename_suppresses_notification_on_retry(monkeypatch):
+    """The rename notification fires on the first run but is suppressed on an
+    upload-retry re-stage (suppress_notification=True), so repeated upload
+    attempts don't fire duplicate rename notifications."""
+    from contextlib import contextmanager
+    from types import SimpleNamespace as NS
+
+    @contextmanager
+    def _staging():
+        yield None
+
+    renamer = NS(
+        apply_staging=_staging,
+        run_poster_rename_adhoc=lambda items: {
+            "success": True,
+            "output": {"movie": [{"title": "Dune"}]},
+            "manifest": {"media_cache": [1]},
+        },
+        config=NS(apply_method="plex", run_border_replacerr=False),
+        full_config=None,
+    )
+
+    notes = []
+
+    class _StubNotifier:
+        def __init__(self, *a, **k):
+            pass
+
+        def send_notification(self, output):
+            notes.append(output)
+
+    class _StubDB:
+        def __init__(self, *a, **k):
+            self.plex = NS(count=lambda: 1)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    class _StubUploader:
+        def __init__(self, *a, **k):
+            pass
+
+        def run(self):
+            return {"success": False, "message": "boom"}
+
+    monkeypatch.setattr("backend.util.notification.NotificationManager", _StubNotifier)
+    monkeypatch.setattr(jp, "_check_plex_upload_enabled", lambda cfg: True)
+    monkeypatch.setattr(jp, "ChubDB", _StubDB)
+    monkeypatch.setattr("backend.util.upload_posters.PosterUploader", _StubUploader)
+
+    # First run notifies once.
+    jp._adhoc_rename_and_post(renamer, [{}], _logger(), 1)
+    assert len(notes) == 1
+
+    # Upload-retry re-stage is suppressed → no additional notification.
+    jp._adhoc_rename_and_post(renamer, [{}], _logger(), 2, suppress_notification=True)
+    assert len(notes) == 1
+
+
+def test_poster_rename_retry_job_threads_suppress_flag(monkeypatch):
+    """A poster_rename job carrying suppress_notification=True (the upload-retry
+    payload) passes it through to _adhoc_rename_and_post."""
+    captured = {}
+
+    def _fake_adhoc(renamer, media_items, logger, job_id, **kwargs):
+        captured["suppress"] = kwargs.get("suppress_notification")
+        return {"success": True}
+
+    monkeypatch.setattr(jp, "_adhoc_rename_and_post", _fake_adhoc)
+    monkeypatch.setattr(
+        "backend.modules.poster_renamerr.PosterRenamerr", lambda **k: object()
+    )
+
+    jp._process_poster_rename_job(
+        {"media_items": [{}], "suppress_notification": True}, _logger(), 5
+    )
+    assert captured["suppress"] is True
