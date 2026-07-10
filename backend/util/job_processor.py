@@ -3,7 +3,8 @@
 import json
 import threading
 import time
-from typing import Any, Dict
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, Optional
 
 from backend.util.database import ChubDB
 
@@ -290,9 +291,49 @@ def _process_webhook_job(
 
         if rename_result["success"]:
             log.info(f"[JOB:{job_id}] Webhook processing successful")
+            message = f"Webhook processed successfully: {media['title']}"
+            up = rename_result.get("upload_result")
+            if (
+                up
+                and not up.get("success")
+                and up.get("error_code") != "NO_ENABLED_INSTANCES"
+            ):
+                # The rename succeeded but the synchronous plex-path upload
+                # didn't. Don't fail the webhook job (the worker would re-run
+                # the whole arr fetch + rename per attempt); enqueue ONE
+                # delayed poster_rename job scoped to these items — it
+                # re-stages and re-uploads only what's still missing, and the
+                # worker's backoff covers repeat failures. Never forced:
+                # already-covered posters skip via their recorded hashes.
+                try:
+                    retry_at = (
+                        datetime.now(timezone.utc) + timedelta(seconds=60)
+                    ).isoformat()
+                    if db is not None:
+                        db.worker.enqueue_job(
+                            "jobs",
+                            {"media_items": media_items},
+                            job_type="poster_rename",
+                            scheduled_at=retry_at,
+                        )
+                    else:
+                        with ChubDB(logger=logger, quiet=True) as tdb:
+                            tdb.worker.enqueue_job(
+                                "jobs",
+                                {"media_items": media_items},
+                                job_type="poster_rename",
+                                scheduled_at=retry_at,
+                            )
+                    log.warning(
+                        f"[JOB:{job_id}] Plex upload failed "
+                        f"({up.get('message')}); queued a poster_rename retry"
+                    )
+                    message += " (Plex upload failed; retry queued)"
+                except Exception as e:
+                    log.error(f"[JOB:{job_id}] Failed to enqueue upload retry: {e}")
             return {
                 "success": True,
-                "message": f"Webhook processed successfully: {media['title']}",
+                "message": message,
                 "data": {"media": media, "rename_result": rename_result},
             }
         else:
@@ -429,7 +470,18 @@ def _process_poster_rename_job(
     renamer = PosterRenamerr(logger=logger)
     # apply_staging() + post-rename actions (border + plex/kometa upload policy)
     # are handled inside the helper.
-    return _adhoc_rename_and_post(renamer, media_items, logger, job_id)
+    result = _adhoc_rename_and_post(renamer, media_items, logger, job_id)
+    up = result.get("upload_result")
+    if result.get("success") and up and not up.get("success"):
+        # Fail the job so the worker's backoff retry re-stages (a fresh
+        # apply_staging per attempt) and re-uploads; capped at max_attempts.
+        return {
+            "status": 500,
+            "success": False,
+            "message": f"Poster upload failed: {up.get('message')}",
+            "error_code": "UPLOAD_FAILED",
+        }
+    return result
 
 
 def _process_upload_posters_job(
@@ -506,9 +558,13 @@ def _adhoc_rename_and_post(
     with renamer.apply_staging():
         result = renamer.run_poster_rename_adhoc(media_items)
         if result.get("success") and result.get("output"):
-            _handle_post_rename_actions(
+            upload_result = _handle_post_rename_actions(
                 result, renamer, logger, job_id, force_upload=force_upload
             )
+            if upload_result is not None:
+                # The rename itself succeeded; each caller decides how a
+                # failed upload affects its job result.
+                result["upload_result"] = upload_result
     return result
 
 
@@ -518,7 +574,7 @@ def _handle_post_rename_actions(
     logger,
     job_id: int,
     force_upload: bool = False,
-) -> None:
+) -> Optional[Dict[str, Any]]:
     """
     Handle notifications and uploads after successful rename.
 
@@ -530,9 +586,13 @@ def _handle_post_rename_actions(
         force_upload: When True, queues the upload job with `force=True` so
             the uploader skips its hash-equal short-circuit. Webhook flows
             set this from the *arr instance's `webhook_force_reupload`.
+
+    Returns the synchronous plex-path upload result dict (None on the kometa
+    path or when no upload ran) so callers can react to a failed upload.
     """
     log = logger.get_adapter("POST_RENAME")
 
+    upload_result: Optional[Dict[str, Any]] = None
     try:
         output = rename_result.get("output", {})
         manifest = rename_result.get("manifest", {})
@@ -567,14 +627,19 @@ def _handle_post_rename_actions(
 
             with ChubDB(logger=logger) as updb:
                 refresh_plex = updb.plex.count() == 0
-                PosterUploader(
+                upload_result = PosterUploader(
                     db=updb,
                     logger=logger,
                     manifest=manifest,
                     force=force_upload,
                     refresh_plex=refresh_plex,
                 ).run()
-            log.info(f"[JOB:{job_id}] Plex upload completed")
+            if upload_result and not upload_result.get("success"):
+                log.warning(
+                    f"[JOB:{job_id}] Plex upload failed: {upload_result.get('message')}"
+                )
+            else:
+                log.info(f"[JOB:{job_id}] Plex upload completed")
         else:
             log.info(
                 f"[JOB:{job_id}] Plex upload not enabled or no manifest - task complete"
@@ -582,6 +647,7 @@ def _handle_post_rename_actions(
 
     except Exception as e:
         log.error(f"[JOB:{job_id}] Error in post-rename actions: {e}")
+    return upload_result
 
 
 def _instance_force_reupload(instance_info: Dict[str, Any]) -> bool:

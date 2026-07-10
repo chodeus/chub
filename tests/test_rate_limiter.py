@@ -10,10 +10,11 @@ from fastapi import HTTPException
 from backend.util.rate_limiter import RateLimiter
 
 
-def make_request(path="/login", ip="1.2.3.4"):
+def make_request(path="/login", ip="1.2.3.4", headers=None):
     return SimpleNamespace(
         url=SimpleNamespace(path=path),
         client=SimpleNamespace(host=ip),
+        headers=dict(headers or {}),
     )
 
 
@@ -92,3 +93,54 @@ def test_retry_after_is_positive_integer():
         limiter(req)
     retry_after = int(excinfo.value.headers["Retry-After"])
     assert retry_after >= 1
+
+
+def _config_with_proxies(proxies):
+    return SimpleNamespace(general=SimpleNamespace(trusted_proxies=proxies))
+
+
+def test_trust_forwarded_separates_clients_behind_trusted_proxy():
+    limiter = RateLimiter(rate=0.001, burst=1, trust_forwarded=True)
+    with patch(
+        "backend.util.config.load_config",
+        return_value=_config_with_proxies(["private"]),
+    ):
+        limiter(make_request(ip="172.16.0.9", headers={"X-Forwarded-For": "10.0.0.1"}))
+        # Different forwarded client gets its own bucket
+        limiter(make_request(ip="172.16.0.9", headers={"X-Forwarded-For": "10.0.0.2"}))
+        with pytest.raises(HTTPException) as excinfo:
+            limiter(
+                make_request(ip="172.16.0.9", headers={"X-Forwarded-For": "10.0.0.1"})
+            )
+        assert excinfo.value.status_code == 429
+
+
+def test_trust_forwarded_ignores_forged_xff_from_untrusted_peer():
+    limiter = RateLimiter(rate=0.001, burst=1, trust_forwarded=True)
+    with patch(
+        "backend.util.config.load_config",
+        return_value=_config_with_proxies(["private"]),
+    ):
+        limiter(make_request(ip="8.8.8.8", headers={"X-Forwarded-For": "10.0.0.1"}))
+        # Rotating XFF must not mint a fresh bucket for an untrusted peer
+        with pytest.raises(HTTPException):
+            limiter(make_request(ip="8.8.8.8", headers={"X-Forwarded-For": "10.0.0.2"}))
+
+
+def test_trust_forwarded_falls_back_to_peer_on_config_failure():
+    limiter = RateLimiter(rate=0.001, burst=1, trust_forwarded=True)
+    with patch(
+        "backend.util.config.load_config", side_effect=RuntimeError("config broken")
+    ):
+        limiter(make_request(ip="172.16.0.9", headers={"X-Forwarded-For": "10.0.0.1"}))
+        with pytest.raises(HTTPException):
+            limiter(
+                make_request(ip="172.16.0.9", headers={"X-Forwarded-For": "10.0.0.2"})
+            )
+
+
+def test_default_ignores_forwarded_headers():
+    limiter = RateLimiter(rate=0.001, burst=1)
+    limiter(make_request(ip="172.16.0.9", headers={"X-Forwarded-For": "10.0.0.1"}))
+    with pytest.raises(HTTPException):
+        limiter(make_request(ip="172.16.0.9", headers={"X-Forwarded-For": "10.0.0.2"}))

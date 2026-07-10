@@ -199,6 +199,7 @@ async def process_poster_webhook(
 
         # Deduplicate at API layer before enqueuing — persistent rolling
         # window so Sonarr/Radarr retries are coalesced even across restarts.
+        dedup_identity = _webhook_dedup_identity(data, client_info)
         if _is_duplicate_webhook(data, db, logger, client_info):
             return ok(
                 "Duplicate webhook ignored",
@@ -226,6 +227,17 @@ async def process_poster_webhook(
 
         if not result.get("success"):
             logger.error(f"Error persisting webhook: {result.get('message')}")
+            # Roll back the dedup row recorded above so the arr's retry
+            # isn't debounced; best-effort — a second DB failure here must
+            # not mask the original 500.
+            if dedup_identity is not None:
+                try:
+                    db.webhook_cache.delete(*dedup_identity)
+                except Exception:
+                    logger.warning(
+                        "Failed to roll back webhook dedup row after enqueue failure",
+                        exc_info=True,
+                    )
             return error(
                 f"Error enqueuing webhook: {result.get('message', 'Unknown error')}",
                 code="WEBHOOK_ENQUEUE_ERROR",
