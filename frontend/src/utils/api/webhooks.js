@@ -38,12 +38,21 @@ export const webhooksAPI = {
     /**
      * Dry-run reconcile of the poster webhook across every Radarr/Sonarr
      * instance. Never returns the secret-bearing URL — only status/drift flags.
-     * @param {string} [baseUrl] - CHUB base URL as reachable from the *arrs.
-     * @returns {Promise<Object>} { base_url, base_url_error?, public_url_configured, secret_configured, notification_name, instances: [{ name, type, status, drift_fields, error, foreign_webhook }] }
+     * Base-URL precedence (server-side): explicit baseUrl → saved public_url →
+     * auto-detected from an existing *arr webhook → originHint (last resort).
+     * @param {Object} [opts]
+     * @param {string} [opts.baseUrl] - Explicit base URL to reconcile against (the user's edited value).
+     * @param {string} [opts.originHint] - Browser origin, used only as a last-resort fallback.
+     * @returns {Promise<Object>} { base_url, detected_base_url, base_url_error?, public_url_configured, secret_configured, notification_name, instances: [{ name, type, status, drift_fields, error, foreign_webhook }] }
      */
-    getProvisionStatus: baseUrl => {
-        const qs = baseUrl ? `?base_url=${encodeURIComponent(baseUrl)}` : '';
-        return apiCore.get(`/webhooks/provision/status${qs}`, { useCache: false });
+    getProvisionStatus: ({ baseUrl, originHint } = {}) => {
+        const params = new URLSearchParams();
+        if (baseUrl) params.set('base_url', baseUrl);
+        if (originHint) params.set('origin_hint', originHint);
+        const qs = params.toString();
+        return apiCore.get(`/webhooks/provision/status${qs ? `?${qs}` : ''}`, {
+            useCache: false,
+        });
     },
 
     /**

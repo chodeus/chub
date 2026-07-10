@@ -85,6 +85,22 @@ def build_webhook_url(base: str, instance_name: str, secret: Optional[str]) -> s
     return url
 
 
+def _base_of(url: str) -> Optional[str]:
+    """Return the ``scheme://host[:port]`` prefix of a URL, or None if it isn't a
+    usable absolute http(s) URL. Used to recover a base URL from an existing
+    webhook already configured in an arr."""
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return None
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        return None
+    netloc = (
+        parsed.hostname if parsed.port is None else f"{parsed.hostname}:{parsed.port}"
+    )
+    return f"{parsed.scheme}://{netloc}"
+
+
 # ----- notification body / diff -------------------------------------------
 
 
@@ -442,3 +458,105 @@ def deprovision_all(
         return deprovision_instance(client, instance_type, name, dry_run=dry_run)
 
     return _run_over_instances(eligible, _op, logger) + skipped
+
+
+# ----- base-URL auto-detection --------------------------------------------
+
+
+def detect_base_url(
+    config: Any, *, only: Optional[List[str]] = None, logger: Any = None
+) -> Optional[str]:
+    """Best-effort auto-detect of CHUB's arr-reachable base URL.
+
+    Reads each eligible arr's notifications and returns the base of the FIRST
+    webhook already pointing at CHUB's ``/poster/add`` endpoint — CHUB's own from
+    a prior run OR one the user configured by hand. This is the most reliable
+    signal because such a URL demonstrably reaches CHUB (and, for a reverse-proxy
+    or split-network setup, encodes the address the arr actually uses). Returns
+    None when no arr has a matching webhook (e.g. a first-time setup)."""
+    eligible, _ = _eligible_instances(config, only)
+    if not eligible:
+        return None
+
+    def _probe(target: Tuple[str, str, str, str]) -> Optional[str]:
+        _type, _name, url, api = target
+        client = None
+        try:
+            client = create_arr_client(url, api, logger)
+            if client is None or not client.is_connected():
+                return None
+            for notif in client.get_notifications() or []:
+                candidate = str(_field_value(notif, "url") or "")
+                if _POSTER_ADD_PATH in candidate:
+                    return _base_of(candidate)
+            return None
+        except Exception:  # noqa: BLE001 - detection is best-effort, never fatal
+            return None
+        finally:
+            session = getattr(client, "session", None)
+            if session is not None:
+                try:
+                    session.close()
+                except Exception:
+                    pass
+
+    with ThreadPoolExecutor(max_workers=min(8, len(eligible))) as pool:
+        for found in pool.map(_probe, eligible):
+            if found:
+                return found
+    return None
+
+
+def resolve_base_url(
+    config: Any,
+    explicit: Optional[str] = None,
+    *,
+    origin_hint: Optional[str] = None,
+    logger: Any = None,
+) -> Tuple[Optional[str], str, Optional[str]]:
+    """Resolve the arr-reachable base URL to use, returning
+    ``(normalized, detected, error)``.
+
+    Precedence: an ``explicit`` value the user typed → the saved
+    ``general.public_url`` → a value auto-detected from an existing arr webhook →
+    the browser ``origin_hint`` (last resort). Detection only runs when there's
+    nothing more authoritative, so it doesn't add arr calls when a value is
+    already known."""
+    explicit = (explicit or "").strip()
+    public_url = (
+        getattr(getattr(config, "general", None), "public_url", "") or ""
+    ).strip()
+    detected = ""
+    if not explicit and not public_url:
+        detected = detect_base_url(config, logger=logger) or ""
+    raw = explicit or public_url or detected or (origin_hint or "").strip()
+    base_url, error = normalize_base_url(raw)
+    return base_url, detected, error
+
+
+def status_report(
+    config: Any,
+    secret: Optional[str],
+    *,
+    explicit: Optional[str] = None,
+    origin_hint: Optional[str] = None,
+    logger: Any = None,
+) -> Dict[str, Any]:
+    """Dry-run reconcile for the status endpoint: resolve the base URL (with
+    auto-detection) and, unless the base URL is unusable, the per-instance status.
+    Bundled into one call so all the arr I/O happens in a single off-loop hop."""
+    base_url, detected, error = resolve_base_url(
+        config, explicit, origin_hint=origin_hint, logger=logger
+    )
+    report: Dict[str, Any] = {
+        "base_url": base_url or "",
+        "detected_base_url": detected,
+    }
+    if error:
+        report["base_url_error"] = error
+        report["instances"] = []
+    else:
+        report["instances"] = provision_all(
+            config, base_url, secret, dry_run=True, logger=logger
+        )
+    return report
