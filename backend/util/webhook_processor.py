@@ -438,6 +438,8 @@ class WebhookProcessor:
                 try:
                     client.session.close()
                 except Exception:
+                    # Best-effort close; a cleanup failure must not mask the
+                    # instance name we just looked up.
                     pass
         except Exception:
             name = None
