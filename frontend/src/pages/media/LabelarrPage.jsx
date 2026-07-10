@@ -559,7 +559,7 @@ const MappingCard = ({
                                                     .filter(Boolean),
                                             })
                                         }
-                                        placeholder="Library names (comma-separated; blank = all)"
+                                        placeholder="Library names (comma-separated; blank = all enabled)"
                                         disabled={disabled}
                                         className={inputCls}
                                     />

@@ -89,6 +89,52 @@ def _rename_config_instance_refs(config: ChubConfig, old: str, new: str) -> int:
     return walk(config)
 
 
+def _prune_module_library_refs(
+    config: ChubConfig, instance_name: str, allowed: list
+) -> int:
+    """Drop per-module Plex library selections that reference a library the
+    instance is no longer opted into.
+
+    Walks the config tree for any model carrying BOTH an ``instance`` name and a
+    ``library_names`` list (PlexScope / LabelarrPlexInstance / NestarrPlexInstance,
+    incl. nestarr's nested library_mappings) and, where ``instance`` matches,
+    filters ``library_names`` to the allow-list. Keeps the global opt-in the single
+    source of truth so no read/apply path can target a de-selected library.
+    Returns the number of library references removed.
+    """
+    allowed_norm = {
+        name.strip().lower() for name in (allowed or []) if isinstance(name, str)
+    }
+
+    def walk(node: Any) -> int:
+        if not isinstance(node, BaseModel):
+            return 0
+        n = 0
+        fields = type(node).model_fields
+        if "instance" in fields and "library_names" in fields:
+            if getattr(node, "instance", None) == instance_name:
+                libs = getattr(node, "library_names", None)
+                if isinstance(libs, list) and libs:
+                    kept = [
+                        lib
+                        for lib in libs
+                        if isinstance(lib, str) and lib.strip().lower() in allowed_norm
+                    ]
+                    if len(kept) != len(libs):
+                        setattr(node, "library_names", kept)
+                        n += len(libs) - len(kept)
+        for fname in fields:
+            val = getattr(node, fname, None)
+            if isinstance(val, BaseModel):
+                n += walk(val)
+            elif isinstance(val, list):
+                for item in val:
+                    n += walk(item)
+        return n
+
+    return walk(config)
+
+
 class TestInstanceRequest(BaseModel):
     """Request schema for testing a service instance."""
 
@@ -438,7 +484,9 @@ def check_all_health(
             service, name, test_url, headers = probe
             start = time.time()
             try:
-                resp = requests.get(test_url, headers=headers, timeout=2, allow_redirects=False)
+                resp = requests.get(
+                    test_url, headers=headers, timeout=2, allow_redirects=False
+                )
                 elapsed = round((time.time() - start) * 1000)
                 return name, {
                     "service": service,
@@ -611,6 +659,34 @@ def _fetch_plex_libraries(plex_data: Any) -> list:
     ]
 
 
+def _annotate_enabled(libraries: list, enabled_libraries: Optional[list]) -> list:
+    """Tag each ``{title, type}`` with ``enabled`` from the instance opt-in list.
+
+    Annotates AFTER the TTL cache (never inside the fetch), so the cache holds the
+    full library set and the opt-in UI can still show un-opted libraries. Mirrors
+    the connector's tri-state: ``None`` (legacy/unset) == all enabled; ``[]`` == all
+    disabled; a list enables exactly its (case-insensitive) members.
+    """
+    if enabled_libraries is None:
+        allowed_norm = None
+    else:
+        allowed_norm = {
+            name.strip().lower() for name in enabled_libraries if isinstance(name, str)
+        }
+    out = []
+    for lib in libraries or []:
+        title = lib.get("title") if isinstance(lib, dict) else str(lib)
+        enabled = (
+            True
+            if allowed_norm is None
+            else (title or "").strip().lower() in allowed_norm
+        )
+        out.append(
+            {**(lib if isinstance(lib, dict) else {"title": title}), "enabled": enabled}
+        )
+    return out
+
+
 @router.get(
     "/plex/libraries",
     summary="Get all Plex libraries (catalog)",
@@ -631,11 +707,14 @@ def get_plex_libraries_catalog(
     catalog: dict = {}
     for name in config.instances.plex or {}:
         try:
-            catalog[name] = plex_library_cache.get_cached_libraries(
+            libs = plex_library_cache.get_cached_libraries(
                 name,
                 fetch=lambda n: _fetch_plex_libraries(config.instances.plex[n]),
                 ttl_seconds=_PLEX_CATALOG_TTL,
                 now=time.monotonic(),
+            )
+            catalog[name] = _annotate_enabled(
+                libs, config.instances.plex[name].enabled_libraries
             )
         except Exception as exc:
             logger.warning(
@@ -710,6 +789,7 @@ def get_plex_libraries(
             logger.error("Plex libraries fetch failed: %s", fe.message)
             return error(fe.message, code=fe.code, status_code=fe.status_code)
 
+        libraries = _annotate_enabled(libraries, plex_data.enabled_libraries)
         return ok(
             f"Retrieved {len(libraries)} libraries for Plex instance '{instance}'",
             {"libraries": libraries},
@@ -722,6 +802,95 @@ def get_plex_libraries(
             code="PLEX_LIBRARIES_ERROR",
             status_code=500,
         )
+
+
+class UpdateLibrariesRequest(BaseModel):
+    """Request schema for setting a Plex instance's opted-in libraries."""
+
+    enabled_libraries: list = []
+
+
+@router.patch(
+    "/plex/{instance}/libraries",
+    summary="Set opted-in Plex libraries",
+    description=(
+        "Replace a Plex instance's library opt-in allow-list. Libraries not in the "
+        "list are hidden everywhere CHUB manages content, their cached rows are "
+        "purged, and any per-module selection referencing them is pruned. This is "
+        "the sole writer of enabled_libraries (the Add/Edit form never touches it)."
+    ),
+    responses={
+        200: {"description": "Opt-in updated"},
+        404: {"description": "Plex instance not found in configuration"},
+    },
+)
+async def update_instance_libraries(
+    instance: str,
+    data: UpdateLibrariesRequest,
+    config: ChubConfig = Depends(get_config),
+    logger: Any = Depends(get_logger),
+) -> JSONResponse:
+    """Set the opt-in allow-list for a Plex instance.
+
+    Persists ``enabled_libraries`` (de-duped, order preserved), prunes stale
+    per-module selections, invalidates the library catalog cache, and purges
+    plex_media_cache / collections_cache rows for de-selected libraries so they
+    stop surfacing in stats/search/matching.
+    """
+    plex_instances = config.instances.plex
+    detail = plex_instances.get(instance)
+    if not detail:
+        return error(
+            f"Plex instance '{instance}' not found",
+            code="PLEX_INSTANCE_NOT_FOUND",
+            status_code=404,
+        )
+
+    new_enabled = [
+        lib
+        for lib in dict.fromkeys(data.enabled_libraries or [])
+        if isinstance(lib, str)
+    ]
+    detail.enabled_libraries = new_enabled
+    allowed_norm = {lib.strip().lower() for lib in new_enabled}
+
+    pruned_refs = _prune_module_library_refs(config, instance, new_enabled)
+
+    save_config(config)
+    plex_library_cache.invalidate(instance)
+
+    purged_rows = 0
+    try:
+        with ChubDB(logger=logger) as db:
+            for lib in db.plex.get_library_names_for_instance(instance):
+                if lib.strip().lower() not in allowed_norm:
+                    purged_rows += db.plex.clear_library(instance, lib) or 0
+            for lib in db.collection.get_library_names_for_instance(instance):
+                if lib.strip().lower() not in allowed_norm:
+                    db.collection.clear_library(instance, lib)
+    except Exception as exc:
+        logger.warning(
+            "Library opt-in for '%s' saved, but cache purge failed: %s", instance, exc
+        )
+
+    logger.info(
+        "Plex '%s' opt-in set to %d librar%s (pruned %d module ref(s), purged %d "
+        "cached row(s))",
+        instance,
+        len(new_enabled),
+        "y" if len(new_enabled) == 1 else "ies",
+        pruned_refs,
+        purged_rows,
+    )
+    return ok(
+        f"Updated library opt-in for '{instance}' ({len(new_enabled)} enabled)",
+        {
+            "instance": instance,
+            "enabled_libraries": new_enabled,
+            "pruned_module_refs": pruned_refs,
+            "purged_rows": purged_rows,
+        },
+    )
 
 
 @router.post(
@@ -787,7 +956,9 @@ def test_instance(
                 stored = None
                 for inst_cfg in service_instances.values():
                     inst_url = (
-                        inst_cfg.url if hasattr(inst_cfg, "url") else inst_cfg.get("url")
+                        inst_cfg.url
+                        if hasattr(inst_cfg, "url")
+                        else inst_cfg.get("url")
                     ) or ""
                     if inst_url.rstrip("/") == target:
                         stored = inst_cfg
@@ -828,9 +999,7 @@ def test_instance(
 
         # No redirects: is_safe_url validated this exact host, but a public URL
         # could 302 onto an internal address (SSRF) if we followed them.
-        resp = requests.get(
-            test_url, headers=headers, timeout=5, allow_redirects=False
-        )
+        resp = requests.get(test_url, headers=headers, timeout=5, allow_redirects=False)
 
         if resp.ok:
             logger.info(f"Connection test successful for {name}")
@@ -955,11 +1124,15 @@ async def create_instance(
                 status_code=400,
             )
 
-        # Create new instance detail
+        # Create new instance detail. A brand-new Plex server starts OPTED OUT
+        # (enabled_libraries=[]) so nothing surfaces in CHUB until the user opts
+        # each library in on the Instances page. Non-Plex services leave the field
+        # unset (None) — it's meaningless for them.
         new_instance = InstanceDetail(
             url=url,
             api=api_key,
             webhook_force_reupload=data.webhook_force_reupload,
+            enabled_libraries=[] if service == "plex" else None,
         )
 
         # Add to appropriate service section
@@ -1055,6 +1228,11 @@ async def update_instance(
                 status_code=404,
             )
 
+        # Snapshot the existing instance BEFORE any rename `del` so fields the
+        # edit form doesn't carry (enabled toggle, Plex library opt-in) survive
+        # the rebuild below instead of silently resetting to their defaults.
+        existing_instance = service_instances.get(instance_id)
+
         # Preserve the stored API key when the frontend sent the redacted
         # placeholder (an edit that didn't retype the key) — otherwise we'd
         # clobber the real key with "********" and break the connection.
@@ -1096,11 +1274,16 @@ async def update_instance(
                         f"to '{new_name}'"
                     )
 
-        # Create/update instance with new values
+        # Create/update instance with new values. Carry forward the fields the
+        # edit form doesn't send — the enabled toggle (owned by toggle_instance)
+        # and the Plex library opt-in (owned by update_instance_libraries) — so
+        # an edit to URL/key/webhook doesn't wipe them.
         updated_instance = InstanceDetail(
             url=url,
             api=api_key,
             webhook_force_reupload=data.webhook_force_reupload,
+            enabled=getattr(existing_instance, "enabled", True),
+            enabled_libraries=getattr(existing_instance, "enabled_libraries", None),
         )
         service_instances[new_name] = updated_instance
 
@@ -1377,9 +1560,7 @@ def test_existing_instance(
             )
 
         start = time.time()
-        resp = requests.get(
-            test_url, headers=headers, timeout=5, allow_redirects=False
-        )
+        resp = requests.get(test_url, headers=headers, timeout=5, allow_redirects=False)
         elapsed = round((time.time() - start) * 1000)
 
         if resp.ok:
@@ -1910,7 +2091,9 @@ def check_instance_health(
 
         start = time.time()
         try:
-            resp = requests.get(test_url, headers=headers, timeout=2, allow_redirects=False)
+            resp = requests.get(
+                test_url, headers=headers, timeout=2, allow_redirects=False
+            )
             elapsed = round((time.time() - start) * 1000)
             health_data = {
                 "name": instance_id,
