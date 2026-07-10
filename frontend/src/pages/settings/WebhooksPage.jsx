@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useApiData } from '../../hooks/useApiData.js';
 import { useToast } from '../../contexts/ToastContext.jsx';
@@ -213,6 +213,291 @@ const SetupDetails = ({ wiring }) => {
     );
 };
 
+/** Status pill styling per provisioning state. */
+const STATUS_META = {
+    connected: { label: 'Connected', cls: 'bg-success/15 text-success' },
+    drift: { label: 'Out of date', cls: 'bg-warning/15 text-warning' },
+    not_set_up: { label: 'Not set up', cls: 'bg-surface-inset text-fg-muted' },
+    failed: { label: 'Failed', cls: 'bg-error/15 text-error' },
+    skipped: { label: 'Skipped', cls: 'bg-surface-inset text-fg-subtle' },
+};
+
+const TYPE_LABEL = { radarr: 'Radarr', sonarr: 'Sonarr', lidarr: 'Lidarr' };
+
+/** Auto-provision the poster webhook into each Radarr/Sonarr via its own API —
+ *  no manual "Settings → Connect → Webhook" per instance. Stateless: the arr's
+ *  own notification list is the source of truth (dry-run status = read + diff). */
+const AutoSetupBoard = () => {
+    const toast = useToast();
+    const [status, setStatus] = useState(null);
+    const [baseUrl, setBaseUrl] = useState('');
+    const [includeUpgrade, setIncludeUpgrade] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [busy, setBusy] = useState(false);
+
+    // Handler-driven refresh (re-check / after a mutation). Never touches the
+    // editable base-URL input, so it can't stomp a value the user is typing.
+    const load = useCallback(async url => {
+        setLoading(true);
+        try {
+            const resp = await webhooksAPI.getProvisionStatus(url || undefined);
+            setStatus(resp?.data || {});
+        } catch {
+            setStatus({
+                instances: [],
+                base_url_error: 'Could not load provisioning status.',
+            });
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    // Initial fetch. All setState runs in the async callbacks (not synchronously
+    // in the effect body), and prefills the base-URL input exactly once.
+    useEffect(() => {
+        let active = true;
+        const origin = typeof window !== 'undefined' ? window.location.origin : '';
+        webhooksAPI
+            .getProvisionStatus(origin || undefined)
+            .then(resp => {
+                if (!active) return;
+                const data = resp?.data || {};
+                setStatus(data);
+                setBaseUrl(prev => prev || data.base_url || origin || '');
+                setLoading(false);
+            })
+            .catch(() => {
+                if (!active) return;
+                setStatus({
+                    instances: [],
+                    base_url_error: 'Could not load provisioning status.',
+                });
+                setLoading(false);
+            });
+        return () => {
+            active = false;
+        };
+    }, []);
+
+    const runProvision = async instances => {
+        setBusy(true);
+        try {
+            const resp = await webhooksAPI.provision({ instances, baseUrl, includeUpgrade });
+            const rows = resp?.data?.instances || [];
+            const failed = rows.filter(r => r.status === 'failed');
+            const wrote = rows.filter(r => ['created', 'updated'].includes(r.action)).length;
+            if (failed.length) {
+                toast.error(`${failed.length} instance(s) failed — see the rows below`);
+            } else {
+                toast.success(
+                    wrote ? `Webhook set up on ${wrote} instance(s)` : 'Already up to date'
+                );
+            }
+            await load(baseUrl);
+        } catch {
+            toast.error('Provisioning failed');
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const runRemove = async instances => {
+        setBusy(true);
+        try {
+            await webhooksAPI.removeProvision({ instances });
+            toast.success('Webhook removed');
+            await load(baseUrl);
+        } catch {
+            toast.error('Removal failed');
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const instances = status?.instances || [];
+    const driftNames = instances.filter(i => i.status === 'drift').map(i => i.name);
+    const setupNames = instances
+        .filter(i => ['not_set_up', 'drift', 'failed'].includes(i.status))
+        .map(i => i.name);
+    const disabled = busy || loading || !!status?.base_url_error;
+
+    return (
+        <section className="bg-surface border border-border rounded-xl overflow-hidden">
+            <div className="flex flex-wrap items-center justify-between gap-3 px-5 pt-4 pb-3">
+                <h2 className="font-display text-[15px] font-semibold text-fg flex items-center gap-2.5">
+                    <span className="material-symbols-outlined text-[18px] text-accent">bolt</span>
+                    Auto-setup
+                </h2>
+                <div className="flex items-center gap-2">
+                    {driftNames.length > 0 && (
+                        <button
+                            type="button"
+                            disabled={disabled}
+                            onClick={() => runProvision(driftNames)}
+                            className="h-8 px-3 rounded-[7px] bg-warning/15 text-warning text-xs font-semibold hover:bg-warning/25 transition-colors disabled:opacity-50"
+                        >
+                            Fix all ({driftNames.length})
+                        </button>
+                    )}
+                    <button
+                        type="button"
+                        disabled={disabled || setupNames.length === 0}
+                        onClick={() => runProvision(['all'])}
+                        className="h-8 px-3 rounded-[7px] bg-primary text-on-color text-xs font-semibold hover:opacity-90 transition-opacity disabled:opacity-50"
+                    >
+                        {busy ? 'Working…' : 'Set up webhooks'}
+                    </button>
+                    <IconButton
+                        icon="refresh"
+                        aria-label="Re-check provisioning status"
+                        variant="ghost"
+                        size="small"
+                        disabled={busy}
+                        onClick={() => load(baseUrl)}
+                    />
+                </div>
+            </div>
+
+            <p className="px-5 text-sm text-fg-muted">
+                Let CHUB add its poster webhook to each Radarr/Sonarr for you — with the right
+                instance routing (and secret) baked in. On File Import only.
+            </p>
+
+            {/* Base URL — must be reachable FROM the *arr containers */}
+            <div className="px-5 pt-3 pb-1 flex flex-col gap-1.5">
+                <label
+                    htmlFor="chub-base-url"
+                    className="font-mono text-[10px] uppercase tracking-wider text-fg-dim"
+                >
+                    CHUB base URL (as your *arrs reach it)
+                </label>
+                <input
+                    id="chub-base-url"
+                    type="text"
+                    value={baseUrl}
+                    onChange={e => setBaseUrl(e.target.value)}
+                    placeholder="http://192.168.1.10:8060"
+                    className="h-9 px-3 rounded-lg bg-surface-inset border border-border font-mono text-[13px] text-fg focus:border-accent outline-none"
+                />
+                <span className="text-[11.5px] text-fg-subtle">
+                    Not the browser address — what a Radarr/Sonarr container can reach. Set{' '}
+                    <code>general.public_url</code> on{' '}
+                    <Link className="text-accent hover:underline" to="/settings/general">
+                        General
+                    </Link>{' '}
+                    to make it stick.
+                </span>
+                <label className="mt-1.5 flex items-center gap-2 text-[12.5px] text-fg-muted select-none">
+                    <input
+                        type="checkbox"
+                        checked={includeUpgrade}
+                        onChange={e => setIncludeUpgrade(e.target.checked)}
+                        className="accent-accent"
+                    />
+                    Also trigger on file upgrade (usually unnecessary)
+                </label>
+            </div>
+
+            {status?.base_url_error && (
+                <div className="mx-5 mt-2 p-3 rounded-lg border border-warning/30 bg-warning/10 text-[13px] text-fg">
+                    {status.base_url_error}
+                </div>
+            )}
+
+            <div className="mt-3 overflow-x-auto">
+                {loading && !status ? (
+                    <p className="px-5 pb-5 text-sm text-fg-muted">Loading…</p>
+                ) : instances.length === 0 ? (
+                    <p className="px-5 pb-5 text-sm text-fg-muted">
+                        No Radarr/Sonarr instances configured.
+                    </p>
+                ) : (
+                    <table className="w-full text-sm">
+                        <tbody>
+                            {instances.map(inst => {
+                                const meta = STATUS_META[inst.status] || STATUS_META.failed;
+                                const canProvision = ['not_set_up', 'drift', 'failed'].includes(
+                                    inst.status
+                                );
+                                const canRemove = ['connected', 'drift'].includes(inst.status);
+                                return (
+                                    <tr
+                                        key={`${inst.type}-${inst.name}`}
+                                        className="border-t border-border-light"
+                                    >
+                                        <td className="px-5 py-3 whitespace-nowrap">
+                                            <span className="font-semibold text-fg">
+                                                {inst.name}
+                                            </span>
+                                            <span className="ml-2 font-mono text-[10px] px-1.5 py-[2px] rounded bg-surface-inset text-fg-subtle">
+                                                {TYPE_LABEL[inst.type] || inst.type}
+                                            </span>
+                                        </td>
+                                        <td className="px-3 py-3">
+                                            <span
+                                                className={`font-mono text-[11px] px-2 py-[3px] rounded-full ${meta.cls}`}
+                                            >
+                                                {meta.label}
+                                            </span>
+                                            {(inst.error ||
+                                                (inst.drift_fields || []).length > 0 ||
+                                                inst.foreign_webhook) && (
+                                                <div className="mt-1 text-[11.5px] text-fg-subtle max-w-[46ch]">
+                                                    {inst.error ||
+                                                        (inst.drift_fields?.length
+                                                            ? `Stale: ${inst.drift_fields.join(', ')}`
+                                                            : '')}
+                                                    {inst.foreign_webhook && (
+                                                        <span className="text-warning">
+                                                            {' '}
+                                                            (another webhook “{inst.foreign_webhook}
+                                                            ” also targets CHUB — left untouched)
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </td>
+                                        <td className="px-5 py-3 text-right whitespace-nowrap">
+                                            {inst.status !== 'skipped' && (
+                                                <div className="inline-flex gap-2">
+                                                    {canProvision && (
+                                                        <button
+                                                            type="button"
+                                                            disabled={disabled}
+                                                            onClick={() =>
+                                                                runProvision([inst.name])
+                                                            }
+                                                            className="text-xs text-accent hover:underline disabled:opacity-50"
+                                                        >
+                                                            {inst.status === 'drift'
+                                                                ? 'Fix'
+                                                                : 'Enable'}
+                                                        </button>
+                                                    )}
+                                                    {canRemove && (
+                                                        <button
+                                                            type="button"
+                                                            disabled={busy}
+                                                            onClick={() => runRemove([inst.name])}
+                                                            className="text-xs text-fg-subtle hover:text-error hover:underline disabled:opacity-50"
+                                                        >
+                                                            Remove
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                )}
+            </div>
+        </section>
+    );
+};
+
 export const WebhooksPage = () => {
     const toast = useToast();
 
@@ -315,6 +600,9 @@ export const WebhooksPage = () => {
                     Copy
                 </button>
             </div>
+
+            {/* AUTO-SETUP: provision the webhook into each *arr via its API */}
+            <AutoSetupBoard />
 
             {/* RECENT CALLERS telemetry table */}
             <section className="bg-surface border border-border rounded-xl overflow-hidden">

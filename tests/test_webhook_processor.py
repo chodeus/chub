@@ -189,9 +189,7 @@ def test_find_arr_instance_resolves_docker_service_name(monkeypatch):
         monkeypatch,
         {"sonarr": {"10.200.10.26"}, "sonarr-anime": {"10.200.10.27"}},
     )
-    result = wp._find_arr_instance(
-        {"client_host": "10.200.10.26", "client_port": None}, "series"
-    )
+    result = wp._find_arr_instance({"client_host": "10.200.10.26"}, "series")
     assert result["found"] is True
     assert result["name"] == "Shows"
 
@@ -228,7 +226,7 @@ def test_find_arr_instance_same_ip_diff_port_by_label(monkeypatch):
     # network call.
     wp = _same_host_two_sonarr_wp(monkeypatch)
     result = wp._find_arr_instance(
-        {"client_host": "192.168.2.206", "client_port": 41999},
+        {"client_host": "192.168.2.206"},
         "series",
         instance_name="Anime",
     )
@@ -431,9 +429,7 @@ def test_validate_webhook_no_instance(monkeypatch):
     wp = WebhookProcessor(logger=StubLogger())
 
     payload = {"series": {"id": 1, "title": "Show"}}
-    result = wp._validate_webhook(
-        payload, client_info={"client_host": "10.0.0.50", "client_port": 1234}
-    )
+    result = wp._validate_webhook(payload, client_info={"client_host": "10.0.0.50"})
     assert result["success"] is False
     assert result["error_code"] == "NO_INSTANCE"
 
@@ -443,7 +439,7 @@ def test_validate_webhook_success(wp):
         "series": {"id": 1, "title": "Show"},
         "episodes": [{"seasonNumber": 2}],
     }
-    client = {"client_host": "192.168.1.11", "client_port": 8989, "scheme": "http"}
+    client = {"client_host": "192.168.1.11", "scheme": "http"}
     result = wp._validate_webhook(payload, client_info=client)
     assert result["success"] is True
     assert result["media_type"] == "series"
@@ -515,6 +511,69 @@ def test_find_arr_instance_application_url_behind_proxy(monkeypatch):
     assert result["name"] == "Anime"
 
 
+# --- Docker published-port NAT: no peer-IP match, route by payload identity ---
+
+
+def _nat_two_radarr_wp(monkeypatch, labels=("Radarr", "Radarr4k")):
+    # Two Radarr instances reachable at the HOST IP on different ports. Inbound
+    # webhooks arrive from the Docker bridge gateway, which matches NEITHER
+    # configured URL host — the published-port NAT case that collapses every
+    # container to one source IP.
+    a, b = labels
+    cfg = ChubConfig(
+        instances=InstancesConfig(
+            radarr={
+                a: InstanceDetail(url="http://192.168.2.206:7878", api="a"),
+                b: InstanceDetail(url="http://192.168.2.206:7879", api="b"),
+            }
+        ),
+    )
+    monkeypatch.setattr("backend.util.webhook_processor.load_config", lambda: cfg)
+    return WebhookProcessor(logger=StubLogger())
+
+
+def test_find_arr_instance_nat_gateway_routes_by_payload_name(monkeypatch):
+    # The reported bug: peer IP is the bridge gateway (matches no configured
+    # instance URL), two same-type instances, applicationUrl empty. The payload's
+    # instanceName still self-identifies the sender, so CHUB must route by it
+    # (case-insensitive against the CHUB label) instead of failing closed.
+    wp = _nat_two_radarr_wp(monkeypatch)
+    result = wp._find_arr_instance(
+        {"client_host": "172.18.0.1"}, "movie", instance_name="radarr4k"
+    )
+    assert result["found"] is True
+    assert result["name"] == "Radarr4k"
+
+
+def test_find_arr_instance_nat_gateway_unknown_name_fails_closed(monkeypatch):
+    # Same NAT topology, but the payload instanceName matches no configured label
+    # and no live lookup succeeds -> genuinely unattributable -> fail closed.
+    wp = _nat_two_radarr_wp(monkeypatch)
+    monkeypatch.setattr(
+        "backend.util.arr.create_arr_client", lambda url, api, logger: None
+    )
+    result = wp._find_arr_instance(
+        {"client_host": "172.18.0.1"}, "movie", instance_name="Nope"
+    )
+    assert result["found"] is False
+
+
+def test_find_arr_instance_ip_match_wins_over_payload_name(monkeypatch):
+    # Regression guard: when the peer IP uniquely matches an instance, that match
+    # wins even if a conflicting payload instanceName is present. The new
+    # payload-name fallback must run ONLY when the IP match found nothing, so
+    # distinct-IP (service-name) setups are unaffected.
+    wp = _two_sonarr_wp(
+        monkeypatch,
+        {"sonarr": {"10.200.10.26"}, "sonarr-anime": {"10.200.10.27"}},
+    )
+    result = wp._find_arr_instance(
+        {"client_host": "10.200.10.26"}, "series", instance_name="Anime"
+    )
+    assert result["found"] is True
+    assert result["name"] == "Shows"
+
+
 # --- wait_for_plex_availability: early-exit + pre-download skip ---
 
 
@@ -525,9 +584,7 @@ def _wp_with_plex(monkeypatch):
         ),
     )
     monkeypatch.setattr("backend.util.webhook_processor.load_config", lambda: cfg)
-    monkeypatch.setattr(
-        "backend.util.ssrf_guard.is_safe_url", lambda url: (True, "ok")
-    )
+    monkeypatch.setattr("backend.util.ssrf_guard.is_safe_url", lambda url: (True, "ok"))
     return WebhookProcessor(logger=StubLogger())
 
 
@@ -569,9 +626,7 @@ def test_wait_skips_for_pre_download_added_event(monkeypatch):
     wp = _wp_with_plex(monkeypatch)
     slept = []
     _patch_plex(monkeypatch, [], slept)  # item NOT in Plex
-    result = wp.wait_for_plex_availability(
-        "New Show", year=2024, is_added_event=True
-    )
+    result = wp.wait_for_plex_availability("New Show", year=2024, is_added_event=True)
     assert result is False
     assert slept == []  # a pre-download add doesn't wait for a scan
 

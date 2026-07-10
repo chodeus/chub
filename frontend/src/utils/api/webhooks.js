@@ -34,4 +34,45 @@ export const webhooksAPI = {
             cacheTTL: 60 * 1000,
         });
     },
+
+    /**
+     * Dry-run reconcile of the poster webhook across every Radarr/Sonarr
+     * instance. Never returns the secret-bearing URL — only status/drift flags.
+     * @param {string} [baseUrl] - CHUB base URL as reachable from the *arrs.
+     * @returns {Promise<Object>} { base_url, base_url_error?, public_url_configured, secret_configured, notification_name, instances: [{ name, type, status, drift_fields, error, foreign_webhook }] }
+     */
+    getProvisionStatus: baseUrl => {
+        const qs = baseUrl ? `?base_url=${encodeURIComponent(baseUrl)}` : '';
+        return apiCore.get(`/webhooks/provision/status${qs}`, { useCache: false });
+    },
+
+    /**
+     * Create/update CHUB's poster webhook in the selected instances via their
+     * own API (?instance= and the secret are baked in server-side).
+     * @param {Object} opts
+     * @param {string[]} [opts.instances] - instance names, or omit/['all'] for all
+     * @param {string} [opts.baseUrl] - arr-reachable CHUB base URL
+     * @param {boolean} [opts.includeUpgrade] - also fire on file upgrade
+     * @param {boolean} [opts.forceSave] - skip the arr's connection test
+     * @returns {Promise<Object>} { instances: [...], base_url }
+     */
+    provision: ({ instances, baseUrl, includeUpgrade = false, forceSave = false } = {}) => {
+        return apiCore.post('/webhooks/provision', {
+            instances,
+            base_url: baseUrl,
+            include_upgrade: includeUpgrade,
+            force_save: forceSave,
+        });
+    },
+
+    /**
+     * Delete CHUB's own poster webhook from the selected instances (leaves
+     * user-made webhooks untouched).
+     * @param {Object} [opts]
+     * @param {string[]} [opts.instances] - instance names, or omit/['all'] for all
+     * @returns {Promise<Object>} { instances: [...] }
+     */
+    removeProvision: ({ instances } = {}) => {
+        return apiCore.post('/webhooks/provision/remove', { instances });
+    },
 };
