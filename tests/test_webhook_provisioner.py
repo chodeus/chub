@@ -26,6 +26,7 @@ class StubClient:
         add_result="auto",
         update_result="auto",
         delete_result=True,
+        lands_on_write=False,
     ):
         self._notifications = [] if notifications is None else notifications
         self._schema = schema
@@ -33,6 +34,10 @@ class StubClient:
         self._add_result = add_result
         self._update_result = update_result
         self._delete_result = delete_result
+        # When True, a write mutates the stored notifications (as if the arr
+        # saved it) even though the call returns a non-success — simulating a
+        # lost/timed-out HTTP reply for verify-after-write.
+        self._lands_on_write = lands_on_write
         self.calls = []
         self.session = SimpleNamespace(close=lambda: None)
 
@@ -47,12 +52,18 @@ class StubClient:
 
     def add_notification(self, body, force_save=False):
         self.calls.append(("add", body, force_save))
-        return {"id": 7, **body} if self._add_result == "auto" else self._add_result
+        if self._add_result == "auto":
+            return {"id": 7, **body}
+        if self._lands_on_write:
+            self._notifications = [{"id": 7, **body}]
+        return self._add_result
 
     def update_notification(self, notification_id, body, force_save=False):
         self.calls.append(("update", notification_id, body, force_save))
         if self._update_result == "auto":
             return {"id": notification_id, **body}
+        if self._lands_on_write:
+            self._notifications = [{"id": notification_id, **body}]
         return self._update_result
 
     def delete_notification(self, notification_id):
@@ -245,6 +256,26 @@ def test_provision_save_failure_surfaces_error():
     res = provision_instance(client, "radarr", "Radarr", "http://chub:8060", None)
     assert res["status"] == "failed"
     assert res["error"]
+
+
+def test_provision_verify_after_write_recovers_lost_response():
+    # The POST reply is lost (returns None) but the entry actually landed in the
+    # arr — verify-after-write must report the true success, not a false failure.
+    client = StubClient(notifications=[], add_result=None, lands_on_write=True)
+    res = provision_instance(client, "radarr", "Radarr", "http://chub:8060", None)
+    assert res["status"] == "connected"
+    assert res["action"] == "created"
+
+
+def test_provision_update_verify_after_write_recovers_lost_response():
+    client = StubClient(
+        notifications=[_existing("http://old/hook")],  # drift → triggers an update
+        update_result=None,  # reply lost
+        lands_on_write=True,  # but the update landed
+    )
+    res = provision_instance(client, "radarr", "Radarr", "http://chub:8060", None)
+    assert res["status"] == "connected"
+    assert res["action"] == "updated"
 
 
 def test_provision_detects_foreign_webhook():
