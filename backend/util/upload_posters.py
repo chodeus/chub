@@ -81,6 +81,9 @@ class PosterUploader:
         # Cache for connections and indexes
         self._plex_clients = {}
         self._media_indexes = {}
+        # Live library-type map per instance, for the webhook/manual LIVE
+        # fallback when an item isn't in the cached snapshot. Filled on first use.
+        self._live_lib_types: Dict[str, Dict[str, Optional[str]]] = {}
 
         # ID-matched uploads whose on-disk folder year (from *arr) disagrees
         # with the Plex item's year by more than the normal lag. Accumulated
@@ -703,6 +706,21 @@ class PosterUploader:
             )
 
             if not matched_entries:
+                # LIVE per-item fallback. The cached plex_media_cache snapshot
+                # doesn't have this item — the common case for a webhook fired on
+                # a BRAND-NEW import that Plex just scanned but the TTL-guarded
+                # cache hasn't picked up. Resolve against LIVE Plex instead:
+                # target every library of the matching type and let
+                # upload_poster's live title+year search find it (no-op in the
+                # libraries that don't hold it). Keeps the real-time path off the
+                # stale snapshot; mirrors asset_renamerr's live fallback.
+                matched_entries = self._live_fallback_targets(
+                    plex_client, asset, asset_type, asset_title
+                )
+                if matched_entries:
+                    match_type = "LIVE"
+
+            if not matched_entries:
                 return UploadResult(
                     asset_title=asset_title,
                     asset_type=asset_type,
@@ -941,6 +959,59 @@ class PosterUploader:
                 reason=f"Processing error: {e}",
             )
 
+    # Plex section type(s) an asset of each type can live in — targets the LIVE
+    # fallback at only the right kind of library.
+    _PLEX_TYPE_FOR_ASSET = {
+        "movie": ("movie",),
+        "show": ("show",),
+        "artist": ("artist",),
+        "album": ("artist",),
+        "collection": ("movie", "show"),
+    }
+
+    def _live_fallback_targets(
+        self,
+        plex_client: PlexClient,
+        asset: Dict,
+        asset_type: str,
+        asset_title: str,
+    ) -> List[Dict]:
+        """Resolve an item against LIVE Plex when the cached index misses.
+
+        Returns one synthetic target per instance library of the matching type,
+        each carrying the raw *arr title/year and NO plex_id — so upload_poster
+        does a live title+year search per library, pushing to the one(s) that
+        hold the item and no-opping the rest. This is the instant path a webhook
+        needs: a just-scanned import absent from the TTL-guarded plex_media_cache
+        is still found and pushed, with zero reliance on the snapshot."""
+        plex_types = self._PLEX_TYPE_FOR_ASSET.get(asset_type)
+        if not plex_types or not asset_title:
+            return []
+        cache_key = str(asset.get("instance_name") or getattr(plex_client, "url", ""))
+        libs = self._live_libraries_of_types(plex_client, cache_key, plex_types)
+        year = asset.get("year")
+        return [
+            {"library_name": lib, "title": asset_title, "year": year, "plex_id": None}
+            for lib in libs
+        ]
+
+    def _live_libraries_of_types(
+        self, plex_client: PlexClient, cache_key: str, plex_types: Tuple[str, ...]
+    ) -> List[str]:
+        """Instance library names whose Plex section type is in ``plex_types``.
+        The (library → type) map is fetched live once per instance and reused for
+        the rest of the run."""
+        type_map = self._live_lib_types.get(cache_key)
+        if type_map is None:
+            type_map = {}
+            for name in plex_client.get_libraries() or []:
+                try:
+                    type_map[name] = plex_client.section_type(name)
+                except Exception:
+                    type_map[name] = None
+            self._live_lib_types[cache_key] = type_map
+        return [name for name, typ in type_map.items() if typ in plex_types]
+
     def _note_year_discrepancy(
         self,
         asset: Dict,
@@ -959,7 +1030,7 @@ class PosterUploader:
         here with a mismatch, so only guid matches are inspected. Recorded once
         per asset and only on an actual upload, so unchanged files don't re-warn
         every run."""
-        if not match_type or match_type.upper() == "TITLE":
+        if not match_type or match_type.upper() in ("TITLE", "LIVE"):
             return
         folder_year = _coerce_year(asset.get("year"))
         if folder_year is None:
