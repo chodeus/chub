@@ -123,6 +123,43 @@ export const InstancesPage = () => {
             .catch(() => {});
     }, []);
 
+    const [savingLibraries, setSavingLibraries] = useState(new Set());
+
+    const handleSaveLibraries = useCallback(
+        async (service, instanceName, enabledTitles) => {
+            const key = `${service}:${instanceName}`;
+            setSavingLibraries(prev => new Set(prev).add(key));
+            try {
+                await instancesAPI.updateInstanceLibraries(instanceName, enabledTitles);
+                // Reflect the new enabled flags locally without a round-trip.
+                setLibrariesData(prev => ({
+                    ...prev,
+                    [key]: (prev[key] || []).map(lib => {
+                        const title = typeof lib === 'string' ? lib : lib.title;
+                        return {
+                            ...(typeof lib === 'string' ? { title } : lib),
+                            enabled: enabledTitles.includes(title),
+                        };
+                    }),
+                }));
+                toast.success(
+                    `${instanceName}: ${enabledTitles.length} librar${
+                        enabledTitles.length === 1 ? 'y' : 'ies'
+                    } enabled`
+                );
+            } catch {
+                toast.error(`Failed to save libraries for ${instanceName}`);
+            } finally {
+                setSavingLibraries(prev => {
+                    const next = new Set(prev);
+                    next.delete(key);
+                    return next;
+                });
+            }
+        },
+        [toast]
+    );
+
     const handleToggleInstance = useCallback(
         async (instanceName, enabled) => {
             try {
@@ -689,6 +726,10 @@ export const InstancesPage = () => {
                                 onDelete={() => handleDelete(service.type, name, data.url)}
                                 onFetchLogs={() => handleFetchLogs(service.type, name)}
                                 onFetchLibraries={() => handleFetchLibraries(service.type, name)}
+                                onSaveLibraries={titles =>
+                                    handleSaveLibraries(service.type, name, titles)
+                                }
+                                isSavingLibraries={savingLibraries.has(`${service.type}:${name}`)}
                                 onToggle={handleToggleInstance}
                                 onRefresh={handleRefreshInstance}
                             />

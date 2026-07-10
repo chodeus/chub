@@ -11,7 +11,11 @@ from backend.util.arr import (
     ARRConnectionError,
     create_arr_client,
 )
-from backend.util.config import ChubConfig, load_config
+from backend.util.config import (
+    ChubConfig,
+    load_config,
+    seed_plex_enabled_libraries,
+)
 from backend.util.database import ChubDB
 from backend.util.logger import Logger
 from backend.util.plex import PlexClient
@@ -650,9 +654,17 @@ class Connector:
                 except Exception as e:
                     raise ConnectionPoolError(f"Failed to fetch libraries: {e}")
 
-                # Determine target libraries
+                # Apply the instance-level opt-in allow-list BEFORE any per-caller
+                # (plex_scope) selection, so a non-opted library is invisible to
+                # every consumer of plex_media_cache.
+                allowed_libraries = self._apply_instance_opt_in(
+                    instance_config.name, all_libraries, logger
+                )
+
+                # Determine target libraries (per-caller scope narrows within the
+                # allow-list; empty scope == all opted-in libraries)
                 target_libraries = self._determine_target_libraries(
-                    all_libraries, instance_config.libraries
+                    allowed_libraries, instance_config.libraries
                 )
 
                 if not target_libraries:
@@ -752,8 +764,11 @@ class Connector:
         try:
             with self.connection_manager.get_plex_client(instance_config) as client:
                 all_libraries = client.get_libraries()
+                allowed_libraries = self._apply_instance_opt_in(
+                    instance_config.name, all_libraries, logger
+                )
                 target_libraries = self._determine_target_libraries(
-                    all_libraries, instance_config.libraries
+                    allowed_libraries, instance_config.libraries
                 )
 
                 for library_name in target_libraries:
@@ -790,6 +805,72 @@ class Connector:
                 duration=time.time() - start_time,
             )
 
+    @staticmethod
+    def _normalize_library_name(name: str) -> str:
+        return name.strip().lower() if isinstance(name, str) else ""
+
+    def _apply_instance_opt_in(
+        self, instance_name: str, all_libraries: List[str], logger=None
+    ) -> List[str]:
+        """Restrict ``all_libraries`` to the instance's opt-in allow-list.
+
+        This is the single ingestion chokepoint for the Plex library opt-in.
+        Reads ``config.instances.plex[name].enabled_libraries`` (tri-state):
+
+        - ``None``  — legacy/unset: SEED the allow-list with the currently-present
+          libraries (so libraries added later stay hidden until opted in) and
+          treat all as enabled for this run. Preserves existing behaviour on
+          upgrade — no library silently disappears.
+        - ``[]``    — opted out: return ``[]`` (fail closed; nothing is synced).
+        - ``[...]`` — return the intersection with the live library list.
+
+        A per-caller (plex_scope) selection is applied AFTER this, narrowing
+        within the returned set. An instance missing from config fails closed
+        (returns ``[]``) — a real sync only ever reaches here for a configured
+        instance, so this guards a config race, not the legacy path.
+        """
+        detail = None
+        try:
+            detail = self.config.instances.plex.get(instance_name)
+        except Exception:
+            detail = None
+        if detail is None:
+            if logger:
+                logger.debug(
+                    "Plex '%s' not in config — opting out (fail closed)",
+                    instance_name,
+                )
+            return []
+        enabled = getattr(detail, "enabled_libraries", None)
+
+        if enabled is None:
+            seeded = seed_plex_enabled_libraries(instance_name, all_libraries)
+            if seeded:
+                # Keep the in-memory snapshot consistent for the rest of this run
+                # (e.g. the collections pass) so it doesn't re-seed.
+                detail.enabled_libraries = list(dict.fromkeys(all_libraries))
+            if seeded and logger:
+                logger.info(
+                    "Seeded library opt-in for Plex '%s' with %d current "
+                    "librar%s; new libraries stay hidden until opted in",
+                    instance_name,
+                    len(all_libraries),
+                    "y" if len(all_libraries) == 1 else "ies",
+                )
+            return list(all_libraries)
+
+        allowed_norm = {self._normalize_library_name(lib) for lib in enabled}
+        allowed = [
+            lib
+            for lib in all_libraries
+            if self._normalize_library_name(lib) in allowed_norm
+        ]
+        if not allowed and logger:
+            logger.debug(
+                "Plex '%s' has no opted-in libraries — skipping", instance_name
+            )
+        return allowed
+
     def _determine_target_libraries(
         self, all_libraries: List[str], selected_libraries: Optional[List[str]]
     ) -> List[str]:
@@ -797,12 +878,14 @@ class Connector:
         if not selected_libraries:
             return all_libraries
 
-        # Normalize for comparison
-        def normalize(name: str) -> str:
-            return name.strip().lower() if isinstance(name, str) else ""
-
-        normalized_selected = {normalize(lib) for lib in selected_libraries}
-        return [lib for lib in all_libraries if normalize(lib) in normalized_selected]
+        normalized_selected = {
+            self._normalize_library_name(lib) for lib in selected_libraries
+        }
+        return [
+            lib
+            for lib in all_libraries
+            if self._normalize_library_name(lib) in normalized_selected
+        ]
 
     def update_media_plex_mappings(self) -> Dict[str, int]:
         """

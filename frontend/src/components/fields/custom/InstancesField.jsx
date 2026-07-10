@@ -152,6 +152,10 @@ const PlexLibrarySelector = React.memo(
 
             librariesData.forEach(library => {
                 if (!library) return;
+                // Respect the instance-level opt-in: a library the user has not
+                // enabled must never appear in a module picker (the list/catalog
+                // endpoints annotate each library with `enabled`).
+                if (typeof library === 'object' && library.enabled === false) return;
 
                 let title;
                 let type;
@@ -896,14 +900,12 @@ const PlexScopeLibrarySelector = React.memo(
         });
 
         const allLibraries = useMemo(() => {
-            if (hasCatalogData) {
-                return catalogLibraries
-                    .map(lib => (typeof lib === 'string' ? lib : lib.title || ''))
-                    .filter(Boolean);
-            }
-            const raw = perInstanceResponse?.data?.libraries;
+            const raw = hasCatalogData ? catalogLibraries : perInstanceResponse?.data?.libraries;
             if (!raw || !Array.isArray(raw)) return [];
+            // Only opted-in libraries are selectable — a de-selected library
+            // (annotated enabled:false by the backend) is hidden here too.
             return raw
+                .filter(lib => typeof lib === 'string' || lib.enabled !== false)
                 .map(lib => (typeof lib === 'string' ? lib : lib.title || ''))
                 .filter(Boolean);
         }, [hasCatalogData, catalogLibraries, perInstanceResponse]);
@@ -941,7 +943,7 @@ const PlexScopeLibrarySelector = React.memo(
             return (
                 <div className="flex items-center gap-3 p-4 text-sm text-fg-muted bg-surface-alt border border-border-subtle rounded-lg">
                     <span className="text-base">ℹ️</span>
-                    <span>No libraries found — leaving empty selects all libraries</span>
+                    <span>No enabled libraries — opt some in on Settings → Instances</span>
                 </div>
             );
         }
@@ -950,7 +952,9 @@ const PlexScopeLibrarySelector = React.memo(
             <div>
                 <div className="text-sm font-semibold text-fg mb-2 pb-1 border-b border-border-subtle">
                     Libraries{' '}
-                    <span className="text-xs font-normal text-fg-subtle">(empty = all)</span>
+                    <span className="text-xs font-normal text-fg-subtle">
+                        (empty = all enabled)
+                    </span>
                 </div>
                 <div className="grid gap-2 grid-cols-1 md:grid-cols-2">
                     {allLibraries.map(library => {

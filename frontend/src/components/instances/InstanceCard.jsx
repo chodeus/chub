@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Button } from '../ui/button/Button';
 import StatusDot from '../ui/StatusDot.jsx';
 import Toggle from '../ui/Toggle.jsx';
@@ -55,6 +55,8 @@ export const InstanceCard = ({
     onDelete,
     onToggle,
     onFetchLibraries,
+    onSaveLibraries,
+    isSavingLibraries,
 }) => {
     const [expanded, setExpanded] = useState(false);
     const [color, tint] = SERVICE_STYLE[serviceType] || ['#6582ca', 'rgba(101,130,202,.14)'];
@@ -62,6 +64,42 @@ export const InstanceCard = ({
     const initial = (instance.name || '?').charAt(0).toUpperCase();
     const enabled = instance.enabled !== false;
     const isPlex = serviceType === 'plex';
+
+    // Library opt-in editing state. Each library carries an `enabled` flag from
+    // the backend; `libDraft` is the user's in-progress selection (Set of titles).
+    const libNorm = title => (title || '').trim().toLowerCase();
+    const persistedEnabled = useMemo(() => {
+        const s = new Set();
+        (plexLibraries || []).forEach(lib => {
+            const title = typeof lib === 'string' ? lib : lib.title;
+            // A string (legacy) or an object without an explicit false is enabled.
+            if (typeof lib === 'string' || lib.enabled !== false) s.add(libNorm(title));
+        });
+        return s;
+    }, [plexLibraries]);
+    // Reset the draft whenever the fetched library set changes (load / refresh)
+    // using the "adjust state during render" pattern — an effect would trip
+    // react-hooks/set-state-in-effect and cause a cascading render.
+    const [libDraft, setLibDraft] = useState(persistedEnabled);
+    const [libSource, setLibSource] = useState(persistedEnabled);
+    if (libSource !== persistedEnabled) {
+        setLibSource(persistedEnabled);
+        setLibDraft(persistedEnabled);
+    }
+    const libDirty = useMemo(() => {
+        if (libDraft.size !== persistedEnabled.size) return true;
+        for (const t of libDraft) if (!persistedEnabled.has(t)) return true;
+        return false;
+    }, [libDraft, persistedEnabled]);
+
+    // Auto-load libraries the first time a Plex card is expanded so the opt-in
+    // checkboxes are populated without a manual click.
+    useEffect(() => {
+        if (expanded && isPlex && onFetchLibraries && plexLibraries === undefined) {
+            onFetchLibraries(instance.name);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [expanded, isPlex]);
 
     const hs = healthStatus?.status;
     const dotStatus = isTesting
@@ -261,23 +299,77 @@ export const InstanceCard = ({
                                 )}
                             </div>
                             {plexLibraries && plexLibraries.length > 0 ? (
-                                <div className="flex flex-wrap gap-1.5">
-                                    {plexLibraries.map((lib, i) => {
-                                        const title = typeof lib === 'string' ? lib : lib.title;
-                                        const type = typeof lib === 'string' ? null : lib.type;
-                                        return (
-                                            <span
-                                                key={i}
-                                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[5px] text-xs bg-surface-inset text-fg-muted"
-                                            >
-                                                <span>{title}</span>
-                                                {type && (
-                                                    <span className="text-fg-subtle">{type}</span>
-                                                )}
+                                <>
+                                    <p className="text-[11px] text-fg-subtle mb-1.5">
+                                        Only enabled libraries appear elsewhere in CHUB. Tick the
+                                        libraries to expose, then Save.
+                                    </p>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {plexLibraries.map((lib, i) => {
+                                            const title = typeof lib === 'string' ? lib : lib.title;
+                                            const type = typeof lib === 'string' ? null : lib.type;
+                                            const on = libDraft.has(libNorm(title));
+                                            return (
+                                                <button
+                                                    type="button"
+                                                    key={i}
+                                                    aria-pressed={on}
+                                                    onClick={() =>
+                                                        setLibDraft(prev => {
+                                                            const next = new Set(prev);
+                                                            const k = libNorm(title);
+                                                            if (next.has(k)) next.delete(k);
+                                                            else next.add(k);
+                                                            return next;
+                                                        })
+                                                    }
+                                                    className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-[5px] text-xs border transition-colors ${
+                                                        on
+                                                            ? 'bg-primary/15 border-primary text-fg'
+                                                            : 'bg-surface-inset border-border text-fg-muted hover:border-primary'
+                                                    }`}
+                                                >
+                                                    <span
+                                                        aria-hidden="true"
+                                                        className={`material-symbols-outlined text-[14px] leading-none ${
+                                                            on ? 'text-primary' : 'text-fg-faint'
+                                                        }`}
+                                                    >
+                                                        {on
+                                                            ? 'check_box'
+                                                            : 'check_box_outline_blank'}
+                                                    </span>
+                                                    <span>{title}</span>
+                                                    {type && (
+                                                        <span className="text-fg-subtle">
+                                                            {type}
+                                                        </span>
+                                                    )}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                    <div className="flex items-center gap-2 mt-2">
+                                        <Button
+                                            size="small"
+                                            variant="primary"
+                                            disabled={!libDirty || isSavingLibraries}
+                                            onClick={() => {
+                                                const titles = (plexLibraries || [])
+                                                    .map(l => (typeof l === 'string' ? l : l.title))
+                                                    .filter(t => libDraft.has(libNorm(t)));
+                                                onSaveLibraries && onSaveLibraries(titles);
+                                            }}
+                                        >
+                                            {isSavingLibraries ? 'Saving…' : 'Save'}
+                                        </Button>
+                                        {libDirty && (
+                                            <span className="text-[11px] text-warning">
+                                                Unsaved changes
                                             </span>
-                                        );
-                                    })}
-                                </div>
+                                        )}
+                                    </div>
+                                </>
                             ) : (
                                 <button
                                     type="button"
