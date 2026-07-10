@@ -416,6 +416,11 @@ export const GeneralSettingsPage = () => {
                                                         id: uniqueId,
                                                         errorId,
                                                         descId,
+                                                        ...(field.type === 'password'
+                                                            ? {
+                                                                  secretPath: `${module.key}.${field.key}`,
+                                                              }
+                                                            : {}),
                                                     }}
                                                     value={fieldValue}
                                                     onChange={value =>

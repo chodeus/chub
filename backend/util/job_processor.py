@@ -668,12 +668,18 @@ def _process_media_sync_job(
                 # one instance at a time) — NOT the forced full walk, so a daily
                 # cadence can't hammer a large library. Empty list = all
                 # libraries of that instance.
+                # Empty list == all OPTED-IN libraries (the connector applies the
+                # instance's enabled_libraries allow-list). Skip instances that are
+                # fully opted out (enabled_libraries == []) so they aren't walked or
+                # connected; a None allow-list (legacy) stays in and gets seeded on
+                # first walk.
                 enabled_plex = {
                     name: []
                     for name, detail in (
                         getattr(cfg.instances, "plex", {}) or {}
                     ).items()
                     if getattr(detail, "enabled", True)
+                    and getattr(detail, "enabled_libraries", None) != []
                 }
                 if enabled_plex:
                     try:
@@ -1155,7 +1161,11 @@ def _process_cache_refresh_job(
             if plex_instances_cfg:
                 plex_map = {}
                 for name, detail in plex_instances_cfg.items():
-                    if detail.enabled:
+                    # Skip instances fully opted out of the library allow-list.
+                    if (
+                        detail.enabled
+                        and getattr(detail, "enabled_libraries", None) != []
+                    ):
                         plex_map[name] = libraries if libraries else []
                 if plex_map:
                     instance_map["plex"] = plex_map

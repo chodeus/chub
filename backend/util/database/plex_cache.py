@@ -148,6 +148,28 @@ class PlexCache(DatabaseBase):
             "DELETE FROM plex_media_cache WHERE instance_name=?", (instance_name,)
         )
 
+    def get_library_names_for_instance(self, instance_name: str) -> list:
+        """Distinct library names currently cached for an instance."""
+        rows = self.execute_query(
+            "SELECT DISTINCT library_name FROM plex_media_cache WHERE instance_name=?",
+            (instance_name,),
+            fetch_all=True,
+        )
+        return [r["library_name"] for r in (rows or []) if r["library_name"]]
+
+    def clear_library(self, instance_name: str, library_name: str) -> int:
+        """Delete all rows for one (instance, library) from plex_media_cache.
+
+        Called when a library is opted OUT so its stale rows stop surfacing in
+        stats/search/matching (sync_for_library only ever runs for libraries it
+        is told to walk, so it never removes a de-selected library on its own).
+        Returns the number of rows deleted.
+        """
+        return self.execute_query(
+            "DELETE FROM plex_media_cache WHERE instance_name=? AND library_name=?",
+            (instance_name, library_name),
+        )
+
     def get_by_instance(self, instance_name: str) -> Optional[list]:
         """
         Return all records for a given instance_name as a list of dicts.

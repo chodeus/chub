@@ -789,10 +789,19 @@ const CredentialModal = ({ modal, busy, onName, onField, onClose, onSave }) => {
                     </div>
                     {schema?.fields.map(field => {
                         const FieldComponent = FieldRegistry.getField(field.type);
+                        // destinations is a list keyed by a stable id; reveal
+                        // resolves the saved secret by that id, not list order.
+                        const secretField =
+                            field.type === 'password' && modal.mode === 'edit' && modal.id
+                                ? {
+                                      ...field,
+                                      secretPath: `notifications.destinations.${modal.id}.config.${field.key}`,
+                                  }
+                                : field;
                         return (
                             <FieldComponent
                                 key={field.key}
-                                field={field}
+                                field={secretField}
                                 value={modal.config[field.key] || ''}
                                 onChange={value => onField(field.key, value)}
                                 errorMessage={modal.errors[field.key]}

@@ -2,6 +2,11 @@ import React, { useState, useCallback } from 'react';
 import { FieldRow, InputBase } from '../primitives';
 import { FieldButton } from '../features/shared';
 import { useOptionalFormField } from '../../forms/FormContext';
+import { configAPI } from '../../../utils/api';
+
+// Saved secrets arrive from the backend redacted to this placeholder; the real
+// value is only ever fetched on demand via configAPI.revealSecret.
+const REDACTED = '********';
 
 export const PasswordField = React.memo(
     ({
@@ -23,21 +28,51 @@ export const PasswordField = React.memo(
         const finalErrorMessage = formField?.errorMessage ?? errorMessage;
         const finalOnBlur = formField?.onBlur ?? onBlur;
 
+        // When present, the eye toggle can fetch and show the real saved secret.
+        const secretPath = field.secretPath ?? null;
+
         const [showPassword, setShowPassword] = useState(false);
+        // Real secret fetched for display only — never pushed into form state,
+        // so revealing never dirties the form or re-saves the value.
+        const [revealedValue, setRevealedValue] = useState(null);
+        const [revealError, setRevealError] = useState(false);
+        const [revealing, setRevealing] = useState(false);
 
         const handleChange = useCallback(
             e => {
+                // User is typing a new secret — drop the revealed value so the
+                // field behaves like a normal editable input from here on.
+                setRevealedValue(null);
+                setRevealError(false);
                 finalOnChange(e.target.value);
             },
             [finalOnChange]
         );
 
-        const togglePasswordVisibility = useCallback(() => {
-            setShowPassword(prev => !prev);
-        }, []);
+        const togglePasswordVisibility = useCallback(async () => {
+            const next = !showPassword;
+            // Revealing a saved-but-redacted secret we don't hold yet: fetch the
+            // real value before switching the input to plain text.
+            if (next && secretPath && revealedValue === null && finalValue === REDACTED) {
+                setRevealing(true);
+                setRevealError(false);
+                try {
+                    const res = await configAPI.revealSecret(secretPath);
+                    setRevealedValue(res?.data?.value ?? '');
+                } catch {
+                    setRevealError(true);
+                    setRevealing(false);
+                    return; // stay masked and surface the error
+                }
+                setRevealing(false);
+            }
+            setShowPassword(next);
+        }, [showPassword, secretPath, revealedValue, finalValue]);
 
         const inputId = field.id || `field-${field.key}`;
-        const inputValue = finalValue || '';
+        // Show the fetched real secret once we have it; otherwise the prop value
+        // (which for a saved secret is the "********" placeholder).
+        const displayValue = revealedValue ?? finalValue ?? '';
 
         return (
             <FieldRow
@@ -45,7 +80,7 @@ export const PasswordField = React.memo(
                 label={field.label}
                 required={field.required}
                 description={field.description}
-                error={finalErrorMessage}
+                error={finalErrorMessage || (revealError ? 'Could not reveal secret' : null)}
                 invalid={finalHighlightInvalid}
             >
                 <div className="flex">
@@ -53,7 +88,7 @@ export const PasswordField = React.memo(
                         id={inputId}
                         type={showPassword ? 'text' : 'password'}
                         name={field.key}
-                        value={inputValue}
+                        value={displayValue}
                         placeholder={field.placeholder}
                         disabled={disabled}
                         required={field.required}
@@ -70,7 +105,7 @@ export const PasswordField = React.memo(
 
                     <FieldButton
                         onClick={togglePasswordVisibility}
-                        disabled={disabled}
+                        disabled={disabled || revealing}
                         ariaLabel={showPassword ? 'Hide password' : 'Show password'}
                         variant="right"
                         className="text-brand-primary"

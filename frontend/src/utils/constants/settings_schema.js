@@ -290,7 +290,7 @@ const CORE_SETTINGS_SCHEMA = [
                 match_collections_option: true,
                 description:
                     'Plex instances to upload posters to and/or match collections from. ' +
-                    'Pick libraries to scope collection matching (empty = all libraries). ' +
+                    'Pick libraries to scope collection matching (empty = all enabled libraries). ' +
                     'Enable "Upload posters" per instance for the Plex apply method.',
             },
             // ─── Chained actions (Pipeline) ────────────────────────────
@@ -580,7 +580,7 @@ const CORE_SETTINGS_SCHEMA = [
                 match_collections_option: true,
                 description:
                     'Plex instances to upload assets (logo/background/squareart) to and/or match collections from. ' +
-                    'Pick libraries to scope collection matching (empty = all libraries). ' +
+                    'Pick libraries to scope collection matching (empty = all enabled libraries). ' +
                     'Enable "Upload posters" per instance for the Plex apply method.',
             },
         ],
@@ -1309,7 +1309,7 @@ const CORE_SETTINGS_SCHEMA = [
                 valueFormat: 'string',
                 section: 'Bloat pass',
                 description:
-                    'Plex instance(s) whose metadata directory is scanned for bloat images. The bloat pass uses the first Plex instance selected here.',
+                    'Plex instance(s) whose metadata directory is scanned for bloat images. The bloat pass uses the first Plex instance selected here. Scans the whole server — the library opt-in does not apply (excluding libraries here would misread in-use artwork as bloat).',
             },
             {
                 key: 'plex_path',
@@ -1577,7 +1577,7 @@ const CORE_SETTINGS_SCHEMA = [
                 match_collections_option: false,
                 description:
                     'Report unmatched Plex collections from these libraries (empty = all ' +
-                    'libraries of the instance). Leave unset to skip collection reporting.',
+                    'enabled libraries of the instance). Leave unset to skip collection reporting.',
             },
             {
                 key: 'ignore_folders',
@@ -1688,13 +1688,16 @@ const CORE_SETTINGS_MODULES = [
     {
         name: 'Poster Cleanarr',
         key: 'poster_cleanarr',
-        description: 'Clean bloat images from Plex metadata and manage orphaned posters.',
+        description:
+            'Clean bloat images from Plex metadata and manage orphaned posters. ' +
+            'Operates on the entire Plex server, independent of the library opt-in.',
     },
     {
         name: 'Plex Maintenance',
         key: 'plex_maintenance',
         description:
-            'Server-level Plex hygiene: empty trash, clean bundles, optimize database, and clear the PhotoTranscoder cache.',
+            'Server-level Plex hygiene: empty trash, clean bundles, optimize database, and clear the PhotoTranscoder cache. ' +
+            'Operates on the entire Plex server, independent of the library opt-in.',
     },
     {
         name: 'Unmatched Assets',

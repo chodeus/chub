@@ -67,6 +67,18 @@ class InstanceDetail(BaseModel):
     # Only meaningful for radarr / sonarr / lidarr (the instances that
     # fire webhooks); harmless on plex entries.
     webhook_force_reupload: bool = False
+    # Instance-level Plex library opt-in ("allow-list"). Only meaningful for
+    # plex entries; ignored on arr instances. Tri-state:
+    #   None  — legacy / never configured. Treated as ALL libraries, then lazily
+    #           SEEDED with the server's current libraries on the first sync (see
+    #           seed_plex_enabled_libraries) so libraries ADDED to Plex later stay
+    #           hidden until explicitly opted in.
+    #   []    — opted out: nothing from this server is synced, cached, counted, or
+    #           shown anywhere CHUB *manages* content.
+    #   [...] — exactly these libraries are enabled.
+    # Whole-server maintenance modules (plex_maintenance, poster_cleanarr) ignore
+    # this by design and always operate on the entire Plex server.
+    enabled_libraries: Optional[List[str]] = None
 
 
 class InstancesConfig(BaseModel):
@@ -912,6 +924,11 @@ SENSITIVE_FIELD_NAMES = frozenset(
 
 REDACTED_PLACEHOLDER = "********"
 
+# Secrets that must NEVER be revealed to the frontend, even though they are in
+# SENSITIVE_FIELD_NAMES. The password hash and JWT signing secret are pure
+# server-side credentials with no legitimate "show me the value" use.
+NEVER_REVEAL_FIELD_NAMES = frozenset({"password_hash", "jwt_secret"})
+
 
 def redact_secrets(data: Any, _parent_key: str = "") -> Any:
     """
@@ -975,6 +992,65 @@ def strip_redacted_placeholders(incoming: Any, current: Any) -> Any:
     if incoming == REDACTED_PLACEHOLDER and isinstance(current, str):
         return current  # keep the real secret
     return incoming
+
+
+class SecretNotRevealable(Exception):
+    """The requested path does not point at a revealable secret field."""
+
+
+def resolve_secret_path(data: Any, path: str) -> str:
+    """
+    Resolve a dotted config *path* against an UNREDACTED config dump and return
+    the real secret string at the leaf. Powers the on-demand "reveal" endpoint.
+
+    Traversal supports dict keys and lists. A list segment matches the item
+    whose ``id`` equals the segment (mirroring ``strip_redacted_placeholders``,
+    so a reordered ``notifications.destinations`` list still resolves the right
+    item), falling back to a positional index for id-less lists.
+
+    Defense in depth: the leaf field name must be in ``SENSITIVE_FIELD_NAMES``
+    and not in ``NEVER_REVEAL_FIELD_NAMES`` — so this can only ever surface an
+    actual, revealable secret, never an arbitrary config value.
+
+    Raises ``SecretNotRevealable`` if the leaf is not a revealable secret, and
+    ``KeyError`` if the path does not resolve.
+    """
+    segments = [s for s in path.split(".") if s != ""]
+    if not segments:
+        raise KeyError("empty path")
+
+    leaf = segments[-1]
+    if leaf not in SENSITIVE_FIELD_NAMES or leaf in NEVER_REVEAL_FIELD_NAMES:
+        raise SecretNotRevealable(leaf)
+
+    node: Any = data
+    for seg in segments:
+        if isinstance(node, dict):
+            if seg not in node:
+                raise KeyError(seg)
+            node = node[seg]
+        elif isinstance(node, list):
+            match = next(
+                (
+                    item
+                    for item in node
+                    if isinstance(item, dict) and str(item.get("id")) == seg
+                ),
+                None,
+            )
+            if match is None and seg.isdigit() and int(seg) < len(node):
+                match = node[int(seg)]
+            if match is None:
+                raise KeyError(seg)
+            node = match
+        else:
+            raise KeyError(seg)
+
+    if node is None:
+        return ""
+    if not isinstance(node, str):
+        raise KeyError(f"{leaf} is not a string secret")
+    return node
 
 
 # ==== CONFIG EXCEPTIONS ====
@@ -1264,3 +1340,27 @@ def save_config(config: ChubConfig, path: Optional[str] = None) -> None:
             raise
     except Exception as e:
         raise ConfigError(f"Failed to save configuration: {e}") from e
+
+
+def seed_plex_enabled_libraries(
+    instance_name: str, live_libraries: List[str], path: Optional[str] = None
+) -> bool:
+    """One-time backfill of a Plex instance's ``enabled_libraries`` opt-in list.
+
+    Only acts when the field is unset (``None`` — a legacy config predating the
+    opt-in feature). It stamps the server's *currently present* libraries as the
+    enabled set so that any library ADDED to Plex later is excluded until the user
+    explicitly opts it in. Idempotent: a no-op once the field is a list (including
+    an empty "opted out" list). Reads + writes a fresh config so a concurrent edit
+    isn't clobbered by a stale in-memory snapshot.
+
+    Returns True iff it seeded (persisted a change).
+    """
+    cfg = load_config(path)
+    detail = cfg.instances.plex.get(instance_name)
+    if detail is None or detail.enabled_libraries is not None:
+        return False
+    # Preserve order, drop dupes — library titles are the key everywhere else.
+    detail.enabled_libraries = list(dict.fromkeys(live_libraries))
+    save_config(cfg, path)
+    return True

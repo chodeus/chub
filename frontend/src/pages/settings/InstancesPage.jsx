@@ -123,6 +123,43 @@ export const InstancesPage = () => {
             .catch(() => {});
     }, []);
 
+    const [savingLibraries, setSavingLibraries] = useState(new Set());
+
+    const handleSaveLibraries = useCallback(
+        async (service, instanceName, enabledTitles) => {
+            const key = `${service}:${instanceName}`;
+            setSavingLibraries(prev => new Set(prev).add(key));
+            try {
+                await instancesAPI.updateInstanceLibraries(instanceName, enabledTitles);
+                // Reflect the new enabled flags locally without a round-trip.
+                setLibrariesData(prev => ({
+                    ...prev,
+                    [key]: (prev[key] || []).map(lib => {
+                        const title = typeof lib === 'string' ? lib : lib.title;
+                        return {
+                            ...(typeof lib === 'string' ? { title } : lib),
+                            enabled: enabledTitles.includes(title),
+                        };
+                    }),
+                }));
+                toast.success(
+                    `${instanceName}: ${enabledTitles.length} librar${
+                        enabledTitles.length === 1 ? 'y' : 'ies'
+                    } enabled`
+                );
+            } catch {
+                toast.error(`Failed to save libraries for ${instanceName}`);
+            } finally {
+                setSavingLibraries(prev => {
+                    const next = new Set(prev);
+                    next.delete(key);
+                    return next;
+                });
+            }
+        },
+        [toast]
+    );
+
     const handleToggleInstance = useCallback(
         async (instanceName, enabled) => {
             try {
@@ -689,6 +726,10 @@ export const InstancesPage = () => {
                                 onDelete={() => handleDelete(service.type, name, data.url)}
                                 onFetchLogs={() => handleFetchLogs(service.type, name)}
                                 onFetchLibraries={() => handleFetchLibraries(service.type, name)}
+                                onSaveLibraries={titles =>
+                                    handleSaveLibraries(service.type, name, titles)
+                                }
+                                isSavingLibraries={savingLibraries.has(`${service.type}:${name}`)}
                                 onToggle={handleToggleInstance}
                                 onRefresh={handleRefreshInstance}
                             />
@@ -765,10 +806,20 @@ export const InstancesPage = () => {
                         ).map(field => {
                             const FieldComponent = FieldRegistry.getField(field.type);
                             const isToggle = field.type === 'toggle' || field.type === 'check_box';
+                            // Reveal resolves against the SAVED instance (keyed by
+                            // its stored name), not whatever name is typed in the
+                            // form — the persisted config is what holds the secret.
+                            const secretField =
+                                field.type === 'password' && modalInstanceData?.name
+                                    ? {
+                                          ...field,
+                                          secretPath: `instances.${modalServiceType}.${modalInstanceData.name}.${field.key}`,
+                                      }
+                                    : field;
                             return (
                                 <FieldComponent
                                     key={field.key}
-                                    field={field}
+                                    field={secretField}
                                     value={
                                         isToggle ? !!formData[field.key] : formData[field.key] || ''
                                     }
