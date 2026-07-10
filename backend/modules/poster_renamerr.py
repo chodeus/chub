@@ -33,6 +33,7 @@ from backend.util.helper import (
 from backend.util.normalization import parse_asset_filename
 from backend.util.logger import Logger
 from backend.util.notification import NotificationManager
+from backend.util.plex_index import PlexMediaIndex
 from backend.util.upload_posters import PosterUploader
 
 # Process-global lock serializing the destructive poster_cache clear()+rebuild.
@@ -839,7 +840,62 @@ class PosterRenamerr(ChubModule):
         except OSError:
             return None
 
-    def _is_unchanged_upload(self, row: dict) -> bool:
+    def _build_upload_lib_indexes(self, db: ChubDB) -> List[PlexMediaIndex]:
+        """One PlexMediaIndex per add_posters-enabled instance, built over the
+        same plex_media_cache snapshot the uploader resolves against — so the
+        skip's notion of "target libraries" can't drift from the uploader's.
+        Instances with no snapshot contribute nothing (the coverage check then
+        degrades to today's hash-only skip rather than re-staging everything).
+        """
+        indexes: List[PlexMediaIndex] = []
+        for scope in self.config.plex_scope or []:
+            if not scope.add_posters:
+                continue
+            rows = db.plex.get_by_instance(scope.instance)
+            if rows:
+                indexes.append(PlexMediaIndex(rows))
+        return indexes
+
+    @staticmethod
+    def _current_target_libs(row: dict, lib_indexes: List[PlexMediaIndex]) -> set:
+        """Libraries the uploader would currently target for ``row``, unioned
+        across every enabled instance (uploaded_libraries is a flat
+        cross-instance record). Empty when the item resolves nowhere — the
+        uploader would only fail "No matching Plex entry found" for those, so
+        an empty result must not block the skip."""
+        asset_type = row.get("asset_type")
+        season_number = row.get("season_number")
+        title_override = None
+        if asset_type == "movie":
+            media_type = "movie"
+        elif asset_type == "show":
+            if season_number is None:
+                media_type = "show"
+            else:
+                media_type = "season"
+                # Mirror the uploader's season title key (_sync_seasons) so
+                # title-only season matches count as targets too.
+                title_override = (
+                    f"{normalize_titles(row.get('title', ''))}:S{season_number}"
+                )
+        elif asset_type in ("collection", "artist", "album"):
+            media_type = asset_type
+        else:
+            return set()
+        libs: set = set()
+        for idx in lib_indexes:
+            entries, _key = idx.resolve(
+                row,
+                media_type=media_type,
+                season_number=season_number if media_type == "season" else None,
+                title_override=title_override,
+            )
+            libs.update(
+                str(e["library_name"]) for e in entries if e.get("library_name")
+            )
+        return libs
+
+    def _is_unchanged_upload(self, row: dict, lib_indexes=None) -> bool:
         """Plex apply path only: True when this matched poster can be skipped
         entirely (no copy, no border, no upload) because its SOURCE is unchanged
         since it was last successfully uploaded AND it was uploaded before.
@@ -848,6 +904,13 @@ class PosterRenamerr(ChubModule):
         (source_file_hash), NOT the staged/bordered file_hash, so it's correct
         whether or not border_replacerr runs. Fails safe: any missing signal
         (no prior upload, no stored hash, unreadable source) → not skipped.
+
+        With ``lib_indexes`` the skip additionally requires the recorded
+        uploaded_libraries to cover every library the uploader would currently
+        target, so a newly opted-in library or a partial per-library failure
+        re-flows into the uploader's backfill instead of being skipped forever.
+        ``None`` (caller couldn't build indexes) keeps the legacy hash-only
+        behavior.
         """
         cfg = self.config
         if getattr(cfg, "apply_method", "kometa") != "plex":
@@ -857,6 +920,13 @@ class PosterRenamerr(ChubModule):
         stored = row.get("source_file_hash")
         if not stored or not row.get("uploaded_libraries"):
             return False
+        if lib_indexes is not None:
+            recorded = PosterUploader._parse_uploaded_libraries(
+                row.get("uploaded_libraries")
+            )
+            targets = self._current_target_libs(row, lib_indexes)
+            if not targets <= recorded:
+                return False
         src = row.get("original_file")
         if not src:
             return False
@@ -1062,12 +1132,17 @@ class PosterRenamerr(ChubModule):
     def get_matched_assets(self, db: ChubDB) -> list:
         matched_assets = []
         skipped_unchanged = 0
+        lib_indexes = None
+        if getattr(self.config, "apply_method", "kometa") == "plex" and getattr(
+            self.config, "skip_unchanged_uploads", True
+        ):
+            lib_indexes = self._build_upload_lib_indexes(db)
 
         def _consider(row: dict) -> None:
             nonlocal skipped_unchanged
             if not (row.get("matched") and self._needs_staging(row)):
                 return
-            if self._is_unchanged_upload(row):
+            if self._is_unchanged_upload(row, lib_indexes):
                 skipped_unchanged += 1
                 return
             matched_assets.append(row)
@@ -1604,9 +1679,12 @@ class PosterRenamerr(ChubModule):
             with ChubDB(logger=self.logger) as db:
                 self.ensure_destination_dir()
 
-                # Clear and rebuild poster cache for current session. Serialized
-                # against the scheduled run's rebuild so the two can't interleave
-                # a clear with the other's insert (see _POSTER_CACHE_REBUILD_LOCK).
+                # Clear and rebuild poster cache for current session. The lock
+                # spans clear+rebuild+match: a concurrent clear (second webhook
+                # worker or the scheduled run) must not empty the cache while
+                # this run's per-item match reads it — the item lists here are
+                # small webhook payloads, so holding it across the match+rename
+                # loop is cheap (see _POSTER_CACHE_REBUILD_LOCK).
                 with _POSTER_CACHE_REBUILD_LOCK:
                     db.poster.clear()
                     self.merge_assets(source_dirs=self._scan_source_dirs(), db=db)
@@ -1614,45 +1692,53 @@ class PosterRenamerr(ChubModule):
                     # search-only so Assets Search covers all local assets.
                     self.merge_gdrive_search_index(db)
 
-                # Process each media item
-                output = {
-                    "collection": [],
-                    "movie": [],
-                    "show": [],
-                    "artist": [],
-                    "album": [],
-                }
-                manifest = {"media_cache": [], "collections_cache": []}
+                    # Process each media item
+                    output = {
+                        "collection": [],
+                        "movie": [],
+                        "show": [],
+                        "artist": [],
+                        "album": [],
+                    }
+                    manifest = {"media_cache": [], "collections_cache": []}
 
-                matched_count = 0
-                for media_item in media_items:
-                    # Match poster to media
-                    is_collection = media_item.get("asset_type") == "collection"
-                    match_result = self.match_item(media_item, db, is_collection)
+                    matched_count = 0
+                    for media_item in media_items:
+                        # Match poster to media
+                        is_collection = media_item.get("asset_type") == "collection"
+                        match_result = self.match_item(media_item, db, is_collection)
 
-                    if match_result["matched"]:
-                        matched_count += 1
-                        # Get the updated item from DB after matching
-                        if is_collection:
-                            updated_item = db.collection.get_by_id(media_item.get("id"))
-                        else:
-                            updated_item = db.media.get_by_id(media_item.get("id"))
+                        if match_result["matched"]:
+                            matched_count += 1
+                            # Get the updated item from DB after matching
+                            if is_collection:
+                                updated_item = db.collection.get_by_id(
+                                    media_item.get("id")
+                                )
+                            else:
+                                updated_item = db.media.get_by_id(media_item.get("id"))
 
-                        if updated_item:
-                            # Rename the file
-                            rename_result = self.rename_file(item=updated_item, db=db)
+                            if updated_item:
+                                # Rename the file
+                                rename_result = self.rename_file(
+                                    item=updated_item, db=db
+                                )
 
-                            if rename_result:
-                                asset_type = updated_item.get("asset_type", "movie")
-                                output.setdefault(asset_type, []).append(rename_result)
-
-                                # Add to manifest
-                                if asset_type == "collection":
-                                    manifest["collections_cache"].append(
-                                        updated_item["id"]
+                                if rename_result:
+                                    asset_type = updated_item.get("asset_type", "movie")
+                                    output.setdefault(asset_type, []).append(
+                                        rename_result
                                     )
-                                else:
-                                    manifest["media_cache"].append(updated_item["id"])
+
+                                    # Add to manifest
+                                    if asset_type == "collection":
+                                        manifest["collections_cache"].append(
+                                            updated_item["id"]
+                                        )
+                                    else:
+                                        manifest["media_cache"].append(
+                                            updated_item["id"]
+                                        )
 
                 log.info(
                     f"Processed {len(media_items)} media items, {matched_count} matched"
@@ -1772,7 +1858,9 @@ class PosterRenamerr(ChubModule):
                     connector.update_arr_database()
                     connector.update_collections_database()
 
-                with self._phase("match"):
+                # matching reads poster_cache per item; hold the rebuild lock so
+                # a webhook clear() can't wipe it mid-match.
+                with self._phase("match"), _POSTER_CACHE_REBUILD_LOCK:
                     self.match_assets_to_media(db=db)
                 with self._phase("match-quality"):
                     self._run_match_quality_pass(db)

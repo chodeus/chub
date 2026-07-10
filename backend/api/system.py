@@ -1153,12 +1153,17 @@ async def clear_poster_cache(
 ) -> JSONResponse:
     try:
         logger.debug("Serving POST /api/system/db/poster-cache/clear")
-        count_row = db.worker.execute_query(
-            "SELECT COUNT(*) AS total FROM poster_cache", fetch_one=True
-        )
-        before = int(count_row["total"]) if count_row else 0
+        # Serialize against poster_renamerr's clear()+rebuild+match critical
+        # section so a manual wipe can't empty the cache mid-run.
+        from backend.modules.poster_renamerr import _POSTER_CACHE_REBUILD_LOCK
 
-        db.poster.clear()
+        with _POSTER_CACHE_REBUILD_LOCK:
+            count_row = db.worker.execute_query(
+                "SELECT COUNT(*) AS total FROM poster_cache", fetch_one=True
+            )
+            before = int(count_row["total"]) if count_row else 0
+
+            db.poster.clear()
 
         logger.info(
             f"Wiped poster_cache via /api/system/db/poster-cache/clear ({before} rows)"
