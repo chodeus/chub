@@ -312,7 +312,7 @@ def _process_webhook_job(
                     if db is not None:
                         db.worker.enqueue_job(
                             "jobs",
-                            {"media_items": media_items, "suppress_notification": True},
+                            {"media_items": media_items},
                             job_type="poster_rename",
                             scheduled_at=retry_at,
                         )
@@ -320,10 +320,7 @@ def _process_webhook_job(
                         with ChubDB(logger=logger, quiet=True) as tdb:
                             tdb.worker.enqueue_job(
                                 "jobs",
-                                {
-                                    "media_items": media_items,
-                                    "suppress_notification": True,
-                                },
+                                {"media_items": media_items},
                                 job_type="poster_rename",
                                 scheduled_at=retry_at,
                             )
@@ -472,16 +469,9 @@ def _process_poster_rename_job(
 
     renamer = PosterRenamerr(logger=logger)
     # apply_staging() + post-rename actions (border + plex/kometa upload policy)
-    # are handled inside the helper. On an upload-retry re-stage the rename
-    # notification is suppressed (the original run already sent it), so repeated
-    # upload attempts don't fire duplicate rename notifications.
-    result = _adhoc_rename_and_post(
-        renamer,
-        media_items,
-        logger,
-        job_id,
-        suppress_notification=bool(payload.get("suppress_notification", False)),
-    )
+    # are handled inside the helper. It notifies only on the actual outcome
+    # (poster uploaded / written), so upload retries don't re-notify.
+    result = _adhoc_rename_and_post(renamer, media_items, logger, job_id)
     up = result.get("upload_result")
     if result.get("success") and up and not up.get("success"):
         # Fail the job so the worker's backoff retry re-stages (a fresh
@@ -559,12 +549,7 @@ def _process_upload_posters_job(
 
 
 def _adhoc_rename_and_post(
-    renamer,
-    media_items,
-    logger,
-    job_id: int,
-    force_upload: bool = False,
-    suppress_notification: bool = False,
+    renamer, media_items, logger, job_id: int, force_upload: bool = False
 ) -> Dict[str, Any]:
     """Run the webhook/adhoc rename + post-rename actions under the apply_staging
     context so the plex path's temp staging dir lives across rename → border →
@@ -575,12 +560,7 @@ def _adhoc_rename_and_post(
         result = renamer.run_poster_rename_adhoc(media_items)
         if result.get("success") and result.get("output"):
             upload_result = _handle_post_rename_actions(
-                result,
-                renamer,
-                logger,
-                job_id,
-                force_upload=force_upload,
-                suppress_notification=suppress_notification,
+                result, renamer, logger, job_id, force_upload=force_upload
             )
             if upload_result is not None:
                 # The rename itself succeeded; each caller decides how a
@@ -595,7 +575,6 @@ def _handle_post_rename_actions(
     logger,
     job_id: int,
     force_upload: bool = False,
-    suppress_notification: bool = False,
 ) -> Optional[Dict[str, Any]]:
     """
     Handle notifications and uploads after successful rename.
@@ -619,20 +598,8 @@ def _handle_post_rename_actions(
         output = rename_result.get("output", {})
         manifest = rename_result.get("manifest", {})
 
-        # Send notifications if there are results — but NOT on an upload-retry
-        # re-stage. The original run already sent the rename notification; a
-        # retry only re-stages + re-uploads, so re-notifying would fire a
-        # duplicate rename notification per attempt (the storm the user saw).
-        if any(output.values()) and not suppress_notification:
-            from backend.util.notification import NotificationManager
-
-            manager = NotificationManager(
-                renamer.full_config, logger, module_name="poster_renamerr"
-            )
-            manager.send_notification(output)
-            log.info(f"[JOB:{job_id}] Notifications sent")
-
-        # Handle border replacer if enabled
+        # Border replacer first, so a notified success reflects the FINISHED
+        # poster (border applied), not the intermediate rename.
         if getattr(renamer.config, "run_border_replacerr", False) and manifest:
             renamer.run_border_replacerr(manifest)
             log.info(f"[JOB:{job_id}] Border replacer completed")
@@ -644,9 +611,14 @@ def _handle_post_rename_actions(
         #     would run after the staging dir is cleaned up). The uploader still
         #     gates per-instance on add_posters. Targeted: reuse the cached Plex
         #     snapshot when one exists to avoid a full rebuild per webhook.
+        # `landed` records the real OUTCOME so the notification below fires only
+        # on success (poster in Plex / written to disk), never on a failed upload
+        # — terminal failures are reported by the on-failure error handler.
+        landed = False
         apply_method = getattr(renamer.config, "apply_method", "kometa")
         if apply_method != "plex":
             log.info(f"[JOB:{job_id}] apply_method=kometa - no Plex upload")
+            landed = True
         elif _check_plex_upload_enabled(renamer.config) and manifest:
             from backend.util.upload_posters import PosterUploader
 
@@ -665,10 +637,24 @@ def _handle_post_rename_actions(
                 )
             else:
                 log.info(f"[JOB:{job_id}] Plex upload completed")
+                landed = True
         else:
             log.info(
                 f"[JOB:{job_id}] Plex upload not enabled or no manifest - task complete"
             )
+            landed = True
+
+        # Outcome-based notification: fire ONCE, only after the poster actually
+        # landed (Plex upload succeeded, or the kometa write completed) — never on
+        # the intermediate rename step, and never on a failed/retried upload.
+        if landed and any(output.values()):
+            from backend.util.notification import NotificationManager
+
+            manager = NotificationManager(
+                renamer.full_config, logger, module_name="poster_renamerr"
+            )
+            manager.send_notification(output)
+            log.info(f"[JOB:{job_id}] Notifications sent")
 
     except Exception as e:
         log.error(f"[JOB:{job_id}] Error in post-rename actions: {e}")
