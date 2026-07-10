@@ -235,6 +235,24 @@ def _base_result(instance_type: str, name: str) -> Dict[str, Any]:
     }
 
 
+def _write_landed(client: Any, desired: Dict[str, Any], instance_type: str) -> bool:
+    """Re-read the arr and report whether CHUB's entry is now present and correct.
+
+    Distinguishes a genuine save failure from a lost/timed-out HTTP reply: the arr
+    can accept the write (its save-time test round-trips through CHUB, which can be
+    slow) even though CHUB never receives the response and its client returns None.
+    Without this, a successful provision is misreported as "failed". Best-effort —
+    False on any error, so a real failure still surfaces."""
+    try:
+        current = client.get_notifications()
+    except Exception:  # noqa: BLE001 - verification is best-effort
+        return False
+    match = _find_chub_notification(current or [])
+    if match is None:
+        return False
+    return not diff_notification(match, desired, instance_type)
+
+
 def provision_instance(
     client: Any,
     instance_type: str,
@@ -280,7 +298,11 @@ def provision_instance(
                 return result
             desired.pop("id", None)
             created = client.add_notification(desired, force_save=force_save)
-            if isinstance(created, dict) and created.get("id"):
+            if (isinstance(created, dict) and created.get("id")) or _write_landed(
+                client, desired, instance_type
+            ):
+                # Verify-after-write: the arr may have accepted the entry even if
+                # the HTTP reply was lost, so trust the arr's actual state.
                 result["status"], result["action"] = "connected", "created"
             else:
                 result["error"] = _save_failed_message(base_url)
@@ -298,7 +320,9 @@ def provision_instance(
         updated = client.update_notification(
             match["id"], desired, force_save=force_save
         )
-        if isinstance(updated, dict) and updated.get("id"):
+        if (isinstance(updated, dict) and updated.get("id")) or _write_landed(
+            client, desired, instance_type
+        ):
             result["status"], result["action"] = "connected", "updated"
         else:
             result["error"] = _save_failed_message(base_url)
