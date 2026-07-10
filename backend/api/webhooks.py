@@ -12,6 +12,7 @@ from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
+from starlette.concurrency import run_in_threadpool
 
 from backend.api.utils import error, get_database, get_logger, ok
 from backend.util.config import ConfigError, load_config
@@ -472,8 +473,11 @@ async def get_provision_status(
             payload["instances"] = []
         else:
             secret = (cfg.general.webhook_secret or "").strip() or None
-            payload["instances"] = provision_all(
-                cfg, base_url, secret, dry_run=True, logger=logger
+            # provision_all does blocking network I/O to each *arr; run it OFF the
+            # event loop so CHUB stays responsive to the arr's save-time test
+            # webhook, which calls BACK into CHUB while this runs (else deadlock).
+            payload["instances"] = await run_in_threadpool(
+                provision_all, cfg, base_url, secret, dry_run=True, logger=logger
             )
         resp = ok("Webhook provisioning status", payload)
         resp.headers["Cache-Control"] = "no-store"
@@ -519,7 +523,10 @@ async def provision_webhooks(
         if base_err:
             return error(base_err, code="WEBHOOK_PROVISION_BASE_URL", status_code=400)
         secret = (cfg.general.webhook_secret or "").strip() or None
-        results = provision_all(
+        # Off the event loop: the arr runs a save-time test that POSTs back to
+        # CHUB, which deadlocks if this blocks the loop (see get_provision_status).
+        results = await run_in_threadpool(
+            provision_all,
             cfg,
             base_url,
             secret,
@@ -571,8 +578,11 @@ async def remove_webhooks(
     try:
         cfg = load_config()
         body = await request.json()
-        results = deprovision_all(
-            cfg, only=_normalize_only(body.get("instances")), logger=logger
+        results = await run_in_threadpool(
+            deprovision_all,
+            cfg,
+            only=_normalize_only(body.get("instances")),
+            logger=logger,
         )
         removed = sum(1 for r in results if r.get("action") == "removed")
         logger.info(
