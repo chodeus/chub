@@ -5,6 +5,7 @@ import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning';
 import { labelarrAPI } from '../../utils/api/labelarr.js';
 import { modulesAPI } from '../../utils/api/modules.js';
 import { configAPI } from '../../utils/api/config.js';
+import { instancesAPI } from '../../utils/api';
 import { Button, IconButton, LoadingButton, StatusDot, Toggle } from '../../components/ui/index.js';
 import Spinner from '../../components/ui/Spinner.jsx';
 import { formatDateTime } from '../../utils/datetime.js';
@@ -355,6 +356,82 @@ const LabelarrPage = () => {
 };
 
 // ─── Mapping card (collapsed summary + expandable editor) ───────────────
+// Compact multi-select of a Plex instance's OPTED-IN libraries. Replaces the
+// old free-text field so a user can only target libraries enabled on
+// Settings → Instances (the list endpoint annotates each with `enabled`).
+// No ticks = all enabled libraries (the labelarr backend's "empty = all").
+const libNorm = t => (t || '').trim().toLowerCase();
+
+const LabelarrLibraryPicker = ({ instanceName, value, onChange, disabled }) => {
+    const { data, isLoading } = useApiData({
+        apiFunction: () => instancesAPI.fetchPlexLibraries(instanceName),
+        dependencies: [instanceName],
+        options: { immediate: !!instanceName, showErrorToast: false },
+    });
+
+    const libraries = useMemo(() => {
+        const raw = data?.data?.libraries;
+        if (!Array.isArray(raw)) return [];
+        return raw
+            .filter(l => typeof l === 'string' || l.enabled !== false)
+            .map(l => (typeof l === 'string' ? l : l.title))
+            .filter(Boolean);
+    }, [data]);
+
+    const selected = useMemo(() => new Set((value || []).map(libNorm)), [value]);
+
+    const hint = 'self-center text-xs text-fg-subtle';
+    if (!instanceName) {
+        return <span className={hint}>Select a Plex instance first</span>;
+    }
+    if (isLoading) {
+        return <span className={hint}>Loading libraries…</span>;
+    }
+    if (libraries.length === 0) {
+        return (
+            <span className={hint}>No enabled libraries — opt some in on Settings → Instances</span>
+        );
+    }
+
+    const toggle = title => {
+        const on = selected.has(libNorm(title));
+        onChange(
+            on
+                ? (value || []).filter(v => libNorm(v) !== libNorm(title))
+                : [...(value || []), title]
+        );
+    };
+
+    return (
+        <div className="flex flex-wrap gap-1.5 py-1">
+            {libraries.map(title => {
+                const on = selected.has(libNorm(title));
+                return (
+                    <button
+                        key={title}
+                        type="button"
+                        disabled={disabled}
+                        aria-pressed={on}
+                        onClick={() => toggle(title)}
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-[5px] text-xs border transition-colors disabled:opacity-50 ${
+                            on
+                                ? 'bg-primary/15 border-primary text-fg'
+                                : 'bg-surface-inset border-border text-fg-muted hover:border-primary'
+                        }`}
+                    >
+                        {title}
+                    </button>
+                );
+            })}
+            {selected.size === 0 && (
+                <span className="self-center text-[11px] text-fg-subtle">
+                    none ticked = all enabled
+                </span>
+            )}
+        </div>
+    );
+};
+
 const MappingCard = ({
     mapping,
     arrOptions,
@@ -531,12 +608,17 @@ const MappingCard = ({
                             mapping.plex_instances.map((p, idx) => (
                                 <div
                                     key={idx}
-                                    className="grid grid-cols-1 sm:grid-cols-[200px_1fr_auto] gap-2 items-center"
+                                    className="grid grid-cols-1 sm:grid-cols-[200px_1fr_auto] gap-2 items-start"
                                 >
                                     <select
                                         value={p.instance}
                                         onChange={e =>
-                                            updatePlex(idx, { instance: e.target.value })
+                                            updatePlex(idx, {
+                                                instance: e.target.value,
+                                                // A different server has different
+                                                // libraries — drop the stale picks.
+                                                library_names: [],
+                                            })
                                         }
                                         disabled={disabled}
                                         className={inputCls}
@@ -548,20 +630,13 @@ const MappingCard = ({
                                             </option>
                                         ))}
                                     </select>
-                                    <input
-                                        type="text"
-                                        value={p.library_names.join(', ')}
-                                        onChange={e =>
-                                            updatePlex(idx, {
-                                                library_names: e.target.value
-                                                    .split(',')
-                                                    .map(s => s.trim())
-                                                    .filter(Boolean),
-                                            })
+                                    <LabelarrLibraryPicker
+                                        instanceName={p.instance}
+                                        value={p.library_names}
+                                        onChange={names =>
+                                            updatePlex(idx, { library_names: names })
                                         }
-                                        placeholder="Library names (comma-separated; blank = all enabled)"
                                         disabled={disabled}
-                                        className={inputCls}
                                     />
                                     <IconButton
                                         icon="close"
