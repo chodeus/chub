@@ -360,6 +360,127 @@ def test_sync_single_asset_uploads_to_all_libraries(tmp_path):
     assert len(updates) == 1  # DB updated once, not per library
 
 
+def test_sync_single_asset_live_fallback_when_absent_from_cache(tmp_path):
+    """A brand-new import that isn't in the cached index still uploads: the LIVE
+    fallback targets the instance's movie libraries (skipping show libraries) and
+    pushes to the one(s) that actually hold it. This is the webhook/instant path
+    that must not depend on the stale plex_media_cache snapshot."""
+    from types import SimpleNamespace
+
+    poster = tmp_path / "The Shawshank Redemption (1994).jpg"
+    poster.write_bytes(b"poster-bytes")
+
+    updates = []
+
+    class FakePlex:
+        url = "http://plex:32400"
+
+        def __init__(self):
+            self.uploads = []
+
+        def get_libraries(self):
+            return ["Films", "Films 4K", "TV Programmes"]
+
+        def section_type(self, name):
+            return "show" if name == "TV Programmes" else "movie"
+
+        def upload_poster(self, *, library_name, item_title, **kw):
+            # Only "Films" actually holds the movie; the live title+year search
+            # finds nothing in the others, so upload_poster returns False there.
+            if library_name == "Films":
+                self.uploads.append(library_name)
+                return True
+            return False
+
+        def remove_label(self, *a, **k):
+            pass
+
+    fake_plex = FakePlex()
+    up = object.__new__(PosterUploader)
+    up.force = True
+    up.config = SimpleNamespace(upload_delay_ms=0)
+    up.logger = SimpleNamespace(
+        warning=lambda *a, **k: None, debug=lambda *a, **k: None
+    )
+    up.db = SimpleNamespace(
+        media=SimpleNamespace(update=lambda **kw: updates.append(kw))
+    )
+    up._live_lib_types = {}
+
+    asset = {
+        "title": "The Shawshank Redemption",
+        "asset_type": "movie",
+        "year": "1994",
+        "tmdb_id": 278,
+        "instance_name": "Chodeus",
+        "renamed_file": str(poster),
+    }
+
+    result = up._sync_single_asset(
+        asset=asset,
+        plex_client=fake_plex,
+        index={},  # EMPTY cache → the live fallback must carry it
+        priority_keys=["tmdb", "imdb", "title"],
+        dry_run=False,
+    )
+
+    assert result.success is True
+    assert result.action == "updated"
+    assert result.match_type == "LIVE"
+    assert fake_plex.uploads == ["Films"]  # only the library that has it
+    assert "TV Programmes" not in fake_plex.uploads  # wrong type never targeted
+
+
+def test_sync_single_asset_no_live_match_reports_not_found(tmp_path):
+    """When neither the cache nor a live search finds the item in any library,
+    it still reports the clear 'No matching Plex entry found' failure."""
+    from types import SimpleNamespace
+
+    poster = tmp_path / "Ghost Movie (2099).jpg"
+    poster.write_bytes(b"poster-bytes")
+
+    class FakePlex:
+        url = "http://plex:32400"
+
+        def get_libraries(self):
+            return ["Films"]
+
+        def section_type(self, name):
+            return "movie"
+
+        def upload_poster(self, **kw):
+            return False  # live search finds nothing anywhere
+
+        def remove_label(self, *a, **k):
+            pass
+
+    up = object.__new__(PosterUploader)
+    up.force = True
+    up.config = SimpleNamespace(upload_delay_ms=0)
+    up.logger = SimpleNamespace(
+        warning=lambda *a, **k: None, debug=lambda *a, **k: None
+    )
+    up.db = SimpleNamespace(media=SimpleNamespace(update=lambda **kw: None))
+    up._live_lib_types = {}
+
+    result = up._sync_single_asset(
+        asset={
+            "title": "Ghost Movie",
+            "asset_type": "movie",
+            "year": "2099",
+            "instance_name": "Chodeus",
+            "renamed_file": str(poster),
+        },
+        plex_client=FakePlex(),
+        index={},
+        priority_keys=["tmdb", "imdb", "title"],
+        dry_run=False,
+    )
+
+    assert result.success is False
+    assert result.reason in ("Upload to Plex failed", "No matching Plex entry found")
+
+
 def test_sync_single_asset_dedupes_same_library(tmp_path):
     """Two index rows for the same library (e.g. unmerged copies) trigger only
     one upload_poster call — _locate_targets already covers copies in a library."""
