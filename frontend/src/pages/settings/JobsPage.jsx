@@ -252,6 +252,22 @@ export const JobsPage = () => {
         return () => clearInterval(id);
     }, []);
 
+    // Fallback poll while any job is running/pending. The list otherwise only
+    // refreshes on an SSE status-change event, but a completed webhook job may
+    // not emit one — leaving it stuck at "running" so its live timer (now -
+    // started_at) keeps ticking well past the real duration (the ~2-min counter
+    // that then corrects to the true time on refresh). Polling transitions a
+    // finished job promptly, capping any overshoot at the poll interval.
+    const hasActiveJobs = jobStats.running > 0 || jobStats.pending > 0;
+    useEffect(() => {
+        if (!hasActiveJobs) return undefined;
+        const id = setInterval(() => {
+            refreshJobs();
+            refreshStats();
+        }, 3000);
+        return () => clearInterval(id);
+    }, [hasActiveJobs, refreshJobs, refreshStats]);
+
     const formatSeconds = seconds => {
         if (seconds == null || !Number.isFinite(seconds) || seconds < 0) return '-';
         const s = Math.round(seconds);
