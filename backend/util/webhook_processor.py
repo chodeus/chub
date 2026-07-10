@@ -259,10 +259,10 @@ class WebhookProcessor:
         instance-scoped, so mis-routing a webhook would fetch the wrong item or
         404 rather than fail loudly.
 
-        The old host+port equality check is gone: a connection's *source* port is
-        never the arr's *listen* port, and ``client_port`` was only ever
-        populated from a non-standard ``X-Service-Port`` header, so it could not
-        match a real Sonarr/Radarr webhook.
+        Source port is never used: a connection's *source* port is never the
+        arr's *listen* port, so it can't identify the sender. The arr's listen
+        port only reaches us via the payload's ``applicationUrl`` (see
+        ``_match_by_application_url``), never the raw connection.
 
         Args:
             client_info: Client connection information.
@@ -307,8 +307,6 @@ class WebhookProcessor:
                 "type": bucket,
                 "api": info.api,
                 "url": info.url,
-                "host": client_info.get("client_host"),
-                "scheme": client_info.get("scheme") or "http",
             }
 
         # 1) Explicit override — fail closed if it names nothing eligible.
@@ -337,9 +335,17 @@ class WebhookProcessor:
                 return _resolved(*picked)
             return {"found": False, "error": "peer IP matched multiple instances"}
 
-        # 4) No peer-IP match (e.g. behind a reverse proxy that masks the peer):
-        # applicationUrl can still identify the sender by host+port.
-        picked = self._match_by_application_url(pool, application_url)
+        # 4) No peer-IP match. Docker published-port NAT collapses every arr to
+        # the bridge gateway IP (and a reverse proxy masks the peer too), so the
+        # connection can't identify the sender — but the webhook PAYLOAD still
+        # self-identifies it. Trust that: applicationUrl (host+port) first, then
+        # the arr's own instanceName. This is the payload-authoritative routing
+        # tools like PosterFlow use; it runs ONLY when the IP match found nothing,
+        # so distinct-IP (service-name) setups keep their existing behaviour.
+        # _disambiguate_by_name is unique-match-only and fails closed on a tie.
+        picked = self._match_by_application_url(
+            pool, application_url
+        ) or self._disambiguate_by_name(pool, instance_name)
         if picked is not None:
             return _resolved(*picked)
 
@@ -432,6 +438,8 @@ class WebhookProcessor:
                 try:
                     client.session.close()
                 except Exception:
+                    # Best-effort close; a cleanup failure must not mask the
+                    # instance name we just looked up.
                     pass
         except Exception:
             name = None
