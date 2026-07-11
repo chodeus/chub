@@ -415,6 +415,16 @@ const ModuleSettingsContent = ({ moduleKey }) => {
                                             )}
                                         </div>
                                     )}
+                                    {/* A sectionToggle/header-mode field is hoisted into the
+                                        header above, which drops its description. Surface it
+                                        here so enable-only sections (e.g. Stale duplicates) read
+                                        as more than a bare toggle. Kept full-opacity — it
+                                        explains what enabling the section does. */}
+                                    {enableF?.description && (
+                                        <p className="text-sm text-fg-subtle -mt-2 mb-4">
+                                            {enableF.description}
+                                        </p>
+                                    )}
                                     <div className={`flex flex-col gap-4 ${dimCls}`}>
                                         {bodyFields.map((field, fi) => renderField(field, fi))}
                                     </div>
