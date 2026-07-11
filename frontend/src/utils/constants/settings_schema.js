@@ -1307,9 +1307,9 @@ const CORE_SETTINGS_SCHEMA = [
                 required: true,
                 instance_types: ['plex'],
                 valueFormat: 'string',
-                section: 'Bloat pass',
+                section: 'Plex connection & advanced',
                 description:
-                    'Plex instance(s) whose metadata directory is scanned for bloat images. The bloat pass uses the first Plex instance selected here. In-use artwork is protected server-wide; to skip a specific library use Exclude Libraries below.',
+                    'Plex instance(s) whose metadata directory is scanned for bloat images. The bloat pass uses the first Plex instance selected here. In-use artwork is protected server-wide; to skip a specific library use Exclude Libraries above.',
             },
             {
                 key: 'excluded_libraries',
@@ -1324,7 +1324,7 @@ const CORE_SETTINGS_SCHEMA = [
                 label: 'Plex Path',
                 type: 'text',
                 required: true,
-                section: 'Bloat pass',
+                section: 'Plex connection & advanced',
                 description:
                     "Path inside the CHUB container that points at your Plex Media Server's data dir " +
                     "— the folder that directly contains 'Metadata/', 'Cache/', 'Plug-in Support/', etc. " +
@@ -1335,7 +1335,7 @@ const CORE_SETTINGS_SCHEMA = [
                 key: 'local_db',
                 label: 'Local Database',
                 type: 'check_box',
-                section: 'Bloat pass',
+                section: 'Plex connection & advanced',
                 description:
                     'Copy the Plex database locally instead of downloading via API. Requires Plex to be stopped.',
             },
@@ -1343,28 +1343,28 @@ const CORE_SETTINGS_SCHEMA = [
                 key: 'use_existing_db',
                 label: 'Use Existing Database',
                 type: 'check_box',
-                section: 'Bloat pass',
+                section: 'Plex connection & advanced',
                 description: 'Reuse existing database copy if less than 2 hours old.',
             },
             {
                 key: 'ignore_running',
                 label: 'Ignore Running Check',
                 type: 'check_box',
-                section: 'Bloat pass',
+                section: 'Plex connection & advanced',
                 description: 'Bypass the Plex running detection when using local database mode.',
             },
             {
                 key: 'sleep',
                 label: 'Sleep Between Operations',
                 type: 'number',
-                section: 'Bloat pass',
+                section: 'Plex connection & advanced',
                 description: 'Seconds to wait between operations (default: 60).',
             },
             {
                 key: 'timeout',
                 label: 'Connection Timeout',
                 type: 'number',
-                section: 'Bloat pass',
+                section: 'Plex connection & advanced',
                 description: 'Plex connection timeout in seconds (default: 600).',
             },
             {
@@ -1373,7 +1373,7 @@ const CORE_SETTINGS_SCHEMA = [
                 type: 'dropdown',
                 options: ['debug', 'info'],
                 required: true,
-                section: 'Bloat pass',
+                section: 'Plex connection & advanced',
                 description: 'Set the logging verbosity for poster cleanup.',
             },
             {
