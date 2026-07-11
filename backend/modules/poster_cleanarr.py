@@ -56,6 +56,26 @@ def format_bytes(size: int) -> str:
     return f"{size:.1f} PB"
 
 
+def _normalize_lib(name: str) -> str:
+    """Case-insensitive library-name key (mirrors Connector._normalize_library_name)."""
+    return name.strip().lower() if isinstance(name, str) else ""
+
+
+def _bundle_root(path: str) -> Optional[str]:
+    """The realpath'd ``.bundle`` directory enclosing a Plex metadata file.
+
+    Returns None when the path isn't inside a ``.bundle`` (never happens for a
+    scanned bloat file, but the caller then treats it as "library unknown").
+    """
+    cur = os.path.dirname(os.path.realpath(path))
+    while cur and not cur.endswith(".bundle"):
+        parent = os.path.dirname(cur)
+        if parent == cur:
+            return None
+        cur = parent
+    return cur or None
+
+
 VALID_MODES = {"report", "move", "remove", "restore", "clear", "nothing"}
 VALID_ORPHAN_MODES = {"report", "move", "remove"}
 VALID_STALE_MODES = {"report", "move", "remove"}
@@ -195,6 +215,42 @@ class PosterCleanarr(ChubModule):
                         ]
                         self.logger.info(
                             f"target_paths restricted to {len(bloat_list)} of {before} bloat files"
+                        )
+
+                    # Library opt-out (excluded_libraries): drop bloat whose
+                    # owning Plex library the user opted out of. This is a
+                    # post-classification set-difference — exactly like the
+                    # target_paths block above — so it can only REMOVE
+                    # candidates, never add one. It NEVER touches the in-use set
+                    # (get_in_use_hashes stays global), so an excluded library's
+                    # live artwork is still protected regardless. Fail-OPEN: a
+                    # bloat file whose bundle can't be resolved to a library is
+                    # treated as not-excluded (kept as a candidate = status quo).
+                    excluded_libs = {
+                        _normalize_lib(n)
+                        for n in (
+                            getattr(self.config, "excluded_libraries", None) or []
+                        )
+                        if _normalize_lib(n)
+                    }
+                    if excluded_libs and bloat_list:
+                        from backend.util.plex_metadata import (
+                            build_bundle_section_map,
+                        )
+
+                        section_map = build_bundle_section_map(db_path, metadata_dir)
+                        before = len(bloat_list)
+                        kept = []
+                        for b in bloat_list:
+                            root = _bundle_root(b["path"])
+                            lib = section_map.get(root) if root else None
+                            if lib is not None and _normalize_lib(lib) in excluded_libs:
+                                continue
+                            kept.append(b)
+                        bloat_list = kept
+                        self.logger.info(
+                            f"library opt-out excluded {before - len(bloat_list)} of "
+                            f"{before} bloat files in libraries {sorted(excluded_libs)}"
                         )
 
                     total_size = sum(b["size"] for b in bloat_list)

@@ -1309,7 +1309,15 @@ const CORE_SETTINGS_SCHEMA = [
                 valueFormat: 'string',
                 section: 'Bloat pass',
                 description:
-                    'Plex instance(s) whose metadata directory is scanned for bloat images. The bloat pass uses the first Plex instance selected here. Scans the whole server — the library opt-in does not apply (excluding libraries here would misread in-use artwork as bloat).',
+                    'Plex instance(s) whose metadata directory is scanned for bloat images. The bloat pass uses the first Plex instance selected here. In-use artwork is protected server-wide; to skip a specific library use Exclude Libraries below.',
+            },
+            {
+                key: 'excluded_libraries',
+                label: 'Exclude Libraries',
+                type: 'plex_library_exclude',
+                section: 'Bloat pass',
+                description:
+                    "Plex libraries to skip in the bloat pass — checked libraries are hidden from the bloat view and never cleaned (handy for Music / Music Videos, whose album art otherwise shows up as '(unknown)'). Safe by design: the in-use protection set stays global, so excluding a library only ever leaves its stale bloat alone — it can never delete a live poster. Empty = every library is scanned. Does not affect the Orphan or Stale-duplicate asset passes.",
             },
             {
                 key: 'plex_path',
@@ -1369,13 +1377,31 @@ const CORE_SETTINGS_SCHEMA = [
                 description: 'Set the logging verbosity for poster cleanup.',
             },
             {
+                key: 'asset_dirs',
+                label: 'Asset Directories',
+                type: 'dirlist_dragdrop',
+                section: 'Asset directories (Orphan & Stale)',
+                description:
+                    "Directories scanned by BOTH asset passes below — Orphan and Stale duplicates. Typically poster_renamerr's destination_dir, but you can list any path you want explicitly cleaned — including source dirs or personal folders that the post-rename pass deliberately leaves alone. Each is walked recursively; the hidden .chub_orphan_restore subdir is skipped.",
+            },
+            {
+                key: 'orphan_instances',
+                label: 'Library Instances (Radarr/Sonarr)',
+                type: 'instances',
+                instance_types: ['radarr', 'sonarr'],
+                valueFormat: 'string',
+                section: 'Asset directories (Orphan & Stale)',
+                description:
+                    "Radarr/Sonarr instances whose libraries define which assets are legitimate — used by BOTH passes below. Orphan flags an asset when it matches none of these libraries (by {tmdb-N}/{tvdb-N} id or title); Stale uses them to resolve each item's canonical folder. Leave empty to fall back to the Plex Bloat 'Plex Instance(s)' selection above. The comparison set is read from CHUB's media cache, populated by poster_renamerr — run it first if the cache is stale.",
+            },
+            {
                 key: 'orphan_assets_enabled',
                 label: 'Enable Orphan Asset Cleanup',
                 type: 'check_box',
                 sectionToggle: true,
                 section: 'Orphan assets',
                 description:
-                    "Walk Asset Directories and act on poster files with no parent media in the Library Instances below — orphan = asset with no parent media. A file is kept if its {tmdb-N}/{tvdb-N} id tag matches the library OR its title matches; it's flagged only when both miss. Use Ignore Titles below to exempt specific posters. (Inverse direction of the Unmatched Assets module, which reports media missing a poster.) Comparison set is read from CHUB's media cache (populated by poster_renamerr) — run renamerr first if the cache is stale.",
+                    "Act on poster files in the Asset Directories above that have no parent media in the Library Instances above — orphan = asset with no parent media. A file is kept if its {tmdb-N}/{tvdb-N} id tag matches the library OR its title matches; it's flagged only when both miss. Use Ignore Titles below to exempt specific posters. (Inverse direction of the Unmatched Assets module, which reports media missing a poster.)",
             },
             {
                 key: 'orphan_assets_mode',
@@ -1390,24 +1416,6 @@ const CORE_SETTINGS_SCHEMA = [
                 section: 'Orphan assets',
                 description:
                     'report (log only), move (relocate to a hidden .chub_orphan_restore subdir inside each asset_dir, fully recoverable), remove (permanent delete).',
-            },
-            {
-                key: 'asset_dirs',
-                label: 'Asset Directories',
-                type: 'dirlist_dragdrop',
-                section: 'Orphan assets',
-                description:
-                    "Directories to scan when this standalone orphan pass runs. Typically poster_renamerr's destination_dir, but you can list any path you want explicitly cleaned — including source dirs or personal folders that the post-rename pass deliberately leaves alone. Each is walked recursively; the hidden .chub_orphan_restore subdir is skipped.",
-            },
-            {
-                key: 'orphan_instances',
-                label: 'Library Instances (Radarr/Sonarr)',
-                type: 'instances',
-                instance_types: ['radarr', 'sonarr'],
-                valueFormat: 'string',
-                section: 'Orphan assets',
-                description:
-                    "Radarr/Sonarr instances whose libraries define which assets are legitimate. An asset is flagged as an orphan only when it matches none of these libraries (by {tmdb-N}/{tvdb-N} id or title). Leave empty to fall back to the Plex Bloat 'Plex Instance(s)' selection above (pre-split behaviour). The comparison set is read from CHUB's media cache, populated by poster_renamerr — run it first if the cache is stale.",
             },
             {
                 key: 'include_collections',
@@ -1432,7 +1440,7 @@ const CORE_SETTINGS_SCHEMA = [
                 sectionToggle: true,
                 section: 'Stale duplicates',
                 description:
-                    'Detects Kometa asset folders whose {tmdb-N}/{tvdb-N} id matches a live item but whose folder name no longer matches the media folder (e.g. after a Sonarr/Radarr folder rename). The canonical folder is always kept; a non-canonical duplicate is reported/moved/removed. Skipped if the canonical folder is not yet staged (never deletes the only copy). Uses the same instance comparison set as Orphan Asset Cleanup (Orphan Instances, falling back to Instances).',
+                    'Scans the Asset Directories above for Kometa asset folders whose {tmdb-N}/{tvdb-N} id matches a live item but whose folder name no longer matches the media folder (e.g. after a Sonarr/Radarr folder rename), using the Library Instances above to resolve each item’s canonical folder. The canonical folder is always kept; a non-canonical duplicate is reported/moved/removed. Skipped if the canonical folder is not yet staged (never deletes the only copy).',
             },
             {
                 key: 'stale_duplicates_mode',
@@ -1690,7 +1698,7 @@ const CORE_SETTINGS_MODULES = [
         key: 'poster_cleanarr',
         description:
             'Clean bloat images from Plex metadata and manage orphaned posters. ' +
-            'Operates on the entire Plex server, independent of the library opt-in.',
+            'Scans the whole Plex server by default; exclude specific libraries in the module settings.',
     },
     {
         name: 'Plex Maintenance',

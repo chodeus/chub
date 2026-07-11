@@ -52,6 +52,7 @@ const FIELD_RESOLVERS = {
     'array-object': () => CustomFields.ArrayObjectField,
     instances: () => CustomFields.InstancesField,
     plex_scope: () => CustomFields.InstancesField,
+    plex_library_exclude: () => CustomFields.PlexLibraryExcludeField,
     instance_dropdown: () => SelectFields.DropdownField,
     schedule: () => CustomFields.ScheduleField,
     tag_input: () => CustomFields.TagInputField,
@@ -133,6 +134,7 @@ const IMPLEMENTED_FIELD_TYPES = new Set([
     'array-object',
     'instances',
     'plex_scope',
+    'plex_library_exclude',
     'instance_dropdown', // Now implemented using DropdownField
     'tag_input',
     'tag_display',
