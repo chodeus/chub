@@ -1,6 +1,38 @@
 import os
 from typing import Any, Dict, List, Tuple
 
+# When a run would fan out into more than this many Discord messages (embeds),
+# collapse the per-item detail into a single summary embed. A first-time bulk
+# poster apply of thousands of items would otherwise hammer the webhook and trip
+# Discord's rate limiter; normal runs (a handful of items → 1–2 parts) are
+# returned unchanged.
+SUMMARY_PART_THRESHOLD = 10
+
+
+def _collapse_large_notification(
+    parts: Dict[int, List[Dict[str, Any]]],
+    fields: List[Dict[str, Any]],
+) -> Dict[int, List[Dict[str, Any]]]:
+    """Replace a many-part embed set with a single summary embed once it exceeds
+    ``SUMMARY_PART_THRESHOLD`` messages. Each ``fields`` entry with a non-empty
+    ``name`` is one titled item, so that count is the run size. Returns ``parts``
+    unchanged for normal-sized runs.
+    """
+    if len(parts) <= SUMMARY_PART_THRESHOLD:
+        return parts
+    entry_count = sum(1 for f in fields if f.get("name"))
+    summary = [
+        {
+            "name": f"{entry_count} items processed",
+            "value": (
+                f"```This run affected {entry_count} items across {len(parts)} "
+                "Discord messages. Per-item detail was collapsed into this "
+                "summary to stay within Discord's rate limits.```"
+            ),
+        }
+    ]
+    return {1: summary}
+
 
 def format_for_discord(
     config: Any, output: Any
@@ -811,4 +843,5 @@ def format_for_discord(
     formatted_output = formatter(output)
     if output_type == "flat":
         return formatted_output, True
-    return split_fields(formatted_output), True
+    parts = split_fields(formatted_output)
+    return _collapse_large_notification(parts, formatted_output), True
