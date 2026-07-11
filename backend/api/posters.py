@@ -2998,6 +2998,26 @@ def _get_plex_path(request: Request) -> Optional[str]:
     return None
 
 
+def _get_cleanarr_excluded_libraries(request: Request) -> List[str]:
+    """Plex library names the user opted out of in poster_cleanarr config.
+
+    Display-side mirror of the module's deletion-side deny-list — hides excluded
+    libraries from the by-media view and its libraries[] catalog. Best-effort: a
+    config failure returns [] (show everything). This is a UI filter, not a
+    safety guard — the in-use set is global regardless of any opt-out.
+    """
+    try:
+        from backend.util.config import load_config
+
+        cfg = load_config()
+    except Exception:
+        return []
+    section = getattr(cfg, "poster_cleanarr", None)
+    if section is None:
+        return []
+    return list(getattr(section, "excluded_libraries", None) or [])
+
+
 @router.get("/plex-metadata/by-media")
 async def list_plex_metadata_by_media(
     request: Request,
@@ -3081,6 +3101,19 @@ async def list_plex_metadata_by_media(
             ]
         if library_id:
             bundles = [b for b in bundles if b.get("library_section_id") == library_id]
+        # Library opt-out (poster_cleanarr.excluded_libraries): hide excluded
+        # libraries from the view. Mirrors the module's deletion-side deny-list
+        # so what the user sees matches what a run would touch. The in-use set is
+        # unaffected — this is display only.
+        excluded_libs = {
+            (n or "").strip().lower() for n in _get_cleanarr_excluded_libraries(request)
+        }
+        if excluded_libs:
+            bundles = [
+                b
+                for b in bundles
+                if (b.get("library_name") or "").strip().lower() not in excluded_libs
+            ]
         if variant_kind != "all":
             trimmed = []
             for b in bundles:
@@ -3098,7 +3131,11 @@ async def list_plex_metadata_by_media(
             f"Retrieved {len(page)} of {total} bundles",
             {
                 "bundles": page,
-                "libraries": scan.get("libraries", []),
+                "libraries": [
+                    lib
+                    for lib in scan.get("libraries", [])
+                    if (lib.get("name") or "").strip().lower() not in excluded_libs
+                ],
                 "media_types": scan.get("media_types", []),
                 "variant_kinds": scan.get("variant_kinds", []),
                 "total": total,

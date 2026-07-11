@@ -215,6 +215,58 @@ def _load_library_sections(db_path: str) -> Dict[int, Dict[str, Any]]:
     return sections
 
 
+def build_bundle_section_map(db_path: str, metadata_dir: str) -> Dict[str, str]:
+    """Map each on-disk ``.bundle`` directory to its owning Plex library NAME.
+
+    Used by poster_cleanarr's library opt-out to drop bloat files that belong
+    to an excluded library. Resolution mirrors ``scan_bundles``: a bundle is
+    tagged with the library of the first of its files that matches an in-use
+    anchor. Best-effort by design — a bundle whose files never anchor stays
+    UNMAPPED (absent from the result), so the caller treats it as "library
+    unknown" and, per the fail-open rule, does NOT exclude it. Keys are
+    ``os.path.realpath``'d bundle dirs so they compare equal to the caller's
+    resolved bloat-file bundle roots.
+
+    NEVER used to build or narrow the in-use set — this only labels
+    already-classified bloat candidates by library.
+    """
+    if not db_path or not metadata_dir:
+        return {}
+    anchor_index = _load_metadata_item_index(db_path)
+    if not anchor_index:
+        return {}
+    sections = _load_library_sections(db_path)
+
+    # Group every file by its enclosing .bundle dir (same walk shape as
+    # scan_bundles), then resolve each bundle's library via an anchored file.
+    bundle_files: Dict[str, List[str]] = {}
+    for root, _dirs, files in os.walk(metadata_dir):
+        bundle_root = root
+        while bundle_root and not bundle_root.endswith(".bundle"):
+            parent = os.path.dirname(bundle_root)
+            if parent == bundle_root or len(parent) < len(metadata_dir):
+                bundle_root = None
+                break
+            bundle_root = parent
+        if not bundle_root:
+            continue
+        bundle_files.setdefault(bundle_root, []).extend(files)
+
+    section_map: Dict[str, str] = {}
+    for bundle_root, files in bundle_files.items():
+        for fname in files:
+            hit = anchor_index.get(fname)
+            if not hit:
+                continue
+            sid = hit.get("library_section_id")
+            sec = sections.get(sid) if sid is not None else None
+            name = sec.get("name") if sec else None
+            if name:
+                section_map[os.path.realpath(bundle_root)] = name
+            break
+    return section_map
+
+
 # Plex metadata_type enum (subset we care about).
 METADATA_TYPE_LABELS = {
     1: "movie",
@@ -421,6 +473,20 @@ def scan_bundles(plex_path: str, *, force: bool = False) -> Dict[str, Any]:
         # upload custom posters for individual tracks/albums. Keeps the
         # payload to movies/shows/seasons/episodes/collections only.
         if info.get("metadata_type") in EXCLUDED_METADATA_TYPES:
+            continue
+
+        # Drop unanchored, non-actionable bundles. When no file in a bundle
+        # matches an in-use anchor, `info` stays at its defaults (rating_key
+        # None, title "" -> rendered "(unknown)", metadata_type None), so the
+        # music-type guard above can't fire. These are almost always Plex's own
+        # music/library defaults under Contents/ that never matched an in-use
+        # filename — they carry no deletable upload and can't be selected or
+        # cleaned, so surfacing them is pure "(unknown)" clutter. An unanchored
+        # bundle that DOES hold an uploads/ file is genuine orphaned bloat and
+        # is kept so the user can still clean it.
+        if info.get("rating_key") is None and not any(
+            f["source"] == "uploads" for f in files
+        ):
             continue
 
         variants = []
