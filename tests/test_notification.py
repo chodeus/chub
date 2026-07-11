@@ -478,10 +478,128 @@ def test_validate_target_rejects_redacted_placeholder_webhook():
     and notifications silently fail."""
     m = make_manager()
     assert isinstance(m._validate_target("discord", {"webhook": "********"}), str)
-    assert isinstance(m._validate_target("discord", {"webhook": "discord.com/api/webhooks/1/x"}), str)
+    assert isinstance(
+        m._validate_target("discord", {"webhook": "discord.com/api/webhooks/1/x"}), str
+    )
     assert isinstance(
         m._validate_target("notifiarr", {"webhook": "********", "channel_id": 5}), str
     )
     # a real https webhook still validates
-    ok = m._validate_target("discord", {"webhook": "https://discord.com/api/webhooks/1/x"})
+    ok = m._validate_target(
+        "discord", {"webhook": "https://discord.com/api/webhooks/1/x"}
+    )
     assert isinstance(ok, dict) and ok["webhook"].startswith("https://")
+
+
+# --- 429 rate-limit handling: honour retry_after instead of dropping the part ---
+
+
+def _resp(status=429, retry_after=None, header=None, text="", raise_json=False):
+    """Build a fake webhook response for the send path."""
+
+    def _json():
+        if raise_json:
+            raise ValueError("no json body")
+        return {} if retry_after is None else {"retry_after": retry_after}
+
+    headers = {}
+    if header is not None:
+        headers["Retry-After"] = header
+    return SimpleNamespace(status_code=status, json=_json, headers=headers, text=text)
+
+
+def test_send_and_log_retries_on_429_then_succeeds():
+    m = make_manager()
+    seq = [_resp(429, retry_after=0.2), _resp(429, retry_after=0.2), _resp(204)]
+    with (
+        patch.object(NotificationManager, "safe_post", side_effect=seq) as post,
+        patch("backend.util.notification.time.sleep") as sleep,
+    ):
+        ok, _ = m.send_and_log_response("Discord", "https://h", {"a": 1})
+    assert ok is True
+    assert post.call_count == 3  # two 429s, then the 204
+    assert sleep.call_count == 2
+    # honoured the returned retry_after (0.2s) plus the small buffer
+    assert abs(sleep.call_args_list[0].args[0] - 0.45) < 1e-6
+
+
+def test_send_and_log_gives_up_after_max_429():
+    m = make_manager()
+    with (
+        patch.object(
+            NotificationManager, "safe_post", return_value=_resp(429, retry_after=0.1)
+        ) as post,
+        patch("backend.util.notification.time.sleep"),
+    ):
+        ok, _ = m.send_and_log_response("Discord", "https://h", {"a": 1})
+    assert ok is False
+    assert post.call_count == NotificationManager._MAX_RATE_LIMIT_RETRIES + 1
+
+
+def test_retry_after_seconds_prefers_body_then_header_and_clamps():
+    # Discord's JSON retry_after (seconds) wins, plus a small buffer.
+    assert (
+        abs(NotificationManager._retry_after_seconds(_resp(retry_after=1.5)) - 1.75)
+        < 1e-6
+    )
+    # Falls back to the standard Retry-After header.
+    assert (
+        abs(NotificationManager._retry_after_seconds(_resp(header="2")) - 2.25) < 1e-6
+    )
+    # An absurd wait is clamped so a global limit can't hang the worker.
+    assert NotificationManager._retry_after_seconds(_resp(retry_after=999)) == 30.25
+    # Unreadable body + no header → sane default.
+    assert NotificationManager._retry_after_seconds(_resp(raise_json=True)) == 1.25
+
+
+def test_safe_post_passes_timeout(monkeypatch):
+    """A hung webhook must not stall the run — every POST is bounded."""
+    seen = {}
+
+    def fake_post(url, json=None, timeout=None):
+        seen["timeout"] = timeout
+        return SimpleNamespace(status_code=204, text="")
+
+    monkeypatch.setattr("backend.util.notification.requests.post", fake_post)
+    monkeypatch.setattr("backend.util.ssrf_guard.is_safe_url", lambda u: (True, ""))
+    NotificationManager.safe_post("https://discord.com/api/webhooks/1/x", {"a": 1})
+    assert seen["timeout"] == 15
+
+
+# --- summary collapse: huge runs don't fan out into dozens of Discord messages ---
+
+
+def _poster_output(n):
+    return {
+        "movie": [
+            {
+                "title": f"Movie {i}",
+                "year": 2001,
+                "messages": [f"poster {i}.jpg -renamed-> {i}.jpg"],
+            }
+            for i in range(n)
+        ]
+    }
+
+
+def test_format_for_discord_collapses_huge_run():
+    from backend.util.notification_formatting import format_for_discord
+
+    cfg = SimpleNamespace(module_name="poster_renamerr")
+    data, ok = format_for_discord(cfg, _poster_output(400))
+    assert ok
+    assert len(data) == 1  # collapsed to a single summary embed
+    field = data[1][0]
+    assert "400 items" in field["name"]
+    assert "collapsed" in field["value"].lower()
+
+
+def test_format_for_discord_keeps_small_run_detailed():
+    from backend.util.notification_formatting import format_for_discord
+
+    cfg = SimpleNamespace(module_name="poster_renamerr")
+    data, ok = format_for_discord(cfg, _poster_output(5))
+    assert ok
+    names = [f.get("name", "") for fields in data.values() for f in fields]
+    assert any("Movie 0" in n for n in names)  # per-item detail preserved
+    assert not any("items processed" in n for n in names)  # not summarised

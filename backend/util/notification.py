@@ -1,6 +1,7 @@
 import json
 import logging
 import threading
+import time
 import traceback
 from dataclasses import dataclass
 from types import SimpleNamespace
@@ -262,13 +263,58 @@ class NotificationManager:
         safe, reason = is_safe_url(url)
         if not safe:
             raise ValueError(f"Notification URL blocked by SSRF guard: {reason}")
-        return requests.post(url, json=payload)
+        # A hung webhook must not stall the whole run: bound every POST.
+        return requests.post(url, json=payload, timeout=15)
+
+    # How many times a single message is re-sent after a 429 before giving up.
+    _MAX_RATE_LIMIT_RETRIES = 5
+
+    @staticmethod
+    def _retry_after_seconds(resp: requests.Response) -> float:
+        """Seconds to wait before retrying a 429, taken from Discord's
+        authoritative ``retry_after`` JSON field (seconds, float) and falling
+        back to the standard ``Retry-After`` header. A small buffer is added and
+        the value is clamped so a bogus/global limit can't stall the worker for
+        minutes.
+        """
+        wait: Optional[float] = None
+        try:
+            body = resp.json()
+            if isinstance(body, dict) and body.get("retry_after") is not None:
+                wait = float(body["retry_after"])
+        except Exception:
+            wait = None
+        if wait is None:
+            headers = getattr(resp, "headers", None) or {}
+            raw = headers.get("Retry-After") or headers.get("retry-after")
+            if raw is not None:
+                try:
+                    wait = float(raw)
+                except (TypeError, ValueError):
+                    wait = None
+        if wait is None:
+            wait = 1.0
+        return max(0.0, min(wait, 30.0)) + 0.25
 
     def send_and_log_response(
         self, label: str, hook: str, payload: Dict[str, Any]
     ) -> Tuple[bool, str]:
         try:
             resp = self.safe_post(hook, payload)
+            # Discord/Notifiarr rate-limit (429) responses carry the exact wait
+            # in `retry_after`. Honour it and re-send the SAME message instead of
+            # dropping it — bulk runs used to lose every rate-limited part and
+            # spam the log with 429 errors.
+            attempts = 0
+            while resp.status_code == 429 and attempts < self._MAX_RATE_LIMIT_RETRIES:
+                attempts += 1
+                wait = self._retry_after_seconds(resp)
+                self.logger.warning(
+                    f"[Notification] {label} rate-limited (429); retry "
+                    f"{attempts}/{self._MAX_RATE_LIMIT_RETRIES} in {wait:.2f}s"
+                )
+                time.sleep(wait)
+                resp = self.safe_post(hook, payload)
             if resp.status_code not in (200, 204):
                 err = self.format_notification_error(resp, label)
                 self.logger.error(
@@ -615,9 +661,7 @@ def install_error_notify_handler(config, logger=None) -> Optional[ErrorNotifyHan
     return handler
 
 
-def refresh_error_notify_handler(
-    config, logger=None
-) -> Optional["ErrorNotifyHandler"]:
+def refresh_error_notify_handler(config, logger=None) -> Optional["ErrorNotifyHandler"]:
     """Re-evaluate the handler against current config on reload: drop the old one
     (stale snapshot) and re-install if a failure destination is now configured —
     so changes take effect without a restart."""
