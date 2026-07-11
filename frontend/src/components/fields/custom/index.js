@@ -16,6 +16,7 @@ export { ArrayObjectField } from './ArrayObjectField.jsx';
 // Working custom implementations
 export { DirPickerField } from './DirPickerField.jsx';
 export { ActionButtonField } from './ActionButtonField.jsx';
+export { PlexLibraryExcludeField } from './PlexLibraryExcludeField.jsx';
 
 // Placeholder implementations
 export {

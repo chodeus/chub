@@ -723,6 +723,17 @@ class PosterCleanarrConfig(BaseModel):
     # matches a live item but whose name != the item's canonical folder.
     stale_duplicates_enabled: bool = False
     stale_duplicates_mode: str = "report"  # report | move | remove
+    # Plex libraries (by name, matched case-insensitively) to EXCLUDE from the
+    # bloat pass — their custom images are neither shown in the by-media view
+    # nor treated as deletion candidates. Deny-list ONLY: the in-use hash set
+    # stays global (get_in_use_hashes is never library-scoped), so an excluded
+    # library's LIVE artwork can never be misread as bloat. Empty (the default)
+    # = every library is in scope, exactly as before. A bloat file whose bundle
+    # can't be resolved to a library fails OPEN (treated as not-excluded), so
+    # this can only ever REDUCE what gets deleted, never widen it. Does NOT
+    # affect the orphan/stale passes (they key on Kometa asset dirs, not Plex
+    # libraries).
+    excluded_libraries: List[str] = Field(default_factory=list)
 
 
 class PlexMaintenanceConfig(BaseModel):
