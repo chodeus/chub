@@ -214,6 +214,19 @@ def test_ssrf_allows_plex_tv_cdn():
     assert not image_fetch._is_allowed_image_host("https://plex.tv.attacker.io/x.png")
 
 
+def test_ssrf_allows_thetvdb_artwork():
+    # Plex serves TheTVDB-agent art (common on shows) as absolute
+    # artworks.thetvdb.com URLs — selecting one 500'd ("disallowed host") until
+    # the CDN was allowlisted alongside tmdb/fanart/plex.
+    assert image_fetch._is_allowed_image_host(
+        "https://artworks.thetvdb.com/banners/v4/movie/6187/backgrounds/x.jpg"
+    )
+    assert image_fetch._is_allowed_image_host("https://thetvdb.com/x.jpg")
+    # lookalikes stay blocked
+    assert not image_fetch._is_allowed_image_host("https://thetvdb.com.attacker.io/x")
+    assert not image_fetch._is_allowed_image_host("https://eviltvdb.com/x.png")
+
+
 # --------------------------------------------------------------------------
 # /plex-art proxy route
 # --------------------------------------------------------------------------
