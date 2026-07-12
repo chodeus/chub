@@ -256,7 +256,9 @@ const ModuleSettingsContent = ({ moduleKey }) => {
         return (
             <div>
                 <div className="flex items-center gap-1 mb-2">
-                    <span className="text-[14px] font-medium text-fg">Action</span>
+                    <span className="text-[14px] font-medium text-fg">
+                        {meta.actionLabel || 'Action'}
+                    </span>
                     {modeF.helpText && <InfoTooltip text={modeF.helpText} />}
                 </div>
                 <SegmentedControl fullWidth options={primary} value={current} onChange={onPick} />
@@ -498,29 +500,55 @@ const ModuleSettingsContent = ({ moduleKey }) => {
                             <p>This module has no configurable options.</p>
                         </div>
                     ) : (
-                        columnDefs.map(col => (
-                            <div
-                                key={col.id}
-                                className="flex-1 flex flex-col gap-5"
-                                style={{ minWidth: 'min(430px, 100%)' }}
-                            >
-                                <div className="flex items-center gap-2.5 px-0.5 pb-0.5">
-                                    <span className="material-symbols-outlined text-[17px] text-primary">
-                                        {col.icon}
-                                    </span>
-                                    <span className="font-mono text-[11px] tracking-[0.12em] uppercase text-fg-faint">
-                                        {col.label}
-                                    </span>
-                                    <div className="flex-1 h-px bg-border-light" />
+                        <>
+                            {columnDefs.map(col => (
+                                <div
+                                    key={col.id}
+                                    className="flex-1 flex flex-col gap-5"
+                                    style={{ minWidth: 'min(430px, 100%)' }}
+                                >
+                                    <div className="flex items-center gap-2.5 px-0.5 pb-0.5">
+                                        <span className="material-symbols-outlined text-[17px] text-primary">
+                                            {col.icon}
+                                        </span>
+                                        <span className="font-mono text-[11px] tracking-[0.12em] uppercase text-fg-faint">
+                                            {col.label}
+                                        </span>
+                                        <div className="flex-1 h-px bg-border-light" />
+                                    </div>
+                                    {layout
+                                        .filter(m => m.column === col.id)
+                                        .map(meta => {
+                                            const group = sections.find(g => g.name === meta.id);
+                                            return group ? renderLayoutCard(group, meta) : null;
+                                        })}
                                 </div>
-                                {layout
-                                    .filter(m => m.column === col.id)
-                                    .map(meta => {
-                                        const group = sections.find(g => g.name === meta.id);
-                                        return group ? renderLayoutCard(group, meta) : null;
-                                    })}
-                            </div>
-                        ))
+                            ))}
+                            {/* Safety net: any visible section NOT claimed by a column
+                                (a `sections` entry missing/typo'd, an unknown column, or
+                                a backend-injected field) still renders full-width below,
+                                so the two-column layout can never silently drop a
+                                configured option. */}
+                            {(() => {
+                                const cols = new Set(columnDefs.map(c => c.id));
+                                const claimed = new Set(
+                                    layout.filter(m => cols.has(m.column)).map(m => m.id)
+                                );
+                                const orphans = sections.filter(g => !claimed.has(g.name));
+                                if (orphans.length === 0) return null;
+                                return (
+                                    <div className="w-full flex flex-col gap-5">
+                                        {orphans.map(group =>
+                                            renderLayoutCard(group, {
+                                                id: group.name || 'other',
+                                                title: group.name || 'Other options',
+                                                kind: 'form',
+                                            })
+                                        )}
+                                    </div>
+                                );
+                            })()}
+                        </>
                     )}
                 </div>
             ) : (
