@@ -26,6 +26,7 @@ from backend.util.cl2k.renderer import (  # noqa: E402
     _place_logo,
     frame_backdrop,
     process_logo,
+    render_cl2k,
     render_framed_art,
 )
 
@@ -204,6 +205,22 @@ def test_encoder_is_progressive_with_icc():
     assert blob[:2] == b"\xff\xd8"  # JPEG SOI
     assert b"\xff\xc2" in blob  # SOF2 = progressive scan
     assert b"ICC_PROFILE" in blob[:65536]  # embedded sRGB profile
+
+
+def test_render_cl2k_svg_logo_never_crashes():
+    """An SVG clear logo must never 500 the render (the deployed ImageMagick has
+    no SVG delegate, and select_logo prefers SVG). When cairosvg is available the
+    SVG is rasterized and used; when it isn't, render falls back to the typeset
+    wordmark. Either path returns valid JPEG bytes rather than raising Wand's
+    'no decode delegate for SVG'."""
+    svg = (
+        b'<svg xmlns="http://www.w3.org/2000/svg" width="800" height="200">'
+        b'<rect width="800" height="200" fill="white"/></svg>'
+    )
+    blob = render_cl2k(
+        backdrop_bytes=_backdrop(), kind="movie", logo_bytes=svg, title="Dune"
+    )
+    assert blob[:2] == b"\xff\xd8"  # JPEG SOI — rendered, did not crash
 
 
 # --------------------------------------------------------------------------

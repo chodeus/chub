@@ -488,14 +488,32 @@ def _apply_whiten(logo: Image, *, invert: bool) -> None:
         logo.composite(img2, left=0, top=0, operator="copy")
 
 
+def _rasterize_svg_logo(svg_bytes: bytes, target_width: int = 2000) -> bytes:
+    """Rasterize an SVG clear-logo to PNG bytes at ~``target_width`` content width.
+
+    CL2K's logo pipeline is raster (Wand). Relying on ImageMagick's own SVG
+    delegate is fragile — it is absent from the runtime image (ImageMagick then
+    raises ``no decode delegate for image format 'SVG'``), which would 500 any
+    title whose best logo is an SVG, and :func:`select_logo` *prefers* SVGs. We
+    rasterize with cairosvg instead (pure-Python, the same rasterizer the holiday
+    borders use; needs only libcairo2, already present via librsvg2-2). Vectors
+    are resolution-free, so ~2000px keeps the logo sharp once scaled to the box.
+
+    Imported lazily so a build without cairosvg surfaces the ImportError to the
+    caller's decode-failure fallback (the typeset wordmark) instead of breaking
+    module import. cairosvg's default (``unsafe=False``) blocks external-resource
+    loading, so a hostile SVG can't read local files or reach the network."""
+    import cairosvg
+
+    return cairosvg.svg2png(bytestring=svg_bytes, output_width=target_width)
+
+
 def _read_logo_image(logo_bytes: bytes) -> Image:
     """Decode logo bytes, rasterizing SVG sources at high density.
 
-    Wand renders an SVG at its intrinsic size (72dpi) — TMDB's SVG logos are
-    typically ~1000px wide, which leaves no headroom once the logo box can
-    reach the full 1000px canvas. Vectors are resolution-free, so small SVGs
-    are re-read with the density scaled to ~2000px content width; raster
-    formats pass through untouched.
+    SVG logos are rasterized to PNG via cairosvg at ~2000px content width (see
+    :func:`_rasterize_svg_logo`) — Wand's own SVG delegate is unavailable in the
+    runtime image. Raster formats pass through untouched.
     """
     head = logo_bytes[:512].lstrip().lower()
     is_svg = head.startswith(b"<svg") or (
@@ -503,14 +521,7 @@ def _read_logo_image(logo_bytes: bytes) -> Image:
     )
     if not is_svg:
         return Image(blob=logo_bytes)
-    img = Image(blob=logo_bytes)
-    if img.width >= 2000:
-        return img
-    # SVG user units are 96/inch (CSS px), so 96dpi reproduces the intrinsic
-    # size — scale from there to reach the target content width.
-    density = 96.0 * 2000.0 / max(1, img.width)
-    img.close()
-    return Image(blob=logo_bytes, resolution=density)
+    return Image(blob=_rasterize_svg_logo(logo_bytes, target_width=2000))
 
 
 def process_logo(
@@ -1016,19 +1027,41 @@ def render_cl2k(
                 )
                 invert = False
             if logo_bytes:
-                _place_logo(
-                    base,
-                    logo_bytes,
-                    baseline,
-                    logo_max_width,
-                    whiten,
-                    logo_scale,
-                    logo_y_offset,
-                    flip_mask_bytes=logo_flip_bytes,
-                    erase_mask_bytes=logo_erase_bytes,
-                    invert=invert,
-                    flat_white=flat_white,
-                )
+                try:
+                    _place_logo(
+                        base,
+                        logo_bytes,
+                        baseline,
+                        logo_max_width,
+                        whiten,
+                        logo_scale,
+                        logo_y_offset,
+                        flip_mask_bytes=logo_flip_bytes,
+                        erase_mask_bytes=logo_erase_bytes,
+                        invert=invert,
+                        flat_white=flat_white,
+                    )
+                except Exception:
+                    # A clear logo we can't decode/place (e.g. an SVG when the SVG
+                    # rasterizer is unavailable, or corrupt logo bytes) must never
+                    # fail the whole render. Fall back to the typeset wordmark,
+                    # which is always placeable, so the poster keeps a title rather
+                    # than 500ing. Per-logo brush strokes (flip/erase) belong to the
+                    # dropped logo, so they don't carry over to the wordmark.
+                    if title:
+                        _place_logo(
+                            base,
+                            generate_text_logo(
+                                title, title_font, stroke_width=text_logo_stroke
+                            ),
+                            baseline,
+                            logo_max_width,
+                            whiten,
+                            logo_scale,
+                            logo_y_offset,
+                            invert=False,
+                            flat_white=flat_white,
+                        )
 
         label_kerning = geo.tracking_to_kerning(geo.LABEL_TRACKING)
         if band_label:
