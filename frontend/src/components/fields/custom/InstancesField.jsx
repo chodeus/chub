@@ -1414,7 +1414,11 @@ export const InstancesField = React.memo(
         if (loading) {
             return (
                 <FieldWrapper invalid={highlightInvalid}>
-                    <FieldLabel label={field.label} required={isRequired} />
+                    <FieldLabel
+                        label={field.label}
+                        required={isRequired}
+                        helpText={field.helpText}
+                    />
                     <div className="flex flex-col items-center justify-center gap-3 text-center bg-surface border-2 text-fg-muted">
                         <div className="w-8 h-8 border-2 border-border border-t-primary rounded-full animate-spin" />
                         <span>Loading instances...</span>
@@ -1430,7 +1434,11 @@ export const InstancesField = React.memo(
         if (loadError) {
             return (
                 <FieldWrapper invalid={true}>
-                    <FieldLabel label={field.label} required={isRequired} />
+                    <FieldLabel
+                        label={field.label}
+                        required={isRequired}
+                        helpText={field.helpText}
+                    />
                     <div className="flex flex-col items-center gap-3 text-center bg-surface border-2 border-error">
                         <div>⚠️</div>
                         <div className="flex flex-col gap-2">
@@ -1451,7 +1459,11 @@ export const InstancesField = React.memo(
         if (field.type === 'plex_scope') {
             return (
                 <FieldWrapper invalid={highlightInvalid}>
-                    <FieldLabel label={field.label} required={isRequired} />
+                    <FieldLabel
+                        label={field.label}
+                        required={isRequired}
+                        helpText={field.helpText}
+                    />
                     <div id={inputId} className="flex flex-col gap-4">
                         <h4 className="text-lg font-bold text-fg mb-2 border-b border-border pb-2">
                             Plex

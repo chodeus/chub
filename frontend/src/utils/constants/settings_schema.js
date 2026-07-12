@@ -1274,6 +1274,54 @@ const CORE_SETTINGS_SCHEMA = [
     {
         key: 'poster_cleanarr',
         label: 'Poster Cleanarr',
+        // Redesign layout metadata (read only by ModuleSettingsPage when a
+        // module defines `sections`). `columns` are the two responsive lanes
+        // with their eyebrow labels; `sections` map each `field.section` id to
+        // a card, its lane, and how it renders (form vs pass). Bloat/orphan/
+        // stale are `pass` cards: their `modeField` renders as the full-width
+        // Action row, `enableField` as the header toggle. `modeCollapseAfter`
+        // hides options past N behind a "More…" affordance.
+        columns: [
+            { id: 'left', label: 'Plex metadata', icon: 'dns' },
+            { id: 'right', label: 'Asset folders', icon: 'folder' },
+        ],
+        sections: [
+            { id: 'plex_conn', title: 'Plex connection', column: 'left', kind: 'form' },
+            {
+                id: 'bloat',
+                title: 'Bloat pass',
+                column: 'left',
+                kind: 'pass',
+                modeField: 'mode',
+                modeCollapseAfter: 3,
+                subtitle: "Scans Plex's metadata directory for leftover artwork and acts on it.",
+            },
+            {
+                id: 'sources',
+                title: 'Asset sources',
+                column: 'right',
+                kind: 'form',
+                subtitle:
+                    "Where your renamed posters live — usually Poster Renamerr's destination. Shared by both passes below.",
+            },
+            {
+                id: 'orphan',
+                title: 'Orphan assets',
+                column: 'right',
+                kind: 'pass',
+                enableField: 'orphan_assets_enabled',
+                modeField: 'orphan_assets_mode',
+            },
+            {
+                id: 'stale',
+                title: 'Stale duplicates',
+                column: 'right',
+                kind: 'pass',
+                enableField: 'stale_duplicates_enabled',
+                modeField: 'stale_duplicates_mode',
+                note: 'The canonical folder is always kept — the pass only acts on the stale, renamed copy.',
+            },
+        ],
         fields: [
             {
                 key: 'mode',
@@ -1288,16 +1336,19 @@ const CORE_SETTINGS_SCHEMA = [
                     { value: 'nothing', label: 'Nothing' },
                 ],
                 required: true,
-                section: 'Bloat pass',
+                section: 'bloat',
                 description:
+                    'Report logs only · Move quarantines (recoverable) · Remove deletes · Restore recovers · Clear empties the restore dir · Nothing skips.',
+                helpText:
                     'Report lists only · Move quarantines (recoverable) · Remove deletes · Restore recovers moved · Clear deletes the restore dir · Nothing skips images.',
             },
             {
                 key: 'overlays_only',
                 label: 'Overlays Only',
                 type: 'check_box',
-                section: 'Bloat pass',
-                description:
+                section: 'bloat',
+                description: 'Only touch posters carrying a Kometa overlay tag.',
+                helpText:
                     'Only act on files that carry the Kometa overlay EXIF tag. Custom-uploaded posters/art (which lack the tag) are left alone. Safer for Kometa users — files without the marker are skipped, not deleted.',
             },
             {
@@ -1307,16 +1358,18 @@ const CORE_SETTINGS_SCHEMA = [
                 required: true,
                 instance_types: ['plex'],
                 valueFormat: 'string',
-                section: 'Plex connection & advanced',
-                description:
-                    'Plex instance(s) whose metadata directory is scanned for bloat images. The bloat pass uses the first Plex instance selected here. In-use artwork is protected server-wide; to skip a specific library use Exclude Libraries above.',
+                section: 'plex_conn',
+                description: 'Server whose metadata is scanned for bloat.',
+                helpText:
+                    'Plex instance(s) whose metadata directory is scanned for bloat images. The bloat pass uses the first Plex instance selected here. In-use artwork is protected server-wide; to skip a specific library use Exclude Libraries in the Bloat pass.',
             },
             {
                 key: 'excluded_libraries',
                 label: 'Exclude Libraries',
                 type: 'plex_library_exclude',
-                section: 'Bloat pass',
-                description:
+                section: 'bloat',
+                description: 'Checked libraries are skipped. Leave all off to scan every library.',
+                helpText:
                     "Plex libraries to skip in the bloat pass — checked libraries are hidden from the bloat view and never cleaned (handy for Music / Music Videos, whose album art otherwise shows up as '(unknown)'). Safe by design: the in-use protection set stays global, so excluding a library only ever leaves its stale bloat alone — it can never delete a live poster. Empty = every library is scanned. Does not affect the Orphan or Stale-duplicate asset passes.",
             },
             {
@@ -1324,8 +1377,9 @@ const CORE_SETTINGS_SCHEMA = [
                 label: 'Plex Path',
                 type: 'text',
                 required: true,
-                section: 'Plex connection & advanced',
-                description:
+                section: 'plex_conn',
+                description: 'Container path to the Plex data directory.',
+                helpText:
                     "Path inside the CHUB container that points at your Plex Media Server's data dir " +
                     "— the folder that directly contains 'Metadata/', 'Cache/', 'Plug-in Support/', etc. " +
                     "Typical Docker setup: mount the host's 'Library/Application Support/Plex Media Server/' " +
@@ -1335,36 +1389,40 @@ const CORE_SETTINGS_SCHEMA = [
                 key: 'local_db',
                 label: 'Local Database',
                 type: 'check_box',
-                section: 'Plex connection & advanced',
-                description:
-                    'Copy the Plex database locally instead of downloading via API. Requires Plex to be stopped.',
+                section: 'plex_conn',
+                advanced: true,
+                description: 'Copy the Plex DB locally instead of via API. Requires Plex stopped.',
             },
             {
                 key: 'use_existing_db',
                 label: 'Use Existing Database',
                 type: 'check_box',
-                section: 'Plex connection & advanced',
-                description: 'Reuse existing database copy if less than 2 hours old.',
+                section: 'plex_conn',
+                advanced: true,
+                description: 'Reuse a DB copy less than 2 hours old.',
             },
             {
                 key: 'ignore_running',
                 label: 'Ignore Running Check',
                 type: 'check_box',
-                section: 'Plex connection & advanced',
-                description: 'Bypass the Plex running detection when using local database mode.',
+                section: 'plex_conn',
+                advanced: true,
+                description: 'Skip the Plex-running check in local-DB mode.',
             },
             {
                 key: 'sleep',
                 label: 'Sleep Between Operations',
                 type: 'number',
-                section: 'Plex connection & advanced',
+                section: 'plex_conn',
+                advanced: true,
                 description: 'Seconds to wait between operations (default: 60).',
             },
             {
                 key: 'timeout',
                 label: 'Connection Timeout',
                 type: 'number',
-                section: 'Plex connection & advanced',
+                section: 'plex_conn',
+                advanced: true,
                 description: 'Plex connection timeout in seconds (default: 600).',
             },
             {
@@ -1373,15 +1431,17 @@ const CORE_SETTINGS_SCHEMA = [
                 type: 'dropdown',
                 options: ['debug', 'info'],
                 required: true,
-                section: 'Plex connection & advanced',
+                section: 'plex_conn',
+                advanced: true,
                 description: 'Set the logging verbosity for poster cleanup.',
             },
             {
                 key: 'asset_dirs',
                 label: 'Asset Directories',
                 type: 'dirlist_dragdrop',
-                section: 'Asset directories (Orphan & Stale)',
-                description:
+                section: 'sources',
+                description: 'Scanned recursively by both asset passes.',
+                helpText:
                     "Directories scanned by BOTH asset passes below — Orphan and Stale duplicates. Typically poster_renamerr's destination_dir, but you can list any path you want explicitly cleaned — including source dirs or personal folders that the post-rename pass deliberately leaves alone. Each is walked recursively; the hidden .chub_orphan_restore subdir is skipped.",
             },
             {
@@ -1390,47 +1450,52 @@ const CORE_SETTINGS_SCHEMA = [
                 type: 'instances',
                 instance_types: ['radarr', 'sonarr'],
                 valueFormat: 'string',
-                section: 'Asset directories (Orphan & Stale)',
-                description:
-                    "Radarr/Sonarr instances whose libraries define which assets are legitimate — used by BOTH passes below. Orphan flags an asset when it matches none of these libraries (by {tmdb-N}/{tvdb-N} id or title); Stale uses them to resolve each item's canonical folder. Leave empty to fall back to the Plex Bloat 'Plex Instance(s)' selection above. The comparison set is read from CHUB's media cache, populated by poster_renamerr — run it first if the cache is stale.",
+                section: 'sources',
+                description: 'Radarr / Sonarr libraries that define which assets are legitimate.',
+                helpText:
+                    "Radarr/Sonarr instances whose libraries define which assets are legitimate — used by BOTH passes below. Orphan flags an asset when it matches none of these libraries (by {tmdb-N}/{tvdb-N} id or title); Stale uses them to resolve each item's canonical folder. Leave empty to fall back to the Plex Bloat 'Plex Instance(s)' selection. The comparison set is read from CHUB's media cache, populated by poster_renamerr — run it first if the cache is stale.",
             },
             {
                 key: 'orphan_assets_enabled',
                 label: 'Enable Orphan Asset Cleanup',
                 type: 'check_box',
                 sectionToggle: true,
-                section: 'Orphan assets',
-                description:
-                    "Act on poster files in the Asset Directories above that have no parent media in the Library Instances above — orphan = asset with no parent media. A file is kept if its {tmdb-N}/{tvdb-N} id tag matches the library OR its title matches; it's flagged only when both miss. Use Ignore Titles below to exempt specific posters. (Inverse direction of the Unmatched Assets module, which reports media missing a poster.)",
+                section: 'orphan',
+                description: 'Act on asset files whose title matches no configured library.',
+                helpText:
+                    "Act on poster files in the Asset Directories that have no parent media in the Library Instances — orphan = asset with no parent media. A file is kept if its {tmdb-N}/{tvdb-N} id tag matches the library OR its title matches; it's flagged only when both miss. Use Ignore Titles below to exempt specific posters. (Inverse direction of the Unmatched Assets module, which reports media missing a poster.)",
             },
             {
                 key: 'orphan_assets_mode',
                 label: 'Orphan Mode',
                 type: 'segmented',
-                placement: 'header',
                 options: [
                     { value: 'report', label: 'Report' },
                     { value: 'move', label: 'Move' },
                     { value: 'remove', label: 'Remove', danger: true },
                 ],
-                section: 'Orphan assets',
+                section: 'orphan',
                 description:
+                    'Report logs · Move quarantines to a recoverable folder · Remove deletes.',
+                helpText:
                     'report (log only), move (relocate to a hidden .chub_orphan_restore subdir inside each asset_dir, fully recoverable), remove (permanent delete).',
             },
             {
                 key: 'include_collections',
                 label: 'Include Collections',
                 type: 'check_box',
-                section: 'Orphan assets',
-                description:
+                section: 'orphan',
+                description: 'Treat Plex collection titles as legitimate.',
+                helpText:
                     "Treat Plex collection titles as part of the comparison set so collection posters aren't flagged as orphans. Default on.",
             },
             {
                 key: 'orphan_ignore_titles',
                 label: 'Ignore Titles',
                 type: 'textarea',
-                section: 'Orphan assets',
-                description:
+                section: 'orphan',
+                description: 'One title per line — never flagged as orphans.',
+                helpText:
                     "Titles to never flag as orphans (one per line), even when they don't match a library entry or carry a stale ID tag. Matched on the same normalized key as the scan, so casing/punctuation/year differences are ignored — e.g. 'The Matrix (1999)' and 'the matrix' are equivalent. Useful for personal or manually-placed posters.",
             },
             {
@@ -1438,22 +1503,23 @@ const CORE_SETTINGS_SCHEMA = [
                 label: 'Enable Stale Duplicate Cleanup',
                 type: 'check_box',
                 sectionToggle: true,
-                section: 'Stale duplicates',
-                description:
-                    'Scans the Asset Directories above for Kometa asset folders whose {tmdb-N}/{tvdb-N} id matches a live item but whose folder name no longer matches the media folder (e.g. after a Sonarr/Radarr folder rename), using the Library Instances above to resolve each item’s canonical folder. The canonical folder is always kept; a non-canonical duplicate is reported/moved/removed. Skipped if the canonical folder is not yet staged (never deletes the only copy).',
+                section: 'stale',
+                description: 'Remove duplicate asset folders left behind after a library rename.',
+                helpText:
+                    'Scans the Asset Directories for Kometa asset folders whose {tmdb-N}/{tvdb-N} id matches a live item but whose folder name no longer matches the media folder (e.g. after a Sonarr/Radarr folder rename), using the Library Instances to resolve each item’s canonical folder. The canonical folder is always kept; a non-canonical duplicate is reported/moved/removed. Skipped if the canonical folder is not yet staged (never deletes the only copy).',
             },
             {
                 key: 'stale_duplicates_mode',
                 label: 'Stale Mode',
                 type: 'segmented',
-                placement: 'header',
                 options: [
                     { value: 'report', label: 'Report' },
                     { value: 'move', label: 'Move' },
                     { value: 'remove', label: 'Remove', danger: true },
                 ],
-                section: 'Stale duplicates',
-                description:
+                section: 'stale',
+                description: 'Report logs · Move to the restore dir (reversible) · Remove deletes.',
+                helpText:
                     'report (log only) · move (to the restore dir, reversible) · remove (delete).',
             },
         ],
@@ -1697,8 +1763,8 @@ const CORE_SETTINGS_MODULES = [
         name: 'Poster Cleanarr',
         key: 'poster_cleanarr',
         description:
-            'Clean bloat images from Plex metadata and manage orphaned posters. ' +
-            'Scans the whole Plex server by default; exclude specific libraries in the module settings.',
+            'Prune bloat images, orphaned assets, and stale duplicate folders. ' +
+            'Each pass runs independently — choose an action for each one below.',
     },
     {
         name: 'Plex Maintenance',

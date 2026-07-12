@@ -12,6 +12,7 @@ import { useToast } from '../../../contexts/ToastContext.jsx';
 import { useUnsavedChangesWarning } from '../../../hooks/useUnsavedChangesWarning';
 import Toggle from '../../../components/ui/Toggle.jsx';
 import SegmentedControl from '../../../components/ui/SegmentedControl.jsx';
+import InfoTooltip from '../../../components/ui/InfoTooltip.jsx';
 
 /**
  * Memoized field component — only re-renders when value/key/disabled change.
@@ -56,6 +57,10 @@ const ModuleSettingsContent = ({ moduleKey }) => {
     const [isSaving, setIsSaving] = useState(false);
     const [saveError, setSaveError] = useState(null);
     const [running, setRunning] = useState(false);
+    // Redesign-layout disclosure state, keyed by section id: the Plex-connection
+    // "Advanced" reveal and each pass's "More actions" mode reveal.
+    const [openAdvanced, setOpenAdvanced] = useState({});
+    const [openMoreModes, setOpenMoreModes] = useState({});
 
     const isDirty = useMemo(
         () => (formData && lastSaved ? JSON.stringify(formData) !== lastSaved : false),
@@ -103,6 +108,12 @@ const ModuleSettingsContent = ({ moduleKey }) => {
         }
         return groups;
     }, [activeModule, formData, conditionApiData]);
+
+    // Redesign layout descriptors (opt-in): a module may declare `sections`
+    // (id -> title/column/kind/modeField/enableField/...) and `columns` (the
+    // two lanes + eyebrows). When absent the original single-column layout is used.
+    const layout = activeModule?.sections || null;
+    const columnDefs = activeModule?.columns || [];
 
     const hasDryRun = !!activeModule?.fields?.some(f => f.key === 'dry_run');
     const dryRunValue = !!formData[activeModule?.key]?.dry_run;
@@ -223,6 +234,151 @@ const ModuleSettingsContent = ({ moduleKey }) => {
         }
     };
 
+    // Normalise a segmented field's options (strings or {value,label,danger}).
+    const segOptions = f =>
+        (f.options || []).map(o =>
+            typeof o === 'string'
+                ? { value: o, label: o }
+                : { value: o.value, label: o.label || o.value, danger: o.danger }
+        );
+
+    // A pass card's mode field, rendered as the full-width "Action" row. Options
+    // past `meta.modeCollapseAfter` hide behind a "More actions" reveal (which
+    // auto-opens when the current value is one of the collapsed options).
+    const renderActionRow = (meta, modeF, moduleData) => {
+        const opts = segOptions(modeF);
+        const after = meta.modeCollapseAfter;
+        const primary = after ? opts.slice(0, after) : opts;
+        const more = after ? opts.slice(after) : [];
+        const current = moduleData[modeF.key] || '';
+        const moreShown = !!openMoreModes[meta.id] || more.some(o => o.value === current);
+        const onPick = v => handleFieldChange(activeModule.key, modeF.key, v);
+        return (
+            <div>
+                <div className="flex items-center gap-1 mb-2">
+                    <span className="text-[14px] font-medium text-fg">Action</span>
+                    {modeF.helpText && <InfoTooltip text={modeF.helpText} />}
+                </div>
+                <SegmentedControl fullWidth options={primary} value={current} onChange={onPick} />
+                {more.length > 0 &&
+                    (moreShown ? (
+                        <div className="mt-2">
+                            <SegmentedControl
+                                fullWidth
+                                options={more}
+                                value={current}
+                                onChange={onPick}
+                            />
+                        </div>
+                    ) : (
+                        <button
+                            type="button"
+                            onClick={() => setOpenMoreModes(s => ({ ...s, [meta.id]: true }))}
+                            className="mt-2 inline-flex items-center gap-1 text-[12.5px] text-fg-subtle hover:text-fg"
+                        >
+                            <span className="material-symbols-outlined text-[16px]">
+                                expand_more
+                            </span>
+                            More actions
+                        </button>
+                    ))}
+                {modeF.description && (
+                    <div className="text-[12px] text-fg-subtle mt-2 leading-relaxed">
+                        {modeF.description}
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+    // One redesign card. `kind:'pass'` sections lead with the Action row and an
+    // optional header enable-toggle (dimming the body when off); `advanced`
+    // fields collapse behind a disclosure; `meta.note` renders an info callout.
+    const renderLayoutCard = (group, meta) => {
+        const moduleData = formData[activeModule.key] || {};
+        const enableF = meta.enableField
+            ? group.fields.find(f => f.key === meta.enableField)
+            : null;
+        const modeF = meta.modeField ? group.fields.find(f => f.key === meta.modeField) : null;
+        const advancedFields = group.fields.filter(f => f.advanced);
+        const bodyFields = group.fields.filter(f => f !== enableF && f !== modeF && !f.advanced);
+        const enabled = enableF ? !!moduleData[enableF.key] : true;
+        const dimCls = enableF && !enabled ? 'opacity-50 pointer-events-none' : '';
+        const subtitle = meta.subtitle || enableF?.description || '';
+        return (
+            <section
+                key={meta.id}
+                className="bg-surface border border-border rounded-xl p-5"
+                style={{ boxShadow: '0 2px 16px -8px rgba(0,0,0,.6)' }}
+            >
+                <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                        <h2 className="font-display text-[15px] font-semibold text-fg">
+                            {meta.title}
+                        </h2>
+                        {enableF?.helpText && <InfoTooltip text={enableF.helpText} />}
+                    </div>
+                    {enableF && (
+                        <Toggle
+                            label={enableF.label}
+                            checked={enabled}
+                            onChange={v => handleFieldChange(activeModule.key, enableF.key, v)}
+                        />
+                    )}
+                </div>
+                {subtitle && (
+                    <p className="text-[12.5px] text-fg-subtle mt-1 mb-0 leading-snug">
+                        {subtitle}
+                    </p>
+                )}
+                <div className={`flex flex-col gap-4 mt-4 ${dimCls}`}>
+                    {modeF && renderActionRow(meta, modeF, moduleData)}
+                    {bodyFields.map((field, fi) => renderField(field, fi))}
+                    {advancedFields.length > 0 && (
+                        <div>
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    setOpenAdvanced(s => ({ ...s, [meta.id]: !s[meta.id] }))
+                                }
+                                className="flex items-center justify-between w-full h-[42px] px-3 rounded-[10px] bg-surface-inset border border-border text-fg-muted text-[13px] font-medium hover:text-fg transition-colors"
+                            >
+                                <span className="flex items-center gap-2">
+                                    <span className="material-symbols-outlined text-[17px] text-fg-subtle">
+                                        tune
+                                    </span>
+                                    Advanced connection options
+                                </span>
+                                <span
+                                    className={`material-symbols-outlined text-[20px] text-fg-subtle transition-transform ${
+                                        openAdvanced[meta.id] ? 'rotate-180' : ''
+                                    }`}
+                                >
+                                    expand_more
+                                </span>
+                            </button>
+                            {openAdvanced[meta.id] && (
+                                <div className="flex flex-col gap-4 pt-4">
+                                    {advancedFields.map((field, fi) => renderField(field, fi))}
+                                </div>
+                            )}
+                        </div>
+                    )}
+                    {meta.note && (
+                        <div className="flex items-start gap-2.5 p-3 rounded-[10px] bg-surface-inset border border-border-light">
+                            <span className="material-symbols-outlined text-[17px] text-accent shrink-0">
+                                info
+                            </span>
+                            <span className="text-[12px] text-fg-data leading-relaxed">
+                                {meta.note}
+                            </span>
+                        </div>
+                    )}
+                </div>
+            </section>
+        );
+    };
+
     return (
         <div className="flex flex-col gap-5">
             {/* Header */}
@@ -332,6 +488,41 @@ const ModuleSettingsContent = ({ moduleKey }) => {
                         Back to Modules
                     </Link>
                 </div>
+            ) : layout ? (
+                <div className="w-full max-w-[1180px] flex flex-wrap gap-5 items-start">
+                    {sections.length === 0 ? (
+                        <div className="w-full text-center py-10 text-fg-subtle rounded-xl border border-dashed border-border">
+                            <span className="material-symbols-outlined text-3xl mb-2 block">
+                                inbox
+                            </span>
+                            <p>This module has no configurable options.</p>
+                        </div>
+                    ) : (
+                        columnDefs.map(col => (
+                            <div
+                                key={col.id}
+                                className="flex-1 flex flex-col gap-5"
+                                style={{ minWidth: 'min(430px, 100%)' }}
+                            >
+                                <div className="flex items-center gap-2.5 px-0.5 pb-0.5">
+                                    <span className="material-symbols-outlined text-[17px] text-primary">
+                                        {col.icon}
+                                    </span>
+                                    <span className="font-mono text-[11px] tracking-[0.12em] uppercase text-fg-faint">
+                                        {col.label}
+                                    </span>
+                                    <div className="flex-1 h-px bg-border-light" />
+                                </div>
+                                {layout
+                                    .filter(m => m.column === col.id)
+                                    .map(meta => {
+                                        const group = sections.find(g => g.name === meta.id);
+                                        return group ? renderLayoutCard(group, meta) : null;
+                                    })}
+                            </div>
+                        ))
+                    )}
+                </div>
             ) : (
                 <div className="w-full max-w-[820px] flex flex-col gap-4">
                     {sections.length === 0 ? (
@@ -359,16 +550,6 @@ const ModuleSettingsContent = ({ moduleKey }) => {
                             const enabled = enableF ? !!moduleData[enableF.key] : true;
                             const dimCls =
                                 enableF && !enabled ? 'opacity-50 pointer-events-none' : '';
-                            const segOptions = f =>
-                                (f.options || []).map(o =>
-                                    typeof o === 'string'
-                                        ? { value: o, label: o }
-                                        : {
-                                              value: o.value,
-                                              label: o.label || o.value,
-                                              danger: o.danger,
-                                          }
-                                );
                             return (
                                 <section
                                     key={group.name || `section-${gi}`}
