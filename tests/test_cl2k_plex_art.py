@@ -227,6 +227,22 @@ def test_ssrf_allows_thetvdb_artwork():
     assert not image_fetch._is_allowed_image_host("https://eviltvdb.com/x.png")
 
 
+def test_ssrf_allows_imdb_amazon_artwork():
+    # Plex serves IMDb art from Amazon's media CDNs; a live picker audit surfaced
+    # m.media-amazon.com (which 500'd until allowlisted).
+    assert image_fetch._is_allowed_image_host(
+        "https://m.media-amazon.com/images/M/abc.jpg"
+    )
+    assert image_fetch._is_allowed_image_host(
+        "https://images-na.ssl-images-amazon.com/images/x.jpg"
+    )
+    # lookalikes stay blocked
+    assert not image_fetch._is_allowed_image_host(
+        "https://m.media-amazon.com.attacker.io/x"
+    )
+    assert not image_fetch._is_allowed_image_host("https://evil-media-amazon.com/x")
+
+
 # --------------------------------------------------------------------------
 # /plex-art proxy route
 # --------------------------------------------------------------------------
