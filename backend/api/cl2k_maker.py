@@ -21,7 +21,7 @@ import posixpath
 import re
 import threading
 from typing import Any, Dict, List, Optional
-from urllib.parse import unquote, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, Response
@@ -1262,9 +1262,17 @@ def plex_images_endpoint(
 # /myplex/account or listings, or pivot via /photo/:/transcode (internal SSRF).
 _PLEX_ART_PATH = re.compile(
     r"^/library/metadata/\d+/"
-    r"(?:art|thumb|posters?|clearlogos?|banner|theme|composite|image)(?:/|$)",
+    r"(art|thumb|posters?|clearlogos?|banner|theme|composite|image|file)(?:/|$)",
     re.IGNORECASE,
 )
+
+# The ``/library/metadata/<id>/file`` key (plexapi's form for locally-stored art
+# — uploaded or agent-combined posters/backgrounds/logos) carries the real
+# artwork ref in its ``?url=`` param, and that ref is ALWAYS a Plex provider URI
+# (an internal storage handle), never an http(s) URL. Constraining ``?url=`` to
+# these schemes keeps the ``file`` proxy from being coerced into making Plex
+# fetch an arbitrary host — the same SSRF the path allow-list guards against.
+_PLEX_PROVIDER_URI = re.compile(r"^(?:upload|metadata|media)://", re.IGNORECASE)
 
 
 def _valid_plex_art_src(src: str) -> bool:
@@ -1273,11 +1281,23 @@ def _valid_plex_art_src(src: str) -> bool:
     string-only regex on the raw path is defeated because requests/Plex collapse
     ``../`` downstream — ``/library/metadata/1/art/../../:/prefs`` becomes
     ``/:/prefs``, which leaks the account-level PlexOnlineToken. Validating the
-    normalized path guarantees what we check is what actually gets fetched."""
-    path = unquote(urlparse(src).path or "")
+    normalized path guarantees what we check is what actually gets fetched.
+
+    Local posters/art resolve to a ``/library/metadata/<id>/file?url=<provider>``
+    key; that ``file`` type is allowed only when ``?url=`` is a Plex provider URI
+    (upload://, metadata://, media://) — never an http URL — so the proxy can't
+    be turned into a Plex-mediated SSRF (see :data:`_PLEX_PROVIDER_URI`)."""
+    parsed = urlparse(src)
+    path = unquote(parsed.path or "")
     if ".." in path.split("/") or path != posixpath.normpath(path):
         return False
-    return bool(_PLEX_ART_PATH.match(path))
+    match = _PLEX_ART_PATH.match(path)
+    if not match:
+        return False
+    if match.group(1).lower() == "file":
+        url_ref = parse_qs(parsed.query).get("url", [""])[0]
+        return bool(_PLEX_PROVIDER_URI.match(url_ref.strip()))
+    return True
 
 
 def _img_media_type(blob: bytes) -> str:

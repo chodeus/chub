@@ -279,6 +279,38 @@ def test_plex_art_proxy_rejects_non_artwork_src(monkeypatch):
     assert called["n"] == 0  # never reached the fetch
 
 
+def test_valid_plex_art_src_allows_local_file_key():
+    # Recent Plex/plexapi returns locally-stored posters/art/logos (uploaded or
+    # agent-combined) with a /library/metadata/<id>/file?url=<provider-uri> key;
+    # rejecting it made every local poster show 400 (invisible in the picker).
+    from backend.api.cl2k_maker import _valid_plex_art_src
+
+    for provider in ("upload", "metadata", "media"):
+        assert _valid_plex_art_src(
+            f"http://plex:32400/library/metadata/738/file?url={provider}%3A%2F%2Fposters%2Fabc"
+        )
+    # the pre-existing artwork types still validate
+    assert _valid_plex_art_src("http://plex:32400/library/metadata/9/thumb/1699")
+
+
+def test_valid_plex_art_src_file_key_blocks_ssrf():
+    # The ?url= on a file key must be a Plex provider URI, never an http(s) URL —
+    # else the proxy could make Plex (with the re-minted admin token) fetch an
+    # internal host. A file key without a valid provider ?url= is rejected.
+    from backend.api.cl2k_maker import _valid_plex_art_src
+
+    assert not _valid_plex_art_src(
+        "http://plex:32400/library/metadata/1/file?url=http://169.254.169.254/latest"
+    )
+    assert not _valid_plex_art_src(
+        "http://plex:32400/library/metadata/1/file?url=https%3A%2F%2Fevil.example%2Fx"
+    )
+    assert not _valid_plex_art_src("http://plex:32400/library/metadata/1/file")
+    assert not _valid_plex_art_src(
+        "http://plex:32400/library/metadata/1/file?url=%2Fetc%2Fpasswd"
+    )
+
+
 def test_plex_art_proxy_404_on_fetch_failure(monkeypatch):
     import backend.api.cl2k_maker as api
     from fastapi import HTTPException

@@ -10,3 +10,9 @@ Wand==0.7.2
 # wheels for the python:3.13-slim image (>=1.20); the InferenceSession/run API is
 # version-stable (verified locally against 1.19.2 on py3.9).
 onnxruntime==1.27.0
+# SVG clear-logo rasterization (renderer._read_logo_image). Wand's own SVG
+# delegate is absent from the runtime image (ImageMagick reports "no decode
+# delegate for image format 'SVG'"), which 500s any title whose best logo is an
+# SVG — and select_logo prefers SVG. cairosvg (pure-Python, the same rasterizer
+# the holiday borders use) only needs libcairo2, already present via librsvg2-2.
+cairosvg==2.7.1
