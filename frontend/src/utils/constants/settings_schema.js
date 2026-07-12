@@ -1608,13 +1608,28 @@ const CORE_SETTINGS_SCHEMA = [
     {
         key: 'plex_maintenance',
         label: 'Plex Maintenance',
+        columns: [
+            { id: 'left', label: 'Plex', icon: 'dns' },
+            { id: 'right', label: 'Maintenance', icon: 'cleaning_services' },
+        ],
+        sections: [
+            { id: 'plex_conn', title: 'Plex connection', column: 'left', kind: 'form' },
+            { id: 'logging', title: 'Logging', column: 'left', kind: 'form' },
+            {
+                id: 'tasks',
+                title: 'Maintenance tasks',
+                column: 'right',
+                kind: 'form',
+                subtitle: 'Select the tasks to run.',
+            },
+        ],
         fields: [
             // ─── Plex connection ───────────────────────────────────────
             {
                 key: 'instances',
                 label: 'Plex Instances',
                 type: 'instances',
-                section: 'Plex connection',
+                section: 'plex_conn',
                 required: true,
                 instance_types: ['plex'],
                 valueFormat: 'string',
@@ -1624,9 +1639,10 @@ const CORE_SETTINGS_SCHEMA = [
                 key: 'plex_path',
                 label: 'Plex Path',
                 type: 'text',
-                section: 'Plex connection',
+                section: 'plex_conn',
                 required: true,
-                description:
+                description: 'Container path to the Plex data directory.',
+                helpText:
                     "Path inside the CHUB container that points at your Plex Media Server's data dir " +
                     '(same value as poster_cleanarr). Required for the PhotoTranscoder cache cleanup.',
             },
@@ -1634,14 +1650,15 @@ const CORE_SETTINGS_SCHEMA = [
                 key: 'timeout',
                 label: 'Connection Timeout',
                 type: 'number',
-                section: 'Plex connection',
+                section: 'plex_conn',
                 description: 'Plex connection timeout in seconds (default: 600).',
             },
             {
                 key: 'dry_run',
                 label: 'Dry Run',
                 type: 'check_box',
-                description:
+                description: 'Log what each task would do without making changes.',
+                helpText:
                     'Log what each selected task would do (including which PhotoTranscoder cache files would be deleted) without making any changes.',
             },
             // ─── Maintenance tasks ─────────────────────────────────────
@@ -1649,36 +1666,37 @@ const CORE_SETTINGS_SCHEMA = [
                 key: 'empty_trash',
                 label: 'Empty Trash',
                 type: 'check_box',
-                section: 'Maintenance tasks',
-                description:
+                section: 'tasks',
+                description: "Purge Plex's internal trash (permanent).",
+                helpText:
                     "Purge Plex's internal trash. Permanently deletes items you've already removed.",
             },
             {
                 key: 'clean_bundles',
                 label: 'Clean Bundles',
                 type: 'check_box',
-                section: 'Maintenance tasks',
+                section: 'tasks',
                 description: 'Remove orphaned .bundle folders for media that no longer exists.',
             },
             {
                 key: 'optimize_db',
                 label: 'Optimize Database',
                 type: 'check_box',
-                section: 'Maintenance tasks',
+                section: 'tasks',
                 description: "Run VACUUM on Plex's database. Reclaims space, rebuilds indexes.",
             },
             {
                 key: 'photo_transcoder',
                 label: 'Clear PhotoTranscoder Cache',
                 type: 'check_box',
-                section: 'Maintenance tasks',
+                section: 'tasks',
                 description: "Clear Plex's transcoded-image cache. Plex regenerates on demand.",
             },
             {
                 key: 'sleep',
                 label: 'Sleep Between Tasks',
                 type: 'number',
-                section: 'Maintenance tasks',
+                section: 'tasks',
                 description: 'Seconds to wait between Plex maintenance operations (default: 60).',
             },
             // ─── Logging ───────────────────────────────────────────────
@@ -1686,10 +1704,10 @@ const CORE_SETTINGS_SCHEMA = [
                 key: 'log_level',
                 label: 'Log Level',
                 type: 'dropdown',
-                section: 'Logging',
+                section: 'logging',
                 options: ['debug', 'info'],
                 required: true,
-                description: 'Set the logging verbosity for Plex maintenance.',
+                description: 'Logging verbosity for Plex maintenance.',
             },
         ],
     },
