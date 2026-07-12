@@ -142,7 +142,7 @@ export const DirListDragDropField = React.memo(
 
         return (
             <FieldWrapper invalid={highlightInvalid}>
-                <FieldLabel label={label} required={field.required} />
+                <FieldLabel label={label} required={field.required} helpText={field.helpText} />
 
                 {/* Optional bulk-add from configured Google Drives — appends
                     locations to the list; drag-to-reorder + single-add stay below */}

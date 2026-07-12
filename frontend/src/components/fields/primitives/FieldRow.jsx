@@ -15,6 +15,7 @@ export const FieldRow = ({
     htmlFor,
     label,
     required = false,
+    helpText,
     description,
     error = null,
     invalid = false,
@@ -27,6 +28,7 @@ export const FieldRow = ({
                     htmlFor={htmlFor}
                     label={label}
                     required={required}
+                    helpText={helpText}
                     className="text-sm font-medium leading-normal text-fg"
                 />
                 {description && (

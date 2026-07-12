@@ -37,6 +37,7 @@ export const CheckboxField = React.memo(
                             htmlFor={inputId}
                             label={field.label}
                             required={field.required}
+                            helpText={field.helpText}
                             className="text-sm font-medium leading-normal text-fg select-none"
                         />
                         {field.description && (
