@@ -35,6 +35,7 @@ export const TextField = React.memo(
                 htmlFor={inputId}
                 label={field.label}
                 required={field.required}
+                helpText={field.helpText}
                 description={field.description}
                 error={finalErrorMessage}
                 invalid={finalHighlightInvalid}

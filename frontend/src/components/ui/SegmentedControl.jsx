@@ -10,13 +10,23 @@ import PropTypes from 'prop-types';
  * @param {string} value - currently-selected option value
  * @param {(value: string) => void} onChange
  * @param {'sm'|'md'} [size]
+ * @param {boolean} [fullWidth] - stretch to fill the row, segments share width equally
  */
-const SegmentedControl = ({ options, value, onChange, size = 'md', className = '' }) => {
+const SegmentedControl = ({
+    options,
+    value,
+    onChange,
+    size = 'md',
+    className = '',
+    fullWidth = false,
+}) => {
     const wrapH = size === 'sm' ? 'h-9' : 'h-11';
     const segH = size === 'sm' ? 'h-7 px-3 text-xs' : 'h-9 px-3.5 text-[13px]';
+    const wrapLayout = fullWidth ? 'flex w-full' : 'inline-flex';
+    const segFlex = fullWidth ? 'flex-1' : '';
     return (
         <div
-            className={`inline-flex items-center ${wrapH} p-1 gap-0.5 rounded-[10px] bg-surface-inset border border-border ${className}`}
+            className={`${wrapLayout} items-center ${wrapH} p-1 gap-0.5 rounded-[10px] bg-surface-inset border border-border ${className}`}
             role="tablist"
         >
             {options.map(opt => {
@@ -38,7 +48,7 @@ const SegmentedControl = ({ options, value, onChange, size = 'md', className = '
                         role="tab"
                         aria-selected={active}
                         onClick={() => onChange(opt.value)}
-                        className={`inline-flex items-center justify-center ${segH} rounded-[7px] whitespace-nowrap transition-colors cursor-pointer ${stateCls}`}
+                        className={`inline-flex items-center justify-center ${segFlex} ${segH} rounded-[7px] whitespace-nowrap transition-colors cursor-pointer ${stateCls}`}
                     >
                         {opt.label}
                     </button>
@@ -60,6 +70,7 @@ SegmentedControl.propTypes = {
     onChange: PropTypes.func.isRequired,
     size: PropTypes.oneOf(['sm', 'md']),
     className: PropTypes.string,
+    fullWidth: PropTypes.bool,
 };
 
 export default SegmentedControl;
