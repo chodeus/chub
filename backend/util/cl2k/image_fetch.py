@@ -141,7 +141,10 @@ def _is_allowed_image_host(url: str) -> bool:
     ``*.plex.tv`` is Plex's own infrastructure: the Plex artwork picker returns
     remote-provider art (tmdb/fanarttv/gracenote) as absolute
     ``metadata-static.plex.tv`` URLs, which must be fetchable or selecting any
-    non-uploaded Plex logo 500s.
+    non-uploaded Plex logo 500s. ``artworks.thetvdb.com`` is the same case for
+    the TheTVDB agent: Plex serves TVDB-sourced logos/backgrounds/posters as
+    absolute ``https://artworks.thetvdb.com/...`` URLs (common on shows), so
+    selecting one 500s unless the host is allowed.
     """
     from urllib.parse import urlparse
 
@@ -153,6 +156,8 @@ def _is_allowed_image_host(url: str) -> bool:
         or host.endswith(".fanart.tv")
         or host == "plex.tv"
         or host.endswith(".plex.tv")
+        or host == "thetvdb.com"
+        or host.endswith(".thetvdb.com")
     ):
         return True
     return (parsed.netloc or "").lower() in _plex_netlocs()
