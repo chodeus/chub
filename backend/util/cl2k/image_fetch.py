@@ -141,10 +141,13 @@ def _is_allowed_image_host(url: str) -> bool:
     ``*.plex.tv`` is Plex's own infrastructure: the Plex artwork picker returns
     remote-provider art (tmdb/fanarttv/gracenote) as absolute
     ``metadata-static.plex.tv`` URLs, which must be fetchable or selecting any
-    non-uploaded Plex logo 500s. ``artworks.thetvdb.com`` is the same case for
-    the TheTVDB agent: Plex serves TVDB-sourced logos/backgrounds/posters as
-    absolute ``https://artworks.thetvdb.com/...`` URLs (common on shows), so
-    selecting one 500s unless the host is allowed.
+    non-uploaded Plex logo 500s. The same applies to every other agent CDN Plex
+    hands back as an absolute URL: ``artworks.thetvdb.com`` (TheTVDB, common on
+    shows) and ``m.media-amazon.com`` / ``*.ssl-images-amazon.com`` (IMDb art).
+    A live audit of the artwork picker across movies + shows surfaced exactly
+    these five provider CDNs (tmdb / fanart.tv / plex.tv / thetvdb.com /
+    media-amazon.com) plus the user's own Plex — anything else must be added here
+    or selecting that art 500s ("refusing to fetch image from disallowed host").
     """
     from urllib.parse import urlparse
 
@@ -158,6 +161,8 @@ def _is_allowed_image_host(url: str) -> bool:
         or host.endswith(".plex.tv")
         or host == "thetvdb.com"
         or host.endswith(".thetvdb.com")
+        or host.endswith(".media-amazon.com")
+        or host.endswith(".ssl-images-amazon.com")
     ):
         return True
     return (parsed.netloc or "").lower() in _plex_netlocs()
