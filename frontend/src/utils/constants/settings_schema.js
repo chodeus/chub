@@ -462,28 +462,52 @@ const CORE_SETTINGS_SCHEMA = [
     {
         key: 'asset_renamerr',
         label: 'Asset Renamerr',
+        columns: [
+            { id: 'in', label: 'Inputs', icon: 'input' },
+            { id: 'out', label: 'Output & pipeline', icon: 'upload' },
+        ],
+        sections: [
+            { id: 'assets', title: 'Asset types', column: 'in', kind: 'form' },
+            { id: 'source', title: 'Source', column: 'in', kind: 'form' },
+            {
+                id: 'apply',
+                title: 'Apply',
+                column: 'out',
+                kind: 'pass',
+                modeField: 'apply_method',
+                actionLabel: 'Apply method',
+                subtitle: 'How matched assets are applied.',
+            },
+            { id: 'targets', title: 'Instances & Plex', column: 'out', kind: 'form' },
+            { id: 'logging', title: 'Logging', column: 'out', kind: 'form' },
+        ],
         fields: [
             {
                 key: 'log_level',
                 label: 'Log Level',
                 type: 'dropdown',
+                section: 'logging',
                 options: ['debug', 'info'],
                 required: true,
-                description:
+                description: 'debug = per-item source & apply decisions · info = normal.',
+                helpText:
                     'Set the logging verbosity. "debug" prints per-item source resolution and apply decisions.',
             },
             {
                 key: 'dry_run',
                 label: 'Dry Run',
                 type: 'check_box',
-                description:
+                description: 'Log every action without writing to disk or uploading.',
+                helpText:
                     'Walk the full pipeline and log every action that would be taken — but write nothing to disk and upload nothing to Plex.',
             },
             {
                 key: 'print_only_renames',
                 label: 'Log only applied assets',
                 type: 'check_box',
-                description:
+                section: 'logging',
+                description: 'Only log newly applied assets.',
+                helpText:
                     'Quiet the log by suppressing entries for assets that were already up to date.',
             },
             // ─── Asset types ───────────────────────────────────────────
@@ -491,11 +515,12 @@ const CORE_SETTINGS_SCHEMA = [
                 key: 'asset_types',
                 label: 'Asset Types',
                 type: 'array',
-                section: 'Assets',
+                section: 'assets',
                 suggestions: ['logo', 'background', 'squareart'],
                 allowCustom: false,
                 placeholder: 'Add asset type…',
-                description:
+                description: 'Which asset types to manage (logo, background, squareart).',
+                helpText:
                     'Which additional asset types to manage. Support varies by Apply Method: logo and background work on BOTH "direct" and "kometa"; squareart works on "direct" ONLY (Kometa asset directories do not read square art, so squareart is skipped with a warning under "kometa"). Defaults to logo + background.',
             },
             // ─── Source ────────────────────────────────────────────────
@@ -503,36 +528,39 @@ const CORE_SETTINGS_SCHEMA = [
                 key: 'sources',
                 label: 'Primary Source',
                 type: 'primary_source',
-                section: 'Source',
+                section: 'source',
                 options: [
                     { value: 'local', label: 'Prefer local files (fanart.tv fallback)' },
                     { value: 'fanart', label: 'Prefer fanart.tv (local fallback)' },
                 ],
                 required: true,
-                description:
+                description: 'Prefer local files or fanart.tv — the other is the fallback.',
+                helpText:
                     'Which image source to prefer; the other is automatically used as a fallback when the preferred source has no image for an item. "local" = files scanned from Source Directories (g-drive synced). "fanart" = logos + backgrounds from fanart.tv, ranked by community likes (requires your fanart.tv personal API key below; supplies logo + background only — square art always comes from local files).',
             },
             {
                 key: 'source_dirs',
                 label: 'Source Directories',
                 type: 'dirlist_dragdrop',
-                section: 'Source',
-                description:
+                section: 'source',
+                description: 'Folders scanned for local asset files. Bottom of the list wins.',
+                helpText:
                     'Folders scanned for asset files named like "Title (Year) {tmdb-123} - Logo.png". Drag to set priority — later directories win when multiple sources have the same asset (bottom takes precedence). Used by the "local" source.',
             },
             {
                 key: 'sync_assets',
                 label: 'Sync from Google Drive first',
                 type: 'check_box',
-                section: 'Source',
-                description:
+                section: 'source',
+                description: 'Run Sync GDrive before a standalone run.',
+                helpText:
                     'Run Sync Gdrive before each standalone Asset Renamerr run so the source directories are up to date. Not needed when running via Poster Renamerr\'s "Run Asset Renamerr after rename" (that pass reuses the poster sync).',
             },
             {
                 key: 'tmdb_language',
                 label: 'Image Languages (priority order)',
                 type: 'multiselect',
-                section: 'Source',
+                section: 'source',
                 placeholder: 'Add language…',
                 options: [
                     { value: 'en', label: 'English (en)' },
@@ -561,7 +589,8 @@ const CORE_SETTINGS_SCHEMA = [
                     { value: 'id', label: 'Indonesian (id)' },
                     { value: 'uk', label: 'Ukrainian (uk)' },
                 ],
-                description:
+                description: 'Preferred languages for fanart.tv art, in priority order.',
+                helpText:
                     'Preferred languages for fanart.tv image selection, in priority order (the order you add them) — the first available language wins, with language-neutral / textless art always allowed as a fallback. Logos prefer your languages then textless; backgrounds prefer textless then your languages. Within a tier, the most-liked image on fanart.tv wins.',
             },
             // ─── Apply ─────────────────────────────────────────────────
@@ -569,39 +598,43 @@ const CORE_SETTINGS_SCHEMA = [
                 key: 'apply_method',
                 label: 'Apply Method',
                 type: 'segmented',
-                section: 'Apply',
+                section: 'apply',
                 options: [
                     { value: 'plex', label: 'Plex' },
                     { value: 'kometa', label: 'Kometa' },
                 ],
                 required: true,
-                description:
+                description: 'Plex uploads straight to Plex · Kometa writes to the destination.',
+                helpText:
                     '"Plex" uploads images straight to Plex via plexapi — logo, background, and squareart — for the instances whose "Upload to this Plex instance" box is ticked below. "Kometa" renames/copies files into the Destination Directory using Kometa asset names (logo.ext, background.ext, and Season##_logo.ext for seasons) for Kometa to apply — Kometa reads only logo and background.',
             },
             {
                 key: 'destination_dir',
                 label: 'Destination Directory',
                 type: 'dir',
-                section: 'Apply',
-                description:
+                section: 'apply',
+                description: 'Kometa assets directory for renamed assets.',
+                helpText:
                     'Kometa assets directory where renamed assets are written. Required when Apply Method is "kometa".',
             },
             {
                 key: 'action_type',
                 label: 'File Action',
                 type: 'dropdown',
-                section: 'Apply',
+                section: 'apply',
                 options: ['copy', 'move', 'hardlink', 'symlink'],
                 required: true,
-                description:
+                description: 'How Kometa places files at the destination.',
+                helpText:
                     'How matched assets reach the destination on the "kometa" path. "hardlink" is fastest and saves disk when source and destination share a filesystem; "copy" is safest.',
             },
             {
                 key: 'asset_folders',
                 label: 'Asset folders (per-title)',
                 type: 'check_box',
-                section: 'Apply',
-                description:
+                section: 'apply',
+                description: 'Kometa-style per-title folders instead of flat filenames.',
+                helpText:
                     'Kometa-style folder layout: destination/<Title (Year)>/logo.png. When off, files are flat: destination/<Title (Year)>_logo.png. Match this to your Kometa configuration.',
             },
             // ─── Targets ───────────────────────────────────────────────
@@ -609,7 +642,7 @@ const CORE_SETTINGS_SCHEMA = [
                 key: 'instances',
                 label: 'Instances',
                 type: 'instances',
-                section: 'Targets',
+                section: 'targets',
                 required: true,
                 instance_types: ['radarr', 'sonarr'],
                 valueFormat: 'string',
@@ -620,10 +653,12 @@ const CORE_SETTINGS_SCHEMA = [
                 key: 'plex_scope',
                 label: 'Plex Libraries',
                 type: 'plex_scope',
-                section: 'Targets',
+                section: 'targets',
                 add_posters_option: true,
                 match_collections_option: true,
                 description:
+                    'Plex instances/libraries to upload assets to and match collections from.',
+                helpText:
                     'Plex instances to upload assets (logo/background/squareart) to and/or match collections from. ' +
                     'Pick libraries to scope collection matching (empty = all enabled libraries). ' +
                     'Enable "Upload posters" per instance for the Plex apply method.',
