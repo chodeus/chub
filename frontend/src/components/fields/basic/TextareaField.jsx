@@ -44,7 +44,12 @@ export const TextareaField = React.memo(
 
         return (
             <FieldWrapper invalid={finalHighlightInvalid}>
-                <FieldLabel htmlFor={inputId} label={field.label} required={field.required} />
+                <FieldLabel
+                    htmlFor={inputId}
+                    label={field.label}
+                    required={field.required}
+                    helpText={field.helpText}
+                />
                 <TextareaBase
                     id={inputId}
                     name={field.key}

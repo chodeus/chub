@@ -195,7 +195,7 @@ export const PlexLibraryExcludeField = React.memo(
 
         return (
             <FieldWrapper invalid={highlightInvalid}>
-                <FieldLabel label={field.label} />
+                <FieldLabel label={field.label} helpText={field.helpText} />
                 <div id={inputId} className="flex flex-col gap-2">
                     <div className="text-xs text-fg-subtle">
                         Checked libraries are skipped by Poster Cleanarr — their artwork is hidden
