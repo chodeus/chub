@@ -15,29 +15,29 @@
   "dependencies": {
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
-    "@tanstack/react-virtual": "^3.14.4",
+    "@tanstack/react-virtual": "^3.14.6",
     "cron-validator": "^1.4.0",
     "cronstrue": "^3.21.0",
     "prop-types": "15.8.1",
     "react": "19.2.7",
     "react-dom": "19.2.7",
-    "react-router-dom": "7.18.0"
+    "react-router-dom": "7.18.1"
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.4",
-    "@tailwindcss/vite": "^4.3.1",
+    "@eslint/js": "^9.39.5",
+    "@tailwindcss/vite": "^4.3.2",
     "@vitejs/plugin-react": "^6.0.3",
-    "eslint": "^9.39.4",
+    "eslint": "^9.39.5",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.7.0",
-    "prettier": "^3.9.1",
+    "prettier": "^3.9.5",
     "stylelint": "^17.14.0",
     "stylelint-config-standard": "^40.0.0",
     "stylelint-selector-bem-pattern": "^5.0.0",
-    "tailwindcss": "^4.3.1",
-    "vite": "^8.1.0"
+    "tailwindcss": "^4.3.2",
+    "vite": "^8.1.4"
   },
   "engines": {
     "node": ">=24.18.0"
