@@ -2,6 +2,24 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.41.0](https://github.com/chodeus/chub/compare/v2.40.0...v2.41.0) (2026-07-14)
+
+
+### Features
+
+* **asset-renamerr:** two-column config settings page ([447a612](https://github.com/chodeus/chub/commit/447a612562dbe071b3e2b1a0406818a19dc742fe))
+* **plex-maintenance:** two-column config settings page ([e475ff4](https://github.com/chodeus/chub/commit/e475ff4b978dbb99f8cb461dd2f2f7aa764c432a))
+* **poster-cleanarr:** library opt-out, hide music "(unknown)" clutter, clearer asset-pass settings ([c6d8bea](https://github.com/chodeus/chub/commit/c6d8bead55947462ea48548f2572d697851251c1))
+* **poster-cleanarr:** show section-toggle descriptions, split the bloat-pass settings ([4ce0a2d](https://github.com/chodeus/chub/commit/4ce0a2db854189d6b45238e323300ab7192f22f8))
+* **poster-cleanarr:** two-column config page with pass cards and help tooltips ([d0682e0](https://github.com/chodeus/chub/commit/d0682e025c75e2c269f0dada954677e376e16928))
+* **poster-renamerr:** two-column config settings page ([ce36a4f](https://github.com/chodeus/chub/commit/ce36a4fad64e1b0b0c3c038e504977e78e8438d4))
+
+
+### Bug Fixes
+
+* **deps:** update all non-major dependencies ([#335](https://github.com/chodeus/chub/issues/335)) ([58022c8](https://github.com/chodeus/chub/commit/58022c873664e2ae74790cb64634dc29faae90d4))
+* **notifications:** honor Discord retry_after and summarize huge runs ([3ca7f2a](https://github.com/chodeus/chub/commit/3ca7f2a0eba5c55f36fde0c12b1e68aeec075696))
+
 ## [2.40.0](https://github.com/chodeus/chub/compare/v2.39.0...v2.40.0) (2026-07-10)
 
 
