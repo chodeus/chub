@@ -1,0 +1,85 @@
+# .coderabbit.yaml — CHUB (Chodeus' Media Script Hub)
+# FastAPI + SQLite Python backend (main.py, backend/) + React 19 / Vite / Tailwind v4 frontend (frontend/).
+# Shared infra: keep this file byte-identical on main and develop (add on main, then merge main -> develop).
+language: "en-US"
+
+reviews:
+  profile: "chill"
+  request_changes_workflow: false
+  auto_review:
+    enabled: true
+    drafts: false
+    # main is the default branch and is always auto-reviewed; develop is the
+    # active dev branch that feature branches are cut from and PR into.
+    base_branches:
+      - "^develop$"   # anchored — base_branches are regex; unanchored could match feature/develop etc.
+
+  path_filters:
+    - "!**/*.db"
+    - "!**/*.png"
+    - "!assets/**"
+    - "!docs/**"
+    - "!wikiscreens/**"
+    - "!design_handoff*/**"
+    - "!logs/**"
+    - "!refs/**"
+    - "!templates/**"
+    - "!frontend/dist/**"
+    - "!**/node_modules/**"
+    - "!**/__pycache__/**"
+    - "!frontend/package-lock.json"
+    - "!CHANGELOG.md"
+
+  path_instructions:
+    - path: "backend/**/*.py"
+      instructions: |-
+        CHUB Python backend review rules — flag any of these failure modes:
+        - FAIL CLOSED: any auth / webhook-secret / API-key / config-load / DNS / DB guard that returns None/empty, skips, or calls the next handler on error MUST deny (401/403/503), never pass through. `if config and not allowed(): deny` is a bug — it skips the check when config is falsy. An `except ...: config = None` branch must reject the request, not continue with defaults.
+        - Read LIVE config each pass: long-lived threads, schedulers, job processors and request handlers must re-read config every iteration/request, not capture a config object at startup — config is REPLACED (not mutated) on reload, so a snapshot goes stale.
+        - No long-lived token in a URL: image/SSE/EventSource/webhook URLs that can't send an Authorization header must use a short-lived, scope-limited token (see create_stream_token / STREAM_SCOPE), never the full session JWT or an admin token.
+        - Don't cache a transient failure as a negative result: distinguish genuine not-found (cacheable) from network/5xx/timeout/rate-limit/breaker-open (never cache) — a blip must not suppress a valid answer later.
+        - Redact secrets on EVERY read path (per-module, per-section, per-instance, export, diagnostics), not just GET /config. Make redaction STRUCTURAL — mask by sensitive leaf-key name — so a newly added secret field is covered automatically, not per-endpoint.
+        - Confirm the recovery before the destructive step: delete-then-refetch / delete-then-research must guarantee the recovery runs even if the confirm times out, or a transient failure becomes permanent loss.
+        - Destructive filesystem ops (unlink/rmtree/rm -rf): re-confine the RESOLVED physical target (os.path.realpath) and re-assert it is inside the allowed root before deleting — a string-only under-root/".." check is defeated by a symlinked path component. When two delete branches exist (soft vs hard, file vs tree), diff their guards: a check present on one branch and missing on its sibling is the bug. An empty "in-use"/"keep" set means a FAILED READ, not "delete everything" — fail closed.
+        - Validate the NORMALIZED path for allowlist/traversal checks (../ collapse defeats string-only checks).
+        - Comments: navigational/instructional only (1-2 line what/gotcha), no why/history essays; match existing density.
+    - path: "main.py"
+      instructions: |-
+        HTTP entrypoint / middleware wiring:
+        - FAIL CLOSED auth: any authentication / webhook-secret / API-key middleware that can't load its config or secret must return 401/503 — never `except ...: await call_next(request)`, which silently disables auth for the whole API when config is unparseable.
+        - Read live config per request; do not snapshot a config object at import/startup that goes stale when config is replaced on reload.
+        - Never mount an endpoint that accepts a long-lived session JWT in the query string; URL-embedded auth must be the short-lived, stream-scoped token only.
+    - path: "backend/util/database/**/*.py"
+      instructions: |-
+        SQLite cache/data layer:
+        - Escape % and _ in SQL LIKE patterns with an explicit ESCAPE clause — especially delete-by-prefix / clear-by-prefix — or a value containing % or _ wildcard-matches sibling rows and deletes/returns too much.
+        - Invalidate the LIST and SEARCH caches on mutation, not just the single item: a delete/patch/insert of /x/{id} must also drop the /x list cache and any search-result cache, or lists show stale or deleted rows.
+        - Don't persist a transient failure (network/5xx/timeout/rate-limit) as a negative/empty cache entry — only cache genuine not-found; a blip must not suppress a valid value on later reads.
+        - Parameterize every query; never string-format user/config values into SQL.
+    - path: "backend/util/logger.py"
+      instructions: |-
+        Log redaction:
+        - Redaction must run at the formatter on the FULLY RENDERED line (msg, args AND the exc_info traceback), on every handler — HTTP-client exceptions embed secret-bearing URLs in the traceback.
+        - Cover URL PATH-SEGMENT secrets, not just query params: e.g. ?X-Plex-Token=, ?apikey=, /passthrough/<key>, bearer tokens. A regex that only masks query strings misses path-embedded secrets.
+        - Mask by sensitive key name structurally so new secret fields are redacted automatically.
+    - path: "backend/api/posters.py"
+      instructions: |-
+        Poster / GDrive endpoints — high-stakes local-delete path:
+        - /gdrive/delete-local must authorize by gdrive_list MEMBERSHIP (realpath-match against a currently-configured gdrive_list entry), NOT is_path_allowed — is_path_allowed keys off roots that exist on disk and would wrongly refuse (and skip the row purge for) a drive whose folder was already deleted. Do NOT add an is_path_allowed gate to this handler.
+        - Fail closed: if config can't be loaded, return 503 and delete nothing.
+        - Re-confine the RESOLVED path (os.path.realpath) and re-assert membership before any unlink/rmtree; reject a resolve to filesystem root. A string-only ".." check is defeated by a symlinked component.
+        - Invalidate the poster LIST + search caches after a delete/mutation, not just the touched row.
+    - path: "frontend/src/**/*.{js,jsx}"
+      instructions: |-
+        React 19 / Vite frontend:
+        - 0 and "" are FALSY: use ?? / Number.isFinite / explicit null checks (not ||) for any value where 0 or "" is legitimate (counts, offsets, timeouts, indices, ratings) — `value || fallback` silently replaces a real 0.
+        - useEffect/useMemo/useCallback deps: follow exhaustive-deps — include EVERY reactive value the effect/callback reads. To control excess re-runs, memoize the object/callback at its source (useMemo/useCallback) or depend on a stable identity field (e.g. item.id) ONLY when that field fully determines the work; never drop a value the body reads just to silence a re-run (that is a stale-closure bug). A non-memoized object/callback gets a new identity every parent render so `[obj]`/`[onDone]` re-runs then — a memoized one does not.
+        - Clean up on unmount: clear timers/intervals, abort fetches, close EventSource/WebSocket and stop polling loops in the effect's cleanup return.
+        - Never embed the full session JWT in an <img>/EventSource/link URL — use the short-lived stream token (useStreamToken) for URL-embedded auth.
+
+  tools:
+    # ruff + eslint intentionally left to CI (codeql-lint.yml already runs Ruff,
+    # ESLint, stylelint, prettier, CodeQL) — CodeRabbit adds gitleaks (net-new
+    # secret scanning) plus AI review + the path_instructions above.
+    gitleaks:
+      enabled: true
