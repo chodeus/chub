@@ -12,7 +12,7 @@ reviews:
     # main is the default branch and is always auto-reviewed; develop is the
     # active dev branch that feature branches are cut from and PR into.
     base_branches:
-      - "develop"
+      - "^develop$"   # anchored — base_branches are regex; unanchored could match feature/develop etc.
 
   path_filters:
     - "!**/*.db"
@@ -73,7 +73,7 @@ reviews:
       instructions: |-
         React 19 / Vite frontend:
         - 0 and "" are FALSY: use ?? / Number.isFinite / explicit null checks (not ||) for any value where 0 or "" is legitimate (counts, offsets, timeouts, indices, ratings) — `value || fallback` silently replaces a real 0.
-        - useEffect/useMemo/useCallback deps: depend on stable IDENTITY FIELDS (e.g. item.id), not whole objects/arrays, and ref non-memoized callbacks — `[obj]` or `[onDone]` re-runs on every parent render.
+        - useEffect/useMemo/useCallback deps: follow exhaustive-deps — include EVERY reactive value the effect/callback reads. To control excess re-runs, memoize the object/callback at its source (useMemo/useCallback) or depend on a stable identity field (e.g. item.id) ONLY when that field fully determines the work; never drop a value the body reads just to silence a re-run (that is a stale-closure bug). A non-memoized object/callback gets a new identity every parent render so `[obj]`/`[onDone]` re-runs then — a memoized one does not.
         - Clean up on unmount: clear timers/intervals, abort fetches, close EventSource/WebSocket and stop polling loops in the effect's cleanup return.
         - Never embed the full session JWT in an <img>/EventSource/link URL — use the short-lived stream token (useStreamToken) for URL-embedded auth.
 
