@@ -564,11 +564,8 @@ class PlexClient:
             # won't pull a same-named item of the wrong kind.
             candidates = section.search(title=item_title)
             if len(candidates) == 1:
-                # Year-guard the lone hit too: a single same-title sibling of a
-                # clearly different year (e.g. a remake) is a different release
-                # and must not receive this poster. A candidate with NO year is
-                # kept — a metadata gap must not reject the only candidate
-                # (mirrors PlexMediaIndex._disambiguate_by_year).
+                # Reject a clear year mismatch; keep yearless candidates
+                # (metadata gap). Malformed non-empty years fail closed.
                 lone_year = getattr(candidates[0], "year", None)
                 try:
                     year_compatible = (
@@ -576,7 +573,7 @@ class PlexClient:
                         or abs(int(lone_year) - int(year)) <= YEAR_MATCH_TOLERANCE
                     )
                 except (TypeError, ValueError):
-                    year_compatible = True
+                    year_compatible = lone_year in (None, "")
                 if year_compatible:
                     items = candidates
                 else:

@@ -722,5 +722,6 @@ def test_excluded_manifest_asset_staged_unbordered(tmp_path, monkeypatch):
     dest = dest_dir / "inman.jpg"
     assert dest.exists()
     # Exact source bytes — copied, not bordered.
-    src_bytes = open(by_id[1]["original_file"], "rb").read()
+    with open(by_id[1]["original_file"], "rb") as f:
+        src_bytes = f.read()
     assert dest.read_bytes() == src_bytes

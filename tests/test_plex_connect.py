@@ -200,6 +200,17 @@ def test_locate_targets_lone_titleonly_hit_keeps_yearless_candidate():
     assert targets == [yearless]
 
 
+def test_locate_targets_lone_titleonly_hit_rejects_malformed_year():
+    """A lone hit with a non-empty MALFORMED year fails closed — an
+    unverifiable candidate must not receive the poster (only genuinely
+    missing years are treated as a metadata gap)."""
+    client = _client_with_year_aware_search(
+        year_results=[], titleonly_results=[_FakeMovie("not-a-year")]
+    )
+    targets = client._locate_targets("Films", "Thanks for Sharing", year=2018)
+    assert targets == []
+
+
 def _client_with_fetchitem(item_or_exc, search_counter):
     """PlexClient whose plex.fetchItem returns an item (or raises) and whose
     section.search is counted, to prove ratingKey resolution skips searching."""
