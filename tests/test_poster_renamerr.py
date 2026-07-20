@@ -1202,3 +1202,64 @@ def test_adhoc_match_runs_under_rebuild_lock(monkeypatch):
     result = m.run_poster_rename_adhoc([{"asset_type": "movie", "id": 1}])
     assert result["success"] is True
     assert observed == [False], "match_item ran without the rebuild lock held"
+
+
+# --- _build_plex_notify_output (plex-path notification payload) ---
+
+
+def test_build_plex_notify_output_lists_only_genuine_uploads():
+    """The plex-path notification is built from the uploader's payload
+    ("uploaded" = action=='updated' only) — staged/skipped/failed posters must
+    never appear, so re-flow retries can't spam every scheduled run."""
+    upload_result = {
+        "success": True,
+        "payload": {
+            "updated": 3,
+            "skipped": 40,
+            "failed": 2,
+            "uploaded": [
+                {
+                    "title": "Film",
+                    "year": "2026",
+                    "asset_type": "movie",
+                    "season_number": None,
+                    "library_name": "Movies, Movies 4K",
+                    "instance": "plex_main",
+                },
+                {
+                    "title": "Show",
+                    "year": 2020,
+                    "asset_type": "show",
+                    "season_number": 2,
+                    "library_name": "TV",
+                    "instance": "plex_main",
+                },
+                {
+                    "title": "Queen",
+                    "year": None,
+                    "asset_type": "artist",
+                    "season_number": None,
+                    "library_name": "Music",
+                    "instance": "plex_main",
+                },
+            ],
+        },
+    }
+    out = PosterRenamerr._build_plex_notify_output(upload_result)
+    assert [a["title"] for a in out["movie"]] == ["Film"]
+    assert out["movie"][0]["messages"] == ["Uploaded to Movies, Movies 4K"]
+    assert out["show"][0]["messages"] == ["Season 02 uploaded to TV"]
+    assert out["artist"][0]["title"] == "Queen"
+    assert out["collection"] == [] and out["album"] == []
+
+
+def test_build_plex_notify_output_empty_and_none_are_all_empty():
+    """Zero genuine uploads (steady state) and a missing/failed upload result
+    both produce the all-empty shape — the caller then sends the one-line
+    heartbeat instead of a poster list."""
+    empty = PosterRenamerr._build_plex_notify_output(
+        {"success": True, "payload": {"uploaded": []}}
+    )
+    assert not any(empty.values())
+    assert not any(PosterRenamerr._build_plex_notify_output(None).values())
+    assert not any(PosterRenamerr._build_plex_notify_output({}).values())

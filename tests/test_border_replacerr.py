@@ -348,9 +348,10 @@ def test_renamerr_run_border_replacerr_forwards_process_all(monkeypatch):
         def set_progress_window(self, *a, **k):
             pass
 
-        def run(self, manifest=None, process_all=False):
+        def run(self, manifest=None, process_all=False, manifest_only=False):
             captured["manifest"] = manifest
             captured["process_all"] = process_all
+            captured["manifest_only"] = manifest_only
 
     monkeypatch.setattr(border_mod, "BorderReplacerr", _FakeBorder)
 
@@ -362,6 +363,12 @@ def test_renamerr_run_border_replacerr_forwards_process_all(monkeypatch):
 
     assert captured["process_all"] is True
     assert captured["manifest"] == manifest
+    assert captured["manifest_only"] is False
+
+    # plex apply path: manifest_only forwards too (hard-restricts the sweep).
+    renamer.run_border_replacerr(manifest, process_all=False, manifest_only=True)
+    assert captured["process_all"] is False
+    assert captured["manifest_only"] is True
 
 
 # ---- end-to-end: full pass borders all, second pass re-encodes nothing -----
@@ -607,3 +614,113 @@ def test_subset_pass_only_borders_manifest_items(tmp_path, monkeypatch):
 
     assert (dest_dir / "inman.jpg").exists()        # manifest item bordered
     assert not (dest_dir / "outman.jpg").exists()   # non-manifest item untouched
+
+
+def _subset_harness(tmp_path, monkeypatch, exclusion_list=None):
+    """Shared setup for manifest-mode runs: two real source posters (ids 1/2),
+    a fake DB, notifications stubbed. Returns (br, dest_dir, rows_by_id)."""
+    import backend.modules.border_replacerr as border_mod
+    from backend.util.database.border_state import BorderState
+
+    src_dir = tmp_path / "src"
+    src_dir.mkdir()
+    dest_dir = tmp_path / "dest"
+    dest_dir.mkdir()
+
+    def _mkrow(id_, name):
+        src = src_dir / f"{name}.jpg"
+        Image.new("RGB", (1000, 1500), (10, 20, 30)).save(src, "JPEG")
+        return {
+            "id": id_,
+            "title": name,
+            "folder": name,
+            "matched": 1,
+            "original_file": str(src),
+            "renamed_file": str(dest_dir / f"{name}.jpg"),
+        }
+
+    by_id = {1: _mkrow(1, "inman"), 2: _mkrow(2, "outman")}
+    border_state = BorderState(logger=StubLogger(), db_path=str(tmp_path / "b.db"))
+
+    class _MediaTable:
+        def get_by_id(self, i):
+            return by_id.get(i)
+
+        def get_all(self):
+            return list(by_id.values())
+
+    class _CollTable:
+        def get_by_id(self, i):
+            return None
+
+        def get_all(self):
+            return []
+
+    class _FakeDB:
+        def __init__(self):
+            self.media = _MediaTable()
+            self.collection = _CollTable()
+            self.holiday = SimpleNamespace(
+                get_status=lambda: {"last_active_holiday": None},
+                set_status=lambda *a, **k: None,
+            )
+            self.border = border_state
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    monkeypatch.setattr(border_mod, "ChubDB", lambda *a, **k: _FakeDB())
+    monkeypatch.setattr(
+        border_mod,
+        "NotificationManager",
+        lambda *a, **k: SimpleNamespace(send_notification=lambda *a, **k: None),
+    )
+
+    br = _make_br()
+    br.full_config = SimpleNamespace()
+    br.config = SimpleNamespace(
+        log_level="info",
+        holidays=[],
+        border_colors=["#FF0000"],
+        exclusion_list=exclusion_list or [],
+        ignore_folders=[],
+        dry_run=False,
+        border_width=26,
+        border_workers=1,
+    )
+    return br, dest_dir, by_id
+
+
+def test_manifest_only_overrides_full_library_triggers(tmp_path, monkeypatch):
+    """manifest_only must beat process_all (and any full-library trigger): on
+    the plex apply path staged files are transient, so a full sweep would
+    re-encode skipped posters into dead temp paths from prior runs. Only the
+    manifest item may be written."""
+    br, dest_dir, _ = _subset_harness(tmp_path, monkeypatch)
+
+    manifest = {"media_cache": [1], "collections_cache": []}
+    br.run(manifest, process_all=True, manifest_only=True)
+
+    assert (dest_dir / "inman.jpg").exists()        # manifest item bordered
+    assert not (dest_dir / "outman.jpg").exists()   # full sweep suppressed
+
+
+def test_excluded_manifest_asset_staged_unbordered(tmp_path, monkeypatch):
+    """A border-EXCLUDED manifest asset must still get its raw source staged
+    at renamed_file (exclusion means no border, not no poster) — otherwise the
+    plex uploader finds nothing to read and fails it on every run."""
+    br, dest_dir, by_id = _subset_harness(
+        tmp_path, monkeypatch, exclusion_list=["inman"]
+    )
+
+    manifest = {"media_cache": [1], "collections_cache": []}
+    br.run(manifest, process_all=False)
+
+    dest = dest_dir / "inman.jpg"
+    assert dest.exists()
+    # Exact source bytes — copied, not bordered.
+    src_bytes = open(by_id[1]["original_file"], "rb").read()
+    assert dest.read_bytes() == src_bytes
