@@ -2,6 +2,14 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.41.1](https://github.com/chodeus/chub/compare/v2.41.0...v2.41.1) (2026-07-20)
+
+
+### Bug Fixes
+
+* **deps:** update all non-major dependencies ([#342](https://github.com/chodeus/chub/issues/342)) ([9446273](https://github.com/chodeus/chub/commit/9446273e709aa899abfd13427154557b97bd45b5))
+* **poster_renamerr:** report only genuine Plex uploads and stop steady-state border churn ([#356](https://github.com/chodeus/chub/issues/356)) ([687a1b8](https://github.com/chodeus/chub/commit/687a1b8f37eccbb17c89841d4134ffab02935ecf))
+
 ## [2.41.0](https://github.com/chodeus/chub/compare/v2.40.0...v2.41.0) (2026-07-14)
 
 
