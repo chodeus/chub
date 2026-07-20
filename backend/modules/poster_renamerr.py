@@ -1244,6 +1244,45 @@ class PosterRenamerr(ChubModule):
         self._report_progress(progress_ceiling)
         return output, manifest
 
+    @staticmethod
+    def _build_plex_notify_output(upload_result: Optional[dict]) -> dict:
+        """Notification payload for the plex apply path: ONLY the posters the
+        uploader genuinely pushed this run (action == "updated"), in the same
+        {asset_type: [{title, year, messages}]} shape the formatter consumes.
+
+        The staged/rename output must NOT feed the notification here — it
+        lists what was staged, so a poster whose upload failed or was skipped
+        (unchanged bytes, re-flow retries) would spam every scheduled run as
+        if it had been uploaded. Failures and skips stay in the log summary.
+        Returns an all-empty shape when nothing genuinely uploaded; the caller
+        then attaches a one-line heartbeat instead of a poster list.
+        """
+        out: Dict[str, List[Dict[str, Any]]] = {
+            "collection": [],
+            "movie": [],
+            "show": [],
+            "artist": [],
+            "album": [],
+        }
+        payload = (upload_result or {}).get("payload") or {}
+        for up in payload.get("uploaded") or []:
+            asset_type = up.get("asset_type") or "movie"
+            season = up.get("season_number")
+            libs = up.get("library_name") or "Plex"
+            msg = (
+                f"Season {str(season).zfill(2)} uploaded to {libs}"
+                if asset_type == "show" and season is not None
+                else f"Uploaded to {libs}"
+            )
+            out.setdefault(asset_type, []).append(
+                {
+                    "title": up.get("title"),
+                    "year": up.get("year"),
+                    "messages": [msg],
+                }
+            )
+        return out
+
     def handle_output(self, output: Dict[str, List[Dict[str, Any]]]):
         headers = {
             "collection": "Collection",
@@ -1630,7 +1669,11 @@ class PosterRenamerr(ChubModule):
         return [self.config.destination_dir] if self.config.destination_dir else []
 
     def run_border_replacerr(
-        self, manifest: Optional[dict], progress_window=None, process_all=False
+        self,
+        manifest: Optional[dict],
+        progress_window=None,
+        process_all=False,
+        manifest_only=False,
     ):
         from backend.modules.border_replacerr import BorderReplacerr
 
@@ -1655,7 +1698,7 @@ class PosterRenamerr(ChubModule):
                 getattr(self, "_job_id", None), getattr(self, "_job_db", None)
             )
             border.set_progress_window(*progress_window)
-        border.run(manifest, process_all=process_all)
+        border.run(manifest, process_all=process_all, manifest_only=manifest_only)
 
         self.logger.info("Finished running border_replacerr.")
 
@@ -1930,18 +1973,28 @@ class PosterRenamerr(ChubModule):
 
                 if self.config.run_border_replacerr:
                     with self._phase("border_replacerr"):
+                        # kometa: full-library pass so a border-settings change
+                        # re-borders the on-disk destination. plex: manifest
+                        # subset ONLY — staged files are transient and only
+                        # manifest assets upload; a full pass would re-encode
+                        # Layer-A-skipped posters into dead temp paths from
+                        # prior runs (leaking recreated dirs) for nothing.
                         self.run_border_replacerr(
                             manifest,
                             progress_window=tail_windows.get("border"),
-                            process_all=True,
+                            process_all=(apply_method != "plex"),
+                            manifest_only=(apply_method == "plex"),
                         )
 
                 # Strict either/or: upload to Plex only on the "plex" path. The
                 # uploader still gates per-instance on add_posters, so only
-                # opted-in Plex servers receive the staged posters.
+                # opted-in Plex servers receive the staged posters. The result
+                # is kept: the notification below reports genuine uploads, not
+                # the staged set.
+                upload_result: Optional[Dict[str, Any]] = None
                 if apply_method == "plex":
                     with self._phase("plex upload"):
-                        PosterUploader(
+                        upload_result = PosterUploader(
                             db=db, logger=self.logger, manifest=manifest
                         ).run()
 
@@ -1972,15 +2025,38 @@ class PosterRenamerr(ChubModule):
                         self.full_config, self.logger, module_name="asset_renamerr"
                     ).send_notification(asset_output)
                 # Always notify on a successful run, even when nothing
-                # was renamed — gives the user a heartbeat that the
-                # module fired. The formatter handles the empty-output
-                # case with a clean "No files were renamed." field.
+                # happened — gives the user a heartbeat that the module fired.
+                # kometa: the rename output IS the outcome (files written for
+                # Kometa), notify from it as before. plex: notify ONLY the
+                # posters the uploader genuinely pushed — staged-but-skipped
+                # and failed posters stay in the logs, so re-flow retries
+                # can't spam the notification every schedule. When nothing
+                # uploaded, a one-line heartbeat replaces the poster list.
                 if any(output.values()):
                     self.handle_output(output)
+                notify_output: Dict[str, Any] = output
+                if apply_method == "plex":
+                    notify_output = self._build_plex_notify_output(upload_result)
+                    if not any(notify_output.values()):
+                        payload = (upload_result or {}).get("payload") or {}
+                        failed = payload.get("failed", 0)
+                        if (upload_result or {}).get("success"):
+                            empty_text = "No posters were uploaded (nothing changed)."
+                        elif failed:
+                            empty_text = (
+                                f"No posters were uploaded "
+                                f"({failed} failed — check the logs)."
+                            )
+                        else:
+                            reason = (upload_result or {}).get(
+                                "message"
+                            ) or "upload did not run"
+                            empty_text = f"No posters were uploaded — {reason}"
+                        notify_output["empty_text"] = empty_text
                 manager = NotificationManager(
                     self.full_config, self.logger, module_name="poster_renamerr"
                 )
-                manager.send_notification(output)
+                manager.send_notification(notify_output)
 
         except KeyboardInterrupt:
             self.logger.info("Keyboard Interrupt detected. Exiting...")

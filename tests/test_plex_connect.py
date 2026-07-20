@@ -176,6 +176,41 @@ def test_locate_targets_year_tolerant_fallback_rejects_off_by_two():
     assert targets == []
 
 
+def test_locate_targets_lone_titleonly_hit_rejects_wrong_year():
+    """A LONE title-only hit of a clearly different year is a different release
+    (e.g. a remake) and must NOT receive the poster — the single-candidate
+    branch is year-guarded like the multi-candidate one. Regression: a
+    'Halloween' (2018) poster landed on the 1978 item when only the 1978 film
+    was in the library."""
+    client = _client_with_year_aware_search(
+        year_results=[], titleonly_results=[_FakeMovie(1978)]
+    )
+    targets = client._locate_targets("Films", "Thanks for Sharing", year=2018)
+    assert targets == []
+
+
+def test_locate_targets_lone_titleonly_hit_keeps_yearless_candidate():
+    """A lone hit with NO year (Plex metadata gap) is kept — a missing year
+    must not reject the only candidate (mirrors _disambiguate_by_year)."""
+    yearless = _FakeMovie(None)
+    client = _client_with_year_aware_search(
+        year_results=[], titleonly_results=[yearless]
+    )
+    targets = client._locate_targets("Films", "Thanks for Sharing", year=2018)
+    assert targets == [yearless]
+
+
+def test_locate_targets_lone_titleonly_hit_rejects_malformed_year():
+    """A lone hit with a non-empty MALFORMED year fails closed — an
+    unverifiable candidate must not receive the poster (only genuinely
+    missing years are treated as a metadata gap)."""
+    client = _client_with_year_aware_search(
+        year_results=[], titleonly_results=[_FakeMovie("not-a-year")]
+    )
+    targets = client._locate_targets("Films", "Thanks for Sharing", year=2018)
+    assert targets == []
+
+
 def _client_with_fetchitem(item_or_exc, search_counter):
     """PlexClient whose plex.fetchItem returns an item (or raises) and whose
     section.search is counted, to prove ratingKey resolution skips searching."""

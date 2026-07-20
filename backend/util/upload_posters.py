@@ -39,6 +39,10 @@ class UploadResult:
     reason: str
     library_name: Optional[str] = None
     match_type: Optional[str] = None
+    # Carried so the caller's notification can render "Title (Year)" /
+    # "Season NN" for genuinely uploaded posters without re-querying the DB.
+    year: Optional[Any] = None
+    season_number: Optional[Any] = None
 
 
 @dataclass
@@ -833,17 +837,18 @@ class PosterUploader:
                     if not missing_libs:
                         # Same bytes, every library covered: refresh the mtime
                         # fast-path key (preserving the record) and skip.
-                        self._update_asset_database(
-                            asset,
-                            current_file_hash,
-                            current_mtime,
-                            uploaded_libraries=(
-                                json.dumps(sorted(recorded_libs))
-                                if not dry_run
-                                else None
-                            ),
-                            source_file_hash=source_file_hash,
-                        )
+                        # Never persist in dry-run — a pretend run must not
+                        # touch the hash/mtime record (unreachable today since
+                        # the dry-run hash can't equal a real record hash, but
+                        # keep the guard structural).
+                        if not dry_run:
+                            self._update_asset_database(
+                                asset,
+                                current_file_hash,
+                                current_mtime,
+                                uploaded_libraries=json.dumps(sorted(recorded_libs)),
+                                source_file_hash=source_file_hash,
+                            )
                         return UploadResult(
                             asset_title=asset_title,
                             asset_type=asset_type,
@@ -933,6 +938,8 @@ class PosterUploader:
                     reason="Successfully uploaded",
                     library_name=", ".join(dict.fromkeys(uploaded_libs)),
                     match_type=match_type,
+                    year=asset.get("year"),
+                    season_number=asset.get("season_number"),
                 )
             else:
                 return UploadResult(
@@ -1118,19 +1125,36 @@ class PosterUploader:
         total_skipped = 0
         total_failed = 0
         successful_instances = 0
+        # Per-poster record of every GENUINE upload this run (action ==
+        # 'updated'), across instances. The scheduled plex path notifies from
+        # this — never from the staged/rename output — so a skipped or failed
+        # poster can't masquerade as an upload in Discord/Notifiarr.
+        uploaded_records: List[Dict[str, Any]] = []
 
         for instance_result in instance_results:
             if instance_result.connected and not instance_result.error_message:
                 successful_instances += 1
 
-                updated = len(
-                    [r for r in instance_result.uploads if r.action == "updated"]
-                )
+                updated_results = [
+                    r for r in instance_result.uploads if r.action == "updated"
+                ]
+                updated = len(updated_results)
                 skipped = len(
                     [r for r in instance_result.uploads if r.action == "skipped"]
                 )
                 failed = len(
                     [r for r in instance_result.uploads if r.action == "failed"]
+                )
+                uploaded_records.extend(
+                    {
+                        "title": r.asset_title,
+                        "year": r.year,
+                        "asset_type": r.asset_type,
+                        "season_number": r.season_number,
+                        "library_name": r.library_name,
+                        "instance": instance_result.instance_name,
+                    }
+                    for r in updated_results
                 )
 
                 total_updated += updated
@@ -1186,6 +1210,7 @@ class PosterUploader:
                 "updated": total_updated,
                 "skipped": total_skipped,
                 "failed": total_failed,
+                "uploaded": uploaded_records,
                 "year_discrepancies": list(self._year_discrepancies),
                 "instances_processed": successful_instances,
                 "instance_results": [
