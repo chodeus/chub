@@ -230,3 +230,53 @@ def test_source_file_hash_persists_and_survives_resync(db):
     got2 = db.media.get_by_id(row["id"])
     assert got2["source_file_hash"] == "deadbeef"  # preserved
     assert got2["title"] == "Film Renamed"  # arr fields still refresh
+
+
+def test_collection_skip_columns_survive_resync(db):
+    """Collection analogue of the media test above: the plex upload dedup
+    record (source_file_hash / uploaded_libraries / file_hash / file_mtime /
+    original_file) must be PRESERVED across a collections re-sync upsert, or
+    every collection would re-upload each scheduled run. Guards the
+    ON CONFLICT DO UPDATE SET column list in collection_cache.upsert."""
+    rec = {
+        "title": "Marvel Collection",
+        "normalized_title": normalize_titles("Marvel Collection"),
+        "year": None,
+        "tmdb_id": 100,
+        "tvdb_id": None,
+        "imdb_id": None,
+        "folder": "/c",
+        "library_name": "Movies",
+    }
+    db.collection.upsert(dict(rec), "plex_main")
+    row = db.collection.execute_query(
+        "SELECT id FROM collections_cache WHERE title='Marvel Collection'",
+        fetch_one=True,
+    )
+    db.collection.update(
+        title="Marvel Collection",
+        year=None,
+        library_name="Movies",
+        instance_name="plex_main",
+        id=row["id"],
+        original_file="/posters/Marvel Collection.jpg",
+        file_hash="feedface",
+        file_mtime=123.0,
+        uploaded_libraries='["Movies"]',
+        source_file_hash="deadbeef",
+    )
+    got = db.collection.get_by_id(row["id"])
+    assert got["source_file_hash"] == "deadbeef"
+    assert got["uploaded_libraries"] == '["Movies"]'
+
+    # Re-sync (same title/library/instance, refreshed id) must refresh arr/plex
+    # fields WITHOUT wiping the upload dedup record.
+    db.collection.upsert({**rec, "tmdb_id": 200, "folder": "/c2"}, "plex_main")
+    got2 = db.collection.get_by_id(row["id"])
+    assert got2["tmdb_id"] == 200  # sync fields still refresh
+    assert got2["folder"] == "/c2"
+    assert got2["source_file_hash"] == "deadbeef"  # preserved
+    assert got2["uploaded_libraries"] == '["Movies"]'  # preserved
+    assert got2["file_hash"] == "feedface"  # preserved
+    assert float(got2["file_mtime"]) == 123.0  # preserved
+    assert got2["original_file"] == "/posters/Marvel Collection.jpg"  # preserved
