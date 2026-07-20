@@ -1,10 +1,12 @@
 # modules/border_replacerr.py
 
+import contextlib
 import filecmp
 import hashlib
 import logging
 import os
 import re
+import shutil
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
@@ -380,6 +382,40 @@ class BorderReplacerr(ChubModule):
             return True
         return False
 
+    def _stage_unbordered(self, asset: dict) -> None:
+        """A border-excluded asset still needs its poster staged: with borders
+        enabled poster_renamerr skips the copy (the border op is the sole file
+        writer), so an excluded title would otherwise never get a file at
+        renamed_file — on the plex path the uploader then fails to read it on
+        every run, and on the kometa path the destination stays empty. Copy
+        the raw source to renamed_file (temp-name + os.replace, crash-safe)
+        when it is missing or differs; never in dry-run. Best-effort — a
+        failure only warns.
+        """
+        src = asset.get("original_file")
+        dest = asset.get("renamed_file")
+        if not src or not dest or self.config.dry_run:
+            return
+        try:
+            if not os.path.exists(src):
+                return
+            if os.path.exists(dest) and filecmp.cmp(src, dest, shallow=False):
+                return
+            os.makedirs(os.path.dirname(dest), exist_ok=True)
+            tmp = f"{dest}.chub-tmp-{os.getpid()}"
+            try:
+                shutil.copyfile(src, tmp)
+                os.replace(tmp, dest)
+            except OSError:
+                with contextlib.suppress(OSError):
+                    os.remove(tmp)
+                raise
+            self.logger.debug(f"[EXCLUDED_COPY] {dest} ← {src} (unbordered)")
+        except OSError as e:
+            self.logger.warning(
+                f"Could not stage excluded asset '{asset.get('title')}': {e}"
+            )
+
     def _collect_matched_assets(self, db) -> list:
         """Return every matched media row + matched collection row, with
         exclusion_list / ignore_folders applied.
@@ -397,12 +433,14 @@ class BorderReplacerr(ChubModule):
             if row.get("matched") != 1:
                 continue
             if self._asset_excluded(row):
+                self._stage_unbordered(row)
                 continue
             assets.append(row)
         for row in db.collection.get_all():
             if row.get("matched") != 1:
                 continue
             if self._asset_excluded(row):
+                self._stage_unbordered(row)
                 continue
             assets.append(row)
         return assets
@@ -418,7 +456,20 @@ class BorderReplacerr(ChubModule):
         manifest subset (webhook/adhoc imports)."""
         return bool(process_all or reset_all or manifest is None)
 
-    def run(self, manifest: Optional[dict] = None, process_all: bool = False):
+    def run(
+        self,
+        manifest: Optional[dict] = None,
+        process_all: bool = False,
+        manifest_only: bool = False,
+    ):
+        # manifest_only is a HARD restriction for the plex apply path: staged
+        # files live in a per-run temp dir and only manifest assets upload, so
+        # a full-library sweep (process_all, a holiday reset_all edge, or a
+        # missing manifest) would re-encode skipped posters into dead temp
+        # paths from prior runs — recreating and leaking those dirs for
+        # nothing. It overrides every full-library trigger.
+        if manifest_only:
+            manifest = manifest or {"media_cache": [], "collections_cache": []}
         with ChubDB(logger=self.logger) as db:
             if self.config.log_level.lower() == "debug":
                 print_settings(self.logger, self.config)
@@ -434,7 +485,9 @@ class BorderReplacerr(ChubModule):
             skipped = 0
             failed = 0
             gate_skipped = 0
-            if self._should_process_all(manifest, process_all, reset_all):
+            if not manifest_only and self._should_process_all(
+                manifest, process_all, reset_all
+            ):
                 self.logger.debug(
                     "Full-library border pass: reprocessing all matched media "
                     "and collections (includes already-moved posters)."
@@ -454,21 +507,11 @@ class BorderReplacerr(ChubModule):
                             f"Asset ID {asset_id} not found in {source}. Skipping."
                         )
                         continue
-                    if (
-                        self.config.exclusion_list
-                        and asset["title"] in self.config.exclusion_list
-                    ):
-                        self.logger.debug(
-                            f"Skipping '{asset['title']}' (in exclusion_list)."
-                        )
-                        continue
-                    if (
-                        self.config.ignore_folders
-                        and asset.get("folder") in self.config.ignore_folders
-                    ):
-                        self.logger.debug(
-                            f"Skipping '{asset['title']}' (folder in ignore_folders)."
-                        )
+                    if self._asset_excluded(asset):
+                        # Excluded from borders, not from posters: stage the
+                        # raw source so the asset still reaches its
+                        # destination / the Plex uploader without a border.
+                        self._stage_unbordered(asset)
                         continue
                     assets.append(asset)
 
