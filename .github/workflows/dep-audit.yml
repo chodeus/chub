@@ -1,0 +1,38 @@
+name: "Dependency Audit"
+
+# Live OSV scan of the dependencies the release actually ships. Renovate keeps
+# versions fresh but never checks advisories; this is the vulnerability gate.
+# Weekly + on any PR that changes the audited manifests. Findings land in the
+# Security tab (SARIF) and fail the run.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "43 2 * * 1"
+  pull_request:
+    paths:
+      - "requirements.txt"
+      - "frontend/package-lock.json"
+      - "deploy/docker/Dockerfile"
+      - ".github/workflows/dep-audit.yml"
+
+permissions: {}
+
+jobs:
+  osv-scan:
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
+    permissions:
+      # Least-privilege for the reusable workflow: SARIF upload + checkout.
+      actions: read
+      contents: read
+      security-events: write
+    with:
+      # Only what ships: backend pins + frontend lockfile. refs/ holds vendored
+      # reference repos and must not be scanned; requirements-cl2k.txt is
+      # develop-only and absent on main, so it cannot be listed here.
+      scan-args: |-
+        -L
+        requirements.txt
+        -L
+        frontend/package-lock.json
+      fail-on-vuln: true
