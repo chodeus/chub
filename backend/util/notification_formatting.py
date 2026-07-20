@@ -249,10 +249,17 @@ def format_for_discord(
             text = "\n".join([section_title] + [f"    {m}" for m in msgs])
             fields.append({"name": section_title, "value": f"```{text}```"})
 
+        add_asset_fields(o.get("artist", []), "Artist")
+
+        add_asset_fields(o.get("album", []), "Album")
+
         if not had_any:
+            # empty_text lets the caller override the heartbeat line (the plex
+            # upload path sends "No posters were uploaded..." instead of the
+            # rename wording).
             fields = [
                 {
-                    "name": "No files were renamed.",
+                    "name": o.get("empty_text") or "No files were renamed.",
                     "value": "",
                 }
             ]

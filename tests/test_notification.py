@@ -603,3 +603,56 @@ def test_format_for_discord_keeps_small_run_detailed():
     names = [f.get("name", "") for fields in data.values() for f in fields]
     assert any("Movie 0" in n for n in names)  # per-item detail preserved
     assert not any("items processed" in n for n in names)  # not summarised
+
+
+def test_format_for_discord_empty_text_override():
+    """The plex upload path replaces the default 'No files were renamed.'
+    heartbeat with an upload-accurate line via the empty_text key."""
+    from backend.util.notification_formatting import format_for_discord
+
+    cfg = SimpleNamespace(module_name="poster_renamerr")
+    data, ok = format_for_discord(
+        cfg,
+        {
+            "collection": [],
+            "movie": [],
+            "show": [],
+            "empty_text": "No posters were uploaded (nothing changed).",
+        },
+    )
+    assert ok
+    fields = data[1]
+    assert fields[0]["name"] == "No posters were uploaded (nothing changed)."
+
+
+def test_format_for_discord_empty_default_unchanged():
+    from backend.util.notification_formatting import format_for_discord
+
+    cfg = SimpleNamespace(module_name="poster_renamerr")
+    data, _ = format_for_discord(cfg, {"collection": [], "movie": [], "show": []})
+    assert data[1][0]["name"] == "No files were renamed."
+
+
+def test_format_for_discord_renders_artist_and_album():
+    """Music uploads must render, not silently fall through to the empty
+    heartbeat (artist/album previously weren't handled by the formatter)."""
+    from backend.util.notification_formatting import format_for_discord
+
+    cfg = SimpleNamespace(module_name="poster_renamerr")
+    data, _ = format_for_discord(
+        cfg,
+        {
+            "artist": [{"title": "Queen", "year": None, "messages": ["Uploaded to Music"]}],
+            "album": [
+                {
+                    "title": "Greatest Hits",
+                    "year": 1981,
+                    "messages": ["Uploaded to Music"],
+                }
+            ],
+        },
+    )
+    names = [f.get("name", "") for fields in data.values() for f in fields]
+    assert any("Queen" in n for n in names)
+    assert any("Greatest Hits (1981)" in n for n in names)
+    assert not any("No files were renamed" in n for n in names)
