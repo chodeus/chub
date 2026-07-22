@@ -333,7 +333,7 @@ def test_should_process_all(manifest, process_all, reset_all, expected):
 def test_renamerr_run_border_replacerr_forwards_process_all(monkeypatch):
     """poster_renamerr.run_border_replacerr must forward process_all into
     BorderReplacerr.run so a full renamerr run sweeps the whole library."""
-    import backend.modules.border_replacerr as border_mod
+    from backend.modules import border_replacerr as border_mod
     from backend.modules.poster_renamerr import PosterRenamerr
 
     captured = {}
@@ -375,7 +375,7 @@ def test_renamerr_run_border_replacerr_forwards_process_all(monkeypatch):
 
 
 def test_full_pass_borders_all_then_skips_unchanged(tmp_path, monkeypatch):
-    import backend.modules.border_replacerr as border_mod
+    from backend.modules import border_replacerr as border_mod
     from backend.util.database.border_state import BorderState
 
     # Real source posters on disk (1000x1500 so border ops are cheap/no-resize).
@@ -466,7 +466,7 @@ def test_full_pass_skips_poster_with_missing_source(tmp_path, monkeypatch):
     """A matched poster whose source file is gone from disk must be counted
     as 'skipped' (no encode attempt, no dest written), not run through the
     encoder and tallied as 'failed'."""
-    import backend.modules.border_replacerr as border_mod
+    from backend.modules import border_replacerr as border_mod
     from backend.util.database.border_state import BorderState
 
     dest_dir = tmp_path / "dest"
@@ -534,7 +534,7 @@ def test_subset_pass_only_borders_manifest_items(tmp_path, monkeypatch):
     """With process_all=False and a manifest, only manifest items are
     bordered; a matched, already-moved poster NOT in the manifest is left
     untouched (webhook/adhoc stays subset-only)."""
-    import backend.modules.border_replacerr as border_mod
+    from backend.modules import border_replacerr as border_mod
     from backend.util.database.border_state import BorderState
 
     src_dir = tmp_path / "src"
@@ -619,7 +619,7 @@ def test_subset_pass_only_borders_manifest_items(tmp_path, monkeypatch):
 def _subset_harness(tmp_path, monkeypatch, exclusion_list=None):
     """Shared setup for manifest-mode runs: two real source posters (ids 1/2),
     a fake DB, notifications stubbed. Returns (br, dest_dir, rows_by_id)."""
-    import backend.modules.border_replacerr as border_mod
+    from backend.modules import border_replacerr as border_mod
     from backend.util.database.border_state import BorderState
 
     src_dir = tmp_path / "src"
