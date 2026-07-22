@@ -2258,8 +2258,9 @@ const RenderPanel = ({
                     return null;
                 }
                 // Tighten REPLACES the brushed block, so signal it: the user
-                // should eyeball the new mask before erasing (it's best on
-                // solid-coloured titles; a light title on busy art can mis-key).
+                // should eyeball the new mask before erasing (multi-coloured,
+                // white and outlined titles all key; tone-on-tone badges keep
+                // the block).
                 toast.success('Tightened to the letters — check the mask before erasing');
                 return resp?.data?.mask || null;
             } catch (err) {
@@ -5851,6 +5852,49 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
         };
         reader.readAsDataURL(f);
     };
+    // Detect/Tighten for the extract brush — the same endpoints as the AI
+    // text-removal panel, sourced from the picked/uploaded poster. Detect
+    // prefills EVERY text region (brush off credits/taglines before
+    // extracting); tighten shrinks the brush to the glyph strokes, which also
+    // confines the extraction keys to the title.
+    const runPosterDetect = useCallback(async () => {
+        if (!posterUrl) return null;
+        try {
+            const source = customPoster?.b64
+                ? { image_b64: customPoster.b64 }
+                : { image_path: posterPath };
+            const resp = await cl2kMakerAPI.detectText({ ...source, min_score: 0.5 });
+            if (!resp?.data?.regions?.length) {
+                toast.info('No text found');
+                return null;
+            }
+            return resp?.data?.mask || null;
+        } catch (err) {
+            toast.error(err.message || 'Text detection failed');
+            return null;
+        }
+    }, [posterUrl, posterPath, customPoster, toast]);
+    const runPosterTighten = useCallback(
+        async maskDataUrl => {
+            if (!posterUrl || !maskDataUrl) return null;
+            try {
+                const source = customPoster?.b64
+                    ? { image_b64: customPoster.b64 }
+                    : { image_path: posterPath };
+                const resp = await cl2kMakerAPI.tightenMask({ ...source, mask_b64: maskDataUrl });
+                if (!resp?.data?.tightened) {
+                    toast.info(resp?.data?.reason || 'Couldn’t isolate letters — kept your mask');
+                    return null;
+                }
+                toast.success('Tightened to the letters — check the mask before extracting');
+                return resp?.data?.mask || null;
+            } catch (err) {
+                toast.error(err.message || 'Tighten failed');
+                return null;
+            }
+        },
+        [posterUrl, posterPath, customPoster, toast]
+    );
     const onExtract = async () => {
         if (!posterUrl) return;
         setExtracting(true);
@@ -6150,9 +6194,11 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                 >
                     <div className="flex flex-col gap-3">
                         <p className="text-xs text-fg-subtle">
-                            Pull a white title straight off a poster — no OpenAI. Pick a poster,
-                            brush over the title (a loose scribble is fine; keep off bright areas),
-                            then Extract. The result becomes your logo below.
+                            Pull a title straight off a poster — no OpenAI. Pick a poster, brush
+                            over the title (a loose scribble is fine; keep off bright areas), then
+                            Extract. Detect text prefills every text region on the poster — brush
+                            off the bits you don&apos;t want; Tighten to letters shrinks your brush
+                            to the glyphs for a cleaner key. The result becomes your logo below.
                         </p>
                         {posterSource === 'upload' ? (
                             <UploadArtCard
@@ -6218,6 +6264,8 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                                         imageUrl={posterUrl}
                                         brushSize={18}
                                         onMaskChange={setExtractMask}
+                                        onDetectText={runPosterDetect}
+                                        onTightenText={runPosterTighten}
                                     />
                                 </div>
                             </div>

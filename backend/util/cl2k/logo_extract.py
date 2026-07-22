@@ -415,66 +415,88 @@ def extract_logo_by_diff(
     return buf.getvalue()
 
 
-def _detect_title(image_bytes, arr, lab, block, width):
-    """Title INK colour (Lab) via the DBNet detector, or ``None``.
-
-    The detector localises the text LINE (colour-agnostic) as a filled box — it
-    does NOT resolve individual strokes, so its band alone can't tell ink from the
-    inter-glyph background. The robust anchor keys the ink against the TRUE
-    background, sampled from just OUTSIDE the user's block (which bounds the
-    title, so outside is real background — unlike a ring around the shrunk band,
-    which the kernel contaminates). Within the box, the pixels FARTHEST from that
-    background palette are the ink; their dominant colour cluster is the title
-    colour — WHITE for white text, blue for blue, black for black, at any brush
-    tightness. Returns ``None`` when the detector is unavailable, finds no text,
-    or the ink is not clearly distinct from the background (no real title to key).
-
-    KNOWN LIMIT (multi-region background): "farthest from the outside-block
-    background" mis-picks the local plate as ink when the title sits on a distinct
-    colour BAND that is itself farther (in Lab) from the surrounding field than
-    the ink is, AND the brush spans both band and field. Then the plate is keyed
-    (an inversion). Narrow and input-dependent; the tighten result is a reviewable
-    prefill so the harm is a visible wrong mask the user re-brushes. Brushing
-    within the band avoids it. Closing it needs an ink cue independent of the
-    outside background (local contrast / inter-glyph cluster) — deliberately left
-    out to avoid re-introducing the fragility of earlier band-based anchors.
-    """
+def _sized_probmap(image_bytes, shape):
+    """Detector probmap resized to the working-array ``shape``, or ``None``."""
     from backend.util.cl2k.text_detect import detect_text_probmap
 
     prob = detect_text_probmap(image_bytes)
     if prob is None:
         return None
-    if prob.shape != block.shape:  # e.g. _open_rgb_bounded downscaled a huge image
+    if prob.shape != shape:  # e.g. _open_rgb_bounded downscaled a huge image
         prob = (
             np.asarray(
                 Image.fromarray((np.clip(prob, 0, 1) * 255).astype(np.uint8)).resize(
-                    (block.shape[1], block.shape[0]), Image.BILINEAR
+                    (shape[1], shape[0]), Image.BILINEAR
                 ),
                 dtype=np.float32,
             )
             / 255.0
         )
+    return prob
+
+
+# Anchor/background separation tiers (ΔE76 in Lab, against the DOMINANT outside
+# clusters only — ``_BG_DOMINANT_FRAC`` mirrors _matches_background's min_frac).
+_BG_SAME = 8.0  # closer than this = the background itself, not ink
+_BG_NEAR = 20.0  # closer than this = "suspect" ink (white title on a pale field)
+_BG_DOMINANT_FRAC = 0.15
+_ANCHOR_MIN_FRAC = 0.08  # smaller clusters are anti-aliasing blends, not ink
+
+
+def _detect_anchors(prob, lab, block, bg, color_tol):
+    """Title INK anchors ``[(lab, tol, suspect)]`` from the detector box, or ``[]``.
+
+    The detector localises text LINES (colour-agnostic) as filled boxes — it does
+    NOT resolve strokes, so the box holds ink AND inter-glyph background. A
+    k-means over the box pixels separates them, and each cluster is judged by its
+    ΔE to the DOMINANT background clusters sampled just OUTSIDE the user's block
+    (which bounds the title, so outside is real background):
+
+    - closer than ``_BG_SAME``: it IS the background between the glyphs — drop.
+    - ``_BG_SAME``..``_BG_NEAR``: "suspect" — plausibly real ink that merely
+      resembles the field (a white title on pale fog). Kept only when LIGHT
+      (L >= 50): a dark near-background cluster is scenery/shadow inside the box,
+      and keying it swallows the artwork. The caller additionally demands a
+      suspect-built mask stay concentrated in the detector box.
+    - farther: clean ink.
+
+    Every kept cluster becomes an anchor, so a MULTI-COLOUR title (cream "A TO" +
+    red "DAY DIE"), a fill-plus-outline title, or a detect-prefill block spanning
+    differently-coloured elements all key as the union — the old single dominant
+    anchor kept exactly one colour and dropped the rest. Per anchor, the key band
+    is clamped to ``0.6 x`` its background distance (floored at ``_BG_SAME``) so
+    the key can never reach the field it sits on — an unclamped band pulled in
+    most of a pale field between the letters of a white title.
+
+    REMAINING LIMIT: text that is not colour-separable from its own plate (a
+    dark-red badge on a red box) yields no anchor there — those regions keep the
+    user's block, which is also the right erase shape for them.
+    """
+    if prob is None or bg is None:
+        return []
     box = (prob > 0.3) & block
     if int(box.sum()) < 100:
-        return None
-    bg = _outside_background(lab, block, width)
-    if bg is None:
-        return None
-    bg_cent, _bg_frac = bg
+        return []
+    bg_cent, bg_frac = bg
+    dom = bg_cent[bg_frac >= _BG_DOMINANT_FRAC]
+    pts = lab[box].astype(np.float32)
+    pts = pts[:: max(1, len(pts) // 4000)]
+    cent, counts = _kmeans(pts, 5)
+    frac = counts / max(1, int(counts.sum()))
 
-    # Ink = box pixels farthest from that background; dominant cluster = ink colour.
-    box_lab = lab[box]
-    dmin = np.sqrt(((box_lab[:, None, :] - bg_cent[None]) ** 2).sum(-1)).min(axis=1)
-    ink = box_lab[dmin > np.median(dmin)]
-    if ink.shape[0] < 50:
-        return None
-    ink = ink.astype(np.float32)[:: max(1, len(ink) // 4000)]
-    cent, counts = _kmeans(ink, 3)
-    title_lab = cent[int(np.argmax(counts))]
-
-    if _matches_background(title_lab, bg):
-        return None  # ink == a dominant background -> no real title; use colour-key
-    return title_lab
+    anchors = []
+    for c, f in zip(cent, frac):
+        if f < _ANCHOR_MIN_FRAC:
+            continue
+        d = float(np.sqrt(((c - dom) ** 2).sum(axis=1)).min()) if len(dom) else np.inf
+        if d < _BG_SAME:
+            continue
+        suspect = d < _BG_NEAR
+        if suspect and c[0] < 50.0:
+            continue
+        tol = min(color_tol, max(_BG_SAME, 0.6 * d))
+        anchors.append((c, tol, suspect))
+    return anchors
 
 
 def _outside_background(lab, block, width):
@@ -525,20 +547,21 @@ def tighten_text_mask(
     block down to just the strokes leaves the real backdrop *between* the letters
     for the inpainter to sample, so the fill stays sharp.
 
-    The title colour is found two ways, best first:
+    The title colours are found two ways, best first:
 
-    1. **DBNet text detector** (:func:`_detect_title`) — localises the title by
-       appearance and keys the ink against the background sampled outside the
-       brush, so it isolates white/black/coloured titles the colour-key's
-       most-saturated guess can't (and never inverts onto a saturated plate).
+    1. **DBNet text detector** (:func:`_detect_anchors`) — localises the text by
+       appearance and keys EVERY ink cluster in the detected boxes against the
+       background sampled outside the brush, so white/black/multi-coloured/
+       outlined titles all key (and it never inverts onto a saturated plate).
     2. **Fallback colour-key** — when the detector is unavailable/off, finds no
        text, or can't separate ink from background: anchor the colour from the
        most-saturated brushed pixels. Works for coloured titles; guarded by a
        stroke-shape gate so a plate-shaped result (an inversion) is rejected.
 
-    Either way, every brushed pixel within ``color_tol`` ΔE76 of the title colour
-    is kept — a uniform glyph body fills SOLID, a differently-coloured plate drops
-    out — then ``grow`` re-dilates for anti-aliasing.
+    Either way, every brushed pixel within an anchor's key band is kept — a
+    uniform glyph body fills SOLID, a differently-coloured plate drops out —
+    then ``grow`` re-dilates for anti-aliasing. ``color_tol`` caps the band;
+    the detector path narrows it per anchor (see :func:`_detect_anchors`).
 
     Returns a white-on-black PNG mask (white = remove, image-sized), or ``None``
     to signal "keep the caller's block": no title could be isolated, or the
@@ -551,13 +574,15 @@ def tighten_text_mask(
     if block is None or int(block.sum()) < 200:
         return None
     lab = _srgb_to_lab(arr)
+    bg = _outside_background(lab, block, width)
+    prob = _sized_probmap(image_bytes, block.shape)
 
-    # 1. Title colour — detector first (polarity-agnostic; keys the ink against
-    #    the background sampled outside the brush). If it can't isolate a title
-    #    (unavailable, no text, or ink == background) it returns None and we fall
-    #    through to the colour-key, which handles a saturated title offline.
-    title_lab = _detect_title(image_bytes, arr, lab, block, width)
-    from_detector = title_lab is not None
+    # 1. Ink anchors — detector first (polarity-agnostic, multi-colour). If it
+    #    can't isolate any ink (unavailable, no text, or everything matches the
+    #    background) fall through to the single-anchor colour-key, which handles
+    #    a saturated title offline.
+    anchors = _detect_anchors(prob, lab, block, bg, color_tol)
+    from_detector = bool(anchors)
     if not from_detector:
         chroma = np.sqrt(lab[..., 1] ** 2 + lab[..., 2] ** 2)
         cthr = float(np.quantile(chroma[block], 0.92))
@@ -570,27 +595,33 @@ def tighten_text_mask(
         # A fallback anchor that equals the DOMINANT background outside the brush
         # IS the plate, not the title — this is how the colour-key inverts on a
         # light title over saturated colour when the block clips the letters.
-        bg = _outside_background(lab, block, width)
         if bg is not None and _matches_background(title_lab, bg):
             return None
+        anchors = [(title_lab, color_tol, False)]
 
-    # 2. Colour-distance segmentation (shared).
-    d = lab - title_lab
-    color_dist = np.sqrt((d * d).sum(axis=-1))
-    letter = block & (color_dist < color_tol)
+    # 2. Colour-distance segmentation — the union over the accepted anchors.
+    letter = np.zeros_like(block)
+    for cent, tol, _suspect in anchors:
+        d = lab - cent
+        letter |= block & (np.sqrt((d * d).sum(axis=-1)) < tol)
     letter = _despeckle((letter.astype(np.uint8)) * 255, min_area=40) > 0
     if not letter.any():
         return None
 
-    # 3. Stroke-shape gate — only on the colour-key fallback. That path can key a
-    #    saturated plate (a light title over colour) into a backwards mask; a
-    #    plate survives erosion, letters vanish, so reject a plate-shaped result.
-    #    The detector anchor is validated distinct-from-background, so its path
-    #    skips this (and its false-reject of legitimately bold titles).
+    # 3. Shape gates. Colour-key fallback: a plate survives erosion, letters
+    #    vanish, so reject a plate-shaped result (the detector path skips this —
+    #    its anchors are background-validated, and the erosion test false-rejects
+    #    legitimately bold titles). Detector path with a SUSPECT anchor (ink that
+    #    resembles the field): real ink stays concentrated in the detector box;
+    #    a field-key spills across the block, so reject a spilled result.
     if not from_detector:
         er = max(3, round(0.006 * width))
         strokiness = 1.0 - int(_erode(letter, er).sum()) / int(letter.sum())
         if strokiness < 0.42:
+            return None
+    elif any(suspect for _cent, _tol, suspect in anchors):
+        zone = _dilate(prob > 0.3, max(8, round(0.03 * width)))
+        if int((letter & zone).sum()) / int(letter.sum()) < 0.6:
             return None
 
     if grow is None:
