@@ -2,6 +2,22 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.42.0](https://github.com/chodeus/chub/compare/v2.41.1...v2.42.0) (2026-07-22)
+
+
+### Features
+
+* **gdrive-presets:** add füsen CL2K drive ([acffe65](https://github.com/chodeus/chub/commit/acffe651c51cd486d602221bcbdfe09c14f2c9e3))
+* **gdrive-presets:** add füsen CL2K drive ([b53177a](https://github.com/chodeus/chub/commit/b53177afa747b0fa73f617df9d8286cb38ccb4ed))
+
+
+### Bug Fixes
+
+* **cl2k:** default AI erase timeout to 300s for sidecar quality passes ([2b12c82](https://github.com/chodeus/chub/commit/2b12c82469d1be0aa69391770031fa45a7bafe3c))
+* **cl2k:** pin the brush-mask canvas to the image's rendered box ([90c7720](https://github.com/chodeus/chub/commit/90c7720755d1159b09ef5adddfb2c45ef2a5fa00))
+* **cl2k:** pin the brush-mask canvas to the image's rendered box ([8da366a](https://github.com/chodeus/chub/commit/8da366a9b69541d682859d4b29c21eb69295a379))
+* **deps:** pin Pygments 2.20.0 (unpinned transitive of shipped pytest) ([decb5fb](https://github.com/chodeus/chub/commit/decb5fb5d36b058d8f0c637b0e6b767e6823525d))
+
 ## [2.41.1](https://github.com/chodeus/chub/compare/v2.41.0...v2.41.1) (2026-07-20)
 
 
