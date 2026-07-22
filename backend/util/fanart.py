@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import time
 from typing import Any, Dict, List, Optional, Union
+from urllib.parse import quote
 
 import requests
 
@@ -216,7 +217,9 @@ class FanartClient:
         """GET /v3/{movies|tv}/{id}. Returns the raw dict, or None on a
         transient failure; {} on a 404 (no art for this id)."""
         path = "movies" if kind == "movie" else "tv"
-        url = f"{self.BASE}/{path}/{lookup_id}"
+        # quote() confines the id to a single path segment — a malformed id from
+        # a media row can't traverse to another fanart.tv endpoint (SSRF-hardening).
+        url = f"{self.BASE}/{path}/{quote(str(lookup_id), safe='')}"
         # Personal key only — it authenticates on its own (no project key).
         params: Dict[str, str] = {"client_key": self.cfg.client_key}
 

@@ -66,7 +66,9 @@ year_regex: Pattern = re.compile(r"\s?\((\d{4})\)(?!.*Collection).*")
 # would otherwise survive as a bare "0" glued to the title ("thesavant0") and break
 # title matching — stranding the poster, and looping if cleanup removes the folder
 # while the renamer recreates it. Stripped alongside year_regex during normalization.
-unknown_year_regex: Pattern = re.compile(r"\s*\(0+\)")
+# Whitespace is bounded (``\s{0,8}`` not ``\s*``) so a crafted title full of spaces
+# can't cause polynomial-time backtracking (same convention as season_number_regex).
+unknown_year_regex: Pattern = re.compile(r"\s{0,8}\(0+\)")
 
 # Matches one or more illegal filename characters—including < > : " / \ | ? * and control characters U+0000–U+001F
 illegal_chars_regex: Pattern = re.compile(r"[<>:\"/\\|?*\x00-\x1f]+")
