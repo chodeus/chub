@@ -90,9 +90,7 @@ def test_find_nohl_files_keeps_movie_with_extra_subfolders_as_movie(tmp_path):
 
     assert [item["title"] for item in results["movies"]] == ["Example Movie"]
     assert results["movies"][0]["year"] == 2024
-    assert results["movies"][0]["nohl"] == [
-        str(movie_dir / "Example Movie (2024).mkv")
-    ]
+    assert results["movies"][0]["nohl"] == [str(movie_dir / "Example Movie (2024).mkv")]
     assert results["series"] == []
 
 
@@ -121,7 +119,8 @@ def test_find_nohl_files_skips_files_that_already_have_hardlinks(tmp_path):
     root = tmp_path / "movies"
     movie_dir = root / "Already Linked (2024)"
     source = touch(movie_dir / "Already Linked (2024).mkv")
-    source.link_to(movie_dir / "Already Linked (2024).copy.mkv")
+    # hardlink_to, not the removed-in-3.12 link_to (whose argument order it flips).
+    (movie_dir / "Already Linked (2024).copy.mkv").hardlink_to(source)
 
     results = Nohl.find_nohl_files(str(root), logger)
 
