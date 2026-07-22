@@ -296,7 +296,8 @@ def test_mask_resized_to_image_dims():
     image = _png_bytes(PILImage.new("RGB", (1920, 1080)))
     mask = _png_bytes(PILImage.new("L", (480, 270), 255))
     out = _mask_to_image_dims(image, mask)
-    assert PILImage.open(_io.BytesIO(out)).size == (1920, 1080)
+    resized = PILImage.open(_io.BytesIO(out)).size
+    assert resized == (1920, 1080)
     # already-matching masks pass through untouched
     same = _png_bytes(PILImage.new("L", (1920, 1080), 255))
     assert _mask_to_image_dims(image, same) is same

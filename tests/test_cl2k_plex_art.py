@@ -258,7 +258,7 @@ def test_img_media_type_from_magic_bytes():
 
 
 def test_plex_art_proxy_streams_bytes_without_token(monkeypatch):
-    import backend.api.cl2k_maker as api
+    from backend.api import cl2k_maker as api
 
     seen = {}
 
@@ -281,7 +281,7 @@ def test_plex_art_proxy_rejects_non_artwork_src(monkeypatch):
     # A leaked <img> URL carries a live stream token + the Plex host in src; that
     # src must not be rewritable to a non-artwork Plex endpoint (the /:/prefs
     # response leaks the account-level PlexOnlineToken).
-    import backend.api.cl2k_maker as api
+    from backend.api import cl2k_maker as api
     from fastapi import HTTPException
 
     called = {"n": 0}
@@ -341,7 +341,7 @@ def test_valid_plex_art_src_file_key_blocks_ssrf():
 
 
 def test_plex_art_proxy_404_on_fetch_failure(monkeypatch):
-    import backend.api.cl2k_maker as api
+    from backend.api import cl2k_maker as api
     from fastapi import HTTPException
 
     def _boom(src):
