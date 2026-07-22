@@ -659,7 +659,7 @@ def test_endpoint_no_token_is_400(monkeypatch):
     from backend.api import cl2k_maker as api
 
     # Default config carries no OAuth token -> config precondition, not 502.
-    monkeypatch.setattr(api, "load_config", lambda: ChubConfig())
+    monkeypatch.setattr(api, "load_config", ChubConfig)
     resp = api.test_drive(
         api.TestDriveRequest(gdrive_folder_id="ABC123"), db=None, logger=StubLogger()
     )
@@ -670,7 +670,7 @@ def test_endpoint_no_token_is_400(monkeypatch):
 def test_endpoint_success(monkeypatch):
     from backend.api import cl2k_maker as api
 
-    monkeypatch.setattr(api, "load_config", lambda: ChubConfig())
+    monkeypatch.setattr(api, "load_config", ChubConfig)
     monkeypatch.setattr(
         "backend.util.cl2k.gdrive_upload.has_upload_token", lambda sync_cfg: True
     )
@@ -696,7 +696,7 @@ def test_endpoint_failure_maps_to_502(monkeypatch):
     def boom(folder_id, sync_cfg, logger):
         raise RuntimeError("rclone copy failed: googleapi: Error 404")
 
-    monkeypatch.setattr(api, "load_config", lambda: ChubConfig())
+    monkeypatch.setattr(api, "load_config", ChubConfig)
     monkeypatch.setattr(
         "backend.util.cl2k.gdrive_upload.has_upload_token", lambda sync_cfg: True
     )
