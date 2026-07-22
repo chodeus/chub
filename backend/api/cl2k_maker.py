@@ -1536,8 +1536,8 @@ def tighten_mask(
     """Colour-key the brushed region down to the title strokes so the inpainter
     fills thin gaps (sharp) instead of one big block (blurry). Pure local
     compute — no AI provider needed. Returns {tightened: bool, mask: b64 PNG |
-    null}; ``tightened=false`` means no solid-coloured title could be isolated,
-    so the frontend keeps the user's block."""
+    null}; ``tightened=false`` means no lettering could be isolated, so the
+    frontend keeps the user's block."""
     if req.image_b64:
         try:
             raw = _b64_to_bytes(req.image_b64)
@@ -1570,7 +1570,7 @@ def tighten_mask(
             {
                 "tightened": False,
                 "mask": None,
-                "reason": "No solid-coloured title to isolate — kept your mask.",
+                "reason": "Couldn't isolate the lettering — kept your mask.",
             },
         )
     return ok("ok", {"tightened": True, "mask": base64.b64encode(tightened).decode()})

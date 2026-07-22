@@ -168,23 +168,23 @@ def test_tighten_detector_keys_the_white_title_not_the_plate(monkeypatch):
     assert (px.min(axis=1) > 170).mean() > 0.6  # on the WHITE letters, not red
 
 
-def test_detect_title_rejects_when_ink_matches_background(monkeypatch):
-    # A detected box over a UNIFORM region (no distinct ink) -> the ink colour
-    # equals the background -> _detect_title returns None (distinctness backstop),
-    # so tighten falls through to the colour-key instead of masking the plate.
+def test_detect_anchors_rejects_when_ink_matches_background():
+    # A detected box over a UNIFORM region (no distinct ink) -> every cluster
+    # sits on the background -> no anchors (distinctness backstop), so tighten
+    # falls through to the colour-key instead of masking the plate.
     import numpy as np
 
-    from backend.util.cl2k import logo_extract, text_detect
+    from backend.util.cl2k import logo_extract
 
     img = Image.new("RGB", (400, 200), (200, 40, 40))  # uniform red, no title
     prob = np.zeros((200, 400), np.float32)
     prob[70:130, 60:340] = 1.0
-    monkeypatch.setattr(text_detect, "detect_text_probmap", lambda _b: prob)
     arr = np.asarray(logo_extract._open_rgb_bounded(_jpeg(img))).astype(np.float32)
     lab = logo_extract._srgb_to_lab(arr)
     block = np.zeros((200, 400), bool)
     block[40:170, 40:360] = True
-    assert logo_extract._detect_title(_jpeg(img), arr, lab, block, 400) is None
+    bg = logo_extract._outside_background(lab, block, 400)
+    assert logo_extract._detect_anchors(prob, lab, block, bg, 33.0) == []
 
 
 def test_matches_background_only_rejects_a_dominant_plate():
@@ -209,6 +209,113 @@ def test_matches_background_only_rejects_a_dominant_plate():
     assert not logo_extract._matches_background(
         near, small
     )  # near a 2% element -> pass
+
+
+def test_tighten_multi_colour_title_keys_both_colours(monkeypatch):
+    # A two-colour title (cream + red rows on a grey field): every ink cluster
+    # becomes an anchor, so the union masks BOTH colours — the old single
+    # dominant anchor kept one row and dropped the other.
+    import numpy as np
+
+    from backend.util.cl2k import text_detect
+
+    img = Image.new("RGB", (500, 300), (95, 100, 108))
+    d = ImageDraw.Draw(img)
+    for x in range(60, 440, 55):
+        d.rectangle((x, 70, x + 22, 130), fill=(245, 240, 220))  # cream row
+        d.rectangle((x, 170, x + 22, 230), fill=(210, 30, 30))  # red row
+    prob = np.zeros((300, 500), np.float32)
+    prob[65:135, 40:460] = 1.0
+    prob[165:235, 40:460] = 1.0
+    monkeypatch.setattr(text_detect, "detect_text_probmap", lambda _b: prob)
+    block = Image.new("L", img.size, 0)
+    ImageDraw.Draw(block).rectangle((30, 50, 470, 250), fill=255)
+
+    out = tighten_text_mask(_jpeg(img), _png(block))
+    assert out is not None
+    m = np.asarray(Image.open(io.BytesIO(out)).convert("L")) > 127
+    assert m[100, 71]  # on a cream bar -> remove
+    assert m[200, 71]  # on a red bar -> remove
+    assert not m[100, 100]  # grey gap between bars -> keep
+
+
+def test_tighten_accepts_white_title_on_pale_field(monkeypatch):
+    # White ink whose ΔE to the pale field is inside 8..20: kept as a LIGHT
+    # suspect with the key band clamped below the field distance, and accepted
+    # because the mask stays inside the detector box. The old hard veto returned
+    # None ("kept your mask") for every white-on-pale title.
+    import numpy as np
+
+    from backend.util.cl2k import text_detect
+
+    img = Image.new("RGB", (500, 200), (200, 205, 212))  # pale fog field
+    d = ImageDraw.Draw(img)
+    for x in range(60, 440, 55):
+        d.rectangle((x, 60, x + 22, 150), fill=(255, 255, 255))
+    prob = np.zeros((200, 500), np.float32)
+    prob[55:155, 40:460] = 1.0
+    monkeypatch.setattr(text_detect, "detect_text_probmap", lambda _b: prob)
+    block = Image.new("L", img.size, 0)
+    ImageDraw.Draw(block).rectangle((40, 45, 460, 165), fill=255)
+
+    out = tighten_text_mask(_jpeg(img), _png(block))
+    assert out is not None
+    m = np.asarray(Image.open(io.BytesIO(out)).convert("L")) > 127
+    assert m[100, 71]  # on a white bar -> remove
+    assert not m[100, 100]  # pale gap between bars -> keep (band is clamped)
+
+
+def test_tighten_unions_outline_with_fill(monkeypatch):
+    # White fill + black outline on a mid-blue field: the outline is its own
+    # ink cluster, far from the field, so the union masks fill AND outline — a
+    # single-anchor key left the outline behind to ghost through the erase.
+    import numpy as np
+
+    from backend.util.cl2k import text_detect
+
+    img = Image.new("RGB", (500, 200), (90, 110, 150))
+    d = ImageDraw.Draw(img)
+    for x in range(60, 440, 55):
+        d.rectangle((x - 6, 54, x + 28, 156), fill=(10, 10, 10))  # outline slab
+        d.rectangle((x, 60, x + 22, 150), fill=(255, 255, 255))  # fill
+    prob = np.zeros((200, 500), np.float32)
+    prob[50:160, 40:460] = 1.0
+    monkeypatch.setattr(text_detect, "detect_text_probmap", lambda _b: prob)
+    block = Image.new("L", img.size, 0)
+    ImageDraw.Draw(block).rectangle((40, 45, 460, 165), fill=255)
+
+    out = tighten_text_mask(_jpeg(img), _png(block))
+    assert out is not None
+    m = np.asarray(Image.open(io.BytesIO(out)).convert("L")) > 127
+    assert m[100, 71]  # white fill -> remove
+    assert m[100, 56]  # black outline -> remove too
+    assert not m[100, 100]  # field gap between glyphs -> keep
+
+
+def test_tighten_drops_dark_scenery_near_background(monkeypatch):
+    # A dark blob (figures/scenery) whose colour sits NEAR a dark background
+    # cluster: dark suspects are dropped, so the blob stays unmasked while the
+    # white title keys — keying it would have swallowed the artwork.
+    import numpy as np
+
+    from backend.util.cl2k import text_detect
+
+    img = Image.new("RGB", (500, 200), (60, 62, 66))  # dark field
+    d = ImageDraw.Draw(img)
+    for x in range(60, 250, 55):
+        d.rectangle((x, 60, x + 22, 150), fill=(255, 255, 255))
+    d.rectangle((300, 40, 430, 160), fill=(35, 37, 41))  # near-field scenery
+    prob = np.zeros((200, 500), np.float32)
+    prob[55:155, 40:460] = 1.0
+    monkeypatch.setattr(text_detect, "detect_text_probmap", lambda _b: prob)
+    block = Image.new("L", img.size, 0)
+    ImageDraw.Draw(block).rectangle((40, 45, 460, 165), fill=255)
+
+    out = tighten_text_mask(_jpeg(img), _png(block))
+    assert out is not None
+    m = np.asarray(Image.open(io.BytesIO(out)).convert("L")) > 127
+    assert m[100, 71]  # white bar -> remove
+    assert not m[100, 350]  # dark blob -> keep (dropped dark suspect)
 
 
 def test_tighten_fallback_rejects_plate_inversion(monkeypatch):

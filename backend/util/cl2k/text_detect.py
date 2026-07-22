@@ -4,8 +4,8 @@ localiser for the CL2K "tighten to letters" anchor.
 The colour-key alone has to GUESS which colour is the title (it assumes the
 most-saturated thing in the brush is the text), which inverts on a light title
 over a saturated plate. A DBNet detector localises text by appearance, not
-colour, so it pins the title regardless of polarity — the tighten anchor then
-reads the true ink colour from the detected strokes.
+colour, so it pins the title regardless of polarity — the tighten anchors then
+read the true ink colours from the detected strokes.
 
 Fail-soft by design: every entry point returns ``None`` if onnxruntime or the
 vendored model is unavailable, or on any inference error, so ``tighten_text_mask``
@@ -28,7 +28,11 @@ _MODEL_PATH = os.path.join(os.path.dirname(__file__), "models", "ppocr_v4_det.on
 # DBNet preprocessing (PP-OCR): ImageNet mean/std, /255, NCHW.
 _MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
 _STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
-_LIMIT = 960  # cap the long side for detection — posters downscale to this
+# Long-side pyramid, max-merged. DBNet misses display type that is LARGE relative
+# to its input (the glyphs outgrow the receptive field), and a single 960 pass
+# skipped whole title lines on real posters; the smaller passes bring huge
+# lettering back into range. Only-downscale, so tiny images dedupe to one pass.
+_SCALES = (960, 640, 448, 320)
 
 
 @lru_cache(maxsize=1)
@@ -62,6 +66,8 @@ def detect_text_probmap(image_bytes: bytes) -> Optional[np.ndarray]:
     (high on text, low elsewhere), or ``None`` when the detector is unavailable
     or errors. High values are text-line cores (DBNet predicts a shrunk kernel),
     so a threshold gives a polarity-agnostic text-line mask, not per-glyph.
+    Runs the ``_SCALES`` pyramid and max-merges, so both huge display titles and
+    small credit lines register in one map.
     """
     sess = _session()
     if sess is None:
@@ -69,16 +75,27 @@ def detect_text_probmap(image_bytes: bytes) -> Optional[np.ndarray]:
     try:
         img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
         w, h = img.size
-        scale = min(_LIMIT / max(w, h), 1.0)  # only downscale
-        nw = max(32, int(round(w * scale)) // 32 * 32)  # DBNet needs /32 dims
-        nh = max(32, int(round(h * scale)) // 32 * 32)
-        x = np.asarray(img.resize((nw, nh), Image.BILINEAR), dtype=np.float32) / 255.0
-        x = ((x - _MEAN) / _STD).transpose(2, 0, 1)[None]
         name = sess.get_inputs()[0].name
-        prob = sess.run(None, {name: x})[0][0, 0]  # HxW in [0, 1]
-        up = Image.fromarray((np.clip(prob, 0.0, 1.0) * 255).astype(np.uint8)).resize(
-            (w, h), Image.BILINEAR
-        )
-        return np.asarray(up, dtype=np.float32) / 255.0
+        merged = None
+        seen = set()
+        for limit in _SCALES:
+            scale = min(limit / max(w, h), 1.0)  # only downscale
+            nw = max(32, int(round(w * scale)) // 32 * 32)  # DBNet needs /32 dims
+            nh = max(32, int(round(h * scale)) // 32 * 32)
+            if (nw, nh) in seen:  # small image — several limits collapse to one
+                continue
+            seen.add((nw, nh))
+            x = (
+                np.asarray(img.resize((nw, nh), Image.BILINEAR), dtype=np.float32)
+                / 255.0
+            )
+            x = ((x - _MEAN) / _STD).transpose(2, 0, 1)[None]
+            prob = sess.run(None, {name: x})[0][0, 0]  # HxW in [0, 1]
+            up = Image.fromarray(
+                (np.clip(prob, 0.0, 1.0) * 255).astype(np.uint8)
+            ).resize((w, h), Image.BILINEAR)
+            arr = np.asarray(up, dtype=np.float32) / 255.0
+            merged = arr if merged is None else np.maximum(merged, arr)
+        return merged
     except Exception:
         return None
