@@ -207,8 +207,9 @@ export const CL2K_MAKER_SCHEMA = {
                 condition: 'not_equals',
                 value: 'none',
             },
-            placeholder: '120',
-            description: 'Seconds to wait for the AI provider before giving up.',
+            placeholder: '300',
+            description:
+                'Seconds to wait for the AI provider before giving up. The LaMa sidecar’s quality passes can take a few minutes on CPU for a large erase, so don’t set this too low.',
         },
     ],
 };
