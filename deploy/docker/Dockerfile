@@ -27,6 +27,13 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip3 install --no-cache-dir -r requirements.txt
 
+# ---- CL2K maker (develop-only extension) ----
+# Extra Python deps for the maker: psd-tools (.psd export) and Wand
+# (ImageMagick bindings for rendering). Separate file + layer so
+# requirements.txt stays identical to main.
+COPY requirements-cl2k.txt .
+RUN pip3 install --no-cache-dir -r requirements-cl2k.txt
+
 # Install rclone: fetch the current release and verify it against the official
 # SHA256SUMS, instead of piping an unpinned install script into a root shell.
 # Always-latest (like the old install.sh) but with integrity + no remote code.
@@ -70,6 +77,36 @@ WORKDIR /app
 RUN apt-get update && \
     apt-get install -y --no-install-recommends curl git tzdata jdupes && \
     rm -rf /var/lib/apt/lists/*
+
+# ---- CL2K maker (develop-only extension) ----
+# imagemagick (Wand's libMagickWand), librsvg2-2 (so IM can read SVG clear
+# logos), fonts-dejavu-core (guaranteed fallback font), and cabextract to
+# unpack the vendored Arial below. Kept as a separate appended layer so the
+# shared apt line above stays identical to main. No `contrib` component or
+# ttf-mscorefonts-installer here: that package downloads MS fonts from
+# SourceForge at build time, and a flaky mirror failed the whole image build.
+RUN set -eux; \
+    apt-get update; \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        imagemagick librsvg2-2 fonts-dejavu-core \
+        fontconfig cabextract; \
+    rm -rf /var/lib/apt/lists/*
+
+# Real Microsoft Arial (regular + bold) for CL2K text rendering, extracted at
+# build from the vendored, unmodified arial32.exe (deploy/docker/fonts/) — so
+# the build never touches the network for fonts. Renamed to the msttcorefonts
+# paths geometry.resolve_font() probes (Arial.ttf / Arial_Bold.ttf).
+# Redistributing the original .exe is permitted by its EULA (shipped alongside
+# as LICENSE-mscorefonts.txt); the extracted .ttf stays inside the image and is
+# never committed to the repo.
+COPY deploy/docker/fonts/arial32.exe /tmp/arial32.exe
+RUN set -eux; \
+    mkdir -p /usr/share/fonts/truetype/msttcorefonts /tmp/arialout; \
+    cabextract -L -d /tmp/arialout /tmp/arial32.exe; \
+    cp /tmp/arialout/arial.ttf   /usr/share/fonts/truetype/msttcorefonts/Arial.ttf; \
+    cp /tmp/arialout/arialbd.ttf /usr/share/fonts/truetype/msttcorefonts/Arial_Bold.ttf; \
+    fc-cache -f; \
+    rm -rf /tmp/arial32.exe /tmp/arialout
 
 # Copy only Python runtime and site-packages from builder
 COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
