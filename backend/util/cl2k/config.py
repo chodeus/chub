@@ -71,7 +71,10 @@ class Cl2kMakerConfig(BaseModel):
     # on GET /api/config like every other secret. Don't re-prefix it.
     api_key: str = ""
     ai_model: str = ""  # openai model id (default gpt-image-1)
-    ai_timeout: int = 120
+    # The sidecar's quality passes (snap + native boundary refine, v1.6+) add
+    # roughly one extra inference per erase, which can push a busy CPU box
+    # well past the old 120s.
+    ai_timeout: int = 300
     # Per-request mask dilation sent to the lama sidecar; -1 = the sidecar's own
     # default (5). The ghost-fringe knob: raise for glowing/beveled logos, lower
     # when masks are already generous — tunable here without a container restart.
