@@ -3572,13 +3572,32 @@ const BrushMask = ({
     onTightenText = null,
 }) => {
     const canvasRef = useRef(null);
+    const imgRef = useRef(null);
     const drawing = useRef(false);
     // Backing px per CSS px (refreshed from the live rect on every pointer
     // mapping) — pointer coords and the brush radius both scale by it, so the
     // on-screen brush feels identical at any backing resolution.
     const displayScale = useRef(1);
+    // Rendered img box in CSS px. The inline-block wrapper's shrink-to-fit
+    // width comes from the image's INTRINSIC width clamped by the pane, and a
+    // max-height on the img (the pop-out editors) narrows the rendered image
+    // WITHOUT re-shrinking the wrapper — so an inset-0 canvas ends up wider
+    // than the poster and every mask lands shifted on the real image. Size the
+    // canvas to the img's measured box instead of the wrapper.
+    const [overlaySize, setOverlaySize] = useState(null);
     const [detecting, setDetecting] = useState(false);
     const [tightening, setTightening] = useState(false);
+
+    useEffect(() => {
+        const img = imgRef.current;
+        if (!img || typeof ResizeObserver === 'undefined') return undefined;
+        const ro = new ResizeObserver(() => {
+            const r = img.getBoundingClientRect();
+            if (r.width && r.height) setOverlaySize({ w: r.width, h: r.height });
+        });
+        ro.observe(img);
+        return () => ro.disconnect();
+    }, []);
     // Brush footprint: round (soft, default) or square (sharp corners — handy for
     // erasing straight logo edges). Purely a drawing concern, kept local here so
     // every BrushMask instance gets the toggle for free.
@@ -3793,6 +3812,7 @@ const BrushMask = ({
         <div className="flex flex-col gap-2">
             <div className="relative inline-block leading-none select-none">
                 <img
+                    ref={imgRef}
                     src={imageUrl}
                     alt="Backdrop to mask"
                     onLoad={e => sizeToImage(e.target)}
@@ -3801,8 +3821,13 @@ const BrushMask = ({
                 />
                 <canvas
                     ref={canvasRef}
-                    className="absolute inset-0 w-full h-full cursor-crosshair rounded"
-                    style={{ opacity: 0.5, touchAction: 'none' }}
+                    className="absolute left-0 top-0 cursor-crosshair rounded"
+                    style={{
+                        opacity: 0.5,
+                        touchAction: 'none',
+                        width: overlaySize ? `${overlaySize.w}px` : '100%',
+                        height: overlaySize ? `${overlaySize.h}px` : '100%',
+                    }}
                     onMouseDown={onDown}
                     onMouseMove={onMove}
                     onMouseUp={onUp}
