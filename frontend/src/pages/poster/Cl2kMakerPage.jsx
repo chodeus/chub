@@ -2073,25 +2073,31 @@ const RenderPanel = ({
     const [gdrivePosters, setGdrivePosters] = useState(null);
     const [gdriveLoading, setGdriveLoading] = useState(false);
     const [gdriveFor, setGdriveFor] = useState(null);
+    // Keyed on the TRIMMED title; an empty title (an ID-only entry) skips the
+    // fetch — the render side shows a "needs a title" hint instead of issuing an
+    // unfiltered browse of the whole cache (no setState here: lint forbids
+    // synchronous setState inside an effect).
+    const gdriveQuery = (item.title || '').trim();
     useEffect(() => {
-        if (backdropSource !== 'gdrive' || gdriveFor === item.title) return undefined;
+        if (backdropSource !== 'gdrive' || !gdriveQuery || gdriveFor === gdriveQuery)
+            return undefined;
         let cancelled = false;
         (async () => {
             setGdriveLoading(true);
             try {
                 const resp = await postersAPI.browsePosters({
-                    query: item.title || undefined,
+                    query: gdriveQuery,
                     image_type: 'poster',
                     limit: 60,
                 });
                 if (!cancelled) {
                     setGdrivePosters(resp?.data?.items || []);
-                    setGdriveFor(item.title);
+                    setGdriveFor(gdriveQuery);
                 }
             } catch (err) {
                 if (!cancelled) {
                     setGdrivePosters([]);
-                    setGdriveFor(item.title);
+                    setGdriveFor(gdriveQuery);
                     toast.error(err.message || 'GDrive browse failed');
                 }
             } finally {
@@ -2101,7 +2107,7 @@ const RenderPanel = ({
         return () => {
             cancelled = true;
         };
-    }, [backdropSource, gdriveFor, item.title, toast]);
+    }, [backdropSource, gdriveFor, gdriveQuery, toast]);
 
     const bdSel = (
         <SourceSelector value={backdropSource} onChange={onBdSource} sources={BACKDROP_SOURCES} />
@@ -2771,6 +2777,10 @@ const RenderPanel = ({
                                         >
                                             Remove
                                         </Button>
+                                    </div>
+                                ) : !gdriveQuery ? (
+                                    <div className="text-xs text-fg-subtle py-2">
+                                        Pick a title first — GDrive posters are matched by title.
                                     </div>
                                 ) : gdriveLoading || gdrivePosters === null ? (
                                     <div className="text-xs text-fg-subtle py-4">Searching…</div>
@@ -5862,25 +5872,31 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
     const [gdrivePosters, setGdrivePosters] = useState(null);
     const [gdriveLoading, setGdriveLoading] = useState(false);
     const [gdriveFor, setGdriveFor] = useState(null);
+    // Keyed on the TRIMMED title; an empty title (an ID-only entry) skips the
+    // fetch — the render side shows a "needs a title" hint instead of issuing an
+    // unfiltered browse of the whole cache (no setState here: lint forbids
+    // synchronous setState inside an effect).
+    const gdriveQuery = (item.title || '').trim();
     useEffect(() => {
-        if (posterSource !== 'gdrive' || gdriveFor === item.title) return undefined;
+        if (posterSource !== 'gdrive' || !gdriveQuery || gdriveFor === gdriveQuery)
+            return undefined;
         let cancelled = false;
         (async () => {
             setGdriveLoading(true);
             try {
                 const resp = await postersAPI.browsePosters({
-                    query: item.title || undefined,
+                    query: gdriveQuery,
                     image_type: 'poster',
                     limit: 60,
                 });
                 if (!cancelled) {
                     setGdrivePosters(resp?.data?.items || []);
-                    setGdriveFor(item.title);
+                    setGdriveFor(gdriveQuery);
                 }
             } catch (err) {
                 if (!cancelled) {
                     setGdrivePosters([]);
-                    setGdriveFor(item.title);
+                    setGdriveFor(gdriveQuery);
                     toast.error(err.message || 'GDrive browse failed');
                 }
             } finally {
@@ -5890,7 +5906,7 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
         return () => {
             cancelled = true;
         };
-    }, [posterSource, gdriveFor, item.title, toast]);
+    }, [posterSource, gdriveFor, gdriveQuery, toast]);
     // GDrive grab: pull a synced poster at FULL resolution (the raw cached file,
     // never the thumbnail) and seed it as the custom poster — same shape the
     // Upload source produces, so the brush/extract flow downstream is identical.
@@ -6310,6 +6326,10 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                                         >
                                             Remove
                                         </Button>
+                                    </div>
+                                ) : !gdriveQuery ? (
+                                    <div className="text-xs text-fg-subtle py-2">
+                                        Pick a title first — GDrive posters are matched by title.
                                     </div>
                                 ) : gdriveLoading || gdrivePosters === null ? (
                                     <div className="text-xs text-fg-subtle py-4">Searching…</div>
