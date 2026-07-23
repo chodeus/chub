@@ -104,9 +104,9 @@ mbid_id_regex: Pattern = re.compile(
 # polluting normalized_title with "tvdbid123".
 id_content_regex = re.compile(
     r"\s*[\{\[]\s*(?:"
-    r"tmdb(?:id[-_\s]*|[-_\s])\d+|"
-    r"tvdb(?:id[-_\s]*|[-_\s])\d+|"
-    r"imdb(?:[-_\s](?:tt)?\d+)|"
+    r"tmdb(?:id[-_\s:]*|[-_\s:])\d+|"
+    r"tvdb(?:id[-_\s:]*|[-_\s:])\d+|"
+    r"imdb(?:[-_\s:](?:tt)?\d+)|"
     r"mbid[-_\s:]*[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
     r")\s*[\}\]]",
     flags=re.IGNORECASE,
