@@ -2782,7 +2782,9 @@ const RenderPanel = ({
                                     <div className="text-xs text-fg-subtle py-2">
                                         Pick a title first — GDrive posters are matched by title.
                                     </div>
-                                ) : gdriveLoading || gdrivePosters === null ? (
+                                ) : gdriveLoading ||
+                                  gdrivePosters === null ||
+                                  gdriveFor !== gdriveQuery ? (
                                     <div className="text-xs text-fg-subtle py-4">Searching…</div>
                                 ) : gdrivePosters.length === 0 ? (
                                     <div className="text-xs text-fg-subtle py-2">
@@ -6331,7 +6333,9 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                                     <div className="text-xs text-fg-subtle py-2">
                                         Pick a title first — GDrive posters are matched by title.
                                     </div>
-                                ) : gdriveLoading || gdrivePosters === null ? (
+                                ) : gdriveLoading ||
+                                  gdrivePosters === null ||
+                                  gdriveFor !== gdriveQuery ? (
                                     <div className="text-xs text-fg-subtle py-4">Searching…</div>
                                 ) : gdrivePosters.length === 0 ? (
                                     <div className="text-xs text-fg-subtle py-2">
