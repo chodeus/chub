@@ -39,6 +39,16 @@ def test_parse_search_id_forms():
     assert parse_search_id("TT0910885") == (None, None, "tt0910885")  # case-folded
     assert parse_search_id("Shaun of the Dead") == (None, None, None)
     assert parse_search_id("") == (None, None, None)
+    # Colon separators — the form users naturally type into a search box.
+    assert parse_search_id("tmdb:286532") == (286532, None, None)
+    assert parse_search_id("tvdb:417373") == (None, 417373, None)
+    assert parse_search_id("imdb:tt0910885") == (None, None, "tt0910885")
+    # A bare all-digits query is ambiguous, so it fills BOTH id slots and the
+    # search clause ORs the two columns.
+    assert parse_search_id("286532") == (286532, 286532, None)
+    assert parse_search_id(" 286532 ") == (286532, 286532, None)
+    # Digits inside an ordinary title query stay a title search.
+    assert parse_search_id("Blade Runner 2049") == (None, None, None)
 
 
 def _titles(result):
@@ -67,6 +77,11 @@ def test_media_search_by_id(db):
         "tvdb-417373",
         "tt18212138",
         "imdb-tt18212138",
+        "tmdb:949536",
+        "tvdb:417373",
+        "imdb:tt18212138",
+        "949536",  # bare digits hit the tmdb_id column
+        "417373",  # ...and the tvdb_id column
     ):
         assert _titles(db.media.search(query=q)) == {"Hard Matter"}, q
     # title search unaffected
@@ -120,9 +135,13 @@ def test_poster_browse_by_id(db):
     )
     for q in ("tmdb-747", "{tmdb-747}", "tt0365748", "imdb-tt0365748"):
         assert _titles(db.poster.browse(query=q)) == {"Shaun of the Dead"}, q
+    # colon and bare-number forms (bare digits match tmdb_id OR tvdb_id)
+    for q in ("tmdb:747", "imdb:tt0365748", "747"):
+        assert _titles(db.poster.browse(query=q)) == {"Shaun of the Dead"}, q
     # title and wildcard search unaffected
     assert _titles(db.poster.browse(query="Shaun")) == {"Shaun of the Dead"}
     assert _titles(db.poster.browse(query="Shaun*")) == {"Shaun of the Dead"}
     # a non-matching id / title returns nothing
     assert _titles(db.poster.browse(query="tmdb-999999")) == set()
+    assert _titles(db.poster.browse(query="999999")) == set()
     assert _titles(db.poster.browse(query="Nonexistent")) == set()

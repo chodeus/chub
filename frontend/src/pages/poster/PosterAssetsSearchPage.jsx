@@ -471,10 +471,21 @@ const PosterAssetsSearchPage = () => {
                             setQuery(e.target.value);
                             runPosterSearch(e.target.value);
                         }}
-                        placeholder="Search by title or filename…"
+                        placeholder="Search by title, filename or ID…"
                         className="flex-1 min-w-0 bg-transparent border-0 outline-none text-sm text-fg placeholder:text-fg-dim"
                         aria-label="Search posters"
                     />
+                    <span
+                        className="material-symbols-outlined text-[16px] text-fg-subtle cursor-help"
+                        title={
+                            'Matches titles and filename text; * is a wildcard (shaun*, *1952).\n' +
+                            'IDs also work: tmdb:12345, tvdb:12345, tt0012345, or a bare numeric id\n' +
+                            '(matched against TMDB and TVDB), plus filename tags like {tmdb-12345}.'
+                        }
+                        aria-label="Search syntax help"
+                    >
+                        help
+                    </span>
                 </div>
                 <select
                     value={owner}
