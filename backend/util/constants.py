@@ -79,14 +79,14 @@ remove_special_chars: Pattern = re.compile(r"[^a-zA-Z0-9\s]+")
 # Matches any path ending in “/Title (YYYY)” (possibly with characters after), capturing the title (everything after the last slash up to the space) as group 1 and the 4-digit year as group 2
 title_regex: str = r".*\/([^/]+)\s\((\d{4})\).*"
 
-# matches "tmdbid 12345", "tmdbid12345", "tmdb-12345", "tmdb_12345", "tmdb 12345"
-tmdb_id_regex = re.compile(r"(?i)\btmdb(?:id[-_\s]*|[-_\s])(\d+)\b")
+# matches "tmdbid 12345", "tmdbid12345", "tmdb-12345", "tmdb_12345", "tmdb 12345", "tmdb:12345"
+tmdb_id_regex = re.compile(r"(?i)\btmdb(?:id[-_\s:]*|[-_\s:])(\d+)\b")
 
-# matches "tvdbid 67890", "tvdbid67890", "tvdb-67890", "tvdb_67890", "tvdb 67890"
-tvdb_id_regex = re.compile(r"(?i)\btvdb(?:id[-_\s]*|[-_\s])(\d+)\b")
+# matches "tvdbid 67890", "tvdbid67890", "tvdb-67890", "tvdb_67890", "tvdb 67890", "tvdb:67890"
+tvdb_id_regex = re.compile(r"(?i)\btvdb(?:id[-_\s:]*|[-_\s:])(\d+)\b")
 
-# Matches strings like "imdb-tt1234567", "imdb_tt1234567", or "imdb tt1234567", capturing the "tt" plus digits as the IMDb ID
-imdb_id_regex: Pattern = re.compile(r"imdb[-_\s](tt\d+)")
+# Matches strings like "imdb-tt1234567", "imdb_tt1234567", "imdb tt1234567", or "imdb:tt1234567", capturing the "tt" plus digits as the IMDb ID
+imdb_id_regex: Pattern = re.compile(r"imdb[-_\s:](tt\d+)")
 
 # Matches a MusicBrainz id tag: "mbid-<uuid>", "mbid_<uuid>", "mbid <uuid>",
 # "mbid:<uuid>" (case-insensitive), capturing the canonical UUID. Used to
