@@ -375,9 +375,12 @@ def parse_search_id(query: str) -> Tuple[Optional[int], Optional[int], Optional[
     """Parse a search query into (tmdb_id, tvdb_id, imdb_id) for id-based search.
 
     Recognizes the same filename-style tags as extract_ids ("tmdb-286532",
-    "{tvdb-417373}", "imdb-tt0910885") and additionally a bare IMDb id
-    ("tt0910885") typed on its own. Returns (None, None, None) for an ordinary
-    title query so callers can fall back to title matching.
+    "{tvdb-417373}", "imdb-tt0910885", colon forms like "tmdb:286532") and
+    additionally a bare IMDb id ("tt0910885") typed on its own. An all-digits
+    query is ambiguous — it could be a TMDB or a TVDB id — so it fills BOTH
+    slots and callers OR the two columns (kept out of extract_ids, where a bare
+    number in a filename is a year, not an id). Returns (None, None, None) for
+    an ordinary title query so callers can fall back to title matching.
     """
     if not query:
         return None, None, None
@@ -386,6 +389,10 @@ def parse_search_id(query: str) -> Tuple[Optional[int], Optional[int], Optional[
         bare = re.fullmatch(r"\s*(tt\d{6,})\s*", query, re.IGNORECASE)
         if bare:
             imdb = bare.group(1).lower()
+    if tmdb is None and tvdb is None and not imdb:
+        digits = re.fullmatch(r"\s*(\d{1,12})\s*", query)
+        if digits:
+            tmdb = tvdb = int(digits.group(1))
     return tmdb, tvdb, imdb
 
 
