@@ -2077,7 +2077,7 @@ const RenderPanel = ({
     // fetch — the render side shows a "needs a title" hint instead of issuing an
     // unfiltered browse of the whole cache (no setState here: lint forbids
     // synchronous setState inside an effect).
-    const gdriveQuery = (item.title || '').trim();
+    const gdriveQuery = (item.title ?? '').trim();
     useEffect(() => {
         if (backdropSource !== 'gdrive' || !gdriveQuery || gdriveFor === gdriveQuery)
             return undefined;
@@ -5878,7 +5878,7 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
     // fetch — the render side shows a "needs a title" hint instead of issuing an
     // unfiltered browse of the whole cache (no setState here: lint forbids
     // synchronous setState inside an effect).
-    const gdriveQuery = (item.title || '').trim();
+    const gdriveQuery = (item.title ?? '').trim();
     useEffect(() => {
         if (posterSource !== 'gdrive' || !gdriveQuery || gdriveFor === gdriveQuery)
             return undefined;
