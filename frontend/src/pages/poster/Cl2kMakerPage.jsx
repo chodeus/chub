@@ -113,9 +113,10 @@ const ART_SOURCES = [
     { key: 'upload', label: 'Upload', icon: 'upload' },
 ];
 
-// The Poster tab's backdrop picker adds a 'gdrive' source (browse the GDrive sync
-// cache) on top of ART_SOURCES — kept Poster-only so the logo / background /
-// square pickers don't grow a meaningless "grab a finished poster" option.
+// The Poster tab's backdrop picker and the Logo Asset extract-from-poster picker
+// add a 'gdrive' source (browse the GDrive sync cache) on top of ART_SOURCES —
+// both grab a FINISHED poster, which is meaningless for the logo / background /
+// square pickers, so those stay on ART_SOURCES.
 const BACKDROP_SOURCES = [...ART_SOURCES, { key: 'gdrive', label: 'GDrive', icon: 'cloud_sync' }];
 
 // Stable identity for an uploaded image ({ b64, name }) in change-detection
@@ -5830,9 +5831,11 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
     const [extracting, setExtracting] = useState(false);
     const posters = artBySource[posterSource]?.posters || [];
     const posterUrl = customPoster?.url || (posterPath ? urlForPath(posterPath) : null);
+    // 'upload' AND 'gdrive' both seed customPoster, so only clear it when
+    // switching to a picker source (same rule as the Poster tab's backdrop).
     const onPosterSource = s => {
         setPosterSource(s);
-        if (s !== 'upload') setCustomPoster(null);
+        if (s !== 'upload' && s !== 'gdrive') setCustomPoster(null);
     };
     const pickPoster = p => {
         setPosterPath(p);
@@ -5852,6 +5855,71 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
         };
         reader.readAsDataURL(f);
     };
+    // Synced GDrive posters matching the title — fetched lazily the first time the
+    // GDrive source is shown, and again whenever the title changes (mirrors the
+    // Poster tab's backdrop grab; grabbing a finished community poster here is the
+    // point: extract ITS logo).
+    const [gdrivePosters, setGdrivePosters] = useState(null);
+    const [gdriveLoading, setGdriveLoading] = useState(false);
+    const [gdriveFor, setGdriveFor] = useState(null);
+    useEffect(() => {
+        if (posterSource !== 'gdrive' || gdriveFor === item.title) return undefined;
+        let cancelled = false;
+        (async () => {
+            setGdriveLoading(true);
+            try {
+                const resp = await postersAPI.browsePosters({
+                    query: item.title || undefined,
+                    image_type: 'poster',
+                    limit: 60,
+                });
+                if (!cancelled) {
+                    setGdrivePosters(resp?.data?.items || []);
+                    setGdriveFor(item.title);
+                }
+            } catch (err) {
+                if (!cancelled) {
+                    setGdrivePosters([]);
+                    setGdriveFor(item.title);
+                    toast.error(err.message || 'GDrive browse failed');
+                }
+            } finally {
+                if (!cancelled) setGdriveLoading(false);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [posterSource, gdriveFor, item.title, toast]);
+    // GDrive grab: pull a synced poster at FULL resolution (the raw cached file,
+    // never the thumbnail) and seed it as the custom poster — same shape the
+    // Upload source produces, so the brush/extract flow downstream is identical.
+    const [importing, setImporting] = useState(false);
+    const importFromSync = useCallback(
+        async poster => {
+            setImporting(true);
+            try {
+                const resp = await fetch(postersAPI.getPreviewUrl(poster.folder, poster.file));
+                if (!resp.ok) throw new Error(`Import failed (${resp.status})`);
+                const blob = await resp.blob();
+                const dataUrl = await new Promise((resolve, reject) => {
+                    const r = new FileReader();
+                    r.onload = () => resolve(r.result);
+                    r.onerror = () => reject(new Error('Could not read image'));
+                    r.readAsDataURL(blob);
+                });
+                const url = String(dataUrl);
+                setCustomPoster({ b64: url.split(',').pop(), url, name: poster.file });
+                setPosterPath(null);
+                setExtractMask(null);
+            } catch (err) {
+                toast.error(err.message || 'Import failed');
+            } finally {
+                setImporting(false);
+            }
+        },
+        [toast]
+    );
     // Detect/Tighten for the extract brush — the same endpoints as the AI
     // text-removal panel, sourced from the picked/uploaded poster. Detect
     // prefills EVERY text region (brush off credits/taglines before
@@ -6207,12 +6275,96 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                                     <SourceSelector
                                         value={posterSource}
                                         onChange={onPosterSource}
+                                        sources={BACKDROP_SOURCES}
                                     />
                                 }
                                 custom={customPoster}
                                 onFile={onPosterFile}
                                 onClear={() => setCustomPoster(null)}
                             />
+                        ) : posterSource === 'gdrive' ? (
+                            <div className="bg-surface border border-border rounded-lg p-3">
+                                <div className="flex items-center justify-between gap-2 mb-2">
+                                    <h3 className="text-sm font-medium text-fg">Poster</h3>
+                                    <SourceSelector
+                                        value={posterSource}
+                                        onChange={onPosterSource}
+                                        sources={BACKDROP_SOURCES}
+                                    />
+                                </div>
+                                {customPoster ? (
+                                    <div className="flex items-center gap-3 rounded-md border-2 border-primary bg-surface-alt p-2">
+                                        <img
+                                            src={customPoster.url}
+                                            alt="Grabbed"
+                                            className="h-16 w-auto max-w-[60%] object-contain rounded"
+                                        />
+                                        <span className="flex-1 truncate text-xs text-fg-muted">
+                                            {customPoster.name}
+                                        </span>
+                                        <Button
+                                            onClick={() => setCustomPoster(null)}
+                                            variant="secondary"
+                                            icon="close"
+                                            size="small"
+                                        >
+                                            Remove
+                                        </Button>
+                                    </div>
+                                ) : gdriveLoading || gdrivePosters === null ? (
+                                    <div className="text-xs text-fg-subtle py-4">Searching…</div>
+                                ) : gdrivePosters.length === 0 ? (
+                                    <div className="text-xs text-fg-subtle py-2">
+                                        No synced posters match this title. Only images already
+                                        pulled by Sync GDrive appear here.
+                                    </div>
+                                ) : (
+                                    <div
+                                        className="grid gap-2 max-h-72 overflow-auto"
+                                        style={{
+                                            gridTemplateColumns:
+                                                'repeat(auto-fill, minmax(96px, 1fr))',
+                                        }}
+                                    >
+                                        {gdrivePosters.map(p => (
+                                            <button
+                                                key={p.id || `${p.folder}/${p.file}`}
+                                                type="button"
+                                                disabled={importing}
+                                                onClick={() => importFromSync(p)}
+                                                title={p.file}
+                                                className="relative bg-surface-alt overflow-hidden rounded border border-border hover:border-primary disabled:opacity-50 p-0"
+                                                style={{ aspectRatio: '2 / 3' }}
+                                            >
+                                                <img
+                                                    src={
+                                                        p.id
+                                                            ? postersAPI.getThumbnailUrl(p.id, 200)
+                                                            : postersAPI.getPreviewUrl(
+                                                                  p.folder,
+                                                                  p.file
+                                                              )
+                                                    }
+                                                    alt={p.file}
+                                                    loading="lazy"
+                                                    className="w-full h-full object-cover"
+                                                />
+                                                {p.style && (
+                                                    <StyleStamp
+                                                        style={p.style}
+                                                        className="absolute top-1.5 left-1.5 z-10 text-[10px] pointer-events-none"
+                                                    />
+                                                )}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                                {importing && (
+                                    <div className="text-xs text-fg-subtle mt-2">
+                                        Importing full-resolution poster…
+                                    </div>
+                                )}
+                            </div>
                         ) : (
                             <Picker
                                 label="Poster"
@@ -6220,6 +6372,7 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                                     <SourceSelector
                                         value={posterSource}
                                         onChange={onPosterSource}
+                                        sources={BACKDROP_SOURCES}
                                     />
                                 }
                                 items={posters}
