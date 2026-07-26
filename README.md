@@ -102,9 +102,7 @@ CHUB re-implements the DAPS modules on a database-backed, web-driven architectur
 - **Respects your filters** — renameinatorr re-applies your ignore filter after each cycle so items tagged to be left alone stay untouched, and honours per-run count limits.
 - **Correct labels** — labelarr matches *arr tags by name (so a tag with internal id 0 still syncs) and removes managed Plex labels once their *arr entry is gone.
 - **Sharper matching** — id-aware fallback plus broader title normalization (`&` ⇄ `and`, region tags, `{tvdbid-…}` blocks, season forms) so near-miss titles line up.
-- **Robust rendering & integrations** — border_replacerr expands short hex colours the standard way, genuinely skips unchanged posters, and survives leap-day holiday schedules; sync_gdrive and jduparr harden their rclone/jdupes handling and report real failures instead of silent success.
-
-Full module-by-module breakdown: **[docs/daps-divergence.md](docs/daps-divergence.md)**.
+- **Robust rendering & integrations** — border_replacerr expands short hex colours the standard way, genuinely skips unchanged posters, and survives leap-day holiday schedules; sync_gdrive and jduparr harden their rclone/jdupes handling and report real failures instead of silent success.**.
 
 ---
 
