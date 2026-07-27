@@ -19,5 +19,5 @@ permissions:
 
 jobs:
   notify:
-    uses: chodeus/chodeus-ops/.github/workflows/repo-events.yml@af17d8ce986da0b92cbdfc84d2170e199e34a3fb # main
+    uses: chodeus/chodeus-ops/.github/workflows/repo-events.yml@aae195c19ec7069d2e91aca88107220ce807ef7e # main
     secrets: inherit
