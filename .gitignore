@@ -62,3 +62,6 @@ backend/assets/borders/**/*.png
 
 # Local reference posters / PSDs (copyrighted — local only)
 refs/
+
+# Agent-generated planning docs — working notes, not project documentation
+docs/superpowers/
