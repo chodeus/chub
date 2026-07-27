@@ -35,6 +35,70 @@ LOGO_WIDTH_MAX = 800  # guide "Max Logo Width" (x100->900) — hard cap
 # plain upscale; below the gate the sidecar's super-resolution rescue
 # (ai_logo_upscale) gets a shot before the text fallback.
 LOGO_MIN_WIDTH = 400
+
+# ----- automatic logo sizing --------------------------------------------------
+# Ported from PosterFlow's Photopea panel (dweagle/posterflow, computeLogoGeometry),
+# which sizes a logo from its own pixel area and projected height instead of a flat
+# width. That matters because a flat LOGO_WIDTH_RECOMMENDED under-sizes wide
+# wordmarks — hand-made CL2K references run ~846-881px — while over-sizing tall
+# or square artwork, which then gets height-clamped anyway. PosterFlow feeds a
+# NEUTRAL density constant rather than measuring ink coverage (aspect and pixel
+# area dominate the result), and this mirrors that; the parameter is kept so a
+# caller can pass a measured value later.
+LOGO_AUTO_CEILING_SMALL = 0.85  # source below 0.2 MP
+LOGO_AUTO_CEILING_MID = 0.84
+LOGO_AUTO_CEILING_LARGE = 0.93  # source above 1.5 MP
+LOGO_AUTO_REF_H = 90  # reference projected height, px on a 1000px-wide canvas
+LOGO_AUTO_FALLOFF = 0.40  # exponent applied to refH / projected height
+LOGO_AUTO_FLOOR = 0.58  # never narrower than this fraction of the canvas
+LOGO_AUTO_DENSITY = 0.30  # the neutral ink fraction the curve is tuned around
+LOGO_AUTO_WIDE_FRAC = 0.60  # past this width the height cap tightens
+LOGO_AUTO_WIDE_MAX_H = 225  # px on a 1500px-tall canvas
+
+
+def auto_logo_size(
+    src_w: int, src_h: int, baseline: int, density: float = LOGO_AUTO_DENSITY
+) -> tuple:
+    """Target ``(width, height)`` for a clear logo, from its own shape.
+
+    Wide artwork is allowed out toward the 800px max guide but capped shorter;
+    tall artwork is pulled narrower by the projected-height falloff so it fits
+    the 1100->baseline zone without being clipped. Aspect ratio is preserved.
+    """
+    if src_w <= 0 or src_h <= 0:
+        return LOGO_WIDTH_RECOMMENDED, 0
+    px = src_w * src_h
+    if px < 200_000:
+        ceiling = LOGO_AUTO_CEILING_SMALL
+    elif px > 1_500_000:
+        ceiling = LOGO_AUTO_CEILING_LARGE
+    else:
+        ceiling = LOGO_AUTO_CEILING_MID
+
+    proj_h = src_h * (LOGO_WIDTH_MAX / src_w)  # height if drawn at the max guide
+    ref_h = CANVAS_W * (LOGO_AUTO_REF_H / 1000.0)
+    ratio = ceiling * (ref_h / max(proj_h, ref_h)) ** LOGO_AUTO_FALLOFF
+    floor = LOGO_AUTO_FLOOR + max(0.0, density - LOGO_AUTO_DENSITY) * 0.10
+    target_w = round(CANVAS_W * max(floor, min(ceiling, ratio)))
+
+    zone_h = baseline - LOGO_ZONE_TOP
+    wide = target_w > round(CANVAS_W * LOGO_AUTO_WIDE_FRAC)
+    max_h = round(CANVAS_H * (LOGO_AUTO_WIDE_MAX_H / 1500.0)) if wide else zone_h
+    if density < LOGO_AUTO_DENSITY:  # sparse artwork carries a larger box
+        mult = 1.0 + ((LOGO_AUTO_DENSITY - density) / LOGO_AUTO_DENSITY) * 0.15
+        target_w = min(round(target_w * mult), LOGO_WIDTH_MAX)
+        max_h = min(round(max_h * mult), zone_h)
+    elif density > 0.60:  # dense artwork reads heavy, so tighten it
+        t = (density - 0.60) / 0.40
+        target_w = round(target_w * (1.0 - t * 0.10))
+        max_h = round(CANVAS_H * (LOGO_AUTO_WIDE_MAX_H / 1500.0) * (1.0 - t * 0.55))
+
+    scale = target_w / src_w
+    if src_h * scale > max_h:
+        scale = max_h / src_h
+    if src_w * scale > LOGO_WIDTH_MAX:
+        scale = LOGO_WIDTH_MAX / src_w
+    return max(1, round(src_w * scale)), max(1, round(src_h * scale))
 # Verified against the PSDs in refs/ (template + 3 finished posters, 2026-06-13):
 # all four embed identical guides — y = 1100 ("Main Logo Height"), 1319
 # ("Collection Logo Bottom"), 1352 ("Main Logo Bottom"), 1375 ("Gradient
@@ -88,14 +152,22 @@ COLLECTION_LABEL_Y = 1350  # centre of "COLLECTION", just below the collection l
 SEASON_TEXT_Y = 1440  # centre of the season/specials band
 
 # ----- gradient --------------------------------------------------------------
-# Vertical transparent->black ramp. The PSD's raster gradient blacks out from
-# y~839 — which contradicts both its own "Gradient Darkest Line" guide (y=1375)
-# AND real creator output (finished CL2K posters keep the backdrop visible to
-# ~90%, measured from references). So gradient.png is *generated* to match the
-# references/guide: alpha 0 until ~y=780, smoothstep to fully black by y=1375,
-# solid to the bottom. Regenerate with scripts/gen_cl2k_gradient.py.
-GRADIENT_START_Y = 780
-GRADIENT_FULL_BLACK_Y = 1375
+# Vertical transparent->black ramp, sampled straight out of the template's own
+# flattened composite (its POSTER group is empty, so above the border the
+# composite alpha IS the gradient). Measured 2026-07-28: fully opaque from
+# y=1374, which agrees with the PSD's "Gradient Darkest Line" guide (y=1375) to
+# within a pixel. The fill layer is dithered, so a single column first lifts off
+# zero at y=1038 while the column-averaged ramp the asset ships does so at
+# y=1037; these constants describe the ASSET, which is what actually renders.
+#
+# An earlier comment here claimed the PSD "blacks out from y~839" and therefore
+# contradicted its own guide, and gradient.png was hand-generated from a
+# smoothstep starting at y=780 to work around that. No reading of the template
+# reproduces y~839; the substitute ramp darkened 240px higher than the template
+# (alpha 79/255 at y=1000 where the template is still perfectly clear). Don't
+# reinstate it. Regenerate with scripts/gen_cl2k_gradient.py.
+GRADIENT_START_Y = 1037
+GRADIENT_FULL_BLACK_Y = 1374
 
 # ----- typography ------------------------------------------------------------
 # Exact values read from the PSD type layers.
@@ -109,6 +181,7 @@ GRADIENT_FULL_BLACK_Y = 1375
 LABEL_FONT_PX = 32
 LABEL_TRACKING = 800  # COLLECTION / SEASON / SPECIALS
 LABEL_TRACKING_LONG = 600  # "COMPLETE LIMITED SERIES" (longer string)
+LABEL_BANNER_LONG = "COMPLETE LIMITED SERIES"  # the one template label at 600
 TITLE_FONT_PX = 97  # main title line (logo-less fallback)
 TITLE_FONT_PX_SMALL = 48  # secondary title line
 TITLE_CENTER_Y = 1319  # centre of the MM2K "MIDDLE BOTTOM" band (1284-1354)
@@ -147,9 +220,36 @@ def tracking_to_kerning(tracking: int, font_px: int = LABEL_FONT_PX) -> float:
     return tracking / 1000.0 * font_px
 
 
+def label_tracking(text: str) -> int:
+    """Photoshop tracking for a bottom-band label.
+
+    Every type layer in the template is tracked 800 EXCEPT
+    ``COMPLETE LIMITED SERIES``, which drops to 600 so it fits the width. This
+    used to be approximated with ``len(text) > 16``, which is wrong in both
+    directions: the template's own spelled-out season labels are longer than
+    that ("SEASON FIFTY-NINE" is 17), so roughly a third of all seasons were
+    silently tightened to 600. Anything longer than the template's own long
+    banner still falls back to 600, since narrowing the tracking is the only
+    width relief a custom banner has.
+    """
+    txt = (text or "").upper()
+    if txt == LABEL_BANNER_LONG or len(txt) > len(LABEL_BANNER_LONG):
+        return LABEL_TRACKING_LONG
+    return LABEL_TRACKING
+
+
 # ----- border ----------------------------------------------------------------
-BORDER_WIDTH = 26  # default white frame (matches border_replacerr)
+# The template's BORDER LAYER is an effects-only layer (fill opacity 0) carrying
+# TWO effects: a white Stroke (Style=Inside, Size=25px, Normal, 100%) and a black
+# Inner Glow (Multiply, 70%, technique Softer, source Edge, choke 50, size 45px,
+# range 50%, contour Linear). The glow is what makes the frame read as a window
+# cut into the art rather than a decal laid on top of it; it ships as a pre-baked
+# alpha field (INNER_GLOW_PNG) because a gaussian fit does not reproduce
+# Photoshop's Softer/choke curve. 26 was borrowed from border_replacerr's own
+# config default, which is unrelated to the CL2K stroke — don't restore it.
+BORDER_WIDTH = 25  # PSD FrFX Stroke: Style=Inside, Size=25px
 BORDER_COLOR = "white"
+GLOW_REACH = 48  # glow alpha reaches 0 exactly 48px in from the canvas edge
 
 # ----- output (DAPS rules) ---------------------------------------------------
 OUTPUT_EXT = ".jpg"  # lowercase, per DAPS
@@ -167,6 +267,7 @@ TEXT_UPPERCASE = True  # text is ALWAYS all-caps
 # ----- bundled assets --------------------------------------------------------
 ASSET_DIR = Path(__file__).resolve().parents[2] / "assets" / "cl2k"
 GRADIENT_PNG = ASSET_DIR / "gradient.png"
+INNER_GLOW_PNG = ASSET_DIR / "inner_glow.png"
 
 # ----- guideline overlay (consumed by the frontend preview) ------------------
 # Each entry: (label, orientation, position). "x" = vertical line, "y" = horizontal.

@@ -119,6 +119,14 @@ const ART_SOURCES = [
 // square pickers, so those stay on ART_SOURCES.
 const BACKDROP_SOURCES = [...ART_SOURCES, { key: 'gdrive', label: 'GDrive', icon: 'cloud_sync' }];
 
+// The logo picker gets 'gdrive' too, browsing the sync cache for `- Logo` assets
+// (image_type=logo) rather than finished posters. A gdrive_list folder that sits
+// outside every renamer source_dir — an "Extras"/assets drive — is indexed
+// search_only=1, so it is pickable here without becoming a poster-match
+// candidate. Nothing hits Drive at browse time: sync_gdrive rclones the folder
+// to disk and poster_cache indexes it, so this reads local files.
+const LOGO_SOURCES = [...ART_SOURCES, { key: 'gdrive', label: 'GDrive', icon: 'cloud_sync' }];
+
 // Stable identity for an uploaded image ({ b64, name }) in change-detection
 // signatures. A b64-prefix slice can collide: the first ~24 bytes of a JPEG are
 // a format header that different files from the same exporter share.
@@ -244,6 +252,7 @@ const CL2K_LOGO_BASELINE_MAIN = 1352; // geo.MAIN_LOGO_BOTTOM ("Main Logo Bottom
 const CL2K_LOGO_BASELINE_COLLECTION = 1319; // geo.COLLECTION_LOGO_BOTTOM
 const CL2K_LOGO_WIDTH_MAX = 800; // geo.LOGO_WIDTH_MAX (guide line, not a clamp)
 const CL2K_LOGO_ZONE_TOP = 1100; // geo.LOGO_ZONE_TOP ("Main Logo Height")
+const CL2K_BORDER_WIDTH = 25; // geo.BORDER_WIDTH (PSD stroke, Style=Inside)
 // Slider/clamp ranges — mirror of geometry.py's interactive control ranges (the
 // backend pydantic Field/Form ge/le validate against the same numbers). Keep in
 // sync with backend/util/cl2k/geometry.py.
@@ -2003,7 +2012,9 @@ const RenderPanel = ({
     };
     const onLogoSource = s => {
         setLogoSource(s);
-        if (s !== 'upload') setCustomLogo(null);
+        // 'gdrive' seeds customLogo the same way 'upload' does (the picked asset
+        // is imported as bytes), so neither may clear it on switch-in.
+        if (s !== 'upload' && s !== 'gdrive') setCustomLogo(null);
     };
 
     // Output mode: 'cl2k' = the full CL2K render (gradient + logo + framing +
@@ -2073,6 +2084,11 @@ const RenderPanel = ({
     const [gdrivePosters, setGdrivePosters] = useState(null);
     const [gdriveLoading, setGdriveLoading] = useState(false);
     const [gdriveFor, setGdriveFor] = useState(null);
+    // Same idea for the logo picker, but browsing `- Logo` assets from the sync
+    // cache (image_type=logo) rather than finished posters.
+    const [gdriveLogos, setGdriveLogos] = useState(null);
+    const [gdriveLogosLoading, setGdriveLogosLoading] = useState(false);
+    const [gdriveLogosFor, setGdriveLogosFor] = useState(null);
     // Keyed on the TRIMMED title; an empty title (an ID-only entry) skips the
     // fetch — the render side shows a "needs a title" hint instead of issuing an
     // unfiltered browse of the whole cache (no setState here: lint forbids
@@ -2108,6 +2124,62 @@ const RenderPanel = ({
             cancelled = true;
         };
     }, [backdropSource, gdriveFor, gdriveQuery, toast]);
+
+    // Logo assets from the same sync cache. image_type='logo' is one of the
+    // browse endpoint's allowed values, so this needs no new backend route.
+    useEffect(() => {
+        if (logoSource !== 'gdrive' || !gdriveQuery || gdriveLogosFor === gdriveQuery)
+            return undefined;
+        let cancelled = false;
+        (async () => {
+            setGdriveLogosLoading(true);
+            try {
+                const resp = await postersAPI.browsePosters({
+                    query: gdriveQuery,
+                    image_type: 'logo',
+                    limit: 60,
+                });
+                if (!cancelled) {
+                    setGdriveLogos(resp?.data?.items || []);
+                    setGdriveLogosFor(gdriveQuery);
+                }
+            } catch (err) {
+                if (!cancelled) {
+                    setGdriveLogos([]);
+                    setGdriveLogosFor(gdriveQuery);
+                    toast.error(err.message || 'GDrive logo browse failed');
+                }
+            } finally {
+                if (!cancelled) setGdriveLogosLoading(false);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [logoSource, gdriveLogosFor, gdriveQuery, toast]);
+
+    // Pull the picked asset's bytes off disk and hand them to the render path as
+    // a custom logo — identical to Upload from here on.
+    const importLogoFromSync = useCallback(
+        async asset => {
+            try {
+                const resp = await fetch(postersAPI.getPreviewUrl(asset.folder, asset.file));
+                if (!resp.ok) throw new Error(`Import failed (${resp.status})`);
+                const blob = await resp.blob();
+                const dataUrl = await new Promise((resolve, reject) => {
+                    const r = new FileReader();
+                    r.onload = () => resolve(r.result);
+                    r.onerror = () => reject(new Error('Could not read image'));
+                    r.readAsDataURL(blob);
+                });
+                const url = String(dataUrl);
+                setCustomLogo({ b64: url.split(',').pop(), url, name: asset.file });
+            } catch (err) {
+                toast.error(err.message || 'Import failed');
+            }
+        },
+        [setCustomLogo, toast]
+    );
 
     const bdSel = (
         <SourceSelector value={backdropSource} onChange={onBdSource} sources={BACKDROP_SOURCES} />
@@ -2879,6 +2951,9 @@ const RenderPanel = ({
                             onSelect={setLogo}
                             customLogo={customLogo}
                             onCustomChange={setCustomLogo}
+                            gdriveLogos={gdriveLogos}
+                            gdriveLoading={gdriveLogosLoading}
+                            onGdrivePick={importLogoFromSync}
                             scale={logoScale}
                             onScale={setLogoScale}
                             yOffset={logoYOffset}
@@ -2920,6 +2995,7 @@ const RenderPanel = ({
                                             kind={item.kind}
                                         />
                                     )}
+                                    <FrameOverlay />
                                     {showGuides && <GuideOverlay />}
                                     <PreviewRefreshing active={previewing} />
                                 </>
@@ -3101,6 +3177,9 @@ const RenderPanel = ({
                                 onSelect={setLogo}
                                 customLogo={customLogo}
                                 onCustomChange={setCustomLogo}
+                                gdriveLogos={gdriveLogos}
+                                gdriveLoading={gdriveLogosLoading}
+                                onGdrivePick={importLogoFromSync}
                                 scale={logoScale}
                                 onScale={setLogoScale}
                                 yOffset={logoYOffset}
@@ -3200,6 +3279,9 @@ const RenderPanel = ({
                                     onSelect={setLogo}
                                     customLogo={customLogo}
                                     onCustomChange={setCustomLogo}
+                                    gdriveLogos={gdriveLogos}
+                                    gdriveLoading={gdriveLogosLoading}
+                                    onGdrivePick={importLogoFromSync}
                                     scale={logoScale}
                                     onScale={setLogoScale}
                                     yOffset={logoYOffset}
@@ -4038,7 +4120,7 @@ const FRAMING_HELP = {
 // as the crop box / vertical-position slider move (no server render): shows the
 // cropped region's placement, the stretched-sky fill above, the fade-to-black
 // below, the template gradient, the logo zone and the label band. Mirrors the
-// backend geometry (gradient 780→1375, logo bottom 1352, label 1440/1350 of 1500).
+// backend geometry (gradient 1038→1374, logo bottom 1352, label 1440/1350 of 1500).
 const FitMock = ({ imageUrl, ratio, crop, vPos, label, labelYFrac }) => {
     const c = crop || FULL_CROP;
     if (!ratio || c.w < 0.02 || c.h < 0.02) return null;
@@ -4115,12 +4197,14 @@ const FitMock = ({ imageUrl, ratio, crop, vPos, label, labelYFrac }) => {
                         />
                     </div>
                 )}
-                {/* Template gradient (780→1375 of 1500) */}
+                {/* Template gradient (1038→1374 of 1500). Stops sampled from
+                    backend/assets/cl2k/gradient.png: alpha 0 to y=1036 (69.1%),
+                    0.55 at y=1157 (77.1%), opaque at y=1374 (91.6%). */}
                 <div
                     className="absolute inset-0 pointer-events-none"
                     style={{
                         background:
-                            'linear-gradient(180deg, rgba(0,0,0,0) 52%, rgba(0,0,0,0.55) 76%, #000 91.7%)',
+                            'linear-gradient(180deg, rgba(0,0,0,0) 69.1%, rgba(0,0,0,0.55) 77.1%, #000 91.6%)',
                     }}
                 />
                 {/* Logo zone (y=1100 → bottom-aligned at the y=1352 guide) */}
@@ -4657,6 +4741,26 @@ const GuideOverlay = () => (
     </div>
 );
 
+// The template's BORDER LAYER is the TOPMOST layer, so the frame paints OVER the
+// logo. The preview stacks the other way round — the server render underneath
+// already carries the frame, then the live logo is drawn on top of it — so a logo
+// the slider pushes past x=975 looked like it cleared the border here and then
+// came back clipped once saved. Repainting the frame above the logo restores the
+// template's order; white over white is idempotent, so the frame already baked
+// into the preview image is unaffected.
+const FrameOverlay = () => (
+    <div
+        style={{
+            position: 'absolute',
+            inset: 0,
+            pointerEvents: 'none',
+            border: `${(CL2K_BORDER_WIDTH / CL2K_CANVAS_W) * 100}% solid #fff`,
+            borderTopWidth: `${(CL2K_BORDER_WIDTH / CL2K_CANVAS_H) * 100}%`,
+            borderBottomWidth: `${(CL2K_BORDER_WIDTH / CL2K_CANVAS_H) * 100}%`,
+        }}
+    />
+);
+
 // CL2K-guides toggle pill (the row beside it supplies the "CL2K guides" label).
 const GuidesToggle = ({ show, onChange }) => (
     <Toggle checked={show} onChange={onChange} label="Toggle CL2K guides" />
@@ -4694,8 +4798,14 @@ const LogoSelector = ({
     onInvert,
     touchUpUrl, // processed (un-flipped) logo for the B/W touch-up brush
     onFlipMask,
-    source, // optional per-picker source ('tmdb'|'fanart'|'plex'|'upload')
+    source, // optional per-picker source ('tmdb'|'fanart'|'plex'|'upload'|'gdrive')
     onSource,
+    // 'gdrive' source: `- Logo` assets from the local sync cache. Picking one
+    // imports its bytes as the custom logo (same route as Upload), so the render
+    // path is identical to an uploaded PNG.
+    gdriveLogos,
+    gdriveLoading = false,
+    onGdrivePick,
     emptyText = 'No logos from this source — a text wordmark is used as fallback.',
     // Pure-presentational split for the 3-column studio: 'picker' renders only the
     // source tabs + grid (left column), 'controls' renders only the colour-mode
@@ -4785,7 +4895,11 @@ const LogoSelector = ({
                         <div className="flex items-center gap-1.5">
                             {!variant && colorTabs}
                             {onSource ? (
-                                <SourceSelector value={source} onChange={onSource} />
+                                <SourceSelector
+                                    value={source}
+                                    onChange={onSource}
+                                    sources={LOGO_SOURCES}
+                                />
                             ) : (
                                 <label className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs border border-border text-fg-muted hover:border-primary cursor-pointer">
                                     <span className="material-symbols-outlined text-sm">
@@ -4815,6 +4929,36 @@ const LogoSelector = ({
                                 onChange={onFile}
                             />
                         </label>
+                    ) : onSource && source === 'gdrive' && !customLogo ? (
+                        gdriveLoading || gdriveLogos === null ? (
+                            <div className="text-xs text-fg-subtle py-4">
+                                Searching your synced assets…
+                            </div>
+                        ) : gdriveLogos.length === 0 ? (
+                            <div className="text-xs text-fg-subtle py-2">
+                                No <span className="font-mono">- Logo</span> assets match this
+                                title. They appear here once sync_gdrive has pulled the folder down.
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-72 overflow-auto">
+                                {gdriveLogos.map(g => (
+                                    <button
+                                        key={g.id || `${g.folder}/${g.file}`}
+                                        type="button"
+                                        onClick={() => onGdrivePick?.(g)}
+                                        title={g.file}
+                                        className="relative aspect-video rounded-md overflow-hidden border-2 border-border hover:border-primary bg-black"
+                                    >
+                                        <img
+                                            src={postersAPI.getPreviewUrl(g.folder, g.file)}
+                                            alt={g.file}
+                                            loading="lazy"
+                                            className="absolute inset-0 w-full h-full object-contain"
+                                        />
+                                    </button>
+                                ))}
+                            </div>
+                        )
                     ) : customLogo ? (
                         <div className="flex items-center gap-3 rounded-md border-2 border-primary bg-black p-2">
                             <img
