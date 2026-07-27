@@ -1,22 +1,34 @@
 # -------------------------
 # Stage 1: Builder
 # -------------------------
+# Node comes from the official image rather than NodeSource's apt repo. That
+# repo was a single external dependency in the critical path of every build:
+# on 2026-07-27 deb.nodesource.com began returning 403 for the whole domain,
+# `curl | gpg --dearmor` was handed an HTML error page, and every build in the
+# repo died on "no valid OpenPGP data found" — including PRs that touched
+# nothing. The official image needs no third-party apt repo and no GPG key.
+#
+# The tag tracks the SAME Debian release as the Python base (trixie, glibc
+# 2.41) so the copied binaries link against an identical libc; node:24-slim is
+# still bookworm/glibc 2.36 and would be a silent mismatch.
+FROM node:24-trixie-slim@sha256:ae91dcc111a68c9d2d81ff2a17bda61be126426176fde6fe7d08ab13b7f50573 AS node
+
 FROM python:3.13-slim@sha256:6771159cd4fa5d9bba1258caf0b82e6b73458c694d178ad97c5e925c2d0e1a91 AS builder
 ARG NODE_MAJOR=24
 
-# Install build dependencies (including Node.js 24 and build tools).
-# libcairo2-dev + cairo runtime libs are needed at build time for
-# cairosvg, which rasterizes the holiday border SVGs to PNGs.
+COPY --from=node /usr/local/bin/node /usr/local/bin/node
+COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
+
+# Install build dependencies (Node.js 24 arrives above). libcairo2-dev + cairo
+# runtime libs are needed at build time for cairosvg, which rasterizes the
+# holiday border SVGs to PNGs.
 RUN set -eux; \
     apt-get update && \
     apt-get install -y --no-install-recommends \
         ca-certificates gnupg gcc wget curl unzip p7zip-full tzdata jq git build-essential \
         libcairo2-dev pkg-config && \
-    install -d -m 0755 /etc/apt/keyrings && \
-    curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg && \
-    echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_${NODE_MAJOR}.x nodistro main" > /etc/apt/sources.list.d/nodesource.list && \
-    apt-get update && \
-    apt-get install -y --no-install-recommends nodejs && \
+    ln -sf ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm && \
+    ln -sf ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx && \
     node --version && npm --version && \
     node -e "if (process.versions.node.split('.')[0] !== '${NODE_MAJOR}') process.exit(1)" && \
     rm -rf /var/lib/apt/lists/*
