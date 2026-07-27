@@ -62,23 +62,37 @@ SUFFIXES = (".jpg", ".jpeg")
 WHITE = 250  # a JPEG-compressed pure-white border lands a little under 255
 
 
+SAMPLES = 32  # scan lines per edge
+
+
 def _edge_runs(path: Path) -> Tuple[Tuple[int, int, int, int], Tuple[int, int]]:
-    """Return ((left, right, top, bottom) white-run widths, (w, h))."""
+    """Return ((left, right, top, bottom) white-run widths, (w, h)).
+
+    Each edge is measured as the MINIMUM white run across many evenly spaced
+    scan lines, not from a single mid row/column. A border of width W leaves a
+    run of at least W on every line — artwork touching it can only lengthen the
+    run, never shorten it — so the minimum recovers W while a single sample is
+    hostage to whatever the artwork does at that one position. Sampling one
+    mid-column measured a snowy poster's sky as a 688px "border" and a poster
+    bright at mid-height as a 369px one, and both were then skipped as
+    unrecognisable rather than repaired.
+    """
     with PILImage.open(path) as im:
         a = np.asarray(im.convert("L")).astype(int)
     h, w = a.shape
 
     def run(vals: np.ndarray) -> int:
-        n = 0
-        for v in vals:
-            if v < WHITE:
-                break
-            n += 1
-        return n
+        idx = np.flatnonzero(vals < WHITE)
+        return int(idx[0]) if idx.size else int(vals.size)
 
-    # Sample a mid row/column, away from the rounded-looking corner blend.
-    row, col = a[h // 2, :], a[:, w // 2]
-    return (run(row), run(row[::-1]), run(col), run(col[::-1])), (w, h)
+    # Skip the corners, where two edges' glow/rounding overlap.
+    rows = np.linspace(h * 0.12, h * 0.88, SAMPLES).astype(int)
+    cols = np.linspace(w * 0.12, w * 0.88, SAMPLES).astype(int)
+    left = min(run(a[y, :]) for y in rows)
+    right = min(run(a[y, ::-1]) for y in rows)
+    top = min(run(a[:, x]) for x in cols)
+    bottom = min(run(a[::-1, x]) for x in cols)
+    return (left, right, top, bottom), (w, h)
 
 
 def _stamped(path: Path) -> bool:
@@ -90,6 +104,28 @@ def _stamped(path: Path) -> bool:
 # on a poster whose artwork happens to be near-white right against the frame.
 OLD_FRAME_RANGE = (20, 32)
 RESIDUE_MAX = 3  # a stripped poster keeps at most the 1px line (+ JPEG bleed)
+
+
+# What the pre-fix renderer always produced: bw+1 on the left/top (ImageMagick's
+# inclusive rectangle) and bw on the right/bottom, where bw was 26.
+LEGACY_FRAME = (27, 26, 27, 26)
+
+
+def _resolve_runs(runs: Tuple[int, int, int, int]) -> Tuple[int, int, int, int]:
+    """Correct an edge whose artwork is itself white right up against the frame.
+
+    Some posters are near-white along an entire edge — a snow scene at the top,
+    say — so no pixel measurement can separate artwork from border there and the
+    run reads far too long. When the OTHER three edges match the legacy frame
+    exactly, the fourth is known by construction rather than by measurement, and
+    trusting the pattern repairs the poster instead of skipping it. Only the
+    over-long edge is corrected, and only when every other edge agrees.
+    """
+    for i in range(4):
+        others = [j for j in range(4) if j != i]
+        if all(runs[j] == LEGACY_FRAME[j] for j in others) and runs[i] > LEGACY_FRAME[i]:
+            return tuple(LEGACY_FRAME[i] if j == i else runs[j] for j in range(4))
+    return runs
 
 
 def _mode_for(runs: Tuple[int, int, int, int]) -> Optional[str]:
@@ -107,6 +143,7 @@ def repair(path: Path, root: Path, backup_dir: Optional[Path], apply: bool) -> s
         return f"skip:size={size[0]}x{size[1]}"
     if _stamped(path):
         return "skip:already-repaired"
+    runs = _resolve_runs(runs)
     mode = _mode_for(runs)
     if mode is None:
         return f"skip:unrecognised-frame={runs}"
