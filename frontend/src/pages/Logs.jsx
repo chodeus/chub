@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 import { useLogModules } from '../hooks/useLogModules.js';
 import { useLogFiles } from '../hooks/useLogFiles.js';
 import { useLogContent } from '../hooks/useLogContent.js';

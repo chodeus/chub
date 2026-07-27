@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router';
 import { useSearchCoordinator, SEARCH_STATUS } from '../contexts/SearchCoordinatorContext.jsx';
 import { useTheme } from '../contexts/ThemeContext.jsx';
 import { useUIState } from '../contexts/UIStateContext.jsx';
