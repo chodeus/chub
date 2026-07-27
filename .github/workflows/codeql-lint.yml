@@ -69,13 +69,13 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@7188fc363630916deb702c7fdcf4e481b751f97a # v4
+        uses: github/codeql-action/init@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v4
         with:
           languages: python
           queries: +security-and-quality
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@7188fc363630916deb702c7fdcf4e481b751f97a # v4
+        uses: github/codeql-action/analyze@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v4
         with:
           category: '/language:python'
 
@@ -88,13 +88,13 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@7188fc363630916deb702c7fdcf4e481b751f97a # v4
+        uses: github/codeql-action/init@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v4
         with:
           languages: javascript-typescript
           queries: +security-and-quality
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@7188fc363630916deb702c7fdcf4e481b751f97a # v4
+        uses: github/codeql-action/analyze@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v4
         with:
           category: '/language:javascript-typescript'
 
@@ -158,7 +158,7 @@ jobs:
   # ---- Frontend Lint (reusable) ----
   frontend-lint:
     name: Frontend Lint
-    uses: chodeus/chodeus-ops/.github/workflows/node-ci.yml@af17d8ce986da0b92cbdfc84d2170e199e34a3fb # main
+    uses: chodeus/chodeus-ops/.github/workflows/node-ci.yml@aae195c19ec7069d2e91aca88107220ce807ef7e # main
     with:
       node_version: '24'
       package_json_dir: frontend
@@ -270,7 +270,7 @@ jobs:
         run: echo "BUILD_NUMBER=$(git rev-list --count HEAD)" >> $GITHUB_ENV
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4
+        uses: docker/login-action@abd2ef45e78c5afb21d64d4ca52ee8550d9572c7 # v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -305,7 +305,7 @@ jobs:
   notify-failure:
     needs: [codeql-python, codeql-javascript, backend-lint, backend-smoke, frontend-lint, branch-isolation-guard, docker-push]
     if: failure() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-    uses: chodeus/chodeus-ops/.github/workflows/notify-discord.yml@af17d8ce986da0b92cbdfc84d2170e199e34a3fb # main
+    uses: chodeus/chodeus-ops/.github/workflows/notify-discord.yml@aae195c19ec7069d2e91aca88107220ce807ef7e # main
     with:
       event_type: build
       status: failure
