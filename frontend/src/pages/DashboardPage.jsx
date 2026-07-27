@@ -1,5 +1,5 @@
 import React, { useMemo, useEffect, useRef, useCallback, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { useApiData } from '../hooks/useApiData';
 import { useModuleEvents } from '../hooks/useModuleEvents';
 import { modulesAPI } from '../utils/api/modules';

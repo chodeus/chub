@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { useApiData } from '../../hooks/useApiData.js';
 import { useStreamToken } from '../../hooks/useStreamToken.js';
 import { useToast } from '../../contexts/ToastContext.jsx';

@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { GENERAL_SETTINGS_SCHEMA } from '../../utils/constants/general_settings_schema.js';
 import { FieldRegistry } from '../../components/fields/FieldRegistry.jsx';
 import { PageHeader } from '../../components/ui/PageHeader';

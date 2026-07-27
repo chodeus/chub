@@ -1,45 +1,45 @@
 {
-  "name": "chub-media-manager",
-  "version": "1.0.0",
-  "description": "CHUB \u2014 Chodeus' Media Script Hub (React 19 frontend)",
-  "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
-    "lint": "eslint src --ext .js,.jsx && node scripts/check-field-types.js",
-    "check:schema": "node scripts/check-field-types.js",
-    "format": "prettier --write \"src/**/*.{js,jsx,css,json,md}\"",
-    "stylelint": "stylelint 'src/**/*.css' --fix"
-  },
-  "dependencies": {
-    "@dnd-kit/sortable": "^10.0.0",
-    "@dnd-kit/utilities": "^3.2.2",
-    "@tanstack/react-virtual": "^3.14.8",
-    "cron-validator": "^1.4.0",
-    "cronstrue": "^3.24.0",
-    "prop-types": "15.8.1",
-    "react": "19.2.8",
-    "react-dom": "19.2.8",
-    "react-router-dom": "7.18.1"
-  },
-  "devDependencies": {
-    "@eslint/js": "^9.39.5",
-    "@tailwindcss/vite": "^4.3.3",
-    "@vitejs/plugin-react": "^6.0.4",
-    "eslint": "^9.39.5",
-    "eslint-config-prettier": "^10.1.8",
-    "eslint-plugin-react": "^7.37.5",
-    "eslint-plugin-react-hooks": "^7.1.1",
-    "globals": "^17.8.0",
-    "prettier": "^3.9.6",
-    "stylelint": "^17.14.1",
-    "stylelint-config-standard": "^40.0.0",
-    "stylelint-selector-bem-pattern": "^5.0.0",
-    "tailwindcss": "^4.3.3",
-    "vite": "^8.1.5"
-  },
-  "engines": {
-    "node": ">=24.18.0"
-  }
+    "name": "chub-media-manager",
+    "version": "1.0.0",
+    "description": "CHUB \u2014 Chodeus' Media Script Hub (React 19 frontend)",
+    "type": "module",
+    "scripts": {
+        "dev": "vite",
+        "build": "vite build",
+        "preview": "vite preview",
+        "lint": "eslint src --ext .js,.jsx && node scripts/check-field-types.js",
+        "check:schema": "node scripts/check-field-types.js",
+        "format": "prettier --write \"src/**/*.{js,jsx,css,json,md}\"",
+        "stylelint": "stylelint 'src/**/*.css' --fix"
+    },
+    "dependencies": {
+        "@dnd-kit/sortable": "^10.0.0",
+        "@dnd-kit/utilities": "^3.2.2",
+        "@tanstack/react-virtual": "^3.14.8",
+        "cron-validator": "^1.4.0",
+        "cronstrue": "^3.24.0",
+        "prop-types": "15.8.1",
+        "react": "19.2.8",
+        "react-dom": "19.2.8",
+        "react-router": "8.3.0"
+    },
+    "devDependencies": {
+        "@eslint/js": "^9.39.5",
+        "@tailwindcss/vite": "^4.3.3",
+        "@vitejs/plugin-react": "^6.0.4",
+        "eslint": "^9.39.5",
+        "eslint-config-prettier": "^10.1.8",
+        "eslint-plugin-react": "^7.37.5",
+        "eslint-plugin-react-hooks": "^7.1.1",
+        "globals": "^17.8.0",
+        "prettier": "^3.9.6",
+        "stylelint": "^17.14.1",
+        "stylelint-config-standard": "^40.0.0",
+        "stylelint-selector-bem-pattern": "^5.0.0",
+        "tailwindcss": "^4.3.3",
+        "vite": "^8.1.5"
+    },
+    "engines": {
+        "node": ">=24.18.0"
+    }
 }
