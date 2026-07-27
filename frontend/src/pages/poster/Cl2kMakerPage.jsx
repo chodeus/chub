@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router';
 
 import { cl2kMakerAPI } from '../../utils/api/cl2k_maker.js';
 import { configAPI } from '../../utils/api/config.js';

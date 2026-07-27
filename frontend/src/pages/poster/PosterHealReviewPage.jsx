@@ -8,7 +8,7 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { useToast } from '../../contexts/ToastContext';
 import { posterSelfHealAPI } from '../../utils/api/posterSelfHeal';

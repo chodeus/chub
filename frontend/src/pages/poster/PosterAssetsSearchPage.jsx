@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useCallback } from 'react';
 import PropTypes from 'prop-types';
-import { useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router';
 import { useApiData, useApiMutation } from '../../hooks/useApiData.js';
 import { useStreamToken } from '../../hooks/useStreamToken.js';
 import { useDebounce } from '../../hooks/useDebounce.js';
