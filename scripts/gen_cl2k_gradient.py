@@ -44,6 +44,18 @@ def main() -> None:
     w, h = geo.CANVAS_W, geo.CANVAS_H
     if alpha.shape != (h, w):
         raise SystemExit(f"{src} is {alpha.shape[1]}x{alpha.shape[0]}, expected {w}x{h}")
+    # A composite flattened to RGB makes convert("RGBA") synthesise alpha 255
+    # everywhere. Both guards above still pass, and this would then overwrite a
+    # known-good committed asset with a fully opaque PNG that the renderer
+    # composites as a solid black field over the whole poster. The template's
+    # gradient is transparent through the artwork, so demand that.
+    probe = alpha[geo.GLOW_REACH : geo.GRADIENT_START_Y - 1, w // 2]
+    if probe.max() > 0:
+        raise SystemExit(
+            f"{src}: alpha is non-zero above y={geo.GRADIENT_START_Y} "
+            "(max %.0f) — that is not the gradient's alpha channel; refusing to "
+            "overwrite %s" % (probe.max(), geo.GRADIENT_PNG.name)
+        )
 
     # Stay clear of the glow band on every side; average out the fill's dither.
     pad = geo.GLOW_REACH
