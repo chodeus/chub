@@ -110,6 +110,23 @@ def _invert_to_clear(logo: Image.Image) -> Image.Image:
     return Image.fromarray((out * 255.0).round().astype("uint8"), "RGBA")
 
 
+def _layer_name(text: str, fallback: str) -> str:
+    """A layer name psd-tools can actually write.
+
+    The legacy Pascal layer name is encoded MacRoman, so a label containing
+    anything outside that codec (CJK, Cyrillic, a stray smart quote) raised
+    UnicodeEncodeError inside ``psd.save()`` and 500'd the whole export — while
+    the render path handled the identical input fine. The template names its
+    label layers with stable ASCII identifiers ('SEASON 3', 'SPECIALS') that are
+    independent of the glyphs drawn, so falling back to one loses nothing.
+    """
+    try:
+        text.encode("mac_roman")
+    except (UnicodeEncodeError, LookupError):
+        return fallback
+    return text
+
+
 def _font(bold: bool, px: int) -> ImageFont.FreeTypeFont:
     path = geo.resolve_font(bold=bold)
     try:
@@ -130,16 +147,18 @@ def _centered(
     """
     box = draw.textbbox((0, 0), text, font=font)
     h = box[3] - box[1]
+    # textbbox measures the INK relative to the draw origin, and PIL's origin is
+    # the ascender line, not the ink top. Subtracting box[1] is what actually
+    # centres the ink on center_y — without it the label sat ~6px low, below both
+    # the template's band and the flattened render of the same poster.
+    y = center_y - h / 2 - box[1]
     if kerning <= 0:
         w = box[2] - box[0]
-        draw.text(
-            (geo.CENTER_X - w / 2, center_y - h / 2), text, font=font, fill="white"
-        )
+        draw.text((geo.CENTER_X - w / 2 - box[0], y), text, font=font, fill="white")
         return
     widths = [draw.textlength(ch, font=font) for ch in text]
     total = sum(widths) + kerning * max(0, len(text) - 1)
     x = geo.CENTER_X - total / 2
-    y = center_y - h / 2
     for ch, cw in zip(text, widths):
         draw.text((x, y), ch, font=font, fill="white")
         x += cw + kerning
@@ -153,7 +172,7 @@ def export_psd(
     title: str = "",
     season_text: str = "",
     band_label: str = "",
-    logo_max_width: int = geo.LOGO_WIDTH_RECOMMENDED,
+    logo_max_width: Optional[int] = None,
     logo_scale: float = 1.0,
     logo_y_offset: int = 0,
     whiten: bool = True,
@@ -173,24 +192,44 @@ def export_psd(
     ).convert("RGBA")
     gradient = Image.open(geo.GRADIENT_PNG).convert("RGBA")
 
+    # No clear logo but a title? Typeset the wordmark the flattened render falls
+    # back to, instead of exporting an empty LOGO layer. Reuses the renderer's own
+    # generator (lazy import — this module is otherwise Pillow-only) so the shape
+    # of the wordmark can't drift. NOTE the parity is for DEFAULTS only: render_cl2k
+    # can pass a custom title_font and text_logo_stroke, which export_psd has no
+    # parameters for, so a request setting either gets a .psd wordmark that differs
+    # from its flattened poster. The wordmark is already CL2K white-on-transparent,
+    # so it skips the whiten/invert passes a sourced logo needs.
+    wordmark = False
+    if not logo_bytes and title:
+        from backend.util.cl2k.renderer import generate_text_logo
+
+        logo_bytes = generate_text_logo(title) or None
+        wordmark = logo_bytes is not None
+
     logo_layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     if logo_bytes:
         lg = Image.open(io.BytesIO(logo_bytes)).convert("RGBA")
         bbox = lg.getbbox()
         if bbox:
             lg = lg.crop(bbox)
-        if flat_white:
+        if wordmark:
+            pass
+        elif flat_white:
             lg = _flat_white(lg)
         elif whiten:
             lg = _whiten(lg, flat_fallback=not invert)
-        if invert and not flat_white:
+        if invert and not flat_white and not wordmark:
             lg = _invert_to_clear(lg)
-        tw = min(logo_max_width, geo.LOGO_WIDTH_MAX)
-        th = round(lg.height * tw / lg.width)
-        max_h = baseline - geo.LOGO_ZONE_TOP
-        if th > max_h:
-            th = max_h
-            tw = round(lg.width * th / lg.height)
+        if logo_max_width is None:
+            tw, th = geo.auto_logo_size(lg.width, lg.height, baseline)
+        else:
+            tw = min(logo_max_width, geo.LOGO_WIDTH_MAX)
+            th = round(lg.height * tw / lg.width)
+            max_h = baseline - geo.LOGO_ZONE_TOP
+            if th > max_h:
+                th = max_h
+                tw = round(lg.width * th / lg.height)
         # Scale the guide-fit box as a whole, canvas-clamped — mirrors
         # renderer._place_logo so the LOGO layer matches the rendered poster.
         scale = max(0.25, min(float(logo_scale or 1.0), 3.0))
@@ -222,13 +261,20 @@ def export_psd(
     elif kind == "season" and season_text:
         label_text = season_text.upper()
 
+    # Bounds are inclusive in PIL too, so the far edge is w-1 / h-1 and the band
+    # thickness is bw-1 — passing w/bw here painted 26px bands on the bottom and
+    # right but 27px on the top and left. The glow is composited under the stroke
+    # so the exported BORDER LAYER matches the flattened render pixel for pixel.
     border = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    if geo.INNER_GLOW_PNG.exists():
+        with Image.open(geo.INNER_GLOW_PNG) as glow:
+            border.alpha_composite(glow.convert("RGBA"))
     bd = ImageDraw.Draw(border)
     bw = geo.BORDER_WIDTH
-    bd.rectangle([0, 0, w, bw], fill="white")
-    bd.rectangle([0, h - bw, w, h], fill="white")
-    bd.rectangle([0, 0, bw, h], fill="white")
-    bd.rectangle([w - bw, 0, w, h], fill="white")
+    bd.rectangle([0, 0, w - 1, bw - 1], fill="white")
+    bd.rectangle([0, h - bw, w - 1, h - 1], fill="white")
+    bd.rectangle([0, 0, bw - 1, h - 1], fill="white")
+    bd.rectangle([w - bw, 0, w - 1, h - 1], fill="white")
 
     layers = [("POSTER", poster), ("GRADIENT", gradient), ("LOGO", logo_layer)]
     if label_text:
@@ -238,9 +284,12 @@ def export_psd(
             label_text,
             label_y,
             _font(False, geo.LABEL_FONT_PX),
-            kerning=geo.tracking_to_kerning(geo.LABEL_TRACKING),
+            # Same rule as the renderer, so the .psd label is the same width as
+            # the flattened poster's; a flat LABEL_TRACKING here rendered
+            # COMPLETE LIMITED SERIES ~140px wider, running under the border.
+            kerning=geo.tracking_to_kerning(geo.label_tracking(label_text)),
         )
-        layers.append((label_text, text_layer))
+        layers.append((_layer_name(label_text, "LABEL"), text_layer))
     layers.append(("BORDER LAYER", border))
 
     # RGBA document so each layer's transparency lands on its own (native) alpha
