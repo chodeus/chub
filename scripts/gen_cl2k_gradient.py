@@ -49,7 +49,11 @@ def main() -> None:
     # known-good committed asset with a fully opaque PNG that the renderer
     # composites as a solid black field over the whole poster. The template's
     # gradient is transparent through the artwork, so demand that.
-    probe = alpha[geo.GLOW_REACH : geo.GRADIENT_START_Y - 1, w // 2]
+    # Slice end is exclusive: GRADIENT_START_Y is the FIRST row with alpha, so
+    # this covers every row that must be transparent, up to and including
+    # GRADIENT_START_Y - 1. Stopping at GRADIENT_START_Y - 1 left that last row
+    # unchecked.
+    probe = alpha[geo.GLOW_REACH : geo.GRADIENT_START_Y, w // 2]
     if probe.max() > 0:
         raise SystemExit(
             f"{src}: alpha is non-zero above y={geo.GRADIENT_START_Y} "

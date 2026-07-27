@@ -191,13 +191,21 @@ def main() -> None:
     if not args.target.exists():
         raise SystemExit(f"no such path: {args.target}")
 
+    # The exclusion root is computed unconditionally, and covers the whole
+    # backup CONTAINER rather than one dated run. Tying it to backup_dir meant a
+    # dry run or --no-backup passed None and enumerated an existing backup tree
+    # inside the target — so `--apply --no-backup` would rewrite the very copies
+    # an earlier run saved. Excluding only today's dated directory would leave
+    # yesterday's equally exposed.
+    base = args.target if args.target.is_dir() else args.target.parent
+    backup_root = args.backup_dir or base.parent / ".cl2k-repair-backups"
+
     backup_dir: Optional[Path] = None
     if args.apply and not args.no_backup:
         stamp = datetime.date.today().strftime("%Y%m%d")
-        base = args.target if args.target.is_dir() else args.target.parent
-        backup_dir = args.backup_dir or base.parent / f".cl2k-repair-backups/{stamp}"
+        backup_dir = args.backup_dir or backup_root / stamp
 
-    targets = _targets(args.target, backup_dir)
+    targets = _targets(args.target, backup_root)
     if args.limit is not None:
         # `if args.limit:` treated 0 as "no limit" and quietly processed the whole
         # tree, and a negative value sliced off all but the last poster. With
