@@ -1071,14 +1071,6 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
     // Custom uploaded backdrop (the 'Upload' backdrop source): { b64, name, url }.
     // Mutually exclusive with a picker-chosen `backdrop` path.
     const [customBackdrop, setCustomBackdrop] = useState(null);
-    const setBackdropExclusive = useCallback(p => {
-        setBackdrop(p);
-        if (p) setCustomBackdrop(null);
-    }, []);
-    const setCustomBackdropExclusive = useCallback(c => {
-        setCustomBackdrop(c);
-        if (c) setBackdrop(null);
-    }, []);
 
     // Crop framing. "cover" scales up + crops to fill (focal point below); "fit"
     // scales the backdrop down to the canvas width and black-pads the bottom so
@@ -1094,6 +1086,39 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
     const [zoom, setZoom] = useState(saved.zoom ?? 1);
     const [focusX, setFocusX] = useState(saved.focusX ?? 0.5);
     const [focusY, setFocusY] = useState(saved.focusY ?? 0.5);
+
+    // Framing is tuned for ONE image: a crop box, zoom, focal point and vertical
+    // pan chosen for backdrop A are meaningless on backdrop B, and silently
+    // carrying them over produced posters framed by the previous picture. Picking
+    // a new TITLE already resets everything (Builder remounts on selectionKey),
+    // so this covers switching the backdrop WITHIN a title. Done in the setters
+    // rather than an effect — the repo's react-hooks/set-state-in-effect rule
+    // forbids resetting state from a useEffect.
+    const resetFraming = useCallback(() => {
+        setCrop(null);
+        setVPos(0);
+        setZoom(1);
+        setFocusX(0.5);
+        setFocusY(0.5);
+    }, []);
+    // fitMode is deliberately NOT reset — it's a per-user way of working
+    // (Fill vs Fit), not a property of the chosen image.
+    const setBackdropExclusive = useCallback(
+        p => {
+            setBackdrop(p);
+            if (p) setCustomBackdrop(null);
+            resetFraming();
+        },
+        [resetFraming]
+    );
+    const setCustomBackdropExclusive = useCallback(
+        c => {
+            setCustomBackdrop(c);
+            if (c) setBackdrop(null);
+            resetFraming();
+        },
+        [resetFraming]
+    );
 
     // Logo size override (1 = the strict CL2K guide box; >1 enlarges the whole
     // guide-fit box past the width guides, capped only by the canvas).
