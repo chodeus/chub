@@ -6637,7 +6637,12 @@ const savedToast = (toast, data, verb = 'Saved') => {
     }
     const local = data?.saved_local;
     const uploaded = data?.uploaded;
-    if (local && uploaded) {
+    // upload_pending: the poster is on disk and the Drive copy runs in the
+    // background (rclone takes tens of seconds — longer than the request
+    // timeout), so this is "not yet", not a failure.
+    if (data?.upload_pending) {
+        toast.success(`${verb}: ${file} — uploading to Drive…`);
+    } else if (local && uploaded) {
         toast.success(`${verb}: ${file} (local + Drive)`);
     } else if (uploaded && !local) {
         toast.success(`${verb} to Drive: ${file}`);
