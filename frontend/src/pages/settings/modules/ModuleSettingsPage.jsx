@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router';
 import { configAPI } from '../../../utils/api/config.js';
 import { modulesAPI } from '../../../utils/api/modules.js';
 import { SETTINGS_MODULES } from '../../../utils/constants/settings_schema.js';
