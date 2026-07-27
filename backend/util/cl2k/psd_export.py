@@ -192,10 +192,13 @@ def export_psd(
     ).convert("RGBA")
     gradient = Image.open(geo.GRADIENT_PNG).convert("RGBA")
 
-    # No clear logo but a title? Typeset the same wordmark the flattened render
-    # falls back to, instead of exporting an empty LOGO layer. Reuses the
-    # renderer's own generator (lazy import — this module is otherwise Pillow-only)
-    # so the two can't drift. The wordmark is already CL2K white-on-transparent,
+    # No clear logo but a title? Typeset the wordmark the flattened render falls
+    # back to, instead of exporting an empty LOGO layer. Reuses the renderer's own
+    # generator (lazy import — this module is otherwise Pillow-only) so the shape
+    # of the wordmark can't drift. NOTE the parity is for DEFAULTS only: render_cl2k
+    # can pass a custom title_font and text_logo_stroke, which export_psd has no
+    # parameters for, so a request setting either gets a .psd wordmark that differs
+    # from its flattened poster. The wordmark is already CL2K white-on-transparent,
     # so it skips the whiten/invert passes a sourced logo needs.
     wordmark = False
     if not logo_bytes and title:

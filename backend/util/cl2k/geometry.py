@@ -228,12 +228,13 @@ def label_tracking(text: str) -> int:
     used to be approximated with ``len(text) > 16``, which is wrong in both
     directions: the template's own spelled-out season labels are longer than
     that ("SEASON FIFTY-NINE" is 17), so roughly a third of all seasons were
-    silently tightened to 600. Anything longer than the template's own long
-    banner still falls back to 600, since narrowing the tracking is the only
-    width relief a custom banner has.
+    silently tightened to 600. Anything AS LONG AS the template's own long
+    banner falls back to 600 — a different 23-character label is at least as
+    wide as COMPLETE LIMITED SERIES and needs the same relief — so this is a
+    length test, not a name match.
     """
     txt = (text or "").upper()
-    if txt == LABEL_BANNER_LONG or len(txt) > len(LABEL_BANNER_LONG):
+    if len(txt) >= len(LABEL_BANNER_LONG):
         return LABEL_TRACKING_LONG
     return LABEL_TRACKING
 

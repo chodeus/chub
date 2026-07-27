@@ -2089,6 +2089,7 @@ const RenderPanel = ({
     const [gdriveLogos, setGdriveLogos] = useState(null);
     const [gdriveLogosLoading, setGdriveLogosLoading] = useState(false);
     const [gdriveLogosFor, setGdriveLogosFor] = useState(null);
+    const [importingLogo, setImportingLogo] = useState(false);
     // Keyed on the TRIMMED title; an empty title (an ID-only entry) skips the
     // fetch — the render side shows a "needs a title" hint instead of issuing an
     // unfiltered browse of the whole cache (no setState here: lint forbids
@@ -2162,6 +2163,7 @@ const RenderPanel = ({
     // a custom logo — identical to Upload from here on.
     const importLogoFromSync = useCallback(
         async asset => {
+            setImportingLogo(true);
             try {
                 const resp = await fetch(postersAPI.getPreviewUrl(asset.folder, asset.file));
                 if (!resp.ok) throw new Error(`Import failed (${resp.status})`);
@@ -2176,6 +2178,8 @@ const RenderPanel = ({
                 setCustomLogo({ b64: url.split(',').pop(), url, name: asset.file });
             } catch (err) {
                 toast.error(err.message || 'Import failed');
+            } finally {
+                setImportingLogo(false);
             }
         },
         [setCustomLogo, toast]
@@ -2954,6 +2958,7 @@ const RenderPanel = ({
                             gdriveLogos={gdriveLogos}
                             gdriveLoading={gdriveLogosLoading}
                             onGdrivePick={importLogoFromSync}
+                            gdriveImporting={importingLogo}
                             scale={logoScale}
                             onScale={setLogoScale}
                             yOffset={logoYOffset}
@@ -3177,9 +3182,6 @@ const RenderPanel = ({
                                 onSelect={setLogo}
                                 customLogo={customLogo}
                                 onCustomChange={setCustomLogo}
-                                gdriveLogos={gdriveLogos}
-                                gdriveLoading={gdriveLogosLoading}
-                                onGdrivePick={importLogoFromSync}
                                 scale={logoScale}
                                 onScale={setLogoScale}
                                 yOffset={logoYOffset}
@@ -3279,9 +3281,6 @@ const RenderPanel = ({
                                     onSelect={setLogo}
                                     customLogo={customLogo}
                                     onCustomChange={setCustomLogo}
-                                    gdriveLogos={gdriveLogos}
-                                    gdriveLoading={gdriveLogosLoading}
-                                    onGdrivePick={importLogoFromSync}
                                     scale={logoScale}
                                     onScale={setLogoScale}
                                     yOffset={logoYOffset}
@@ -4749,16 +4748,26 @@ const GuideOverlay = () => (
 // template's order; white over white is idempotent, so the frame already baked
 // into the preview image is unaffected.
 const FrameOverlay = () => (
-    <div
-        style={{
-            position: 'absolute',
-            inset: 0,
-            pointerEvents: 'none',
-            border: `${(CL2K_BORDER_WIDTH / CL2K_CANVAS_W) * 100}% solid #fff`,
-            borderTopWidth: `${(CL2K_BORDER_WIDTH / CL2K_CANVAS_H) * 100}%`,
-            borderBottomWidth: `${(CL2K_BORDER_WIDTH / CL2K_CANVAS_H) * 100}%`,
-        }}
-    />
+    <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+        {/* Four filled edges rather than a CSS border: border-width takes a
+            <length> only, never a percentage, so a percentage border is dropped
+            outright and the overlay renders nothing. width/height/inset DO take
+            percentages, which is what keeps the frame proportional to whatever
+            size the preview is displayed at. */}
+        {[
+            { top: 0, left: 0, right: 0, height: `${(CL2K_BORDER_WIDTH / CL2K_CANVAS_H) * 100}%` },
+            {
+                bottom: 0,
+                left: 0,
+                right: 0,
+                height: `${(CL2K_BORDER_WIDTH / CL2K_CANVAS_H) * 100}%`,
+            },
+            { top: 0, bottom: 0, left: 0, width: `${(CL2K_BORDER_WIDTH / CL2K_CANVAS_W) * 100}%` },
+            { top: 0, bottom: 0, right: 0, width: `${(CL2K_BORDER_WIDTH / CL2K_CANVAS_W) * 100}%` },
+        ].map((edge, i) => (
+            <div key={i} style={{ position: 'absolute', background: '#fff', ...edge }} />
+        ))}
+    </div>
 );
 
 // CL2K-guides toggle pill (the row beside it supplies the "CL2K guides" label).
@@ -4803,9 +4812,12 @@ const LogoSelector = ({
     // 'gdrive' source: `- Logo` assets from the local sync cache. Picking one
     // imports its bytes as the custom logo (same route as Upload), so the render
     // path is identical to an uploaded PNG.
-    gdriveLogos,
+    // Default to null, not undefined: an unwired call site must land in the
+    // loading state rather than reach `.length` on undefined.
+    gdriveLogos = null,
     gdriveLoading = false,
     onGdrivePick,
+    gdriveImporting = false,
     emptyText = 'No logos from this source — a text wordmark is used as fallback.',
     // Pure-presentational split for the 3-column studio: 'picker' renders only the
     // source tabs + grid (left column), 'controls' renders only the colour-mode
@@ -4898,7 +4910,10 @@ const LogoSelector = ({
                                 <SourceSelector
                                     value={source}
                                     onChange={onSource}
-                                    sources={LOGO_SOURCES}
+                                    // Only offer the GDrive tab where a picker
+                                    // handler was actually wired — LogoAssetPanel
+                                    // reuses this component without one.
+                                    sources={onGdrivePick ? LOGO_SOURCES : ART_SOURCES}
                                 />
                             ) : (
                                 <label className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs border border-border text-fg-muted hover:border-primary cursor-pointer">
@@ -4930,7 +4945,7 @@ const LogoSelector = ({
                             />
                         </label>
                     ) : onSource && source === 'gdrive' && !customLogo ? (
-                        gdriveLoading || gdriveLogos === null ? (
+                        gdriveLoading || !gdriveLogos ? (
                             <div className="text-xs text-fg-subtle py-4">
                                 Searching your synced assets…
                             </div>
@@ -4945,9 +4960,10 @@ const LogoSelector = ({
                                     <button
                                         key={g.id || `${g.folder}/${g.file}`}
                                         type="button"
+                                        disabled={gdriveImporting}
                                         onClick={() => onGdrivePick?.(g)}
                                         title={g.file}
-                                        className="relative aspect-video rounded-md overflow-hidden border-2 border-border hover:border-primary bg-black"
+                                        className="relative aspect-video rounded-md overflow-hidden border-2 border-border hover:border-primary disabled:opacity-50 bg-black"
                                     >
                                         <img
                                             src={postersAPI.getPreviewUrl(g.folder, g.file)}

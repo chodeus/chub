@@ -1092,38 +1092,28 @@ def render_cl2k(
                             flat_white=flat_white,
                         )
 
-        label_kerning = geo.tracking_to_kerning(geo.LABEL_TRACKING)
-        if band_label:
-            # Explicit banner (e.g. COMPLETE LIMITED SERIES), which the template
-            # tracks tighter than every other label so it fits the width.
-            txt = band_label.upper()
-            tracking = geo.label_tracking(txt)
+        # Every branch derives its tracking from the label itself, exactly as the
+        # PSD exporter does. Pinning collection/season to a flat LABEL_TRACKING
+        # would agree today but diverge the moment a season string reaches the
+        # long-banner length — 800 here, 600 in the .psd, for the same poster.
+        def _label(txt: str, center_y: int) -> None:
             _draw_text(
                 base,
                 txt,
-                geo.SEASON_TEXT_Y,
+                center_y,
                 label_font,
                 geo.LABEL_FONT_PX,
-                kerning=geo.tracking_to_kerning(tracking),
+                kerning=geo.tracking_to_kerning(geo.label_tracking(txt)),
             )
+
+        if band_label:
+            # Explicit banner (e.g. COMPLETE LIMITED SERIES), which the template
+            # tracks tighter than every other label so it fits the width.
+            _label(band_label.upper(), geo.SEASON_TEXT_Y)
         elif kind == "collection":
-            _draw_text(
-                base,
-                "COLLECTION",
-                geo.COLLECTION_LABEL_Y,
-                label_font,
-                geo.LABEL_FONT_PX,
-                kerning=label_kerning,
-            )
+            _label("COLLECTION", geo.COLLECTION_LABEL_Y)
         elif kind == "season" and season_text:
-            _draw_text(
-                base,
-                season_text.upper(),
-                geo.SEASON_TEXT_Y,
-                label_font,
-                geo.LABEL_FONT_PX,
-                kerning=label_kerning,
-            )
+            _label(season_text.upper(), geo.SEASON_TEXT_Y)
 
         _draw_border(base)
 
