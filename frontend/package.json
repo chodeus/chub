@@ -1,7 +1,7 @@
 {
     "name": "chub-media-manager",
     "version": "1.0.0",
-    "description": "CHUB \u2014 Chodeus' Media Script Hub (React 19 frontend)",
+    "description": "CHUB — Chodeus' Media Script Hub (React 19 frontend)",
     "type": "module",
     "scripts": {
         "dev": "vite",
@@ -35,7 +35,6 @@
         "prettier": "^3.9.6",
         "stylelint": "^17.14.1",
         "stylelint-config-standard": "^40.0.0",
-        "stylelint-selector-bem-pattern": "^5.0.0",
         "tailwindcss": "^4.3.3",
         "vite": "^8.1.5"
     },

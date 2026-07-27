@@ -1,6 +1,5 @@
 export default {
   extends: ['stylelint-config-standard'],
-  plugins: ['stylelint-selector-bem-pattern'],
   overrides: [
     {
       // Tailwind v4 entry: allow its at-rules, nested @utility bodies, and
