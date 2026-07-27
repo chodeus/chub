@@ -3088,27 +3088,9 @@ const RenderPanel = ({
                                     setFitMode={setFitMode}
                                     crop={crop}
                                     setCrop={setCrop}
-                                    vPos={vPos}
-                                    setVPos={setVPos}
-                                    zoom={zoom}
-                                    setZoom={setZoom}
                                     focusX={focusX}
                                     focusY={focusY}
                                     onChange={onFocusChange}
-                                    mockLabel={
-                                        isSeasonPoster
-                                            ? bandLabel ||
-                                              (Number(seasonNumber) === 0
-                                                  ? 'Specials'
-                                                  : `Season ${seasonNumber}`)
-                                            : bandLabel ||
-                                              (item.kind === 'collection' ? 'COLLECTION' : '')
-                                    }
-                                    labelYFrac={
-                                        !isSeasonPoster && !bandLabel && item.kind === 'collection'
-                                            ? 1350 / 1500
-                                            : 1440 / 1500
-                                    }
                                 />
                             )}
                             <div>
@@ -4115,154 +4097,17 @@ const FRAMING_HELP = {
     extend: 'Drag a box around the subjects (use Zoom to enlarge them): the empty bottom is filled by AI on Generate. The mock shows the free edge-extend placeholder until then.',
 };
 
-// Live miniature of the final 2:3 canvas for fit/extend framing. Updates instantly
-// as the crop box / vertical-position slider move (no server render): shows the
-// cropped region's placement, the stretched-sky fill above, the fade-to-black
-// below, the template gradient, the logo zone and the label band. Mirrors the
-// backend geometry (gradient 1038→1374, logo bottom 1352, label 1440/1350 of 1500).
-const FitMock = ({ imageUrl, ratio, crop, vPos, label, labelYFrac }) => {
-    const c = crop || FULL_CROP;
-    if (!ratio || c.w < 0.02 || c.h < 0.02) return null;
-    const photoH = Math.min(1, (2 / 3) * ((c.h * ratio) / c.w)); // frac of canvas height
-    const top = clamp01(vPos) * Math.max(0, 1 - photoH);
-    const bottomFillH = Math.min(1 - top - photoH, 0.18);
-    // Shared horizontal mapping: scale the full image so the crop's x-range fills
-    // the mock width.
-    const imgW = `${100 / c.w}%`;
-    const imgLeft = `-${(c.x / c.w) * 100}%`;
-    const skySliver = 0.03 * c.h; // thin top-of-crop sliver, stretched (as backend does)
-    return (
-        <div className="shrink-0">
-            <div
-                className="relative overflow-hidden rounded border border-border bg-black"
-                style={{ width: 150, height: 225 }}
-            >
-                {top > 0.002 && (
-                    <div
-                        className="absolute left-0 w-full overflow-hidden"
-                        style={{ top: 0, height: `${top * 100}%` }}
-                    >
-                        <img
-                            src={imageUrl}
-                            alt=""
-                            className="absolute"
-                            style={{
-                                width: imgW,
-                                left: imgLeft,
-                                height: `${100 / Math.max(skySliver, 0.005)}%`,
-                                top: `-${(c.y / Math.max(skySliver, 0.005)) * 100}%`,
-                                filter: 'blur(6px)',
-                            }}
-                        />
-                    </div>
-                )}
-                <div
-                    className="absolute left-0 w-full overflow-hidden"
-                    style={{ top: `${top * 100}%`, height: `${photoH * 100}%` }}
-                >
-                    <img
-                        src={imageUrl}
-                        alt=""
-                        className="absolute max-w-none"
-                        style={{
-                            width: imgW,
-                            left: imgLeft,
-                            top: `-${(c.y / c.h) * 100}%`,
-                        }}
-                    />
-                </div>
-                {bottomFillH > 0.002 && (
-                    <div
-                        className="absolute left-0 w-full overflow-hidden"
-                        style={{ top: `${(top + photoH) * 100}%`, height: `${bottomFillH * 100}%` }}
-                    >
-                        <img
-                            src={imageUrl}
-                            alt=""
-                            className="absolute"
-                            style={{
-                                width: imgW,
-                                left: imgLeft,
-                                height: `${100 / Math.max(skySliver, 0.005)}%`,
-                                top: `-${((c.y + c.h - skySliver) / Math.max(skySliver, 0.005)) * 100}%`,
-                                filter: 'blur(6px)',
-                            }}
-                        />
-                        <div
-                            className="absolute inset-0"
-                            style={{
-                                background: 'linear-gradient(180deg, rgba(0,0,0,0.3), #000 90%)',
-                            }}
-                        />
-                    </div>
-                )}
-                {/* Template gradient (1038→1374 of 1500). Stops sampled from
-                    backend/assets/cl2k/gradient.png: alpha 0 to y=1036 (69.1%),
-                    0.55 at y=1157 (77.1%), opaque at y=1374 (91.6%). */}
-                <div
-                    className="absolute inset-0 pointer-events-none"
-                    style={{
-                        background:
-                            'linear-gradient(180deg, rgba(0,0,0,0) 69.1%, rgba(0,0,0,0.55) 77.1%, #000 91.6%)',
-                    }}
-                />
-                {/* Logo zone (y=1100 → bottom-aligned at the y=1352 guide) */}
-                <div
-                    className="absolute pointer-events-none flex items-end justify-center"
-                    style={{
-                        left: '20%',
-                        width: '60%',
-                        top: '73.3%',
-                        height: '16.8%',
-                        border: '1px dashed rgba(255,255,255,0.35)',
-                        borderRadius: 3,
-                    }}
-                >
-                    <span style={{ fontSize: 8, color: 'rgba(255,255,255,0.5)', lineHeight: 1.6 }}>
-                        LOGO
-                    </span>
-                </div>
-                {label ? (
-                    <div
-                        className="absolute w-full text-center pointer-events-none"
-                        style={{
-                            top: `${labelYFrac * 100}%`,
-                            transform: 'translateY(-50%)',
-                            color: '#fff',
-                            fontSize: 7,
-                            letterSpacing: 2,
-                            fontFamily: 'Arial, sans-serif',
-                        }}
-                    >
-                        {label.toUpperCase()}
-                    </div>
-                ) : null}
-            </div>
-            <p className="text-xs text-fg-subtle mt-1 text-center" style={{ width: 150 }}>
-                Live mock (approx.)
-            </p>
-        </div>
-    );
-};
-
 const CropFramer = ({
     imageUrl,
     fitMode,
     setFitMode,
     crop,
     setCrop,
-    vPos,
-    // setVPos / setZoom are still passed by the parent (the Zoom + Vertical
-    // sliders now live in the right-column FRAMING group), but CropFramer only
-    // reads vPos/zoom for its canvas math — the slider UI moved out.
-    zoom,
     focusX,
     focusY,
     onChange,
-    mockLabel = '',
-    labelYFrac = 1440 / 1500,
-    // Compact = the right-rail placement: no nested card chrome, no FitMock
-    // (the big center preview is the result view), image fills the rail width.
+    // Compact = the right-rail placement: no nested card chrome, image fills
+    // the rail width. The big center preview is the result view.
     compact = false,
 }) => {
     const wrapRef = useRef(null);
@@ -4360,40 +4205,6 @@ const CropFramer = ({
     );
 
     const activeRect = isBox ? boxRect : coverRect;
-
-    // The region the live mock should render, accounting for the new controls:
-    //  - fit/extend: shrink the box horizontally by 1/zoom (centred) so the mock
-    //    magnifies the subject like the backend's side-cropping zoom.
-    //  - cover (Fill): shift the cover crop down within its own height by ~30%·vPos
-    //    so the framing reads as panned UP, with the floor fading to black below.
-    const mockCrop = useMemo(() => {
-        if (isBox) {
-            const c = crop || FULL_CROP;
-            const z = Math.max(1, zoom || 1);
-            if (z <= 1) return c;
-            const w = c.w / z;
-            return { x: c.x + (c.w - w) / 2, y: c.y, w, h: c.h };
-        }
-        if (!coverRect) return null;
-        // Zoom scales the sampled region by 1/z about the cover crop's centre,
-        // mirroring the backend's cover-fill zoom: >1 punches in (smaller
-        // region), <1 samples beyond the cover crop so more of the source shows,
-        // the freed bands falling into the CL2K gradient/border as black.
-        const z = Math.max(CONTROL_RANGES.zoom.min, Math.min(zoom || 1, CONTROL_RANGES.zoom.max));
-        const w = coverRect.w / z;
-        const h0 = coverRect.h / z;
-        const x = coverRect.left + (coverRect.w - w) / 2;
-        const y0 = coverRect.top + (coverRect.h - h0) / 2;
-        // vPos then pans the framing UP at the same size: shift down through the
-        // source, the floor fading to black below (FitMock's bottom fill).
-        const shift = clamp01(vPos) * 0.3 * h0;
-        return {
-            x,
-            y: Math.min(y0 + shift, y0 + h0 - 0.05),
-            w,
-            h: Math.max(0.05, h0 - shift),
-        };
-    }, [isBox, crop, zoom, coverRect, vPos]);
 
     // The reset button ("Whole image" / "Center") is a no-op when the framing is
     // already at its default — disable it then and explain what to do instead via
@@ -4501,16 +4312,6 @@ const CropFramer = ({
                         />
                     )}
                 </div>
-                {!compact && (
-                    <FitMock
-                        imageUrl={imageUrl}
-                        ratio={ratio}
-                        crop={mockCrop}
-                        vPos={isBox ? vPos : 0}
-                        label={mockLabel}
-                        labelYFrac={labelYFrac}
-                    />
-                )}
             </div>
         </div>
     );
