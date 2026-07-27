@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   release:
-    uses: chodeus/chodeus-ops/.github/workflows/release-please.yml@af17d8ce986da0b92cbdfc84d2170e199e34a3fb # main
+    uses: chodeus/chodeus-ops/.github/workflows/release-please.yml@aae195c19ec7069d2e91aca88107220ce807ef7e # main
 
   docker-version:
     needs: release
@@ -40,7 +40,7 @@ jobs:
         uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4
+        uses: docker/login-action@abd2ef45e78c5afb21d64d4ca52ee8550d9572c7 # v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
