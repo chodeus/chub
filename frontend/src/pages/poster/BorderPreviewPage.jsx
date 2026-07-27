@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 
 import { borderReplacerrAPI } from '../../utils/api/border_replacerr.js';
 import { configAPI } from '../../utils/api/config.js';
