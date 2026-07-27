@@ -583,7 +583,7 @@ def _place_logo(
     base: Image,
     logo_bytes: bytes,
     baseline: int,
-    max_width: int,
+    max_width: Optional[int],
     whiten: bool,
     logo_scale: float = 1.0,
     logo_y_offset: int = 0,
@@ -630,12 +630,18 @@ def _place_logo(
             _invert_to_clear(logo)
         if erase_mask_bytes:
             _erase_regions(logo, erase_mask_bytes)
-        target_w = min(max_width, geo.LOGO_WIDTH_MAX)  # the guide box width
-        target_h = int(round(logo.height * target_w / logo.width))
-        max_h = baseline - geo.LOGO_ZONE_TOP
-        if target_h > max_h:
-            target_h = max_h
-            target_w = int(round(logo.width * target_h / logo.height))
+        if max_width is None:
+            # Auto: size from the logo's own shape (see geometry.auto_logo_size).
+            target_w, target_h = geo.auto_logo_size(
+                logo.width, logo.height, baseline
+            )
+        else:
+            target_w = min(max_width, geo.LOGO_WIDTH_MAX)  # the guide box width
+            target_h = int(round(logo.height * target_w / logo.width))
+            max_h = baseline - geo.LOGO_ZONE_TOP
+            if target_h > max_h:
+                target_h = max_h
+                target_w = int(round(logo.width * target_h / logo.height))
         # Scale the guide-fit box as a whole; keep it on the canvas (aspect kept).
         target_w = int(round(target_w * logo_scale))
         target_h = int(round(target_h * logo_scale))
@@ -703,15 +709,36 @@ def _encode_jpeg(base: Image) -> bytes:
 
 
 def _draw_border(base: Image) -> None:
-    """Composite the default white frame (DAPS rule)."""
+    """Composite the template's BORDER LAYER — inner glow, then the white stroke.
+
+    Reproduces the PSD effects-only layer in Photoshop's own order: the black
+    Inner Glow ramps inward from the canvas edge first, then the 25px inside
+    Stroke is painted over its innermost band.
+
+    Bounds are given as right/bottom, NOT width/height: ImageMagick's rectangle
+    primitive is inclusive of both corners, so ``width=bw`` paints bw+1 px. The
+    top and left bands start at 0 so that extra pixel landed inside the canvas,
+    while the bottom and right bands started at CANVAS-bw so theirs was clipped
+    away — which is what made every poster 27px on the top/left and 26px on the
+    bottom/right, and left a 1px white line behind when a downstream border strip
+    cropped a symmetric 26.
+
+    The glow is a canvas-sized field, so it is only composited when ``base`` is
+    the CL2K canvas; the as-is paths can hand this an arbitrary size, and those
+    still get a correctly-sized stroke on all four edges.
+    """
     bw = geo.BORDER_WIDTH
+    w, h = base.width, base.height
+    if (w, h) == (geo.CANVAS_W, geo.CANVAS_H) and geo.INNER_GLOW_PNG.exists():
+        with Image(filename=str(geo.INNER_GLOW_PNG)) as glow:
+            base.composite(glow, left=0, top=0)
     with Drawing() as draw:
         draw.fill_color = Color(geo.BORDER_COLOR)
         draw.stroke_width = 0
-        draw.rectangle(left=0, top=0, width=geo.CANVAS_W, height=bw)
-        draw.rectangle(left=0, top=geo.CANVAS_H - bw, width=geo.CANVAS_W, height=bw)
-        draw.rectangle(left=0, top=0, width=bw, height=geo.CANVAS_H)
-        draw.rectangle(left=geo.CANVAS_W - bw, top=0, width=bw, height=geo.CANVAS_H)
+        draw.rectangle(left=0, top=0, right=w - 1, bottom=bw - 1)
+        draw.rectangle(left=0, top=h - bw, right=w - 1, bottom=h - 1)
+        draw.rectangle(left=0, top=0, right=bw - 1, bottom=h - 1)
+        draw.rectangle(left=w - bw, top=0, right=w - 1, bottom=h - 1)
         draw(base)
 
 
@@ -889,29 +916,31 @@ def _framed_inset_base(
     v_pos: float,
     zoom: float,
 ) -> Image:
-    """Frame the backdrop INSIDE the 26px border and return a full CANVAS image.
+    """Frame the backdrop FULL-BLEED and return a full CANVAS image.
 
-    CL2K source posters already leave room for the default frame, so the artwork
-    must sit *inside* the border rather than full-bleed beneath it — otherwise
-    ``_draw_border`` paints over (clips) the outer BORDER_WIDTH px of artwork.
-    The art is framed to the inner rect (canvas minus the border on every side)
-    and composited at the border offset; the margin is filled with the border
-    colour and the real border is drawn on top later. render_cl2k and
-    frame_backdrop both go through here, so they stay pixel-identical (the PSD
-    POSTER-layer parity the exporter relies on).
+    The template's stroke is Style=Inside on a full-canvas layer, so it paints
+    OVER the outer 25px of artwork rather than displacing it. Every finished
+    creator poster in refs/ agrees: their POSTER group is (0, 0, 1000, 1500) —
+    one is even (0, 0, 1000, 1502) — under a BORDER LAYER of (-2, 0, 1000, 1500).
+
+    This used to inset the art to a 948x1448 inner rect on the theory that the
+    border would otherwise clip it. It does clip it, and that is the intent: the
+    art is meant to run under the frame at full scale, not be shrunk 5% to fit
+    inside it. Insetting also broke the framing UI's contract, since CropFramer
+    offers a 2:3 crop box while the inner rect is not 2:3.
+
+    render_cl2k and frame_backdrop both go through here, so they stay
+    pixel-identical (the PSD POSTER-layer parity the exporter relies on).
     """
-    bw = geo.BORDER_WIDTH
-    inner_w = geo.CANVAS_W - 2 * bw
-    inner_h = geo.CANVAS_H - 2 * bw
     base = Image(
         width=geo.CANVAS_W, height=geo.CANVAS_H, background=Color(geo.BORDER_COLOR)
     )
     with Image(blob=backdrop_bytes) as art:
         if fit_mode == "fit":
-            _fit_resize(art, inner_w, inner_h, crop, v_pos, zoom)
+            _fit_resize(art, geo.CANVAS_W, geo.CANVAS_H, crop, v_pos, zoom)
         else:
-            _cover_resize(art, inner_w, inner_h, focus_x, focus_y, v_pos, zoom)
-        base.composite(art, left=bw, top=bw)
+            _cover_resize(art, geo.CANVAS_W, geo.CANVAS_H, focus_x, focus_y, v_pos, zoom)
+        base.composite(art, left=0, top=0)
     return base
 
 
@@ -953,7 +982,7 @@ def render_cl2k(
     logo_bytes: Optional[bytes] = None,
     title: str = "",
     season_text: str = "",
-    logo_max_width: int = geo.LOGO_WIDTH_RECOMMENDED,
+    logo_max_width: Optional[int] = None,
     logo_scale: float = 1.0,
     logo_y_offset: int = 0,
     logo_flip_bytes: Optional[bytes] = None,  # B/W touch-up regions (mask PNG)
@@ -1063,38 +1092,28 @@ def render_cl2k(
                             flat_white=flat_white,
                         )
 
-        label_kerning = geo.tracking_to_kerning(geo.LABEL_TRACKING)
-        if band_label:
-            # Explicit banner (e.g. COMPLETE LIMITED SERIES). Long strings use the
-            # tighter tracking the PSD specifies so they fit the width.
-            txt = band_label.upper()
-            tracking = geo.LABEL_TRACKING_LONG if len(txt) > 16 else geo.LABEL_TRACKING
+        # Every branch derives its tracking from the label itself, exactly as the
+        # PSD exporter does. Pinning collection/season to a flat LABEL_TRACKING
+        # would agree today but diverge the moment a season string reaches the
+        # long-banner length — 800 here, 600 in the .psd, for the same poster.
+        def _label(txt: str, center_y: int) -> None:
             _draw_text(
                 base,
                 txt,
-                geo.SEASON_TEXT_Y,
+                center_y,
                 label_font,
                 geo.LABEL_FONT_PX,
-                kerning=geo.tracking_to_kerning(tracking),
+                kerning=geo.tracking_to_kerning(geo.label_tracking(txt)),
             )
+
+        if band_label:
+            # Explicit banner (e.g. COMPLETE LIMITED SERIES), which the template
+            # tracks tighter than every other label so it fits the width.
+            _label(band_label.upper(), geo.SEASON_TEXT_Y)
         elif kind == "collection":
-            _draw_text(
-                base,
-                "COLLECTION",
-                geo.COLLECTION_LABEL_Y,
-                label_font,
-                geo.LABEL_FONT_PX,
-                kerning=label_kerning,
-            )
+            _label("COLLECTION", geo.COLLECTION_LABEL_Y)
         elif kind == "season" and season_text:
-            _draw_text(
-                base,
-                season_text.upper(),
-                geo.SEASON_TEXT_Y,
-                label_font,
-                geo.LABEL_FONT_PX,
-                kerning=label_kerning,
-            )
+            _label(season_text.upper(), geo.SEASON_TEXT_Y)
 
         _draw_border(base)
 
@@ -1120,9 +1139,7 @@ def overlay_label(
         center_y = geo.SEASON_TEXT_Y
     font = font_path or geo.resolve_font(bold=False)
     txt = (text or "").upper()
-    # Long banners (e.g. COMPLETE LIMITED SERIES) use the tighter PSD tracking so
-    # they fit the width — same rule as render_cl2k's band_label branch.
-    tracking = geo.LABEL_TRACKING_LONG if len(txt) > 16 else geo.LABEL_TRACKING
+    tracking = geo.label_tracking(txt)
     with Image(blob=image_bytes) as base:
         _draw_text(
             base,
@@ -1154,7 +1171,7 @@ def overlay_logo(
     logo_bytes: bytes,
     *,
     kind: str = "movie",
-    logo_max_width: int = geo.LOGO_WIDTH_RECOMMENDED,
+    logo_max_width: Optional[int] = None,
     logo_scale: float = 1.0,
     logo_y_offset: int = 0,
     whiten: bool = True,

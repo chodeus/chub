@@ -22,6 +22,7 @@ from wand.color import Color  # noqa: E402
 from wand.drawing import Drawing  # noqa: E402
 from wand.image import Image  # noqa: E402
 
+from backend.util.cl2k import geometry as geo  # noqa: E402
 from backend.util.cl2k.renderer import (  # noqa: E402
     _place_logo,
     frame_backdrop,
@@ -29,6 +30,9 @@ from backend.util.cl2k.renderer import (  # noqa: E402
     render_cl2k,
     render_framed_art,
 )
+
+# _solid_logo's default source dimensions — the shape auto_logo_size reads.
+_LOGO_SRC = (2000, 300)
 
 
 # --------------------------------------------------------------------------
@@ -266,10 +270,16 @@ def test_psd_logo_layer_honours_logo_scale():
         layer = next(la for la in psd if la.name == "LOGO").topil()
         bb = layer.getbbox()
         sizes[scale] = (bb[2] - bb[0], bb[3] - bb[1], bb[3])
-    # default box is the 700px recommended guide width; the slider may take it
-    # past the 800px guide line (guidelines, not limits)
-    assert sizes[1.0][:2] == (700, 105)
-    assert sizes[1.25][:2] == (875, 131)
+    # The default box is now sized from the logo's own shape
+    # (geometry.auto_logo_size) rather than a flat 700px guide, so assert the
+    # contract this test is actually about: the slider scales that box, and the
+    # slider may take it past the 800px guide line (guidelines, not limits).
+    base_w, base_h = geo.auto_logo_size(*_LOGO_SRC, geo.MAIN_LOGO_BOTTOM)
+    assert sizes[1.0][:2] == (base_w, base_h)
+    assert sizes[1.25][0] == round(base_w * 1.25)
+    assert sizes[1.25][0] > sizes[1.0][0]
+    # aspect ratio survives the scale
+    assert abs(sizes[1.25][0] / sizes[1.25][1] - base_w / base_h) < 0.05
     # bottom stays pinned to the template's y=1352 "Main Logo Bottom" guide
     assert sizes[1.0][2] == sizes[1.25][2] == 1352
 
@@ -301,3 +311,97 @@ def test_mask_resized_to_image_dims():
     # already-matching masks pass through untouched
     same = _png_bytes(PILImage.new("L", (1920, 1080), 255))
     assert _mask_to_image_dims(image, same) is same
+
+
+# --------------------------------------------------------------------------
+# BORDER LAYER parity with CL2K_template.psd
+#
+# The frame shipped 27px on the top/left and 26px on the bottom/right for months
+# because nothing asserted it: ImageMagick's rectangle primitive is inclusive of
+# both corners, so width=bw paints bw+1 px, and only the far edges clipped the
+# extra one. Downstream border-strip passes then cropped a symmetric width and
+# left a 1px white line behind. These lock the geometry and the inner glow.
+# --------------------------------------------------------------------------
+
+
+def _white_run(values):
+    n = 0
+    for v in values:
+        if v < 250:
+            break
+        n += 1
+    return n
+
+
+def _bordered_gray():
+    """A mid-grey canvas with the real border drawn on it, as a numpy L array."""
+    import numpy as np
+    from PIL import Image as PILImage
+
+    from backend.util.cl2k.renderer import _draw_border
+
+    with Image(width=geo.CANVAS_W, height=geo.CANVAS_H, background=Color("gray50")) as im:
+        _draw_border(im)
+        im.format = "png"
+        blob = im.make_blob()
+    return np.asarray(PILImage.open(io.BytesIO(blob)).convert("L")).astype(int)
+
+
+def test_border_is_symmetric_and_matches_the_psd_stroke():
+    arr = _bordered_gray()
+    row, col = arr[geo.CANVAS_H // 2, :], arr[:, geo.CANVAS_W // 2]
+    assert _white_run(row) == geo.BORDER_WIDTH  # left
+    assert _white_run(row[::-1]) == geo.BORDER_WIDTH  # right
+    assert _white_run(col) == geo.BORDER_WIDTH  # top
+    assert _white_run(col[::-1]) == geo.BORDER_WIDTH  # bottom
+    assert geo.BORDER_WIDTH == 25  # PSD FrFX Stroke, Style=Inside, Size=25px
+
+
+def test_inner_glow_darkens_inward_from_the_stroke():
+    arr = _bordered_gray()
+    row = arr[geo.CANVAS_H // 2, :]
+    bw, reach = geo.BORDER_WIDTH, geo.GLOW_REACH
+    # Darkest against the stroke, brightening inward, gone by GLOW_REACH.
+    assert row[bw] < row[bw + 5] < row[bw + 12] < row[reach - 1]
+    assert row[bw] < 128  # the glow really does cut the mid-grey down
+    interior = row[reach + 20]
+    assert abs(int(row[reach]) - int(interior)) <= 2  # fully faded by 48px in
+    # symmetric on the opposite edge
+    assert abs(int(row[bw]) - int(row[-bw - 1])) <= 2
+
+
+def test_gradient_matches_the_template_endpoints():
+    import numpy as np
+    from PIL import Image as PILImage
+
+    alpha = np.asarray(PILImage.open(geo.GRADIENT_PNG).convert("RGBA"))[:, 500, 3]
+    # Clear through the artwork, opaque by the template's "Gradient Darkest" guide.
+    assert alpha[geo.GRADIENT_START_Y - 1] == 0
+    assert alpha[geo.GRADIENT_START_Y] > 0
+    assert alpha[geo.GRADIENT_FULL_BLACK_Y] == 255
+    assert (np.diff(alpha.astype(int)) >= 0).all()  # monotonic
+    # The pre-2026-07 substitute ramp started ~240px higher; guard the regression.
+    assert alpha[1000] == 0
+    assert geo.GRADIENT_START_Y > 1000
+
+
+def test_artwork_is_full_bleed_under_the_frame():
+    """The template's POSTER group is (0,0,1000,1500) — art runs under an INSIDE
+    stroke rather than being inset to fit within it."""
+    import numpy as np
+    from PIL import Image as PILImage
+
+    framed = frame_backdrop(backdrop_bytes=_backdrop())
+    arr = np.asarray(PILImage.open(io.BytesIO(framed)).convert("RGB")).astype(int)
+    assert arr.shape[:2] == (geo.CANVAS_H, geo.CANVAS_W)
+    assert not (arr > 250).all(axis=2).any()  # no white margin anywhere
+
+
+def test_label_tracking_follows_the_template_not_string_length():
+    """Only COMPLETE LIMITED SERIES is tracked 600; every season label is 800 —
+    including the spelled-out ones that a >16-character rule caught by mistake."""
+    assert geo.label_tracking("SEASON ONE") == geo.LABEL_TRACKING
+    assert geo.label_tracking("SEASON FIFTY-NINE") == geo.LABEL_TRACKING
+    assert geo.label_tracking("SPECIALS") == geo.LABEL_TRACKING
+    assert geo.label_tracking("COLLECTION") == geo.LABEL_TRACKING
+    assert geo.label_tracking("COMPLETE LIMITED SERIES") == geo.LABEL_TRACKING_LONG
