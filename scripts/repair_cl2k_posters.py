@@ -100,7 +100,7 @@ def _mode_for(runs: Tuple[int, int, int, int]) -> Optional[str]:
     return None
 
 
-def repair(path: Path, backup_dir: Optional[Path], apply: bool) -> str:
+def repair(path: Path, root: Path, backup_dir: Optional[Path], apply: bool) -> str:
     """Repaint the CL2K frame on one poster. Returns a one-word outcome."""
     runs, size = _edge_runs(path)
     if size != (geo.CANVAS_W, geo.CANVAS_H):
@@ -115,8 +115,17 @@ def repair(path: Path, backup_dir: Optional[Path], apply: bool) -> str:
         return f"would-{mode}:edges={runs}"
 
     if backup_dir is not None:
-        backup_dir.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(path, backup_dir / path.name)
+        # Mirror the tree under the backup root, NOT a flat dump of basenames:
+        # a Kometa assets tree repeats `poster.jpg` and `Season01.jpg` in every
+        # show folder, so a flat copy would collapse every backup onto one file
+        # and leave the originals unrecoverable.
+        try:
+            rel = path.relative_to(root) if root.is_dir() else Path(path.name)
+        except ValueError:
+            rel = Path(path.name)
+        dest = backup_dir / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, dest)
 
     bw = geo.BORDER_WIDTH
     with WandImage(filename=str(path)) as img:
@@ -145,10 +154,29 @@ def repair(path: Path, backup_dir: Optional[Path], apply: bool) -> str:
     return mode
 
 
-def _targets(root: Path) -> List[Path]:
+def _targets(root: Path, exclude: Optional[Path] = None) -> List[Path]:
+    """Posters under ``root``, skipping anything inside ``exclude``.
+
+    The backup root is excluded so a second run doesn't pick up the copies it
+    made on the first one — which would otherwise re-repair (and re-back-up)
+    already-saved originals when the backup dir sits inside the target tree.
+    """
     if root.is_file():
         return [root]
-    return sorted(p for p in root.rglob("*") if p.suffix.lower() in SUFFIXES)
+    skip = exclude.resolve() if exclude else None
+
+    def outside(p: Path) -> bool:
+        if skip is None:
+            return True
+        try:
+            p.resolve().relative_to(skip)
+        except ValueError:
+            return True
+        return False
+
+    return sorted(
+        p for p in root.rglob("*") if p.suffix.lower() in SUFFIXES and outside(p)
+    )
 
 
 def main() -> None:
@@ -163,14 +191,27 @@ def main() -> None:
     if not args.target.exists():
         raise SystemExit(f"no such path: {args.target}")
 
+    # The exclusion root is computed unconditionally, and covers the whole
+    # backup CONTAINER rather than one dated run. Tying it to backup_dir meant a
+    # dry run or --no-backup passed None and enumerated an existing backup tree
+    # inside the target — so `--apply --no-backup` would rewrite the very copies
+    # an earlier run saved. Excluding only today's dated directory would leave
+    # yesterday's equally exposed.
+    base = args.target if args.target.is_dir() else args.target.parent
+    backup_root = args.backup_dir or base.parent / ".cl2k-repair-backups"
+
     backup_dir: Optional[Path] = None
     if args.apply and not args.no_backup:
         stamp = datetime.date.today().strftime("%Y%m%d")
-        base = args.target if args.target.is_dir() else args.target.parent
-        backup_dir = args.backup_dir or base.parent / f".cl2k-repair-backups/{stamp}"
+        backup_dir = args.backup_dir or backup_root / stamp
 
-    targets = _targets(args.target)
-    if args.limit:
+    targets = _targets(args.target, backup_root)
+    if args.limit is not None:
+        # `if args.limit:` treated 0 as "no limit" and quietly processed the whole
+        # tree, and a negative value sliced off all but the last poster. With
+        # --apply either is an unintended bulk rewrite.
+        if args.limit <= 0:
+            ap.error("--limit must be a positive integer")
         targets = targets[: args.limit]
     if not targets:
         raise SystemExit(f"no {'/'.join(SUFFIXES)} files under {args.target}")
@@ -178,7 +219,7 @@ def main() -> None:
     tally: dict = {}
     for path in targets:
         try:
-            outcome = repair(path, backup_dir, args.apply)
+            outcome = repair(path, args.target, backup_dir, args.apply)
         except Exception as exc:  # one bad file must not abandon the batch
             outcome = f"error:{type(exc).__name__}"
             print(f"  !! {path.name}: {exc}", file=sys.stderr)

@@ -61,6 +61,18 @@ def main() -> None:
     w, h = geo.CANVAS_W, geo.CANVAS_H
     if alpha.shape != (h, w):
         raise SystemExit(f"{src} is {alpha.shape[1]}x{alpha.shape[0]}, expected {w}x{h}")
+    # A composite flattened to RGB makes convert("RGBA") synthesise alpha 255
+    # everywhere; the guards above still pass and this would overwrite a
+    # known-good committed asset with a fully opaque field the renderer then
+    # composites as solid black. The glow only reaches GLOW_REACH in from each
+    # edge, so the interior at the clean row must be fully transparent.
+    interior = alpha[CLEAN_ROW, geo.GLOW_REACH : w - geo.GLOW_REACH]
+    if interior.max() > 0:
+        raise SystemExit(
+            f"{src}: alpha is non-zero {geo.GLOW_REACH}px in from the edge "
+            f"(max {interior.max():.0f}) — that is not the glow's alpha channel; "
+            f"refusing to overwrite {geo.INNER_GLOW_PNG.name}"
+        )
 
     reach, stroke = geo.GLOW_REACH, geo.BORDER_WIDTH
     prof = _edge_profile(alpha, reach, stroke)
