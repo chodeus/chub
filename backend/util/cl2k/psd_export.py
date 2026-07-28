@@ -210,11 +210,8 @@ def export_psd(
     logo_layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     if logo_bytes:
         lg = Image.open(io.BytesIO(logo_bytes)).convert("RGBA")
-        # Same visible-content trim the renderer applies (renderer._trim_logo), so
-        # the LOGO layer lands where the flattened poster's logo does. Pillow's
-        # plain getbbox() keeps ANY non-zero alpha, which would place this layer
-        # off-centre for a logo carrying a sub-visible glow — see
-        # geo.LOGO_TRIM_ALPHA.
+        # Mirrors renderer._trim_logo: plain getbbox() keeps ANY non-zero alpha,
+        # which places this layer off-centre vs the render. See geo.LOGO_TRIM_ALPHA.
         alpha = lg.getchannel("A").point(
             lambda v: 255 if v > geo.LOGO_TRIM_ALPHA else 0
         )

@@ -948,14 +948,38 @@ def _persist_poster(
     uploaded_folders: List[str] = []
     upload_errors: List[str] = []
 
-    def _run_uploads() -> None:
+    def _run_uploads(reload_config: bool = False) -> None:
         """Push the poster to every routed Drive folder.
 
         Appends to ``uploaded_folders`` / ``upload_errors`` and marks provenance.
-        Run inline by default; ``defer_upload`` runs it after the HTTP response
-        instead (see the deferral guard below).
+        ``reload_config`` re-reads routing + credentials first — set on the
+        deferred path, where the snapshot can go stale before the task runs.
         """
         from backend.util.cl2k.gdrive_upload import upload_file
+
+        targets, upload_cfg = folder_ids, sync_cfg
+        if reload_config:
+            # Deferred: minutes can pass, so routing may have changed and the
+            # OAuth token may have been refreshed. Skip rather than upload to a
+            # removed folder or with dead credentials.
+            try:
+                from backend.util.config import load_config
+
+                fresh = load_config()
+                targets = _drive_targets(fresh.cl2k_maker, image_type)
+                upload_cfg = fresh.sync_gdrive
+            except Exception as exc:
+                logger.warning(
+                    f"CL2K skipped deferred Drive upload for {filename} — "
+                    f"could not re-read config: {exc}"
+                )
+                return
+            if not targets:
+                logger.info(
+                    f"CL2K skipped deferred Drive upload for {filename} — "
+                    f"no Drive folder is routed for {image_type} any more"
+                )
+                return
 
         # rclone needs a real on-disk file named with the DAPS filename. Reuse a
         # local save when present; otherwise stage a temp copy just for the upload.
@@ -968,10 +992,10 @@ def _persist_poster(
                 src_path = os.path.join(tmpdir, filename)
                 with open(src_path, "wb") as fh:
                     fh.write(blob)
-            for folder_id in folder_ids:
+            for folder_id in targets:
                 logger.info(f"CL2K uploading {filename} to Drive folder {folder_id}…")
                 try:
-                    upload_file(src_path, folder_id, sync_cfg, logger)
+                    upload_file(src_path, folder_id, upload_cfg, logger)
                     uploaded_folders.append(folder_id)
                     logger.info(f"CL2K uploaded {filename} to Drive {folder_id}")
                 except Exception as exc:
@@ -985,10 +1009,8 @@ def _persist_poster(
 
         if not uploaded_folders:
             return
-        # Provenance is bookkeeping — the poster is already on Drive. Inline, a
-        # raise here would 500 a request that actually succeeded; deferred, it
-        # would surface as a bare background-task traceback with no context.
-        # Log it against the file either way.
+        # Provenance is bookkeeping; the poster is already on Drive. Never let it
+        # fail the request (inline) or raise inside the task (deferred).
         try:
             if written:
                 cl2k_generated_for(db).mark_uploaded(written[0])
@@ -1016,20 +1038,13 @@ def _persist_poster(
                 f"CL2K uploaded {filename} but could not record provenance: {exc}"
             )
 
-    # A single rclone upload takes tens of seconds — it authenticates and lists
-    # the destination folder before copying — which outran the UI's request
-    # timeout and reported a failure for a poster that had in fact been written
-    # and uploaded fine. Deferring lets the response return as soon as the poster
-    # is on disk.
-    #
-    # ONLY deferred when a local copy exists. With no local file the upload is
-    # the sole outcome, so returning before it finishes could report success for
-    # a poster saved nowhere, and the temp file staged for rclone would have to
-    # outlive this function. Both problems disappear by staying inline there.
+    # An rclone upload outruns the UI's request timeout, so hand it to the
+    # background. Only when a local copy exists: with no local file the upload is
+    # the sole outcome, and returning early would report success prematurely.
     deferred_upload = False
     if folder_ids:
         if defer_upload is not None and written:
-            defer_upload(_run_uploads)
+            defer_upload(lambda: _run_uploads(reload_config=True))
             deferred_upload = True
             logger.info(
                 f"CL2K queued Drive upload for {filename} "
@@ -1038,9 +1053,8 @@ def _persist_poster(
         else:
             _run_uploads()
 
-    # Every routed target failed => nothing was saved anywhere — report an error
-    # instead of a misleading success. A deferred upload has not run yet, so it
-    # can't have failed; `written` is non-empty whenever we defer.
+    # Nothing landed anywhere => error, not a misleading success. A deferred
+    # upload can't be the cause: `written` is non-empty whenever we defer.
     if not written and not uploaded_folders:
         return {
             "status": "error",
@@ -1060,10 +1074,8 @@ def _persist_poster(
         "saved_paths": written,
         "uploaded": bool(uploaded_folders),
         "uploaded_folders": uploaded_folders,
-        # Deferred: the upload runs after this response, so "not uploaded yet"
-        # must not read as "upload failed". Poll the generated list for the
-        # settled state — the provenance row's `uploaded` flag is the source of
-        # truth once the background task finishes.
+        # Not yet uploaded, not failed. The provenance row's `uploaded` flag
+        # settles it once the background task finishes.
         "upload_pending": deferred_upload,
     }
     # Surface non-fatal failures so the caller can tell the user which targets

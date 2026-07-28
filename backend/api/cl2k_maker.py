@@ -516,10 +516,7 @@ def generate(
         force=req.force,
         save_local=req.save_local,
         upload_gdrive=req.upload_gdrive,
-        # An rclone upload runs for tens of seconds — longer than the UI's
-        # request timeout — so hand it to the background once the poster is on
-        # disk. Interactive path only: the batch run() and the asset makers
-        # stay inline, where nothing is waiting on a response.
+        # Interactive path only — the batch run() and asset makers stay inline.
         defer_upload=background_tasks.add_task,
     )
     if result.get("status") == "generated":

@@ -36,21 +36,12 @@ LOGO_WIDTH_MAX = 800  # guide "Max Logo Width" (x100->900) — hard cap
 # (ai_logo_upscale) gets a shot before the text fallback.
 LOGO_MIN_WIDTH = 400
 
-# Alpha at or below this counts as transparent padding when a clear logo is
-# trimmed. Both trims are otherwise "any non-zero alpha is content", so a source
-# logo carrying a sub-visible glow or drop shadow — TMDB clearlogos sometimes do,
-# at alpha 1-5 of 255 — keeps that invisible margin inside the trimmed box. The
-# box is then centred on the canvas, which pushes the artwork you can actually
-# see off-centre by half the margin. 8/255 is ~3% opacity: below anything the eye
-# resolves against the gradient, and well under the ~5% where a deliberate glow
-# starts to read, so a designed glow still survives as part of the logo.
-#
-# Applied as an explicit alpha threshold, NOT ImageMagick's trim fuzz: fuzz
-# compares against the background colour with alpha-weighted distance, and an
-# HDRI build cuts at fuzz*sqrt(2) where a non-HDRI build cuts at fuzz — so the
-# same fuzz trims differently on the dev Mac (HDRI) and in the container (not).
-# Thresholding alpha directly keeps the Wand renderer and the Pillow PSD export
-# byte-identical everywhere.
+# Alpha at or below this counts as transparent padding when a logo is trimmed.
+# Without it, a sub-visible glow (TMDB clearlogos carry alpha 1-5) stays inside
+# the trimmed box and pushes the visible artwork off-centre. 8/255 is ~3%
+# opacity: invisible, but under the ~5% where a designed glow starts to read.
+# Applied as an explicit alpha threshold, not ImageMagick trim fuzz — fuzz cuts
+# at fuzz*sqrt(2) on an HDRI build, so dev and the container would disagree.
 LOGO_TRIM_ALPHA = 8
 
 # ----- automatic logo sizing --------------------------------------------------

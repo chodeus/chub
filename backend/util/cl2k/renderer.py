@@ -527,26 +527,22 @@ def _read_logo_image(logo_bytes: bytes) -> Image:
 def _trim_logo(logo: Image) -> None:
     """Crop a clear logo to its visible content, in place.
 
-    The ONE trim for logos — :func:`process_logo`, :func:`logo_is_usable` and
-    :func:`_place_logo` must all measure the same box or the frontend overlay
-    stops matching the render, the touch-up brushes land in the wrong place, and
-    the too-small gate disagrees with what actually gets placed.
-
-    Pixels at or below ``geo.LOGO_TRIM_ALPHA`` are treated as padding (see that
-    constant for why). Done by binarising a clone of the alpha channel and
-    trimming *that*, so the cut is an exact alpha comparison rather than
-    ImageMagick's fuzzy colour distance — which varies with the build's HDRI
-    setting and would not match the Pillow PSD export.
+    Pixels at or below ``geo.LOGO_TRIM_ALPHA`` count as padding. The one trim
+    for logos: process_logo, logo_is_usable and _place_logo must agree, or the
+    preview, the touch-up brushes and the too-small gate drift apart.
     """
     with logo.clone() as probe:
         probe.alpha_channel = "extract"  # alpha -> greyscale, so trim sees it
         probe.threshold(geo.LOGO_TRIM_ALPHA / 255.0)
+        # Nothing above the threshold: ImageMagick trims a uniform image to 1x1
+        # rather than to nothing, so a size check can't detect this. Leave the
+        # logo alone (what the Pillow PSD path does on a None bbox).
+        if probe.mean_channel()[0] <= 0:
+            return
         probe.background_color = Color("black")
         probe.trim(color=Color("black"))
         left, top = probe.page_x, probe.page_y
         width, height = probe.width, probe.height
-    # A fully transparent logo trims to nothing — leave it alone rather than
-    # cropping to a degenerate box the callers would then divide by.
     if width > 0 and height > 0:
         logo.crop(left=left, top=top, width=width, height=height)
 
