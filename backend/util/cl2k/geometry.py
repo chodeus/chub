@@ -36,6 +36,23 @@ LOGO_WIDTH_MAX = 800  # guide "Max Logo Width" (x100->900) — hard cap
 # (ai_logo_upscale) gets a shot before the text fallback.
 LOGO_MIN_WIDTH = 400
 
+# Alpha at or below this counts as transparent padding when a clear logo is
+# trimmed. Both trims are otherwise "any non-zero alpha is content", so a source
+# logo carrying a sub-visible glow or drop shadow — TMDB clearlogos sometimes do,
+# at alpha 1-5 of 255 — keeps that invisible margin inside the trimmed box. The
+# box is then centred on the canvas, which pushes the artwork you can actually
+# see off-centre by half the margin. 8/255 is ~3% opacity: below anything the eye
+# resolves against the gradient, and well under the ~5% where a deliberate glow
+# starts to read, so a designed glow still survives as part of the logo.
+#
+# Applied as an explicit alpha threshold, NOT ImageMagick's trim fuzz: fuzz
+# compares against the background colour with alpha-weighted distance, and an
+# HDRI build cuts at fuzz*sqrt(2) where a non-HDRI build cuts at fuzz — so the
+# same fuzz trims differently on the dev Mac (HDRI) and in the container (not).
+# Thresholding alpha directly keeps the Wand renderer and the Pillow PSD export
+# byte-identical everywhere.
+LOGO_TRIM_ALPHA = 8
+
 # ----- automatic logo sizing --------------------------------------------------
 # Ported from PosterFlow's Photopea panel (dweagle/posterflow, computeLogoGeometry),
 # which sizes a logo from its own pixel area and projected height instead of a flat

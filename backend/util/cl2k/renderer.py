@@ -524,6 +524,33 @@ def _read_logo_image(logo_bytes: bytes) -> Image:
     return Image(blob=_rasterize_svg_logo(logo_bytes, target_width=2000))
 
 
+def _trim_logo(logo: Image) -> None:
+    """Crop a clear logo to its visible content, in place.
+
+    The ONE trim for logos — :func:`process_logo`, :func:`logo_is_usable` and
+    :func:`_place_logo` must all measure the same box or the frontend overlay
+    stops matching the render, the touch-up brushes land in the wrong place, and
+    the too-small gate disagrees with what actually gets placed.
+
+    Pixels at or below ``geo.LOGO_TRIM_ALPHA`` are treated as padding (see that
+    constant for why). Done by binarising a clone of the alpha channel and
+    trimming *that*, so the cut is an exact alpha comparison rather than
+    ImageMagick's fuzzy colour distance — which varies with the build's HDRI
+    setting and would not match the Pillow PSD export.
+    """
+    with logo.clone() as probe:
+        probe.alpha_channel = "extract"  # alpha -> greyscale, so trim sees it
+        probe.threshold(geo.LOGO_TRIM_ALPHA / 255.0)
+        probe.background_color = Color("black")
+        probe.trim(color=Color("black"))
+        left, top = probe.page_x, probe.page_y
+        width, height = probe.width, probe.height
+    # A fully transparent logo trims to nothing — leave it alone rather than
+    # cropping to a degenerate box the callers would then divide by.
+    if width > 0 and height > 0:
+        logo.crop(left=left, top=top, width=width, height=height)
+
+
 def process_logo(
     logo_bytes: bytes,
     *,
@@ -545,8 +572,7 @@ def process_logo(
     logos into clearlogos (see :func:`_invert_to_clear`).
     """
     with _read_logo_image(logo_bytes) as logo:
-        logo.background_color = Color("transparent")
-        logo.trim(color=Color("transparent"))
+        _trim_logo(logo)
         if flat_white:
             _flat_white(logo)
         elif whiten:
@@ -572,8 +598,7 @@ def logo_is_usable(logo_bytes: bytes, min_width: int = geo.LOGO_MIN_WIDTH) -> bo
     we simply couldn't measure)."""
     try:
         with _read_logo_image(logo_bytes) as logo:
-            logo.background_color = Color("transparent")
-            logo.trim(color=Color("transparent"))
+            _trim_logo(logo)
             return logo.width >= min_width
     except Exception:
         return True
@@ -616,8 +641,7 @@ def _place_logo(
         geo.LOGO_Y_OFFSET_MIN, min(int(logo_y_offset or 0), geo.LOGO_Y_OFFSET_MAX)
     )
     with _read_logo_image(logo_bytes) as logo:
-        logo.background_color = Color("transparent")
-        logo.trim(color=Color("transparent"))  # drop padding -> width == content
+        _trim_logo(logo)  # drop padding -> width == visible content
         if flat_white:
             _flat_white(logo)
         elif whiten:
