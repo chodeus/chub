@@ -36,6 +36,10 @@ LOGO_WIDTH_MAX = 800  # guide "Max Logo Width" (x100->900) — hard cap
 # (ai_logo_upscale) gets a shot before the text fallback.
 LOGO_MIN_WIDTH = 400
 
+# Logo-trim cutoff: alpha <= this is padding, above is content. An explicit
+# threshold, NOT ImageMagick trim fuzz (HDRI builds cut fuzz at sqrt(2)x).
+LOGO_TRIM_ALPHA = 8
+
 # ----- automatic logo sizing --------------------------------------------------
 # Ported from PosterFlow's Photopea panel (dweagle/posterflow, computeLogoGeometry),
 # which sizes a logo from its own pixel area and projected height instead of a flat

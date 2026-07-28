@@ -23,7 +23,7 @@ import threading
 from typing import Any, Dict, List, Optional
 from urllib.parse import parse_qs, unquote, urlparse
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 
@@ -474,6 +474,7 @@ def preview(
 @router.post("/generate", summary="Generate + save a CL2K poster")
 def generate(
     req: GenerateRequest,
+    background_tasks: BackgroundTasks,
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
@@ -515,8 +516,12 @@ def generate(
         force=req.force,
         save_local=req.save_local,
         upload_gdrive=req.upload_gdrive,
+        # Interactive path only — the batch run() and asset makers stay inline.
+        defer_upload=background_tasks.add_task,
     )
     if result.get("status") == "generated":
+        if result.get("upload_pending"):
+            return ok("Poster generated — uploading to Drive", result)
         return ok("Poster generated", result)
     return error(
         result.get("reason", "generation failed"), "CL2K_GENERATE", data=result

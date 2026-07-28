@@ -26,6 +26,7 @@ from backend.util.cl2k import geometry as geo  # noqa: E402
 from backend.util.cl2k.renderer import (  # noqa: E402
     _place_logo,
     frame_backdrop,
+    logo_is_usable,
     process_logo,
     render_cl2k,
     render_framed_art,
@@ -157,6 +158,80 @@ def test_logo_scale_is_canvas_clamped():
 
 
 # --------------------------------------------------------------------------
+# logo trim — invisible alpha must not push the visible artwork off-centre
+# --------------------------------------------------------------------------
+
+
+def _logo_with_side_glow(glow_alpha, ink=1000, pad=200, tail=400):
+    """White ink block plus a one-sided block at ``glow_alpha`` on its right.
+
+    ``glow_alpha=0`` draws no block at all. The asymmetry is the point: a trim
+    that keeps the block centres the *box*, which puts the visible ink left of
+    the canvas centre by half the block's width.
+    """
+
+    def draw(d):
+        if glow_alpha:
+            d.fill_color = Color(f"rgba(255,255,255,{glow_alpha / 255:.6f})")
+            d.rectangle(left=pad + ink, top=0, width=tail - 1, height=299)
+        d.fill_color = Color("white")
+        d.rectangle(left=pad, top=60, width=ink - 1, height=179)
+
+    return _png(pad + ink + tail, 300, draw)
+
+
+def _visible_ink_offset(logo_bytes):
+    """Centre-offset (px) of the placed logo's *visible* ink from canvas centre."""
+    with Image(width=1000, height=1500, background=Color("black")) as canvas:
+        _place_logo(canvas, logo_bytes, geo.MAIN_LOGO_BOTTOM, None, False)
+        blob = canvas.make_blob("png")
+    with Image(blob=blob) as flat:
+        with flat.clone() as probe:
+            probe.transform_colorspace("gray")
+            probe.threshold(200 / 255)
+            probe.background_color = Color("black")
+            probe.trim(color=Color("black"))
+            left, width = probe.page_x, probe.width
+    return (left + (width - 1) / 2) - (geo.CANVAS_W - 1) / 2
+
+
+@pytest.mark.parametrize("glow_alpha", [0, 1, 5, geo.LOGO_TRIM_ALPHA])
+def test_subvisible_alpha_does_not_shift_the_logo(glow_alpha):
+    # <=LOGO_TRIM_ALPHA is invisible padding: the ink stays centred. The 0.5px
+    # tolerance is the unavoidable half-pixel when the placed width is odd.
+    assert abs(_visible_ink_offset(_logo_with_side_glow(glow_alpha))) <= 0.5
+
+
+def test_visible_glow_is_kept_as_part_of_the_logo():
+    # A glow the eye CAN see is design, not padding — it stays inside the box, so
+    # the ink is deliberately off-centre. Guards against over-trimming.
+    assert _visible_ink_offset(_logo_with_side_glow(64)) < -50
+
+
+def test_all_subvisible_logo_is_left_uncropped():
+    # Nothing above the threshold. ImageMagick trims a uniform image to 1x1
+    # rather than to nothing, so a size check alone would crop the logo to a
+    # single pixel while the Pillow PSD path (None bbox) left it whole.
+    def draw(d):
+        d.fill_color = Color(f"rgba(255,255,255,{geo.LOGO_TRIM_ALPHA / 255:.6f})")
+        d.rectangle(left=100, top=50, width=699, height=199)
+
+    blob = _png(900, 300, draw)
+    _png_bytes, w, h = process_logo(blob, whiten=False)
+    assert (w, h) == (900, 300)
+
+
+def test_trim_agrees_across_the_renderer_entry_points():
+    # process_logo (frontend overlay + brush space), logo_is_usable (the
+    # too-small gate) and _place_logo must measure the same box.
+    logo = _logo_with_side_glow(1)
+    _, w, _h = process_logo(logo, whiten=False)
+    assert w == 1000  # the invisible tail is gone, not 1400
+    assert logo_is_usable(logo, min_width=1000)
+    assert not logo_is_usable(logo, min_width=1001)
+
+
+# --------------------------------------------------------------------------
 # B/W touch-up flip
 # --------------------------------------------------------------------------
 
@@ -282,6 +357,42 @@ def test_psd_logo_layer_honours_logo_scale():
     assert abs(sizes[1.25][0] / sizes[1.25][1] - base_w / base_h) < 0.05
     # bottom stays pinned to the template's y=1352 "Main Logo Bottom" guide
     assert sizes[1.0][2] == sizes[1.25][2] == 1352
+
+
+@pytest.mark.parametrize(
+    "glow_alpha, tail_kept",
+    [(geo.LOGO_TRIM_ALPHA, False), (geo.LOGO_TRIM_ALPHA + 1, True)],
+)
+def test_psd_logo_layer_trims_like_the_renderer(glow_alpha, tail_kept):
+    # The PSD path has its own Pillow bbox, so it can drift from the Wand
+    # renderer's threshold. Straddle LOGO_TRIM_ALPHA and require both to agree.
+    pytest.importorskip("psd_tools")
+    from psd_tools import PSDImage
+
+    from backend.util.cl2k.psd_export import export_psd
+
+    logo = _logo_with_side_glow(glow_alpha)
+    blob = export_psd(
+        backdrop_bytes=frame_backdrop(backdrop_bytes=_backdrop()),
+        kind="movie",
+        logo_bytes=logo,
+        whiten=False,
+    )
+    psd = PSDImage.open(io.BytesIO(blob))
+    layer = next(la for la in psd if la.name == "LOGO").topil().convert("RGBA")
+    # Bbox of the OPAQUE ink only — the layer bbox would include a kept glow.
+    ink = layer.getchannel("A").point(lambda v: 255 if v > 128 else 0).getbbox()
+    psd_centre = (ink[0] + ink[2] - 1) / 2 - (geo.CANVAS_W - 1) / 2
+
+    _, process_w, _h = process_logo(logo, whiten=False)
+    assert (process_w == 1400) is tail_kept  # 1000 ink + 400 tail
+
+    if tail_kept:
+        assert psd_centre < -50  # visible glow kept -> ink deliberately left
+    else:
+        assert abs(psd_centre) <= 0.5
+    # and the PSD layer lands where the renderer puts it
+    assert abs(psd_centre - _visible_ink_offset(logo)) <= 1.0
 
 
 # --------------------------------------------------------------------------

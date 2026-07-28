@@ -210,7 +210,12 @@ def export_psd(
     logo_layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     if logo_bytes:
         lg = Image.open(io.BytesIO(logo_bytes)).convert("RGBA")
-        bbox = lg.getbbox()
+        # Mirrors renderer._trim_logo: plain getbbox() keeps ANY non-zero alpha,
+        # which places this layer off-centre vs the render. See geo.LOGO_TRIM_ALPHA.
+        alpha = lg.getchannel("A").point(
+            lambda v: 255 if v > geo.LOGO_TRIM_ALPHA else 0
+        )
+        bbox = alpha.getbbox()
         if bbox:
             lg = lg.crop(bbox)
         if wordmark:
