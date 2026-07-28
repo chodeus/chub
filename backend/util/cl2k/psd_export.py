@@ -1,9 +1,11 @@
 """Export a CL2K poster as a layered ``.psd`` for editing in Photopea/Photoshop.
 
-Assembles the render components as named layers — POSTER, GRADIENT, LOGO, TEXT,
-BORDER — using Pillow for the pixels and psd-tools to write the file. The TEXT
-layer is rasterized (re-type it live in Photopea if you need editable text).
-Mirrors PosterFlow's PSD-export concept; geometry comes from :mod:`geometry`.
+Assembles the creator-template structure — POSTER>Main, GRADIENT>live gradient
+fill, LOGO>Layer 1, an editable type layer for the label, and an effects-only
+BORDER LAYER carrying live Stroke + Inner Glow — using Pillow for the pixels
+and psd-tools to write the file (live pieces built in :mod:`psd_live`). The
+embedded preview is our own flat composite; geometry comes from
+:mod:`geometry`.
 """
 
 from __future__ import annotations
@@ -281,7 +283,7 @@ def export_psd(
     bd.rectangle([0, 0, bw - 1, h - 1], fill="white")
     bd.rectangle([w - bw, 0, w - 1, h - 1], fill="white")
 
-    layers = [("POSTER", poster), ("GRADIENT", gradient), ("LOGO", logo_layer)]
+    text_layer = None
     if label_text:
         text_layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
         _centered(
@@ -294,19 +296,62 @@ def export_psd(
             # COMPLETE LIMITED SERIES ~140px wider, running under the border.
             kerning=geo.tracking_to_kerning(geo.label_tracking(label_text)),
         )
-        layers.append((_layer_name(label_text, "LABEL"), text_layer))
-    layers.append(("BORDER LAYER", border))
 
     # RGBA document so each layer's transparency lands on its own (native) alpha
-    # channel — matching the official CL2K_template.psd (RGB, 4-channel composite),
-    # whose layers all use native alpha rather than masks. An RGB document makes
-    # some psd-tools versions push the alpha into a per-layer mask instead, which
-    # is messier to edit; RGBA keeps the layers clean (logo/gradient/border carry
-    # their own transparency, no mask to detach).
+    # channel; psd-tools would push alpha into a per-layer mask in an RGB doc.
     psd = PSDImage.new(mode="RGBA", size=(w, h))
-    for name, img in layers:
-        psd.append(PixelLayer.frompil(img, psd, name))
+    from psd_tools.api.layers import Group
+
+    from backend.util.cl2k import psd_live
+
+    # Creator-template structure: POSTER>Main, GRADIENT>live fill, LOGO>Layer 1.
+    poster_group = Group.new(psd, "POSTER", open_folder=False)
+    PixelLayer.frompil(poster, poster_group, "Main")
+    gradient_group = Group.new(psd, "GRADIENT", open_folder=False)
+    psd_live.make_gradient_layer(gradient_group)
+    logo_group = Group.new(psd, "LOGO", open_folder=False)
+    logo_bbox = logo_layer.getbbox()
+    if logo_bbox:
+        PixelLayer.frompil(
+            logo_layer.crop(logo_bbox), logo_group, "Layer 1",
+            top=logo_bbox[1], left=logo_bbox[0],
+        )
+    if text_layer is not None:
+        ink = text_layer.getbbox()
+        if ink:
+            label_layer = PixelLayer.frompil(
+                text_layer.crop(ink),
+                psd,
+                _layer_name(label_text, "LABEL"),
+                top=ink[1],
+                left=ink[0],
+            )
+            tysh = psd_live.label_type_block(
+                label_text,
+                geo.label_tracking(label_text),
+                label_y,
+                ink[2] - ink[0],
+            )
+            # Donor asset present -> a real editable type layer; absent -> the
+            # raster stays a plain pixel layer (still correct, just not live).
+            if tysh is not None:
+                from psd_tools.constants import Tag
+
+                label_layer.tagged_blocks[Tag.TYPE_TOOL_OBJECT_SETTING] = tysh
+    psd_live.make_border_layer(
+        psd, Image.new("RGBA", (w, h), (189, 0, 0, 255))
+    )
+
+    # The embedded preview must be OUR flat composite: psd-tools cannot render
+    # the live effects (no Inner Glow, broken edge stroke), so letting save()
+    # recomposite would embed garbage for every non-Photoshop viewer.
+    preview = poster.copy()
+    preview.alpha_composite(gradient)
+    preview.alpha_composite(logo_layer)
+    if text_layer is not None:
+        preview.alpha_composite(text_layer)
+    preview.alpha_composite(border)
 
     buf = io.BytesIO()
-    psd.save(buf)
+    psd_live.inject_preview(psd, preview, buf)
     return buf.getvalue()

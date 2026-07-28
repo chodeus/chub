@@ -307,6 +307,13 @@ def test_render_cl2k_svg_logo_never_crashes():
 # --------------------------------------------------------------------------
 
 
+def _psd_layer_image(psd, name):
+    """Full-canvas RGBA of the named layer; descends into the creator-style
+    groups (POSTER>Main, LOGO>Layer 1) the live export writes."""
+    layer = next(la for la in psd if la.name == name)
+    return layer.composite(viewport=(0, 0, psd.width, psd.height))
+
+
 def test_psd_poster_layer_matches_renderer_framing():
     pytest.importorskip("psd_tools")
     from PIL import Image as PILImage
@@ -320,7 +327,7 @@ def test_psd_poster_layer_matches_renderer_framing():
     )
     blob = export_psd(backdrop_bytes=framed, kind="movie", title="X")
     psd = PSDImage.open(io.BytesIO(blob))
-    poster = next(la for la in psd if la.name == "POSTER").topil().convert("RGB")
+    poster = _psd_layer_image(psd, "POSTER").convert("RGB")
     ref = PILImage.open(io.BytesIO(framed)).convert("RGB")
     assert poster.size == ref.size == (1000, 1500)
     assert ImageChops.difference(poster, ref).getbbox() is None  # pixel-identical
@@ -342,7 +349,7 @@ def test_psd_logo_layer_honours_logo_scale():
             logo_scale=scale,
         )
         psd = PSDImage.open(io.BytesIO(blob))
-        layer = next(la for la in psd if la.name == "LOGO").topil()
+        layer = _psd_layer_image(psd, "LOGO")
         bb = layer.getbbox()
         sizes[scale] = (bb[2] - bb[0], bb[3] - bb[1], bb[3])
     # The default box is now sized from the logo's own shape
@@ -379,7 +386,7 @@ def test_psd_logo_layer_trims_like_the_renderer(glow_alpha, tail_kept):
         whiten=False,
     )
     psd = PSDImage.open(io.BytesIO(blob))
-    layer = next(la for la in psd if la.name == "LOGO").topil().convert("RGBA")
+    layer = _psd_layer_image(psd, "LOGO").convert("RGBA")
     # Bbox of the OPAQUE ink only — the layer bbox would include a kept glow.
     ink = layer.getchannel("A").point(lambda v: 255 if v > 128 else 0).getbbox()
     psd_centre = (ink[0] + ink[2] - 1) / 2 - (geo.CANVAS_W - 1) / 2
@@ -516,3 +523,119 @@ def test_label_tracking_follows_the_template_not_string_length():
     assert geo.label_tracking("SPECIALS") == geo.LABEL_TRACKING
     assert geo.label_tracking("COLLECTION") == geo.LABEL_TRACKING
     assert geo.label_tracking("COMPLETE LIMITED SERIES") == geo.LABEL_TRACKING_LONG
+
+
+# --------------------------------------------------------------------------
+# live (editable) PSD structure — effects, gradient fill, type layer, preview
+# --------------------------------------------------------------------------
+
+
+def _live_psd(**kwargs):
+    pytest.importorskip("psd_tools")
+    from psd_tools import PSDImage
+
+    from backend.util.cl2k.psd_export import export_psd
+
+    blob = export_psd(
+        backdrop_bytes=frame_backdrop(backdrop_bytes=_backdrop()), **kwargs
+    )
+    return PSDImage.open(io.BytesIO(blob)), blob
+
+
+def test_psd_border_layer_carries_live_effects():
+    psd, _ = _live_psd(kind="movie", logo_bytes=_solid_logo("white"))
+    border = next(la for la in psd if la.name == "BORDER LAYER")
+    fx = {e.__class__.__name__: e.enabled for e in border.effects}
+    assert fx == {"Stroke": True, "InnerGlow": True}
+    from psd_tools.constants import Tag
+
+    assert border.tagged_blocks.get_data(Tag.BLEND_FILL_OPACITY) == 0
+    lfx2 = border.tagged_blocks.get_data(Tag.OBJECT_BASED_EFFECTS_LAYER_INFO)
+    stroke, glow = lfx2[b"FrFX"], lfx2[b"IrGl"]
+    # present=True is load-bearing: without it readers report zero effects
+    assert stroke[b"present"].value and glow[b"present"].value
+    assert stroke[b"Sz  "].value == float(geo.BORDER_WIDTH)
+    assert stroke[b"Styl"].enum == b"InsF"
+    assert (glow[b"Ckmt"].value, glow[b"blur"].value) == (50.0, 45.0)
+
+
+def test_psd_gradient_is_a_live_fill_layer():
+    psd, _ = _live_psd(kind="movie", logo_bytes=_solid_logo("white"))
+    grad = next(
+        la for g in psd if g.is_group() and g.name == "GRADIENT" for la in g
+    )
+    assert grad.kind == "gradientfill"
+    from psd_tools.constants import Tag
+
+    gd = grad.tagged_blocks.get_data(Tag.GRADIENT_FILL_SETTING)
+    assert (gd[b"Angl"].value, gd[b"Scl "].value) == (90.0, 30.0)
+    stops = [
+        (float(t[b"Opct"].value), int(t[b"Lctn"].value))
+        for t in gd[b"Grad"][b"Trns"]
+    ]
+    # the template's own opacity stops — these are what put first-alpha at
+    # y=1037 and full black at y=1374 when Photoshop rasterises the fill
+    assert stops == [(100.0, 819), (0.0, 3909)]
+
+
+def test_psd_label_is_an_editable_type_layer():
+    psd, _ = _live_psd(
+        kind="season", logo_bytes=_solid_logo("white"), season_text="Season three"
+    )
+    label = next(la for la in psd if la.kind == "type")
+    assert label.text.rstrip("\r") == "SEASON THREE"
+    from psd_tools.constants import Tag
+
+    tysh = label.tagged_blocks.get_data(Tag.TYPE_TOOL_OBJECT_SETTING)
+    engine = tysh.text_data[b"EngineData"].value["EngineDict"]
+    style = engine["StyleRun"]["RunArray"][0]["StyleSheet"]["StyleSheetData"]
+    assert int(style["Tracking"].value) == geo.label_tracking("SEASON THREE")
+    assert float(style["FontSize"].value) == float(geo.LABEL_FONT_PX)
+    # run lengths must cover text + trailing \r or Photoshop mis-parses runs
+    for run in ("StyleRun", "ParagraphRun"):
+        assert int(engine[run]["RunLengthArray"][0].value) == len("SEASON THREE") + 1
+    # anchor pre-compensates centre-justification's tracking bias
+    expected_tx = geo.CENTER_X - geo.label_tracking("SEASON THREE") * geo.LABEL_FONT_PX / 2000.0
+    assert abs(tysh.transform[4] - expected_tx) < 0.01
+    assert tysh.transform[5] == 1451.0
+
+
+def test_psd_embedded_preview_is_the_flat_composite():
+    # psd-tools cannot render the live effects, so the preview MUST be the
+    # injected flat composite — not a recomposite (which would be garbage).
+    psd, blob = _live_psd(kind="movie", logo_bytes=_solid_logo("white"))
+    assert psd.has_preview()
+    preview = psd.topil().convert("RGB")
+    left = preview.getpixel((2, 750))
+    top = preview.getpixel((500, 2))
+    assert left == (255, 255, 255) and top == (255, 255, 255)  # border painted
+    inside = preview.getpixel((500, 500))
+    assert inside != (255, 255, 255)  # artwork, not a blown-out recomposite
+    # and PIL parses the file independently of psd-tools
+    from PIL import Image as PILImage
+
+    with PILImage.open(io.BytesIO(blob)) as pil:
+        assert pil.format == "PSD" and pil.size == (1000, 1500)
+
+
+def test_psd_label_falls_back_to_raster_without_the_donor(monkeypatch, tmp_path):
+    # The donor TySh asset is a committed derivative; a build without it must
+    # still export — the label just stays a plain pixel layer instead of type.
+    pytest.importorskip("psd_tools")
+    from psd_tools import PSDImage
+
+    from backend.util.cl2k import psd_live
+    from backend.util.cl2k.psd_export import export_psd
+
+    monkeypatch.setattr(psd_live, "LABEL_TYSH_BIN", tmp_path / "missing.bin")
+    monkeypatch.setattr(psd_live, "_DONOR_CACHE", {})
+    blob = export_psd(
+        backdrop_bytes=frame_backdrop(backdrop_bytes=_backdrop()),
+        kind="season",
+        logo_bytes=_solid_logo("white"),
+        season_text="Season three",
+    )
+    psd = PSDImage.open(io.BytesIO(blob))
+    label = next(la for la in psd if la.name == "SEASON THREE")
+    assert label.kind == "pixel"
+    assert next(la for la in psd if la.name == "BORDER LAYER").effects  # still live
