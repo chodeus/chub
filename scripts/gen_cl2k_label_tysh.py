@@ -42,7 +42,7 @@ def _find(layers, name):
             return layer
         if layer.is_group():
             hit = _find(layer, name)
-            if hit:
+            if hit is not None:
                 return hit
     return None
 

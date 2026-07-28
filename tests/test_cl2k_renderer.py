@@ -579,6 +579,10 @@ def test_psd_gradient_is_a_live_fill_layer():
 
 
 def test_psd_label_is_an_editable_type_layer():
+    from backend.util.cl2k import psd_live
+
+    if not psd_live.LABEL_TYSH_BIN.exists():
+        pytest.skip("label TySh donor asset not present in this checkout")
     psd, _ = _live_psd(
         kind="season", logo_bytes=_solid_logo("white"), season_text="Season three"
     )

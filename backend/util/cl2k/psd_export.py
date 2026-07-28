@@ -166,6 +166,12 @@ def _centered(
         x += cw + kerning
 
 
+# The template's own border-plate colour. Never visible: fill opacity is 0 and
+# only the live Stroke + Inner Glow paint — but the plate must stay OPAQUE, the
+# effects key off the layer's alpha shape (a transparent plate draws nothing).
+_BORDER_PLATE_RGBA = (189, 0, 0, 255)
+
+
 def export_psd(
     *,
     backdrop_bytes: bytes,
@@ -338,9 +344,7 @@ def export_psd(
                 from psd_tools.constants import Tag
 
                 label_layer.tagged_blocks[Tag.TYPE_TOOL_OBJECT_SETTING] = tysh
-    psd_live.make_border_layer(
-        psd, Image.new("RGBA", (w, h), (189, 0, 0, 255))
-    )
+    psd_live.make_border_layer(psd, Image.new("RGBA", (w, h), _BORDER_PLATE_RGBA))
 
     # The embedded preview must be OUR flat composite: psd-tools cannot render
     # the live effects (no Inner Glow, broken edge stroke), so letting save()

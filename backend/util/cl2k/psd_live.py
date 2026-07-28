@@ -24,7 +24,8 @@ from __future__ import annotations
 
 import copy
 import io
-from typing import Any, Optional, Tuple
+import logging
+from typing import Any, Optional
 
 from backend.util.cl2k import geometry as geo
 
@@ -264,16 +265,31 @@ _DONOR_CACHE: dict = {}
 def _load_donor_tysh() -> Optional[Any]:
     from psd_tools.psd.tagged_blocks import TaggedBlock
 
-    if "tysh" not in _DONOR_CACHE:
-        blob = None
-        if LABEL_TYSH_BIN.exists():
-            try:
-                raw = LABEL_TYSH_BIN.read_bytes()
-                blob = TaggedBlock.read(io.BytesIO(raw), version=1, padding=1)
-            except Exception:
-                blob = None
-        _DONOR_CACHE["tysh"] = blob
-    return _DONOR_CACHE["tysh"]
+    if "tysh" in _DONOR_CACHE:
+        return _DONOR_CACHE["tysh"]
+    if not LABEL_TYSH_BIN.exists():
+        _DONOR_CACHE["tysh"] = None  # genuine not-found: the donor is optional
+        return None
+    try:
+        raw = LABEL_TYSH_BIN.read_bytes()
+        blob = TaggedBlock.read(io.BytesIO(raw), version=1, padding=1)
+        # psd-tools returns None (with only a log line) on bad bytes rather
+        # than raising — normalise that to a failure.
+        if blob is None or not hasattr(getattr(blob, "data", None), "text_data"):
+            raise ValueError("asset is not a TySh tagged block")
+    except Exception:
+        # Transient (partial deploy, permission blip, truncated read) — retry
+        # next export instead of silently rasterising labels for the process
+        # lifetime.
+        logging.getLogger(__name__).warning(
+            "CL2K label donor %s unreadable; label falls back to raster this "
+            "export",
+            LABEL_TYSH_BIN,
+            exc_info=True,
+        )
+        return None
+    _DONOR_CACHE["tysh"] = blob
+    return blob
 
 
 def make_border_layer(psd: Any, plate: Any) -> Any:
@@ -332,8 +348,3 @@ def inject_preview(psd: Any, preview: Any, out: io.BytesIO) -> None:
         pass
     psd._updated = False
     psd.save(out)
-
-
-def label_metrics(label_center_y: int) -> Tuple[float, float]:
-    """(anchor_ty, unused) — exposed for tests."""
-    return _TYPE_BASELINE.get(label_center_y, float(label_center_y) + 11.0), 0.0
