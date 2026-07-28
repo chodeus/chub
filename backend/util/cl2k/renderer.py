@@ -525,18 +525,15 @@ def _read_logo_image(logo_bytes: bytes) -> Image:
 
 
 def _trim_logo(logo: Image) -> None:
-    """Crop a clear logo to its visible content, in place.
+    """Crop to visible content (alpha > geo.LOGO_TRIM_ALPHA), in place.
 
-    Pixels at or below ``geo.LOGO_TRIM_ALPHA`` count as padding. The one trim
-    for logos: process_logo, logo_is_usable and _place_logo must agree, or the
-    preview, the touch-up brushes and the too-small gate drift apart.
+    The ONE logo trim — process_logo, logo_is_usable and _place_logo must agree.
     """
     with logo.clone() as probe:
         probe.alpha_channel = "extract"  # alpha -> greyscale, so trim sees it
         probe.threshold(geo.LOGO_TRIM_ALPHA / 255.0)
-        # Nothing above the threshold: ImageMagick trims a uniform image to 1x1
-        # rather than to nothing, so a size check can't detect this. Leave the
-        # logo alone (what the Pillow PSD path does on a None bbox).
+        # All sub-threshold: IM trims a uniform image to 1x1, not to nothing —
+        # bail out here (matches the Pillow PSD path's None bbox).
         if probe.mean_channel()[0] <= 0:
             return
         probe.background_color = Color("black")

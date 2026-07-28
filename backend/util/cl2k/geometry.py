@@ -36,12 +36,8 @@ LOGO_WIDTH_MAX = 800  # guide "Max Logo Width" (x100->900) — hard cap
 # (ai_logo_upscale) gets a shot before the text fallback.
 LOGO_MIN_WIDTH = 400
 
-# Alpha at or below this counts as transparent padding when a logo is trimmed.
-# Without it, a sub-visible glow (TMDB clearlogos carry alpha 1-5) stays inside
-# the trimmed box and pushes the visible artwork off-centre. 8/255 is ~3%
-# opacity: invisible, but under the ~5% where a designed glow starts to read.
-# Applied as an explicit alpha threshold, not ImageMagick trim fuzz — fuzz cuts
-# at fuzz*sqrt(2) on an HDRI build, so dev and the container would disagree.
+# Logo-trim cutoff: alpha <= this is padding, above is content. An explicit
+# threshold, NOT ImageMagick trim fuzz (HDRI builds cut fuzz at sqrt(2)x).
 LOGO_TRIM_ALPHA = 8
 
 # ----- automatic logo sizing --------------------------------------------------

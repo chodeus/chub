@@ -949,19 +949,12 @@ def _persist_poster(
     upload_errors: List[str] = []
 
     def _run_uploads(reload_config: bool = False) -> None:
-        """Push the poster to every routed Drive folder.
-
-        Appends to ``uploaded_folders`` / ``upload_errors`` and marks provenance.
-        ``reload_config`` re-reads routing + credentials first — set on the
-        deferred path, where the snapshot can go stale before the task runs.
-        """
+        """Upload to every routed Drive folder; deferred runs reload live config."""
         from backend.util.cl2k.gdrive_upload import upload_file
 
         targets, upload_cfg = folder_ids, sync_cfg
         if reload_config:
-            # Deferred: minutes can pass, so routing may have changed and the
-            # OAuth token may have been refreshed. Skip rather than upload to a
-            # removed folder or with dead credentials.
+            # Deferred runs use current routing/credentials; skip if unreadable.
             try:
                 from backend.util.config import load_config
 
@@ -1038,9 +1031,7 @@ def _persist_poster(
                 f"CL2K uploaded {filename} but could not record provenance: {exc}"
             )
 
-    # An rclone upload outruns the UI's request timeout, so hand it to the
-    # background. Only when a local copy exists: with no local file the upload is
-    # the sole outcome, and returning early would report success prematurely.
+    # Defer only uploads backed by a local copy (rclone outruns the UI timeout).
     deferred_upload = False
     if folder_ids:
         if defer_upload is not None and written:
