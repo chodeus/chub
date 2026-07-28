@@ -278,9 +278,7 @@ def _load_donor_tysh() -> Optional[Any]:
         if blob is None or not hasattr(getattr(blob, "data", None), "text_data"):
             raise ValueError("asset is not a TySh tagged block")
     except Exception:
-        # Transient (partial deploy, permission blip, truncated read) — retry
-        # next export instead of silently rasterising labels for the process
-        # lifetime.
+        # Transient failure: don't cache — retry next export.
         logging.getLogger(__name__).warning(
             "CL2K label donor %s unreadable; label falls back to raster this "
             "export",
