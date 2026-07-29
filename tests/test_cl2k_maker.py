@@ -94,3 +94,43 @@ def test_auto_sourced_small_logo_is_dropped(env, monkeypatch):
         logo_path=None,
     )
     assert info["logo_source"] == "none"  # too small -> dropped (no fallback configured)
+
+
+def test_a_successful_ai_extend_is_not_reframed_again(env, monkeypatch):
+    """The AI-extended canvas is finished art — render it as-is.
+
+    fit_extend_canvas has already applied zoom and v_pos to produce a full
+    CANVAS_W x CANVAS_H canvas, and the AI filled the band below. Passing the
+    same zoom/v_pos on to render_cl2k re-scales that finished image, and for
+    v_pos > 0 (the ~0.4 headroom the docstring recommends) crops rows off its
+    top and fades a black band over the fill the AI just generated.
+    """
+    full_config, logger = env
+    monkeypatch.setattr(
+        maker.renderer,
+        "fit_extend_canvas",
+        lambda *a, **k: (_backdrop_png(), b"mask"),
+    )
+    monkeypatch.setattr(maker.text_removal, "unavailable_reason", lambda *a, **k: None)
+    monkeypatch.setattr(maker.text_removal, "remove_text", lambda *a, **k: _backdrop_png())
+    seen = {}
+    monkeypatch.setattr(maker, "render_cl2k", lambda **kw: seen.update(kw) or _backdrop_png())
+
+    maker._resolve_and_render(
+        db=object(),
+        full_config=full_config,
+        logger=logger,
+        kind="show",
+        title="The Tiny Chef Show",
+        tmdb_id=221230,
+        backdrop_bytes=_backdrop_png(),
+        logo_path="/iMuXNXkPq9OCKw5jljoIxkv8IRV.png",
+        fit_mode="extend",
+        v_pos=0.4,
+        zoom=1.5,
+    )
+
+    assert seen["fit_mode"] == "cover"
+    assert seen["crop"] is None
+    assert seen["v_pos"] == 0.0, "v_pos was already baked into the extended canvas"
+    assert seen["zoom"] == 1.0, "zoom was already baked into the extended canvas"

@@ -198,7 +198,6 @@ def _resolve_and_render(
     backdrop_bytes: Optional[bytes] = None,
     apply_ai: bool = False,
     focus_x: float = 0.5,
-    focus_y: float = 0.5,
     fit_mode: str = "cover",
     crop: Optional[Tuple[float, float, float, float]] = None,
     v_pos: float = 0.0,
@@ -286,7 +285,11 @@ def _resolve_and_render(
             )
         if extended is not None and extended is not canvas_bytes:
             backdrop_bytes = extended
-            fit_mode, crop = "cover", None
+            # Identity framing, not just "cover": the AI canvas is already
+            # CANVAS_W x CANVAS_H with zoom/v_pos baked in by fit_extend_canvas.
+            # Re-applying them re-scales the finished image and, for v_pos > 0,
+            # crops rows off the top and fades a black band over the fill.
+            fit_mode, crop, zoom, v_pos = "cover", None, 1.0, 0.0
         else:
             if extend_mask is not None and logger:
                 reason = (
@@ -383,7 +386,6 @@ def _resolve_and_render(
         flat_white=flat_white,
         invert=invert,
         focus_x=focus_x,
-        focus_y=focus_y,
         fit_mode=fit_mode,
         crop=crop,
         v_pos=v_pos,
@@ -427,7 +429,6 @@ def generate_for_item(
     backdrop_bytes: Optional[bytes] = None,
     apply_ai: bool = False,
     focus_x: float = 0.5,
-    focus_y: float = 0.5,
     fit_mode: str = "cover",
     crop: Optional[Tuple[float, float, float, float]] = None,
     v_pos: float = 0.0,
@@ -492,7 +493,6 @@ def generate_for_item(
         backdrop_bytes=backdrop_bytes,
         apply_ai=apply_ai,
         focus_x=focus_x,
-        focus_y=focus_y,
         fit_mode=fit_mode,
         crop=crop,
         v_pos=v_pos,
@@ -545,8 +545,8 @@ def generate_square_art(
     backdrop_path: Optional[str] = None,
     backdrop_bytes: Optional[bytes] = None,
     focus_x: float = 0.5,
-    focus_y: float = 0.5,
     fit_mode: str = "cover",
+    v_pos: float = 0.0,
     zoom: float = 1.0,
     season_number: Optional[int] = None,
     save_local: bool = True,
@@ -584,8 +584,8 @@ def generate_square_art(
     blob = renderer.render_square_art(
         backdrop_bytes=backdrop_bytes,
         focus_x=focus_x,
-        focus_y=focus_y,
         fit_mode=fit_mode,
+        v_pos=v_pos,
         zoom=zoom,
     )
     return _persist_poster(
@@ -625,8 +625,8 @@ def generate_background_art(
     backdrop_path: Optional[str] = None,
     backdrop_bytes: Optional[bytes] = None,
     focus_x: float = 0.5,
-    focus_y: float = 0.5,
     fit_mode: str = "cover",
+    v_pos: float = 0.0,
     zoom: float = 1.0,
     resolution: str = "1080p",
     season_number: Optional[int] = None,
@@ -670,8 +670,8 @@ def generate_background_art(
         width=width,
         height=height,
         focus_x=focus_x,
-        focus_y=focus_y,
         fit_mode=fit_mode,
+        v_pos=v_pos,
         zoom=zoom,
     )
     return _persist_poster(
@@ -1349,7 +1349,6 @@ def generate_seasons(
     imdb_id: Optional[str] = None,
     fit_mode: str = "cover",
     focus_x: float = 0.5,
-    focus_y: float = 0.5,
     crop: Optional[Tuple[float, float, float, float]] = None,
     v_pos: float = 0.0,
     zoom: float = 1.0,
@@ -1402,7 +1401,6 @@ def generate_seasons(
                 custom_logo_bytes=custom_logo_bytes,
                 fit_mode=fit_mode,
                 focus_x=focus_x,
-                focus_y=focus_y,
                 crop=crop,
                 v_pos=v_pos,
                 zoom=zoom,
@@ -1444,7 +1442,6 @@ def psd_for_item(
     logo_scale: float = 1.0,
     logo_y_offset: int = 0,
     focus_x: float = 0.5,
-    focus_y: float = 0.5,
     fit_mode: str = "cover",
     crop: Optional[Tuple[float, float, float, float]] = None,
     v_pos: float = 0.0,
@@ -1477,7 +1474,6 @@ def psd_for_item(
     backdrop_bytes = renderer.frame_backdrop(
         backdrop_bytes=image_fetch.download(backdrop_path),
         focus_x=focus_x,
-        focus_y=focus_y,
         fit_mode=fit_mode,
         crop=crop,
         v_pos=v_pos,
