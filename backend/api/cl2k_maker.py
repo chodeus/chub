@@ -117,10 +117,11 @@ class GenerateRequest(BaseModel):
     crop_y: Optional[float] = None
     crop_w: Optional[float] = None
     crop_h: Optional[float] = None
-    # Vertical position. In cover ("Fill") it is -1..1 centred on 0: positive pans
-    # the framing UP at the same size (real artwork flows into the gradient, no
-    # AI), negative pans down through source only. In fit/extend it keeps its
-    # 0..1 top-anchored meaning (0 = top, ~0.4 = headroom).
+    # Vertical position. In cover ("Fill") it is -1..1 centred on 0: positive
+    # slides the framing UP at the same size (real artwork flows down into the
+    # gradient, no AI), negative slides it DOWN and only as far as real source
+    # above the crop allows — no gradient up there to hide an extended band. In
+    # fit/extend it keeps its 0..1 top-anchored meaning (0 = top, ~0.4 = headroom).
     v_pos: float = Field(0.0, ge=geo.V_POS_MIN, le=geo.V_POS_MAX)
     # Zoom (0.5-3.0): in fit/extend, >1 enlarges the subject above the full-width
     # fit (sides crop) so a wide backdrop isn't shrunk to a tiny strip; in cover

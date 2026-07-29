@@ -285,7 +285,11 @@ def _resolve_and_render(
             )
         if extended is not None and extended is not canvas_bytes:
             backdrop_bytes = extended
-            fit_mode, crop = "cover", None
+            # Identity framing, not just "cover": the AI canvas is already
+            # CANVAS_W x CANVAS_H with zoom/v_pos baked in by fit_extend_canvas.
+            # Re-applying them re-scales the finished image and, for v_pos > 0,
+            # crops rows off the top and fades a black band over the fill.
+            fit_mode, crop, zoom, v_pos = "cover", None, 1.0, 0.0
         else:
             if extend_mask is not None and logger:
                 reason = (

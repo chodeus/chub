@@ -1061,7 +1061,8 @@ def render_cl2k(
       on black, keeping the full width so subjects spread across a wide backdrop
       all stay in frame (the artist technique). ``crop`` (``x, y, w, h`` in 0..1)
       optionally isolates the subject region first; the black bottom band is the
-      gradient/logo zone.
+      gradient/logo zone. ``v_pos`` applies here too, but on :func:`_fit_resize`'s
+      0..1 top-anchored scale (0 = top), not cover's -1..1.
     """
     kind = kind.lower()
     baseline = geo.logo_baseline(kind)
