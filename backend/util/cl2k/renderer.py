@@ -227,12 +227,14 @@ def _fit_resize(
 
     ``v_pos`` (0..1) positions the photo vertically when it's shorter than the
     canvas: 0 = top-anchored (default), 1 = bottom-anchored, 0.4 ≈ headroom above
-    the subjects. The freed space is edge-extended — **sky upward** above the photo
-    (no black fade; the CL2K top has no gradient) and **faded to black downward**
-    below it (so it merges into the gradient/logo zone). ``crop`` (``x, y, w, h``
-    0..1) optionally isolates the subject region before fitting. ``zoom`` (>=1)
-    enlarges the subject above the full-width fit (sides crop), so a wide backdrop
-    doesn't shrink to a tiny strip.
+    the subjects. Deliberately NOT :func:`_cover_resize`'s -1..1-centred-on-0
+    scale: here the photo is *anchored*, not panned, so 0 means top and there is
+    nothing for a negative value to name. The freed space is edge-extended —
+    **sky upward** above the photo (no black fade; the CL2K top has no gradient)
+    and **faded to black downward** below it (so it merges into the gradient/logo
+    zone). ``crop`` (``x, y, w, h`` 0..1) optionally isolates the subject region
+    before fitting. ``zoom`` (>=1) enlarges the subject above the full-width fit
+    (sides crop), so a wide backdrop doesn't shrink to a tiny strip.
     """
     _apply_crop(img, crop)
     new_h = _zoom_fit(img, width, zoom)
@@ -282,6 +284,8 @@ def fit_extend_canvas(
     empty band and black (=keep) over the photo, feathered at the seam. Returns
     ``(canvas_png, None)`` when the fitted photo already fills the height — nothing
     to extend, the caller should just fit/cover it (``v_pos`` picks the slice).
+    ``v_pos`` is top-anchored 0..1 here, matching :func:`_fit_resize` rather than
+    :func:`_cover_resize`.
 
     The mask convention matches :mod:`text_removal` (white = fill), so the canvas +
     mask feed straight into ``text_removal.remove_text`` for any provider.

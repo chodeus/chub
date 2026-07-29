@@ -108,7 +108,7 @@ class GenerateRequest(BaseModel):
     mask_b64: Optional[str] = None  # user-brushed mask (PNG, white=remove) for AI
     remove_text: bool = False  # run AI text removal (OpenAI can do it mask-less)
     focus_x: float = 0.5  # crop focal point (0..1); 0.5 = centre (cover mode)
-    # Framing: "cover" scales up + crops to fill (focus_x/y); "fit" scales the
+    # Framing: "cover" scales up + crops to fill (focus_x + v_pos); "fit" scales the
     # backdrop down to the canvas width and black-pads the bottom, keeping the full
     # width so spread-out subjects all stay in frame. ``crop_*`` (0..1) optionally
     # isolates the subject region of a wide backdrop before the fit.
@@ -117,10 +117,11 @@ class GenerateRequest(BaseModel):
     crop_y: Optional[float] = None
     crop_w: Optional[float] = None
     crop_h: Optional[float] = None
-    # Vertical position (0..1). In fit/extend it positions the fitted photo (0 =
-    # top, ~0.4 = headroom). In cover ("Fill") it pans the framing UP at the same
-    # size — real artwork flows down into the gradient, no AI (0 = unchanged).
-    v_pos: float = 0.0
+    # Vertical position. In cover ("Fill") it is -1..1 centred on 0: positive pans
+    # the framing UP at the same size (real artwork flows into the gradient, no
+    # AI), negative pans down through source only. In fit/extend it keeps its
+    # 0..1 top-anchored meaning (0 = top, ~0.4 = headroom).
+    v_pos: float = Field(0.0, ge=geo.V_POS_MIN, le=geo.V_POS_MAX)
     # Zoom (0.5-3.0): in fit/extend, >1 enlarges the subject above the full-width
     # fit (sides crop) so a wide backdrop isn't shrunk to a tiny strip; in cover
     # ("Fill"), <1 shrinks the art below the fill onto black. 1.0 = plain fit/cover.
@@ -565,7 +566,7 @@ class SquareArtRequest(BaseModel):
     backdrop_path: Optional[str] = None
     backdrop_b64: Optional[str] = None  # custom-uploaded source art (base64)
     focus_x: float = 0.5
-    v_pos: float = 0.0
+    v_pos: float = Field(0.0, ge=geo.V_POS_MIN, le=geo.V_POS_MAX)
     fit_mode: str = "cover"  # cover (focal crop) | fit (contain on black)
     zoom: float = Field(1.0, ge=geo.ZOOM_MIN, le=geo.ZOOM_MAX)
     save_local: bool = True
@@ -688,7 +689,7 @@ class BackgroundArtRequest(BaseModel):
     backdrop_path: Optional[str] = None
     backdrop_b64: Optional[str] = None  # custom-uploaded source art (base64)
     focus_x: float = 0.5
-    v_pos: float = 0.0
+    v_pos: float = Field(0.0, ge=geo.V_POS_MIN, le=geo.V_POS_MAX)
     fit_mode: str = "cover"  # cover (focal crop) | fit (contain on black)
     zoom: float = Field(1.0, ge=geo.ZOOM_MIN, le=geo.ZOOM_MAX)
     resolution: str = "1080p"  # 1080p (1920x1080) | 4k (3840x2160), per Plex dims
@@ -938,7 +939,7 @@ class SeasonsRequest(BaseModel):
     crop_y: Optional[float] = None
     crop_w: Optional[float] = None
     crop_h: Optional[float] = None
-    v_pos: float = 0.0
+    v_pos: float = Field(0.0, ge=geo.V_POS_MIN, le=geo.V_POS_MAX)
     zoom: float = Field(1.0, ge=geo.ZOOM_MIN, le=geo.ZOOM_MAX)
     logo_scale: float = Field(1.0, ge=geo.LOGO_SCALE_MIN, le=geo.LOGO_SCALE_MAX)
     logo_y_offset: int = Field(0, ge=geo.LOGO_Y_OFFSET_MIN, le=geo.LOGO_Y_OFFSET_MAX)

@@ -263,13 +263,24 @@ const CONTROL_RANGES = {
     vPos: { min: -1, max: 1 }, // geo.V_POS_MIN/MAX — 0 = centred
 };
 
-// v_pos (-1..1, 0 = centred) as the 0..1 vertical fraction the crop-box overlays
-// draw with. Mirrors renderer._v_pos_top: 0 -> centre, ±1 -> the travel limits.
-const vPosToFrac = vPos =>
-    0.5 + Math.max(CONTROL_RANGES.vPos.min, Math.min(vPos || 0, CONTROL_RANGES.vPos.max)) / 2;
-// Inverse, for turning a drag on the crop box back into v_pos.
-const fracToVPos = frac =>
-    Math.max(CONTROL_RANGES.vPos.min, Math.min((frac - 0.5) * 2, CONTROL_RANGES.vPos.max));
+const clampVPos = v =>
+    Math.max(CONTROL_RANGES.vPos.min, Math.min(Number(v) || 0, CONTROL_RANGES.vPos.max));
+
+// v_pos (-1..1, 0 = centred) <-> the 0..1 source fraction the crop-box overlays
+// draw with. `hF` is the kept box's height as a fraction of the scaled source, so
+// the travel each way is the real slack — (1 - hF) / 2 — not half the whole
+// source. renderer._v_pos_top pans over exactly that: (src_h - height) / 2 either
+// side of centre. Mapping over the full source instead makes the box outrun the
+// render and saturate early, which is what it did when v_pos absorbed focus_y.
+const vPosTravel = hF => (1 - Math.min(1, Math.max(0, hF || 0))) / 2;
+const vPosToFrac = (vPos, hF) => 0.5 + clampVPos(vPos) * vPosTravel(hF);
+// Inverse, for turning a drag on the crop box back into v_pos. null when the box
+// fills the height: there is nothing to pan, and a drag must then leave the
+// user's Vertical position alone rather than slam it to a limit.
+const fracToVPos = (frac, hF) => {
+    const travel = vPosTravel(hF);
+    return travel <= 0 ? null : clampVPos((frac - 0.5) / travel);
+};
 
 const cl2kLogoBaseline = kind =>
     (kind || '').toLowerCase() === 'collection'
@@ -1121,6 +1132,13 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
     }, []);
     // fitMode is deliberately NOT reset — it's a per-user way of working
     // (Fill vs Fit), not a property of the chosen image.
+    // v_pos is only two-sided in Fill: the fit/extend renderers anchor the photo
+    // from the TOP over 0..1, so negative has no meaning there. Clamp on the way
+    // in rather than let the backend silently floor it.
+    const setFitModeClamped = useCallback(mode => {
+        setFitMode(mode);
+        if (mode !== 'cover') setVPos(v => Math.max(0, v ?? 0));
+    }, []);
     const setBackdropExclusive = useCallback(
         p => {
             setBackdrop(p);
@@ -1837,7 +1855,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                     logoEraseB64={logoEraseB64}
                     processedLogo={overlayLogo}
                     fitMode={fitMode}
-                    setFitMode={setFitMode}
+                    setFitMode={setFitModeClamped}
                     crop={crop}
                     setCrop={setCrop}
                     vPos={vPos}
@@ -3111,7 +3129,7 @@ const RenderPanel = ({
 
                     {/* RIGHT: framing + logo controls + accordions */}
                     <section className="bg-surface border border-border rounded-[12px] p-4 flex flex-col gap-3.5">
-                        {/* FRAMING — always visible (Zoom / Vertical / Focus Y +
+                        {/* FRAMING — always visible (Zoom / Vertical position +
                             guides). The sliders only call setZoom/setVPos/onFocusChange
                             — all RenderPanel props — so no CropFramer drag math moves. */}
                         <div className="flex flex-col gap-3">
@@ -3155,7 +3173,7 @@ const RenderPanel = ({
                                 </div>
                                 <input
                                     type="range"
-                                    min={CONTROL_RANGES.vPos.min}
+                                    min={fitMode === 'cover' ? CONTROL_RANGES.vPos.min : 0}
                                     max={CONTROL_RANGES.vPos.max}
                                     step="0.01"
                                     value={vPos}
@@ -4111,7 +4129,7 @@ const clamp01 = v => Math.max(0, Math.min(1, v));
 const FULL_CROP = { x: 0, y: 0, w: 1, h: 1 };
 
 const FRAMING_HELP = {
-    cover: 'Drag on the photo to choose what stays in the 2:3 crop — the dimmed area is cut. Use Vertical position to slide the framing up at the same size; real artwork flows down into the gradient (no AI).',
+    cover: 'Drag on the photo to choose what stays in the 2:3 crop — the dimmed area is cut. Vertical position slides the framing at the same size: 0 is centred, positive flows real artwork down into the gradient (no AI). Negative needs source above the crop — raise Zoom past 1x, or use a taller-than-16:9 backdrop.',
     fit: 'Drag a box around the subjects: that region shrinks to the poster width (use Zoom to enlarge it), sky is extended above, and the bottom fades to black into the logo zone. The mock shows where it lands.',
     extend: 'Drag a box around the subjects (use Zoom to enlarge them): the empty bottom is filled by AI on Generate. The mock shows the free edge-extend placeholder until then.',
 };
@@ -4153,7 +4171,10 @@ const CropFramer = ({
             hF = 1 / target / ratio;
         }
         const leftF = Math.max(0, Math.min(focusX - wF / 2, 1 - wF));
-        const topF = Math.max(0, Math.min(vPosToFrac(vPos) - hF / 2, 1 - hF));
+        // Positive v_pos can pan past the source into the edge-extended band that
+        // lands in the gradient; that band isn't on this image, so the box stops
+        // at the real bottom edge rather than drawing a region that doesn't exist.
+        const topF = Math.max(0, Math.min(vPosToFrac(vPos, hF) - hF / 2, 1 - hF));
         return { left: leftF, top: topF, w: wF, h: hF };
     }, [ratio, focusX, vPos]);
 
@@ -4184,10 +4205,11 @@ const CropFramer = ({
                 anchor.current = p;
                 setCrop({ x: p.nx, y: p.ny, w: 0, h: 0 });
             } else {
-                onChange(p.nx, fracToVPos(p.ny));
+                const vp = fracToVPos(p.ny, coverRect?.h);
+                onChange(p.nx, vp === null ? vPos : vp);
             }
         },
-        [isBox, pointFromEvent, onChange, setCrop]
+        [isBox, pointFromEvent, onChange, setCrop, coverRect, vPos]
     );
     const moveEvt = useCallback(
         e => {
@@ -4203,10 +4225,11 @@ const CropFramer = ({
                     h: Math.abs(p.ny - a.ny),
                 });
             } else if (!isBox) {
-                onChange(p.nx, fracToVPos(p.ny));
+                const vp = fracToVPos(p.ny, coverRect?.h);
+                onChange(p.nx, vp === null ? vPos : vp);
             }
         },
-        [isBox, pointFromEvent, onChange, setCrop]
+        [isBox, pointFromEvent, onChange, setCrop, coverRect, vPos]
     );
     const up = useCallback(() => {
         // A tiny accidental box collapses back to the whole image.
@@ -4273,7 +4296,7 @@ const CropFramer = ({
                         doesn't reliably fire native title tooltips cross-browser. */}
                     <span title={resetTip} className="inline-flex">
                         <Button
-                            onClick={() => (isBox ? setCrop(FULL_CROP) : onChange(0.5, 0.5))}
+                            onClick={() => (isBox ? setCrop(FULL_CROP) : onChange(0.5, 0))}
                             variant="secondary"
                             icon={isBox ? 'crop_free' : 'filter_center_focus'}
                             size="small"
@@ -5051,7 +5074,7 @@ const SquareFramer = ({
         const hF = Math.min(1, aspect / nh);
         return {
             left: Math.max(0, Math.min(focusX - wF / 2, 1 - wF)),
-            top: Math.max(0, Math.min(vPosToFrac(vPos) - hF / 2, 1 - hF)),
+            top: Math.max(0, Math.min(vPosToFrac(vPos, hF) - hF / 2, 1 - hF)),
             w: wF,
             h: hF,
         };
@@ -5076,17 +5099,23 @@ const SquareFramer = ({
             e.preventDefault();
             dragging.current = true;
             const p = point(e);
-            if (p) onChange(p.nx, p.ny);
+            // ny is a 0..1 fraction of the image; vPos is -1..1 centred on 0, and
+            // null means the frame fills the height — pan nothing, keep the slider.
+            if (!p) return;
+            const vp = fracToVPos(p.ny, rect?.h);
+            onChange(p.nx, vp === null ? vPos : vp);
         },
-        [point, onChange]
+        [point, onChange, rect, vPos]
     );
     const move = useCallback(
         e => {
             if (!dragging.current) return;
             const p = point(e);
-            if (p) onChange(p.nx, p.ny);
+            if (!p) return;
+            const vp = fracToVPos(p.ny, rect?.h);
+            onChange(p.nx, vp === null ? vPos : vp);
         },
-        [point, onChange]
+        [point, onChange, rect, vPos]
     );
     const up = useCallback(() => {
         dragging.current = false;
@@ -5112,7 +5141,7 @@ const SquareFramer = ({
                     </button>
                     <Button
                         onClick={() => {
-                            onChange(0.5, 0.5);
+                            onChange(0.5, 0);
                             setZoom(1);
                         }}
                         variant="secondary"
@@ -5406,9 +5435,9 @@ const SquareArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                             imageUrl={srcUrl}
                             focusX={focusX}
                             vPos={vPos}
-                            onChange={(fx, fy) => {
+                            onChange={(fx, vp) => {
                                 setFocusX(fx);
-                                setVPos(fy);
+                                setVPos(vp);
                             }}
                             fitMode={fitMode}
                             setFitMode={setFitMode}
@@ -5661,9 +5690,9 @@ const BackgroundArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast 
                             imageUrl={srcUrl}
                             focusX={focusX}
                             vPos={vPos}
-                            onChange={(fx, fy) => {
+                            onChange={(fx, vp) => {
                                 setFocusX(fx);
-                                setVPos(fy);
+                                setVPos(vp);
                             }}
                             fitMode={fitMode}
                             setFitMode={setFitMode}

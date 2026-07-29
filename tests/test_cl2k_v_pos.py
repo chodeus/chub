@@ -8,6 +8,8 @@ that band lands in the CL2K gradient, up may not, because the top of the poster
 is bright artwork with nothing to hide a fabricated band.
 """
 
+import inspect
+
 import pytest
 
 pytest.importorskip("wand.image")  # Wand + ImageMagick required (cl2k extra)
@@ -17,7 +19,11 @@ from wand.drawing import Drawing  # noqa: E402
 from wand.image import Image  # noqa: E402
 
 from backend.util.cl2k import geometry as geo  # noqa: E402
-from backend.util.cl2k.renderer import _cover_resize, frame_backdrop  # noqa: E402
+from backend.util.cl2k.renderer import (  # noqa: E402
+    _cover_resize,
+    _fit_resize,
+    frame_backdrop,
+)
 
 
 def _banded(w, h, bands=15):
@@ -83,11 +89,36 @@ def test_v_pos_moves_both_ways_once_there_is_slack(v_pos):
 
 def test_v_pos_is_clamped_to_the_declared_range():
     assert _framed((1920, 1080), 9.0) == _framed((1920, 1080), geo.V_POS_MAX)
-    assert _framed((1920, 1080), -9.0) == _framed((1920, 1080), geo.V_POS_MIN)
+    # Needs zoom: a cover-filled 16:9 is exactly CANVAS_H tall, so centre_top is 0
+    # and every negative v_pos lands on top=0 with or without the clamp. At 1.5x
+    # there is real source above the crop, so the clamp is the only thing stopping
+    # -9 from panning straight past it.
+    assert _framed((1920, 1080), -9.0, zoom=1.5) == _framed((1920, 1080), geo.V_POS_MIN, zoom=1.5)
+    # No companion assertion for _v_pos_top: it clamps the resulting crop top to
+    # [0, src_h - height] anyway, so deleting its v_pos clamp changes no output —
+    # an assertion there would pass on the broken code and prove nothing.
+
+
+def test_fit_mode_keeps_the_top_anchored_zero_to_one_scale():
+    # v_pos is one control but not one scale: fit/extend ANCHOR the photo from the
+    # top over 0..1, so negative names nothing there and floors to 0. The maker's
+    # vertical slider narrows its range on those modes off the back of this, so a
+    # change here silently turns half that slider back into a dead control.
+    def fitted(v_pos):
+        with Image(blob=_banded(1920, 1080)) as img:
+            _fit_resize(img, geo.CANVAS_W, geo.CANVAS_H, None, v_pos, 1.0)
+            return img.signature
+
+    assert fitted(-1.0) == fitted(0.0)
+    assert fitted(0.5) != fitted(0.0)
 
 
 def test_frame_backdrop_no_longer_accepts_focus_y():
     # focus_y is retired; a caller still passing it should fail loudly rather
-    # than have a silently ignored framing argument.
+    # than have a silently ignored framing argument. Splatted, not written as a
+    # literal keyword: a literal is a statically resolvable wrong-argument call
+    # and CodeQL (py/call/wrong-named-argument) fails the run on it.
+    retired = {"focus_y": 0.2}
+    assert "focus_y" not in inspect.signature(frame_backdrop).parameters
     with pytest.raises(TypeError):
-        frame_backdrop(backdrop_bytes=_banded(1920, 1080), focus_y=0.2)
+        frame_backdrop(backdrop_bytes=_banded(1920, 1080), **retired)
