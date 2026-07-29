@@ -586,6 +586,16 @@ const Cl2kMakerPage = () => {
 .cl2k-page input[type=range]{-webkit-appearance:none;appearance:none;height:5px;border-radius:3px;background:#2a3052;accent-color:var(--primary);cursor:pointer;}
 .cl2k-page input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.5);cursor:pointer;}
 .cl2k-page input[type=range]::-moz-range-thumb{width:15px;height:15px;border:none;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.5);cursor:pointer;}
+/* A 5px-tall track is a 5px-tall touch target. On a coarse pointer give the
+   input a finger-sized box and move the visible 5px track into the track
+   pseudo-element, so the slider looks identical but can actually be grabbed.
+   Desktop keeps the original rendering untouched. */
+@media (pointer:coarse){
+.cl2k-page input[type=range]{height:40px;background:transparent;border-radius:0;}
+.cl2k-page input[type=range]::-webkit-slider-runnable-track{height:5px;border-radius:3px;background:#2a3052;}
+.cl2k-page input[type=range]::-webkit-slider-thumb{margin-top:-5px;}
+.cl2k-page input[type=range]::-moz-range-track{height:5px;border-radius:3px;background:#2a3052;}
+}
 `}</style>
             <PageHeader
                 title="CL2K Poster Maker"
