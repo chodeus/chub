@@ -480,9 +480,8 @@ def preview(
     except HTTPException:
         raise  # a real HTTP status (auth, upstream) must not become a 400
     except Exception as exc:
-        # A render failure is a bad input (undecodable logo/backdrop), not a
-        # server fault — surface the reason instead of a bare 500 the preview
-        # box can only report as "preview unavailable".
+        # Bad input (undecodable logo/backdrop), not a server fault — surface the
+        # reason instead of a bare 500.
         logger.warning(f"cl2k: preview render failed: {exc}")
         return error(f"Could not render that preview: {exc}", "PREVIEW_RENDER")
     if blob is None:

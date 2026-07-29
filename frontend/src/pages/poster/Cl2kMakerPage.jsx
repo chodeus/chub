@@ -267,12 +267,10 @@ const cl2kLogoBaseline = kind =>
         ? CL2K_LOGO_BASELINE_COLLECTION
         : CL2K_LOGO_BASELINE_MAIN;
 
-// natW/natH = trimmed logo dims (from /logo-processed); boxW/boxH = the placement
-// box the backend already computed for them (geo.auto_logo_size — the same call
-// _place_logo makes, so the overlay and the generated poster agree). maxWidth is
-// the legacy flat guide-box width, kept only as a fallback for a response that
-// predates box_w/box_h; it over-sizes wide logos by ~15%, so it is not preferred.
-// baseline = the kind's bottom guide (geo.logo_baseline mirror).
+// natW/natH = trimmed logo dims (from /logo-processed); boxW/boxH = the box the
+// backend computed for them (geo.auto_logo_size — what _place_logo uses, so the
+// overlay matches the render). maxWidth = flat-guide fallback, over-sizes wide
+// logos ~15%. baseline = the kind's bottom guide (geo.logo_baseline mirror).
 // Returns the overlay box as percentages of the 2:3 preview, or null.
 const logoBoxPct = ({ natW, natH, boxW, boxH, maxWidth, scale = 1, yOffset = 0, baseline }) => {
     if (!natW || !natH) return null;

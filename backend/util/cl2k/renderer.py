@@ -529,9 +529,8 @@ def _trim_logo(logo: Image) -> None:
 
     The ONE logo trim — process_logo, logo_is_usable and _place_logo must agree.
     """
-    # trim() reports the content box in VIRTUAL CANVAS coords, so a source
-    # carrying a page offset (trimmed once with no repage) pushes `left` past the
-    # image and crop raises. Drop the offset so all geometry is image-relative.
+    # trim() reports the box in canvas coords, so a source carrying a page offset
+    # would push `left` past the image and make crop raise.
     logo.reset_coords()
     with logo.clone() as probe:
         probe.alpha_channel = "extract"  # alpha -> greyscale, so trim sees it
