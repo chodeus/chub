@@ -1069,7 +1069,7 @@ const MediaManagePage = () => {
                                         aria-label="Edit collection"
                                         title="Rename this collection"
                                         variant="ghost"
-                                        className="opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-fast"
+                                        className="pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100 focus-visible:opacity-100 transition-fast"
                                         onClick={() => {
                                             setEditCollection(col);
                                             setEditCollectionName(col.title || col.name || '');
@@ -1080,7 +1080,7 @@ const MediaManagePage = () => {
                                         aria-label="Delete collection"
                                         title="Delete this collection (media items are not deleted)"
                                         variant="ghost"
-                                        className="opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-fast"
+                                        className="pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100 focus-visible:opacity-100 transition-fast"
                                         onClick={() => handleDeleteCollection(col.id)}
                                     />
                                 </div>

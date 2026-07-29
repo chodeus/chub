@@ -413,7 +413,7 @@ const LabelarrLibraryPicker = ({ instanceName, value, onChange, disabled }) => {
                         disabled={disabled}
                         aria-pressed={on}
                         onClick={() => toggle(title)}
-                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-[5px] text-xs border transition-colors disabled:opacity-50 ${
+                        className={`inline-flex items-center gap-1 px-2 py-1.5 rounded-[5px] text-xs border transition-colors disabled:opacity-50 ${
                             on
                                 ? 'bg-primary/15 border-primary text-fg'
                                 : 'bg-surface-inset border-border text-fg-muted hover:border-primary'

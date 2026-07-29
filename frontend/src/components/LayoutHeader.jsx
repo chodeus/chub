@@ -7,10 +7,12 @@ import useSearchPageDetection from '../hooks/useSearchPageDetection.js';
 import { useRecentSearches } from '../hooks/useRecentSearches.js';
 import SearchInterface from './Search/SearchInterface.jsx';
 import { HamburgerButton } from './ui/index.js';
+import { NAV_TITLES } from './navSections.js';
 
 // Mirrors the map in useDocumentTitle so the in-app header shows the same
 // page name that the browser tab and breadcrumb already use. Keep them in
 // sync — adding a route here without there means an empty header title.
+// Core routes only; extension routes resolve via NAV_TITLES below.
 const ROUTE_TITLES = {
     '/login': 'Sign in',
     '/dashboard': 'Dashboard',
@@ -64,7 +66,7 @@ const LayoutHeader = React.memo(() => {
     const { toggleTheme, isDarkTheme, isLightTheme, isSystemTheme, actualTheme } = useTheme();
     const { mobileMenuOpen, toggleMobileMenu, isMobile } = useUIState();
     const { pathname } = useLocation();
-    const pageTitle = ROUTE_TITLES[pathname] || '';
+    const pageTitle = ROUTE_TITLES[pathname] ?? NAV_TITLES[pathname] ?? '';
 
     // Context-aware header detection
     const { isSearchPage, searchPageType, searchSubtype } = useSearchPageDetection();

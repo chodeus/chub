@@ -381,7 +381,7 @@ const MediaSearchPage = () => {
                                                     icon="delete"
                                                     aria-label="Delete"
                                                     variant="ghost"
-                                                    className="opacity-0 group-hover:opacity-100 transition-opacity"
+                                                    className="pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
                                                     onClick={() => setDeleteTarget(item)}
                                                 />
                                             </div>

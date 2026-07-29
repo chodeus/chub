@@ -78,7 +78,7 @@ export const MultiSelectField = React.memo(
                                         type="button"
                                         onClick={() => removeValue(v)}
                                         aria-label={`Remove ${labelFor(v)}`}
-                                        className="ml-1 leading-none hover:text-error"
+                                        className="ml-1 inline-flex items-center justify-center leading-none touch-expand hover:text-error"
                                     >
                                         ×
                                     </button>

@@ -133,9 +133,9 @@ const InstanceRow = ({ inst }) => {
 
     return (
         <div className="rounded-xl bg-surface border border-warning/30 px-[18px] py-[15px]">
-            <div className="flex items-start gap-4">
-                <div className="w-[150px] shrink-0 min-w-0">
-                    <span className="font-display text-[15px] font-semibold text-fg truncate">
+            <div className="flex flex-wrap items-start gap-x-4 gap-y-1">
+                <div className="w-full sm:w-[150px] shrink-0 min-w-0">
+                    <span className="block font-display text-[15px] font-semibold text-fg truncate">
                         {inst.instance_name}
                     </span>
                 </div>

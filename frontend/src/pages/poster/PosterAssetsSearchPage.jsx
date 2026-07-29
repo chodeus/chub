@@ -675,7 +675,9 @@ const PosterAssetsSearchPage = () => {
                             onPageChange={page => setOffset((page - 1) * PAGE_SIZE)}
                         />
                     </div>
-                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-8 gap-3">
+                    {/* 2-up on phones: at 3-up a tile is ~111px, narrower than the
+                        per-poster action bar it has to host. */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-8 gap-3">
                         {items.map(item => {
                             const suffixParts = [
                                 item.year,
@@ -709,21 +711,31 @@ const PosterAssetsSearchPage = () => {
                                             type="button"
                                             onClick={() => setLightboxItem(item)}
                                             className="bg-surface-alt overflow-hidden block w-full p-0 border-0 cursor-zoom-in"
-                                            style={{ aspectRatio: '2 / 3' }}
                                             aria-label={`Enlarge ${displayTitle}`}
                                         >
-                                            <PosterThumbnail
-                                                src={
-                                                    item.id
-                                                        ? postersAPI.getThumbnailUrl(item.id, 200)
-                                                        : postersAPI.getPreviewUrl(
-                                                              item.folder,
-                                                              item.file
-                                                          )
-                                                }
-                                                alt={displayTitle}
-                                                imageType={item.image_type}
-                                            />
+                                            {/* Ratio on a plain div, not the button:
+                                                WebKit does not apply aspect-ratio to
+                                                form controls. */}
+                                            <div
+                                                className="w-full"
+                                                style={{ aspectRatio: '2 / 3' }}
+                                            >
+                                                <PosterThumbnail
+                                                    src={
+                                                        item.id
+                                                            ? postersAPI.getThumbnailUrl(
+                                                                  item.id,
+                                                                  200
+                                                              )
+                                                            : postersAPI.getPreviewUrl(
+                                                                  item.folder,
+                                                                  item.file
+                                                              )
+                                                    }
+                                                    alt={displayTitle}
+                                                    imageType={item.image_type}
+                                                />
+                                            </div>
                                         </button>
                                     )}
                                     {item.style && (
@@ -732,7 +744,13 @@ const PosterAssetsSearchPage = () => {
                                             className="absolute top-1.5 left-1.5 z-10 text-[10px] pointer-events-none"
                                         />
                                     )}
-                                    <div className="absolute top-1.5 right-1.5 z-10 flex items-center gap-0.5 rounded-lg bg-black/55 backdrop-blur-sm p-0.5 opacity-0 group-hover:opacity-100 transition-fast">
+                                    {/* pointer-events must track opacity: while
+                                        hidden this bar still hit-tested, so a tap on
+                                        the poster's top-right corner opened the
+                                        delete confirmation instead of the lightbox.
+                                        On a touch screen hover never fires, so show
+                                        it outright. */}
+                                    <div className="absolute top-1.5 right-1.5 z-10 flex items-center gap-0.5 rounded-lg bg-black/55 backdrop-blur-sm p-0.5 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto pointer-coarse:opacity-100 pointer-coarse:pointer-events-auto transition-fast">
                                         <IconButton
                                             icon="playlist_add"
                                             aria-label="Add to collection"
