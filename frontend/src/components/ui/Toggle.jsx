@@ -13,7 +13,7 @@ const Toggle = ({ checked = false, onChange, disabled = false, label, className 
         aria-label={label}
         disabled={disabled}
         onClick={() => !disabled && onChange?.(!checked)}
-        className={`relative shrink-0 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${className}`}
+        className={`relative shrink-0 rounded-full transition-colors touch-expand disabled:opacity-50 disabled:cursor-not-allowed ${className}`}
         style={{ width: 38, height: 22, background: checked ? 'var(--primary)' : '#2a3052' }}
     >
         <span

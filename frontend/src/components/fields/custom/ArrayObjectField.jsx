@@ -417,7 +417,7 @@ export const ArrayObjectField = ({
         const { primary, badge } = displayTemplate.display(item);
         return (
             <div key={index} className="bg-surface border border-border rounded-xl overflow-hidden">
-                <div className="flex items-center gap-3 px-4 py-3 border-b border-border bg-surface-inset">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 border-b border-border bg-surface-inset">
                     <div className="min-w-0 flex-1">
                         <div className="font-semibold text-sm text-fg truncate">{primary}</div>
                     </div>
@@ -468,13 +468,13 @@ export const ArrayObjectField = ({
                 key={index}
                 className={`bg-surface border border-border rounded-xl overflow-hidden ${enabled ? '' : 'opacity-60'}`}
             >
-                <div className="flex items-center gap-3 px-4 py-3 border-b border-border bg-surface-inset">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 border-b border-border bg-surface-inset">
                     <input
                         value={item.label || ''}
                         onChange={e => set('label', e.target.value)}
                         placeholder="Profile name"
                         disabled={disabled}
-                        className="font-display font-semibold text-sm text-fg bg-transparent border-0 outline-none min-w-0 max-w-[240px] flex-1"
+                        className="font-display font-semibold text-sm text-fg bg-transparent border-0 outline-none min-w-[140px] max-w-[240px] flex-1"
                     />
                     <span
                         className={`font-mono text-[11px] shrink-0 ${enabled ? 'text-accent' : 'text-fg-subtle'}`}
@@ -846,7 +846,7 @@ export const ArrayObjectField = ({
                 key={index}
                 className={`bg-surface border border-border rounded-xl overflow-hidden ${enabled ? '' : 'opacity-60'}`}
             >
-                <div className="flex items-center gap-3 px-4 py-3 border-b border-border bg-surface-inset">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 border-b border-border bg-surface-inset">
                     <span className="font-mono text-[10px] tracking-[0.8px] text-fg-subtle shrink-0">
                         ARR
                     </span>
@@ -854,7 +854,7 @@ export const ArrayObjectField = ({
                         value={item.app_instance || ''}
                         onChange={e => set('app_instance', e.target.value)}
                         disabled={disabled}
-                        className="h-9 px-2.5 rounded-md bg-surface border border-border text-fg text-sm font-semibold outline-none focus:border-primary min-w-[160px]"
+                        className="h-9 px-2.5 rounded-md bg-surface border border-border text-fg text-sm font-semibold outline-none focus:border-primary min-w-[160px] flex-1"
                     >
                         <option value="">— Select —</option>
                         {instanceOptions.map(o => (

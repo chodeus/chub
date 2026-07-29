@@ -199,6 +199,21 @@
 }
 
 /* Named sizes + grid templates (utilities/sizing.css, utilities/layout.css). */
+
+/* App-shell height. Not h-screen: on iOS 100vh is the URL-bar-retracted
+   viewport, and because the shell locks the body and scrolls an inner element
+   the bar never retracts — so the last ~100px sits under it, unreachable. */
+@utility h-app {
+    height: 100vh;
+}
+
+/* Separate rule, not a second declaration above: the minifier dedupes those and
+   drops the vh fallback, leaving pre-15.4 Safari with no height at all. */
+@supports (height: 100dvh) {
+    .h-app {
+        height: 100dvh;
+    }
+}
 @utility h-input {
     height: 44px;
 }
@@ -336,6 +351,13 @@
     min-height: 44px;
     touch-action: manipulation;
 }
+
+/* For controls whose rendered size is a design spec and so cannot take
+   touch-target's 44px minimum (the 38x22 Toggle pill). Grows only the hit
+   area, and only on a coarse pointer, so the visual is untouched. */
+@utility touch-expand {
+    position: relative;
+}
 @utility scrollbar-hidden {
     scrollbar-width: none;
     -ms-overflow-style: none;
@@ -383,5 +405,20 @@
 @media (prefers-reduced-motion: reduce) {
     .animate-slide-down {
         animation: none !important;
+    }
+}
+
+/* Separate rule (see h-app): a nested @media inside @utility puts declarations
+   in a position stylelint rejects. Pseudo-element so the hit area grows without
+   affecting layout or the pill's own box. */
+@media (pointer: coarse) {
+    .touch-expand::after {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: max(100%, 44px);
+        height: max(100%, 44px);
+        transform: translate(-50%, -50%);
     }
 }

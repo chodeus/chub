@@ -154,7 +154,7 @@ const LoginPage = () => {
                             <button
                                 type="button"
                                 onClick={() => setShowPw(s => !s)}
-                                className="absolute right-2.5 text-fg-subtle hover:text-fg flex"
+                                className="absolute right-2.5 text-fg-subtle hover:text-fg flex touch-expand"
                                 aria-label={showPw ? 'Hide password' : 'Show password'}
                             >
                                 <span className="material-symbols-outlined text-[18px]">

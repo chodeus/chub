@@ -51,8 +51,8 @@ export const ScheduleCard = React.memo(
                 className="bg-surface border border-border rounded-xl overflow-hidden"
                 style={{ boxShadow: '0 2px 16px -8px rgba(0,0,0,.6)' }}
             >
-                <div className="flex items-center gap-4 px-[18px] py-[15px]">
-                    <div className="w-[200px] shrink-0 min-w-0">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-3 px-[18px] py-[15px]">
+                    <div className="w-full sm:w-[200px] shrink-0 min-w-0">
                         <div className="flex items-center gap-2 min-w-0">
                             {isRunning && <StatusDot status="running" size={7} />}
                             <div className="font-display text-[15px] font-semibold text-fg truncate">
