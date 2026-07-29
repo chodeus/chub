@@ -2,6 +2,13 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.43.1](https://github.com/chodeus/chub/compare/v2.43.0...v2.43.1) (2026-07-29)
+
+
+### Bug Fixes
+
+* **ui:** make the app usable in real mobile browsers ([#410](https://github.com/chodeus/chub/issues/410)) ([ffcb6cd](https://github.com/chodeus/chub/commit/ffcb6cde6f64522f47744edff0db2fb621b6b007))
+
 ## [2.43.0](https://github.com/chodeus/chub/compare/v2.42.0...v2.43.0) (2026-07-27)
 
 
