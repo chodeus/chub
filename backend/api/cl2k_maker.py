@@ -1019,14 +1019,13 @@ def _run_seasons_job(jid: int, db: ChubDB, logger: Any, req: SeasonsRequest) -> 
                 job["results"].append(entry)
                 job["done"] += 1
 
-    # Decoded once: generate_seasons is a thin per-season loop, so driving it a
-    # season at a time costs nothing except re-decoding these multi-MB blobs.
-    backdrop_bytes = _b64_to_bytes(req.backdrop_b64)
-    logo_bytes = _b64_to_bytes(req.logo_b64)
     try:
+        # Hoisted out of the loop, not out of the guard: malformed base64 must
+        # fail the job, and re-decoding multi-MB blobs per season is wasted work.
+        backdrop_bytes = _b64_to_bytes(req.backdrop_b64)
+        logo_bytes = _b64_to_bytes(req.logo_b64)
         for n in req.seasons:
-            # Re-read per season: config is REPLACED on reload, so a batch that
-            # snapshots it renders later seasons with settings the user changed.
+            # Re-read per season: config is REPLACED on reload.
             # Inside the guard, so a config fault fails the job, not the thread.
             generate_seasons(
                 db=db,
@@ -1145,8 +1144,7 @@ def _run_retext_seasons_job(
     try:
         for n in req.seasons:
             n = int(n)
-            # Re-read per season: config is REPLACED on reload, so a batch that
-            # snapshots it renders later seasons with settings the user changed.
+            # Re-read per season: config is REPLACED on reload.
             # Inside the guard, so a config fault fails the job, not the thread.
             full_config = load_config()
             try:
