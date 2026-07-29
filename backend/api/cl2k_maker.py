@@ -1020,36 +1020,43 @@ def _run_seasons_job(jid: int, db: ChubDB, logger: Any, req: SeasonsRequest) -> 
                 job["done"] += 1
 
     try:
-        generate_seasons(
-            db=db,
-            full_config=load_config(),
-            logger=logger,
-            tmdb_id=req.tmdb_id,
-            title=req.title,
-            seasons=req.seasons,
-            year=req.year,
-            tvdb_id=req.tvdb_id,
-            imdb_id=req.imdb_id,
-            backdrop_path=req.backdrop_path,
-            backdrop_bytes=_b64_to_bytes(req.backdrop_b64),
-            logo_path=req.logo_path,
-            custom_logo_bytes=_b64_to_bytes(req.logo_b64),
-            fit_mode=req.fit_mode,
-            focus_x=req.focus_x,
-            focus_y=req.focus_y,
-            crop=_crop_tuple(req),
-            v_pos=req.v_pos,
-            zoom=req.zoom,
-            logo_scale=req.logo_scale,
-            logo_y_offset=req.logo_y_offset,
-            whiten=req.whiten,
-            flat_white=req.flat_white,
-            invert=req.invert,
-            force=req.force,
-            save_local=req.save_local,
-            upload_gdrive=req.upload_gdrive,
-            progress_cb=_progress,
-        )
+        # Hoisted out of the loop, not out of the guard: malformed base64 must
+        # fail the job, and re-decoding multi-MB blobs per season is wasted work.
+        backdrop_bytes = _b64_to_bytes(req.backdrop_b64)
+        logo_bytes = _b64_to_bytes(req.logo_b64)
+        for n in req.seasons:
+            # Re-read per season: config is REPLACED on reload.
+            # Inside the guard, so a config fault fails the job, not the thread.
+            generate_seasons(
+                db=db,
+                full_config=load_config(),
+                logger=logger,
+                tmdb_id=req.tmdb_id,
+                title=req.title,
+                seasons=[int(n)],
+                year=req.year,
+                tvdb_id=req.tvdb_id,
+                imdb_id=req.imdb_id,
+                backdrop_path=req.backdrop_path,
+                backdrop_bytes=backdrop_bytes,
+                logo_path=req.logo_path,
+                custom_logo_bytes=logo_bytes,
+                fit_mode=req.fit_mode,
+                focus_x=req.focus_x,
+                focus_y=req.focus_y,
+                crop=_crop_tuple(req),
+                v_pos=req.v_pos,
+                zoom=req.zoom,
+                logo_scale=req.logo_scale,
+                logo_y_offset=req.logo_y_offset,
+                whiten=req.whiten,
+                flat_white=req.flat_white,
+                invert=req.invert,
+                force=req.force,
+                save_local=req.save_local,
+                upload_gdrive=req.upload_gdrive,
+                progress_cb=_progress,
+            )
         with _season_jobs_lock:
             job = _season_jobs.get(jid)
             if job is not None:
@@ -1134,10 +1141,12 @@ def _run_retext_seasons_job(
     """Worker body: re-file the one source poster once per season, drawing that
     season's SEASON-N band. Never raises — a crash is recorded as the job error so
     the frontend poll terminates instead of spinning on a stuck "running"."""
-    full_config = load_config()
     try:
         for n in req.seasons:
             n = int(n)
+            # Re-read per season: config is REPLACED on reload.
+            # Inside the guard, so a config fault fails the job, not the thread.
+            full_config = load_config()
             try:
                 res = retext_poster(
                     db=db,
