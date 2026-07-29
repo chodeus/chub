@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
 import PropTypes from 'prop-types';
 
 /**
@@ -12,6 +12,7 @@ import PropTypes from 'prop-types';
  */
 const InfoTooltip = ({ text, label = 'More info' }) => {
     const [open, setOpen] = useState(false);
+    const tooltipId = useId();
     if (!text) return null;
     return (
         <span className="group/tip relative inline-flex align-middle">
@@ -19,6 +20,7 @@ const InfoTooltip = ({ text, label = 'More info' }) => {
                 type="button"
                 aria-label={label}
                 aria-expanded={open}
+                aria-describedby={open ? tooltipId : undefined}
                 onClick={() => setOpen(o => !o)}
                 onBlur={() => setOpen(false)}
                 className="inline-flex items-center justify-center text-fg-faint hover:text-fg-muted focus-visible:text-fg-muted outline-none cursor-help touch-expand"
@@ -26,6 +28,7 @@ const InfoTooltip = ({ text, label = 'More info' }) => {
                 <span className="material-symbols-outlined text-[15px] leading-none">info</span>
             </button>
             <span
+                id={tooltipId}
                 role="tooltip"
                 className={`pointer-events-none absolute left-0 top-[calc(100%+6px)] w-[240px] max-w-[70vw] rounded-lg border border-border bg-surface-elevated p-2.5 text-[12px] font-normal leading-relaxed text-fg-muted group-hover/tip:block group-focus-within/tip:block ${
                     open ? 'block' : 'hidden'
