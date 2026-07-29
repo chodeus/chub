@@ -322,3 +322,16 @@
         }
     }
 }
+
+/* iOS zooms the whole page in whenever a focused form control computes below
+   16px, and never zooms back out — so a single tap on any text-sm field strands
+   the user at 1.3x. Unlayered on purpose: the offending sizes come from utility
+   classes, which a @layer base rule would lose to. Nothing in the app sets a
+   form control above 16px, so this only ever raises. */
+@media (pointer: coarse) {
+    input,
+    select,
+    textarea {
+        font-size: 16px;
+    }
+}

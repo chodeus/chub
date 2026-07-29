@@ -199,6 +199,21 @@
 }
 
 /* Named sizes + grid templates (utilities/sizing.css, utilities/layout.css). */
+
+/* App-shell height. Not h-screen: on iOS 100vh is the URL-bar-retracted
+   viewport, and because the shell locks the body and scrolls an inner element
+   the bar never retracts — so the last ~100px sits under it, unreachable. */
+@utility h-app {
+    height: 100vh;
+}
+
+/* Separate rule, not a second declaration above: the minifier dedupes those and
+   drops the vh fallback, leaving pre-15.4 Safari with no height at all. */
+@supports (height: 100dvh) {
+    .h-app {
+        height: 100dvh;
+    }
+}
 @utility h-input {
     height: 44px;
 }
