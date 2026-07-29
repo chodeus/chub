@@ -3144,6 +3144,7 @@ const RenderPanel = ({
                                     setCrop={setCrop}
                                     focusX={focusX}
                                     vPos={vPos}
+                                    zoom={zoom}
                                     onChange={onFocusChange}
                                 />
                             )}
@@ -4142,6 +4143,7 @@ const CropFramer = ({
     setCrop,
     focusX,
     vPos,
+    zoom,
     onChange,
     // Compact = the right-rail placement: no nested card chrome, image fills
     // the rail width. The big center preview is the result view.
@@ -4162,13 +4164,18 @@ const CropFramer = ({
     const coverRect = useMemo(() => {
         if (!ratio) return null;
         const target = 2 / 3; // CL2K canvas aspect (w:h)
+        // _cover_resize scales by max(W/w, H/h) * zoom, so zoom divides the kept
+        // fraction on both axes. Ignoring it left the box claiming a 16:9 backdrop
+        // has no vertical travel at 1.5x, when that is exactly where v_pos gains
+        // its upward range. Neither axis can keep more than the whole source.
+        const z = Math.max(CONTROL_RANGES.zoom.min, Math.min(zoom || 1, CONTROL_RANGES.zoom.max));
         let wF, hF;
         if (1 / ratio > target) {
-            hF = 1;
-            wF = target * ratio;
+            hF = Math.min(1, 1 / z);
+            wF = Math.min(1, (target * ratio) / z);
         } else {
-            wF = 1;
-            hF = 1 / target / ratio;
+            wF = Math.min(1, 1 / z);
+            hF = Math.min(1, 1 / target / ratio / z);
         }
         const leftF = Math.max(0, Math.min(focusX - wF / 2, 1 - wF));
         // Positive v_pos can pan past the source into the edge-extended band that
@@ -4176,7 +4183,7 @@ const CropFramer = ({
         // at the real bottom edge rather than drawing a region that doesn't exist.
         const topF = Math.max(0, Math.min(vPosToFrac(vPos, hF) - hF / 2, 1 - hF));
         return { left: leftF, top: topF, w: wF, h: hF };
-    }, [ratio, focusX, vPos]);
+    }, [ratio, focusX, vPos, zoom]);
 
     // Box-mode kept-region from the normalized crop (already fractions).
     const boxRect = useMemo(() => {
