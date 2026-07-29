@@ -36,27 +36,41 @@ _COPY_ALPHA = "copy_alpha" if "copy_alpha" in COMPOSITE_OPERATORS else "copy_opa
 
 
 # ----- helpers ---------------------------------------------------------------
+def _v_pos_top(src_h: int, height: int, v_pos: float) -> int:
+    """Crop top for ``v_pos`` (-1..1, 0 = centred) within a source that overflows.
+
+    Plain source-bounded panning — no black band, so callers that cannot hide one
+    (every path except the cover-fill's downward extend) share this.
+    """
+    centre = max(0, min(int(round(0.5 * src_h - height / 2)), src_h - height))
+    v_pos = max(geo.V_POS_MIN, min(float(v_pos or 0.0), geo.V_POS_MAX))
+    span = centre if v_pos <= 0 else (src_h - height) - centre
+    return max(0, min(centre + int(round(v_pos * span)), src_h - height))
+
+
 def _cover_resize(
     img: Image,
     width: int,
     height: int,
     focus_x: float = 0.5,
-    focus_y: float = 0.5,
     v_pos: float = 0.0,
     zoom: float = 1.0,
 ) -> None:
     """Resize + crop ``img`` in place to exactly width×height (cover fill).
 
-    ``focus_x``/``focus_y`` (0..1) choose what stays in frame: the focal point of
-    the scaled image is centred in the crop, clamped to the edges. 0.5/0.5 is the
-    centre crop (the default, unchanged behaviour).
+    ``focus_x`` (0..1) chooses what stays in frame horizontally: the focal point
+    of the scaled image is centred in the crop, clamped to the edges. 0.5 is the
+    centre crop (the default).
 
-    ``v_pos`` (0..1) then pushes the framed image *up* without changing its size:
-    it pans down through any remaining source below the crop and, once the source
-    runs out, edge-extends the bottom row faded to black — a band that lands in the
-    CL2K gradient/black zone, so it stays hidden. This lets a tall subject sit
-    higher (real artwork flowing down into the gradient) with no AI. 0 = the
-    focal-point crop above, unchanged.
+    ``v_pos`` (-1..1) is the ONE vertical control; 0 is the centred crop.
+    Positive pushes the framed image *up* without changing its size: it pans down
+    through any source remaining below the crop and, once that runs out,
+    edge-extends the bottom row faded to black — a band that lands in the CL2K
+    gradient/black zone, so it stays hidden. Negative pans the other way, but only
+    into real source above the crop: the gradient is bottom-only, so an extended
+    band at the top would be plainly visible. A cover-filled 16:9 backdrop is
+    exactly ``height`` tall, so it has no upward travel at all until ``zoom`` > 1
+    — that is the geometry, not a clamp we could lift.
 
     ``zoom`` (0.5..3.0) scales relative to the cover-fill baseline. 1.0 = plain
     cover (unchanged). >1 crops tighter (punch in). <1 scales the art *below* the
@@ -77,8 +91,7 @@ def _cover_resize(
             cx = max(0, min(cx, img.width - width))
             img.crop(cx, 0, width=width, height=img.height)
         if img.height > height:
-            cy = int(round(focus_y * img.height - height / 2))
-            cy = max(0, min(cy, img.height - height))
+            cy = _v_pos_top(img.height, height, v_pos)
             img.crop(0, cy, width=img.width, height=height)
         img.background_color = Color("black")
         off_x = -((width - img.width) // 2) if img.width < width else 0
@@ -87,17 +100,22 @@ def _cover_resize(
         return
     left = int(round(focus_x * img.width - width / 2))
     left = max(0, min(left, img.width - width))
-    base_top = int(round(focus_y * img.height - height / 2))
-    base_top = max(0, min(base_top, img.height - height))
-    v_pos = max(0.0, min(1.0, v_pos))
+    centre_top = max(0, min(int(round(0.5 * img.height - height / 2)), img.height - height))
+    v_pos = max(geo.V_POS_MIN, min(float(v_pos or 0.0), geo.V_POS_MAX))
     if v_pos <= 0:
-        img.crop(left, base_top, width=width, height=height)
+        # Up is source-only (see the docstring): scale into whatever sits above.
+        img.crop(
+            left,
+            centre_top + int(round(v_pos * centre_top)),
+            width=width,
+            height=height,
+        )
         return
     # Pan down through the source still below the crop, then up to ~30% of the
     # canvas past its bottom edge (that band sits in the black gradient zone).
-    remaining = img.height - height - base_top
+    remaining = img.height - height - centre_top
     black_allow = int(round(height * 0.30))
-    top = base_top + int(round(v_pos * (remaining + black_allow)))
+    top = centre_top + int(round(v_pos * (remaining + black_allow)))
     avail = max(1, min(height, img.height - top))
     img.crop(left, min(top, img.height - 1), width=width, height=avail)
     if avail >= height:
@@ -872,8 +890,8 @@ def render_framed_art(
     width: int,
     height: int,
     focus_x: float = 0.5,
-    focus_y: float = 0.5,
     fit_mode: str = "cover",
+    v_pos: float = 0.0,
     zoom: float = 1.0,
 ) -> bytes:
     """Render plain framed artwork at ``width``×``height`` — no gradient/logo/label.
@@ -881,9 +899,11 @@ def render_framed_art(
     ``fit_mode`` ``"cover"`` fills the canvas (cropping the overflowing edges);
     ``"fit"`` contains the whole image on black (letterbox). ``zoom`` (0.5–3.0)
     scales from that baseline — raise it in ``fit`` to punch in from contain toward
-    a full crop, or in ``cover`` to crop tighter. ``focus_x``/``focus_y`` (0..1) pan
-    the window when the image overflows the canvas; plain black letterbox where the
-    image doesn't cover. Encoded at CL2K quality.
+    a full crop, or in ``cover`` to crop tighter. ``focus_x`` (0..1) pans the window
+    horizontally and ``v_pos`` (-1..1, 0 = centred) vertically, where the image
+    overflows the canvas; plain black letterbox where it doesn't. There is no
+    gradient here to hide an extended band, so ``v_pos`` is source-bounded both
+    ways. Encoded at CL2K quality.
     """
     zoom = max(geo.ZOOM_MIN, min(float(zoom or 1.0), geo.ZOOM_MAX))
     with Image(blob=backdrop_bytes) as img:
@@ -899,9 +919,8 @@ def render_framed_art(
         # Place the focal point at the canvas centre; clamp so an axis the image
         # covers shows no needless black, and centre an axis it doesn't (letterbox).
         ox = int(round(width / 2 - focus_x * nw))
-        oy = int(round(height / 2 - focus_y * nh))
         ox = max(min(ox, 0), width - nw) if nw >= width else (width - nw) // 2
-        oy = max(min(oy, 0), height - nh) if nh >= height else (height - nh) // 2
+        oy = -_v_pos_top(nh, height, v_pos) if nh >= height else (height - nh) // 2
         with Image(width=width, height=height, background=Color("black")) as canvas:
             canvas.composite(img, left=ox, top=oy)
             return _encode_jpeg(canvas)
@@ -912,8 +931,8 @@ def render_square_art(
     backdrop_bytes: bytes,
     size: int = 1000,
     focus_x: float = 0.5,
-    focus_y: float = 0.5,
     fit_mode: str = "cover",
+    v_pos: float = 0.0,
     zoom: float = 1.0,
 ) -> bytes:
     """Render square (1:1) art from a backdrop/poster — just the framed artwork."""
@@ -922,8 +941,8 @@ def render_square_art(
         width=size,
         height=size,
         focus_x=focus_x,
-        focus_y=focus_y,
         fit_mode=fit_mode,
+        v_pos=v_pos,
         zoom=zoom,
     )
 
@@ -932,7 +951,6 @@ def _framed_inset_base(
     backdrop_bytes: bytes,
     *,
     focus_x: float,
-    focus_y: float,
     fit_mode: str,
     crop: Optional[Tuple[float, float, float, float]],
     v_pos: float,
@@ -961,7 +979,7 @@ def _framed_inset_base(
         if fit_mode == "fit":
             _fit_resize(art, geo.CANVAS_W, geo.CANVAS_H, crop, v_pos, zoom)
         else:
-            _cover_resize(art, geo.CANVAS_W, geo.CANVAS_H, focus_x, focus_y, v_pos, zoom)
+            _cover_resize(art, geo.CANVAS_W, geo.CANVAS_H, focus_x, v_pos, zoom)
         base.composite(art, left=0, top=0)
     return base
 
@@ -970,7 +988,6 @@ def frame_backdrop(
     *,
     backdrop_bytes: bytes,
     focus_x: float = 0.5,
-    focus_y: float = 0.5,
     fit_mode: str = "cover",
     crop: Optional[Tuple[float, float, float, float]] = None,
     v_pos: float = 0.0,
@@ -987,7 +1004,6 @@ def frame_backdrop(
     with _framed_inset_base(
         backdrop_bytes,
         focus_x=focus_x,
-        focus_y=focus_y,
         fit_mode=fit_mode,
         crop=crop,
         v_pos=v_pos,
@@ -1014,7 +1030,6 @@ def render_cl2k(
     invert: bool = False,  # plate logo -> clearlogo (white->transparent, black->white)
     font_path: Optional[str] = None,
     focus_x: float = 0.5,
-    focus_y: float = 0.5,
     fit_mode: str = "cover",
     crop: Optional[Tuple[float, float, float, float]] = None,
     v_pos: float = 0.0,
@@ -1035,9 +1050,9 @@ def render_cl2k(
 
     ``fit_mode`` controls how the backdrop fills the 2:3 canvas:
 
-    - ``"cover"`` (default): scale up and crop to fill; ``focus_x``/``focus_y``
-      (0..1) choose which part is kept (0.5/0.5 = centre). Best when the subject
-      already fills a roughly 2:3 region.
+    - ``"cover"`` (default): scale up and crop to fill; ``focus_x`` (0..1) and
+      ``v_pos`` (-1..1) choose which part is kept (0.5/0 = centre). Best when the
+      subject already fills a roughly 2:3 region.
     - ``"fit"``: scale the backdrop *down* to the canvas width and top-anchor it
       on black, keeping the full width so subjects spread across a wide backdrop
       all stay in frame (the artist technique). ``crop`` (``x, y, w, h`` in 0..1)
@@ -1052,7 +1067,6 @@ def render_cl2k(
     with _framed_inset_base(
         backdrop_bytes,
         focus_x=focus_x,
-        focus_y=focus_y,
         fit_mode=fit_mode,
         crop=crop,
         v_pos=v_pos,

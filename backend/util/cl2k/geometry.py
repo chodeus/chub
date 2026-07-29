@@ -122,6 +122,9 @@ COLLECTION_LOGO_BOTTOM = 1319  # "Collection Logo Bottom" (COLLECTION label belo
 LOGO_SCALE_MIN, LOGO_SCALE_MAX = 0.25, 3.0
 LOGO_Y_OFFSET_MIN, LOGO_Y_OFFSET_MAX = -600, 200
 ZOOM_MIN, ZOOM_MAX = 0.5, 3.0
+# The one vertical framing control; 0 = centred crop. Negative pans up into real
+# source only, positive pans down and may edge-extend into the gradient zone.
+V_POS_MIN, V_POS_MAX = -1.0, 1.0
 
 # ----- logo whitening (CL2K two-tone) -----------------------------------------
 # Real CL2K logos are black & white, not flat white silhouettes: coloured/bright

@@ -260,7 +260,16 @@ const CONTROL_RANGES = {
     logoScale: { min: 0.25, max: 3 }, // geo.LOGO_SCALE_MIN/MAX
     logoYOffset: { min: -600, max: 200 }, // geo.LOGO_Y_OFFSET_MIN/MAX
     zoom: { min: 0.5, max: 3 }, // geo.ZOOM_MIN/MAX
+    vPos: { min: -1, max: 1 }, // geo.V_POS_MIN/MAX — 0 = centred
 };
+
+// v_pos (-1..1, 0 = centred) as the 0..1 vertical fraction the crop-box overlays
+// draw with. Mirrors renderer._v_pos_top: 0 -> centre, ±1 -> the travel limits.
+const vPosToFrac = vPos =>
+    0.5 + Math.max(CONTROL_RANGES.vPos.min, Math.min(vPos || 0, CONTROL_RANGES.vPos.max)) / 2;
+// Inverse, for turning a drag on the crop box back into v_pos.
+const fracToVPos = frac =>
+    Math.max(CONTROL_RANGES.vPos.min, Math.min((frac - 0.5) * 2, CONTROL_RANGES.vPos.max));
 
 const cl2kLogoBaseline = kind =>
     (kind || '').toLowerCase() === 'collection'
@@ -1088,14 +1097,14 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
     // technique). `crop` (0..1 {x,y,w,h}) isolates the subject region for fit mode.
     const [fitMode, setFitMode] = useState(saved.fitMode ?? 'cover');
     const [crop, setCrop] = useState(saved.crop ?? null);
-    // Vertical position (0..1). In fit/extend it positions the fitted photo; in
-    // Fill it pans the framing up at the same size (real artwork into the gradient).
+    // Vertical position (-1..1, 0 = centred) — the ONE vertical control. In
+    // fit/extend it positions the fitted photo; in Fill it pans the framing at the
+    // same size (down flows real artwork into the gradient, up is source-bounded).
     const [vPos, setVPos] = useState(saved.vPos ?? 0);
     // Zoom (>=1) for fit/extend: enlarge the subject above the full-width fit so a
     // wide backdrop isn't shrunk to a tiny strip.
     const [zoom, setZoom] = useState(saved.zoom ?? 1);
     const [focusX, setFocusX] = useState(saved.focusX ?? 0.5);
-    const [focusY, setFocusY] = useState(saved.focusY ?? 0.5);
 
     // Framing is tuned for ONE image: a crop box, zoom, focal point and vertical
     // pan chosen for backdrop A are meaningless on backdrop B, and silently
@@ -1109,7 +1118,6 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
         setVPos(0);
         setZoom(1);
         setFocusX(0.5);
-        setFocusY(0.5);
     }, []);
     // fitMode is deliberately NOT reset — it's a per-user way of working
     // (Fill vs Fit), not a property of the chosen image.
@@ -1176,7 +1184,6 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             vPos,
             zoom,
             focusX,
-            focusY,
             logoScale,
             logoYOffset,
             whitenLogo,
@@ -1198,7 +1205,6 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
         vPos,
         zoom,
         focusX,
-        focusY,
         logoScale,
         logoYOffset,
         whitenLogo,
@@ -1429,7 +1435,6 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             mask_b64: null,
             fit_mode: fitMode,
             focus_x: focusX,
-            focus_y: focusY,
             crop_x: (fitMode === 'fit' || fitMode === 'extend') && crop ? crop.x : null,
             crop_y: (fitMode === 'fit' || fitMode === 'extend') && crop ? crop.y : null,
             crop_w: (fitMode === 'fit' || fitMode === 'extend') && crop ? crop.w : null,
@@ -1465,7 +1470,6 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             vPos,
             zoom,
             focusX,
-            focusY,
             bandLabel,
             saveTargets.saveLocal,
             saveTargets.uploadGdrive,
@@ -1505,7 +1509,6 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                 vp: vPos,
                 zm: zoom,
                 fx: focusX,
-                fy: focusY,
                 bl: bandLabel,
                 pl: !hasLogo,
                 ti: hasLogo ? null : item.title,
@@ -1526,7 +1529,6 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             vPos,
             zoom,
             focusX,
-            focusY,
             bandLabel,
             hasLogo,
             logoScale,
@@ -1646,7 +1648,6 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                 invert: invertLogo,
                 fit_mode: fitMode,
                 focus_x: focusX,
-                focus_y: focusY,
                 crop_x: (fitMode === 'fit' || fitMode === 'extend') && crop ? crop.x : null,
                 crop_y: (fitMode === 'fit' || fitMode === 'extend') && crop ? crop.y : null,
                 crop_w: (fitMode === 'fit' || fitMode === 'extend') && crop ? crop.w : null,
@@ -1712,7 +1713,6 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
         saveTargets,
         fitMode,
         focusX,
-        focusY,
         crop,
         vPos,
         zoom,
@@ -1845,10 +1845,9 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                     zoom={zoom}
                     setZoom={setZoom}
                     focusX={focusX}
-                    focusY={focusY}
-                    onFocusChange={(fx, fy) => {
+                    onFocusChange={(fx, vp) => {
                         setFocusX(fx);
-                        setFocusY(fy);
+                        setVPos(vp);
                     }}
                     item={item}
                     config={config}
@@ -2008,7 +2007,6 @@ const RenderPanel = ({
     zoom,
     setZoom,
     focusX,
-    focusY,
     onFocusChange,
     item,
     config,
@@ -3127,7 +3125,7 @@ const RenderPanel = ({
                                     crop={crop}
                                     setCrop={setCrop}
                                     focusX={focusX}
-                                    focusY={focusY}
+                                    vPos={vPos}
                                     onChange={onFocusChange}
                                 />
                             )}
@@ -3157,28 +3155,11 @@ const RenderPanel = ({
                                 </div>
                                 <input
                                     type="range"
-                                    min="0"
-                                    max="1"
+                                    min={CONTROL_RANGES.vPos.min}
+                                    max={CONTROL_RANGES.vPos.max}
                                     step="0.01"
                                     value={vPos}
                                     onChange={e => setVPos(Number(e.target.value))}
-                                    className="w-full"
-                                />
-                            </div>
-                            <div>
-                                <div className="flex justify-between mb-1.5">
-                                    <span className="text-sm text-fg-muted">Focus Y</span>
-                                    <span className="font-mono text-xs text-fg-subtle">
-                                        {(focusY ?? 0.5).toFixed(2)}
-                                    </span>
-                                </div>
-                                <input
-                                    type="range"
-                                    min="0"
-                                    max="1"
-                                    step="0.01"
-                                    value={focusY ?? 0.5}
-                                    onChange={e => onFocusChange(focusX, Number(e.target.value))}
                                     className="w-full"
                                 />
                             </div>
@@ -4117,8 +4098,8 @@ const clamp01 = v => Math.max(0, Math.min(1, v));
  * Drag a 2:3 crop box over the wide backdrop to choose what stays in frame.
  * The box mirrors exactly what the backend keeps: the largest 2:3 rectangle that
  * fits the backdrop, positioned by the focal point. Everything outside is dimmed.
- * Reports focus_x/focus_y (0..1, the box centre) so /preview + /generate crop the
- * same way. Drag anywhere on the image to move the focal point.
+ * Reports focus_x (0..1) and v_pos (-1..1, 0 = centred) so /preview + /generate
+ * crop the same way. Drag anywhere on the image to move the focal point.
  */
 // Two framing modes:
 //  - "cover" (Fill): drag a focal point; a fixed 2:3 box scales up + crops to fill
@@ -4142,7 +4123,7 @@ const CropFramer = ({
     crop,
     setCrop,
     focusX,
-    focusY,
+    vPos,
     onChange,
     // Compact = the right-rail placement: no nested card chrome, image fills
     // the rail width. The big center preview is the result view.
@@ -4172,9 +4153,9 @@ const CropFramer = ({
             hF = 1 / target / ratio;
         }
         const leftF = Math.max(0, Math.min(focusX - wF / 2, 1 - wF));
-        const topF = Math.max(0, Math.min(focusY - hF / 2, 1 - hF));
+        const topF = Math.max(0, Math.min(vPosToFrac(vPos) - hF / 2, 1 - hF));
         return { left: leftF, top: topF, w: wF, h: hF };
-    }, [ratio, focusX, focusY]);
+    }, [ratio, focusX, vPos]);
 
     // Box-mode kept-region from the normalized crop (already fractions).
     const boxRect = useMemo(() => {
@@ -4203,7 +4184,7 @@ const CropFramer = ({
                 anchor.current = p;
                 setCrop({ x: p.nx, y: p.ny, w: 0, h: 0 });
             } else {
-                onChange(p.nx, p.ny);
+                onChange(p.nx, fracToVPos(p.ny));
             }
         },
         [isBox, pointFromEvent, onChange, setCrop]
@@ -4222,7 +4203,7 @@ const CropFramer = ({
                     h: Math.abs(p.ny - a.ny),
                 });
             } else if (!isBox) {
-                onChange(p.nx, p.ny);
+                onChange(p.nx, fracToVPos(p.ny));
             }
         },
         [isBox, pointFromEvent, onChange, setCrop]
@@ -4248,7 +4229,7 @@ const CropFramer = ({
     // already at its default — disable it then and explain what to do instead via
     // a tooltip, so it reads as state rather than a dead control.
     const cropIsWhole = !crop || (crop.x === 0 && crop.y === 0 && crop.w === 1 && crop.h === 1);
-    const focusIsCentered = focusX === 0.5 && focusY === 0.5;
+    const focusIsCentered = focusX === 0.5 && (vPos ?? 0) === 0;
     const resetAtDefault = isBox ? cropIsWhole : focusIsCentered;
     const resetTip = resetAtDefault
         ? isBox
@@ -4999,11 +4980,11 @@ const LogoSelector = ({
 // ─── Square art tab ─────────────────────────────────────────────────────────
 
 // Drag a 1:1 cover-crop box over the source art to choose what fills the square.
-// Zoom + Focus-Y sliders for the asset framers (Background / Square), surfaced in
-// the right-column FRAMING group to mirror the Poster tab. The frame itself (fit
-// tabs + drag-to-pan) stays in the center SquareFramer; these drive the same
-// zoom / focusY state, so they stay in sync with a drag.
-const FramingSliders = ({ zoom, setZoom, focusY, setFocusY }) => (
+// Zoom + Vertical-position sliders for the asset framers (Background / Square),
+// surfaced in the right-column FRAMING group to mirror the Poster tab. The frame
+// itself (fit tabs + drag-to-pan) stays in the center SquareFramer; these drive
+// the same zoom / vPos state, so they stay in sync with a drag.
+const FramingSliders = ({ zoom, setZoom, vPos, setVPos }) => (
     <>
         <div>
             <div className="flex justify-between mb-1.5">
@@ -5022,18 +5003,18 @@ const FramingSliders = ({ zoom, setZoom, focusY, setFocusY }) => (
         </div>
         <div>
             <div className="flex justify-between mb-1.5">
-                <span className="text-sm text-fg-muted">Focus Y</span>
+                <span className="text-sm text-fg-muted">Vertical position</span>
                 <span className="font-mono text-xs text-fg-subtle">
-                    {(focusY ?? 0.5).toFixed(2)}
+                    {Math.round((vPos ?? 0) * 100)}
                 </span>
             </div>
             <input
                 type="range"
-                min="0"
-                max="1"
+                min={CONTROL_RANGES.vPos.min}
+                max={CONTROL_RANGES.vPos.max}
                 step="0.01"
-                value={focusY ?? 0.5}
-                onChange={e => setFocusY(Number(e.target.value))}
+                value={vPos ?? 0}
+                onChange={e => setVPos(Number(e.target.value))}
                 className="w-full"
             />
         </div>
@@ -5043,7 +5024,7 @@ const FramingSliders = ({ zoom, setZoom, focusY, setFocusY }) => (
 const SquareFramer = ({
     imageUrl,
     focusX,
-    focusY,
+    vPos,
     onChange,
     fitMode,
     setFitMode,
@@ -5070,11 +5051,11 @@ const SquareFramer = ({
         const hF = Math.min(1, aspect / nh);
         return {
             left: Math.max(0, Math.min(focusX - wF / 2, 1 - wF)),
-            top: Math.max(0, Math.min(focusY - hF / 2, 1 - hF)),
+            top: Math.max(0, Math.min(vPosToFrac(vPos) - hF / 2, 1 - hF)),
             w: wF,
             h: hF,
         };
-    }, [ratio, focusX, focusY, fitMode, zoom, aspect]);
+    }, [ratio, focusX, vPos, fitMode, zoom, aspect]);
     const segCls = on =>
         `px-2.5 py-1 text-sm rounded-md border ${
             on
@@ -5244,7 +5225,7 @@ const SquareArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
         setCustomBg(null);
     };
     const [focusX, setFocusX] = useState(0.5);
-    const [focusY, setFocusY] = useState(0.5);
+    const [vPos, setVPos] = useState(0);
     const [fitMode, setFitMode] = useState('cover'); // cover (fill) | fit (contain)
     const [zoom, setZoom] = useState(1);
     const [seasonNumber, setSeasonNumber] = useState(''); // '' = show-level asset
@@ -5268,8 +5249,8 @@ const SquareArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
             backdrop_path: customBg ? null : backdrop,
             backdrop_b64: customBg?.b64 || null,
             focus_x: focusX,
-            focus_y: focusY,
             fit_mode: fitMode,
+            v_pos: vPos,
             zoom,
             save_local: saveTargets.saveLocal,
             upload_gdrive: saveTargets.uploadGdrive,
@@ -5279,8 +5260,8 @@ const SquareArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
             backdrop,
             customBg,
             focusX,
-            focusY,
             fitMode,
+            vPos,
             zoom,
             seasonNum,
             saveTargets.saveLocal,
@@ -5292,7 +5273,7 @@ const SquareArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
         reqRef.current = req;
     }, [req]);
 
-    const sig = `${customSig(customBg) || backdrop}|${focusX}|${focusY}|${fitMode}|${zoom}`;
+    const sig = `${customSig(customBg) || backdrop}|${focusX}|${vPos}|${fitMode}|${zoom}`;
     useEffect(() => {
         if (!hasSrc) return undefined;
         let cancelled = false;
@@ -5424,10 +5405,10 @@ const SquareArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                         <SquareFramer
                             imageUrl={srcUrl}
                             focusX={focusX}
-                            focusY={focusY}
+                            vPos={vPos}
                             onChange={(fx, fy) => {
                                 setFocusX(fx);
-                                setFocusY(fy);
+                                setVPos(fy);
                             }}
                             fitMode={fitMode}
                             setFitMode={setFitMode}
@@ -5468,12 +5449,7 @@ const SquareArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
             <section className="bg-surface border border-border rounded-[12px] p-4 flex flex-col gap-3.5">
                 <div className="flex flex-col gap-3">
                     <StudioGroupLabel>Framing</StudioGroupLabel>
-                    <FramingSliders
-                        zoom={zoom}
-                        setZoom={setZoom}
-                        focusY={focusY}
-                        setFocusY={setFocusY}
-                    />
+                    <FramingSliders zoom={zoom} setZoom={setZoom} vPos={vPos} setVPos={setVPos} />
                 </div>
                 <StudioAccordion title="Recently generated">
                     <HistorySection toast={toast} />
@@ -5500,7 +5476,7 @@ const BackgroundArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast 
         setCustomBg(null);
     };
     const [focusX, setFocusX] = useState(0.5);
-    const [focusY, setFocusY] = useState(0.5);
+    const [vPos, setVPos] = useState(0);
     const [fitMode, setFitMode] = useState('cover'); // cover (fill) | fit (contain)
     const [zoom, setZoom] = useState(1);
     const [resolution, setResolution] = useState('1080p'); // 1080p | 4k (Plex dims)
@@ -5525,8 +5501,8 @@ const BackgroundArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast 
             backdrop_path: customBg ? null : backdrop,
             backdrop_b64: customBg?.b64 || null,
             focus_x: focusX,
-            focus_y: focusY,
             fit_mode: fitMode,
+            v_pos: vPos,
             zoom,
             resolution,
             save_local: saveTargets.saveLocal,
@@ -5537,8 +5513,8 @@ const BackgroundArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast 
             backdrop,
             customBg,
             focusX,
-            focusY,
             fitMode,
+            vPos,
             zoom,
             resolution,
             seasonNum,
@@ -5552,7 +5528,7 @@ const BackgroundArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast 
     }, [req]);
 
     // Preview renders at 1080p regardless of resolution — same 16:9 frame.
-    const sig = `${customSig(customBg) || backdrop}|${focusX}|${focusY}|${fitMode}|${zoom}`;
+    const sig = `${customSig(customBg) || backdrop}|${focusX}|${vPos}|${fitMode}|${zoom}`;
     useEffect(() => {
         if (!hasSrc) return undefined;
         let cancelled = false;
@@ -5684,10 +5660,10 @@ const BackgroundArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast 
                         <SquareFramer
                             imageUrl={srcUrl}
                             focusX={focusX}
-                            focusY={focusY}
+                            vPos={vPos}
                             onChange={(fx, fy) => {
                                 setFocusX(fx);
-                                setFocusY(fy);
+                                setVPos(fy);
                             }}
                             fitMode={fitMode}
                             setFitMode={setFitMode}
@@ -5763,12 +5739,7 @@ const BackgroundArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast 
                             </button>
                         </div>
                     </div>
-                    <FramingSliders
-                        zoom={zoom}
-                        setZoom={setZoom}
-                        focusY={focusY}
-                        setFocusY={setFocusY}
-                    />
+                    <FramingSliders zoom={zoom} setZoom={setZoom} vPos={vPos} setVPos={setVPos} />
                 </div>
                 <StudioAccordion title="Recently generated">
                     <HistorySection toast={toast} />

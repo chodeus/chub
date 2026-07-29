@@ -108,7 +108,6 @@ class GenerateRequest(BaseModel):
     mask_b64: Optional[str] = None  # user-brushed mask (PNG, white=remove) for AI
     remove_text: bool = False  # run AI text removal (OpenAI can do it mask-less)
     focus_x: float = 0.5  # crop focal point (0..1); 0.5 = centre (cover mode)
-    focus_y: float = 0.5
     # Framing: "cover" scales up + crops to fill (focus_x/y); "fit" scales the
     # backdrop down to the canvas width and black-pads the bottom, keeping the full
     # width so spread-out subjects all stay in frame. ``crop_*`` (0..1) optionally
@@ -462,7 +461,6 @@ def preview(
             mask_bytes=mask_bytes,
             apply_ai=req.remove_text,
             focus_x=req.focus_x,
-            focus_y=req.focus_y,
             fit_mode=req.fit_mode,
             crop=_crop_tuple(req),
             v_pos=req.v_pos,
@@ -520,7 +518,6 @@ def generate(
         mask_bytes=mask_bytes,
         apply_ai=req.remove_text,
         focus_x=req.focus_x,
-        focus_y=req.focus_y,
         fit_mode=req.fit_mode,
         crop=_crop_tuple(req),
         v_pos=req.v_pos,
@@ -568,7 +565,7 @@ class SquareArtRequest(BaseModel):
     backdrop_path: Optional[str] = None
     backdrop_b64: Optional[str] = None  # custom-uploaded source art (base64)
     focus_x: float = 0.5
-    focus_y: float = 0.5
+    v_pos: float = 0.0
     fit_mode: str = "cover"  # cover (focal crop) | fit (contain on black)
     zoom: float = Field(1.0, ge=geo.ZOOM_MIN, le=geo.ZOOM_MAX)
     save_local: bool = True
@@ -636,8 +633,8 @@ def square_preview(
     blob = render_square_art(
         backdrop_bytes=raw,
         focus_x=req.focus_x,
-        focus_y=req.focus_y,
         fit_mode=req.fit_mode,
+        v_pos=req.v_pos,
         zoom=req.zoom,
     )
     return Response(
@@ -664,8 +661,8 @@ def square_generate(
         backdrop_path=req.backdrop_path,
         backdrop_bytes=_b64_to_bytes(req.backdrop_b64),
         focus_x=req.focus_x,
-        focus_y=req.focus_y,
         fit_mode=req.fit_mode,
+        v_pos=req.v_pos,
         zoom=req.zoom,
         season_number=req.season_number,
         save_local=req.save_local,
@@ -691,7 +688,7 @@ class BackgroundArtRequest(BaseModel):
     backdrop_path: Optional[str] = None
     backdrop_b64: Optional[str] = None  # custom-uploaded source art (base64)
     focus_x: float = 0.5
-    focus_y: float = 0.5
+    v_pos: float = 0.0
     fit_mode: str = "cover"  # cover (focal crop) | fit (contain on black)
     zoom: float = Field(1.0, ge=geo.ZOOM_MIN, le=geo.ZOOM_MAX)
     resolution: str = "1080p"  # 1080p (1920x1080) | 4k (3840x2160), per Plex dims
@@ -721,8 +718,8 @@ def background_preview(
         width=1920,
         height=1080,
         focus_x=req.focus_x,
-        focus_y=req.focus_y,
         fit_mode=req.fit_mode,
+        v_pos=req.v_pos,
         zoom=req.zoom,
     )
     return Response(
@@ -749,8 +746,8 @@ def background_generate(
         backdrop_path=req.backdrop_path,
         backdrop_bytes=_b64_to_bytes(req.backdrop_b64),
         focus_x=req.focus_x,
-        focus_y=req.focus_y,
         fit_mode=req.fit_mode,
+        v_pos=req.v_pos,
         zoom=req.zoom,
         resolution=req.resolution,
         season_number=req.season_number,
@@ -902,7 +899,6 @@ def psd_export(
         logo_scale=req.logo_scale,
         logo_y_offset=req.logo_y_offset,
         focus_x=req.focus_x,
-        focus_y=req.focus_y,
         fit_mode=req.fit_mode,
         crop=_crop_tuple(req),
         v_pos=req.v_pos,
@@ -938,7 +934,6 @@ class SeasonsRequest(BaseModel):
     # Framing carried over from the show poster so every season matches it.
     fit_mode: str = "cover"
     focus_x: float = 0.5
-    focus_y: float = 0.5
     crop_x: Optional[float] = None
     crop_y: Optional[float] = None
     crop_w: Optional[float] = None
@@ -1036,7 +1031,6 @@ def _run_seasons_job(jid: int, db: ChubDB, logger: Any, req: SeasonsRequest) -> 
             custom_logo_bytes=_b64_to_bytes(req.logo_b64),
             fit_mode=req.fit_mode,
             focus_x=req.focus_x,
-            focus_y=req.focus_y,
             crop=_crop_tuple(req),
             v_pos=req.v_pos,
             zoom=req.zoom,
