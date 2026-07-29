@@ -3053,8 +3053,11 @@ const RenderPanel = ({
 
                     {/* CENTER: large persistent preview + actions (never moves). The
                         crop framer lives in the right-column Framing group. */}
-                    <section className="sticky top-0 self-start flex flex-col items-center gap-[13px]">
-                        <div className="relative aspect-[2/3] h-[clamp(640px,80vh,880px)] max-w-full bg-black rounded-[10px] overflow-hidden flex items-center justify-center border border-border shadow-lg">
+                    <section className="xl:sticky xl:top-0 self-start flex flex-col items-center gap-[13px]">
+                        {/* Width-driven on phones — a viewport-height floor there
+                            just letterboxes the poster and pushes the controls
+                            off the bottom. Height leads from md up. */}
+                        <div className="relative aspect-[2/3] w-full max-w-full md:w-auto md:h-[clamp(640px,80vh,880px)] bg-black rounded-[10px] overflow-hidden flex items-center justify-center border border-border shadow-lg">
                             {hasBackdrop && previewUrl ? (
                                 <>
                                     <img
@@ -4340,7 +4343,10 @@ const CropFramer = ({
             <div className={compact ? '' : 'flex gap-3 items-start'}>
                 <div
                     ref={wrapRef}
-                    className={`relative leading-none select-none overflow-hidden rounded cursor-crosshair ${
+                    /* touch-none: React registers touchmove passively, so the
+                       handler's preventDefault can't stop the page scrolling
+                       under a drag — CSS has to. */
+                    className={`relative leading-none select-none overflow-hidden rounded cursor-crosshair touch-none ${
                         compact ? 'block w-full' : 'inline-block min-w-0'
                     }`}
                     onMouseDown={down}
@@ -4384,6 +4390,24 @@ const CropFramer = ({
 };
 
 // ─── Picker grid ───────────────────────────────────────────────────────────
+
+// WebKit (iOS Safari and iOS Chrome) ignores aspect-ratio on form controls, so
+// a <button> tile whose children are all absolutely positioned collapses to
+// zero height there — which in turn makes every tile "near the viewport" and
+// defeats loading="lazy". Percentage padding sizes the tile on every engine.
+const ASPECT_PAD = {
+    'aspect-video': '56.25%',
+    'aspect-square': '100%',
+    'aspect-[2/3]': '150%',
+};
+
+const AspectSpacer = ({ aspect }) => (
+    <span
+        className="block w-full"
+        style={{ paddingTop: ASPECT_PAD[aspect] || ASPECT_PAD['aspect-video'] }}
+        aria-hidden="true"
+    />
+);
 
 // Custom-upload body shown when a picker's source is 'Upload' — the chosen file
 // (with Remove) or an upload prompt. Header mirrors Picker so the SourceSelector
@@ -4455,7 +4479,7 @@ const Picker = ({
                                 type="button"
                                 onClick={() => onSelect(isSel ? null : path)}
                                 aria-pressed={isSel}
-                                className={`relative ${aspect} rounded-md overflow-hidden border-2 transition-all ${
+                                className={`relative rounded-md overflow-hidden border-2 transition-all ${
                                     isSel
                                         ? 'border-primary ring-2 ring-primary/40'
                                         : 'border-border hover:border-primary'
@@ -4470,8 +4494,9 @@ const Picker = ({
                                         : path
                                 }
                             >
+                                <AspectSpacer aspect={aspect} />
                                 <img
-                                    src={urlForPath(it.url || path)}
+                                    src={thumbUrl(it.url || path)}
                                     alt=""
                                     loading="lazy"
                                     className="absolute inset-0 w-full h-full object-contain"
@@ -4830,8 +4855,9 @@ const LogoSelector = ({
                                         disabled={gdriveImporting}
                                         onClick={() => onGdrivePick?.(g)}
                                         title={g.file}
-                                        className="relative aspect-video rounded-md overflow-hidden border-2 border-border hover:border-primary disabled:opacity-50 bg-black"
+                                        className="relative rounded-md overflow-hidden border-2 border-border hover:border-primary disabled:opacity-50 bg-black"
                                     >
+                                        <AspectSpacer aspect="aspect-video" />
                                         <img
                                             src={postersAPI.getPreviewUrl(g.folder, g.file)}
                                             alt={g.file}
@@ -4876,15 +4902,16 @@ const LogoSelector = ({
                                         type="button"
                                         onClick={() => onSelect(isSel ? null : path)}
                                         aria-pressed={isSel}
-                                        className={`relative aspect-video rounded-md overflow-hidden border-2 bg-black transition-all ${
+                                        className={`relative rounded-md overflow-hidden border-2 bg-black transition-all ${
                                             isSel
                                                 ? 'border-primary ring-2 ring-primary/40'
                                                 : 'border-border hover:border-primary'
                                         }`}
                                         title={it.width ? `${it.width}×${it.height}` : path}
                                     >
+                                        <AspectSpacer aspect="aspect-video" />
                                         <img
-                                            src={urlForPath(it.url || path)}
+                                            src={thumbUrl(it.url || path)}
                                             alt=""
                                             loading="lazy"
                                             className="absolute inset-0 w-full h-full object-contain"
@@ -5183,7 +5210,9 @@ const SquareFramer = ({
             </p>
             <div
                 ref={wrapRef}
-                className="relative inline-block leading-none select-none overflow-hidden rounded cursor-crosshair max-w-full"
+                /* touch-none — see CropFramer: passive touchmove means the drag
+                   can only be kept from scrolling the page in CSS. */
+                className="relative inline-block leading-none select-none overflow-hidden rounded cursor-crosshair max-w-full touch-none"
                 onMouseDown={down}
                 onMouseMove={move}
                 onMouseUp={up}
@@ -5435,7 +5464,7 @@ const SquareArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
             </div>
 
             {/* CENTER: sticky preview + framer + output */}
-            <section className="sticky top-0 self-start flex flex-col items-center gap-[13px]">
+            <section className="xl:sticky xl:top-0 self-start flex flex-col items-center gap-[13px]">
                 <div className="relative w-full max-w-[420px] aspect-square bg-black rounded-[10px] overflow-hidden flex items-center justify-center border border-border shadow-lg">
                     {hasSrc && previewUrl ? (
                         <>
@@ -5690,7 +5719,7 @@ const BackgroundArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast 
             </div>
 
             {/* CENTER: sticky preview + framer + output */}
-            <section className="sticky top-0 self-start flex flex-col items-center gap-[13px]">
+            <section className="xl:sticky xl:top-0 self-start flex flex-col items-center gap-[13px]">
                 <div className="relative w-full max-w-[560px] aspect-video bg-black rounded-[10px] overflow-hidden flex items-center justify-center border border-border shadow-lg">
                     {hasSrc && previewUrl ? (
                         <>
@@ -6188,7 +6217,7 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
             </div>
 
             {/* CENTER: sticky checkerboard preview + output */}
-            <section className="sticky top-0 self-start flex flex-col items-center gap-[13px]">
+            <section className="xl:sticky xl:top-0 self-start flex flex-col items-center gap-[13px]">
                 <div
                     className="relative w-full max-w-[480px] aspect-video rounded-[10px] overflow-hidden flex items-center justify-center border border-border shadow-lg"
                     style={{
@@ -6630,6 +6659,20 @@ const urlForPath = path => {
         return token ? `${path}&token=${encodeURIComponent(token)}` : BLANK_IMAGE;
     }
     return path.startsWith('http') ? path : `${TMDB_CDN}${path}`;
+};
+
+// Picker grids show hundreds of tiles at once, so they must never pull the
+// full-size asset: one original TMDB backdrop is ~1.2 MB (and ~33 MB decoded)
+// where the w500 rendition is ~28 KB. Enough for any tile, and the difference
+// is what keeps a phone's tab alive. Only TMDB CDN URLs can be resized this
+// way — fanart / Plex-proxy / upload URLs pass through untouched.
+const TMDB_CDN_THUMB = 'https://image.tmdb.org/t/p/w500';
+
+const thumbUrl = path => {
+    const url = urlForPath(path);
+    return typeof url === 'string' && url.startsWith(TMDB_CDN)
+        ? TMDB_CDN_THUMB + url.slice(TMDB_CDN.length)
+        : url;
 };
 
 const slugify = s =>
