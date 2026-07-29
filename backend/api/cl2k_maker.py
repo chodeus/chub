@@ -1115,10 +1115,12 @@ def _run_retext_seasons_job(
     season's SEASON-N band. Never raises — a crash is recorded as the job error so
     the frontend poll terminates instead of spinning on a stuck "running"."""
     try:
-        # Inside the guard: a config fault must fail the job, not kill the thread.
-        full_config = load_config()
         for n in req.seasons:
             n = int(n)
+            # Re-read per season: config is REPLACED on reload, so a batch that
+            # snapshots it renders later seasons with settings the user changed.
+            # Inside the guard, so a config fault fails the job, not the thread.
+            full_config = load_config()
             try:
                 res = retext_poster(
                     db=db,
