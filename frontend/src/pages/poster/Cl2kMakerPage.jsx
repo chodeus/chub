@@ -268,18 +268,34 @@ const clampVPos = v =>
 
 // v_pos (-1..1, 0 = centred) <-> the 0..1 source fraction the crop-box overlays
 // draw with. `hF` is the kept box's height as a fraction of the scaled source, so
-// the travel each way is the real slack — (1 - hF) / 2 — not half the whole
-// source. renderer._v_pos_top pans over exactly that: (src_h - height) / 2 either
-// side of centre. Mapping over the full source instead makes the box outrun the
-// render and saturate early, which is what it did when v_pos absorbed focus_y.
-const vPosTravel = hF => (1 - Math.min(1, Math.max(0, hF || 0))) / 2;
-const vPosToFrac = (vPos, hF) => 0.5 + clampVPos(vPos) * vPosTravel(hF);
-// Inverse, for turning a drag on the crop box back into v_pos. null when the box
-// fills the height: there is nothing to pan, and a drag must then leave the
-// user's Vertical position alone rather than slam it to a limit.
-const fracToVPos = (frac, hF) => {
-    const travel = vPosTravel(hF);
-    return travel <= 0 ? null : clampVPos((frac - 0.5) / travel);
+// travel is the real slack — (1 - hF) / 2 — not half the whole source.
+// The two directions are NOT symmetric in cover mode: _cover_resize pans down
+// through the source AND up to black_allow past its bottom edge, edge-extended
+// into the gradient. `band` mirrors that; paths that crop through _v_pos_top
+// (render_framed_art, and _cover_resize's own zoom-out branch) are symmetric and
+// leave it 0. A 16:9 backdrop at zoom 1 is the case that makes this matter: it
+// cover-fills to exactly the canvas, so hF is 1 and the ONLY travel it has is the
+// band.
+const COVER_EXTEND_BAND = 0.3; // renderer._cover_resize: black_allow = 0.30 * CANVAS_H
+const vPosClampHF = hF => Math.min(1, Math.max(0, hF || 0));
+const vPosTravelUp = hF => (1 - vPosClampHF(hF)) / 2;
+const vPosTravelDown = (hF, band = 0) => vPosTravelUp(hF) + band * vPosClampHF(hF);
+const vPosToFrac = (vPos, hF, band = 0) => {
+    const v = clampVPos(vPos);
+    return 0.5 + v * (v < 0 ? vPosTravelUp(hF) : vPosTravelDown(hF, band));
+};
+// Inverse, for turning a drag on the crop box back into v_pos. null only when
+// neither direction can move: leave the user's Vertical position alone rather
+// than slam it to a limit. A drag toward a side with no travel lands on 0 — the
+// nearest framing that side can reach — so it can still pull the framing back.
+const fracToVPos = (frac, hF, band = 0) => {
+    const up = vPosTravelUp(hF);
+    const down = vPosTravelDown(hF, band);
+    if (up <= 0 && down <= 0) return null;
+    const d = frac - 0.5;
+    if (d === 0) return 0;
+    const travel = d < 0 ? up : down;
+    return travel <= 0 ? 0 : clampVPos(d / travel);
 };
 
 const cl2kLogoBaseline = kind =>
@@ -4169,20 +4185,21 @@ const CropFramer = ({
         // has no vertical travel at 1.5x, when that is exactly where v_pos gains
         // its upward range. Neither axis can keep more than the whole source.
         const z = Math.max(CONTROL_RANGES.zoom.min, Math.min(zoom || 1, CONTROL_RANGES.zoom.max));
-        let wF, hF;
-        if (1 / ratio > target) {
-            hF = Math.min(1, 1 / z);
-            wF = Math.min(1, (target * ratio) / z);
-        } else {
-            wF = Math.min(1, 1 / z);
-            hF = Math.min(1, 1 / target / ratio / z);
-        }
+        const wide = 1 / ratio > target;
+        const rawW = wide ? (target * ratio) / z : 1 / z;
+        const rawH = wide ? 1 / z : 1 / target / ratio / z;
+        const wF = Math.min(1, rawW);
+        const hF = Math.min(1, rawH);
+        // Either raw fraction over 1 means the scaled art no longer fills the
+        // canvas, which is _cover_resize's zoom-out branch — symmetric _v_pos_top,
+        // no extend band.
+        const band = rawW <= 1 && rawH <= 1 ? COVER_EXTEND_BAND : 0;
         const leftF = Math.max(0, Math.min(focusX - wF / 2, 1 - wF));
         // Positive v_pos can pan past the source into the edge-extended band that
         // lands in the gradient; that band isn't on this image, so the box stops
         // at the real bottom edge rather than drawing a region that doesn't exist.
-        const topF = Math.max(0, Math.min(vPosToFrac(vPos, hF) - hF / 2, 1 - hF));
-        return { left: leftF, top: topF, w: wF, h: hF };
+        const topF = Math.max(0, Math.min(vPosToFrac(vPos, hF, band) - hF / 2, 1 - hF));
+        return { left: leftF, top: topF, w: wF, h: hF, band };
     }, [ratio, focusX, vPos, zoom]);
 
     // Box-mode kept-region from the normalized crop (already fractions).
@@ -4212,7 +4229,7 @@ const CropFramer = ({
                 anchor.current = p;
                 setCrop({ x: p.nx, y: p.ny, w: 0, h: 0 });
             } else {
-                const vp = fracToVPos(p.ny, coverRect?.h);
+                const vp = fracToVPos(p.ny, coverRect?.h, coverRect?.band);
                 onChange(p.nx, vp === null ? vPos : vp);
             }
         },
@@ -4232,7 +4249,7 @@ const CropFramer = ({
                     h: Math.abs(p.ny - a.ny),
                 });
             } else if (!isBox) {
-                const vp = fracToVPos(p.ny, coverRect?.h);
+                const vp = fracToVPos(p.ny, coverRect?.h, coverRect?.band);
                 onChange(p.nx, vp === null ? vPos : vp);
             }
         },
