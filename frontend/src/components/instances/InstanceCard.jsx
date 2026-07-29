@@ -148,11 +148,11 @@ export const InstanceCard = ({
             : null;
 
     const iconBtn =
-        'w-8 h-8 rounded-lg flex items-center justify-center text-fg-muted hover:text-fg hover:bg-row-hover transition-colors disabled:opacity-50';
+        'w-8 h-8 touch-expand rounded-lg flex items-center justify-center text-fg-muted hover:text-fg hover:bg-row-hover transition-colors disabled:opacity-50';
 
     return (
         <div className="rounded-xl bg-surface border border-border hover:border-[#3b3d72] transition-colors overflow-hidden">
-            <div className="flex items-center gap-4 px-[18px] py-[15px]">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-3 px-[18px] py-[15px]">
                 <span
                     className="shrink-0 w-11 h-11 rounded-[10px] flex items-center justify-center font-display text-[17px] font-bold"
                     style={{ background: tint, color }}
@@ -181,7 +181,7 @@ export const InstanceCard = ({
                     </div>
                 </div>
 
-                <div className="hidden md:flex flex-col items-end gap-1 shrink-0 mr-1">
+                <div className="flex flex-col items-end gap-1 shrink-0 mr-1">
                     <span
                         className={`flex items-center gap-1.5 text-[12px] font-semibold ${healthTone}`}
                     >
@@ -195,7 +195,7 @@ export const InstanceCard = ({
                     )}
                 </div>
 
-                <div className="flex items-center gap-1.5 shrink-0">
+                <div className="flex items-center gap-1.5 shrink-0 w-full justify-end sm:w-auto">
                     <Button variant="surface" size="small" onClick={onTest} disabled={isTesting}>
                         {isTesting ? 'Testing…' : 'Test'}
                     </Button>

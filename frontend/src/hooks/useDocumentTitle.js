@@ -1,10 +1,12 @@
 import { useEffect } from 'react';
 import { useLocation } from 'react-router';
+import { NAV_TITLES } from '../components/navSections.js';
 
 /**
  * Map of canonical pathname → user-facing page name. Kept in sync with the
  * Breadcrumbs route map so the browser tab and breadcrumb trail speak the
- * same language.
+ * same language. Core routes only — extension routes fall through to
+ * NAV_TITLES, which is derived from the nav tree they already register into.
  */
 const ROUTE_TITLES = {
     '/login': 'Sign in',
@@ -47,7 +49,7 @@ export function useDocumentTitle() {
     const { pathname } = useLocation();
 
     useEffect(() => {
-        const label = ROUTE_TITLES[pathname];
+        const label = ROUTE_TITLES[pathname] ?? NAV_TITLES[pathname];
         document.title = label ? `${label} · ${SUFFIX}` : SUFFIX;
     }, [pathname]);
 }

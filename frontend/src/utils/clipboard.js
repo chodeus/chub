@@ -37,8 +37,23 @@ export async function copyText(text) {
     textarea.style.background = 'transparent';
     textarea.style.opacity = '0';
 
+    // iOS ignores select() on a readonly field and then reports execCommand
+    // success having copied nothing, so the selection has to be made with a
+    // Range over a contenteditable node. Harmless elsewhere — select() below
+    // still does the work on every other engine.
+    textarea.contentEditable = 'true';
+    textarea.readOnly = false;
+    // Under 16px iOS zooms the page in when the field takes selection.
+    textarea.style.fontSize = '16px';
+
     document.body.appendChild(textarea);
     try {
+        const range = document.createRange();
+        range.selectNodeContents(textarea);
+        const selection = window.getSelection();
+        selection?.removeAllRanges();
+        selection?.addRange(range);
+
         textarea.select();
         textarea.setSelectionRange(0, text.length);
         const ok = document.execCommand('copy');

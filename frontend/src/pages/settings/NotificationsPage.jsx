@@ -690,7 +690,7 @@ const ModulePicker = ({ selected, all, onToggle, onSelectAll, onClearAll, onDone
     const isChecked = key => all || selected.includes(key);
     return (
         <div
-            className="absolute z-30 right-[17px] bottom-[14px] w-[340px] rounded-[12px] overflow-hidden"
+            className="absolute z-30 right-[17px] bottom-[14px] w-[340px] max-w-[calc(100vw-34px)] rounded-[12px] overflow-hidden"
             style={{
                 background: '#15112e',
                 border: '1px solid #3b3d72',

@@ -16,7 +16,7 @@ const Layout = ({ children }) => {
 
     return (
         <ToolbarProvider>
-            <div className="h-screen flex flex-col">
+            <div className="h-app flex flex-col">
                 {/* Skip link for keyboard navigation - WCAG 2.1 AA requirement */}
                 <a href="#main-content" className="skip-link">
                     Skip to main content

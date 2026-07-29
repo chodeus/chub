@@ -106,7 +106,7 @@ export const Modal = ({
     // All styling via utility classes
     const centeredClasses = `
         relative flex flex-col w-full mx-4
-        max-h-[90vh] rounded-xl overflow-hidden border
+        max-h-[90svh] rounded-xl overflow-hidden border
         bg-surface border-border-light
         transition-transform duration-200
         z-modal
@@ -116,7 +116,7 @@ export const Modal = ({
 
     const sheetClasses = `
         relative flex flex-col w-full
-        max-h-[90vh] rounded-t-xl overflow-hidden border-t border-x
+        max-h-[90svh] rounded-t-xl overflow-hidden border-t border-x
         bg-surface border-border-light
         transition-transform duration-200
         z-modal

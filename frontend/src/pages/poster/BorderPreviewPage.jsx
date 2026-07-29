@@ -514,6 +514,11 @@ const BordersPicker = ({ holidayName, selected, onChange, disabled }) => {
     );
 };
 
+// WebKit (iOS Safari and iOS Chrome) ignores aspect-ratio on form controls, so
+// a <button> tile whose children are all absolutely positioned collapses to
+// zero height there. Percentage padding sizes it on every engine — 150% is 2:3.
+const PosterRatioSpacer = () => <span className="block w-full pt-[150%]" aria-hidden="true" />;
+
 const ThumbnailGroup = ({
     label,
     holiday,
@@ -539,13 +544,14 @@ const ThumbnailGroup = ({
                             onClick={() => onToggle(name)}
                             disabled={disabled}
                             aria-pressed={isSelected}
-                            className={`relative aspect-[2/3] rounded-md overflow-hidden border-2 transition-all focus:outline-2 focus:outline-primary focus:outline-offset-1 disabled:opacity-50 ${
+                            className={`relative rounded-md overflow-hidden border-2 transition-all focus:outline-2 focus:outline-primary focus:outline-offset-1 disabled:opacity-50 ${
                                 isSelected
                                     ? 'border-primary ring-2 ring-primary/40'
                                     : 'border-border hover:border-border-strong'
                             }`}
                             title={`${name}${isSelected ? ' — selected' : ''}`}
                         >
+                            <PosterRatioSpacer />
                             <img
                                 src={borderReplacerrAPI.thumbnailUrl(holiday, source, name)}
                                 alt={`${label} border variant ${name}`}
