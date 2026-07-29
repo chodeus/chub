@@ -26,6 +26,7 @@ from backend.util.cl2k import geometry as geo  # noqa: E402
 from backend.util.cl2k.renderer import (  # noqa: E402
     _place_logo,
     frame_backdrop,
+    generate_text_logo,
     logo_is_usable,
     process_logo,
     render_cl2k,
@@ -229,6 +230,56 @@ def test_trim_agrees_across_the_renderer_entry_points():
     assert w == 1000  # the invisible tail is gone, not 1400
     assert logo_is_usable(logo, min_width=1000)
     assert not logo_is_usable(logo, min_width=1001)
+
+
+def _logo_with_page_offset(page=(8000, 900, 3558, 214)):
+    """A logo carrying a virtual-canvas offset — trimmed once with no repage."""
+
+    def draw(d):
+        d.fill_color = Color("white")
+        d.rectangle(left=100, top=50, width=689, height=199)
+
+    with Image(blob=_png(890, 300, draw)) as img:
+        img.page = page
+        return img.make_blob("png")
+
+
+def test_trim_survives_a_source_page_offset():
+    # trim() reports the content box in canvas coords, so a source with a page
+    # offset made `left` exceed the image width and Wand raised
+    # "ValueError: 3558 > 890" — a 500 out of /preview, not a placed logo.
+    _png_bytes, w, h = process_logo(_logo_with_page_offset(), whiten=False)
+    assert (w, h) == (690, 200)
+
+
+def test_generated_text_logo_carries_no_page_offset():
+    # generate_text_logo draws at cx=4000 on an 8000px canvas, so trimming
+    # without reset_coords baked a ~3500px offset into every wordmark — which
+    # then blew up the trim above. The wordmark IS the fallback that renders
+    # when no clear logo is found, so this took the whole poster down with it.
+    with Image(blob=generate_text_logo("Nobody 2")) as img:
+        assert (img.page_x, img.page_y) == (0, 0)
+        assert img.page_width == img.width
+        assert img.page_height == img.height
+
+
+def test_render_cl2k_falls_back_to_a_wordmark_with_no_logo():
+    # The end-to-end shape of the bug: no logo bytes -> text fallback -> place.
+    blob = render_cl2k(backdrop_bytes=_backdrop(), kind="movie", title="Nobody 2")
+    with Image(blob=blob) as img:
+        assert (img.width, img.height) == (geo.CANVAS_W, geo.CANVAS_H)
+
+
+@pytest.mark.parametrize("src", [(1600, 400), (1000, 300), (900, 250), (600, 400)])
+def test_reported_logo_box_matches_the_placed_size(src):
+    # /logo-processed reports auto_logo_size so the live overlay draws the logo
+    # at the size the render will actually use. render_cl2k never passes
+    # logo_max_width, so _place_logo always takes its auto branch — a flat
+    # guide-box width in the frontend over-sized wide logos by ~15%.
+    logo = _solid_logo("white", *src)
+    _png_bytes, w, h = process_logo(logo, whiten=False)
+    box = geo.auto_logo_size(w, h, geo.MAIN_LOGO_BOTTOM)
+    assert _placed_size(logo, 1.0, max_width=None) == box
 
 
 # --------------------------------------------------------------------------

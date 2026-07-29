@@ -379,6 +379,8 @@ class LogoProcessRequest(BaseModel):
     invert: bool = False  # plate logo -> clearlogo
     flip_b64: Optional[str] = None  # B/W touch-up regions (mask PNG, white=flip)
     erase_b64: Optional[str] = None  # erase regions (mask PNG, white=erase)
+    # Picks the bottom baseline the auto box is fitted against (collection=1319).
+    kind: str = "movie"
 
 
 @router.post("/logo-processed", summary="Trimmed + whitened logo for the live overlay")
@@ -387,10 +389,16 @@ def logo_processed(
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
-    """Return the trimmed + whitened logo (PNG, base64) and its natural size, plus
-    the recommended guide-box width. The frontend draws these bytes at the box
-    derived from the logo geometry so the size/position sliders preview live —
-    matching :func:`render_cl2k`'s placement without a render per drag."""
+    """Return the trimmed + whitened logo (PNG, base64), its natural size and the
+    placement box the render would give it. The frontend draws these bytes at
+    ``box_w``/``box_h`` so the size/position sliders preview live — matching
+    :func:`render_cl2k`'s placement without a render per drag.
+
+    ``box_w``/``box_h`` come from :func:`geometry.auto_logo_size`, the SAME call
+    :func:`renderer._place_logo` makes (``logo_max_width`` is never passed, so the
+    render always takes its auto branch). Deriving the box here rather than
+    re-deriving it in JS is what keeps the overlay and the generated poster the
+    same size — a flat guide-box width over-sizes wide logos by ~15%."""
     try:
         raw = _resolve_logo_bytes(req.logo_path, req.logo_b64)
     except LogoFetchError as exc:
@@ -411,6 +419,7 @@ def logo_processed(
     except Exception as exc:
         logger.warning(f"cl2k: logo processing failed: {exc}")
         return error("Could not process that logo", "LOGO_PROCESS")
+    box_w, box_h = geo.auto_logo_size(width, height, geo.logo_baseline(req.kind))
     return ok(
         "ok",
         {
@@ -418,6 +427,8 @@ def logo_processed(
             "width": width,
             "height": height,
             "max_width": geo.LOGO_WIDTH_RECOMMENDED,
+            "box_w": box_w,
+            "box_h": box_h,
         },
     )
 
@@ -432,38 +443,48 @@ def preview(
         mask_bytes = _mask_bytes(req.mask_b64)
     except Exception:
         return error("invalid mask data", "BAD_MASK")
-    blob = render_preview(
-        db,
-        load_config(),
-        logger,
-        kind=req.kind,
-        title=req.title,
-        tmdb_id=req.tmdb_id,
-        season_number=req.season_number,
-        backdrop_path=req.backdrop_path,
-        backdrop_bytes=_b64_to_bytes(req.backdrop_b64),
-        logo_path=req.logo_path,
-        custom_logo_bytes=_b64_to_bytes(req.logo_b64),
-        tvdb_id=req.tvdb_id,
-        imdb_id=req.imdb_id,
-        mask_bytes=mask_bytes,
-        apply_ai=req.remove_text,
-        focus_x=req.focus_x,
-        focus_y=req.focus_y,
-        fit_mode=req.fit_mode,
-        crop=_crop_tuple(req),
-        v_pos=req.v_pos,
-        zoom=req.zoom,
-        band_label=req.band_label,
-        logo_scale=req.logo_scale,
-        logo_y_offset=req.logo_y_offset,
-        logo_flip_bytes=_b64_to_bytes(req.logo_flip_b64),
-        logo_erase_bytes=_b64_to_bytes(req.logo_erase_b64),
-        whiten=req.whiten,
-        flat_white=req.flat_white,
-        invert=req.invert,
-        place_logo=req.place_logo,
-    )
+    cfg = load_config()  # outside the guard: a config fault is not a render fault
+    try:
+        blob = render_preview(
+            db,
+            cfg,
+            logger,
+            kind=req.kind,
+            title=req.title,
+            tmdb_id=req.tmdb_id,
+            season_number=req.season_number,
+            backdrop_path=req.backdrop_path,
+            backdrop_bytes=_b64_to_bytes(req.backdrop_b64),
+            logo_path=req.logo_path,
+            custom_logo_bytes=_b64_to_bytes(req.logo_b64),
+            tvdb_id=req.tvdb_id,
+            imdb_id=req.imdb_id,
+            mask_bytes=mask_bytes,
+            apply_ai=req.remove_text,
+            focus_x=req.focus_x,
+            focus_y=req.focus_y,
+            fit_mode=req.fit_mode,
+            crop=_crop_tuple(req),
+            v_pos=req.v_pos,
+            zoom=req.zoom,
+            band_label=req.band_label,
+            logo_scale=req.logo_scale,
+            logo_y_offset=req.logo_y_offset,
+            logo_flip_bytes=_b64_to_bytes(req.logo_flip_b64),
+            logo_erase_bytes=_b64_to_bytes(req.logo_erase_b64),
+            whiten=req.whiten,
+            flat_white=req.flat_white,
+            invert=req.invert,
+            place_logo=req.place_logo,
+        )
+    except HTTPException:
+        raise  # a real HTTP status (auth, upstream) must not become a 400
+    except Exception as exc:
+        # A render failure is a bad input (undecodable logo/backdrop), not a
+        # server fault — surface the reason instead of a bare 500 the preview
+        # box can only report as "preview unavailable".
+        logger.warning(f"cl2k: preview render failed: {exc}")
+        return error(f"Could not render that preview: {exc}", "PREVIEW_RENDER")
     if blob is None:
         return error("No textless backdrop available", "NO_BACKDROP")
     return Response(

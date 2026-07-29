@@ -529,6 +529,10 @@ def _trim_logo(logo: Image) -> None:
 
     The ONE logo trim — process_logo, logo_is_usable and _place_logo must agree.
     """
+    # trim() reports the content box in VIRTUAL CANVAS coords, so a source
+    # carrying a page offset (trimmed once with no repage) pushes `left` past the
+    # image and crop raises. Drop the offset so all geometry is image-relative.
+    logo.reset_coords()
     with logo.clone() as probe:
         probe.alpha_channel = "extract"  # alpha -> greyscale, so trim sees it
         probe.threshold(geo.LOGO_TRIM_ALPHA / 255.0)
@@ -856,7 +860,9 @@ def generate_text_logo(
                 draw.text(cx, y, s)
                 y += line_h
             draw(img)
-        img.trim()
+        # reset_coords drops the 8000px canvas offset trim would otherwise bake
+        # into the PNG — _trim_logo reads page coords and would crop out of bounds.
+        img.trim(reset_coords=True)
         img.format = "png"
         return img.make_blob()
 

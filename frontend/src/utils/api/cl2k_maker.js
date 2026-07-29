@@ -138,8 +138,9 @@ export const cl2kMakerAPI = {
             { useCache: true, cacheTTL: 5 * 60 * 1000 }
         ),
 
-    /** Trimmed + whitened logo (b64 PNG + natural size + max_width) for the live
-     *  overlay. `req` = { logo_path } or { logo_b64 }. */
+    /** Trimmed + whitened logo (b64 PNG + natural size + the box_w/box_h the
+     *  render would place it at) for the live overlay.
+     *  `req` = { logo_path | logo_b64, kind }. */
     logoProcessed: req => apiCore.post('/cl2k-maker/logo-processed', req),
 
     /** Render a preview JPEG without saving. Returns a Blob. */
