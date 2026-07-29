@@ -267,11 +267,12 @@ const cl2kLogoBaseline = kind =>
         ? CL2K_LOGO_BASELINE_COLLECTION
         : CL2K_LOGO_BASELINE_MAIN;
 
-// natW/natH = trimmed logo dims (from /logo-processed); maxWidth = the
-// recommended guide-box width the backend reports (700px); baseline = the
-// kind's bottom guide (geo.logo_baseline mirror).
+// natW/natH = trimmed logo dims (from /logo-processed); boxW/boxH = the box the
+// backend computed for them (geo.auto_logo_size — what _place_logo uses, so the
+// overlay matches the render). maxWidth = flat-guide fallback, over-sizes wide
+// logos ~15%. baseline = the kind's bottom guide (geo.logo_baseline mirror).
 // Returns the overlay box as percentages of the 2:3 preview, or null.
-const logoBoxPct = ({ natW, natH, maxWidth, scale = 1, yOffset = 0, baseline }) => {
+const logoBoxPct = ({ natW, natH, boxW, boxH, maxWidth, scale = 1, yOffset = 0, baseline }) => {
     if (!natW || !natH) return null;
     const base = baseline || CL2K_LOGO_BASELINE_MAIN;
     const s = Math.max(
@@ -282,12 +283,19 @@ const logoBoxPct = ({ natW, natH, maxWidth, scale = 1, yOffset = 0, baseline }) 
         CONTROL_RANGES.logoYOffset.min,
         Math.min(Math.round(yOffset || 0), CONTROL_RANGES.logoYOffset.max)
     );
-    let targetW = Math.min(maxWidth || 700, CL2K_LOGO_WIDTH_MAX);
-    let targetH = Math.round((natH * targetW) / natW);
-    const maxH = base - CL2K_LOGO_ZONE_TOP;
-    if (targetH > maxH) {
-        targetH = maxH;
-        targetW = Math.round((natW * targetH) / natH);
+    let targetW;
+    let targetH;
+    if (boxW > 0 && boxH > 0) {
+        targetW = boxW;
+        targetH = boxH;
+    } else {
+        targetW = Math.min(maxWidth || 700, CL2K_LOGO_WIDTH_MAX);
+        targetH = Math.round((natH * targetW) / natW);
+        const maxH = base - CL2K_LOGO_ZONE_TOP;
+        if (targetH > maxH) {
+            targetH = maxH;
+            targetW = Math.round((natW * targetH) / natH);
+        }
     }
     // Scale the guide-fit box as a whole; keep it on the canvas (aspect kept) —
     // mirrors _place_logo so the overlay still lands pixel-exact. The width
@@ -315,13 +323,15 @@ const logoBoxPct = ({ natW, natH, maxWidth, scale = 1, yOffset = 0, baseline }) 
 
 // Live logo drawn over the logo-less preview base. Moves instantly with the
 // size/position sliders — no server render per drag. `logo` = { dataUrl, width,
-// height, maxWidth } from /logo-processed; `kind` picks the bottom baseline
-// (collection logos sit on the higher 1319 guide).
+// height, boxW, boxH, maxWidth } from /logo-processed; `kind` picks the bottom
+// baseline (collection logos sit on the higher 1319 guide).
 const LogoOverlay = ({ logo, scale, yOffset, kind }) => {
     if (!logo?.dataUrl) return null;
     const box = logoBoxPct({
         natW: logo.width,
         natH: logo.height,
+        boxW: logo.boxW,
+        boxH: logo.boxH,
         maxWidth: logo.maxWidth,
         scale,
         yOffset,
@@ -1252,6 +1262,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                     whiten: effectiveWhiten,
                     flat_white: flatWhite,
                     invert: invertLogo,
+                    kind: item.kind,
                     ...extra,
                 })
                 .then(resp => {
@@ -1261,11 +1272,13 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                               dataUrl: `data:image/png;base64,${d.b64}`,
                               width: d.width,
                               height: d.height,
+                              boxW: d.box_w,
+                              boxH: d.box_h,
                               maxWidth: d.max_width,
                           }
                         : null;
                 }),
-        [customLogo, logo, effectiveWhiten, flatWhite, invertLogo]
+        [customLogo, logo, effectiveWhiten, flatWhite, invertLogo, item.kind]
     );
     useEffect(() => {
         if (!hasLogo) return undefined; // no fetch; `overlayLogo` below hides it
