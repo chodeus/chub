@@ -397,7 +397,7 @@ const ModuleSettingsContent = ({ moduleKey }) => {
                         )}
                     </div>
                     {activeModule && (
-                        <div className="flex items-center gap-2.5 shrink-0">
+                        <div className="flex flex-wrap items-center gap-2.5 shrink-0 max-w-full">
                             {hasDryRun && isRunnable && (
                                 <label className="flex items-center gap-2 text-[13px] text-fg-muted cursor-pointer select-none">
                                     Dry run
