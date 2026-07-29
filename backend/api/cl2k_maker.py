@@ -1019,37 +1019,45 @@ def _run_seasons_job(jid: int, db: ChubDB, logger: Any, req: SeasonsRequest) -> 
                 job["results"].append(entry)
                 job["done"] += 1
 
+    # Decoded once: generate_seasons is a thin per-season loop, so driving it a
+    # season at a time costs nothing except re-decoding these multi-MB blobs.
+    backdrop_bytes = _b64_to_bytes(req.backdrop_b64)
+    logo_bytes = _b64_to_bytes(req.logo_b64)
     try:
-        generate_seasons(
-            db=db,
-            full_config=load_config(),
-            logger=logger,
-            tmdb_id=req.tmdb_id,
-            title=req.title,
-            seasons=req.seasons,
-            year=req.year,
-            tvdb_id=req.tvdb_id,
-            imdb_id=req.imdb_id,
-            backdrop_path=req.backdrop_path,
-            backdrop_bytes=_b64_to_bytes(req.backdrop_b64),
-            logo_path=req.logo_path,
-            custom_logo_bytes=_b64_to_bytes(req.logo_b64),
-            fit_mode=req.fit_mode,
-            focus_x=req.focus_x,
-            focus_y=req.focus_y,
-            crop=_crop_tuple(req),
-            v_pos=req.v_pos,
-            zoom=req.zoom,
-            logo_scale=req.logo_scale,
-            logo_y_offset=req.logo_y_offset,
-            whiten=req.whiten,
-            flat_white=req.flat_white,
-            invert=req.invert,
-            force=req.force,
-            save_local=req.save_local,
-            upload_gdrive=req.upload_gdrive,
-            progress_cb=_progress,
-        )
+        for n in req.seasons:
+            # Re-read per season: config is REPLACED on reload, so a batch that
+            # snapshots it renders later seasons with settings the user changed.
+            # Inside the guard, so a config fault fails the job, not the thread.
+            generate_seasons(
+                db=db,
+                full_config=load_config(),
+                logger=logger,
+                tmdb_id=req.tmdb_id,
+                title=req.title,
+                seasons=[int(n)],
+                year=req.year,
+                tvdb_id=req.tvdb_id,
+                imdb_id=req.imdb_id,
+                backdrop_path=req.backdrop_path,
+                backdrop_bytes=backdrop_bytes,
+                logo_path=req.logo_path,
+                custom_logo_bytes=logo_bytes,
+                fit_mode=req.fit_mode,
+                focus_x=req.focus_x,
+                focus_y=req.focus_y,
+                crop=_crop_tuple(req),
+                v_pos=req.v_pos,
+                zoom=req.zoom,
+                logo_scale=req.logo_scale,
+                logo_y_offset=req.logo_y_offset,
+                whiten=req.whiten,
+                flat_white=req.flat_white,
+                invert=req.invert,
+                force=req.force,
+                save_local=req.save_local,
+                upload_gdrive=req.upload_gdrive,
+                progress_cb=_progress,
+            )
         with _season_jobs_lock:
             job = _season_jobs.get(jid)
             if job is not None:

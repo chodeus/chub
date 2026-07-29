@@ -59,19 +59,26 @@ def test_config_failure_fails_the_job_rather_than_the_thread(worker, logger, mon
     assert "bad YAML" in job["error"]
 
 
-def test_each_season_reads_live_config(logger, monkeypatch):
+@pytest.mark.parametrize("worker", ["retext", "seasons"])
+def test_each_season_reads_live_config(worker, logger, monkeypatch):
     """Config is REPLACED on reload, so a batch must re-read it per season.
 
     Snapshotting it before the loop renders every later season with the settings
-    the user just changed away from — silently, and only for long batches.
+    the user just changed away from — silently, and only for long batches. Both
+    workers, because the full-CL2K one runs the *longer* batch of the two.
     """
     seen = []
     monkeypatch.setattr(api, "load_config", lambda *a, **k: seen.append(1) or "cfg")
-    monkeypatch.setattr(api, "retext_poster", lambda **kw: {"status": "generated"})
 
     jid = api._new_season_job(3, "Some Show")
-    req = api.RetextSeasonsRequest(seasons=[1, 2, 3], tmdb_id=1, title="Some Show")
-    api._run_retext_seasons_job(jid, object(), logger, b"", req)
+    if worker == "retext":
+        monkeypatch.setattr(api, "retext_poster", lambda **kw: {"status": "generated"})
+        req = api.RetextSeasonsRequest(seasons=[1, 2, 3], tmdb_id=1, title="Some Show")
+        api._run_retext_seasons_job(jid, object(), logger, b"", req)
+    else:
+        monkeypatch.setattr(api, "generate_seasons", lambda **kw: {"results": []})
+        req = api.SeasonsRequest(seasons=[1, 2, 3], tmdb_id=1, title="Some Show")
+        api._run_seasons_job(jid, object(), logger, req)
 
     assert len(seen) == 3, "config was snapshotted for the batch, not read per season"
     assert _job_state(jid)["status"] == "done"
