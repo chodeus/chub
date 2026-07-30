@@ -13,6 +13,21 @@
 # still bookworm/glibc 2.36 and would be a silent mismatch.
 FROM node:24-trixie-slim@sha256:ae91dcc111a68c9d2d81ff2a17bda61be126426176fde6fe7d08ab13b7f50573 AS node
 
+# -------------------------
+# Stage 1a: Frontend bundle (BUILD platform, never emulated)
+# -------------------------
+# dist is architecture-independent JS/CSS, so this must NOT run under QEMU: on
+# 2026-07-29 the arm64 leg of the release build sat at rolldown's "rendering
+# chunks..." for 2h55m (its threaded Rust binding deadlocks under qemu-user)
+# until the 6h job timeout. Pinned to $BUILDPLATFORM, one bundle serves both
+# target arches. `npm ci` keeps optional native bindings strict per the lockfile.
+FROM --platform=$BUILDPLATFORM node:24-trixie-slim@sha256:ae91dcc111a68c9d2d81ff2a17bda61be126426176fde6fe7d08ab13b7f50573 AS frontend
+WORKDIR /app/frontend
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+COPY frontend/ ./
+RUN npm run build
+
 FROM python:3.13-slim@sha256:6771159cd4fa5d9bba1258caf0b82e6b73458c694d178ad97c5e925c2d0e1a91 AS builder
 ARG NODE_MAJOR=24
 
@@ -70,11 +85,9 @@ RUN pip3 install --no-cache-dir cairosvg && \
     python3 scripts/rasterize_borders.py && \
     pip3 uninstall -y cairosvg
 
-# Build frontend assets.
-# Use `npm ci` so platform-specific optional native bindings
-# (e.g. @rolldown/binding-linux-arm64-gnu) are resolved strictly from the
-# lockfile per buildx target arch — avoids npm/cli#4828 drift with npm install.
-RUN cd frontend && npm ci && npm run build
+# Frontend assets come from the native-platform `frontend` stage above — dist is
+# just JS/CSS, so emulating the bundler for arm64 bought nothing and hung it.
+COPY --from=frontend /app/frontend/dist ./frontend/dist
 
 # -------------------------
 # Stage 2: Final runtime image
