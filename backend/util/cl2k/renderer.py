@@ -26,7 +26,11 @@ from wand.drawing import Drawing
 from wand.image import COMPOSITE_OPERATORS, Image
 
 from backend.util.cl2k import color, geometry as geo
-from backend.util.cl2k.logo_extract import fill_dark_bodies, ink_color_edges
+from backend.util.cl2k.logo_extract import (
+    fill_dark_bodies,
+    flatten_3d_logo,
+    ink_color_edges,
+)
 
 # ImageMagick 7 renamed CopyOpacity to CopyAlpha; wand exposes whichever the
 # linked library supports (IM6 = Debian/CI runners, IM7 = homebrew dev). Both
@@ -484,6 +488,21 @@ def _flat_white(logo: Image) -> None:
     logo.colorize(color=Color("white"), alpha=Color("white"))  # RGB only
 
 
+def _face_only(logo: Image) -> None:
+    """Keep a 3D/extruded logo's lit face as a flat white wordmark, in place.
+
+    Unsplittable art falls back to the flat silhouette — never the two-tone pass,
+    which is what this mode exists to avoid.
+    """
+    faced = flatten_3d_logo(logo.make_blob("png"))
+    if faced is None:
+        _flat_white(logo)
+        return
+    with Image(blob=faced) as face:
+        logo.composite(face, left=0, top=0, operator="copy")
+    _trim_logo(logo)  # callers trimmed the OLD silhouette; the extrusion's padding is now free
+
+
 def _apply_whiten(logo: Image, *, invert: bool) -> None:
     """Two-tone whiten + colour-edge keylines + dark-body fill, in place.
 
@@ -574,6 +593,7 @@ def process_logo(
     *,
     whiten: bool = True,
     flat_white: bool = False,
+    logo_3d: bool = False,
     flip_mask_bytes: Optional[bytes] = None,
     erase_mask_bytes: Optional[bytes] = None,
     invert: bool = False,
@@ -588,16 +608,21 @@ def process_logo(
     server render per drag. ``flip_mask_bytes`` applies the user's black↔white
     touch-up regions (see :func:`_flip_regions`); ``invert`` turns plate-style
     logos into clearlogos (see :func:`_invert_to_clear`).
+
+    Recolour modes rank ``logo_3d`` > ``flat_white`` > ``whiten``.
     """
     with _read_logo_image(logo_bytes) as logo:
         _trim_logo(logo)
-        if flat_white:
+        if logo_3d:
+            _face_only(logo)
+        elif flat_white:
             _flat_white(logo)
         elif whiten:
             _apply_whiten(logo, invert=invert)
         if flip_mask_bytes:
             _flip_regions(logo, flip_mask_bytes)
-        if invert and not flat_white:
+        # Both white-silhouette modes invert to full transparency, i.e. nothing.
+        if invert and not flat_white and not logo_3d:
             _invert_to_clear(logo)
         if erase_mask_bytes:
             _erase_regions(logo, erase_mask_bytes)
@@ -634,6 +659,7 @@ def _place_logo(
     erase_mask_bytes: Optional[bytes] = None,
     invert: bool = False,
     flat_white: bool = False,
+    logo_3d: bool = False,
 ) -> None:
     """Whiten, size and bottom-align the clear logo onto ``base``.
 
@@ -660,7 +686,10 @@ def _place_logo(
     )
     with _read_logo_image(logo_bytes) as logo:
         _trim_logo(logo)  # drop padding -> width == visible content
-        if flat_white:
+        # Mode ranking mirrors process_logo — the overlay must match the render.
+        if logo_3d:
+            _face_only(logo)
+        elif flat_white:
             _flat_white(logo)
         elif whiten:
             _apply_whiten(logo, invert=invert)
@@ -668,7 +697,7 @@ def _place_logo(
             # Same trimmed/whitened space the touch-up brush was drawn over
             # (process_logo's output) — applied before the resize below.
             _flip_regions(logo, flip_mask_bytes)
-        if invert and not flat_white:
+        if invert and not flat_white and not logo_3d:
             _invert_to_clear(logo)
         if erase_mask_bytes:
             _erase_regions(logo, erase_mask_bytes)
@@ -1031,6 +1060,7 @@ def render_cl2k(
     logo_erase_bytes: Optional[bytes] = None,  # erase regions (mask PNG, white=erase)
     whiten: bool = True,
     flat_white: bool = False,  # paint the logo a flat pure-white silhouette
+    logo_3d: bool = False,  # extruded art -> flat-white lit face
     invert: bool = False,  # plate logo -> clearlogo (white->transparent, black->white)
     font_path: Optional[str] = None,
     focus_x: float = 0.5,
@@ -1110,6 +1140,7 @@ def render_cl2k(
                         erase_mask_bytes=logo_erase_bytes,
                         invert=invert,
                         flat_white=flat_white,
+                        logo_3d=logo_3d,
                     )
                 except Exception:
                     # A clear logo we can't decode/place (e.g. an SVG when the SVG
@@ -1131,6 +1162,7 @@ def render_cl2k(
                             logo_y_offset,
                             invert=False,
                             flat_white=flat_white,
+                            logo_3d=logo_3d,
                         )
 
         # Every branch derives its tracking from the label itself, exactly as the
@@ -1217,6 +1249,7 @@ def overlay_logo(
     logo_y_offset: int = 0,
     whiten: bool = True,
     flat_white: bool = False,
+    logo_3d: bool = False,  # extruded art -> flat-white lit face
     invert: bool = False,
 ) -> bytes:
     """Composite a clear logo onto a finished poster at the locked CL2K baseline.
@@ -1240,6 +1273,7 @@ def overlay_logo(
             logo_y_offset,
             invert=invert,
             flat_white=flat_white,
+            logo_3d=logo_3d,
         )
         return _encode_jpeg(base)
 

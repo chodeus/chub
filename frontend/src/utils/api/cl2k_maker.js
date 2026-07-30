@@ -163,7 +163,7 @@ export const cl2kMakerAPI = {
 
     /** Processed logo asset (transparent PNG) without saving. Returns a PNG Blob.
      *  `req` = { logo_path | logo_b64, whiten }. */
-    logoAssetPreview: req => postBlob('/cl2k-maker/logo-asset-preview', req),
+    logoAssetPreview: (req, opts) => postBlob('/cl2k-maker/logo-asset-preview', req, opts),
 
     /** File a clear logo as a `- Logo.png` asset (whiten toggles CL2K white). */
     logoAssetGenerate: req => apiCore.post('/cl2k-maker/logo-asset-generate', req),

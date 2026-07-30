@@ -40,6 +40,22 @@ def _flat_white(logo: Image.Image) -> Image.Image:
     return white
 
 
+def _face_only(logo: Image.Image) -> Image.Image:
+    """3D logo face — Pillow mirror of ``renderer._face_only``, re-trim included."""
+    from backend.util.cl2k.logo_extract import flatten_3d_logo
+
+    buf = io.BytesIO()
+    logo.save(buf, "PNG")
+    faced = flatten_3d_logo(buf.getvalue())
+    if faced is None:
+        return _flat_white(logo)
+    face = Image.open(io.BytesIO(faced)).convert("RGBA")
+    # Mirrors renderer._face_only: the freed extrusion padding must go, or the
+    # layer is placed by the old silhouette's box (see geo.LOGO_TRIM_ALPHA).
+    bbox = face.getchannel("A").point(lambda v: 255 if v > geo.LOGO_TRIM_ALPHA else 0).getbbox()
+    return face.crop(bbox) if bbox else face
+
+
 def _whiten(logo: Image.Image, flat_fallback: bool = True) -> Image.Image:
     """CL2K two-tone whiten — Pillow mirror of ``renderer._whiten``.
 
@@ -185,6 +201,7 @@ def export_psd(
     logo_y_offset: int = 0,
     whiten: bool = True,
     flat_white: bool = False,
+    logo_3d: bool = False,
     invert: bool = False,
 ) -> bytes:
     """Build the CL2K poster as a layered PSD and return its bytes."""
@@ -228,11 +245,13 @@ def export_psd(
             lg = lg.crop(bbox)
         if wordmark:
             pass
+        elif logo_3d:
+            lg = _face_only(lg)
         elif flat_white:
             lg = _flat_white(lg)
         elif whiten:
             lg = _whiten(lg, flat_fallback=not invert)
-        if invert and not flat_white and not wordmark:
+        if invert and not flat_white and not logo_3d and not wordmark:
             lg = _invert_to_clear(lg)
         if logo_max_width is None:
             tw, th = geo.auto_logo_size(lg.width, lg.height, baseline)

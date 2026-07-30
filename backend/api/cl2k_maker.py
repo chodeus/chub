@@ -97,6 +97,9 @@ class GenerateRequest(BaseModel):
     # Flat white: paint the logo a pure-white silhouette (no two-tone keylines) —
     # for already-stylised/outline logos the two-tone whiten mangles. Wins over whiten.
     flat_white: bool = False
+    # 3D logo: keep the lit face of extruded/bevelled art, drop the extrusion and
+    # shadow, flat-white the rest. Wins over flat_white.
+    logo_3d: bool = False
     # Invert logo: plate-style art -> clearlogo (white->transparent, black->white).
     invert: bool = False
     # B/W touch-up: regions brushed over the PROCESSED logo whose black/white is
@@ -377,6 +380,7 @@ class LogoProcessRequest(BaseModel):
     flat_white: bool = (
         False  # pure-white silhouette (no two-tone keylines); wins over whiten
     )
+    logo_3d: bool = False  # extruded art -> flat-white lit face; wins over flat_white
     invert: bool = False  # plate logo -> clearlogo
     flip_b64: Optional[str] = None  # B/W touch-up regions (mask PNG, white=flip)
     erase_b64: Optional[str] = None  # erase regions (mask PNG, white=erase)
@@ -413,6 +417,7 @@ def logo_processed(
             raw,
             whiten=cfg.whiten_logo if req.whiten is None else req.whiten,
             flat_white=req.flat_white,
+            logo_3d=req.logo_3d,
             flip_mask_bytes=_b64_to_bytes(req.flip_b64),
             erase_mask_bytes=_b64_to_bytes(req.erase_b64),
             invert=req.invert,
@@ -474,6 +479,7 @@ def preview(
             logo_erase_bytes=_b64_to_bytes(req.logo_erase_b64),
             whiten=req.whiten,
             flat_white=req.flat_white,
+            logo_3d=req.logo_3d,
             invert=req.invert,
             place_logo=req.place_logo,
         )
@@ -531,6 +537,7 @@ def generate(
         logo_erase_bytes=_b64_to_bytes(req.logo_erase_b64),
         whiten=req.whiten,
         flat_white=req.flat_white,
+        logo_3d=req.logo_3d,
         invert=req.invert,
         force=req.force,
         save_local=req.save_local,
@@ -585,6 +592,7 @@ class LogoAssetRequest(BaseModel):
     logo_b64: Optional[str] = None
     whiten: bool = False  # True = CL2K-whitened; False = original (colored) clear logo
     flat_white: bool = False  # pure-white silhouette (no keylines); wins over whiten
+    logo_3d: bool = False  # extruded art -> flat-white lit face; wins over flat_white
     invert: bool = False  # plate logo -> clearlogo (white->transparent, black->white)
     flip_b64: Optional[str] = None  # B/W touch-up regions (mask PNG, white=flip)
     erase_b64: Optional[str] = None  # erase regions (mask PNG, white=erase)
@@ -782,6 +790,7 @@ def logo_asset_preview(
         raw,
         whiten=req.whiten,
         flat_white=req.flat_white,
+        logo_3d=req.logo_3d,
         flip_mask_bytes=_b64_to_bytes(req.flip_b64),
         erase_mask_bytes=_b64_to_bytes(req.erase_b64),
         invert=req.invert,
@@ -811,6 +820,7 @@ def logo_asset_generate(
         logo_bytes=_b64_to_bytes(req.logo_b64),
         whiten=req.whiten,
         flat_white=req.flat_white,
+        logo_3d=req.logo_3d,
         invert=req.invert,
         flip_mask_bytes=_b64_to_bytes(req.flip_b64),
         erase_mask_bytes=_b64_to_bytes(req.erase_b64),
@@ -907,6 +917,7 @@ def psd_export(
         zoom=req.zoom,
         whiten=req.whiten,
         flat_white=req.flat_white,
+        logo_3d=req.logo_3d,
         invert=req.invert,
     )
     if blob is None:
@@ -946,7 +957,12 @@ class SeasonsRequest(BaseModel):
     logo_y_offset: int = Field(0, ge=geo.LOGO_Y_OFFSET_MIN, le=geo.LOGO_Y_OFFSET_MAX)
     whiten: Optional[bool] = None  # None = module config (whiten_logo)
     flat_white: bool = False  # pure-white silhouette (no keylines); wins over whiten
+    logo_3d: bool = False  # extruded art -> flat-white lit face; wins over flat_white
     invert: bool = False  # plate logo -> clearlogo
+    # The logo edits the preview was built with — every season reuses the SAME
+    # logo, so omitting these silently bulk-generated with an unedited one.
+    logo_flip_b64: Optional[str] = None  # B/W touch-up regions (mask PNG)
+    logo_erase_b64: Optional[str] = None  # erase regions (mask PNG, white=erase)
     force: bool = False
     # Save destinations (mirror GenerateRequest): honour the same targets the
     # single-poster Generate used. upload_gdrive=None falls back to module config.
@@ -1021,6 +1037,8 @@ def _run_seasons_job(jid: int, db: ChubDB, logger: Any, req: SeasonsRequest) -> 
         # fail the job, and re-decoding multi-MB blobs per season is wasted work.
         backdrop_bytes = _b64_to_bytes(req.backdrop_b64)
         logo_bytes = _b64_to_bytes(req.logo_b64)
+        logo_flip_bytes = _b64_to_bytes(req.logo_flip_b64)
+        logo_erase_bytes = _b64_to_bytes(req.logo_erase_b64)
         for n in req.seasons:
             # Re-read per season: config is REPLACED on reload.
             # Inside the guard, so a config fault fails the job, not the thread.
@@ -1047,7 +1065,10 @@ def _run_seasons_job(jid: int, db: ChubDB, logger: Any, req: SeasonsRequest) -> 
                 logo_y_offset=req.logo_y_offset,
                 whiten=req.whiten,
                 flat_white=req.flat_white,
+                logo_3d=req.logo_3d,
                 invert=req.invert,
+                logo_flip_bytes=logo_flip_bytes,
+                logo_erase_bytes=logo_erase_bytes,
                 force=req.force,
                 save_local=req.save_local,
                 upload_gdrive=req.upload_gdrive,

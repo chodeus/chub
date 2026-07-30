@@ -130,7 +130,14 @@ const LOGO_SOURCES = [...ART_SOURCES, { key: 'gdrive', label: 'GDrive', icon: 'c
 // Stable identity for an uploaded image ({ b64, name }) in change-detection
 // signatures. A b64-prefix slice can collide: the first ~24 bytes of a JPEG are
 // a format header that different files from the same exporter share.
-const customSig = c => (c ? `${c.name}:${c.b64?.length || 0}` : null);
+// Identity of an uploaded asset, for keying masks/previews to the image they were
+// made for. Name+length alone collides (same filename is normal), so sample the
+// encoded head and tail too — for real image data those carry the header fields
+// and the trailing checksum.
+const customSig = c =>
+    c
+        ? `${c.name}:${c.b64?.length ?? 0}:${(c.b64 ?? '').slice(0, 32)}:${(c.b64 ?? '').slice(-32)}`
+        : null;
 
 const SourceSelector = ({ value, onChange, sources = ART_SOURCES }) => (
     <div className="flex items-center gap-1 flex-wrap">
@@ -284,18 +291,74 @@ const vPosToFrac = (vPos, hF, band = 0) => {
     const v = clampVPos(vPos);
     return 0.5 + v * (v < 0 ? vPosTravelUp(hF) : vPosTravelDown(hF, band));
 };
-// Inverse, for turning a drag on the crop box back into v_pos. null only when
-// neither direction can move: leave the user's Vertical position alone rather
-// than slam it to a limit. A drag toward a side with no travel lands on 0 — the
-// nearest framing that side can reach — so it can still pull the framing back.
+// Inverse, for turning a drag on the crop box back into v_pos. A drag moves the
+// BOX, so it may only address travel that is ON the image: clamped to the box's
+// reachable centre range, which leaves the extend `band` to the slider. null =
+// no source travel at all (a 16:9 backdrop at zoom 1 cover-fills exactly, so the
+// band is its ONLY travel) — the caller must then keep the user's v_pos, NOT
+// drive it from a horizontal drag.
+const VPOS_TRAVEL_EPS = 1e-4; // sub-pixel travel is no travel (a near-2:3 source)
 const fracToVPos = (frac, hF, band = 0) => {
+    // Unmeasured box (ratio not loaded): hF is undefined, which clamps to 0 and
+    // would read as FULL travel — an early drag would then invent a v_pos.
+    if (!Number.isFinite(hF)) return null;
     const up = vPosTravelUp(hF);
-    const down = vPosTravelDown(hF, band);
-    if (up <= 0 && down <= 0) return null;
-    const d = frac - 0.5;
+    if (up <= VPOS_TRAVEL_EPS) return null;
+    const d = Math.max(-up, Math.min(frac - 0.5, up));
     if (d === 0) return 0;
-    const travel = d < 0 ? up : down;
-    return travel <= 0 ? 0 : clampVPos(d / travel);
+    return clampVPos(d / (d < 0 ? up : vPosTravelDown(hF, band)));
+};
+
+// Kept region of the source (fractions) under the 2:3 cover fill — mirror of
+// _cover_resize's scale + crop. Shared by the crop overlay and the slider bounds
+// so they can't disagree about how much travel exists.
+const coverKeep = (ratio, zoom) => {
+    const target = 2 / 3;
+    const z = Math.max(CONTROL_RANGES.zoom.min, Math.min(zoom || 1, CONTROL_RANGES.zoom.max));
+    const wide = 1 / ratio > target;
+    const rawW = wide ? (target * ratio) / z : 1 / z;
+    const rawH = wide ? 1 / z : 1 / target / ratio / z;
+    // Either raw fraction over 1 means the art no longer fills the canvas —
+    // _cover_resize's zoom-out branch, which crops through the symmetric
+    // _v_pos_top and so has no extend band.
+    return {
+        wF: Math.min(1, rawW),
+        hF: Math.min(1, rawH),
+        band: rawW <= 1 && rawH <= 1 ? COVER_EXTEND_BAND : 0,
+    };
+};
+
+// Same for the asset frames (render_framed_art): fit scales the source INTO the
+// frame, cover fills it, and neither can hide an extend band.
+const framedKeep = (ratio, zoom, aspect, fitMode) => {
+    const z = Math.max(CONTROL_RANGES.zoom.min, Math.min(zoom || 1, CONTROL_RANGES.zoom.max));
+    const base = fitMode === 'fit' ? Math.min(1, aspect / ratio) : Math.max(1, aspect / ratio);
+    const s = base * z;
+    return { wF: Math.min(1, 1 / s), hF: Math.min(1, aspect / (ratio * s)), band: 0 };
+};
+
+// Slider bounds for a kept region: a direction with no travel collapses to 0, so
+// the control can't offer a range the renderer will ignore. `dead` = no travel at
+// all, which is a disabled slider rather than a 0..0 one.
+const vPosBounds = (hF, band = 0) => {
+    const min = vPosTravelUp(hF) > VPOS_TRAVEL_EPS ? CONTROL_RANGES.vPos.min : 0;
+    const max = vPosTravelDown(hF, band) > VPOS_TRAVEL_EPS ? CONTROL_RANGES.vPos.max : 0;
+    return { min, max, dead: min === 0 && max === 0 };
+};
+const clampToBounds = (v, { min, max }) =>
+    Math.max(min, Math.min(Number.isFinite(Number(v)) ? Number(v) : 0, max));
+// A collapsed direction is state, not a broken control — say which and why.
+// `oneSided`: the poster's fit/extend renderers anchor from the TOP over 0..1, so
+// negative is meaningless there by design rather than for want of source.
+const vPosTip = ({ min, dead }, { oneSided = false, frame = 'crop' } = {}) => {
+    if (dead)
+        return `No vertical travel at this zoom — the art no longer fills the ${frame}, so the renderer centres it. Raise Zoom to pan.`;
+    if (oneSided) return `Positions the fitted photo from the top of the ${frame}.`;
+    if (min === 0)
+        return `Up needs source above the ${frame}: at this zoom the kept region already fills its height. Raise Zoom past 1x for negative travel.`;
+    // No down-only case to handle: down travel is up + the band, so losing it
+    // means losing both, which `dead` already caught.
+    return 'Slides the framing at the same size. Positive continues past the photo’s bottom edge into the gradient.';
 };
 
 const cl2kLogoBaseline = kind =>
@@ -1142,6 +1205,39 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
     // wide backdrop isn't shrunk to a tiny strip.
     const [zoom, setZoom] = useState(saved.zoom ?? 1);
     const [focusX, setFocusX] = useState(saved.focusX ?? 0.5);
+    // Measured by CropFramer's <img onLoad>; owned here because the Vertical
+    // position slider's real range depends on it. null until measured.
+    const [backdropRatio, setBackdropRatio] = useState(null);
+
+    // How much travel v_pos really has at this ratio/zoom. Fill is the only
+    // two-sided mode; fit/extend anchor from the top over 0..1.
+    const vPosBoundsFor = useCallback((mode, ratio, z) => {
+        if (mode !== 'cover') return { min: 0, max: 1, dead: false };
+        if (!ratio) return { min: CONTROL_RANGES.vPos.min, max: 1, dead: false };
+        const { hF, band } = coverKeep(ratio, z);
+        return vPosBounds(hF, band);
+    }, []);
+    const vPosLimits = useMemo(
+        () => vPosBoundsFor(fitMode, backdropRatio, zoom),
+        [vPosBoundsFor, fitMode, backdropRatio, zoom]
+    );
+    // Raising a range input's `min` above its current `value` moves the thumb
+    // WITHOUT firing onChange, so the shown position would lie about the state.
+    // Every setter that can shrink the range re-clamps v_pos itself.
+    const setZoomClamped = useCallback(
+        z => {
+            setZoom(z);
+            setVPos(v => clampToBounds(v, vPosBoundsFor(fitMode, backdropRatio, z)));
+        },
+        [vPosBoundsFor, fitMode, backdropRatio]
+    );
+    const onBackdropRatio = useCallback(
+        r => {
+            setBackdropRatio(r);
+            setVPos(v => clampToBounds(v, vPosBoundsFor(fitMode, r, zoom)));
+        },
+        [vPosBoundsFor, fitMode, zoom]
+    );
 
     // Framing is tuned for ONE image: a crop box, zoom, focal point and vertical
     // pan chosen for backdrop A are meaningless on backdrop B, and silently
@@ -1155,16 +1251,20 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
         setVPos(0);
         setZoom(1);
         setFocusX(0.5);
+        setBackdropRatio(null); // re-measured by the new image's onLoad
     }, []);
     // fitMode is deliberately NOT reset — it's a per-user way of working
     // (Fill vs Fit), not a property of the chosen image.
     // v_pos is only two-sided in Fill: the fit/extend renderers anchor the photo
     // from the TOP over 0..1, so negative has no meaning there. Clamp on the way
     // in rather than let the backend silently floor it.
-    const setFitModeClamped = useCallback(mode => {
-        setFitMode(mode);
-        if (mode !== 'cover') setVPos(v => Math.max(0, v ?? 0));
-    }, []);
+    const setFitModeClamped = useCallback(
+        mode => {
+            setFitMode(mode);
+            setVPos(v => clampToBounds(v, vPosBoundsFor(mode, backdropRatio, zoom)));
+        },
+        [vPosBoundsFor, backdropRatio, zoom]
+    );
     const setBackdropExclusive = useCallback(
         p => {
             setBackdrop(p);
@@ -1193,6 +1293,8 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
     // Flat white: paint the logo a pure-white silhouette (no two-tone keylines) —
     // for already-stylised/outline logos the CL2K-white pass mangles. Wins over whiten.
     const [flatWhite, setFlatWhite] = useState(saved.flatWhite ?? false);
+    // 3D logo: keep extruded art's lit face, drop the extrusion. Wins over flat.
+    const [logo3d, setLogo3d] = useState(saved.logo3d ?? false);
     // Invert logo: white -> transparent, black -> white (plate/sticker art).
     const [invertLogo, setInvertLogo] = useState(saved.invertLogo ?? false);
 
@@ -1232,6 +1334,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             logoYOffset,
             whitenLogo,
             flatWhite,
+            logo3d,
             invertLogo,
             seasonNumber,
             bulkSeasons,
@@ -1253,6 +1356,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
         logoYOffset,
         whitenLogo,
         flatWhite,
+        logo3d,
         invertLogo,
         seasonNumber,
         bulkSeasons,
@@ -1286,7 +1390,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
     const hasLogo = !!(logo || customLogo);
     // Strokes are keyed to the (logo, whiten, invert) they were drawn over: a
     // stale key makes the mask a derived no-op instead of needing a reset-in-effect.
-    const flipKey = `${customSig(customLogo) || logo}|${effectiveWhiten}|${flatWhite}|${invertLogo}`;
+    const flipKey = `${customSig(customLogo) || logo}|${effectiveWhiten}|${flatWhite}|${logo3d}|${invertLogo}`;
     const [logoFlip, setLogoFlip] = useState(null); // { key, b64 }
     const logoFlipB64 = logoFlip && logoFlip.key === flipKey ? logoFlip.b64 : null;
     const setLogoFlipB64 = useCallback(
@@ -1311,6 +1415,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                     ...(customLogo?.b64 ? { logo_b64: customLogo.b64 } : { logo_path: logo }),
                     whiten: effectiveWhiten,
                     flat_white: flatWhite,
+                    logo_3d: logo3d,
                     invert: invertLogo,
                     kind: item.kind,
                     ...extra,
@@ -1328,7 +1433,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                           }
                         : null;
                 }),
-        [customLogo, logo, effectiveWhiten, flatWhite, invertLogo, item.kind]
+        [customLogo, logo, effectiveWhiten, flatWhite, logo3d, invertLogo, item.kind]
     );
     useEffect(() => {
         if (!hasLogo) return undefined; // no fetch; `overlayLogo` below hides it
@@ -1344,7 +1449,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             cancelled = true;
         };
     }, [hasLogo, logoReq]);
-    const editKey = `${logoFlipB64 || ''}|${logoEraseB64 || ''}`;
+    const editKey = `${flipKey}|${logoFlipB64 || ''}|${logoEraseB64 || ''}`;
     const hasEdit = !!(logoFlipB64 || logoEraseB64);
     useEffect(() => {
         if (!hasEdit) return undefined; // overlay derives to the base below
@@ -1468,6 +1573,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             logo_y_offset: logoYOffset,
             whiten: whitenLogo,
             flat_white: flatWhite,
+            logo_3d: logo3d,
             invert: invertLogo,
             logo_flip_b64: logoFlipB64,
             logo_erase_b64: logoEraseB64,
@@ -1506,6 +1612,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             logoYOffset,
             whitenLogo,
             flatWhite,
+            logo3d,
             invertLogo,
             logoFlipB64,
             logoEraseB64,
@@ -1689,7 +1796,12 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                 logo_b64: customLogo?.b64 || null,
                 whiten: whitenLogo,
                 flat_white: flatWhite,
+                logo_3d: logo3d,
                 invert: invertLogo,
+                // Every season reuses the SAME logo, so it must carry the same
+                // touch-up/erase edits the preview was built with.
+                logo_flip_b64: logoFlipB64,
+                logo_erase_b64: logoEraseB64,
                 fit_mode: fitMode,
                 focus_x: focusX,
                 crop_x: (fitMode === 'fit' || fitMode === 'extend') && crop ? crop.x : null,
@@ -1753,7 +1865,10 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
         customLogo,
         whitenLogo,
         flatWhite,
+        logo3d,
         invertLogo,
+        logoFlipB64,
+        logoEraseB64,
         saveTargets,
         fitMode,
         focusX,
@@ -1873,6 +1988,8 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                     setWhitenLogo={setWhitenLogo}
                     flatWhite={flatWhite}
                     setFlatWhite={setFlatWhite}
+                    logo3d={logo3d}
+                    setLogo3d={setLogo3d}
                     invertLogo={invertLogo}
                     setInvertLogo={setInvertLogo}
                     logoTouchUpUrl={processedBase?.dataUrl || null}
@@ -1887,7 +2004,10 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                     vPos={vPos}
                     setVPos={setVPos}
                     zoom={zoom}
-                    setZoom={setZoom}
+                    setZoom={setZoomClamped}
+                    vPosLimits={vPosLimits}
+                    backdropRatio={backdropRatio}
+                    onBackdropRatio={onBackdropRatio}
                     focusX={focusX}
                     onFocusChange={(fx, vp) => {
                         setFocusX(fx);
@@ -2035,6 +2155,8 @@ const RenderPanel = ({
     setWhitenLogo,
     flatWhite,
     setFlatWhite,
+    logo3d,
+    setLogo3d,
     invertLogo,
     setInvertLogo,
     logoTouchUpUrl,
@@ -2050,6 +2172,9 @@ const RenderPanel = ({
     setVPos,
     zoom,
     setZoom,
+    vPosLimits,
+    backdropRatio,
+    onBackdropRatio,
     focusX,
     onFocusChange,
     item,
@@ -3047,6 +3172,8 @@ const RenderPanel = ({
                             onWhiten={setWhitenLogo}
                             flat={flatWhite}
                             onFlat={setFlatWhite}
+                            logo3d={logo3d}
+                            onLogo3d={setLogo3d}
                             invert={invertLogo}
                             onInvert={setInvertLogo}
                             touchUpUrl={logoTouchUpUrl}
@@ -3174,6 +3301,8 @@ const RenderPanel = ({
                                     focusX={focusX}
                                     vPos={vPos}
                                     zoom={zoom}
+                                    ratio={backdropRatio}
+                                    onRatio={onBackdropRatio}
                                     onChange={onFocusChange}
                                 />
                             )}
@@ -3194,21 +3323,35 @@ const RenderPanel = ({
                                     className="w-full"
                                 />
                             </div>
-                            <div>
+                            <div
+                                title={vPosTip(vPosLimits, {
+                                    oneSided: fitMode !== 'cover',
+                                    frame: '2:3 crop',
+                                })}
+                            >
                                 <div className="flex justify-between mb-1.5">
-                                    <span className="text-sm text-fg-muted">Vertical position</span>
+                                    <span
+                                        className={`text-sm ${
+                                            vPosLimits.dead ? 'text-fg-subtle' : 'text-fg-muted'
+                                        }`}
+                                    >
+                                        Vertical position
+                                    </span>
                                     <span className="font-mono text-xs text-fg-subtle">
-                                        {Math.round((vPos ?? 0) * 100)}
+                                        {vPosLimits.dead ? '—' : Math.round((vPos ?? 0) * 100)}
                                     </span>
                                 </div>
                                 <input
                                     type="range"
-                                    min={fitMode === 'cover' ? CONTROL_RANGES.vPos.min : 0}
-                                    max={CONTROL_RANGES.vPos.max}
+                                    // Bounds are the travel the renderer can honour at
+                                    // this ratio/zoom — see vPosBounds.
+                                    min={vPosLimits.min}
+                                    max={vPosLimits.dead ? 1 : vPosLimits.max}
                                     step="0.01"
                                     value={vPos}
+                                    disabled={vPosLimits.dead}
                                     onChange={e => setVPos(Number(e.target.value))}
-                                    className="w-full"
+                                    className="w-full disabled:opacity-40"
                                 />
                             </div>
                             <div className="flex items-center justify-between">
@@ -3239,6 +3382,8 @@ const RenderPanel = ({
                                 onWhiten={setWhitenLogo}
                                 flat={flatWhite}
                                 onFlat={setFlatWhite}
+                                logo3d={logo3d}
+                                onLogo3d={setLogo3d}
                                 invert={invertLogo}
                                 onInvert={setInvertLogo}
                                 touchUpUrl={logoTouchUpUrl}
@@ -3338,6 +3483,8 @@ const RenderPanel = ({
                                     onWhiten={setWhitenLogo}
                                     flat={flatWhite}
                                     onFlat={setFlatWhite}
+                                    logo3d={logo3d}
+                                    onLogo3d={setLogo3d}
                                     invert={invertLogo}
                                     onInvert={setInvertLogo}
                                     touchUpUrl={logoTouchUpUrl}
@@ -3699,6 +3846,9 @@ const AiPanel = ({
 // ~33MB RGBA per mounted canvas (inline + pop-out), and the backend resizes the
 // mask to the image anyway.
 const MASK_BACKING_MAX = 2048;
+// Half-opaque pixels needed before a mask counts as live — below this it is
+// anti-aliasing left by an erase, not a stroke.
+const MASK_MIN_SOLID_PX = 4;
 
 /**
  * Brush a white-on-black mask over the backdrop. White = remove. The canvas
@@ -3746,6 +3896,9 @@ const BrushMask = ({
     // erasing straight logo edges). Purely a drawing concern, kept local here so
     // every BrushMask instance gets the toggle for free.
     const [brushShape, setBrushShape] = useState('round');
+    // Paint adds to the mask; erase subtracts from it (destination-out) — for
+    // unmasking part of a Detect-text result instead of clearing the whole thing.
+    const [brushMode, setBrushMode] = useState('paint');
 
     // Back the canvas with the image's NATIVE resolution (long edge capped) rather
     // than its CSS size, so the exported mask can hug edges the display grid can't
@@ -3795,6 +3948,8 @@ const BrushMask = ({
     const stamp = useCallback(
         p => {
             const ctx = canvasRef.current.getContext('2d');
+            ctx.globalCompositeOperation =
+                brushMode === 'erase' ? 'destination-out' : 'source-over';
             ctx.fillStyle = '#ffffff';
             const r = brushSize * displayScale.current;
             if (brushShape === 'square') {
@@ -3804,8 +3959,9 @@ const BrushMask = ({
                 ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
                 ctx.fill();
             }
+            ctx.globalCompositeOperation = 'source-over';
         },
-        [brushSize, brushShape]
+        [brushSize, brushShape, brushMode]
     );
 
     const paint = useCallback(
@@ -3830,9 +3986,26 @@ const BrushMask = ({
     );
 
     const emit = useCallback(() => {
-        const data = canvasRef.current.toDataURL('image/png').split(',')[1];
-        onMaskChange(data);
-    }, [onMaskChange]);
+        const c = canvasRef.current;
+        // Erasing the last stroke away must report "no mask", not a blank PNG —
+        // a blank mask still reads as a live mask (Send to AI erases nothing).
+        if (brushMode === 'erase') {
+            // Strokes stamp at full opacity, so a surviving one has a solid core.
+            // Erasing over one leaves an anti-aliased rim instead — counting ANY
+            // non-zero alpha called that a live mask, so erasing everything away
+            // still armed Send to AI on a mask that erases nothing.
+            const px = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+            let solid = 0;
+            for (let i = 3; i < px.length && solid < MASK_MIN_SOLID_PX; i += 4) {
+                if (px[i] >= 128) solid++;
+            }
+            if (solid < MASK_MIN_SOLID_PX) {
+                onMaskChange(null);
+                return;
+            }
+        }
+        onMaskChange(c.toDataURL('image/png').split(',')[1]);
+    }, [onMaskChange, brushMode]);
 
     const onDown = useCallback(
         e => {
@@ -4011,10 +4184,33 @@ const BrushMask = ({
                     </button>
                 )}
                 <div className="flex gap-1 p-0.5 rounded-[7px] bg-surface-inset border border-border">
+                    {['paint', 'erase'].map(m => (
+                        <button
+                            key={m}
+                            type="button"
+                            aria-pressed={brushMode === m}
+                            onClick={() => setBrushMode(m)}
+                            title={
+                                m === 'paint'
+                                    ? 'Brush adds to the mask'
+                                    : 'Brush removes from the mask — unmask text you want to keep'
+                            }
+                            className={`px-2.5 h-[26px] rounded-[5px] text-xs capitalize ${
+                                brushMode === m
+                                    ? 'bg-primary text-white font-semibold'
+                                    : 'text-fg-muted hover:text-fg'
+                            }`}
+                        >
+                            {m}
+                        </button>
+                    ))}
+                </div>
+                <div className="flex gap-1 p-0.5 rounded-[7px] bg-surface-inset border border-border">
                     {['round', 'square'].map(shape => (
                         <button
                             key={shape}
                             type="button"
+                            aria-pressed={brushShape === shape}
                             onClick={() => setBrushShape(shape)}
                             className={`px-2.5 h-[26px] rounded-[5px] text-xs capitalize ${
                                 brushShape === shape
@@ -4159,7 +4355,7 @@ const clamp01 = v => Math.max(0, Math.min(1, v));
 const FULL_CROP = { x: 0, y: 0, w: 1, h: 1 };
 
 const FRAMING_HELP = {
-    cover: 'Drag on the photo to choose what stays in the 2:3 crop — the dimmed area is cut. Vertical position slides the framing at the same size: 0 is centred, positive flows real artwork down into the gradient (no AI). Negative needs source above the crop — raise Zoom past 1x, or use a taller-than-16:9 backdrop.',
+    cover: 'Drag on the photo to choose what stays in the 2:3 crop — the dimmed area is cut. Dragging only pans inside the photo, so when the crop already fills its height (any backdrop wider than 2:3 at 1x) the drag is horizontal only. Vertical position slides the framing at the same size: 0 is centred, and its positive half continues past the photo’s bottom edge, flowing real artwork down into the gradient (no AI). Negative needs source above the crop — raise Zoom past 1x, or use a backdrop taller than 2:3.',
     fit: 'Drag a box around the subjects: that region shrinks to the poster width (use Zoom to enlarge it), sky is extended above, and the bottom fades to black into the logo zone. The mock shows where it lands.',
     extend: 'Drag a box around the subjects (use Zoom to enlarge them): the empty bottom is filled by AI on Generate. The mock shows the free edge-extend placeholder until then.',
 };
@@ -4174,17 +4370,20 @@ const CropFramer = ({
     vPos,
     zoom,
     onChange,
+    // Natural aspect ratio (h/w) of the backdrop, owned by the parent: the
+    // Vertical position slider's real travel depends on it, and it must not be
+    // measured twice. Display-size independent, so the overlay/drag math stays
+    // correct when layout resizes the displayed image without a reload.
+    ratio,
+    onRatio,
     // Compact = the right-rail placement: no nested card chrome, image fills
     // the rail width. The big center preview is the result view.
     compact = false,
 }) => {
     const wrapRef = useRef(null);
-    // Natural aspect ratio (h/w) of the backdrop — display-size independent, so
-    // the overlay/drag math stays correct when layout (e.g. the live mock beside
-    // the image) resizes the displayed image without a reload.
-    const [ratio, setRatio] = useState(null);
     const dragging = useRef(false);
     const anchor = useRef(null); // box-draw anchor (normalized)
+    const priorCrop = useRef(null); // crop to restore if the drag draws nothing usable
     // Both "fit" and "extend" use the free-form keep-region box; only "cover" uses
     // the focal-point 2:3 box.
     const isBox = fitMode === 'fit' || fitMode === 'extend';
@@ -4192,21 +4391,7 @@ const CropFramer = ({
     // Cover-mode 2:3 box positioned by the focal point (fractions of the image).
     const coverRect = useMemo(() => {
         if (!ratio) return null;
-        const target = 2 / 3; // CL2K canvas aspect (w:h)
-        // _cover_resize scales by max(W/w, H/h) * zoom, so zoom divides the kept
-        // fraction on both axes. Ignoring it left the box claiming a 16:9 backdrop
-        // has no vertical travel at 1.5x, when that is exactly where v_pos gains
-        // its upward range. Neither axis can keep more than the whole source.
-        const z = Math.max(CONTROL_RANGES.zoom.min, Math.min(zoom || 1, CONTROL_RANGES.zoom.max));
-        const wide = 1 / ratio > target;
-        const rawW = wide ? (target * ratio) / z : 1 / z;
-        const rawH = wide ? 1 / z : 1 / target / ratio / z;
-        const wF = Math.min(1, rawW);
-        const hF = Math.min(1, rawH);
-        // Either raw fraction over 1 means the scaled art no longer fills the
-        // canvas, which is _cover_resize's zoom-out branch — symmetric _v_pos_top,
-        // no extend band.
-        const band = rawW <= 1 && rawH <= 1 ? COVER_EXTEND_BAND : 0;
+        const { wF, hF, band } = coverKeep(ratio, zoom);
         const leftF = Math.max(0, Math.min(focusX - wF / 2, 1 - wF));
         // Positive v_pos can pan past the source into the edge-extended band that
         // lands in the gradient; that band isn't on this image, so the box stops
@@ -4237,20 +4422,26 @@ const CropFramer = ({
             e.preventDefault();
             const p = pointFromEvent(e);
             if (!p) return;
+            // Unmeasured image: fracToVPos already refuses, but focusX would still
+            // move — invisibly, then the crop jumps once onLoad reports the ratio.
+            if (!ratio && !isBox) return;
             dragging.current = true;
             if (isBox) {
+                // Don't write the crop yet: a click that never moves must leave
+                // the existing crop alone, not zero it for `up` to widen.
                 anchor.current = p;
-                setCrop({ x: p.nx, y: p.ny, w: 0, h: 0 });
+                priorCrop.current = crop;
             } else {
                 const vp = fracToVPos(p.ny, coverRect?.h, coverRect?.band);
                 onChange(p.nx, vp === null ? vPos : vp);
             }
         },
-        [isBox, pointFromEvent, onChange, setCrop, coverRect, vPos]
+        [isBox, pointFromEvent, onChange, crop, coverRect, vPos, ratio]
     );
     const moveEvt = useCallback(
         e => {
             if (!dragging.current) return;
+            if (!ratio && !isBox) return;
             const p = pointFromEvent(e);
             if (!p) return;
             if (isBox && anchor.current) {
@@ -4266,13 +4457,16 @@ const CropFramer = ({
                 onChange(p.nx, vp === null ? vPos : vp);
             }
         },
-        [isBox, pointFromEvent, onChange, setCrop, coverRect, vPos]
+        [isBox, pointFromEvent, onChange, setCrop, coverRect, vPos, ratio]
     );
     const up = useCallback(() => {
-        // A tiny accidental box collapses back to the whole image.
-        if (isBox && crop && (crop.w < 0.05 || crop.h < 0.05)) setCrop(FULL_CROP);
+        // A tiny accidental box reverts to the crop it replaced (whole image if
+        // there wasn't one) — a slip must not silently re-frame the poster.
+        if (isBox && dragging.current && crop && (crop.w < 0.05 || crop.h < 0.05))
+            setCrop(priorCrop.current || FULL_CROP);
         dragging.current = false;
         anchor.current = null;
+        priorCrop.current = null;
     }, [isBox, crop, setCrop]);
 
     const selectBox = useCallback(
@@ -4297,7 +4491,7 @@ const CropFramer = ({
             : 'Drag on the photo to set the focal point'
         : isBox
           ? 'Reset the crop to the whole image'
-          : 'Re-centre the focal point';
+          : 'Re-centre the focal point and vertical position';
 
     return (
         <div
@@ -4371,7 +4565,7 @@ const CropFramer = ({
                         src={imageUrl}
                         alt="Crop framing"
                         onLoad={e =>
-                            setRatio(
+                            onRatio(
                                 e.target.naturalWidth
                                     ? e.target.naturalHeight / e.target.naturalWidth
                                     : null
@@ -4705,6 +4899,8 @@ const LogoSelector = ({
     onWhiten,
     flat, // flat pure-white silhouette (no two-tone keylines); wins over whiten
     onFlat,
+    logo3d, // 3D/extruded art: keep the lit face, drop the extrusion; wins over flat
+    onLogo3d,
     invert, // invert logo: white -> transparent, black -> white (plate/sticker art)
     onInvert,
     touchUpUrl, // processed (un-flipped) logo for the B/W touch-up brush
@@ -4756,10 +4952,11 @@ const LogoSelector = ({
         <div className="flex gap-1 p-1 rounded-lg bg-surface-inset border border-border">
             <button
                 type="button"
-                className={tabCls(whiten && !flat)}
+                className={tabCls(whiten && !flat && !logo3d)}
                 onClick={() => {
                     onWhiten(true);
                     onFlat?.(false);
+                    onLogo3d?.(false);
                 }}
                 title="CL2K two-tone: white fills, black keylines"
             >
@@ -4767,10 +4964,12 @@ const LogoSelector = ({
             </button>
             <button
                 type="button"
-                className={tabCls(!whiten && !flat)}
+                className={tabCls(!whiten && !flat && !logo3d)}
                 onClick={() => {
                     onWhiten(false);
                     onFlat?.(false);
+                    onLogo3d?.(false);
+                    onInvert?.(false); // hidden outside CL2K white — don't keep sending it
                 }}
                 title="Keep the logo's original colors"
             >
@@ -4779,14 +4978,31 @@ const LogoSelector = ({
             {onFlat && (
                 <button
                     type="button"
-                    className={tabCls(flat)}
+                    className={tabCls(flat && !logo3d)}
                     onClick={() => {
                         onFlat(true);
                         onWhiten(false);
+                        onLogo3d?.(false);
+                        onInvert?.(false);
                     }}
                     title="Flat pure-white silhouette (no keylines) — for outline/stylised logos"
                 >
                     Flat white
+                </button>
+            )}
+            {onLogo3d && (
+                <button
+                    type="button"
+                    className={tabCls(logo3d)}
+                    onClick={() => {
+                        onLogo3d(true);
+                        onFlat?.(false);
+                        onWhiten(false);
+                        onInvert?.(false);
+                    }}
+                    title="3D / extruded art: keep the lit letter faces, drop the extrusion and shadow"
+                >
+                    3D
                 </button>
             )}
         </div>
@@ -5068,42 +5284,101 @@ const LogoSelector = ({
 // surfaced in the right-column FRAMING group to mirror the Poster tab. The frame
 // itself (fit tabs + drag-to-pan) stays in the center SquareFramer; these drive
 // the same zoom / vPos state, so they stay in sync with a drag.
-const FramingSliders = ({ zoom, setZoom, vPos, setVPos }) => (
-    <>
-        <div>
-            <div className="flex justify-between mb-1.5">
-                <span className="text-sm text-fg-muted">Zoom</span>
-                <span className="font-mono text-xs text-fg-subtle">{(zoom ?? 1).toFixed(2)}×</span>
+const FramingSliders = ({
+    zoom,
+    setZoom,
+    vPos,
+    setVPos,
+    vPosLimits = null,
+    frameLabel = 'frame',
+}) => {
+    const lim = vPosLimits || { min: CONTROL_RANGES.vPos.min, max: 1, dead: false };
+    return (
+        <>
+            <div>
+                <div className="flex justify-between mb-1.5">
+                    <span className="text-sm text-fg-muted">Zoom</span>
+                    <span className="font-mono text-xs text-fg-subtle">
+                        {(zoom ?? 1).toFixed(2)}×
+                    </span>
+                </div>
+                <input
+                    type="range"
+                    min="0.5"
+                    max="3"
+                    step="0.05"
+                    value={zoom ?? 1}
+                    onChange={e => setZoom(Number(e.target.value))}
+                    className="w-full"
+                />
             </div>
-            <input
-                type="range"
-                min="0.5"
-                max="3"
-                step="0.05"
-                value={zoom ?? 1}
-                onChange={e => setZoom(Number(e.target.value))}
-                className="w-full"
-            />
-        </div>
-        <div>
-            <div className="flex justify-between mb-1.5">
-                <span className="text-sm text-fg-muted">Vertical position</span>
-                <span className="font-mono text-xs text-fg-subtle">
-                    {Math.round((vPos ?? 0) * 100)}
-                </span>
+            <div title={vPosTip(lim, { frame: frameLabel })}>
+                <div className="flex justify-between mb-1.5">
+                    <span className={`text-sm ${lim.dead ? 'text-fg-subtle' : 'text-fg-muted'}`}>
+                        Vertical position
+                    </span>
+                    <span className="font-mono text-xs text-fg-subtle">
+                        {lim.dead ? '—' : Math.round((vPos ?? 0) * 100)}
+                    </span>
+                </div>
+                <input
+                    type="range"
+                    min={lim.min}
+                    max={lim.dead ? 1 : lim.max}
+                    step="0.01"
+                    value={vPos ?? 0}
+                    disabled={lim.dead}
+                    onChange={e => setVPos(Number(e.target.value))}
+                    className="w-full disabled:opacity-40"
+                />
             </div>
-            <input
-                type="range"
-                min={CONTROL_RANGES.vPos.min}
-                max={CONTROL_RANGES.vPos.max}
-                step="0.01"
-                value={vPos ?? 0}
-                onChange={e => setVPos(Number(e.target.value))}
-                className="w-full"
-            />
-        </div>
-    </>
-);
+        </>
+    );
+};
+
+// Vertical/zoom framing state for the asset framers, with v_pos kept inside the
+// travel the frame really has at this source ratio (see vPosBounds). Raising a
+// range input's `min` past its value moves the thumb WITHOUT firing onChange, so
+// every setter that can shrink the range re-clamps here rather than in an effect.
+const useAssetFraming = aspect => {
+    const [vPos, setVPos] = useState(0);
+    const [fitMode, setFitModeRaw] = useState('cover'); // cover (fill) | fit (contain)
+    const [zoom, setZoomRaw] = useState(1);
+    const [srcRatio, setSrcRatio] = useState(null); // measured from the source image
+    const boundsFor = useCallback(
+        (mode, ratio, z) =>
+            ratio
+                ? vPosBounds(framedKeep(ratio, z, aspect, mode).hF)
+                : { min: CONTROL_RANGES.vPos.min, max: 1, dead: false },
+        [aspect]
+    );
+    const vPosLimits = useMemo(
+        () => boundsFor(fitMode, srcRatio, zoom),
+        [boundsFor, fitMode, srcRatio, zoom]
+    );
+    const setZoom = useCallback(
+        z => {
+            setZoomRaw(z);
+            setVPos(v => clampToBounds(v, boundsFor(fitMode, srcRatio, z)));
+        },
+        [boundsFor, fitMode, srcRatio]
+    );
+    const setFitMode = useCallback(
+        mode => {
+            setFitModeRaw(mode);
+            setVPos(v => clampToBounds(v, boundsFor(mode, srcRatio, zoom)));
+        },
+        [boundsFor, srcRatio, zoom]
+    );
+    const onSrcRatio = useCallback(
+        r => {
+            setSrcRatio(r);
+            setVPos(v => clampToBounds(v, boundsFor(fitMode, r, zoom)));
+        },
+        [boundsFor, fitMode, zoom]
+    );
+    return { vPos, setVPos, fitMode, setFitMode, zoom, setZoom, srcRatio, onSrcRatio, vPosLimits };
+};
 
 const SquareFramer = ({
     imageUrl,
@@ -5117,22 +5392,16 @@ const SquareFramer = ({
     aspect = 1, // target frame h/w: 1 = square, 9/16 = background art
     title = 'Crop to square',
     frameName = '1:1 square',
+    ratio, // natural h/w, owned by the panel (the vPos slider's range needs it)
+    onRatio,
 }) => {
     const wrapRef = useRef(null);
-    const [ratio, setRatio] = useState(null); // natural h/w
     const dragging = useRef(false);
     // The kept region (fraction of the source shown in the target frame) under the
     // current Fill/Fit + zoom — mirrors render_framed_art's scale+pan maths.
     const rect = useMemo(() => {
         if (!ratio) return null;
-        const z = Math.max(CONTROL_RANGES.zoom.min, Math.min(zoom || 1, CONTROL_RANGES.zoom.max));
-        // frame width = 1, height = aspect; source width = 1, height = ratio (h/w).
-        const base = fitMode === 'fit' ? Math.min(1, aspect / ratio) : Math.max(1, aspect / ratio);
-        const s = base * z;
-        const nw = s; // scaled source width (frame width = 1)
-        const nh = ratio * s; // scaled source height
-        const wF = Math.min(1, 1 / nw);
-        const hF = Math.min(1, aspect / nh);
+        const { wF, hF } = framedKeep(ratio, zoom, aspect, fitMode);
         return {
             left: Math.max(0, Math.min(focusX - wF / 2, 1 - wF)),
             top: Math.max(0, Math.min(vPosToFrac(vPos, hF) - hF / 2, 1 - hF)),
@@ -5158,6 +5427,7 @@ const SquareFramer = ({
     const down = useCallback(
         e => {
             e.preventDefault();
+            if (!ratio) return; // see CropFramer: focusX would move before measurement
             dragging.current = true;
             const p = point(e);
             // ny is a 0..1 fraction of the image; vPos is -1..1 centred on 0, and
@@ -5166,17 +5436,17 @@ const SquareFramer = ({
             const vp = fracToVPos(p.ny, rect?.h);
             onChange(p.nx, vp === null ? vPos : vp);
         },
-        [point, onChange, rect, vPos]
+        [point, onChange, rect, vPos, ratio]
     );
     const move = useCallback(
         e => {
-            if (!dragging.current) return;
+            if (!dragging.current || !ratio) return;
             const p = point(e);
             if (!p) return;
             const vp = fracToVPos(p.ny, rect?.h);
             onChange(p.nx, vp === null ? vPos : vp);
         },
-        [point, onChange, rect, vPos]
+        [point, onChange, rect, vPos, ratio]
     );
     const up = useCallback(() => {
         dragging.current = false;
@@ -5235,7 +5505,7 @@ const SquareFramer = ({
                     src={imageUrl}
                     alt={title}
                     onLoad={e =>
-                        setRatio(
+                        onRatio(
                             e.target.naturalWidth
                                 ? e.target.naturalHeight / e.target.naturalWidth
                                 : null
@@ -5310,16 +5580,19 @@ const SquareArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
     // Leaving the Upload source clears the custom image so a provider pick wins.
     const onBgSource = s => {
         setBgSource(s);
-        if (s !== 'upload') setCustomBg(null);
+        if (s !== 'upload') {
+            setCustomBg(null);
+            onSrcRatio(null);
+        }
     };
     const pickBackdrop = p => {
         setBackdrop(p);
         setCustomBg(null);
+        onSrcRatio(null); // the old ratio must not outlive the old image
     };
     const [focusX, setFocusX] = useState(0.5);
-    const [vPos, setVPos] = useState(0);
-    const [fitMode, setFitMode] = useState('cover'); // cover (fill) | fit (contain)
-    const [zoom, setZoom] = useState(1);
+    const { vPos, setVPos, fitMode, setFitMode, zoom, setZoom, srcRatio, onSrcRatio, vPosLimits } =
+        useAssetFraming(1);
     const [seasonNumber, setSeasonNumber] = useState(''); // '' = show-level asset
     const [previewUrl, setPreviewUrl] = useState(null);
     const [previewing, setPreviewing] = useState(false);
@@ -5409,6 +5682,7 @@ const SquareArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
         reader.onload = () => {
             const url = String(reader.result);
             setCustomBg({ b64: url.split(',').pop(), url, name: f.name });
+            onSrcRatio(null);
             setBackdrop(null);
         };
         reader.readAsDataURL(f);
@@ -5506,6 +5780,8 @@ const SquareArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                             setFitMode={setFitMode}
                             zoom={zoom}
                             setZoom={setZoom}
+                            ratio={srcRatio}
+                            onRatio={onSrcRatio}
                         />
                     </div>
                 )}
@@ -5541,7 +5817,14 @@ const SquareArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
             <section className="bg-surface border border-border rounded-[12px] p-4 flex flex-col gap-3.5">
                 <div className="flex flex-col gap-3">
                     <StudioGroupLabel>Framing</StudioGroupLabel>
-                    <FramingSliders zoom={zoom} setZoom={setZoom} vPos={vPos} setVPos={setVPos} />
+                    <FramingSliders
+                        zoom={zoom}
+                        setZoom={setZoom}
+                        vPos={vPos}
+                        setVPos={setVPos}
+                        vPosLimits={vPosLimits}
+                        frameLabel="1:1 square"
+                    />
                 </div>
                 <StudioAccordion title="Recently generated">
                     <HistorySection toast={toast} />
@@ -5561,16 +5844,19 @@ const BackgroundArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast 
     const posters = artBySource[bgSource]?.posters || [];
     const onBgSource = s => {
         setBgSource(s);
-        if (s !== 'upload') setCustomBg(null);
+        if (s !== 'upload') {
+            setCustomBg(null);
+            onSrcRatio(null);
+        }
     };
     const pickBackdrop = p => {
         setBackdrop(p);
         setCustomBg(null);
+        onSrcRatio(null); // the old ratio must not outlive the old image
     };
     const [focusX, setFocusX] = useState(0.5);
-    const [vPos, setVPos] = useState(0);
-    const [fitMode, setFitMode] = useState('cover'); // cover (fill) | fit (contain)
-    const [zoom, setZoom] = useState(1);
+    const { vPos, setVPos, fitMode, setFitMode, zoom, setZoom, srcRatio, onSrcRatio, vPosLimits } =
+        useAssetFraming(9 / 16);
     const [resolution, setResolution] = useState('1080p'); // 1080p | 4k (Plex dims)
     const [seasonNumber, setSeasonNumber] = useState(''); // '' = show-level asset
     const [previewUrl, setPreviewUrl] = useState(null);
@@ -5664,6 +5950,7 @@ const BackgroundArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast 
         reader.onload = () => {
             const url = String(reader.result);
             setCustomBg({ b64: url.split(',').pop(), url, name: f.name });
+            onSrcRatio(null);
             setBackdrop(null);
         };
         reader.readAsDataURL(f);
@@ -5761,6 +6048,8 @@ const BackgroundArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast 
                             setFitMode={setFitMode}
                             zoom={zoom}
                             setZoom={setZoom}
+                            ratio={srcRatio}
+                            onRatio={onSrcRatio}
                             aspect={9 / 16}
                             title="Crop to 16:9"
                             frameName="16:9 frame"
@@ -5831,7 +6120,14 @@ const BackgroundArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast 
                             </button>
                         </div>
                     </div>
-                    <FramingSliders zoom={zoom} setZoom={setZoom} vPos={vPos} setVPos={setVPos} />
+                    <FramingSliders
+                        zoom={zoom}
+                        setZoom={setZoom}
+                        vPos={vPos}
+                        setVPos={setVPos}
+                        vPosLimits={vPosLimits}
+                        frameLabel="16:9 frame"
+                    />
                 </div>
                 <StudioAccordion title="Recently generated">
                     <HistorySection toast={toast} />
@@ -5860,6 +6156,8 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
     // Flat white: paint the logo a pure-white silhouette (no two-tone keylines) —
     // for already-stylised/outline logos the CL2K-white pass mangles.
     const [flatWhite, setFlatWhite] = useState(false);
+    // 3D logo: keep extruded art's lit face, drop the extrusion. Wins over flat.
+    const [logo3d, setLogo3d] = useState(false);
     // Invert logo: white -> transparent, black -> white (plate/sticker art).
     const [invert, setInvert] = useState(false);
     const [previewUrl, setPreviewUrl] = useState(null); // UN-flipped (brush base)
@@ -5867,12 +6165,14 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
     const [busy, setBusy] = useState(false);
     const hasLogo = !!(logo || customLogo);
 
-    // B/W touch-up strokes are keyed to the (logo, whiten, flat, invert) they were
-    // drawn over so a stale mask becomes a derived no-op (same as the Builder).
-    const flipKey = `${customSig(customLogo) || logo}|${whiten}|${flatWhite}|${invert}`;
+    // The logo + colour mode a processed result belongs to. Strokes and the brush
+    // base are both keyed to it, so a stale mask becomes a derived no-op instead
+    // of needing a reset (same as the Builder). ONE literal: a new colour field
+    // added to only one of the two keys would silently un-key the other.
+    const colorKey = `${customSig(customLogo) || logo}|${whiten}|${flatWhite}|${logo3d}|${invert}`;
     const [flip, setFlip] = useState(null); // { key, b64 }
-    const flipB64 = flip && flip.key === flipKey ? flip.b64 : null;
-    const setFlipB64 = useCallback(b64 => setFlip(b64 ? { key: flipKey, b64 } : null), [flipKey]);
+    const flipB64 = flip && flip.key === colorKey ? flip.b64 : null;
+    const setFlipB64 = useCallback(b64 => setFlip(b64 ? { key: colorKey, b64 } : null), [colorKey]);
     // Eraser strokes are keyed to the LOGO only (erasing is geometric — it survives
     // colour-mode switches, unlike the colour-dependent B/W flip).
     const eraseKey = customSig(customLogo) || logo;
@@ -6079,6 +6379,7 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
             logo_b64: customLogo?.b64 || null,
             whiten,
             flat_white: flatWhite,
+            logo_3d: logo3d,
             invert,
             flip_b64: flipB64,
             erase_b64: eraseB64,
@@ -6091,6 +6392,7 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
             customLogo,
             whiten,
             flatWhite,
+            logo3d,
             invert,
             flipB64,
             eraseB64,
@@ -6106,18 +6408,23 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
     // Brush base: the processed logo WITHOUT any mask — it must stay stable as
     // strokes land, or the accumulated mask would be drawn over a moving target.
     // Both the touch-up and eraser brushes draw over this.
-    const sig = `${customSig(customLogo) || logo}|${whiten}|${flatWhite}|${invert}`;
     useEffect(() => {
         if (!hasLogo) return undefined;
         let cancelled = false;
+        // Abort in cleanup like the square/background previews: a rapid colour-mode
+        // change would otherwise leave the superseded render running server-side.
+        const aborter = new AbortController();
         const t = setTimeout(async () => {
             setPreviewing(true);
             try {
-                const blob = await cl2kMakerAPI.logoAssetPreview({
-                    ...reqRef.current,
-                    flip_b64: null,
-                    erase_b64: null,
-                });
+                const blob = await cl2kMakerAPI.logoAssetPreview(
+                    {
+                        ...reqRef.current,
+                        flip_b64: null,
+                        erase_b64: null,
+                    },
+                    { signal: aborter.signal }
+                );
                 if (!cancelled)
                     setPreviewUrl(prev => {
                         if (prev) URL.revokeObjectURL(prev);
@@ -6131,10 +6438,11 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
         }, 300);
         return () => {
             cancelled = true;
+            aborter.abort();
             clearTimeout(t);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [sig]);
+    }, [colorKey]);
     useEffect(
         () => () => {
             if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -6142,14 +6450,17 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
         [previewUrl]
     );
     // Edited variant (flip + erase masks applied) for the preview box and Export.
-    const editKey = `${flipB64 || ''}|${eraseB64 || ''}`;
+    const editKey = `${colorKey}|${flipB64 || ''}|${eraseB64 || ''}`;
     const hasEdit = !!(flipB64 || eraseB64);
     useEffect(() => {
         if (!hasEdit) return undefined;
         let cancelled = false;
+        const aborter = new AbortController();
         (async () => {
             try {
-                const blob = await cl2kMakerAPI.logoAssetPreview(reqRef.current);
+                const blob = await cl2kMakerAPI.logoAssetPreview(reqRef.current, {
+                    signal: aborter.signal,
+                });
                 if (!cancelled)
                     setEdited(prev => {
                         if (prev?.url) URL.revokeObjectURL(prev.url);
@@ -6161,6 +6472,7 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
         })();
         return () => {
             cancelled = true;
+            aborter.abort();
         };
     }, [editKey, hasEdit]);
     useEffect(
@@ -6281,33 +6593,50 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                     <div className="flex items-center gap-2">
                         <button
                             type="button"
-                            className={seg(!whiten && !flatWhite)}
+                            className={seg(!whiten && !flatWhite && !logo3d)}
                             onClick={() => {
                                 setWhiten(false);
                                 setFlatWhite(false);
+                                setLogo3d(false);
+                                setInvert(false); // hidden outside CL2K white
                             }}
                         >
                             Original
                         </button>
                         <button
                             type="button"
-                            className={seg(whiten && !flatWhite)}
+                            className={seg(whiten && !flatWhite && !logo3d)}
                             onClick={() => {
                                 setWhiten(true);
                                 setFlatWhite(false);
+                                setLogo3d(false);
                             }}
                         >
                             CL2K white
                         </button>
                         <button
                             type="button"
-                            className={seg(flatWhite)}
+                            className={seg(flatWhite && !logo3d)}
                             onClick={() => {
                                 setFlatWhite(true);
                                 setWhiten(false);
+                                setLogo3d(false);
+                                setInvert(false);
                             }}
                         >
                             Flat white
+                        </button>
+                        <button
+                            type="button"
+                            className={seg(logo3d)}
+                            onClick={() => {
+                                setLogo3d(true);
+                                setFlatWhite(false);
+                                setWhiten(false);
+                                setInvert(false);
+                            }}
+                        >
+                            3D
                         </button>
                     </div>
                     <p className="text-xs text-fg-subtle">
@@ -6315,9 +6644,10 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                         asset). CL2K white recolours it to the CL2K two-tone — white fills, black
                         keylines — like a CL2K poster logo. Flat white paints the whole logo pure
                         white (no keylines) — best for outline or already-stylised logos the
-                        two-tone pass mangles.
+                        two-tone pass mangles. 3D keeps only the lit letter faces of extruded /
+                        bevelled art and drops the extrusion and shadow.
                     </p>
-                    {whiten && !flatWhite && (
+                    {whiten && !flatWhite && !logo3d && (
                         <label className="flex items-center gap-2 text-xs text-fg-muted cursor-pointer">
                             <input
                                 type="checkbox"

@@ -766,3 +766,53 @@ def fill_dark_bodies(whitened_png: bytes, original_png: bytes) -> bytes:
     buf = io.BytesIO()
     Image.fromarray(out).save(buf, "PNG")
     return buf.getvalue()
+
+
+# --- 3D / extruded logos (a whiten MODE, called from renderer.process_logo) -----
+_FACE_SOFT = 0.06  # +/- luma either side of the split, ramped for antialiasing
+_FACE_MIN_FRAC = 0.12  # kept fraction of the opaque area below this -> not a face
+_FACE_MAX_FRAC = 0.95  # ...and above this nothing was dropped -> not a 3D logo
+_FACE_MIN_AREA = 64  # despeckle: drop kept components smaller than this (px)
+
+
+def flatten_3d_logo(logo_png: bytes) -> Optional[bytes]:
+    """Otsu-split an extruded logo's lit face from its extrusion; white-fill the face.
+
+    None = not splittable (flat histogram, or a face too small/large to be the
+    letterforms); the caller falls back to the flat silhouette.
+    """
+    try:
+        src = Image.open(io.BytesIO(logo_png)).convert("RGBA")
+    except Exception:
+        return None
+    arr = np.asarray(src).astype(np.float32) / 255.0
+    rgb, alpha = arr[..., :3], arr[..., 3]
+    luma = 0.299 * rgb[..., 0] + 0.587 * rgb[..., 1] + 0.114 * rgb[..., 2]
+    opaque = alpha > 0.5
+    if not opaque.any():
+        return None
+    vals = luma[opaque]
+    split = _otsu(vals)
+    if split is None:
+        return None
+    # _otsu returns the FIRST bin that separates the classes, which on strongly
+    # bimodal art sits on the dark class itself. Re-centre between the class means
+    # so the ramp straddles the valley (one intermeans step).
+    dark, lit = vals[vals <= split], vals[vals > split]
+    if not dark.size or not lit.size:
+        return None
+    d_mean, l_mean = float(dark.mean()), float(lit.mean())
+    if l_mean - d_mean <= 2 * _FACE_SOFT:
+        return None  # planes too close to separate — the ramp would swallow both
+    split = (d_mean + l_mean) / 2.0
+    lo, hi = split - _FACE_SOFT, split + _FACE_SOFT
+    ramp = np.clip((luma - lo) / max(hi - lo, 1e-6), 0.0, 1.0)
+    kept = _despeckle((ramp * alpha * 255).astype(np.uint8), min_area=_FACE_MIN_AREA)
+    frac = float((kept > 128).sum()) / float(opaque.sum())
+    if not _FACE_MIN_FRAC <= frac <= _FACE_MAX_FRAC:
+        return None
+    out = np.full(arr.shape, 255, dtype=np.uint8)  # white RGB...
+    out[..., 3] = kept  # ...shaped by the face alone
+    buf = io.BytesIO()
+    Image.fromarray(out).save(buf, "PNG")
+    return buf.getvalue()
