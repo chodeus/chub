@@ -1037,6 +1037,8 @@ def _run_seasons_job(jid: int, db: ChubDB, logger: Any, req: SeasonsRequest) -> 
         # fail the job, and re-decoding multi-MB blobs per season is wasted work.
         backdrop_bytes = _b64_to_bytes(req.backdrop_b64)
         logo_bytes = _b64_to_bytes(req.logo_b64)
+        logo_flip_bytes = _b64_to_bytes(req.logo_flip_b64)
+        logo_erase_bytes = _b64_to_bytes(req.logo_erase_b64)
         for n in req.seasons:
             # Re-read per season: config is REPLACED on reload.
             # Inside the guard, so a config fault fails the job, not the thread.
@@ -1065,8 +1067,8 @@ def _run_seasons_job(jid: int, db: ChubDB, logger: Any, req: SeasonsRequest) -> 
                 flat_white=req.flat_white,
                 logo_3d=req.logo_3d,
                 invert=req.invert,
-                logo_flip_bytes=_b64_to_bytes(req.logo_flip_b64),
-                logo_erase_bytes=_b64_to_bytes(req.logo_erase_b64),
+                logo_flip_bytes=logo_flip_bytes,
+                logo_erase_bytes=logo_erase_bytes,
                 force=req.force,
                 save_local=req.save_local,
                 upload_gdrive=req.upload_gdrive,

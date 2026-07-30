@@ -1449,7 +1449,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             cancelled = true;
         };
     }, [hasLogo, logoReq]);
-    const editKey = `${logoFlipB64 || ''}|${logoEraseB64 || ''}`;
+    const editKey = `${flipKey}|${logoFlipB64 || ''}|${logoEraseB64 || ''}`;
     const hasEdit = !!(logoFlipB64 || logoEraseB64);
     useEffect(() => {
         if (!hasEdit) return undefined; // overlay derives to the base below
@@ -6429,14 +6429,17 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
         [previewUrl]
     );
     // Edited variant (flip + erase masks applied) for the preview box and Export.
-    const editKey = `${flipB64 || ''}|${eraseB64 || ''}`;
+    const editKey = `${colorKey}|${flipB64 || ''}|${eraseB64 || ''}`;
     const hasEdit = !!(flipB64 || eraseB64);
     useEffect(() => {
         if (!hasEdit) return undefined;
         let cancelled = false;
+        const aborter = new AbortController();
         (async () => {
             try {
-                const blob = await cl2kMakerAPI.logoAssetPreview(reqRef.current);
+                const blob = await cl2kMakerAPI.logoAssetPreview(reqRef.current, {
+                    signal: aborter.signal,
+                });
                 if (!cancelled)
                     setEdited(prev => {
                         if (prev?.url) URL.revokeObjectURL(prev.url);
@@ -6448,6 +6451,7 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
         })();
         return () => {
             cancelled = true;
+            aborter.abort();
         };
     }, [editKey, hasEdit]);
     useEffect(
