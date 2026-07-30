@@ -5305,6 +5305,50 @@ const FramingSliders = ({
     );
 };
 
+// Vertical/zoom framing state for the asset framers, with v_pos kept inside the
+// travel the frame really has at this source ratio (see vPosBounds). Raising a
+// range input's `min` past its value moves the thumb WITHOUT firing onChange, so
+// every setter that can shrink the range re-clamps here rather than in an effect.
+const useAssetFraming = aspect => {
+    const [vPos, setVPos] = useState(0);
+    const [fitMode, setFitModeRaw] = useState('cover'); // cover (fill) | fit (contain)
+    const [zoom, setZoomRaw] = useState(1);
+    const [srcRatio, setSrcRatio] = useState(null); // measured from the source image
+    const boundsFor = useCallback(
+        (mode, ratio, z) =>
+            ratio
+                ? vPosBounds(framedKeep(ratio, z, aspect, mode).hF)
+                : { min: CONTROL_RANGES.vPos.min, max: 1, dead: false },
+        [aspect]
+    );
+    const vPosLimits = useMemo(
+        () => boundsFor(fitMode, srcRatio, zoom),
+        [boundsFor, fitMode, srcRatio, zoom]
+    );
+    const setZoom = useCallback(
+        z => {
+            setZoomRaw(z);
+            setVPos(v => clampToBounds(v, boundsFor(fitMode, srcRatio, z)));
+        },
+        [boundsFor, fitMode, srcRatio]
+    );
+    const setFitMode = useCallback(
+        mode => {
+            setFitModeRaw(mode);
+            setVPos(v => clampToBounds(v, boundsFor(mode, srcRatio, zoom)));
+        },
+        [boundsFor, srcRatio, zoom]
+    );
+    const onSrcRatio = useCallback(
+        r => {
+            setSrcRatio(r);
+            setVPos(v => clampToBounds(v, boundsFor(fitMode, r, zoom)));
+        },
+        [boundsFor, fitMode, zoom]
+    );
+    return { vPos, setVPos, fitMode, setFitMode, zoom, setZoom, srcRatio, onSrcRatio, vPosLimits };
+};
+
 const SquareFramer = ({
     imageUrl,
     focusX,
@@ -5511,43 +5555,8 @@ const SquareArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
         setCustomBg(null);
     };
     const [focusX, setFocusX] = useState(0.5);
-    const [vPos, setVPos] = useState(0);
-    const [fitMode, setFitModeRaw] = useState('cover'); // cover (fill) | fit (contain)
-    const [zoom, setZoomRaw] = useState(1);
-    // Measured from the source image; the Vertical position slider's real travel
-    // depends on it, so it lives here rather than inside the framer.
-    const [srcRatio, setSrcRatio] = useState(null);
-    const vPosLimitsFor = useCallback((mode, ratio, z) => {
-        if (!ratio) return { min: CONTROL_RANGES.vPos.min, max: 1, dead: false };
-        return vPosBounds(framedKeep(ratio, z, 1, mode).hF);
-    }, []);
-    const vPosLimits = useMemo(
-        () => vPosLimitsFor(fitMode, srcRatio, zoom),
-        [vPosLimitsFor, fitMode, srcRatio, zoom]
-    );
-    // Raising a range input's `min` past its value moves the thumb without firing
-    // onChange, so every setter that can shrink the range re-clamps v_pos.
-    const setZoom = useCallback(
-        z => {
-            setZoomRaw(z);
-            setVPos(v => clampToBounds(v, vPosLimitsFor(fitMode, srcRatio, z)));
-        },
-        [vPosLimitsFor, fitMode, srcRatio]
-    );
-    const setFitMode = useCallback(
-        mode => {
-            setFitModeRaw(mode);
-            setVPos(v => clampToBounds(v, vPosLimitsFor(mode, srcRatio, zoom)));
-        },
-        [vPosLimitsFor, srcRatio, zoom]
-    );
-    const onSrcRatio = useCallback(
-        r => {
-            setSrcRatio(r);
-            setVPos(v => clampToBounds(v, vPosLimitsFor(fitMode, r, zoom)));
-        },
-        [vPosLimitsFor, fitMode, zoom]
-    );
+    const { vPos, setVPos, fitMode, setFitMode, zoom, setZoom, srcRatio, onSrcRatio, vPosLimits } =
+        useAssetFraming(1);
     const [seasonNumber, setSeasonNumber] = useState(''); // '' = show-level asset
     const [previewUrl, setPreviewUrl] = useState(null);
     const [previewing, setPreviewing] = useState(false);
@@ -5805,43 +5814,8 @@ const BackgroundArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast 
         setCustomBg(null);
     };
     const [focusX, setFocusX] = useState(0.5);
-    const [vPos, setVPos] = useState(0);
-    const [fitMode, setFitModeRaw] = useState('cover'); // cover (fill) | fit (contain)
-    const [zoom, setZoomRaw] = useState(1);
-    // Measured from the source image; the Vertical position slider's real travel
-    // depends on it, so it lives here rather than inside the framer.
-    const [srcRatio, setSrcRatio] = useState(null);
-    const vPosLimitsFor = useCallback((mode, ratio, z) => {
-        if (!ratio) return { min: CONTROL_RANGES.vPos.min, max: 1, dead: false };
-        return vPosBounds(framedKeep(ratio, z, 9 / 16, mode).hF);
-    }, []);
-    const vPosLimits = useMemo(
-        () => vPosLimitsFor(fitMode, srcRatio, zoom),
-        [vPosLimitsFor, fitMode, srcRatio, zoom]
-    );
-    // Raising a range input's `min` past its value moves the thumb without firing
-    // onChange, so every setter that can shrink the range re-clamps v_pos.
-    const setZoom = useCallback(
-        z => {
-            setZoomRaw(z);
-            setVPos(v => clampToBounds(v, vPosLimitsFor(fitMode, srcRatio, z)));
-        },
-        [vPosLimitsFor, fitMode, srcRatio]
-    );
-    const setFitMode = useCallback(
-        mode => {
-            setFitModeRaw(mode);
-            setVPos(v => clampToBounds(v, vPosLimitsFor(mode, srcRatio, zoom)));
-        },
-        [vPosLimitsFor, srcRatio, zoom]
-    );
-    const onSrcRatio = useCallback(
-        r => {
-            setSrcRatio(r);
-            setVPos(v => clampToBounds(v, vPosLimitsFor(fitMode, r, zoom)));
-        },
-        [vPosLimitsFor, fitMode, zoom]
-    );
+    const { vPos, setVPos, fitMode, setFitMode, zoom, setZoom, srcRatio, onSrcRatio, vPosLimits } =
+        useAssetFraming(9 / 16);
     const [resolution, setResolution] = useState('1080p'); // 1080p | 4k (Plex dims)
     const [seasonNumber, setSeasonNumber] = useState(''); // '' = show-level asset
     const [previewUrl, setPreviewUrl] = useState(null);
