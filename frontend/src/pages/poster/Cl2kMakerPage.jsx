@@ -4184,6 +4184,7 @@ const BrushMask = ({
                         <button
                             key={m}
                             type="button"
+                            aria-pressed={brushMode === m}
                             onClick={() => setBrushMode(m)}
                             title={
                                 m === 'paint'
@@ -4205,6 +4206,7 @@ const BrushMask = ({
                         <button
                             key={shape}
                             type="button"
+                            aria-pressed={brushShape === shape}
                             onClick={() => setBrushShape(shape)}
                             className={`px-2.5 h-[26px] rounded-[5px] text-xs capitalize ${
                                 brushShape === shape
@@ -5569,11 +5571,15 @@ const SquareArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
     // Leaving the Upload source clears the custom image so a provider pick wins.
     const onBgSource = s => {
         setBgSource(s);
-        if (s !== 'upload') setCustomBg(null);
+        if (s !== 'upload') {
+            setCustomBg(null);
+            onSrcRatio(null);
+        }
     };
     const pickBackdrop = p => {
         setBackdrop(p);
         setCustomBg(null);
+        onSrcRatio(null); // the old ratio must not outlive the old image
     };
     const [focusX, setFocusX] = useState(0.5);
     const { vPos, setVPos, fitMode, setFitMode, zoom, setZoom, srcRatio, onSrcRatio, vPosLimits } =
@@ -5667,6 +5673,7 @@ const SquareArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
         reader.onload = () => {
             const url = String(reader.result);
             setCustomBg({ b64: url.split(',').pop(), url, name: f.name });
+            onSrcRatio(null);
             setBackdrop(null);
         };
         reader.readAsDataURL(f);
@@ -5828,11 +5835,15 @@ const BackgroundArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast 
     const posters = artBySource[bgSource]?.posters || [];
     const onBgSource = s => {
         setBgSource(s);
-        if (s !== 'upload') setCustomBg(null);
+        if (s !== 'upload') {
+            setCustomBg(null);
+            onSrcRatio(null);
+        }
     };
     const pickBackdrop = p => {
         setBackdrop(p);
         setCustomBg(null);
+        onSrcRatio(null); // the old ratio must not outlive the old image
     };
     const [focusX, setFocusX] = useState(0.5);
     const { vPos, setVPos, fitMode, setFitMode, zoom, setZoom, srcRatio, onSrcRatio, vPosLimits } =
@@ -5930,6 +5941,7 @@ const BackgroundArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast 
         reader.onload = () => {
             const url = String(reader.result);
             setCustomBg({ b64: url.split(',').pop(), url, name: f.name });
+            onSrcRatio(null);
             setBackdrop(null);
         };
         reader.readAsDataURL(f);
