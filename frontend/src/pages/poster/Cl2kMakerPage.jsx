@@ -284,18 +284,19 @@ const vPosToFrac = (vPos, hF, band = 0) => {
     const v = clampVPos(vPos);
     return 0.5 + v * (v < 0 ? vPosTravelUp(hF) : vPosTravelDown(hF, band));
 };
-// Inverse, for turning a drag on the crop box back into v_pos. null only when
-// neither direction can move: leave the user's Vertical position alone rather
-// than slam it to a limit. A drag toward a side with no travel lands on 0 — the
-// nearest framing that side can reach — so it can still pull the framing back.
+// Inverse, for turning a drag on the crop box back into v_pos. A drag moves the
+// BOX, so it may only address travel that is ON the image: clamped to the box's
+// reachable centre range, which leaves the extend `band` to the slider. null =
+// no source travel at all (a 16:9 backdrop at zoom 1 cover-fills exactly, so the
+// band is its ONLY travel) — the caller must then keep the user's v_pos, NOT
+// drive it from a horizontal drag.
+const VPOS_TRAVEL_EPS = 1e-4; // sub-pixel travel is no travel (a near-2:3 source)
 const fracToVPos = (frac, hF, band = 0) => {
     const up = vPosTravelUp(hF);
-    const down = vPosTravelDown(hF, band);
-    if (up <= 0 && down <= 0) return null;
-    const d = frac - 0.5;
+    if (up <= VPOS_TRAVEL_EPS) return null;
+    const d = Math.max(-up, Math.min(frac - 0.5, up));
     if (d === 0) return 0;
-    const travel = d < 0 ? up : down;
-    return travel <= 0 ? 0 : clampVPos(d / travel);
+    return clampVPos(d / (d < 0 ? up : vPosTravelDown(hF, band)));
 };
 
 const cl2kLogoBaseline = kind =>
@@ -1193,6 +1194,8 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
     // Flat white: paint the logo a pure-white silhouette (no two-tone keylines) —
     // for already-stylised/outline logos the CL2K-white pass mangles. Wins over whiten.
     const [flatWhite, setFlatWhite] = useState(saved.flatWhite ?? false);
+    // 3D logo: keep extruded art's lit face, drop the extrusion. Wins over flat.
+    const [logo3d, setLogo3d] = useState(saved.logo3d ?? false);
     // Invert logo: white -> transparent, black -> white (plate/sticker art).
     const [invertLogo, setInvertLogo] = useState(saved.invertLogo ?? false);
 
@@ -1232,6 +1235,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             logoYOffset,
             whitenLogo,
             flatWhite,
+            logo3d,
             invertLogo,
             seasonNumber,
             bulkSeasons,
@@ -1253,6 +1257,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
         logoYOffset,
         whitenLogo,
         flatWhite,
+        logo3d,
         invertLogo,
         seasonNumber,
         bulkSeasons,
@@ -1286,7 +1291,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
     const hasLogo = !!(logo || customLogo);
     // Strokes are keyed to the (logo, whiten, invert) they were drawn over: a
     // stale key makes the mask a derived no-op instead of needing a reset-in-effect.
-    const flipKey = `${customSig(customLogo) || logo}|${effectiveWhiten}|${flatWhite}|${invertLogo}`;
+    const flipKey = `${customSig(customLogo) || logo}|${effectiveWhiten}|${flatWhite}|${logo3d}|${invertLogo}`;
     const [logoFlip, setLogoFlip] = useState(null); // { key, b64 }
     const logoFlipB64 = logoFlip && logoFlip.key === flipKey ? logoFlip.b64 : null;
     const setLogoFlipB64 = useCallback(
@@ -1311,6 +1316,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                     ...(customLogo?.b64 ? { logo_b64: customLogo.b64 } : { logo_path: logo }),
                     whiten: effectiveWhiten,
                     flat_white: flatWhite,
+                    logo_3d: logo3d,
                     invert: invertLogo,
                     kind: item.kind,
                     ...extra,
@@ -1328,7 +1334,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                           }
                         : null;
                 }),
-        [customLogo, logo, effectiveWhiten, flatWhite, invertLogo, item.kind]
+        [customLogo, logo, effectiveWhiten, flatWhite, logo3d, invertLogo, item.kind]
     );
     useEffect(() => {
         if (!hasLogo) return undefined; // no fetch; `overlayLogo` below hides it
@@ -1468,6 +1474,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             logo_y_offset: logoYOffset,
             whiten: whitenLogo,
             flat_white: flatWhite,
+            logo_3d: logo3d,
             invert: invertLogo,
             logo_flip_b64: logoFlipB64,
             logo_erase_b64: logoEraseB64,
@@ -1506,6 +1513,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
             logoYOffset,
             whitenLogo,
             flatWhite,
+            logo3d,
             invertLogo,
             logoFlipB64,
             logoEraseB64,
@@ -1689,6 +1697,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                 logo_b64: customLogo?.b64 || null,
                 whiten: whitenLogo,
                 flat_white: flatWhite,
+                logo_3d: logo3d,
                 invert: invertLogo,
                 fit_mode: fitMode,
                 focus_x: focusX,
@@ -1753,6 +1762,7 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
         customLogo,
         whitenLogo,
         flatWhite,
+        logo3d,
         invertLogo,
         saveTargets,
         fitMode,
@@ -1873,6 +1883,8 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                     setWhitenLogo={setWhitenLogo}
                     flatWhite={flatWhite}
                     setFlatWhite={setFlatWhite}
+                    logo3d={logo3d}
+                    setLogo3d={setLogo3d}
                     invertLogo={invertLogo}
                     setInvertLogo={setInvertLogo}
                     logoTouchUpUrl={processedBase?.dataUrl || null}
@@ -2035,6 +2047,8 @@ const RenderPanel = ({
     setWhitenLogo,
     flatWhite,
     setFlatWhite,
+    logo3d,
+    setLogo3d,
     invertLogo,
     setInvertLogo,
     logoTouchUpUrl,
@@ -3047,6 +3061,8 @@ const RenderPanel = ({
                             onWhiten={setWhitenLogo}
                             flat={flatWhite}
                             onFlat={setFlatWhite}
+                            logo3d={logo3d}
+                            onLogo3d={setLogo3d}
                             invert={invertLogo}
                             onInvert={setInvertLogo}
                             touchUpUrl={logoTouchUpUrl}
@@ -3239,6 +3255,8 @@ const RenderPanel = ({
                                 onWhiten={setWhitenLogo}
                                 flat={flatWhite}
                                 onFlat={setFlatWhite}
+                                logo3d={logo3d}
+                                onLogo3d={setLogo3d}
                                 invert={invertLogo}
                                 onInvert={setInvertLogo}
                                 touchUpUrl={logoTouchUpUrl}
@@ -3338,6 +3356,8 @@ const RenderPanel = ({
                                     onWhiten={setWhitenLogo}
                                     flat={flatWhite}
                                     onFlat={setFlatWhite}
+                                    logo3d={logo3d}
+                                    onLogo3d={setLogo3d}
                                     invert={invertLogo}
                                     onInvert={setInvertLogo}
                                     touchUpUrl={logoTouchUpUrl}
@@ -3746,6 +3766,9 @@ const BrushMask = ({
     // erasing straight logo edges). Purely a drawing concern, kept local here so
     // every BrushMask instance gets the toggle for free.
     const [brushShape, setBrushShape] = useState('round');
+    // Paint adds to the mask; erase subtracts from it (destination-out) — for
+    // unmasking part of a Detect-text result instead of clearing the whole thing.
+    const [brushMode, setBrushMode] = useState('paint');
 
     // Back the canvas with the image's NATIVE resolution (long edge capped) rather
     // than its CSS size, so the exported mask can hug edges the display grid can't
@@ -3795,6 +3818,8 @@ const BrushMask = ({
     const stamp = useCallback(
         p => {
             const ctx = canvasRef.current.getContext('2d');
+            ctx.globalCompositeOperation =
+                brushMode === 'erase' ? 'destination-out' : 'source-over';
             ctx.fillStyle = '#ffffff';
             const r = brushSize * displayScale.current;
             if (brushShape === 'square') {
@@ -3804,8 +3829,9 @@ const BrushMask = ({
                 ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
                 ctx.fill();
             }
+            ctx.globalCompositeOperation = 'source-over';
         },
-        [brushSize, brushShape]
+        [brushSize, brushShape, brushMode]
     );
 
     const paint = useCallback(
@@ -3830,9 +3856,25 @@ const BrushMask = ({
     );
 
     const emit = useCallback(() => {
-        const data = canvasRef.current.toDataURL('image/png').split(',')[1];
-        onMaskChange(data);
-    }, [onMaskChange]);
+        const c = canvasRef.current;
+        // Erasing the last stroke away must report "no mask", not a blank PNG —
+        // a blank mask still reads as a live mask (Send to AI erases nothing).
+        if (brushMode === 'erase') {
+            const px = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+            let painted = false;
+            for (let i = 3; i < px.length; i += 4) {
+                if (px[i]) {
+                    painted = true;
+                    break;
+                }
+            }
+            if (!painted) {
+                onMaskChange(null);
+                return;
+            }
+        }
+        onMaskChange(c.toDataURL('image/png').split(',')[1]);
+    }, [onMaskChange, brushMode]);
 
     const onDown = useCallback(
         e => {
@@ -4011,6 +4053,27 @@ const BrushMask = ({
                     </button>
                 )}
                 <div className="flex gap-1 p-0.5 rounded-[7px] bg-surface-inset border border-border">
+                    {['paint', 'erase'].map(m => (
+                        <button
+                            key={m}
+                            type="button"
+                            onClick={() => setBrushMode(m)}
+                            title={
+                                m === 'paint'
+                                    ? 'Brush adds to the mask'
+                                    : 'Brush removes from the mask — unmask text you want to keep'
+                            }
+                            className={`px-2.5 h-[26px] rounded-[5px] text-xs capitalize ${
+                                brushMode === m
+                                    ? 'bg-primary text-white font-semibold'
+                                    : 'text-fg-muted hover:text-fg'
+                            }`}
+                        >
+                            {m}
+                        </button>
+                    ))}
+                </div>
+                <div className="flex gap-1 p-0.5 rounded-[7px] bg-surface-inset border border-border">
                     {['round', 'square'].map(shape => (
                         <button
                             key={shape}
@@ -4159,7 +4222,7 @@ const clamp01 = v => Math.max(0, Math.min(1, v));
 const FULL_CROP = { x: 0, y: 0, w: 1, h: 1 };
 
 const FRAMING_HELP = {
-    cover: 'Drag on the photo to choose what stays in the 2:3 crop — the dimmed area is cut. Vertical position slides the framing at the same size: 0 is centred, positive flows real artwork down into the gradient (no AI). Negative needs source above the crop — raise Zoom past 1x, or use a taller-than-16:9 backdrop.',
+    cover: 'Drag on the photo to choose what stays in the 2:3 crop — the dimmed area is cut. Dragging only pans inside the photo, so when the crop already fills its height (any backdrop wider than 2:3 at 1x) the drag is horizontal only. Vertical position slides the framing at the same size: 0 is centred, and its positive half continues past the photo’s bottom edge, flowing real artwork down into the gradient (no AI). Negative needs source above the crop — raise Zoom past 1x, or use a backdrop taller than 2:3.',
     fit: 'Drag a box around the subjects: that region shrinks to the poster width (use Zoom to enlarge it), sky is extended above, and the bottom fades to black into the logo zone. The mock shows where it lands.',
     extend: 'Drag a box around the subjects (use Zoom to enlarge them): the empty bottom is filled by AI on Generate. The mock shows the free edge-extend placeholder until then.',
 };
@@ -4185,6 +4248,7 @@ const CropFramer = ({
     const [ratio, setRatio] = useState(null);
     const dragging = useRef(false);
     const anchor = useRef(null); // box-draw anchor (normalized)
+    const priorCrop = useRef(null); // crop to restore if the drag draws nothing usable
     // Both "fit" and "extend" use the free-form keep-region box; only "cover" uses
     // the focal-point 2:3 box.
     const isBox = fitMode === 'fit' || fitMode === 'extend';
@@ -4239,14 +4303,16 @@ const CropFramer = ({
             if (!p) return;
             dragging.current = true;
             if (isBox) {
+                // Don't write the crop yet: a click that never moves must leave
+                // the existing crop alone, not zero it for `up` to widen.
                 anchor.current = p;
-                setCrop({ x: p.nx, y: p.ny, w: 0, h: 0 });
+                priorCrop.current = crop;
             } else {
                 const vp = fracToVPos(p.ny, coverRect?.h, coverRect?.band);
                 onChange(p.nx, vp === null ? vPos : vp);
             }
         },
-        [isBox, pointFromEvent, onChange, setCrop, coverRect, vPos]
+        [isBox, pointFromEvent, onChange, crop, coverRect, vPos]
     );
     const moveEvt = useCallback(
         e => {
@@ -4269,10 +4335,13 @@ const CropFramer = ({
         [isBox, pointFromEvent, onChange, setCrop, coverRect, vPos]
     );
     const up = useCallback(() => {
-        // A tiny accidental box collapses back to the whole image.
-        if (isBox && crop && (crop.w < 0.05 || crop.h < 0.05)) setCrop(FULL_CROP);
+        // A tiny accidental box reverts to the crop it replaced (whole image if
+        // there wasn't one) — a slip must not silently re-frame the poster.
+        if (isBox && dragging.current && crop && (crop.w < 0.05 || crop.h < 0.05))
+            setCrop(priorCrop.current || FULL_CROP);
         dragging.current = false;
         anchor.current = null;
+        priorCrop.current = null;
     }, [isBox, crop, setCrop]);
 
     const selectBox = useCallback(
@@ -4297,7 +4366,7 @@ const CropFramer = ({
             : 'Drag on the photo to set the focal point'
         : isBox
           ? 'Reset the crop to the whole image'
-          : 'Re-centre the focal point';
+          : 'Re-centre the focal point and vertical position';
 
     return (
         <div
@@ -4705,6 +4774,8 @@ const LogoSelector = ({
     onWhiten,
     flat, // flat pure-white silhouette (no two-tone keylines); wins over whiten
     onFlat,
+    logo3d, // 3D/extruded art: keep the lit face, drop the extrusion; wins over flat
+    onLogo3d,
     invert, // invert logo: white -> transparent, black -> white (plate/sticker art)
     onInvert,
     touchUpUrl, // processed (un-flipped) logo for the B/W touch-up brush
@@ -4756,10 +4827,11 @@ const LogoSelector = ({
         <div className="flex gap-1 p-1 rounded-lg bg-surface-inset border border-border">
             <button
                 type="button"
-                className={tabCls(whiten && !flat)}
+                className={tabCls(whiten && !flat && !logo3d)}
                 onClick={() => {
                     onWhiten(true);
                     onFlat?.(false);
+                    onLogo3d?.(false);
                 }}
                 title="CL2K two-tone: white fills, black keylines"
             >
@@ -4767,10 +4839,11 @@ const LogoSelector = ({
             </button>
             <button
                 type="button"
-                className={tabCls(!whiten && !flat)}
+                className={tabCls(!whiten && !flat && !logo3d)}
                 onClick={() => {
                     onWhiten(false);
                     onFlat?.(false);
+                    onLogo3d?.(false);
                 }}
                 title="Keep the logo's original colors"
             >
@@ -4779,14 +4852,29 @@ const LogoSelector = ({
             {onFlat && (
                 <button
                     type="button"
-                    className={tabCls(flat)}
+                    className={tabCls(flat && !logo3d)}
                     onClick={() => {
                         onFlat(true);
                         onWhiten(false);
+                        onLogo3d?.(false);
                     }}
                     title="Flat pure-white silhouette (no keylines) — for outline/stylised logos"
                 >
                     Flat white
+                </button>
+            )}
+            {onLogo3d && (
+                <button
+                    type="button"
+                    className={tabCls(logo3d)}
+                    onClick={() => {
+                        onLogo3d(true);
+                        onFlat?.(false);
+                        onWhiten(false);
+                    }}
+                    title="3D / extruded art: keep the lit letter faces, drop the extrusion and shadow"
+                >
+                    3D
                 </button>
             )}
         </div>
@@ -5860,6 +5948,8 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
     // Flat white: paint the logo a pure-white silhouette (no two-tone keylines) —
     // for already-stylised/outline logos the CL2K-white pass mangles.
     const [flatWhite, setFlatWhite] = useState(false);
+    // 3D logo: keep extruded art's lit face, drop the extrusion. Wins over flat.
+    const [logo3d, setLogo3d] = useState(false);
     // Invert logo: white -> transparent, black -> white (plate/sticker art).
     const [invert, setInvert] = useState(false);
     const [previewUrl, setPreviewUrl] = useState(null); // UN-flipped (brush base)
@@ -5869,7 +5959,7 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
 
     // B/W touch-up strokes are keyed to the (logo, whiten, flat, invert) they were
     // drawn over so a stale mask becomes a derived no-op (same as the Builder).
-    const flipKey = `${customSig(customLogo) || logo}|${whiten}|${flatWhite}|${invert}`;
+    const flipKey = `${customSig(customLogo) || logo}|${whiten}|${flatWhite}|${logo3d}|${invert}`;
     const [flip, setFlip] = useState(null); // { key, b64 }
     const flipB64 = flip && flip.key === flipKey ? flip.b64 : null;
     const setFlipB64 = useCallback(b64 => setFlip(b64 ? { key: flipKey, b64 } : null), [flipKey]);
@@ -6079,6 +6169,7 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
             logo_b64: customLogo?.b64 || null,
             whiten,
             flat_white: flatWhite,
+            logo_3d: logo3d,
             invert,
             flip_b64: flipB64,
             erase_b64: eraseB64,
@@ -6091,6 +6182,7 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
             customLogo,
             whiten,
             flatWhite,
+            logo3d,
             invert,
             flipB64,
             eraseB64,
@@ -6106,7 +6198,7 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
     // Brush base: the processed logo WITHOUT any mask — it must stay stable as
     // strokes land, or the accumulated mask would be drawn over a moving target.
     // Both the touch-up and eraser brushes draw over this.
-    const sig = `${customSig(customLogo) || logo}|${whiten}|${flatWhite}|${invert}`;
+    const sig = `${customSig(customLogo) || logo}|${whiten}|${flatWhite}|${logo3d}|${invert}`;
     useEffect(() => {
         if (!hasLogo) return undefined;
         let cancelled = false;
@@ -6281,33 +6373,47 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                     <div className="flex items-center gap-2">
                         <button
                             type="button"
-                            className={seg(!whiten && !flatWhite)}
+                            className={seg(!whiten && !flatWhite && !logo3d)}
                             onClick={() => {
                                 setWhiten(false);
                                 setFlatWhite(false);
+                                setLogo3d(false);
                             }}
                         >
                             Original
                         </button>
                         <button
                             type="button"
-                            className={seg(whiten && !flatWhite)}
+                            className={seg(whiten && !flatWhite && !logo3d)}
                             onClick={() => {
                                 setWhiten(true);
                                 setFlatWhite(false);
+                                setLogo3d(false);
                             }}
                         >
                             CL2K white
                         </button>
                         <button
                             type="button"
-                            className={seg(flatWhite)}
+                            className={seg(flatWhite && !logo3d)}
                             onClick={() => {
                                 setFlatWhite(true);
                                 setWhiten(false);
+                                setLogo3d(false);
                             }}
                         >
                             Flat white
+                        </button>
+                        <button
+                            type="button"
+                            className={seg(logo3d)}
+                            onClick={() => {
+                                setLogo3d(true);
+                                setFlatWhite(false);
+                                setWhiten(false);
+                            }}
+                        >
+                            3D
                         </button>
                     </div>
                     <p className="text-xs text-fg-subtle">
@@ -6315,9 +6421,10 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                         asset). CL2K white recolours it to the CL2K two-tone — white fills, black
                         keylines — like a CL2K poster logo. Flat white paints the whole logo pure
                         white (no keylines) — best for outline or already-stylised logos the
-                        two-tone pass mangles.
+                        two-tone pass mangles. 3D keeps only the lit letter faces of extruded /
+                        bevelled art and drops the extrusion and shadow.
                     </p>
-                    {whiten && !flatWhite && (
+                    {whiten && !flatWhite && !logo3d && (
                         <label className="flex items-center gap-2 text-xs text-fg-muted cursor-pointer">
                             <input
                                 type="checkbox"
