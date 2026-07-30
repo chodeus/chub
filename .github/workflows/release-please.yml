@@ -18,6 +18,9 @@ jobs:
     needs: release
     if: needs.release.outputs.release_created == 'true'
     runs-on: ubuntu-latest
+    # Normal multi-arch build is ~13-17m. Without this a wedged build sits on the
+    # 6h default (and holds the ghcr-push group, queueing every later push).
+    timeout-minutes: 45
     permissions:
       contents: read
       packages: write
