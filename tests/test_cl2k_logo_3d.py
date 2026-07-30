@@ -63,6 +63,28 @@ def test_undecodable_bytes_are_refused_not_raised():
     assert flatten_3d_logo(b"not a png") is None
 
 
+def _long_shadow(h=300, w=900):
+    """Face top-left, extrusion and a long shadow trailing far down-right."""
+    a = np.zeros((h, w, 4), dtype=np.uint8)
+    a[120:260, 120:760] = (70, 70, 70, 255)
+    a[60:200, 60:700] = (150, 150, 150, 255)
+    a[20:160, 20:660] = (245, 245, 245, 255)
+    return a
+
+
+def test_process_logo_retrims_the_freed_extrusion_padding():
+    """Dropping the extrusion frees padding _place_logo would otherwise size and
+    bottom-align by — the returned box must be the FACE's box, edge to edge."""
+    pytest.importorskip("wand.image")
+    from backend.util.cl2k.renderer import process_logo
+
+    blob, w, h = process_logo(_png(_long_shadow()), whiten=True, logo_3d=True)
+    res = PILImage.open(io.BytesIO(blob)).convert("RGBA")
+    assert (w, h) == res.size
+    bbox = res.getchannel("A").point(lambda v: 255 if v > 8 else 0).getbbox()
+    assert bbox == (0, 0, w, h), f"transparent margin left around the face: {bbox} in {w}x{h}"
+
+
 @pytest.mark.parametrize("mode", ["logo_3d", "flat_white"])
 def test_process_logo_modes_produce_a_white_only_logo(mode):
     """logo_3d must rank above flat_white, and both must leave RGB pure white."""

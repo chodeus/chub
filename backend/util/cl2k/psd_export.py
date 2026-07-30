@@ -41,7 +41,7 @@ def _flat_white(logo: Image.Image) -> Image.Image:
 
 
 def _face_only(logo: Image.Image) -> Image.Image:
-    """3D logo face — Pillow mirror of ``renderer._face_only``."""
+    """3D logo face — Pillow mirror of ``renderer._face_only``, re-trim included."""
     from backend.util.cl2k.logo_extract import flatten_3d_logo
 
     buf = io.BytesIO()
@@ -49,7 +49,11 @@ def _face_only(logo: Image.Image) -> Image.Image:
     faced = flatten_3d_logo(buf.getvalue())
     if faced is None:
         return _flat_white(logo)
-    return Image.open(io.BytesIO(faced)).convert("RGBA")
+    face = Image.open(io.BytesIO(faced)).convert("RGBA")
+    # Mirrors renderer._face_only: the freed extrusion padding must go, or the
+    # layer is placed by the old silhouette's box (see geo.LOGO_TRIM_ALPHA).
+    bbox = face.getchannel("A").point(lambda v: 255 if v > geo.LOGO_TRIM_ALPHA else 0).getbbox()
+    return face.crop(bbox) if bbox else face
 
 
 def _whiten(logo: Image.Image, flat_fallback: bool = True) -> Image.Image:
