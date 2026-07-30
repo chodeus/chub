@@ -299,6 +299,53 @@ const fracToVPos = (frac, hF, band = 0) => {
     return clampVPos(d / (d < 0 ? up : vPosTravelDown(hF, band)));
 };
 
+// Kept region of the source (fractions) under the 2:3 cover fill — mirror of
+// _cover_resize's scale + crop. Shared by the crop overlay and the slider bounds
+// so they can't disagree about how much travel exists.
+const coverKeep = (ratio, zoom) => {
+    const target = 2 / 3;
+    const z = Math.max(CONTROL_RANGES.zoom.min, Math.min(zoom || 1, CONTROL_RANGES.zoom.max));
+    const wide = 1 / ratio > target;
+    const rawW = wide ? (target * ratio) / z : 1 / z;
+    const rawH = wide ? 1 / z : 1 / target / ratio / z;
+    // Either raw fraction over 1 means the art no longer fills the canvas —
+    // _cover_resize's zoom-out branch, which crops through the symmetric
+    // _v_pos_top and so has no extend band.
+    return {
+        wF: Math.min(1, rawW),
+        hF: Math.min(1, rawH),
+        band: rawW <= 1 && rawH <= 1 ? COVER_EXTEND_BAND : 0,
+    };
+};
+
+// Same for the asset frames (render_framed_art): fit scales the source INTO the
+// frame, cover fills it, and neither can hide an extend band.
+const framedKeep = (ratio, zoom, aspect, fitMode) => {
+    const z = Math.max(CONTROL_RANGES.zoom.min, Math.min(zoom || 1, CONTROL_RANGES.zoom.max));
+    const base = fitMode === 'fit' ? Math.min(1, aspect / ratio) : Math.max(1, aspect / ratio);
+    const s = base * z;
+    return { wF: Math.min(1, 1 / s), hF: Math.min(1, aspect / (ratio * s)), band: 0 };
+};
+
+// Slider bounds for a kept region: a direction with no travel collapses to 0, so
+// the control can't offer a range the renderer will ignore. `dead` = no travel at
+// all, which is a disabled slider rather than a 0..0 one.
+const vPosBounds = (hF, band = 0) => {
+    const min = vPosTravelUp(hF) > VPOS_TRAVEL_EPS ? CONTROL_RANGES.vPos.min : 0;
+    const max = vPosTravelDown(hF, band) > VPOS_TRAVEL_EPS ? CONTROL_RANGES.vPos.max : 0;
+    return { min, max, dead: min === 0 && max === 0 };
+};
+const clampToBounds = (v, { min, max }) => Math.max(min, Math.min(Number(v) || 0, max));
+// A collapsed direction is state, not a broken control — say which and why.
+const vPosTip = ({ min, max, dead }, fitMode) => {
+    if (dead)
+        return 'No vertical travel at this zoom — the art no longer fills the frame, so the renderer centres it. Raise Zoom to pan.';
+    if (fitMode === 'cover' && min === 0)
+        return 'Up needs source above the crop: this backdrop is wider than 2:3, so at this zoom the crop already fills its height. Raise Zoom past 1x for negative travel.';
+    if (max === 0) return 'Down has no travel at this zoom.';
+    return 'Slides the framing at the same size. Positive continues past the photo’s bottom edge into the gradient.';
+};
+
 const cl2kLogoBaseline = kind =>
     (kind || '').toLowerCase() === 'collection'
         ? CL2K_LOGO_BASELINE_COLLECTION
@@ -1143,6 +1190,39 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
     // wide backdrop isn't shrunk to a tiny strip.
     const [zoom, setZoom] = useState(saved.zoom ?? 1);
     const [focusX, setFocusX] = useState(saved.focusX ?? 0.5);
+    // Measured by CropFramer's <img onLoad>; owned here because the Vertical
+    // position slider's real range depends on it. null until measured.
+    const [backdropRatio, setBackdropRatio] = useState(null);
+
+    // How much travel v_pos really has at this ratio/zoom. Fill is the only
+    // two-sided mode; fit/extend anchor from the top over 0..1.
+    const vPosBoundsFor = useCallback((mode, ratio, z) => {
+        if (mode !== 'cover') return { min: 0, max: 1, dead: false };
+        if (!ratio) return { min: CONTROL_RANGES.vPos.min, max: 1, dead: false };
+        const { hF, band } = coverKeep(ratio, z);
+        return vPosBounds(hF, band);
+    }, []);
+    const vPosLimits = useMemo(
+        () => vPosBoundsFor(fitMode, backdropRatio, zoom),
+        [vPosBoundsFor, fitMode, backdropRatio, zoom]
+    );
+    // Raising a range input's `min` above its current `value` moves the thumb
+    // WITHOUT firing onChange, so the shown position would lie about the state.
+    // Every setter that can shrink the range re-clamps v_pos itself.
+    const setZoomClamped = useCallback(
+        z => {
+            setZoom(z);
+            setVPos(v => clampToBounds(v, vPosBoundsFor(fitMode, backdropRatio, z)));
+        },
+        [vPosBoundsFor, fitMode, backdropRatio]
+    );
+    const onBackdropRatio = useCallback(
+        r => {
+            setBackdropRatio(r);
+            setVPos(v => clampToBounds(v, vPosBoundsFor(fitMode, r, zoom)));
+        },
+        [vPosBoundsFor, fitMode, zoom]
+    );
 
     // Framing is tuned for ONE image: a crop box, zoom, focal point and vertical
     // pan chosen for backdrop A are meaningless on backdrop B, and silently
@@ -1156,16 +1236,20 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
         setVPos(0);
         setZoom(1);
         setFocusX(0.5);
+        setBackdropRatio(null); // re-measured by the new image's onLoad
     }, []);
     // fitMode is deliberately NOT reset — it's a per-user way of working
     // (Fill vs Fit), not a property of the chosen image.
     // v_pos is only two-sided in Fill: the fit/extend renderers anchor the photo
     // from the TOP over 0..1, so negative has no meaning there. Clamp on the way
     // in rather than let the backend silently floor it.
-    const setFitModeClamped = useCallback(mode => {
-        setFitMode(mode);
-        if (mode !== 'cover') setVPos(v => Math.max(0, v ?? 0));
-    }, []);
+    const setFitModeClamped = useCallback(
+        mode => {
+            setFitMode(mode);
+            setVPos(v => clampToBounds(v, vPosBoundsFor(mode, backdropRatio, zoom)));
+        },
+        [vPosBoundsFor, backdropRatio, zoom]
+    );
     const setBackdropExclusive = useCallback(
         p => {
             setBackdrop(p);
@@ -1899,7 +1983,10 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                     vPos={vPos}
                     setVPos={setVPos}
                     zoom={zoom}
-                    setZoom={setZoom}
+                    setZoom={setZoomClamped}
+                    vPosLimits={vPosLimits}
+                    backdropRatio={backdropRatio}
+                    onBackdropRatio={onBackdropRatio}
                     focusX={focusX}
                     onFocusChange={(fx, vp) => {
                         setFocusX(fx);
@@ -2064,6 +2151,9 @@ const RenderPanel = ({
     setVPos,
     zoom,
     setZoom,
+    vPosLimits,
+    backdropRatio,
+    onBackdropRatio,
     focusX,
     onFocusChange,
     item,
@@ -3190,6 +3280,8 @@ const RenderPanel = ({
                                     focusX={focusX}
                                     vPos={vPos}
                                     zoom={zoom}
+                                    ratio={backdropRatio}
+                                    onRatio={onBackdropRatio}
                                     onChange={onFocusChange}
                                 />
                             )}
@@ -3210,21 +3302,30 @@ const RenderPanel = ({
                                     className="w-full"
                                 />
                             </div>
-                            <div>
+                            <div title={vPosTip(vPosLimits, fitMode)}>
                                 <div className="flex justify-between mb-1.5">
-                                    <span className="text-sm text-fg-muted">Vertical position</span>
+                                    <span
+                                        className={`text-sm ${
+                                            vPosLimits.dead ? 'text-fg-subtle' : 'text-fg-muted'
+                                        }`}
+                                    >
+                                        Vertical position
+                                    </span>
                                     <span className="font-mono text-xs text-fg-subtle">
-                                        {Math.round((vPos ?? 0) * 100)}
+                                        {vPosLimits.dead ? '—' : Math.round((vPos ?? 0) * 100)}
                                     </span>
                                 </div>
                                 <input
                                     type="range"
-                                    min={fitMode === 'cover' ? CONTROL_RANGES.vPos.min : 0}
-                                    max={CONTROL_RANGES.vPos.max}
+                                    // Bounds are the travel the renderer can honour at
+                                    // this ratio/zoom — see vPosBounds.
+                                    min={vPosLimits.min}
+                                    max={vPosLimits.dead ? 1 : vPosLimits.max}
                                     step="0.01"
                                     value={vPos}
+                                    disabled={vPosLimits.dead}
                                     onChange={e => setVPos(Number(e.target.value))}
-                                    className="w-full"
+                                    className="w-full disabled:opacity-40"
                                 />
                             </div>
                             <div className="flex items-center justify-between">
@@ -4237,15 +4338,17 @@ const CropFramer = ({
     vPos,
     zoom,
     onChange,
+    // Natural aspect ratio (h/w) of the backdrop, owned by the parent: the
+    // Vertical position slider's real travel depends on it, and it must not be
+    // measured twice. Display-size independent, so the overlay/drag math stays
+    // correct when layout resizes the displayed image without a reload.
+    ratio,
+    onRatio,
     // Compact = the right-rail placement: no nested card chrome, image fills
     // the rail width. The big center preview is the result view.
     compact = false,
 }) => {
     const wrapRef = useRef(null);
-    // Natural aspect ratio (h/w) of the backdrop — display-size independent, so
-    // the overlay/drag math stays correct when layout (e.g. the live mock beside
-    // the image) resizes the displayed image without a reload.
-    const [ratio, setRatio] = useState(null);
     const dragging = useRef(false);
     const anchor = useRef(null); // box-draw anchor (normalized)
     const priorCrop = useRef(null); // crop to restore if the drag draws nothing usable
@@ -4256,21 +4359,7 @@ const CropFramer = ({
     // Cover-mode 2:3 box positioned by the focal point (fractions of the image).
     const coverRect = useMemo(() => {
         if (!ratio) return null;
-        const target = 2 / 3; // CL2K canvas aspect (w:h)
-        // _cover_resize scales by max(W/w, H/h) * zoom, so zoom divides the kept
-        // fraction on both axes. Ignoring it left the box claiming a 16:9 backdrop
-        // has no vertical travel at 1.5x, when that is exactly where v_pos gains
-        // its upward range. Neither axis can keep more than the whole source.
-        const z = Math.max(CONTROL_RANGES.zoom.min, Math.min(zoom || 1, CONTROL_RANGES.zoom.max));
-        const wide = 1 / ratio > target;
-        const rawW = wide ? (target * ratio) / z : 1 / z;
-        const rawH = wide ? 1 / z : 1 / target / ratio / z;
-        const wF = Math.min(1, rawW);
-        const hF = Math.min(1, rawH);
-        // Either raw fraction over 1 means the scaled art no longer fills the
-        // canvas, which is _cover_resize's zoom-out branch — symmetric _v_pos_top,
-        // no extend band.
-        const band = rawW <= 1 && rawH <= 1 ? COVER_EXTEND_BAND : 0;
+        const { wF, hF, band } = coverKeep(ratio, zoom);
         const leftF = Math.max(0, Math.min(focusX - wF / 2, 1 - wF));
         // Positive v_pos can pan past the source into the edge-extended band that
         // lands in the gradient; that band isn't on this image, so the box stops
@@ -4440,7 +4529,7 @@ const CropFramer = ({
                         src={imageUrl}
                         alt="Crop framing"
                         onLoad={e =>
-                            setRatio(
+                            onRatio(
                                 e.target.naturalWidth
                                     ? e.target.naturalHeight / e.target.naturalWidth
                                     : null
@@ -5156,42 +5245,50 @@ const LogoSelector = ({
 // surfaced in the right-column FRAMING group to mirror the Poster tab. The frame
 // itself (fit tabs + drag-to-pan) stays in the center SquareFramer; these drive
 // the same zoom / vPos state, so they stay in sync with a drag.
-const FramingSliders = ({ zoom, setZoom, vPos, setVPos }) => (
-    <>
-        <div>
-            <div className="flex justify-between mb-1.5">
-                <span className="text-sm text-fg-muted">Zoom</span>
-                <span className="font-mono text-xs text-fg-subtle">{(zoom ?? 1).toFixed(2)}×</span>
+const FramingSliders = ({ zoom, setZoom, vPos, setVPos, vPosLimits = null }) => {
+    const lim = vPosLimits || { min: CONTROL_RANGES.vPos.min, max: 1, dead: false };
+    return (
+        <>
+            <div>
+                <div className="flex justify-between mb-1.5">
+                    <span className="text-sm text-fg-muted">Zoom</span>
+                    <span className="font-mono text-xs text-fg-subtle">
+                        {(zoom ?? 1).toFixed(2)}×
+                    </span>
+                </div>
+                <input
+                    type="range"
+                    min="0.5"
+                    max="3"
+                    step="0.05"
+                    value={zoom ?? 1}
+                    onChange={e => setZoom(Number(e.target.value))}
+                    className="w-full"
+                />
             </div>
-            <input
-                type="range"
-                min="0.5"
-                max="3"
-                step="0.05"
-                value={zoom ?? 1}
-                onChange={e => setZoom(Number(e.target.value))}
-                className="w-full"
-            />
-        </div>
-        <div>
-            <div className="flex justify-between mb-1.5">
-                <span className="text-sm text-fg-muted">Vertical position</span>
-                <span className="font-mono text-xs text-fg-subtle">
-                    {Math.round((vPos ?? 0) * 100)}
-                </span>
+            <div title={vPosTip(lim, 'cover')}>
+                <div className="flex justify-between mb-1.5">
+                    <span className={`text-sm ${lim.dead ? 'text-fg-subtle' : 'text-fg-muted'}`}>
+                        Vertical position
+                    </span>
+                    <span className="font-mono text-xs text-fg-subtle">
+                        {lim.dead ? '—' : Math.round((vPos ?? 0) * 100)}
+                    </span>
+                </div>
+                <input
+                    type="range"
+                    min={lim.min}
+                    max={lim.dead ? 1 : lim.max}
+                    step="0.01"
+                    value={vPos ?? 0}
+                    disabled={lim.dead}
+                    onChange={e => setVPos(Number(e.target.value))}
+                    className="w-full disabled:opacity-40"
+                />
             </div>
-            <input
-                type="range"
-                min={CONTROL_RANGES.vPos.min}
-                max={CONTROL_RANGES.vPos.max}
-                step="0.01"
-                value={vPos ?? 0}
-                onChange={e => setVPos(Number(e.target.value))}
-                className="w-full"
-            />
-        </div>
-    </>
-);
+        </>
+    );
+};
 
 const SquareFramer = ({
     imageUrl,
@@ -5205,22 +5302,16 @@ const SquareFramer = ({
     aspect = 1, // target frame h/w: 1 = square, 9/16 = background art
     title = 'Crop to square',
     frameName = '1:1 square',
+    ratio, // natural h/w, owned by the panel (the vPos slider's range needs it)
+    onRatio,
 }) => {
     const wrapRef = useRef(null);
-    const [ratio, setRatio] = useState(null); // natural h/w
     const dragging = useRef(false);
     // The kept region (fraction of the source shown in the target frame) under the
     // current Fill/Fit + zoom — mirrors render_framed_art's scale+pan maths.
     const rect = useMemo(() => {
         if (!ratio) return null;
-        const z = Math.max(CONTROL_RANGES.zoom.min, Math.min(zoom || 1, CONTROL_RANGES.zoom.max));
-        // frame width = 1, height = aspect; source width = 1, height = ratio (h/w).
-        const base = fitMode === 'fit' ? Math.min(1, aspect / ratio) : Math.max(1, aspect / ratio);
-        const s = base * z;
-        const nw = s; // scaled source width (frame width = 1)
-        const nh = ratio * s; // scaled source height
-        const wF = Math.min(1, 1 / nw);
-        const hF = Math.min(1, aspect / nh);
+        const { wF, hF } = framedKeep(ratio, zoom, aspect, fitMode);
         return {
             left: Math.max(0, Math.min(focusX - wF / 2, 1 - wF)),
             top: Math.max(0, Math.min(vPosToFrac(vPos, hF) - hF / 2, 1 - hF)),
@@ -5323,7 +5414,7 @@ const SquareFramer = ({
                     src={imageUrl}
                     alt={title}
                     onLoad={e =>
-                        setRatio(
+                        onRatio(
                             e.target.naturalWidth
                                 ? e.target.naturalHeight / e.target.naturalWidth
                                 : null
@@ -5406,8 +5497,42 @@ const SquareArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
     };
     const [focusX, setFocusX] = useState(0.5);
     const [vPos, setVPos] = useState(0);
-    const [fitMode, setFitMode] = useState('cover'); // cover (fill) | fit (contain)
-    const [zoom, setZoom] = useState(1);
+    const [fitMode, setFitModeRaw] = useState('cover'); // cover (fill) | fit (contain)
+    const [zoom, setZoomRaw] = useState(1);
+    // Measured from the source image; the Vertical position slider's real travel
+    // depends on it, so it lives here rather than inside the framer.
+    const [srcRatio, setSrcRatio] = useState(null);
+    const vPosLimitsFor = useCallback((mode, ratio, z) => {
+        if (!ratio) return { min: CONTROL_RANGES.vPos.min, max: 1, dead: false };
+        return vPosBounds(framedKeep(ratio, z, 1, mode).hF);
+    }, []);
+    const vPosLimits = useMemo(
+        () => vPosLimitsFor(fitMode, srcRatio, zoom),
+        [vPosLimitsFor, fitMode, srcRatio, zoom]
+    );
+    // Raising a range input's `min` past its value moves the thumb without firing
+    // onChange, so every setter that can shrink the range re-clamps v_pos.
+    const setZoom = useCallback(
+        z => {
+            setZoomRaw(z);
+            setVPos(v => clampToBounds(v, vPosLimitsFor(fitMode, srcRatio, z)));
+        },
+        [vPosLimitsFor, fitMode, srcRatio]
+    );
+    const setFitMode = useCallback(
+        mode => {
+            setFitModeRaw(mode);
+            setVPos(v => clampToBounds(v, vPosLimitsFor(mode, srcRatio, zoom)));
+        },
+        [vPosLimitsFor, srcRatio, zoom]
+    );
+    const onSrcRatio = useCallback(
+        r => {
+            setSrcRatio(r);
+            setVPos(v => clampToBounds(v, vPosLimitsFor(fitMode, r, zoom)));
+        },
+        [vPosLimitsFor, fitMode, zoom]
+    );
     const [seasonNumber, setSeasonNumber] = useState(''); // '' = show-level asset
     const [previewUrl, setPreviewUrl] = useState(null);
     const [previewing, setPreviewing] = useState(false);
@@ -5594,6 +5719,8 @@ const SquareArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                             setFitMode={setFitMode}
                             zoom={zoom}
                             setZoom={setZoom}
+                            ratio={srcRatio}
+                            onRatio={onSrcRatio}
                         />
                     </div>
                 )}
@@ -5629,7 +5756,13 @@ const SquareArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
             <section className="bg-surface border border-border rounded-[12px] p-4 flex flex-col gap-3.5">
                 <div className="flex flex-col gap-3">
                     <StudioGroupLabel>Framing</StudioGroupLabel>
-                    <FramingSliders zoom={zoom} setZoom={setZoom} vPos={vPos} setVPos={setVPos} />
+                    <FramingSliders
+                        zoom={zoom}
+                        setZoom={setZoom}
+                        vPos={vPos}
+                        setVPos={setVPos}
+                        vPosLimits={vPosLimits}
+                    />
                 </div>
                 <StudioAccordion title="Recently generated">
                     <HistorySection toast={toast} />
@@ -5657,8 +5790,42 @@ const BackgroundArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast 
     };
     const [focusX, setFocusX] = useState(0.5);
     const [vPos, setVPos] = useState(0);
-    const [fitMode, setFitMode] = useState('cover'); // cover (fill) | fit (contain)
-    const [zoom, setZoom] = useState(1);
+    const [fitMode, setFitModeRaw] = useState('cover'); // cover (fill) | fit (contain)
+    const [zoom, setZoomRaw] = useState(1);
+    // Measured from the source image; the Vertical position slider's real travel
+    // depends on it, so it lives here rather than inside the framer.
+    const [srcRatio, setSrcRatio] = useState(null);
+    const vPosLimitsFor = useCallback((mode, ratio, z) => {
+        if (!ratio) return { min: CONTROL_RANGES.vPos.min, max: 1, dead: false };
+        return vPosBounds(framedKeep(ratio, z, 9 / 16, mode).hF);
+    }, []);
+    const vPosLimits = useMemo(
+        () => vPosLimitsFor(fitMode, srcRatio, zoom),
+        [vPosLimitsFor, fitMode, srcRatio, zoom]
+    );
+    // Raising a range input's `min` past its value moves the thumb without firing
+    // onChange, so every setter that can shrink the range re-clamps v_pos.
+    const setZoom = useCallback(
+        z => {
+            setZoomRaw(z);
+            setVPos(v => clampToBounds(v, vPosLimitsFor(fitMode, srcRatio, z)));
+        },
+        [vPosLimitsFor, fitMode, srcRatio]
+    );
+    const setFitMode = useCallback(
+        mode => {
+            setFitModeRaw(mode);
+            setVPos(v => clampToBounds(v, vPosLimitsFor(mode, srcRatio, zoom)));
+        },
+        [vPosLimitsFor, srcRatio, zoom]
+    );
+    const onSrcRatio = useCallback(
+        r => {
+            setSrcRatio(r);
+            setVPos(v => clampToBounds(v, vPosLimitsFor(fitMode, r, zoom)));
+        },
+        [vPosLimitsFor, fitMode, zoom]
+    );
     const [resolution, setResolution] = useState('1080p'); // 1080p | 4k (Plex dims)
     const [seasonNumber, setSeasonNumber] = useState(''); // '' = show-level asset
     const [previewUrl, setPreviewUrl] = useState(null);
@@ -5849,6 +6016,8 @@ const BackgroundArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast 
                             setFitMode={setFitMode}
                             zoom={zoom}
                             setZoom={setZoom}
+                            ratio={srcRatio}
+                            onRatio={onSrcRatio}
                             aspect={9 / 16}
                             title="Crop to 16:9"
                             frameName="16:9 frame"
@@ -5919,7 +6088,13 @@ const BackgroundArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast 
                             </button>
                         </div>
                     </div>
-                    <FramingSliders zoom={zoom} setZoom={setZoom} vPos={vPos} setVPos={setVPos} />
+                    <FramingSliders
+                        zoom={zoom}
+                        setZoom={setZoom}
+                        vPos={vPos}
+                        setVPos={setVPos}
+                        vPosLimits={vPosLimits}
+                    />
                 </div>
                 <StudioAccordion title="Recently generated">
                     <HistorySection toast={toast} />
