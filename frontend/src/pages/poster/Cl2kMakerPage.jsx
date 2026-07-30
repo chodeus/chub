@@ -3846,6 +3846,9 @@ const AiPanel = ({
 // ~33MB RGBA per mounted canvas (inline + pop-out), and the backend resizes the
 // mask to the image anyway.
 const MASK_BACKING_MAX = 2048;
+// Half-opaque pixels needed before a mask counts as live — below this it is
+// anti-aliasing left by an erase, not a stroke.
+const MASK_MIN_SOLID_PX = 4;
 
 /**
  * Brush a white-on-black mask over the backdrop. White = remove. The canvas
@@ -3987,15 +3990,16 @@ const BrushMask = ({
         // Erasing the last stroke away must report "no mask", not a blank PNG —
         // a blank mask still reads as a live mask (Send to AI erases nothing).
         if (brushMode === 'erase') {
+            // Strokes stamp at full opacity, so a surviving one has a solid core.
+            // Erasing over one leaves an anti-aliased rim instead — counting ANY
+            // non-zero alpha called that a live mask, so erasing everything away
+            // still armed Send to AI on a mask that erases nothing.
             const px = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
-            let painted = false;
-            for (let i = 3; i < px.length; i += 4) {
-                if (px[i]) {
-                    painted = true;
-                    break;
-                }
+            let solid = 0;
+            for (let i = 3; i < px.length && solid < MASK_MIN_SOLID_PX; i += 4) {
+                if (px[i] >= 128) solid++;
             }
-            if (!painted) {
+            if (solid < MASK_MIN_SOLID_PX) {
                 onMaskChange(null);
                 return;
             }
