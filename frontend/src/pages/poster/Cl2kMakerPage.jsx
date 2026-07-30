@@ -6124,12 +6124,14 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
     const [busy, setBusy] = useState(false);
     const hasLogo = !!(logo || customLogo);
 
-    // B/W touch-up strokes are keyed to the (logo, whiten, flat, invert) they were
-    // drawn over so a stale mask becomes a derived no-op (same as the Builder).
-    const flipKey = `${customSig(customLogo) || logo}|${whiten}|${flatWhite}|${logo3d}|${invert}`;
+    // The logo + colour mode a processed result belongs to. Strokes and the brush
+    // base are both keyed to it, so a stale mask becomes a derived no-op instead
+    // of needing a reset (same as the Builder). ONE literal: a new colour field
+    // added to only one of the two keys would silently un-key the other.
+    const colorKey = `${customSig(customLogo) || logo}|${whiten}|${flatWhite}|${logo3d}|${invert}`;
     const [flip, setFlip] = useState(null); // { key, b64 }
-    const flipB64 = flip && flip.key === flipKey ? flip.b64 : null;
-    const setFlipB64 = useCallback(b64 => setFlip(b64 ? { key: flipKey, b64 } : null), [flipKey]);
+    const flipB64 = flip && flip.key === colorKey ? flip.b64 : null;
+    const setFlipB64 = useCallback(b64 => setFlip(b64 ? { key: colorKey, b64 } : null), [colorKey]);
     // Eraser strokes are keyed to the LOGO only (erasing is geometric — it survives
     // colour-mode switches, unlike the colour-dependent B/W flip).
     const eraseKey = customSig(customLogo) || logo;
@@ -6365,7 +6367,6 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
     // Brush base: the processed logo WITHOUT any mask — it must stay stable as
     // strokes land, or the accumulated mask would be drawn over a moving target.
     // Both the touch-up and eraser brushes draw over this.
-    const sig = `${customSig(customLogo) || logo}|${whiten}|${flatWhite}|${logo3d}|${invert}`;
     useEffect(() => {
         if (!hasLogo) return undefined;
         let cancelled = false;
@@ -6393,7 +6394,7 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
             clearTimeout(t);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [sig]);
+    }, [colorKey]);
     useEffect(
         () => () => {
             if (previewUrl) URL.revokeObjectURL(previewUrl);
