@@ -130,7 +130,14 @@ const LOGO_SOURCES = [...ART_SOURCES, { key: 'gdrive', label: 'GDrive', icon: 'c
 // Stable identity for an uploaded image ({ b64, name }) in change-detection
 // signatures. A b64-prefix slice can collide: the first ~24 bytes of a JPEG are
 // a format header that different files from the same exporter share.
-const customSig = c => (c ? `${c.name}:${c.b64?.length || 0}` : null);
+// Identity of an uploaded asset, for keying masks/previews to the image they were
+// made for. Name+length alone collides (same filename is normal), so sample the
+// encoded head and tail too — for real image data those carry the header fields
+// and the trailing checksum.
+const customSig = c =>
+    c
+        ? `${c.name}:${c.b64?.length || 0}:${(c.b64 || '').slice(0, 32)}:${(c.b64 || '').slice(-32)}`
+        : null;
 
 const SourceSelector = ({ value, onChange, sources = ART_SOURCES }) => (
     <div className="flex items-center gap-1 flex-wrap">
@@ -292,6 +299,9 @@ const vPosToFrac = (vPos, hF, band = 0) => {
 // drive it from a horizontal drag.
 const VPOS_TRAVEL_EPS = 1e-4; // sub-pixel travel is no travel (a near-2:3 source)
 const fracToVPos = (frac, hF, band = 0) => {
+    // Unmeasured box (ratio not loaded): hF is undefined, which clamps to 0 and
+    // would read as FULL travel — an early drag would then invent a v_pos.
+    if (!Number.isFinite(hF)) return null;
     const up = vPosTravelUp(hF);
     if (up <= VPOS_TRAVEL_EPS) return null;
     const d = Math.max(-up, Math.min(frac - 0.5, up));
@@ -335,7 +345,8 @@ const vPosBounds = (hF, band = 0) => {
     const max = vPosTravelDown(hF, band) > VPOS_TRAVEL_EPS ? CONTROL_RANGES.vPos.max : 0;
     return { min, max, dead: min === 0 && max === 0 };
 };
-const clampToBounds = (v, { min, max }) => Math.max(min, Math.min(Number(v) || 0, max));
+const clampToBounds = (v, { min, max }) =>
+    Math.max(min, Math.min(Number.isFinite(Number(v)) ? Number(v) : 0, max));
 // A collapsed direction is state, not a broken control — say which and why.
 // `oneSided`: the poster's fit/extend renderers anchor from the TOP over 0..1, so
 // negative is meaningless there by design rather than for want of source.
@@ -4942,6 +4953,7 @@ const LogoSelector = ({
                     onWhiten(false);
                     onFlat?.(false);
                     onLogo3d?.(false);
+                    onInvert?.(false); // hidden outside CL2K white — don't keep sending it
                 }}
                 title="Keep the logo's original colors"
             >
@@ -4955,6 +4967,7 @@ const LogoSelector = ({
                         onFlat(true);
                         onWhiten(false);
                         onLogo3d?.(false);
+                        onInvert?.(false);
                     }}
                     title="Flat pure-white silhouette (no keylines) — for outline/stylised logos"
                 >
@@ -4969,6 +4982,7 @@ const LogoSelector = ({
                         onLogo3d(true);
                         onFlat?.(false);
                         onWhiten(false);
+                        onInvert?.(false);
                     }}
                     title="3D / extruded art: keep the lit letter faces, drop the extrusion and shadow"
                 >
@@ -6370,14 +6384,20 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
     useEffect(() => {
         if (!hasLogo) return undefined;
         let cancelled = false;
+        // Abort in cleanup like the square/background previews: a rapid colour-mode
+        // change would otherwise leave the superseded render running server-side.
+        const aborter = new AbortController();
         const t = setTimeout(async () => {
             setPreviewing(true);
             try {
-                const blob = await cl2kMakerAPI.logoAssetPreview({
-                    ...reqRef.current,
-                    flip_b64: null,
-                    erase_b64: null,
-                });
+                const blob = await cl2kMakerAPI.logoAssetPreview(
+                    {
+                        ...reqRef.current,
+                        flip_b64: null,
+                        erase_b64: null,
+                    },
+                    { signal: aborter.signal }
+                );
                 if (!cancelled)
                     setPreviewUrl(prev => {
                         if (prev) URL.revokeObjectURL(prev);
@@ -6391,6 +6411,7 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
         }, 300);
         return () => {
             cancelled = true;
+            aborter.abort();
             clearTimeout(t);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -6546,6 +6567,7 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                                 setWhiten(false);
                                 setFlatWhite(false);
                                 setLogo3d(false);
+                                setInvert(false); // hidden outside CL2K white
                             }}
                         >
                             Original
@@ -6568,6 +6590,7 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                                 setFlatWhite(true);
                                 setWhiten(false);
                                 setLogo3d(false);
+                                setInvert(false);
                             }}
                         >
                             Flat white
@@ -6579,6 +6602,7 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                                 setLogo3d(true);
                                 setFlatWhite(false);
                                 setWhiten(false);
+                                setInvert(false);
                             }}
                         >
                             3D
