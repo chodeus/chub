@@ -78,11 +78,16 @@ def test_process_logo_retrims_the_freed_extrusion_padding():
     pytest.importorskip("wand.image")
     from backend.util.cl2k.renderer import process_logo
 
-    blob, w, h = process_logo(_png(_long_shadow()), whiten=True, logo_3d=True)
+    src = _png(_long_shadow())
+    blob, w, h = process_logo(src, whiten=True, logo_3d=True)
     res = PILImage.open(io.BytesIO(blob)).convert("RGBA")
     assert (w, h) == res.size
     bbox = res.getchannel("A").point(lambda v: 255 if v > 8 else 0).getbbox()
     assert bbox == (0, 0, w, h), f"transparent margin left around the face: {bbox} in {w}x{h}"
+    # A trimmed box alone would also pass on the flat-white fallback, which keeps
+    # the whole silhouette — so require that the extrusion actually went.
+    _flat, fw, fh = process_logo(src, whiten=True, flat_white=True)
+    assert w < fw and h < fh, f"face box {w}x{h} not smaller than the silhouette {fw}x{fh}"
 
 
 @pytest.mark.parametrize("mode", ["logo_3d", "flat_white"])

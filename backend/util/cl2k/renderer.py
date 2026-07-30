@@ -500,10 +500,7 @@ def _face_only(logo: Image) -> None:
         return
     with Image(blob=faced) as face:
         logo.composite(face, left=0, top=0, operator="copy")
-    # Dropping the extrusion frees the padding it occupied. Both callers trimmed
-    # BEFORE this, so without a re-trim the box they size and bottom-align is the
-    # old silhouette's — floating the letters above the baseline.
-    _trim_logo(logo)
+    _trim_logo(logo)  # callers trimmed the OLD silhouette; the extrusion's padding is now free
 
 
 def _apply_whiten(logo: Image, *, invert: bool) -> None:

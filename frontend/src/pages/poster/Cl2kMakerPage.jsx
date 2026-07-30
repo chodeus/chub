@@ -337,11 +337,14 @@ const vPosBounds = (hF, band = 0) => {
 };
 const clampToBounds = (v, { min, max }) => Math.max(min, Math.min(Number(v) || 0, max));
 // A collapsed direction is state, not a broken control — say which and why.
-const vPosTip = ({ min, max, dead }, fitMode) => {
+// `oneSided`: the poster's fit/extend renderers anchor from the TOP over 0..1, so
+// negative is meaningless there by design rather than for want of source.
+const vPosTip = ({ min, max, dead }, { oneSided = false, frame = 'crop' } = {}) => {
     if (dead)
-        return 'No vertical travel at this zoom — the art no longer fills the frame, so the renderer centres it. Raise Zoom to pan.';
-    if (fitMode === 'cover' && min === 0)
-        return 'Up needs source above the crop: this backdrop is wider than 2:3, so at this zoom the crop already fills its height. Raise Zoom past 1x for negative travel.';
+        return `No vertical travel at this zoom — the art no longer fills the ${frame}, so the renderer centres it. Raise Zoom to pan.`;
+    if (oneSided) return `Positions the fitted photo from the top of the ${frame}.`;
+    if (min === 0)
+        return `Up needs source above the ${frame}: at this zoom the kept region already fills its height. Raise Zoom past 1x for negative travel.`;
     if (max === 0) return 'Down has no travel at this zoom.';
     return 'Slides the framing at the same size. Positive continues past the photo’s bottom edge into the gradient.';
 };
@@ -3302,7 +3305,12 @@ const RenderPanel = ({
                                     className="w-full"
                                 />
                             </div>
-                            <div title={vPosTip(vPosLimits, fitMode)}>
+                            <div
+                                title={vPosTip(vPosLimits, {
+                                    oneSided: fitMode !== 'cover',
+                                    frame: '2:3 crop',
+                                })}
+                            >
                                 <div className="flex justify-between mb-1.5">
                                     <span
                                         className={`text-sm ${
@@ -5245,7 +5253,14 @@ const LogoSelector = ({
 // surfaced in the right-column FRAMING group to mirror the Poster tab. The frame
 // itself (fit tabs + drag-to-pan) stays in the center SquareFramer; these drive
 // the same zoom / vPos state, so they stay in sync with a drag.
-const FramingSliders = ({ zoom, setZoom, vPos, setVPos, vPosLimits = null }) => {
+const FramingSliders = ({
+    zoom,
+    setZoom,
+    vPos,
+    setVPos,
+    vPosLimits = null,
+    frameLabel = 'frame',
+}) => {
     const lim = vPosLimits || { min: CONTROL_RANGES.vPos.min, max: 1, dead: false };
     return (
         <>
@@ -5266,7 +5281,7 @@ const FramingSliders = ({ zoom, setZoom, vPos, setVPos, vPosLimits = null }) => 
                     className="w-full"
                 />
             </div>
-            <div title={vPosTip(lim, 'cover')}>
+            <div title={vPosTip(lim, { frame: frameLabel })}>
                 <div className="flex justify-between mb-1.5">
                     <span className={`text-sm ${lim.dead ? 'text-fg-subtle' : 'text-fg-muted'}`}>
                         Vertical position
@@ -5762,6 +5777,7 @@ const SquareArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                         vPos={vPos}
                         setVPos={setVPos}
                         vPosLimits={vPosLimits}
+                        frameLabel="1:1 square"
                     />
                 </div>
                 <StudioAccordion title="Recently generated">
@@ -6094,6 +6110,7 @@ const BackgroundArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast 
                         vPos={vPos}
                         setVPos={setVPos}
                         vPosLimits={vPosLimits}
+                        frameLabel="16:9 frame"
                     />
                 </div>
                 <StudioAccordion title="Recently generated">
