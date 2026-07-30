@@ -1798,6 +1798,10 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
                 flat_white: flatWhite,
                 logo_3d: logo3d,
                 invert: invertLogo,
+                // Every season reuses the SAME logo, so it must carry the same
+                // touch-up/erase edits the preview was built with.
+                logo_flip_b64: logoFlipB64,
+                logo_erase_b64: logoEraseB64,
                 fit_mode: fitMode,
                 focus_x: focusX,
                 crop_x: (fitMode === 'fit' || fitMode === 'extend') && crop ? crop.x : null,
@@ -1863,6 +1867,8 @@ const Builder = ({ item, config, uploadStatus, onReset, onItemChange, toast }) =
         flatWhite,
         logo3d,
         invertLogo,
+        logoFlipB64,
+        logoEraseB64,
         saveTargets,
         fitMode,
         focusX,

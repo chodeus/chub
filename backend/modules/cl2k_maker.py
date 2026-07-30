@@ -1366,6 +1366,8 @@ def generate_seasons(
     flat_white: bool = False,  # paint the logo a flat pure-white silhouette
     logo_3d: bool = False,  # extruded art -> flat-white lit face; wins over flat_white
     invert: bool = False,  # plate logo -> clearlogo (white->transparent, black->white)
+    logo_flip_bytes: Optional[bytes] = None,  # B/W touch-up regions (mask PNG)
+    logo_erase_bytes: Optional[bytes] = None,  # erase regions (mask PNG, white=erase)
     force: bool = False,
     backdrop_path: Optional[str] = None,
     backdrop_bytes: Optional[bytes] = None,
@@ -1419,6 +1421,8 @@ def generate_seasons(
                 flat_white=flat_white,
                 logo_3d=logo_3d,
                 invert=invert,
+                logo_flip_bytes=logo_flip_bytes,
+                logo_erase_bytes=logo_erase_bytes,
                 force=force,
                 save_local=save_local,
                 upload_gdrive=upload_gdrive,

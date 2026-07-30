@@ -145,3 +145,49 @@ def test_each_season_reads_live_config(worker, logger, monkeypatch):
 
     assert len(seen) == 3, "config was snapshotted for the batch, not read per season"
     assert _job_state(jid)["status"] == "done"
+
+
+def test_the_batch_carries_the_logo_edits_the_preview_was_built_with(logger, monkeypatch):
+    """A season batch reuses ONE logo, so it must reuse that logo's edits too.
+
+    The masks are keyed to the logo in the UI, so dropping them here doesn't fail —
+    it quietly bulk-generates every season from an unedited logo while the preview
+    beside it shows the edited one.
+    """
+    seen = {}
+
+    def _capture(**kw):
+        seen.update(kw)
+        for n in kw["seasons"]:
+            kw["progress_cb"]({"season": int(n), "status": "generated"})
+        return {"results": []}
+
+    monkeypatch.setattr(api, "load_config", lambda *a, **k: "cfg")
+    monkeypatch.setattr(api, "generate_seasons", _capture)
+    jid = api._new_season_job(1, "Some Show")
+    req = api.SeasonsRequest(
+        seasons=[1],
+        tmdb_id=1,
+        title="Some Show",
+        logo_flip_b64="aGVsbG8=",  # "hello"
+        logo_erase_b64="d29ybGQ=",  # "world"
+    )
+
+    api._run_seasons_job(jid, object(), logger, req)
+
+    assert _job_state(jid)["status"] == "done"
+    assert seen.get("logo_flip_bytes") == b"hello"
+    assert seen.get("logo_erase_bytes") == b"world"
+
+
+@pytest.mark.parametrize("field", ["logo_flip_b64", "logo_erase_b64"])
+def test_malformed_logo_edit_masks_fail_the_job_rather_than_the_thread(field, logger, monkeypatch):
+    """Same never-raise contract as the other blobs — decoded inside the guard."""
+    monkeypatch.setattr(api, "load_config", lambda *a, **k: "cfg")
+    monkeypatch.setattr(api, "generate_seasons", _fake_generate_seasons)
+    jid = api._new_season_job(1, "Some Show")
+    req = api.SeasonsRequest(seasons=[1], tmdb_id=1, title="Some Show", **{field: "!!!not-b64"})
+
+    api._run_seasons_job(jid, object(), logger, req)
+
+    assert _job_state(jid)["status"] == "error"
