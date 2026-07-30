@@ -771,7 +771,7 @@ def generate_logo_asset(
         imdb_id=imdb_id,
         season_number=None,
         backdrop_path=None,
-        logo_source="logo-white" if (whiten or flat_white) else "logo",
+        logo_source="logo-white" if (whiten or flat_white or logo_3d) else "logo",
         save_local=save_local,
         upload_gdrive=upload_gdrive,
         image_type="logo",

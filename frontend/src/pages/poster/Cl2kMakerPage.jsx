@@ -339,13 +339,14 @@ const clampToBounds = (v, { min, max }) => Math.max(min, Math.min(Number(v) || 0
 // A collapsed direction is state, not a broken control — say which and why.
 // `oneSided`: the poster's fit/extend renderers anchor from the TOP over 0..1, so
 // negative is meaningless there by design rather than for want of source.
-const vPosTip = ({ min, max, dead }, { oneSided = false, frame = 'crop' } = {}) => {
+const vPosTip = ({ min, dead }, { oneSided = false, frame = 'crop' } = {}) => {
     if (dead)
         return `No vertical travel at this zoom — the art no longer fills the ${frame}, so the renderer centres it. Raise Zoom to pan.`;
     if (oneSided) return `Positions the fitted photo from the top of the ${frame}.`;
     if (min === 0)
         return `Up needs source above the ${frame}: at this zoom the kept region already fills its height. Raise Zoom past 1x for negative travel.`;
-    if (max === 0) return 'Down has no travel at this zoom.';
+    // No down-only case to handle: down travel is up + the band, so losing it
+    // means losing both, which `dead` already caught.
     return 'Slides the framing at the same size. Positive continues past the photo’s bottom edge into the gradient.';
 };
 
