@@ -136,7 +136,7 @@ const LOGO_SOURCES = [...ART_SOURCES, { key: 'gdrive', label: 'GDrive', icon: 'c
 // and the trailing checksum.
 const customSig = c =>
     c
-        ? `${c.name}:${c.b64?.length || 0}:${(c.b64 || '').slice(0, 32)}:${(c.b64 || '').slice(-32)}`
+        ? `${c.name}:${c.b64?.length ?? 0}:${(c.b64 ?? '').slice(0, 32)}:${(c.b64 ?? '').slice(-32)}`
         : null;
 
 const SourceSelector = ({ value, onChange, sources = ART_SOURCES }) => (
@@ -4418,6 +4418,9 @@ const CropFramer = ({
             e.preventDefault();
             const p = pointFromEvent(e);
             if (!p) return;
+            // Unmeasured image: fracToVPos already refuses, but focusX would still
+            // move — invisibly, then the crop jumps once onLoad reports the ratio.
+            if (!ratio && !isBox) return;
             dragging.current = true;
             if (isBox) {
                 // Don't write the crop yet: a click that never moves must leave
@@ -4429,11 +4432,12 @@ const CropFramer = ({
                 onChange(p.nx, vp === null ? vPos : vp);
             }
         },
-        [isBox, pointFromEvent, onChange, crop, coverRect, vPos]
+        [isBox, pointFromEvent, onChange, crop, coverRect, vPos, ratio]
     );
     const moveEvt = useCallback(
         e => {
             if (!dragging.current) return;
+            if (!ratio && !isBox) return;
             const p = pointFromEvent(e);
             if (!p) return;
             if (isBox && anchor.current) {
@@ -4449,7 +4453,7 @@ const CropFramer = ({
                 onChange(p.nx, vp === null ? vPos : vp);
             }
         },
-        [isBox, pointFromEvent, onChange, setCrop, coverRect, vPos]
+        [isBox, pointFromEvent, onChange, setCrop, coverRect, vPos, ratio]
     );
     const up = useCallback(() => {
         // A tiny accidental box reverts to the crop it replaced (whole image if
@@ -5419,6 +5423,7 @@ const SquareFramer = ({
     const down = useCallback(
         e => {
             e.preventDefault();
+            if (!ratio) return; // see CropFramer: focusX would move before measurement
             dragging.current = true;
             const p = point(e);
             // ny is a 0..1 fraction of the image; vPos is -1..1 centred on 0, and
@@ -5427,17 +5432,17 @@ const SquareFramer = ({
             const vp = fracToVPos(p.ny, rect?.h);
             onChange(p.nx, vp === null ? vPos : vp);
         },
-        [point, onChange, rect, vPos]
+        [point, onChange, rect, vPos, ratio]
     );
     const move = useCallback(
         e => {
-            if (!dragging.current) return;
+            if (!dragging.current || !ratio) return;
             const p = point(e);
             if (!p) return;
             const vp = fracToVPos(p.ny, rect?.h);
             onChange(p.nx, vp === null ? vPos : vp);
         },
-        [point, onChange, rect, vPos]
+        [point, onChange, rect, vPos, ratio]
     );
     const up = useCallback(() => {
         dragging.current = false;
