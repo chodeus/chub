@@ -214,13 +214,38 @@ def _resolve_and_render(
     allow_ai_extend: bool = True,
     place_logo: bool = True,
 ) -> Tuple[Optional[bytes], Dict[str, Any]]:
-    """Resolve art (textless backdrop + logo) and render.
-
-    The logo source chain is: ``custom_logo_bytes`` (an uploaded PNG, used as-is)
-    -> ``logo_path`` (a chosen TMDB/fanart logo) -> auto TMDB -> fanart.tv ->
-    generated text wordmark. Returns ``(jpeg_bytes, info)``; ``jpeg_bytes`` is None
-    with ``info['reason']`` set when no textless backdrop is available. Shared by
-    the preview endpoint and :func:`generate_for_item`.
+    """
+    Resolve the artwork inputs and render a CL2K poster.
+    
+    Explicit logo bytes or a selected logo path take precedence over automatically
+    resolved artwork. Missing logos may fall back to fanart artwork or a generated
+    text wordmark. Season renders can reuse the stored show backdrop, and season
+    labels are derived from the season number when needed.
+    
+    Parameters:
+        kind (str): Poster type, such as ``movie``, ``show``, ``collection``, or
+            ``season``.
+        season_number (Optional[int]): Season number used for backdrop reuse and
+            automatic season labeling.
+        season_text (str): Label to render for a season poster.
+        backdrop_path (Optional[str]): Selected backdrop asset path.
+        logo_path (Optional[str]): Selected logo asset path.
+        custom_logo_bytes (Optional[bytes]): Uploaded logo data that takes
+            precedence over other logo sources.
+        apply_ai (bool): Whether to apply AI text removal without requiring a mask.
+        fit_mode (str): Backdrop fitting mode, including the AI-assisted
+            ``"extend"`` mode.
+        mask_bytes (Optional[bytes]): Mask defining regions for AI text removal.
+        logo_3d (bool): Whether to render the logo with the 3D logo treatment.
+        allow_ai_extend (bool): Whether AI outpainting may be used for ``"extend"``
+            fitting.
+        place_logo (bool): Whether to place the logo on the rendered poster.
+    
+    Returns:
+        tuple: Rendered JPEG bytes and an information dictionary containing the
+        resolved backdrop path and logo source. The image bytes are ``None`` when
+        no textless backdrop is available; in that case, the information dictionary
+        contains a ``"reason"`` entry.
     """
     cfg = full_config.cl2k_maker
     lang = cfg.language or "en"
@@ -449,11 +474,18 @@ def generate_for_item(
     upload_gdrive: Optional[bool] = None,
     defer_upload: Optional[Callable[[Callable[[], None]], None]] = None,
 ) -> Dict[str, Any]:
-    """Render + name + write to the selected destinations + provenance.
-
-    Shared core for the API (on-demand) and run() (batch). ``save_local`` /
-    ``upload_gdrive`` choose the destination(s) (see :func:`_persist_poster`).
-    Returns ``{status, file?, reason?, logo_source?}``.
+    """
+    Render a poster for an item and persist it to the configured destinations.
+    
+    Parameters:
+        kind (str): Item type: ``movie``, ``show``, ``collection``, or ``season``.
+        force (bool): Whether to generate the poster when an existing result is found.
+        save_local (bool): Whether to save the poster to configured local folders.
+        upload_gdrive (Optional[bool]): Whether to upload the poster to configured Google Drive folders.
+        defer_upload (Optional[Callable]): Callback used to schedule deferred uploads.
+    
+    Returns:
+        Dict[str, Any]: Generation status and, when successful, output file and destination details.
     """
     cfg = full_config.cl2k_maker
     kind = (kind or "").lower()
@@ -723,10 +755,22 @@ def generate_logo_asset(
     save_local: bool = True,
     upload_gdrive: Optional[bool] = None,
 ) -> Dict[str, Any]:
-    """File a clear logo as its own ``- Logo.png`` asset (applied via uploadLogo).
-
-    ``whiten`` exports the CL2K-whitened logo; otherwise the original (colored)
-    clear logo, trimmed. Filed separately from any square art or poster.
+    """
+    Save a processed clear logo as a ``- Logo.png`` asset.
+    
+    The logo is read from ``logo_bytes`` or downloaded from ``logo_path``, then
+    optionally whitened, converted to a flat-white or 3D treatment, inverted, and
+    adjusted using the supplied touch-up masks.
+    
+    Parameters:
+        kind (str): Poster item type.
+        logo_bytes (Optional[bytes]): Logo image data to process directly.
+        logo_path (Optional[str]): Image path used when ``logo_bytes`` is not provided.
+        flip_mask_bytes (Optional[bytes]): Mask identifying regions to retain or flip.
+        erase_mask_bytes (Optional[bytes]): Mask identifying regions to erase.
+    
+    Returns:
+        Dict[str, Any]: Persistence status and details for the generated logo asset.
     """
     cfg = full_config.cl2k_maker
     kind = (kind or "").lower()
@@ -1158,16 +1202,18 @@ def save_finished_poster(
     save_local: bool = True,
     upload_gdrive: Optional[bool] = None,
 ) -> Dict[str, Any]:
-    """File a pre-made poster (no rendering) into the selected destinations.
-
-    Used by the manual finished-poster upload and the G-Drive .psd source (both
-    supply a complete poster). The image is forced to the locked 1000×1500 canvas
-    (cropped if needed), named per DAPS, and registered so the rest of CHUB picks
-    it up. When ``logo_bytes`` is given (a TMDB/fanart/custom clear logo), it is
-    composited at the locked CL2K baseline first, with the same whitening/sizing a
-    fresh render uses. ``add_border`` (default True, per the DAPS rule) composites
-    the default 26px white frame; uncheck it for a poster that already has the
-    required border. ``save_local`` / ``upload_gdrive`` choose the destination(s).
+    """
+    Persist a completed poster after normalizing its dimensions and optionally applying a logo and border.
+    
+    The poster is normalized to the locked 1000×1500 canvas. An optional logo is composited using the configured styling, and the default border is applied unless disabled. The resulting poster is saved locally, uploaded to Google Drive, or both according to the destination options.
+    
+    Parameters:
+        logo_3d (bool): Whether to render the logo with an extruded, lit-face treatment.
+        save_local (bool): Whether to save the poster to configured local destinations.
+        upload_gdrive (Optional[bool]): Whether to upload the poster to configured Google Drive destinations.
+    
+    Returns:
+        Dict[str, Any]: Persistence status and destination details.
     """
     cfg = full_config.cl2k_maker
     kind = (kind or "").lower()
@@ -1375,20 +1421,20 @@ def generate_seasons(
     upload_gdrive: Optional[bool] = None,
     progress_cb=None,
 ) -> Dict[str, Any]:
-    """Generate CL2K season posters for each number in ``seasons``.
-
-    The backdrop and logo the user built in the preview are passed through to
-    EVERY season (``backdrop_path``/``backdrop_bytes`` + ``logo_path``/
-    ``custom_logo_bytes``), so each season is composed from the same art rather
-    than re-resolving a fresh auto-pick server-side. When no backdrop is supplied
-    the season-reuse path in :func:`generate_for_item` still falls back to the
-    show's most-recent stored backdrop. The framing (``fit_mode`` / ``focus`` /
-    ``crop`` / ``logo_scale``) is carried from the show poster so every season is
-    composed identically.
-
-    ``progress_cb`` (optional) is invoked with each season's result dict as it
-    completes, so a background runner can report live progress. A failure on one
-    season is captured as an ``error`` result and never aborts the batch.
+    """
+    Generate CL2K posters for each season number in `seasons`.
+    
+    Each poster uses the supplied backdrop, logo, and framing settings. If no
+    backdrop is supplied, the show's stored backdrop may be reused. Failures are
+    isolated to individual seasons, and progress results are reported through
+    `progress_cb` when provided.
+    
+    Parameters:
+        seasons: Season numbers to generate.
+        progress_cb: Optional callback invoked with each completed season's result.
+    
+    Returns:
+        A dictionary containing the per-season generation results under `"results"`.
     """
     results = []
     for n in seasons:
@@ -1461,14 +1507,14 @@ def psd_for_item(
     logo_3d: bool = False,  # extruded art -> flat-white lit face; wins over flat_white
     invert: bool = False,  # plate logo -> clearlogo (white->transparent, black->white)
 ) -> Optional[bytes]:
-    """Resolve art and return a layered CL2K poster as PSD bytes (for Photopea).
-
-    The backdrop is framed via the renderer's own fit/cover/v_pos machinery so
-    the PSD's POSTER layer is pixel-identical to what /preview and /generate
-    show for the same framing knobs. A season's SEASON-N band is derived from
-    ``season_number`` (via season_band_text — same rule as the render path), and a
-    ``band_label`` override wins over it, so the PSD carries the same label the
-    flattened poster would, unless an explicit ``season_text`` is given.
+    """Resolve artwork and create a layered CL2K poster in PSD format.
+    
+    The backdrop uses the specified framing controls, and season text is derived from
+    ``season_number`` when no explicit text is provided. Logo styling options,
+    including whitening, inversion, and 3D treatment, are applied during export.
+    
+    Returns:
+        Optional[bytes]: PSD bytes, or ``None`` when no backdrop is available.
     """
     from backend.util.cl2k.psd_export import export_psd
 

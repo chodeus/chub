@@ -477,22 +477,16 @@ def _invert_to_clear(logo: Image) -> None:
 
 
 def _flat_white(logo: Image) -> None:
-    """Paint every opaque pixel pure white, keeping alpha — a flat silhouette.
-
-    Unlike :func:`_whiten` (the two-tone key + keyline pass), this does no
-    keying: it is the right tool for already-stylised logos the two-tone pass
-    mangles — outline wordmarks and rings, where thin strokes are almost all
-    "edge" so the keyline pass blackens them instead of leaving clean fills.
-    The result is exactly :func:`_whiten`'s mostly-black fallback, forced.
-    """
+    """Converts the visible portions of a logo to solid white while preserving transparency."""
     logo.colorize(color=Color("white"), alpha=Color("white"))  # RGB only
 
 
 def _face_only(logo: Image) -> None:
-    """Keep a 3D/extruded logo's lit face as a flat white wordmark, in place.
-
-    Unsplittable art falls back to the flat silhouette — never the two-tone pass,
-    which is what this mode exists to avoid.
+    """
+    Replaces a 3D or extruded logo with its extracted lit face.
+    
+    Falls back to a flat white version when the lit face cannot be extracted and updates
+    the logo bounds after removing extrusion padding.
     """
     faced = flatten_3d_logo(logo.make_blob("png"))
     if faced is None:
@@ -504,18 +498,11 @@ def _face_only(logo: Image) -> None:
 
 
 def _apply_whiten(logo: Image, *, invert: bool) -> None:
-    """Two-tone whiten + colour-edge keylines + dark-body fill, in place.
-
-    :func:`_whiten` whitens saturated/light fills and inks thin luma keylines
-    crisply. Two post-passes finish the two-tone for cases a per-pixel key can't:
-    :func:`ink_color_edges` adds a black separator where two differently-coloured
-    fills meet with no outline (else they merge to one white blob), and
-    :func:`fill_dark_bodies` blacks in a WIDE dark shape the small keyline blur
-    leaves white-cored. Both are no-ops on an already-clean logo (Dragon Ball GT).
-
-    Skipped entirely on the invert path (it makes a clearlogo differently) and
-    when the flat-white fallback fired (the post-passes would re-mark that clean
-    silhouette). The pre-whiten original is captured only when the passes can run.
+    """
+    Apply the selected logo whitening treatment in place.
+    
+    Parameters:
+        invert (bool): Whether to use the invert-specific whitening treatment.
     """
     if invert:
         _whiten(logo, flat_fallback=False)
@@ -598,18 +585,20 @@ def process_logo(
     erase_mask_bytes: Optional[bytes] = None,
     invert: bool = False,
 ) -> Tuple[bytes, int, int]:
-    """Trim transparent padding and (optionally) whiten a clear logo.
-
-    Returns ``(png_bytes, width, height)`` for the *trimmed* result — the exact
-    bytes and dimensions :func:`_place_logo` would size and place. The frontend
-    uses this for the live logo overlay: drawing these bytes at the box derived
-    from ``width``/``height`` + the logo geometry matches the rendered placement
-    pixel-for-pixel, so the size/position sliders preview instantly without a
-    server render per drag. ``flip_mask_bytes`` applies the user's black↔white
-    touch-up regions (see :func:`_flip_regions`); ``invert`` turns plate-style
-    logos into clearlogos (see :func:`_invert_to_clear`).
-
-    Recolour modes rank ``logo_3d`` > ``flat_white`` > ``whiten``.
+    """
+    Process a logo into trimmed PNG data for placement.
+    
+    Parameters:
+        logo_bytes (bytes): Source logo image data.
+        whiten (bool): Whether to apply the standard clear-logo recoloring.
+        flat_white (bool): Whether to render the logo as a solid white silhouette.
+        logo_3d (bool): Whether to extract the lit face from a three-dimensional logo.
+        flip_mask_bytes (Optional[bytes]): Mask identifying regions whose colors should be inverted.
+        erase_mask_bytes (Optional[bytes]): Mask identifying regions to make transparent.
+        invert (bool): Whether to convert a plate-style logo into clear-logo opacity.
+    
+    Returns:
+        Tuple[bytes, int, int]: The processed PNG data and its trimmed width and height.
     """
     with _read_logo_image(logo_bytes) as logo:
         _trim_logo(logo)
@@ -661,22 +650,22 @@ def _place_logo(
     flat_white: bool = False,
     logo_3d: bool = False,
 ) -> None:
-    """Whiten, size and bottom-align the clear logo onto ``base``.
-
-    The guide-fit box targets ``max_width`` (the 700px recommended guide by
-    default) with height clamped so the logo top never rises above
-    ``LOGO_ZONE_TOP``. ``logo_scale`` then multiplies that whole box (1.0 =
-    strict guides), clamped only to the canvas. The width guides (600/700/800)
-    are guidelines, not limits — hand-made references run ~846-881px wide, and
-    boxy/sticker designs break the y=1100 top guide rather than shrink to an
-    unreadable stamp — so the slider can take ANY logo past the guide box.
-
-    ``logo_y_offset`` shifts the placement (px; positive = down) without changing
-    the size. At offset 0 the logo bottom sits exactly on the template's
-    "Main Logo Bottom" guide (y=1352; collections use 1319) — finished creator
-    PSDs in refs/ all bottom-align there pixel-exact (Deuce Bigalow measured
-    y≈1349 too), so the offset is an escape hatch for odd logo artwork, not a
-    routine adjustment.
+    """
+    Process, size, and bottom-align a logo on the poster canvas.
+    
+    Parameters:
+        base (Image): Canvas receiving the logo.
+        logo_bytes (bytes): Encoded logo image.
+        baseline (int): Vertical position used to align the logo's bottom edge.
+        max_width (Optional[int]): Maximum guide width, or ``None`` to size from the logo shape.
+        whiten (bool): Whether to apply standard logo whitening.
+        logo_scale (float): Scale applied to the fitted logo dimensions.
+        logo_y_offset (int): Vertical placement adjustment in pixels.
+        flip_mask_bytes (Optional[bytes]): Optional mask defining regions to invert.
+        erase_mask_bytes (Optional[bytes]): Optional mask defining regions to erase.
+        invert (bool): Whether to convert the logo to clear-logo opacity.
+        flat_white (bool): Whether to render the logo as a flat white silhouette.
+        logo_3d (bool): Whether to extract and render the lit face of a 3D logo.
     """
     logo_scale = max(
         geo.LOGO_SCALE_MIN, min(float(logo_scale or 1.0), geo.LOGO_SCALE_MAX)
@@ -1073,26 +1062,36 @@ def render_cl2k(
     text_logo_stroke: int = 0,
 ) -> bytes:
     """Render a CL2K poster and return JPEG bytes.
-
-    ``kind`` is one of ``movie`` / ``show`` / ``collection`` / ``season``. A
-    clear logo is preferred; when none is supplied (or usable) the ``title`` is
-    drawn as all-caps text in the logo area (MM2K fallback).
-
-    ``band_label`` draws an explicit banner in the bottom label band (e.g.
-    ``COMPLETE LIMITED SERIES`` or ``SPECIALS``), overriding the automatic
-    COLLECTION / season label. Long strings use the tighter PSD tracking.
-
-    ``fit_mode`` controls how the backdrop fills the 2:3 canvas:
-
-    - ``"cover"`` (default): scale up and crop to fill; ``focus_x`` (0..1) and
-      ``v_pos`` (-1..1) choose which part is kept (0.5/0 = centre). Best when the
-      subject already fills a roughly 2:3 region.
-    - ``"fit"``: scale the backdrop *down* to the canvas width and top-anchor it
-      on black, keeping the full width so subjects spread across a wide backdrop
-      all stay in frame (the artist technique). ``crop`` (``x, y, w, h`` in 0..1)
-      optionally isolates the subject region first; the black bottom band is the
-      gradient/logo zone. ``v_pos`` applies here too, but on :func:`_fit_resize`'s
-      0..1 top-anchored scale (0 = top), not cover's -1..1.
+    
+    A supplied clear logo is placed in the logo area. If no logo is supplied and
+    ``title`` is provided, an all-caps text wordmark is generated as a fallback.
+    Logo processing supports whitening, flat-white silhouettes, and lit-face
+    extraction for extruded artwork.
+    
+    ``band_label`` replaces the automatic collection or season label. Set
+    ``place_logo`` to ``False`` to render the poster without a logo.
+    
+    ``fit_mode`` controls backdrop framing:
+    
+    - ``"cover"`` scales and crops the backdrop to fill the canvas. ``focus_x``
+      and ``v_pos`` control horizontal and vertical positioning.
+    - ``"fit"`` scales the backdrop to the canvas width, preserves its full width,
+      and extends the uncovered lower area. ``crop`` can optionally isolate a
+      normalized ``(x, y, width, height)`` region first; ``v_pos`` controls the
+      top-anchored framing.
+    
+    Parameters:
+        backdrop_bytes (bytes): Source backdrop image data.
+        kind (str): Poster type, such as ``"movie"``, ``"show"``,
+            ``"collection"``, or ``"season"``.
+        title (str): Title used to generate a fallback wordmark.
+        season_text (str): Text shown for season posters when no explicit
+            ``band_label`` is provided.
+        band_label (str): Explicit label displayed in the bottom label band.
+        place_logo (bool): Whether to place a supplied or generated logo.
+    
+    Returns:
+        bytes: The rendered poster encoded as JPEG.
     """
     kind = kind.lower()
     baseline = geo.logo_baseline(kind)
@@ -1252,14 +1251,23 @@ def overlay_logo(
     logo_3d: bool = False,  # extruded art -> flat-white lit face
     invert: bool = False,
 ) -> bytes:
-    """Composite a clear logo onto a finished poster at the locked CL2K baseline.
-
-    Trims, whitens and width-normalises the logo to the CL2K guides exactly like
-    a fresh render (via the shared :func:`_place_logo`), then bottom-aligns it on
-    the kind's baseline. Used to add a TMDB / fanart / custom logo onto an
-    already-finished uploaded poster (the save-as-is flow), where no full render
-    happens. The poster should already be the locked 1000×1500 canvas. Returns
-    JPEG bytes.
+    """
+    Overlay a processed clear logo onto a finished CL2K poster.
+    
+    Parameters:
+        image_bytes (bytes): Finished poster image data.
+        logo_bytes (bytes): Logo image data.
+        kind (str): Poster type used to select the logo baseline.
+        logo_max_width (Optional[int]): Maximum logo width in pixels.
+        logo_scale (float): Scale applied to the logo guide box.
+        logo_y_offset (int): Vertical adjustment from the baseline.
+        whiten (bool): Whether to apply CL2K logo whitening.
+        flat_white (bool): Whether to render the logo as solid white.
+        logo_3d (bool): Whether to use the lit face of an extruded logo.
+        invert (bool): Whether to convert the logo to clearlogo opacity.
+    
+    Returns:
+        bytes: JPEG-encoded poster with the logo composited.
     """
     baseline = geo.logo_baseline((kind or "movie").lower())
     with Image(blob=image_bytes) as base:

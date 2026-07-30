@@ -394,16 +394,15 @@ def logo_processed(
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
-    """Return the trimmed + whitened logo (PNG, base64), its natural size and the
-    placement box the render would give it. The frontend draws these bytes at
-    ``box_w``/``box_h`` so the size/position sliders preview live — matching
-    :func:`render_cl2k`'s placement without a render per drag.
-
-    ``box_w``/``box_h`` come from :func:`geometry.auto_logo_size`, the SAME call
-    :func:`renderer._place_logo` makes (``logo_max_width`` is never passed, so the
-    render always takes its auto branch). Deriving the box here rather than
-    re-deriving it in JS is what keeps the overlay and the generated poster the
-    same size — a flat guide-box width over-sizes wide logos by ~15%."""
+    """
+    Process a logo and provide its dimensions and recommended placement box for live preview.
+    
+    Parameters:
+        req (LogoProcessRequest): Logo source, processing options, and poster kind.
+    
+    Returns:
+        JSONResponse: Processed logo as base64-encoded PNG data, its dimensions, and placement box dimensions.
+    """
     try:
         raw = _resolve_logo_bytes(req.logo_path, req.logo_b64)
     except LogoFetchError as exc:
@@ -445,6 +444,16 @@ def preview(
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_cl2k_logger),
 ):
+    """Render a poster preview without saving it.
+    
+    Parameters:
+    	req (GenerateRequest): Preview settings, artwork sources, and rendering options.
+    	db (ChubDB): Database connection.
+    	logger (Any): Logger for preview rendering failures.
+    
+    Returns:
+    	Response: A JPEG preview with no-store caching, or an error response when the mask, artwork, or rendering data is invalid.
+    """
     try:
         mask_bytes = _mask_bytes(req.mask_b64)
     except Exception:
@@ -504,6 +513,15 @@ def generate(
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
+    """
+    Generate and optionally upload a poster from the supplied artwork and rendering options.
+    
+    Parameters:
+    	req (GenerateRequest): Poster identity, source artwork, processing, framing, and save options.
+    
+    Returns:
+    	JSONResponse: A success response with generation details, or an error response if the mask or poster generation fails.
+    """
     try:
         mask_bytes = _mask_bytes(req.mask_b64)
     except Exception:
@@ -779,6 +797,15 @@ def logo_asset_preview(
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_cl2k_logger),
 ):
+    """
+    Render a processed clear-logo preview from an uploaded or remote logo source.
+    
+    Parameters:
+    	req (LogoAssetRequest): Logo source and processing options.
+    
+    Returns:
+    	Response: A transparent PNG containing the processed logo.
+    """
     try:
         raw = _resolve_logo_bytes(req.logo_path, req.logo_b64)
     except LogoFetchError as exc:
@@ -806,6 +833,15 @@ def logo_asset_generate(
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
+    """
+    Generate and save a processed clear-logo asset.
+    
+    Parameters:
+        req (LogoAssetRequest): Logo source, processing options, and save destinations.
+    
+    Returns:
+        JSONResponse: Success response with the generated asset details, or an error response.
+    """
     result = generate_logo_asset(
         db=db,
         full_config=load_config(),
@@ -897,6 +933,15 @@ def psd_export(
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_cl2k_logger),
 ):
+    """
+    Generate a layered Photoshop document for the requested poster.
+    
+    Parameters:
+        req (GenerateRequest): Poster identity, artwork, logo, framing, and processing options.
+    
+    Returns:
+        Response: A downloadable PSD response, or an error response when no textless backdrop is available.
+    """
     blob = psd_for_item(
         db=db,
         full_config=load_config(),

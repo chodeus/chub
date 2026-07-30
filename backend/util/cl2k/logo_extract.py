@@ -726,17 +726,14 @@ _DARK_BODY_CHROMA = 18.0  # ...and only if NEAR-NEUTRAL (vivid darks stay white)
 
 
 def fill_dark_bodies(whitened_png: bytes, original_png: bytes) -> bytes:
-    """Fill wide DARK bodies black — the companion to the small keyline blur.
-
-    The keyline pass uses a small neighbourhood blur so it stays crisp (no muddy
-    halos), but that means it only blackens dark pixels within a few px of an
-    edge — a WIDE dark shape (a dark star body, a thick dark stroke) keeps a white
-    core, because the sat/light key whitens it and nothing pulls the middle back.
-    This fills genuinely dark ORIGINAL regions that are THICK — a morphological
-    opening drops thin outlines and soft halos, so only real bodies fill. An
-    already-crisp logo whose only darks are thin outlines (Dragon Ball GT) is a
-    no-op. Both PNGs same (trimmed) size; input returned unchanged on any decode
-    failure or when there is nothing thick and dark to fill.
+    """Fill sufficiently large, near-neutral dark regions with black.
+    
+    The returned image preserves the input alpha channel and leaves thin dark outlines
+    and regions without a sufficiently large dark area unchanged.
+    
+    Returns:
+        bytes: PNG data containing the updated image, or the original whitened PNG
+        when decoding fails or no qualifying dark region is found.
     """
     try:
         white = Image.open(io.BytesIO(whitened_png)).convert("RGBA")
@@ -776,10 +773,15 @@ _FACE_MIN_AREA = 64  # despeckle: drop kept components smaller than this (px)
 
 
 def flatten_3d_logo(logo_png: bytes) -> Optional[bytes]:
-    """Otsu-split an extruded logo's lit face from its extrusion; white-fill the face.
-
-    None = not splittable (flat histogram, or a face too small/large to be the
-    letterforms); the caller falls back to the flat silhouette.
+    """
+    Extract the lit face of a 3D logo and render it as a white-filled PNG.
+    
+    Parameters:
+        logo_png (bytes): RGBA PNG containing the logo.
+    
+    Returns:
+        Optional[bytes]: A white-filled PNG whose alpha represents the extracted
+        logo face, or None when the face cannot be reliably separated.
     """
     try:
         src = Image.open(io.BytesIO(logo_png)).convert("RGBA")

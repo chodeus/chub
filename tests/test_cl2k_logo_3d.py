@@ -16,6 +16,15 @@ from backend.util.cl2k.logo_extract import flatten_3d_logo
 
 
 def _png(arr):
+    """
+    Encode an RGBA array as PNG bytes.
+    
+    Parameters:
+    	arr (numpy.ndarray): RGBA pixel data to encode.
+    
+    Returns:
+    	bytes: PNG-encoded image data.
+    """
     buf = io.BytesIO()
     PILImage.fromarray(arr, "RGBA").save(buf, "PNG")
     return buf.getvalue()

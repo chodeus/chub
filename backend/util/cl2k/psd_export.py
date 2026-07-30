@@ -35,13 +35,31 @@ def _cover(im: Image.Image, w: int, h: int) -> Image.Image:
 
 
 def _flat_white(logo: Image.Image) -> Image.Image:
+    """
+    Create a white version of the logo while preserving its transparency.
+    
+    Parameters:
+    	logo (Image.Image): Source logo whose alpha channel defines the output transparency.
+    
+    Returns:
+    	Image.Image: An RGBA image with white pixels and the source logo's alpha channel.
+    """
     white = Image.new("RGBA", logo.size, (255, 255, 255, 0))
     white.putalpha(logo.split()[3])
     return white
 
 
 def _face_only(logo: Image.Image) -> Image.Image:
-    """3D logo face — Pillow mirror of ``renderer._face_only``, re-trim included."""
+    """
+    Extract the two-dimensional face from a 3D logo.
+    
+    Parameters:
+        logo (Image.Image): Logo image to process.
+    
+    Returns:
+        Image.Image: Cropped face image, or a flat white version of the logo when
+            face extraction is unavailable.
+    """
     from backend.util.cl2k.logo_extract import flatten_3d_logo
 
     buf = io.BytesIO()
@@ -57,13 +75,15 @@ def _face_only(logo: Image.Image) -> Image.Image:
 
 
 def _whiten(logo: Image.Image, flat_fallback: bool = True) -> Image.Image:
-    """CL2K two-tone whiten — Pillow mirror of ``renderer._whiten``.
-
-    Same recipe and constants (see :mod:`geometry`, "logo whitening") so the
-    PSD's LOGO layer matches the rendered poster: white fills, black keylines,
-    local-contrast pass for interior accents, flat-white fallback for logos
-    that would come out mostly black (suppressed when the invert pass follows,
-    mirroring the renderer).
+    """
+    Convert a logo to a two-tone white treatment while preserving its transparency.
+    
+    Parameters:
+        logo (Image.Image): Logo image to transform.
+        flat_fallback (bool): Whether to use a flat white version when the computed result is predominantly dark.
+    
+    Returns:
+        Image.Image: Whitened RGBA logo with the original alpha channel.
     """
     import numpy as np
     from PIL import ImageFilter
@@ -204,7 +224,27 @@ def export_psd(
     logo_3d: bool = False,
     invert: bool = False,
 ) -> bytes:
-    """Build the CL2K poster as a layered PSD and return its bytes."""
+    """
+    Build the CL2K poster as a layered, editable PSD.
+    
+    Parameters:
+        backdrop_bytes (bytes): Rendered backdrop image data.
+        kind (str): Poster type used to determine layout.
+        logo_bytes (Optional[bytes]): Logo image data. If omitted, a wordmark is generated from `title` when provided.
+        title (str): Title used to generate a wordmark when no logo image is supplied.
+        season_text (str): Season label for season posters.
+        band_label (str): Explicit bottom label, which takes precedence over other labels.
+        logo_max_width (Optional[int]): Maximum logo width before applying `logo_scale`.
+        logo_scale (float): Additional logo size multiplier, clamped between 0.25 and 3.0.
+        logo_y_offset (int): Vertical logo offset within the allowed range.
+        whiten (bool): Applies CL2K whitening to sourced logos.
+        flat_white (bool): Converts the logo to flat white while preserving transparency.
+        logo_3d (bool): Extracts the two-dimensional face from a 3D logo.
+        invert (bool): Converts logo luminance into transparency.
+    
+    Returns:
+        bytes: PSD file data containing the poster layers and embedded preview.
+    """
     from psd_tools import PSDImage
     from psd_tools.api.layers import PixelLayer
 
