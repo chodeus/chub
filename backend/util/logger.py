@@ -9,6 +9,39 @@ from typing import Optional
 from backend.util.helper import create_bar
 from backend.util.version import get_version
 
+# Size cap per log file. Set LOG_MAX_BYTES=0 to disable the cap.
+DEFAULT_MAX_LOG_BYTES = 10 * 1024 * 1024
+
+
+def _max_log_bytes() -> int:
+    # A negative value must NOT collapse to 0 — 0 is the documented "no cap"
+    # opt-out, so that would silently restore unbounded growth.
+    try:
+        value = int(os.getenv("LOG_MAX_BYTES", "").strip() or DEFAULT_MAX_LOG_BYTES)
+    except ValueError:
+        return DEFAULT_MAX_LOG_BYTES
+    return value if value >= 0 else DEFAULT_MAX_LOG_BYTES
+
+
+def rotated_log_path(log_file_path: str, index: int) -> Optional[str]:
+    """`<dir>/<name>.log` + N -> `<dir>/<name>.N.log`, or None if the FILENAME
+    doesn't end in `.log`. Strip only the suffix — a `.log` inside a directory
+    name would otherwise rewrite the path out of its own directory."""
+    directory, sep, filename = log_file_path.rpartition(os.sep)
+    if not filename.endswith(".log"):
+        return None
+    return f"{directory}{sep}{filename[: -len('.log')]}.{index}.log"
+
+
+def rotation_namer(default_name: str) -> str:
+    """Map RotatingFileHandler's `<base>.log.N` onto this app's `<base>.N.log`.
+    prune_old_logs() and the log viewer both glob `*.log`, which the default
+    naming would escape entirely."""
+    base, _, index = default_name.rpartition(".")
+    if not index.isdigit():
+        return default_name
+    return rotated_log_path(base, int(index)) or default_name
+
 
 class SafeFormatter(logging.Formatter):
     """Formatter that sets the source tag and redacts secrets from the FULL
@@ -19,6 +52,11 @@ class SafeFormatter(logging.Formatter):
     def format(self, record):
         source = getattr(record, "source", None)
         record.source_tag = f"[{source}]" if source else ""
+        # Restore a buffered record's event time (see _BufferingLogger) so
+        # replayed lines aren't all stamped with the flush time.
+        orig_created = getattr(record, "orig_created", None)
+        if orig_created is not None:
+            record.created = orig_created
         return SmartRedactionFilter.redact(super().format(record))
 
 
@@ -230,20 +268,15 @@ class Logger:
         os.makedirs(log_dir, exist_ok=True)
 
         # Only rotate if main log file exists
-        if os.path.isfile(log_file_path):
-            # Extract base name (without .log extension)
-            base_name = log_file_path.rsplit(".log", 1)[0]
-
+        if os.path.isfile(log_file_path) and rotated_log_path(log_file_path, 1):
             # Shift existing numbered logs: module_name.9.log -> module_name.10.log, etc.
             for i in range(max_logs - 1, 0, -1):
-                old_file = f"{base_name}.{i}.log"
-                new_file = f"{base_name}.{i + 1}.log"
+                old_file = rotated_log_path(log_file_path, i)
+                new_file = rotated_log_path(log_file_path, i + 1)
                 if os.path.exists(old_file):
                     os.rename(old_file, new_file)
 
-            # Move current log to module_name.1.log
-            rotated_file = f"{base_name}.1.log"
-            os.rename(log_file_path, rotated_file)
+            os.rename(log_file_path, rotated_log_path(log_file_path, 1))
 
     def _setup_handlers(self, log_file_path: str, max_logs: int) -> None:
         """Setup logging handlers with improved redaction."""
@@ -253,10 +286,16 @@ class Logger:
         )
         redaction_filter = SmartRedactionFilter()
 
-        # File handler
+        # maxBytes must be non-zero or doRollover() never fires, and backupCount
+        # must be >= 1 or rollover reopens the base file in append mode — the
+        # size cap then bounds nothing and thrashes a rollover per record.
         file_handler = RotatingFileHandler(
-            log_file_path, mode="a", backupCount=max_logs
+            log_file_path,
+            mode="a",
+            maxBytes=_max_log_bytes(),
+            backupCount=max(1, max_logs),
         )
+        file_handler.namer = rotation_namer
         file_handler.setFormatter(formatter)
         file_handler.addFilter(redaction_filter)
         self._logger.addHandler(file_handler)
@@ -410,17 +449,12 @@ def ensure_log_dir_and_rotate(log_file_path: str, max_logs: int = 9) -> None:
     os.makedirs(log_dir, exist_ok=True)
 
     # Only rotate if main log file exists
-    if os.path.isfile(log_file_path):
-        # Extract base name (without .log extension)
-        base_name = log_file_path.rsplit(".log", 1)[0]
-
+    if os.path.isfile(log_file_path) and rotated_log_path(log_file_path, 1):
         # Shift existing numbered logs: module_name.9.log -> module_name.10.log, etc.
         for i in range(max_logs - 1, 0, -1):
-            old_file = f"{base_name}.{i}.log"
-            new_file = f"{base_name}.{i + 1}.log"
+            old_file = rotated_log_path(log_file_path, i)
+            new_file = rotated_log_path(log_file_path, i + 1)
             if os.path.exists(old_file):
                 os.rename(old_file, new_file)
 
-        # Move current log to module_name.1.log
-        rotated_file = f"{base_name}.1.log"
-        os.rename(log_file_path, rotated_file)
+        os.rename(log_file_path, rotated_log_path(log_file_path, 1))
