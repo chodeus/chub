@@ -9,6 +9,28 @@ from typing import Optional
 from backend.util.helper import create_bar
 from backend.util.version import get_version
 
+# Size cap per log file. Rotation otherwise only ran on the first Logger() per
+# process, so a hot error loop could grow one file without bound (a 401 retry
+# storm once wrote 296MB / 2.4M lines). 0 disables the cap.
+DEFAULT_MAX_LOG_BYTES = 10 * 1024 * 1024
+
+
+def _max_log_bytes() -> int:
+    try:
+        return max(0, int(os.getenv("LOG_MAX_BYTES", "").strip() or DEFAULT_MAX_LOG_BYTES))
+    except ValueError:
+        return DEFAULT_MAX_LOG_BYTES
+
+
+def rotation_namer(default_name: str) -> str:
+    """Map RotatingFileHandler's `<base>.log.N` onto this app's `<base>.N.log`.
+    prune_old_logs() and the log viewer both glob `*.log`, which the default
+    naming would escape entirely."""
+    base, _, index = default_name.rpartition(".")
+    if not index.isdigit():
+        return default_name
+    return f"{base.rsplit('.log', 1)[0]}.{index}.log"
+
 
 class SafeFormatter(logging.Formatter):
     """Formatter that sets the source tag and redacts secrets from the FULL
@@ -19,6 +41,12 @@ class SafeFormatter(logging.Formatter):
     def format(self, record):
         source = getattr(record, "source", None)
         record.source_tag = f"[{source}]" if source else ""
+        # Buffered module logs (see _BufferingLogger) replay at the end of a run;
+        # without this every line of a 49-minute run reads as the flush time.
+        # super().format() recomputes asctime from created.
+        orig_created = getattr(record, "orig_created", None)
+        if orig_created:
+            record.created = orig_created
         return SmartRedactionFilter.redact(super().format(record))
 
 
@@ -253,10 +281,14 @@ class Logger:
         )
         redaction_filter = SmartRedactionFilter()
 
-        # File handler
+        # File handler. maxBytes must be non-zero or doRollover() never fires.
         file_handler = RotatingFileHandler(
-            log_file_path, mode="a", backupCount=max_logs
+            log_file_path,
+            mode="a",
+            maxBytes=_max_log_bytes(),
+            backupCount=max_logs,
         )
+        file_handler.namer = rotation_namer
         file_handler.setFormatter(formatter)
         file_handler.addFilter(redaction_filter)
         self._logger.addHandler(file_handler)
