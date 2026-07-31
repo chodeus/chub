@@ -278,7 +278,7 @@ class ResetFakeApp:
         return True
 
     def wait_for_command_result(self, command_id, label=""):
-        return "completed" if True else "failed"
+        return "completed"
 
     def get_rename_list(self, media_id, threadsafe=False):
         self.fetched_rename_ids.append(media_id)

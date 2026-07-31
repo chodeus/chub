@@ -16,10 +16,13 @@ DEFAULT_MAX_LOG_BYTES = 10 * 1024 * 1024
 
 
 def _max_log_bytes() -> int:
+    # A negative value must NOT collapse to 0 — 0 is the documented "no cap"
+    # opt-out, so that would silently restore unbounded growth.
     try:
-        return max(0, int(os.getenv("LOG_MAX_BYTES", "").strip() or DEFAULT_MAX_LOG_BYTES))
+        value = int(os.getenv("LOG_MAX_BYTES", "").strip() or DEFAULT_MAX_LOG_BYTES)
     except ValueError:
         return DEFAULT_MAX_LOG_BYTES
+    return value if value >= 0 else DEFAULT_MAX_LOG_BYTES
 
 
 def rotation_namer(default_name: str) -> str:
@@ -45,7 +48,7 @@ class SafeFormatter(logging.Formatter):
         # without this every line of a 49-minute run reads as the flush time.
         # super().format() recomputes asctime from created.
         orig_created = getattr(record, "orig_created", None)
-        if orig_created:
+        if orig_created is not None:
             record.created = orig_created
         return SmartRedactionFilter.redact(super().format(record))
 

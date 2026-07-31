@@ -23,10 +23,20 @@ COMMAND_FAILED = "failed"
 COMMAND_TIMEOUT = "timeout"
 COMMAND_UNREACHABLE = "unreachable"
 
+def _positive_int_env(name: str, default: int) -> int:
+    """Polling budget from env. Must not raise — this runs at import time, so a
+    typo like `30m` would otherwise take down every importer of this module."""
+    try:
+        value = int(os.getenv(name, "").strip() or default)
+    except ValueError:
+        return default
+    return value if value > 0 else default
+
+
 COMMAND_POLL_SECONDS = 5
 # Generous: the *arr serialises searches, so a queue wait is normal, not a fault.
-COMMAND_QUEUE_TIMEOUT_SECONDS = int(os.getenv("ARR_COMMAND_QUEUE_TIMEOUT", "3600"))
-COMMAND_RUN_TIMEOUT_SECONDS = int(os.getenv("ARR_COMMAND_RUN_TIMEOUT", "1800"))
+COMMAND_QUEUE_TIMEOUT_SECONDS = _positive_int_env("ARR_COMMAND_QUEUE_TIMEOUT", 3600)
+COMMAND_RUN_TIMEOUT_SECONDS = _positive_int_env("ARR_COMMAND_RUN_TIMEOUT", 1800)
 COMMAND_MAX_POLL_ERRORS = 12
 COMMAND_TERMINAL_FAILURES = ("failed", "aborted", "cancelled", "orphaned")
 

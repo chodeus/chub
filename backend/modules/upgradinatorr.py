@@ -1336,7 +1336,10 @@ class Upgradinatorr(ChubModule):
             tagged_in_run = len(searched_items) - sum(
                 1 for v in failed_searches.values() if v
             )
+            # A deferred item is in searched_items but records no failure, so it
+            # would otherwise be counted as tagged when it deliberately is not.
             deferred = self._deferred_count(search_stats)
+            tagged_in_run -= deferred
             summary = (
                 f"   → {search_stats['searches_attempted']} searched, "
                 f"{max(tagged_in_run, 0)} tagged"

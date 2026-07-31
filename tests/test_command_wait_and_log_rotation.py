@@ -31,7 +31,9 @@ from backend.util.logger import SafeFormatter, rotation_namer
 
 
 class _Clock:
-    """Virtual clock so the waits below don't actually sleep."""
+    """Stands in for the `time` module inside arr, so the waits below don't
+    actually sleep. Swapped in as `arr.time` rather than by patching attributes
+    on the stdlib module, which would replace sleep/monotonic process-wide."""
 
     def __init__(self) -> None:
         self.now = 0.0
@@ -40,6 +42,9 @@ class _Clock:
         self.now += seconds
 
     def monotonic(self) -> float:
+        return self.now
+
+    def time(self) -> float:
         return self.now
 
 
@@ -54,8 +59,7 @@ def _client(responses, monkeypatch):
     """A BaseARRClient whose command polls return `responses` in order (the last
     entry repeats), with a virtual clock patched over arr's time module."""
     clock = _Clock()
-    monkeypatch.setattr(arr_mod.time, "sleep", clock.sleep)
-    monkeypatch.setattr(arr_mod.time, "monotonic", clock.monotonic)
+    monkeypatch.setattr(arr_mod, "time", clock)
 
     client = BaseARRClient.__new__(BaseARRClient)
     # api_base is a read-only property derived from these two.
@@ -176,6 +180,46 @@ def test_size_cap_is_set_so_rollover_can_fire():
 
     # maxBytes=0 is the stdlib default and means "never roll over" — the bug.
     assert _max_log_bytes() > 0
+
+
+@pytest.mark.parametrize("raw", ["-1", "not-a-number", "10MB"])
+def test_unusable_log_size_cap_falls_back_instead_of_disabling_rollover(
+    raw, monkeypatch
+):
+    """A negative or malformed LOG_MAX_BYTES must not collapse to 0, which is the
+    documented "no cap" opt-out and would restore unbounded growth."""
+    from backend.util.logger import DEFAULT_MAX_LOG_BYTES, _max_log_bytes
+
+    monkeypatch.setenv("LOG_MAX_BYTES", raw)
+
+    assert _max_log_bytes() == DEFAULT_MAX_LOG_BYTES
+
+
+def test_explicit_zero_still_disables_the_cap(monkeypatch):
+    from backend.util.logger import _max_log_bytes
+
+    monkeypatch.setenv("LOG_MAX_BYTES", "0")
+
+    assert _max_log_bytes() == 0
+
+
+@pytest.mark.parametrize("raw", ["30m", "", "0", "-5", "abc"])
+def test_command_budget_env_never_raises_at_import(raw, monkeypatch):
+    """These are read at module import, so a bad value would take down every
+    importer of backend.util.arr rather than just degrading one setting."""
+    from backend.util.arr import _positive_int_env
+
+    monkeypatch.setenv("ARR_COMMAND_QUEUE_TIMEOUT", raw)
+
+    assert _positive_int_env("ARR_COMMAND_QUEUE_TIMEOUT", 3600) == 3600
+
+
+def test_command_budget_env_honours_a_valid_override(monkeypatch):
+    from backend.util.arr import _positive_int_env
+
+    monkeypatch.setenv("ARR_COMMAND_QUEUE_TIMEOUT", "900")
+
+    assert _positive_int_env("ARR_COMMAND_QUEUE_TIMEOUT", 3600) == 900
 
 
 def test_buffered_logs_keep_their_original_event_time():
