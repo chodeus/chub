@@ -153,6 +153,37 @@ def test_recovers_when_a_junk_response_is_followed_by_a_real_one(monkeypatch):
     assert client.wait_for_command_result(19) == COMMAND_COMPLETED
 
 
+def test_unreadable_command_list_reports_not_ready_rather_than_zero(monkeypatch):
+    """0 is reserved for a genuinely empty list. Returning it on a failed read
+    would let the readiness gate launch searches into an unknown state."""
+    client, _ = _client([None], monkeypatch)
+    assert client.count_queued_commands(("AlbumSearch",)) is None
+
+    client, _ = _client(["<html>502</html>"], monkeypatch)
+    assert client.count_queued_commands(("AlbumSearch",)) is None
+
+
+def test_command_list_counts_only_queued_and_running_searches(monkeypatch):
+    client, _ = _client(
+        [
+            [
+                {"name": "AlbumSearch", "status": "queued"},
+                {"name": "AlbumSearch", "status": "started"},
+                {"name": "AlbumSearch", "status": "completed"},
+                {"name": "RssSync", "status": "queued"},
+            ]
+        ],
+        monkeypatch,
+    )
+
+    assert client.count_queued_commands(("AlbumSearch",)) == 2
+
+
+def test_empty_command_list_is_a_real_zero(monkeypatch):
+    client, _ = _client([[]], monkeypatch)
+    assert client.count_queued_commands(("AlbumSearch",)) == 0
+
+
 @pytest.mark.parametrize("status", ["failed", "aborted", "cancelled", "orphaned"])
 def test_terminal_failures_are_reported_as_failures(status, monkeypatch):
     client, _ = _client([{"status": status}], monkeypatch)

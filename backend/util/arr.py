@@ -34,9 +34,7 @@ def _positive_int_env(name: str, default: int) -> int:
 
 
 COMMAND_POLL_SECONDS = 5
-# Both generous on purpose. A queue wait is normal (the *arr serialises
-# searches), and a search can legitimately run for a long time — an observed
-# Sonarr SeasonSearch took 26m15s of execution with no queue wait at all.
+# Keep queue and run budgets separate: *arr serialises searches, and runs can be long.
 COMMAND_QUEUE_TIMEOUT_SECONDS = _positive_int_env("ARR_COMMAND_QUEUE_TIMEOUT", 3600)
 COMMAND_RUN_TIMEOUT_SECONDS = _positive_int_env("ARR_COMMAND_RUN_TIMEOUT", 3600)
 COMMAND_MAX_POLL_ERRORS = 12
@@ -280,14 +278,14 @@ class BaseARRClient:
                     run_deadline = time.monotonic() + COMMAND_RUN_TIMEOUT_SECONDS
 
             now = time.monotonic()
-            if run_deadline is None and now > queue_deadline:
+            if run_deadline is None and now >= queue_deadline:
                 self.logger.error(
                     f"{tag}Command {command_id} still QUEUED on {who} after "
                     f"{COMMAND_QUEUE_TIMEOUT_SECONDS // 60} min — it has not started "
                     "yet, so the search is being left for the next run."
                 )
                 return COMMAND_TIMEOUT
-            if run_deadline is not None and now > run_deadline:
+            if run_deadline is not None and now >= run_deadline:
                 self.logger.error(
                     f"{tag}Command {command_id} still running on {who} after "
                     f"{COMMAND_RUN_TIMEOUT_SECONDS // 60} min — giving up waiting."
@@ -300,12 +298,20 @@ class BaseARRClient:
         """True only when the command reached 'completed'."""
         return self.wait_for_command_result(command_id) == COMMAND_COMPLETED
 
-    def count_queued_commands(self, names: Sequence[str]) -> int:
+    def count_queued_commands(self, names: Sequence[str]) -> Optional[int]:
         """How many of `names` are queued/running right now. Used as a readiness
-        gate so a run doesn't pile more searches onto a backed-up *arr."""
+        gate so a run doesn't pile more searches onto a backed-up *arr.
+
+        Returns None when the command list can't be read — 0 is reserved for a
+        genuinely empty list, so callers must treat None as "not ready" rather
+        than launching searches into an unknown state."""
         response = self.make_get_request(f"{self.api_base}/command")
         if not isinstance(response, list):
-            return 0
+            self.logger.warning(
+                f"Could not read the command list from "
+                f"{self.instance_name or 'instance'} — treating it as not ready."
+            )
+            return None
         wanted = {n.lower() for n in names}
         return sum(
             1

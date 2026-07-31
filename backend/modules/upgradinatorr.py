@@ -1176,10 +1176,15 @@ class Upgradinatorr(ChubModule):
             # Readiness gate: an *arr already chewing through searches will just
             # queue ours behind them, so stage the run instead of piling on.
             backlog = app.count_queued_commands(SEARCH_COMMAND_NAMES)
-            if backlog >= SEARCH_BACKLOG_LIMIT:
+            if backlog is None or backlog >= SEARCH_BACKLOG_LIMIT:
+                reason = (
+                    "its command queue could not be read"
+                    if backlog is None
+                    else f"{backlog} search command(s) already queued or running"
+                )
                 self.logger.warning(
-                    f"Skipping {app.instance_name}: {backlog} search command(s) already "
-                    "queued or running. Nothing is lost — the next run picks this up."
+                    f"Skipping {app.instance_name}: {reason}. Nothing is lost — "
+                    "the next run picks this up."
                 )
                 filtered_media_dict = []
 

@@ -27,6 +27,8 @@ let authConfigured = null;
 // Gate re-entry after a failed mint — see the loop note in ensureStreamToken.
 let retryAfterMs = 0;
 let retryDelayMs = RETRY_BASE_MS;
+// The JWT a terminal 401 was seen on; retrying can't succeed until it changes.
+let rejectedJwt = null;
 const listeners = new Set();
 
 function fullToken() {
@@ -78,6 +80,7 @@ function handleAuthFailure(status, body) {
     if (status !== 401 || (code !== 'AUTH_REQUIRED' && code !== 'AUTH_TOKEN_INVALID')) {
         return;
     }
+    rejectedJwt = fullToken();
     try {
         localStorage.removeItem(TOKEN_STORAGE_KEY);
     } catch {
@@ -86,6 +89,22 @@ function handleAuthFailure(status, body) {
     if (window.location.pathname !== '/login') {
         window.location.href = '/login';
     }
+}
+
+/**
+ * True while the last failure was a handled 401 and no new credential has
+ * arrived. Retrying then cannot succeed, and AuthContext keeps a 4-minute
+ * interval alive on /login (where handleAuthFailure does not navigate), so
+ * without this the timers mint forever against a cleared session.
+ */
+function terminalAuthFailure() {
+    if (rejectedJwt === null) return false;
+    const jwt = fullToken();
+    if (jwt && jwt !== rejectedJwt) {
+        rejectedJwt = null;
+        return false;
+    }
+    return true;
 }
 
 function scheduleProactiveRefresh(ttlMs) {
@@ -121,6 +140,7 @@ export async function ensureStreamToken() {
     // subscriber, each rebuilt image URL calls streamTokenParam() -> back in here,
     // and without this gate that is an unbounded 401 loop (~46 req/s).
     if (Date.now() < retryAfterMs) return '';
+    if (terminalAuthFailure()) return '';
     if (!inflight) {
         const jwt = fullToken();
         inflight = fetch('/api/auth/stream-token', {
@@ -153,13 +173,17 @@ export async function ensureStreamToken() {
                 if (!d) {
                     // Back off, and do NOT notify — a re-render is what re-arms
                     // the loop, and nothing changed for subscribers anyway.
-                    retryAfterMs = Date.now() + retryDelayMs;
-                    scheduleRetry(retryDelayMs);
-                    retryDelayMs = Math.min(retryDelayMs * 2, RETRY_MAX_MS);
+                    // A handled 401 is terminal: no timer, it can't succeed.
+                    if (!terminalAuthFailure()) {
+                        retryAfterMs = Date.now() + retryDelayMs;
+                        scheduleRetry(retryDelayMs);
+                        retryDelayMs = Math.min(retryDelayMs * 2, RETRY_MAX_MS);
+                    }
                     return '';
                 }
                 retryAfterMs = 0;
                 retryDelayMs = RETRY_BASE_MS;
+                rejectedJwt = null;
                 cached = token ? { token, expMs: Date.now() + ttl } : null;
                 if (cached) scheduleProactiveRefresh(ttl);
                 notify();
@@ -193,5 +217,6 @@ export function clearStreamToken() {
     refreshTimer = null;
     retryAfterMs = 0;
     retryDelayMs = RETRY_BASE_MS;
+    rejectedJwt = null;
     notify();
 }
