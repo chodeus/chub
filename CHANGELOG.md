@@ -2,6 +2,13 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.43.2](https://github.com/chodeus/chub/compare/v2.43.1...v2.43.2) (2026-07-30)
+
+
+### Bug Fixes
+
+* **docker:** build the frontend on the native platform, not under QEMU ([#416](https://github.com/chodeus/chub/issues/416)) ([7009ea6](https://github.com/chodeus/chub/commit/7009ea68443a8335a0cfc6bc38bf84b7577cbc0d))
+
 ## [2.43.1](https://github.com/chodeus/chub/compare/v2.43.0...v2.43.1) (2026-07-29)
 
 
