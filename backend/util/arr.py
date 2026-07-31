@@ -34,9 +34,11 @@ def _positive_int_env(name: str, default: int) -> int:
 
 
 COMMAND_POLL_SECONDS = 5
-# Generous: the *arr serialises searches, so a queue wait is normal, not a fault.
+# Both generous on purpose. A queue wait is normal (the *arr serialises
+# searches), and a search can legitimately run for a long time — an observed
+# Sonarr SeasonSearch took 26m15s of execution with no queue wait at all.
 COMMAND_QUEUE_TIMEOUT_SECONDS = _positive_int_env("ARR_COMMAND_QUEUE_TIMEOUT", 3600)
-COMMAND_RUN_TIMEOUT_SECONDS = _positive_int_env("ARR_COMMAND_RUN_TIMEOUT", 1800)
+COMMAND_RUN_TIMEOUT_SECONDS = _positive_int_env("ARR_COMMAND_RUN_TIMEOUT", 3600)
 COMMAND_MAX_POLL_ERRORS = 12
 COMMAND_TERMINAL_FAILURES = ("failed", "aborted", "cancelled", "orphaned")
 

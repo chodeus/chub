@@ -92,6 +92,17 @@ def test_long_queue_wait_then_success_is_not_a_timeout(monkeypatch):
     assert clock.now > 600
 
 
+def test_a_long_running_search_with_no_queue_wait_still_completes(monkeypatch):
+    """The Sonarr variant: command 1868702 started instantly and ran for 26m15s
+    before completing. The old single 10-minute budget expired mid-execution and
+    reported the season search as failed."""
+    running = [{"status": "started"}] * 320  # ~26.5 min of execution
+    client, clock = _client(running + [{"status": "completed"}], monkeypatch)
+
+    assert client.wait_for_command_result(1868702) == COMMAND_COMPLETED
+    assert clock.now > 26 * 60
+
+
 def test_stuck_in_queue_past_the_queue_budget_defers(monkeypatch):
     client, _ = _client([{"status": "queued"}], monkeypatch)
 
