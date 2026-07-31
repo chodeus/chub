@@ -322,6 +322,32 @@ class Upgradinatorr(ChubModule):
             return True
         return str(event_type).strip().lower() in {"grabbed", "1"}
 
+    # History record field naming the item a grab belongs to, per *arr.
+    _HISTORY_OWNER_FIELD = {
+        "radarr": "movieId",
+        "sonarr": "seriesId",
+        "lidarr": "artistId",
+    }
+
+    @classmethod
+    def _record_in_scope(
+        cls,
+        record: Dict[str, Any],
+        instance_type: str,
+        media_id: int,
+        album_id: Optional[int],
+    ) -> bool:
+        """Drop a record whose owning id contradicts the request; a missing id is
+        kept. Guards against an *arr that ignores its history scope params."""
+        checks = [(cls._HISTORY_OWNER_FIELD.get(instance_type), media_id)]
+        if album_id is not None:
+            checks.append(("albumId", album_id))
+        for field, expected in checks:
+            actual = record.get(field) if field else None
+            if actual is not None and str(actual) != str(expected):
+                return False
+        return True
+
     @staticmethod
     def _record_search_attempt(
         search_stats: Optional[Dict[str, int]], outcome: str
@@ -390,14 +416,24 @@ class Upgradinatorr(ChubModule):
             return None
 
         downloads: List[Dict[str, Any]] = []
+        out_of_scope = 0
         for record in records:
             if not isinstance(record, dict):
                 continue
             if not self._is_grabbed_history(record):
                 continue
+            if not self._record_in_scope(record, instance_type, media_id, album_id):
+                out_of_scope += 1
+                continue
             download = self._history_record_to_download(record, media_id)
             if download:
                 downloads.append(download)
+        if out_of_scope:
+            self.logger.warning(
+                f"Discarded {out_of_scope} history record(s) belonging to other media "
+                f"while reading grabs for {instance_type} ID {media_id} — "
+                f"{app.instance_name} ignored the history scope filter."
+            )
         return downloads
 
     def _capture_new_grabs(
