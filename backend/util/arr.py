@@ -1751,12 +1751,8 @@ class LidarrClient(BaseARRClient):
         return self.make_get_request(endpoint, headers=self.headers, params=params)
 
     def get_album_grab_history(self, album_id: int) -> Any:
-        """Get grab history for a specific album.
-
-        Must use `albumId`/`eventType` — Lidarr's /history binds only those and
-        silently IGNORES filterKey/filterValue, returning the whole library's
-        history and attributing other artists' grabs to this album.
-        """
+        """Grab history for one album. Lidarr's /history binds albumId/eventType
+        and silently ignores filterKey/filterValue — those return the WHOLE library."""
         endpoint = f"{self.api_base}/history"
         params = {
             "page": 1,

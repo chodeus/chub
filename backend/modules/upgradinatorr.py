@@ -337,11 +337,8 @@ class Upgradinatorr(ChubModule):
         media_id: int,
         album_id: Optional[int],
     ) -> bool:
-        """Reject a history record that carries someone else's id. Guards against
-        an *arr endpoint ignoring its scope params (Lidarr's /history did),
-        which otherwise attributes unrelated grabs to the searched item. A
-        missing id means "can't tell" — kept, so a shape change can't blank the
-        report."""
+        """Drop a record whose owning id contradicts the request; a missing id is
+        kept. Guards against an *arr that ignores its history scope params."""
         checks = [(cls._HISTORY_OWNER_FIELD.get(instance_type), media_id)]
         if album_id is not None:
             checks.append(("albumId", album_id))
