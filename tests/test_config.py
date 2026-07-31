@@ -966,6 +966,93 @@ def test_upgradinatorr_lidarr_captures_all_grabbed_albums():
     }
 
 
+class FakeLeakyLidarrApp(FakeLidarrHistoryApp):
+    """Mimics Lidarr's /history when the scope filter is ignored: every call
+    returns the whole library's recent grabs, not just the album's. A manual
+    download for an unrelated artist lands mid-run, so it is absent from the
+    "before" snapshot and present in the "after" one — which is what made it
+    look like a new grab for the album being searched."""
+
+    UNRELATED = {
+        "id": 9001,
+        "downloadId": "manual-pantera",
+        "sourceTitle": (
+            "Pantera - Reinventing the Steel (2000) [Album] "
+            "[20th Anniversary Edition 2020] [FLAC 24bit Lossless / WEB]"
+        ),
+        "customFormatScore": 6,
+        "eventType": "grabbed",
+        "artistId": 189,
+        "albumId": 358,
+    }
+
+    def __init__(self):
+        super().__init__()
+        self.history_calls = 0
+
+    def search_album(self, album_id):
+        response = FakeLidarrApp.search_album(self, album_id)
+        self.grab_history[album_id] = [
+            {
+                "id": album_id,
+                "downloadId": f"download-{album_id}",
+                "sourceTitle": f"Artist.Album.{album_id}.FLAC",
+                "customFormatScore": 9000 + album_id,
+                "eventType": "grabbed",
+                "artistId": 21,
+                "albumId": album_id,
+            }
+        ]
+        return response
+
+    def get_album_grab_history(self, album_id):
+        self.history_calls += 1
+        records = list(self.grab_history.get(album_id, []))
+        # Call 1 is the first album's "before" snapshot; the manual grab appears
+        # from the following call onward.
+        if self.history_calls > 1:
+            records.insert(0, self.UNRELATED)
+        return {"records": records}
+
+
+def test_upgradinatorr_ignores_grabs_belonging_to_other_media():
+    module = make_upgradinatorr(dry_run=False)
+    app = FakeLeakyLidarrApp()
+    grabbed = {}
+
+    module._process_lidarr_item(
+        _lidarr_item(),
+        app,
+        checked_tag_id=99,
+        count=5,
+        granular=False,
+        progress_db=None,
+        search_count=0,
+        grabbed_downloads=grabbed,
+    )
+
+    captured = [download["download"] for download in grabbed[21]]
+    assert captured == [
+        "Artist.Album.101.FLAC",
+        "Artist.Album.102.FLAC",
+        "Artist.Album.103.FLAC",
+    ]
+    assert not any("Pantera" in title for title in captured)
+
+
+def test_upgradinatorr_scope_check_keeps_records_without_ids():
+    """An id the *arr doesn't serialize means "can't tell" — the record is kept
+    rather than silently dropped from the report."""
+    module = make_upgradinatorr(dry_run=False)
+
+    assert module._record_in_scope({"sourceTitle": "x"}, "lidarr", 21, 101) is True
+    assert module._record_in_scope({"artistId": 21}, "lidarr", 21, None) is True
+    assert module._record_in_scope({"artistId": 189}, "lidarr", 21, None) is False
+    assert module._record_in_scope({"albumId": 358}, "lidarr", 21, 101) is False
+    assert module._record_in_scope({"seriesId": 11}, "sonarr", 11, None) is True
+    assert module._record_in_scope({"movieId": 5}, "radarr", 7, None) is False
+
+
 def test_upgradinatorr_lidarr_failure_does_not_tag_or_record_progress():
     module = make_upgradinatorr(dry_run=False)
     app = FakeFailingLidarrApp()
