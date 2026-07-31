@@ -137,6 +137,10 @@ export async function ensureStreamToken() {
                         return null;
                     });
             })
+            // MUST sit before the classification below: a network-level reject
+            // would otherwise skip it for the trailing catch, leaving the retry
+            // gate open and the loop free to re-arm during an outage.
+            .catch(() => null)
             .then(d => {
                 const token = d?.data?.token || '';
                 const ttl = (d?.data?.expires_in || 0) * 1000;
