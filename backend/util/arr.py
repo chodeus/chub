@@ -239,7 +239,10 @@ class BaseARRClient:
         while True:
             response = self.make_get_request(endpoint)
 
-            if response is None:
+            # Not just None: make_get_request falls back to response.text when a
+            # 200 body isn't JSON (a proxy's HTML page), and .get() on a str
+            # would escape this loop and abort the whole search run.
+            if not isinstance(response, dict):
                 consecutive_errors += 1
                 if consecutive_errors >= COMMAND_MAX_POLL_ERRORS:
                     self.logger.error(

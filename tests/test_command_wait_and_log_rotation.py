@@ -121,6 +121,27 @@ def test_unreachable_instance_gives_up_instead_of_burning_the_budget(monkeypatch
     assert clock.now < COMMAND_QUEUE_TIMEOUT_SECONDS
 
 
+@pytest.mark.parametrize(
+    "junk", ["<html>502 Bad Gateway</html>", "", [], 0]
+)
+def test_non_dict_poll_response_is_a_poll_error_not_a_crash(junk, monkeypatch):
+    """make_get_request returns response.text when a 200 body isn't JSON, so a
+    proxy error page would otherwise raise AttributeError out of the wait loop
+    and abort the entire search run."""
+    client, _ = _client([junk], monkeypatch)
+
+    assert client.wait_for_command_result(17) == COMMAND_UNREACHABLE
+
+
+def test_recovers_when_a_junk_response_is_followed_by_a_real_one(monkeypatch):
+    client, _ = _client(
+        ["<html>502</html>", None, {"status": "started"}, {"status": "completed"}],
+        monkeypatch,
+    )
+
+    assert client.wait_for_command_result(19) == COMMAND_COMPLETED
+
+
 @pytest.mark.parametrize("status", ["failed", "aborted", "cancelled", "orphaned"])
 def test_terminal_failures_are_reported_as_failures(status, monkeypatch):
     client, _ = _client([{"status": status}], monkeypatch)
