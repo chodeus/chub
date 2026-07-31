@@ -15,6 +15,8 @@
 
 const TOKEN_STORAGE_KEY = 'chub-auth-token';
 const SKEW_MS = 30_000; // refresh this long before expiry
+const RETRY_BASE_MS = 30_000;
+const RETRY_MAX_MS = 300_000;
 
 let cached = null; // { token: string, expMs: number }
 let inflight = null;
@@ -22,6 +24,9 @@ let refreshTimer = null;
 // null = unknown, true = auth on (token required), false = auth not configured
 // (the /stream-token route is open, so image/SSE URLs need no token at all).
 let authConfigured = null;
+// Gate re-entry after a failed mint — see the loop note in ensureStreamToken.
+let retryAfterMs = 0;
+let retryDelayMs = RETRY_BASE_MS;
 const listeners = new Set();
 
 function fullToken() {
@@ -63,6 +68,26 @@ export function streamAuthDisabled() {
     return authConfigured === false;
 }
 
+/**
+ * Mirror the 401 handling in core.js (this module uses a raw fetch, so it never
+ * reaches that handler): a dead session must land on /login rather than leave
+ * the app rendering an error it can't recover from.
+ */
+function handleAuthFailure(status, body) {
+    const code = body?.error_code;
+    if (status !== 401 || (code !== 'AUTH_REQUIRED' && code !== 'AUTH_TOKEN_INVALID')) {
+        return;
+    }
+    try {
+        localStorage.removeItem(TOKEN_STORAGE_KEY);
+    } catch {
+        /* noop */
+    }
+    if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+    }
+}
+
 function scheduleProactiveRefresh(ttlMs) {
     if (refreshTimer) clearTimeout(refreshTimer);
     // Refresh SKEW before expiry so the token never actually lapses. Force a
@@ -75,6 +100,16 @@ function scheduleProactiveRefresh(ttlMs) {
     }, delay);
 }
 
+// One bounded retry after a failed mint, so a transient backend blip self-heals
+// instead of leaving images token-less until the next unrelated re-render.
+function scheduleRetry(delayMs) {
+    if (refreshTimer) clearTimeout(refreshTimer);
+    refreshTimer = setTimeout(() => {
+        retryAfterMs = 0;
+        ensureStreamToken();
+    }, delayMs);
+}
+
 /** Fetch (or reuse) a valid stream token. Concurrent callers share one request. */
 export async function ensureStreamToken() {
     const current = fresh();
@@ -82,13 +117,26 @@ export async function ensureStreamToken() {
     // Auth confirmed off: the token is always empty and the route is open, so
     // stop re-hitting /stream-token on every render — there is nothing to mint.
     if (authConfigured === false) return '';
+    // A failed mint must NOT re-arm on the next render: notify() re-renders every
+    // subscriber, each rebuilt image URL calls streamTokenParam() -> back in here,
+    // and without this gate that is an unbounded 401 loop (~46 req/s).
+    if (Date.now() < retryAfterMs) return '';
     if (!inflight) {
         const jwt = fullToken();
         inflight = fetch('/api/auth/stream-token', {
             method: 'POST',
             headers: jwt ? { Authorization: `Bearer ${jwt}` } : {},
         })
-            .then(r => (r.ok ? r.json() : null))
+            .then(r => {
+                if (r.ok) return r.json();
+                return r
+                    .json()
+                    .catch(() => null)
+                    .then(body => {
+                        handleAuthFailure(r.status, body);
+                        return null;
+                    });
+            })
             .then(d => {
                 const token = d?.data?.token || '';
                 const ttl = (d?.data?.expires_in || 0) * 1000;
@@ -98,6 +146,16 @@ export async function ensureStreamToken() {
                 // (null) is an auth-on 401/expired-JWT case, so leave the state
                 // unchanged rather than mislabelling it as "not configured".
                 if (d) authConfigured = token !== '';
+                if (!d) {
+                    // Back off, and do NOT notify — a re-render is what re-arms
+                    // the loop, and nothing changed for subscribers anyway.
+                    retryAfterMs = Date.now() + retryDelayMs;
+                    scheduleRetry(retryDelayMs);
+                    retryDelayMs = Math.min(retryDelayMs * 2, RETRY_MAX_MS);
+                    return '';
+                }
+                retryAfterMs = 0;
+                retryDelayMs = RETRY_BASE_MS;
                 cached = token ? { token, expMs: Date.now() + ttl } : null;
                 if (cached) scheduleProactiveRefresh(ttl);
                 notify();
@@ -129,5 +187,7 @@ export function clearStreamToken() {
     inflight = null;
     if (refreshTimer) clearTimeout(refreshTimer);
     refreshTimer = null;
+    retryAfterMs = 0;
+    retryDelayMs = RETRY_BASE_MS;
     notify();
 }
