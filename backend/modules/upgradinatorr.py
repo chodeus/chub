@@ -1,11 +1,19 @@
 # modules/upgradinatorr.py
 
 import threading
+import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Optional, Tuple
 
-from backend.util.arr import BaseARRClient, create_arr_client
+from backend.util.arr import (
+    COMMAND_COMPLETED,
+    COMMAND_FAILED,
+    COMMAND_TIMEOUT,
+    COMMAND_UNREACHABLE,
+    BaseARRClient,
+    create_arr_client,
+)
 from backend.util.base_module import ChubModule
 from backend.util.database import ChubDB
 from backend.util.database.upgradinatorr_progress import UpgradinatorrProgress
@@ -16,6 +24,25 @@ from backend.util.notification import NotificationManager
 VALID_STATUSES = {"continuing", "airing", "ended", "canceled", "released"}
 VALID_SEARCH_MODES = {"upgrade", "missing", "cutoff"}
 VALID_COUNT_MODES = {"series_artist", "season_album"}
+
+# Outcomes that mean "the *arr is behind", not "the search failed" — the run
+# stops and leaves the work untagged so the next run resumes it.
+DEFERRED_OUTCOMES = (COMMAND_TIMEOUT, COMMAND_UNREACHABLE)
+# Queued/running searches at which an instance is considered too busy to accept
+# more. The *arr runs them one at a time, so anything above this just backs up.
+SEARCH_BACKLOG_LIMIT = 3
+# Search commands to count when checking whether an instance is ready.
+SEARCH_COMMAND_NAMES = (
+    "MoviesSearch",
+    "MissingMoviesSearch",
+    "SeriesSearch",
+    "SeasonSearch",
+    "EpisodeSearch",
+    "MissingEpisodeSearch",
+    "AlbumSearch",
+    "ArtistSearch",
+    "MissingAlbumSearch",
+)
 
 
 class _BufferingLogger:
@@ -37,7 +64,7 @@ class _BufferingLogger:
 
     def _store(self, level: str, msg: Any, args: tuple, kwargs: dict) -> None:
         with self._lock:
-            self._records.append((level, msg, args, kwargs))
+            self._records.append((level, msg, args, kwargs, time.time()))
 
     def debug(self, msg: Any, *args, **kwargs) -> None:
         self._store("debug", msg, args, kwargs)
@@ -84,7 +111,11 @@ class _BufferingLogger:
         with self._lock:
             records = list(self._records)
             self._records.clear()
-        for level, msg, args, kwargs in records:
+        for level, msg, args, kwargs, created in records:
+            # Carry the original event time so replayed lines aren't all stamped
+            # with the flush time (SafeFormatter honours orig_created).
+            kwargs = dict(kwargs)
+            kwargs["extra"] = {**(kwargs.get("extra") or {}), "orig_created": created}
             getattr(logger, level)(msg, *args, **kwargs)
 
 
@@ -208,25 +239,34 @@ class Upgradinatorr(ChubModule):
         search_response: Optional[Dict[str, Any]],
         media_id: int,
         app: BaseARRClient,
-    ) -> bool:
-        if search_response:
-            self.logger.debug(
-                f"    [CMD] Waiting for command to complete for search response ID: {search_response['id']}"
-            )
-            ready = app.wait_for_command(search_response["id"])
-            if ready:
-                self.logger.debug(
-                    f"    [CMD] Command completed successfully for search response ID: {search_response['id']}"
-                )
-                return True
-            else:
-                self.logger.warning(
-                    f"    [CMD] Command did not complete successfully for search response ID: {search_response['id']}"
-                )
-                return False
-        else:
+        label: str = "",
+    ) -> str:
+        """Wait on a fired search. Returns an arr COMMAND_* outcome — callers must
+        treat TIMEOUT/UNREACHABLE as "defer", NOT as a failure: the search is
+        still queued on the *arr and completes after we stop watching."""
+        if not search_response:
             self.logger.warning(f"No search response for media ID: {media_id}")
-            return False
+            return COMMAND_FAILED
+
+        command_id = search_response["id"]
+        self.logger.debug(
+            f"    [CMD] Waiting for command to complete for search response ID: {command_id}"
+        )
+        outcome = app.wait_for_command_result(command_id, label)
+        if outcome == COMMAND_COMPLETED:
+            self.logger.debug(
+                f"    [CMD] Command completed successfully for search response ID: {command_id}"
+            )
+        elif outcome in DEFERRED_OUTCOMES:
+            self.logger.warning(
+                f"    [CMD] Search {command_id} left {outcome} on {app.instance_name} — "
+                "staging it for the next run (the search itself was NOT lost)."
+            )
+        else:
+            self.logger.warning(
+                f"    [CMD] Command did not complete successfully for search response ID: {command_id}"
+            )
+        return outcome
 
     @staticmethod
     def _history_records(history_response: Any) -> Optional[List[Dict[str, Any]]]:
@@ -284,15 +324,24 @@ class Upgradinatorr(ChubModule):
 
     @staticmethod
     def _record_search_attempt(
-        search_stats: Optional[Dict[str, int]], success: bool
+        search_stats: Optional[Dict[str, int]], outcome: str
     ) -> None:
         if search_stats is None:
             return
         search_stats["searches_attempted"] = (
             search_stats.get("searches_attempted", 0) + 1
         )
-        key = "searches_succeeded" if success else "searches_failed"
+        if outcome == COMMAND_COMPLETED:
+            key = "searches_succeeded"
+        elif outcome in DEFERRED_OUTCOMES:
+            key = "searches_deferred"
+        else:
+            key = "searches_failed"
         search_stats[key] = search_stats.get(key, 0) + 1
+
+    @staticmethod
+    def _deferred_count(search_stats: Optional[Dict[str, int]]) -> int:
+        return (search_stats or {}).get("searches_deferred", 0)
 
     @staticmethod
     def _record_search_failure(
@@ -402,6 +451,7 @@ class Upgradinatorr(ChubModule):
         if not granular:
             searched = False
             all_successful = True
+            deferred = False
             for season in item["seasons"]:
                 if season["monitored"]:
                     season_number = season["season_number"]
@@ -412,11 +462,14 @@ class Upgradinatorr(ChubModule):
                         app, item["media_id"], "sonarr", season_number
                     )
                     search_response = app.search_season(item["media_id"], season_number)
-                    success = self.process_search_response(
-                        search_response, item["media_id"], app
+                    outcome = self.process_search_response(
+                        search_response,
+                        item["media_id"],
+                        app,
+                        f"{item['title']} S{season_number}",
                     )
-                    self._record_search_attempt(search_stats, success)
-                    if success:
+                    self._record_search_attempt(search_stats, outcome)
+                    if outcome == COMMAND_COMPLETED:
                         after_downloads = self._get_grabbed_downloads(
                             app, item["media_id"], "sonarr", season_number
                         )
@@ -426,6 +479,11 @@ class Upgradinatorr(ChubModule):
                             after_downloads,
                             item["media_id"],
                         )
+                    elif outcome in DEFERRED_OUTCOMES:
+                        all_successful = False
+                        deferred = True
+                        searched = True
+                        break
                     else:
                         all_successful = False
                         self._record_search_failure(
@@ -442,6 +500,11 @@ class Upgradinatorr(ChubModule):
                     if progress_db is not None:
                         # Clean up any stale progress rows from a prior granular run.
                         progress_db.clear_for_media(app.instance_name, item["media_id"])
+                elif deferred:
+                    self.logger.warning(
+                        f"Not tagging {self._format_item_title(item)} yet — "
+                        f"{app.instance_name} is still working through the searches."
+                    )
                 else:
                     self.logger.warning(
                         f"Not tagging {self._format_item_title(item)} because one or more "
@@ -485,11 +548,14 @@ class Upgradinatorr(ChubModule):
                 app, item["media_id"], "sonarr", season_number
             )
             search_response = app.search_season(item["media_id"], season_number)
-            success = self.process_search_response(
-                search_response, item["media_id"], app
+            outcome = self.process_search_response(
+                search_response,
+                item["media_id"],
+                app,
+                f"{item['title']} S{season_number}",
             )
-            self._record_search_attempt(search_stats, success)
-            if success:
+            self._record_search_attempt(search_stats, outcome)
+            if outcome == COMMAND_COMPLETED:
                 after_downloads = self._get_grabbed_downloads(
                     app, item["media_id"], "sonarr", season_number
                 )
@@ -499,11 +565,14 @@ class Upgradinatorr(ChubModule):
                     after_downloads,
                     item["media_id"],
                 )
+            elif outcome in DEFERRED_OUTCOMES:
+                # Untagged + unrecorded, so the next run resumes at this season.
+                return search_count, True
             else:
                 self._record_search_failure(
                     failed_searches, item["media_id"], f"Season {season_number}"
                 )
-            if success and progress_db is not None:
+            if outcome == COMMAND_COMPLETED and progress_db is not None:
                 progress_db.record_processed_child(
                     app.instance_name, item["media_id"], str(season_number)
                 )
@@ -547,6 +616,7 @@ class Upgradinatorr(ChubModule):
         if not granular:
             searched = False
             all_successful = True
+            deferred = False
             for album in item["seasons"]:
                 if album.get("monitored", False):
                     album_id = album.get("album_id")
@@ -561,11 +631,14 @@ class Upgradinatorr(ChubModule):
                             app, item["media_id"], "lidarr", album_id=album_id
                         )
                         search_response = app.search_album(album_id)
-                        success = self.process_search_response(
-                            search_response, item["media_id"], app
+                        outcome = self.process_search_response(
+                            search_response,
+                            item["media_id"],
+                            app,
+                            f"{item['title']} — {album_title}",
                         )
-                        self._record_search_attempt(search_stats, success)
-                        if success:
+                        self._record_search_attempt(search_stats, outcome)
+                        if outcome == COMMAND_COMPLETED:
                             after_downloads = self._get_grabbed_downloads(
                                 app, item["media_id"], "lidarr", album_id=album_id
                             )
@@ -575,6 +648,11 @@ class Upgradinatorr(ChubModule):
                                 after_downloads,
                                 item["media_id"],
                             )
+                        elif outcome in DEFERRED_OUTCOMES:
+                            all_successful = False
+                            deferred = True
+                            searched = True
+                            break
                         else:
                             all_successful = False
                             self._record_search_failure(
@@ -592,6 +670,11 @@ class Upgradinatorr(ChubModule):
                     app.add_tags(item["media_id"], checked_tag_id)
                     if progress_db is not None:
                         progress_db.clear_for_media(app.instance_name, item["media_id"])
+                elif deferred:
+                    self.logger.warning(
+                        f"Not tagging {item['title']} yet — {app.instance_name} is "
+                        "still working through the searches."
+                    )
                 else:
                     self.logger.warning(
                         f"Not tagging {item['title']} because one or more album searches failed."
@@ -631,11 +714,14 @@ class Upgradinatorr(ChubModule):
                 app, item["media_id"], "lidarr", album_id=album_id
             )
             search_response = app.search_album(album_id)
-            success = self.process_search_response(
-                search_response, item["media_id"], app
+            outcome = self.process_search_response(
+                search_response,
+                item["media_id"],
+                app,
+                f"{item['title']} — {album_title}",
             )
-            self._record_search_attempt(search_stats, success)
-            if success:
+            self._record_search_attempt(search_stats, outcome)
+            if outcome == COMMAND_COMPLETED:
                 after_downloads = self._get_grabbed_downloads(
                     app, item["media_id"], "lidarr", album_id=album_id
                 )
@@ -645,11 +731,14 @@ class Upgradinatorr(ChubModule):
                     after_downloads,
                     item["media_id"],
                 )
+            elif outcome in DEFERRED_OUTCOMES:
+                # Untagged + unrecorded, so the next run resumes at this album.
+                return search_count, True
             else:
                 self._record_search_failure(
                     failed_searches, item["media_id"], f"Album {album_title}"
                 )
-            if success and progress_db is not None:
+            if outcome == COMMAND_COMPLETED and progress_db is not None:
                 progress_db.record_processed_child(
                     app.instance_name, item["media_id"], str(album_id)
                 )
@@ -1059,6 +1148,7 @@ class Upgradinatorr(ChubModule):
             "searches_attempted": 0,
             "searches_succeeded": 0,
             "searches_failed": 0,
+            "searches_deferred": 0,
             "data": [],
         }
 
@@ -1071,6 +1161,7 @@ class Upgradinatorr(ChubModule):
                 "searches_attempted": 0,
                 "searches_succeeded": 0,
                 "searches_failed": 0,
+                "searches_deferred": 0,
             }
             progress_db: Optional[UpgradinatorrProgress] = None
             db_ctx: Optional[ChubDB] = None
@@ -1083,6 +1174,23 @@ class Upgradinatorr(ChubModule):
                 progress_db = db_ctx.upgradinatorr_progress
 
             try:
+                # Readiness gate: an *arr already chewing through searches will
+                # just queue ours behind them, so stage the run instead of
+                # piling on. MUST stay inside the try — count_queued_commands
+                # re-raises on 401/404 and db_ctx is already open.
+                backlog = app.count_queued_commands(SEARCH_COMMAND_NAMES)
+                if backlog is None or backlog >= SEARCH_BACKLOG_LIMIT:
+                    reason = (
+                        "its command queue could not be read"
+                        if backlog is None
+                        else f"{backlog} search command(s) already queued or running"
+                    )
+                    self.logger.warning(
+                        f"Skipping {app.instance_name}: {reason}. Nothing is lost — "
+                        "the next run picks this up."
+                    )
+                    filtered_media_dict = []
+
                 for item in filtered_media_dict:
                     if self.is_cancelled():
                         break
@@ -1106,10 +1214,14 @@ class Upgradinatorr(ChubModule):
                             app, item["media_id"], instance_type
                         )
                         search_response = app.search_media(item["media_id"])
-                        success = self.process_search_response(
-                            search_response, item["media_id"], app
+                        outcome = self.process_search_response(
+                            search_response,
+                            item["media_id"],
+                            app,
+                            self._format_item_title(item),
                         )
-                        self._record_search_attempt(search_stats, success)
+                        self._record_search_attempt(search_stats, outcome)
+                        success = outcome == COMMAND_COMPLETED
                         if success:
                             after_downloads = self._get_grabbed_downloads(
                                 app, item["media_id"], instance_type
@@ -1124,7 +1236,7 @@ class Upgradinatorr(ChubModule):
                                 f"[TAG] {item['title']} += {checked_tag_id}"
                             )
                             app.add_tags(item["media_id"], checked_tag_id)
-                        else:
+                        elif outcome not in DEFERRED_OUTCOMES:
                             self._record_search_failure(
                                 failed_searches, item["media_id"], "Media search"
                             )
@@ -1161,6 +1273,14 @@ class Upgradinatorr(ChubModule):
                             failed_searches,
                             search_stats,
                         )
+
+                    if self._deferred_count(search_stats):
+                        self.logger.warning(
+                            f"{app.instance_name} is not keeping up — stopping this run "
+                            f"after {search_count} search(es). The staged work is "
+                            "untagged and unrecorded, so the next run resumes from here."
+                        )
+                        break
 
                     if budget_hit:
                         self.logger.debug(
@@ -1223,10 +1343,17 @@ class Upgradinatorr(ChubModule):
             tagged_in_run = len(searched_items) - sum(
                 1 for v in failed_searches.values() if v
             )
-            self.logger.info(
+            # A deferred item is in searched_items but records no failure, so it
+            # would otherwise be counted as tagged when it deliberately is not.
+            deferred = self._deferred_count(search_stats)
+            tagged_in_run -= deferred
+            summary = (
                 f"   → {search_stats['searches_attempted']} searched, "
                 f"{max(tagged_in_run, 0)} tagged"
             )
+            if deferred:
+                summary += f", {deferred} staged for the next run"
+            self.logger.info(summary)
         else:
             for item in filtered_media_dict:
                 output_dict["data"].append(
@@ -1259,14 +1386,22 @@ class Upgradinatorr(ChubModule):
 
             table = [[f"{run_data['server_name']}"]]
             self.logger.info(create_table(table))
+            deferred = run_data.get("searches_deferred", 0)
             self.logger.info(
                 f"Searches: {run_data.get('searches_attempted', 0)} attempted, "
                 f"{run_data.get('searches_succeeded', 0)} completed, "
-                f"{run_data.get('searches_failed', 0)} failed | "
-                f"Parents: {run_data.get('untagged_count', 0)} untagged, "
+                f"{run_data.get('searches_failed', 0)} failed"
+                + (f", {deferred} staged" if deferred else "")
+                + f" | Parents: {run_data.get('untagged_count', 0)} untagged, "
                 f"{run_data.get('tagged_count', 0)} tagged, "
                 f"{run_data.get('total_count', 0)} total."
             )
+            if deferred:
+                self.logger.info(
+                    f"[STAGED] {deferred} search(es) left with "
+                    f"{run_data['server_name']} — they finish there on their own and "
+                    "the next run resumes the untagged work. Not a failure."
+                )
 
             with_grabs = [it for it in instance_data if it.get("download")]
             with_failures = [it for it in instance_data if it.get("search_failures")]

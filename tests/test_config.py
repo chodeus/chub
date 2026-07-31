@@ -395,6 +395,12 @@ class FakeARR:
     def wait_for_command(self, command_id):
         return True
 
+    def wait_for_command_result(self, command_id, label=""):
+        return "completed"
+
+    def count_queued_commands(self, _names):
+        return 0
+
     def add_tags(self, media_id, tag_id):
         self.add_calls.append((media_id, tag_id))
 
@@ -405,6 +411,9 @@ class FakeARR:
 class FakeFailingARR(FakeARR):
     def wait_for_command(self, command_id):
         return False
+
+    def wait_for_command_result(self, command_id, label=""):
+        return "failed"
 
 
 class FakeQueueARR(FakeARR):
@@ -597,6 +606,12 @@ class FakeSonarrApp:
     def wait_for_command(self, _cmd_id):
         return True
 
+    def wait_for_command_result(self, _cmd_id, label=""):
+        return "completed"
+
+    def count_queued_commands(self, _names):
+        return 0
+
     def add_tags(self, media_id, tag_id):
         self.tag_calls.append((media_id, tag_id))
 
@@ -626,6 +641,9 @@ class FakeFailingSonarrApp(FakeSonarrApp):
     def wait_for_command(self, _cmd_id):
         return False
 
+    def wait_for_command_result(self, _cmd_id, label=""):
+        return "failed"
+
 
 class FakeLidarrApp:
     instance_name = "lidarr_main"
@@ -641,6 +659,12 @@ class FakeLidarrApp:
 
     def wait_for_command(self, _cmd_id):
         return True
+
+    def wait_for_command_result(self, _cmd_id, label=""):
+        return "completed"
+
+    def count_queued_commands(self, _names):
+        return 0
 
     def add_tags(self, media_id, tag_id):
         self.tag_calls.append((media_id, tag_id))
@@ -671,6 +695,9 @@ class FakeLidarrHistoryApp(FakeLidarrApp):
 class FakeFailingLidarrApp(FakeLidarrApp):
     def wait_for_command(self, _cmd_id):
         return False
+
+    def wait_for_command_result(self, _cmd_id, label=""):
+        return "failed"
 
 
 def _sonarr_item():
