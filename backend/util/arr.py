@@ -6,7 +6,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Sequence, Union
 
 import requests
 from unidecode import unidecode
@@ -16,6 +16,19 @@ from backend.util.helper import extract_year
 from backend.util.normalization import normalize_titles
 
 logging.getLogger("requests").setLevel(logging.WARNING)
+
+# wait_for_command_result outcomes.
+COMMAND_COMPLETED = "completed"
+COMMAND_FAILED = "failed"
+COMMAND_TIMEOUT = "timeout"
+COMMAND_UNREACHABLE = "unreachable"
+
+COMMAND_POLL_SECONDS = 5
+# Generous: the *arr serialises searches, so a queue wait is normal, not a fault.
+COMMAND_QUEUE_TIMEOUT_SECONDS = int(os.getenv("ARR_COMMAND_QUEUE_TIMEOUT", "3600"))
+COMMAND_RUN_TIMEOUT_SECONDS = int(os.getenv("ARR_COMMAND_RUN_TIMEOUT", "1800"))
+COMMAND_MAX_POLL_ERRORS = 12
+COMMAND_TERMINAL_FAILURES = ("failed", "aborted", "cancelled", "orphaned")
 
 
 # Custom exception types for specific error categories
@@ -196,33 +209,96 @@ class BaseARRClient:
         endpoint = f"{self.api_base}/health"
         return self.make_get_request(endpoint)
 
-    def wait_for_command(self, command_id: int) -> bool:
-        """
-        Poll the given command ID until it completes, fails, or times out.
+    def wait_for_command_result(self, command_id: int, label: str = "") -> str:
+        """Poll `command_id` until it settles. Returns one of COMMAND_COMPLETED,
+        COMMAND_FAILED, COMMAND_TIMEOUT, COMMAND_UNREACHABLE.
 
-        Args:
-            command_id (int): Command ID to wait for.
-        Returns:
-            bool: True if successful, False otherwise.
-        """
-        self.logger.debug("Waiting for command to complete...")
-        cycle = 0
+        Queue time is budgeted separately from run time: the *arr runs search
+        commands one at a time, so a command can sit queued far longer than it
+        takes to run. Charging that wait to a single wall-clock budget made
+        searches that later succeeded get reported as failures."""
+        endpoint = f"{self.api_base}/command/{command_id}"
+        tag = f"[{label}] " if label else ""
+        who = self.instance_name or "instance"
+        started_at = time.monotonic()
+        queue_deadline = started_at + COMMAND_QUEUE_TIMEOUT_SECONDS
+        run_deadline: Optional[float] = None
+        consecutive_errors = 0
+        last_status: Optional[str] = None
+
         while True:
-            endpoint = f"{self.api_base}/command/{command_id}"
             response = self.make_get_request(endpoint)
-            if response and response.get("status") == "completed":
-                return True
-            if response and response.get("status") == "failed":
-                return False
-            time.sleep(5)
-            cycle += 1
-            if cycle % 5 == 0:
-                self.logger.debug(
-                    f"Still waiting for command {command_id}... (cycle {cycle})"
+
+            if response is None:
+                consecutive_errors += 1
+                if consecutive_errors >= COMMAND_MAX_POLL_ERRORS:
+                    self.logger.error(
+                        f"{tag}Command {command_id}: {who} unreachable for "
+                        f"{consecutive_errors} consecutive polls — giving up."
+                    )
+                    return COMMAND_UNREACHABLE
+            else:
+                consecutive_errors = 0
+                status = response.get("status")
+
+                if status == "completed":
+                    self.logger.debug(
+                        f"{tag}Command {command_id} completed in "
+                        f"{int(time.monotonic() - started_at)}s."
+                    )
+                    return COMMAND_COMPLETED
+                if status in COMMAND_TERMINAL_FAILURES:
+                    self.logger.warning(
+                        f"{tag}Command {command_id} reported '{status}' by {who}."
+                    )
+                    return COMMAND_FAILED
+
+                if status != last_status:
+                    if last_status == "queued" and run_deadline is None:
+                        self.logger.info(
+                            f"{tag}Command {command_id} started on {who} after "
+                            f"{int(time.monotonic() - started_at)}s queued."
+                        )
+                    last_status = status
+                # Anything past "queued" is executing — start the run budget.
+                if run_deadline is None and status and status != "queued":
+                    run_deadline = time.monotonic() + COMMAND_RUN_TIMEOUT_SECONDS
+
+            now = time.monotonic()
+            if run_deadline is None and now > queue_deadline:
+                self.logger.error(
+                    f"{tag}Command {command_id} still QUEUED on {who} after "
+                    f"{COMMAND_QUEUE_TIMEOUT_SECONDS // 60} min — it has not started "
+                    "yet, so the search is being left for the next run."
                 )
-            if cycle > 120:
-                self.logger.error(f"Command {command_id} timed out after 10 minutes.")
-                return False
+                return COMMAND_TIMEOUT
+            if run_deadline is not None and now > run_deadline:
+                self.logger.error(
+                    f"{tag}Command {command_id} still running on {who} after "
+                    f"{COMMAND_RUN_TIMEOUT_SECONDS // 60} min — giving up waiting."
+                )
+                return COMMAND_TIMEOUT
+
+            time.sleep(COMMAND_POLL_SECONDS)
+
+    def wait_for_command(self, command_id: int) -> bool:
+        """True only when the command reached 'completed'."""
+        return self.wait_for_command_result(command_id) == COMMAND_COMPLETED
+
+    def count_queued_commands(self, names: Sequence[str]) -> int:
+        """How many of `names` are queued/running right now. Used as a readiness
+        gate so a run doesn't pile more searches onto a backed-up *arr."""
+        response = self.make_get_request(f"{self.api_base}/command")
+        if not isinstance(response, list):
+            return 0
+        wanted = {n.lower() for n in names}
+        return sum(
+            1
+            for c in response
+            if isinstance(c, dict)
+            and str(c.get("name", "")).lower() in wanted
+            and c.get("status") in ("queued", "started")
+        )
 
     def create_tag(self, tag: str) -> int:
         """
