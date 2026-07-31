@@ -2,6 +2,22 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.43.3](https://github.com/chodeus/chub/compare/v2.43.2...v2.43.3) (2026-07-31)
+
+
+### Bug Fixes
+
+* **arr:** raise the run budget to an hour on observed evidence ([f5a9fad](https://github.com/chodeus/chub/commit/f5a9fadce4707f2827b56a8d3812852efb93c490))
+* **arr:** treat a non-dict poll response as a poll error, not a crash ([33d2cdb](https://github.com/chodeus/chub/commit/33d2cdbbfe123764b400df6d910c0cd25f1e15dc))
+* **auth:** route rejected fetches through the retry gate ([cc4ce05](https://github.com/chodeus/chub/commit/cc4ce05c4e7b9ffec9fa4604436b294a01a47cf3))
+* **auth:** stop the stream-token 401 retry loop ([914b9ce](https://github.com/chodeus/chub/commit/914b9cebfa068edd359fa69a0fa4a930374c2317))
+* close the DB-context leak and make rotation paths directory-safe ([b0d40ff](https://github.com/chodeus/chub/commit/b0d40ffb5a529394ce9e4118761395abc72f4b2b))
+* harden env parsing and correct the deferred-item tag count ([8b1441f](https://github.com/chodeus/chub/commit/8b1441fcd5ccc0a5774eba1266e10bc8270b2c17))
+* **logger:** cap log file size and keep buffered event times ([9db2968](https://github.com/chodeus/chub/commit/9db29680c74f32d02f22338bd41c9459c2ab79f0))
+* stop retrying handled 401s and fail closed on an unreadable command list ([bce3efc](https://github.com/chodeus/chub/commit/bce3efcc6044402c6aa3792daa45de3169ee2389))
+* stop the stream-token retry loop, cap log size, and fix arr command waits ([1c2920f](https://github.com/chodeus/chub/commit/1c2920fe74f7df32db5e11d3b9a8fd1d6b146565))
+* **upgradinatorr:** budget arr queue time separately from run time ([537f39c](https://github.com/chodeus/chub/commit/537f39c33378edc7aa8e074c8762a1830df3fa87))
+
 ## [2.43.2](https://github.com/chodeus/chub/compare/v2.43.1...v2.43.2) (2026-07-30)
 
 
