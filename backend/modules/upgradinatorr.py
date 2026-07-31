@@ -1173,22 +1173,24 @@ class Upgradinatorr(ChubModule):
                 db_ctx.__enter__()
                 progress_db = db_ctx.upgradinatorr_progress
 
-            # Readiness gate: an *arr already chewing through searches will just
-            # queue ours behind them, so stage the run instead of piling on.
-            backlog = app.count_queued_commands(SEARCH_COMMAND_NAMES)
-            if backlog is None or backlog >= SEARCH_BACKLOG_LIMIT:
-                reason = (
-                    "its command queue could not be read"
-                    if backlog is None
-                    else f"{backlog} search command(s) already queued or running"
-                )
-                self.logger.warning(
-                    f"Skipping {app.instance_name}: {reason}. Nothing is lost — "
-                    "the next run picks this up."
-                )
-                filtered_media_dict = []
-
             try:
+                # Readiness gate: an *arr already chewing through searches will
+                # just queue ours behind them, so stage the run instead of
+                # piling on. MUST stay inside the try — count_queued_commands
+                # re-raises on 401/404 and db_ctx is already open.
+                backlog = app.count_queued_commands(SEARCH_COMMAND_NAMES)
+                if backlog is None or backlog >= SEARCH_BACKLOG_LIMIT:
+                    reason = (
+                        "its command queue could not be read"
+                        if backlog is None
+                        else f"{backlog} search command(s) already queued or running"
+                    )
+                    self.logger.warning(
+                        f"Skipping {app.instance_name}: {reason}. Nothing is lost — "
+                        "the next run picks this up."
+                    )
+                    filtered_media_dict = []
+
                 for item in filtered_media_dict:
                     if self.is_cancelled():
                         break

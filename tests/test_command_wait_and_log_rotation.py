@@ -238,6 +238,45 @@ def test_rotation_namer_keeps_files_matching_the_star_dot_log_glob(
         assert expected.rsplit("/", 1)[-1].endswith(".log")
 
 
+def test_rotation_never_leaves_the_log_directory():
+    """A `.log` inside a DIRECTORY name must not be mistaken for the suffix —
+    `rsplit('.log', 1)` rewrote /tmp/archive.log/app.txt.1 to /tmp/archive.1.log,
+    dropping rotated files outside the configured directory."""
+    from backend.util.logger import rotated_log_path
+
+    assert rotation_namer("/tmp/archive.log/app.txt.1") == "/tmp/archive.log/app.txt.1"
+    assert rotated_log_path("/tmp/archive.log/app.txt", 1) is None
+    assert (
+        rotated_log_path("/appdata/my.logs/general.log", 3)
+        == "/appdata/my.logs/general.3.log"
+    )
+    assert rotated_log_path("general.log", 2) == "general.2.log"
+
+
+@pytest.mark.parametrize("max_logs", [0, -3])
+def test_backup_count_is_floored_so_the_cap_actually_bounds_growth(
+    max_logs, tmp_path, monkeypatch
+):
+    """RotatingFileHandler with backupCount=0 reopens the base file in append
+    mode on rollover, so maxBytes bounds nothing and it rolls over per record.
+    GeneralConfig enforces >= 1, but direct Logger() callers are not bound by it."""
+    from logging.handlers import RotatingFileHandler
+
+    from backend.util.logger import Logger
+
+    monkeypatch.setenv("LOG_DIR", str(tmp_path))
+    name = f"capmod{max_logs}"
+    Logger._initialized.discard((name, str(tmp_path / name / f"{name}.log")))
+    logger = Logger(log_level="INFO", module_name=name, max_logs=max_logs)
+
+    handlers = [
+        h for h in logger._logger.handlers if isinstance(h, RotatingFileHandler)
+    ]
+    assert handlers, "expected a rotating file handler"
+    assert handlers[0].backupCount >= 1
+    assert handlers[0].maxBytes > 0
+
+
 def test_size_cap_is_set_so_rollover_can_fire():
     from backend.util.logger import _max_log_bytes
 
