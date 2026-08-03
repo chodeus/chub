@@ -6,12 +6,12 @@ charset-normalizer==3.4.9
 click==8.4.2
 croniter==6.2.4
 defusedxml==0.7.1
-fastapi==0.140.2
+fastapi==0.140.13
 h11==0.16.0
 idna==3.18
 iniconfig==2.3.0
 Jinja2==3.1.6
-Markdown==3.10.2
+Markdown==3.10.3
 MarkupSafe==3.0.3
 mypy_extensions==1.1.0
 oauthlib==3.3.1
