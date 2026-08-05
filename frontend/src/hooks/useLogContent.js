@@ -1,6 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { logsAPI } from '../utils/api/logs.js';
 
+// Initial load and poll refresh MUST pass the same tail, or the view shrinks
+// on the first poll.
+const LOG_TAIL_LINES = 5000;
+
 /**
  * useLogContent - Fetch log file content
  *
@@ -52,11 +56,8 @@ export function useLogContent(selectedModule, selectedLogFile) {
         abortRef.current = controller;
         inFlightRef.current = true;
 
-        // Initial load fetches the full file so the viewer shows everything,
-        // including the top of long runs. Polling refresh below stays tailed
-        // to keep recurring fetches cheap.
         logsAPI
-            .fetchLogContent(selectedModule, selectedLogFile, controller.signal, 0)
+            .fetchLogContent(selectedModule, selectedLogFile, controller.signal, LOG_TAIL_LINES)
             .then(content => {
                 if (!controller.signal.aborted) setLogText(content);
             })
@@ -97,7 +98,8 @@ export function useLogContent(selectedModule, selectedLogFile) {
             const content = await logsAPI.fetchLogContent(
                 selectedModule,
                 selectedLogFile,
-                controller.signal
+                controller.signal,
+                LOG_TAIL_LINES
             );
             if (!controller.signal.aborted) setLogText(content);
         } catch (err) {

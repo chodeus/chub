@@ -1340,7 +1340,9 @@ class PosterRenamerr(ChubModule):
         if record.get("year") is not None and key in show_keys:
             return "show"
 
-        if record.get("year") is None:
+        # An IMDb id means it's a movie missing its year, not a collection.
+        # Mirrored in asset_renamerr._classify — keep the two in step.
+        if record.get("year") is None and not record.get("imdb_id"):
             return "collection"
 
         return "movie"

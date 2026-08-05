@@ -115,6 +115,18 @@ def test_real_gdrive_collection_logo():
     assert AssetRenamerr._classify(rec) == "collection"
 
 
+def test_year_less_asset_with_imdb_id_is_movie():
+    """Mirrors poster_renamerr: an IMDb id vetoes the year-less collection
+    branch, so a real drive file like "Leo 2 {tmdb-…} {imdb-tt…} - Logo.png"
+    stays matchable against the movie."""
+    rec = build_asset_record(
+        "Leo 2 {tmdb-1235976} {imdb-tt31066554} - Logo.png", "/x"
+    )
+    assert rec["year"] is None
+    assert rec["imdb_id"] == "tt31066554"
+    assert AssetRenamerr._classify(rec) == "movie"
+
+
 @pytest.mark.parametrize(
     "fname,expected",
     [

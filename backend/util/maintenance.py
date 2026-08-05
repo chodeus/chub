@@ -10,6 +10,7 @@ running. All work is wrapped so a transient failure never kills the thread.
 """
 
 import os
+import stat
 import threading
 import time
 from pathlib import Path
@@ -64,14 +65,31 @@ def prune_old_backups(backup_dir: Path, keep: int, logger=None) -> int:
     except OSError:
         return 0
 
+    try:
+        root = backup_dir.resolve(strict=True)
+        dir_fd = os.open(str(root), os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+    except OSError:
+        return 0
+
     removed = 0
-    for old in backups[keep:]:
-        try:
-            old.unlink()
-            removed += 1
-        except OSError as e:
-            if logger:
-                logger.debug(f"Could not prune backup {old}: {e}")
+    try:
+        for old in backups[keep:]:
+            try:
+                # NEVER resolve-then-unlink: that deletes a symlink's TARGET.
+                # lstat + S_ISREG rejects links and dirs; unlinking by name
+                # against dir_fd stops a swapped parent redirecting the delete.
+                st = os.lstat(os.path.join(str(root), old.name))
+                if not stat.S_ISREG(st.st_mode):
+                    if logger:
+                        logger.warning(f"Skipping non-regular backup entry: {old}")
+                    continue
+                os.unlink(old.name, dir_fd=dir_fd)
+                removed += 1
+            except OSError as e:
+                if logger:
+                    logger.debug(f"Could not prune backup {old}: {e}")
+    finally:
+        os.close(dir_fd)
     if removed and logger:
         logger.info(f"Pruned {removed} old backup(s), keeping newest {keep}")
     return removed
@@ -84,7 +102,7 @@ def run_auto_backup(keep: int, logger=None) -> None:
     from backend.api.system import _get_backup_dir, save_backup
 
     save_backup(logger)
-    prune_old_backups(_get_backup_dir(), keep, logger)
+    prune_old_backups(_get_backup_dir(logger), keep, logger)
 
 
 def _run_once(config, logger) -> None:
