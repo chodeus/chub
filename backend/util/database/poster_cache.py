@@ -399,6 +399,10 @@ class PosterCache(DatabaseBase):
         """Delete all rows from poster_cache."""
         self.execute_query("DELETE FROM poster_cache")
 
+    def analyze(self) -> None:
+        """Refresh planner stats; without them the match queries mis-pick indexes."""
+        self.execute_query("ANALYZE poster_cache")
+
     def delete_by_path_prefix(self, path_prefix: str) -> int:
         """Delete all rows whose `file` path lives under `path_prefix`.
 
