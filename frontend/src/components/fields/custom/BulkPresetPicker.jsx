@@ -115,7 +115,7 @@ export const BulkPresetPicker = React.memo(({ field, value = [], onChange, disab
             />
             <FieldDescription
                 id="bulk_base_dir-desc"
-                description="Drives are organised into {style}/{curator} subfolders here, e.g. /kometa/posters/CL2K/Chodeus."
+                description="Drives are organised into {style}/{curator} subfolders here, e.g. /kometa/posters/CL2K/Chodeus. CL2K and MM2K are poster styles; Artwork drives hold logos, backgrounds and square art — add those to Asset Renamerr's source directories to use them."
             />
         </div>
     );
