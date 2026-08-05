@@ -400,11 +400,7 @@ class PosterCache(DatabaseBase):
         self.execute_query("DELETE FROM poster_cache")
 
     def analyze(self) -> None:
-        """Refresh planner statistics for poster_cache.
-
-        Without sqlite_stat1 the planner mis-picks indexes on the hot match
-        queries. Call after a full rebuild, when row shape has changed most.
-        """
+        """Refresh planner stats; without them the match queries mis-pick indexes."""
         self.execute_query("ANALYZE poster_cache")
 
     def delete_by_path_prefix(self, path_prefix: str) -> int:
