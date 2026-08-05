@@ -22,13 +22,11 @@ from backend.util.helper import (
 from backend.util.normalization import normalize_titles
 from backend.util.ssrf_guard import is_safe_url
 
-# plexapi derives X-Plex-Client-Identifier from the MAC (hex(getnode())) and
-# X-Plex-Device-Name from the hostname. Both are per-container in Docker, so
-# without this every image update registers ANOTHER device on the user's account.
+# plexapi defaults these to the MAC and hostname, which change per container —
+# unpinned, every image update registers a new Plex device.
 PLEX_IDENTITY_FILE = "plex_client_id"
 PLEX_PRODUCT_NAME = "CHUB"
-# Used when CONFIG_DIR can't be read/written — still stable across rebuilds,
-# which is the point; it only costs uniqueness between two installs on one account.
+# Fallback when CONFIG_DIR is unreadable: stable, but shared across installs.
 _PLEX_IDENTITY_FALLBACK = "chub"
 # Dict rather than a bare flag so apply_plex_identity needs no `global`.
 _plex_identity = {"applied": False}
