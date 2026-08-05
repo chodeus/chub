@@ -1880,6 +1880,8 @@ class PosterRenamerr(ChubModule):
                     # Index gdrive_list folders outside source_dirs as
                     # search-only so Assets Search covers all local assets.
                     self.merge_gdrive_search_index(db)
+                    # Refresh planner stats before the match phase reads them.
+                    db.poster.analyze()
                 from backend.util.connector import build_instance_map
 
                 with self._phase("arr/collections sync"):
