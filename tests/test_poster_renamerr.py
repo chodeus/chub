@@ -82,6 +82,31 @@ def test_classify_record_without_year_is_collection():
     assert m._classify_asset_record(record, set()) == "collection"
 
 
+def test_classify_year_less_record_with_imdb_id_is_movie():
+    """A TMDB collection never has an IMDb id, so "Leo 2 {tmdb-…} {imdb-tt…}.jpg"
+    is a movie whose filename omitted the year — not a collection."""
+    m = make_module()
+    record = {
+        "season_number": None,
+        "year": None,
+        "imdb_id": "tt31066554",
+        "normalized_title": "leo2",
+    }
+    assert m._classify_asset_record(record, set()) == "movie"
+
+
+def test_classify_year_less_collection_with_tmdb_id_stays_collection():
+    """Real collection posters DO carry {tmdb-…}, so only IMDb may veto."""
+    m = make_module()
+    record = {
+        "season_number": None,
+        "year": None,
+        "tmdb_id": 1511685,
+        "normalized_title": "dedepyaardecollection",
+    }
+    assert m._classify_asset_record(record, set()) == "collection"
+
+
 def test_classify_year_zero_treated_as_present_year():
     """A year of 0 is not None — it should not be classified as collection."""
     m = make_module()

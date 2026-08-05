@@ -407,7 +407,8 @@ class AssetRenamerr(ChubModule):
             return record["music_kind"]
         if record.get("season_number") is not None or record.get("tvdb_id"):
             return "show"
-        if record.get("year") is None:
+        # Mirrors poster_renamerr._classify_asset_record — keep the two in step.
+        if record.get("year") is None and not record.get("imdb_id"):
             return "collection"
         return "movie"
 
