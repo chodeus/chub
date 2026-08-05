@@ -1,7 +1,9 @@
 import html
 import itertools
+import os
 import sys
 import time
+import uuid
 from typing import Any, Dict, List, Optional
 
 import plexapi
@@ -11,6 +13,7 @@ from pathvalidate import sanitize_filename
 from plexapi.server import PlexServer
 from unidecode import unidecode
 
+from backend.util.config import get_config_path
 from backend.util.helper import (
     YEAR_MATCH_TOLERANCE,
     generate_title_variants,
@@ -18,6 +21,68 @@ from backend.util.helper import (
 )
 from backend.util.normalization import normalize_titles
 from backend.util.ssrf_guard import is_safe_url
+
+# plexapi derives X-Plex-Client-Identifier from the MAC (hex(getnode())) and
+# X-Plex-Device-Name from the hostname. Both are per-container in Docker, so
+# without this every image update registers ANOTHER device on the user's account.
+PLEX_IDENTITY_FILE = "plex_client_id"
+PLEX_PRODUCT_NAME = "CHUB"
+# Used when CONFIG_DIR can't be read/written — still stable across rebuilds,
+# which is the point; it only costs uniqueness between two installs on one account.
+_PLEX_IDENTITY_FALLBACK = "chub"
+_plex_identity_applied = False
+
+
+def _plex_identity_path() -> str:
+    return os.path.join(os.path.dirname(get_config_path()), PLEX_IDENTITY_FILE)
+
+
+def _stable_plex_identifier(logger: Any = None) -> str:
+    """Read this install's Plex client identifier, minting and persisting one once."""
+    path = _plex_identity_path()
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            existing = handle.read().strip()
+        if existing:
+            return existing
+    except FileNotFoundError:
+        pass
+    except OSError as exc:
+        if logger:
+            logger.warning(f"Could not read Plex identity file '{path}': {exc}")
+        return _PLEX_IDENTITY_FALLBACK
+
+    identifier = uuid.uuid4().hex
+    try:
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(identifier)
+    except OSError as exc:
+        if logger:
+            logger.warning(f"Could not persist Plex identity file '{path}': {exc}")
+        return _PLEX_IDENTITY_FALLBACK
+    return identifier
+
+
+def apply_plex_identity(logger: Any = None) -> str:
+    """Pin CHUB's X-Plex-* headers so a container rebuild reuses the same Plex device.
+
+    Idempotent; called once from main.py before anything touches Plex.
+    """
+    global _plex_identity_applied
+    if _plex_identity_applied:
+        return plexapi.X_PLEX_IDENTIFIER
+
+    identifier = _stable_plex_identifier(logger)
+    plexapi.X_PLEX_IDENTIFIER = identifier
+    plexapi.X_PLEX_PRODUCT = PLEX_PRODUCT_NAME
+    plexapi.X_PLEX_DEVICE_NAME = PLEX_PRODUCT_NAME
+    # Must mutate in place: plexapi/server.py does `from plexapi import
+    # BASE_HEADERS`, so rebinding plexapi.BASE_HEADERS would never reach it.
+    plexapi.BASE_HEADERS.update(plexapi.reset_base_headers())
+    _plex_identity_applied = True
+    if logger:
+        logger.debug(f"Pinned Plex client identity ({identifier})")
+    return identifier
 
 
 def connect_plex_with_retry(
