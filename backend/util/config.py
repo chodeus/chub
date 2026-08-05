@@ -625,6 +625,9 @@ class GeneralConfig(BaseModel):
     # prunes the backups directory to the newest `auto_backup_keep` archives.
     auto_backup: bool = False
     auto_backup_keep: int = Field(default=12, ge=1, le=100)
+    # Empty = CONFIG_DIR/backups, the same volume as the data it protects —
+    # prefer an external one. Resolved by backend/api/system.py::_get_backup_dir.
+    backup_dir: str = ""
     # Modules the user has hard-disabled on the Modules page. A disabled module
     # is skipped by the scheduler AND blocked from manual / webhook runs. Names
     # are the module keys in backend.modules.MODULES (e.g. "poster_renamerr").

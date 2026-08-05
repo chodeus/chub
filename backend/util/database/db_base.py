@@ -59,6 +59,9 @@ class DatabaseBase:
                 # cannot corrupt and only risks the last txn on power loss —
                 # acceptable for these regenerable caches.
                 conn.execute("PRAGMA synchronous=NORMAL")
+                # Also per-connection. SQLite's 2MB default thrashes on a
+                # 100MB+ poster_cache; 20MB matches what Sonarr ships.
+                conn.execute("PRAGMA cache_size=-20000")
                 conn.row_factory = self._dict_factory
                 yield conn
         except Exception as e:
@@ -96,6 +99,7 @@ class DatabaseBase:
         """
         conn = sqlite3.connect(self.db_path, check_same_thread=False, timeout=30)
         conn.execute("PRAGMA busy_timeout=30000")
+        conn.execute("PRAGMA cache_size=-20000")
         conn.execute("PRAGMA query_only=ON")
         conn.row_factory = self._dict_factory
         return conn

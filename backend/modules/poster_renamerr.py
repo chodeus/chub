@@ -1340,7 +1340,9 @@ class PosterRenamerr(ChubModule):
         if record.get("year") is not None and key in show_keys:
             return "show"
 
-        if record.get("year") is None:
+        # An IMDb id means it's a movie missing its year, not a collection.
+        # Mirrored in asset_renamerr._classify — keep the two in step.
+        if record.get("year") is None and not record.get("imdb_id"):
             return "collection"
 
         return "movie"
@@ -1878,6 +1880,8 @@ class PosterRenamerr(ChubModule):
                     # Index gdrive_list folders outside source_dirs as
                     # search-only so Assets Search covers all local assets.
                     self.merge_gdrive_search_index(db)
+                    # Refresh planner stats before the match phase reads them.
+                    db.poster.analyze()
                 from backend.util.connector import build_instance_map
 
                 with self._phase("arr/collections sync"):

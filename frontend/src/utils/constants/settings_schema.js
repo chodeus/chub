@@ -606,7 +606,7 @@ const CORE_SETTINGS_SCHEMA = [
                 required: true,
                 description: 'Plex uploads straight to Plex · Kometa writes to the destination.',
                 helpText:
-                    '"Plex" uploads images straight to Plex via plexapi — logo, background, and squareart — for the instances whose "Upload to this Plex instance" box is ticked below. "Kometa" renames/copies files into the Destination Directory using Kometa asset names (logo.ext, background.ext, and Season##_logo.ext for seasons) for Kometa to apply — Kometa reads only logo and background.',
+                    '"Plex" uploads images straight to Plex via plexapi — logo, background, and squareart — for the instances whose "Upload to this Plex instance" box is ticked below. "Kometa" renames/copies files into the Destination Directory using Kometa asset names (logo.ext, background.ext, and Season##_logo.ext for seasons) for Kometa to apply — Kometa reads only logo and background. On the Kometa path, keep dimensional_asset_rename turned OFF in your Kometa config: it classifies unrecognised asset-folder images by aspect ratio, so a wide logo.png gets renamed to background.png.',
             },
             {
                 key: 'destination_dir',

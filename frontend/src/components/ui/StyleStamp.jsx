@@ -8,6 +8,8 @@ import React from 'react';
 const STYLE_COLOR = {
     CL2K: { text: '#c9bcff', border: 'rgba(135,103,247,0.55)' },
     MM2K: { text: '#ffd257', border: 'rgba(255,201,68,0.5)' },
+    // Artwork drives carry logos/backgrounds/squareart, not posters.
+    ARTWORK: { text: '#7fe3c4', border: 'rgba(64,208,168,0.5)' },
 };
 const DEFAULT_COLOR = { text: '#ffffff', border: 'rgba(255,255,255,0.25)' };
 
