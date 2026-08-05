@@ -457,10 +457,11 @@ class SchemaManager:
                 "CREATE INDEX IF NOT EXISTS poster_cache_imdb_id_idx ON poster_cache (imdb_id)",
                 "CREATE INDEX IF NOT EXISTS poster_cache_asset_type_idx ON poster_cache (asset_type)",
                 "CREATE INDEX IF NOT EXISTS poster_cache_style_idx ON poster_cache (style)",
-                "CREATE INDEX IF NOT EXISTS poster_cache_created_at_idx ON poster_cache (created_at)",
                 "CREATE INDEX IF NOT EXISTS poster_cache_resolution_idx ON poster_cache (width, height)",
-                "CREATE INDEX IF NOT EXISTS poster_cache_image_type_idx ON poster_cache (image_type)",
-                "CREATE INDEX IF NOT EXISTS poster_cache_search_only_idx ON poster_cache (search_only)",
+                # image_type / search_only / created_at are deliberately NOT
+                # indexed — see the 20260805_drop_unselective_poster_indexes
+                # migration. Re-adding one costs ~100k index writes per rebuild
+                # and the planner picks it over a selective index.
             ],
         )
         self._add_table(poster_cache)
@@ -1075,6 +1076,23 @@ class SchemaManager:
             "WHERE match_reason LIKE '%not found on TMDB%'",
             requires_table="media_cache",
         )
+
+        # image_type/search_only are ~100% single-valued on a real library, so
+        # they can never narrow a scan — but with no ANALYZE stats the planner
+        # still preferred them over normalized_title_idx / imdb_id_idx on the
+        # hot match queries. Removing the index list alone doesn't drop them
+        # from existing DBs.
+        for idx in (
+            "poster_cache_image_type_idx",
+            "poster_cache_search_only_idx",
+            "poster_cache_created_at_idx",
+        ):
+            self._apply_once(
+                conn,
+                f"20260805_drop_unselective_poster_indexes_{idx}",
+                f"DROP INDEX IF EXISTS {idx}",
+                requires_table="poster_cache",
+            )
 
     def _apply_once(
         self,
