@@ -288,7 +288,7 @@ def test_border_thumbnail_rejects_traversal(app_with_router):
 
 
 def test_gdrive_presets_returns_bundled_catalogue(app_with_router):
-    """The /gdrive-presets endpoint serves the bundled CL2K/MM2K JSON."""
+    """The /gdrive-presets endpoint serves the bundled CL2K/MM2K/Artwork JSON."""
     app = app_with_router(system_router.router)
     client = TestClient(app)
     resp = client.get("/api/gdrive-presets")
@@ -300,12 +300,14 @@ def test_gdrive_presets_returns_bundled_catalogue(app_with_router):
     # Every preset must carry the three fields the frontend uses.
     for entry in presets:
         assert {"name", "id", "style"}.issubset(entry.keys())
-        assert entry["style"] in ("CL2K", "MM2K")
+        assert entry["style"] in ("CL2K", "MM2K", "Artwork")
     # Spot-check a couple of canonical entries so we'd notice if the
     # bundled JSON gets mangled in a future commit.
     by_id = {e["id"]: e for e in presets}
     assert "1MiNjT3t_eIdaMTiQ4E89IMNXasco7r6q" in by_id  # CL2K Mario
     assert by_id["1MiNjT3t_eIdaMTiQ4E89IMNXasco7r6q"]["style"] == "CL2K"
+    # Artwork drives carry logos/backgrounds/squareart, not posters.
+    assert by_id["1zUE6LDrrxPo66ch8voZlgVyG_wi-4V7s"]["style"] == "Artwork"
 
 
 def test_gdrive_presets_missing_file_returns_500(monkeypatch, app_with_router):

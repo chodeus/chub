@@ -560,14 +560,55 @@ def _get_db_path() -> str:
     return os.path.join(config_dir, "chub.db")
 
 
-def _get_backup_dir() -> Path:
-    """Get (and create) the backup directory."""
+def _default_backup_dir() -> Path:
     config_dir = os.environ.get("CONFIG_DIR") or str(
         Path(__file__).parents[2] / "config"
     )
-    backup_dir = Path(config_dir) / "backups"
-    backup_dir.mkdir(parents=True, exist_ok=True)
-    return backup_dir
+    return Path(config_dir) / "backups"
+
+
+def _get_backup_dir(logger: Any = None) -> Path:
+    """Resolve general.backup_dir, falling back to CONFIG_DIR/backups."""
+    default = _default_backup_dir()
+
+    configured = ""
+    config = None
+    try:
+        config = load_config()
+        configured = (getattr(config.general, "backup_dir", "") or "").strip()
+    except Exception as exc:
+        if logger:
+            logger.error(f"Could not read backup_dir from config: {exc}")
+
+    if configured and config is not None:
+        if not is_path_allowed(configured, config):
+            if logger:
+                logger.error(
+                    f"backup_dir '{configured}' is outside the allowed roots; "
+                    f"backing up to {default} instead"
+                )
+        else:
+            try:
+                target = Path(configured).expanduser().resolve()
+                target.mkdir(parents=True, exist_ok=True)
+                # Re-confine the RESOLVED target: is_path_allowed() authorised a
+                # path that a swapped symlink could since have re-pointed.
+                if is_path_allowed(str(target), config):
+                    return target
+                if logger:
+                    logger.error(
+                        f"backup_dir '{configured}' resolved outside the allowed "
+                        f"roots ({target}); backing up to {default} instead"
+                    )
+            except OSError as exc:
+                if logger:
+                    logger.error(
+                        f"backup_dir '{configured}' is not usable ({exc}); "
+                        f"backing up to {default} instead"
+                    )
+
+    default.mkdir(parents=True, exist_ok=True)
+    return default
 
 
 def build_backup_bytes() -> bytes:
@@ -605,7 +646,7 @@ def save_backup(logger: Any = None) -> Path:
     """Write a timestamped backup into the backups directory; return its path."""
     data = build_backup_bytes()
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    backup_path = _get_backup_dir() / f"chub-backup-{timestamp}.zip"
+    backup_path = _get_backup_dir(logger) / f"chub-backup-{timestamp}.zip"
     backup_path.write_bytes(data)
     if logger:
         logger.info(f"Backup created: {backup_path.name}")

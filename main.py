@@ -23,6 +23,7 @@ from backend.util.config import (
 )
 from backend.util.logger import Logger
 from backend.util.module_orchestrator import ModuleOrchestrator
+from backend.util.plex import apply_plex_identity
 from backend.util.scheduler import ChubScheduler
 from backend.util.version import get_version
 
@@ -200,6 +201,9 @@ class ChubApplication:
                 )
 
             self._install_config_log_bridge()
+
+            # Before either mode branches — both talk to Plex.
+            apply_plex_identity(self.logger.get_adapter("MAIN"))
 
             self.module_orchestrator = ModuleOrchestrator(logger=self.logger)
 
