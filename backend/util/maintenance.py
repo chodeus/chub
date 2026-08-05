@@ -84,7 +84,7 @@ def run_auto_backup(keep: int, logger=None) -> None:
     from backend.api.system import _get_backup_dir, save_backup
 
     save_backup(logger)
-    prune_old_backups(_get_backup_dir(), keep, logger)
+    prune_old_backups(_get_backup_dir(logger), keep, logger)
 
 
 def _run_once(config, logger) -> None:

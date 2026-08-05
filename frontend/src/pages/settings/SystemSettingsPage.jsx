@@ -87,6 +87,18 @@ const InsetSelect = ({ value, onChange, disabled, children, ariaLabel }) => (
     </div>
 );
 
+const InsetInput = ({ value, onChange, onBlur, placeholder, ariaLabel }) => (
+    <input
+        type="text"
+        value={value}
+        onChange={onChange}
+        onBlur={onBlur}
+        placeholder={placeholder}
+        aria-label={ariaLabel}
+        className="h-[34px] w-[280px] max-w-full shrink-0 px-3 rounded-lg bg-surface-inset border border-border font-mono text-[13px] text-fg focus:border-primary outline-none"
+    />
+);
+
 const LOG_LEVELS = ['debug', 'info', 'warning', 'error', 'critical'];
 const RETENTION_OPTIONS = [
     { value: 0, label: 'Off' },
@@ -142,6 +154,17 @@ export const SystemSettingsPage = () => {
     const general = generalData?.data?.general || {};
     const [pending, setPending] = useState({}); // optimistic overrides while a save is in flight
     const cfg = key => (key in pending ? pending[key] : general[key]);
+
+    // Free-text path, saved on blur rather than per keystroke. Re-seeded from
+    // the server value when it changes — the render-time adjust pattern, not a
+    // setState-in-effect.
+    const serverBackupDir = general.backup_dir || '';
+    const [backupDir, setBackupDir] = useState(serverBackupDir);
+    const [lastServerBackupDir, setLastServerBackupDir] = useState(serverBackupDir);
+    if (lastServerBackupDir !== serverBackupDir) {
+        setLastServerBackupDir(serverBackupDir);
+        setBackupDir(serverBackupDir);
+    }
 
     const saveGeneral = useCallback(
         async (key, value) => {
@@ -348,6 +371,25 @@ export const SystemSettingsPage = () => {
                             label="Automatic config backups"
                             checked={!!cfg('auto_backup')}
                             onChange={v => saveGeneral('auto_backup', v)}
+                        />
+                    </div>
+                    <Divider />
+                    <div className="flex items-center justify-between gap-4 py-2">
+                        <RowLabel
+                            label="Backup location"
+                            hint="Blank uses the config directory — which is the same volume as the data it protects"
+                        />
+                        <InsetInput
+                            ariaLabel="Backup location"
+                            placeholder="/mnt/user/backups/chub"
+                            value={backupDir}
+                            onChange={e => setBackupDir(e.target.value)}
+                            onBlur={() => {
+                                const next = backupDir.trim();
+                                if (next !== (general.backup_dir || '')) {
+                                    saveGeneral('backup_dir', next);
+                                }
+                            }}
                         />
                     </div>
                     <Divider />
