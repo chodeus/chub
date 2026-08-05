@@ -3,7 +3,9 @@ location. A backup landing in the wrong place beats one silently never written,
 so every failure path must fall back to CONFIG_DIR/backups, loudly."""
 
 import backend.api.system as system_mod
-from backend.api.system import _default_backup_dir, _get_backup_dir
+
+_default_backup_dir = system_mod._default_backup_dir
+_get_backup_dir = system_mod._get_backup_dir
 
 
 class _Log:

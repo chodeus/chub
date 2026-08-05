@@ -6,7 +6,9 @@ import plexapi.server
 import pytest
 
 import backend.util.plex as plex_mod
-from backend.util.plex import PLEX_PRODUCT_NAME, apply_plex_identity
+
+apply_plex_identity = plex_mod.apply_plex_identity
+PLEX_PRODUCT_NAME = plex_mod.PLEX_PRODUCT_NAME
 
 
 class _Log:
@@ -23,7 +25,7 @@ class _Log:
 @pytest.fixture(autouse=True)
 def _isolate(monkeypatch, tmp_path):
     """Reset the applied-once latch and the plexapi globals around each test."""
-    monkeypatch.setattr(plex_mod, "_plex_identity_applied", False)
+    monkeypatch.setitem(plex_mod._plex_identity, "applied", False)
     monkeypatch.setattr(plexapi, "X_PLEX_IDENTIFIER", "0xdeadbeef")
     monkeypatch.setattr(plexapi, "X_PLEX_PRODUCT", "PlexAPI")
     monkeypatch.setattr(plexapi, "X_PLEX_DEVICE_NAME", "somehost")
@@ -50,7 +52,7 @@ def test_identifier_is_persisted_and_reused(monkeypatch, tmp_path):
     assert (tmp_path / "plex_client_id").read_text().strip() == first
 
     # A fresh process against the same CONFIG_DIR reads the stored id back.
-    monkeypatch.setattr(plex_mod, "_plex_identity_applied", False)
+    monkeypatch.setitem(plex_mod._plex_identity, "applied", False)
     assert apply_plex_identity() == first
 
 

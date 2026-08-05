@@ -64,10 +64,22 @@ def prune_old_backups(backup_dir: Path, keep: int, logger=None) -> int:
     except OSError:
         return 0
 
+    try:
+        root = backup_dir.resolve(strict=True)
+    except OSError:
+        return 0
+
     removed = 0
     for old in backups[keep:]:
         try:
-            old.unlink()
+            # backup_dir is user-configurable, so re-confine the resolved file
+            # before unlinking — a symlinked entry must not delete outside it.
+            resolved = old.resolve()
+            if resolved.parent != root or resolved.is_dir():
+                if logger:
+                    logger.warning(f"Skipping backup outside {root}: {old}")
+                continue
+            resolved.unlink()
             removed += 1
         except OSError as e:
             if logger:

@@ -30,7 +30,8 @@ PLEX_PRODUCT_NAME = "CHUB"
 # Used when CONFIG_DIR can't be read/written — still stable across rebuilds,
 # which is the point; it only costs uniqueness between two installs on one account.
 _PLEX_IDENTITY_FALLBACK = "chub"
-_plex_identity_applied = False
+# Dict rather than a bare flag so apply_plex_identity needs no `global`.
+_plex_identity = {"applied": False}
 
 
 def _plex_identity_path() -> str:
@@ -46,7 +47,7 @@ def _stable_plex_identifier(logger: Any = None) -> str:
         if existing:
             return existing
     except FileNotFoundError:
-        pass
+        pass  # First run — fall through and mint one.
     except OSError as exc:
         if logger:
             logger.warning(f"Could not read Plex identity file '{path}': {exc}")
@@ -68,8 +69,7 @@ def apply_plex_identity(logger: Any = None) -> str:
 
     Idempotent; called once from main.py before anything touches Plex.
     """
-    global _plex_identity_applied
-    if _plex_identity_applied:
+    if _plex_identity["applied"]:
         return plexapi.X_PLEX_IDENTIFIER
 
     identifier = _stable_plex_identifier(logger)
@@ -79,7 +79,7 @@ def apply_plex_identity(logger: Any = None) -> str:
     # Must mutate in place: plexapi/server.py does `from plexapi import
     # BASE_HEADERS`, so rebinding plexapi.BASE_HEADERS would never reach it.
     plexapi.BASE_HEADERS.update(plexapi.reset_base_headers())
-    _plex_identity_applied = True
+    _plex_identity["applied"] = True
     if logger:
         logger.debug(f"Pinned Plex client identity ({identifier})")
     return identifier

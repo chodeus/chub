@@ -1340,10 +1340,8 @@ class PosterRenamerr(ChubModule):
         if record.get("year") is not None and key in show_keys:
             return "show"
 
-        # A TMDB collection never carries an IMDb id, so a year-less file tagged
-        # {imdb-tt…} is a movie whose filename just omitted the year. Without
-        # this veto it types as "collection" and get_by_id's asset_type filter
-        # means it can never match. Mirrored in asset_renamerr._classify.
+        # An IMDb id means it's a movie missing its year, not a collection.
+        # Mirrored in asset_renamerr._classify — keep the two in step.
         if record.get("year") is None and not record.get("imdb_id"):
             return "collection"
 

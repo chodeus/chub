@@ -568,11 +568,7 @@ def _default_backup_dir() -> Path:
 
 
 def _get_backup_dir(logger: Any = None) -> Path:
-    """Get (and create) the backup directory, honouring general.backup_dir.
-
-    Falls back to CONFIG_DIR/backups on any problem — a backup landing in the
-    wrong place beats one that is silently never written.
-    """
+    """Resolve general.backup_dir, falling back to CONFIG_DIR/backups."""
     default = _default_backup_dir()
 
     configured = ""
@@ -593,9 +589,17 @@ def _get_backup_dir(logger: Any = None) -> Path:
                 )
         else:
             try:
-                target = Path(configured)
+                target = Path(configured).expanduser().resolve()
                 target.mkdir(parents=True, exist_ok=True)
-                return target
+                # Re-confine the RESOLVED target: is_path_allowed() authorised a
+                # path that a swapped symlink could since have re-pointed.
+                if is_path_allowed(str(target), config):
+                    return target
+                if logger:
+                    logger.error(
+                        f"backup_dir '{configured}' resolved outside the allowed "
+                        f"roots ({target}); backing up to {default} instead"
+                    )
             except OSError as exc:
                 if logger:
                     logger.error(

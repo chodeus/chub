@@ -1,10 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { logsAPI } from '../utils/api/logs.js';
 
-// Both the initial load and the poll refresh MUST pass this. They used to
-// differ — initial fetched the whole file, refresh defaulted to the last 5000 —
-// so the viewer showed everything and then silently collapsed on the first
-// poll. Real module logs run 20k-80k lines, so that was very visible.
+// Initial load and poll refresh MUST pass the same tail, or the view shrinks
+// on the first poll.
 const LOG_TAIL_LINES = 5000;
 
 /**
