@@ -93,6 +93,7 @@ def test_keep_zero_or_negative_is_a_noop(tmp_path):
     _archive(tmp_path, "chub-backup-20260803-000000.zip")
 
     assert prune_old_backups(tmp_path, keep=0) == 0
+    assert prune_old_backups(tmp_path, keep=-1) == 0
     assert len(list(tmp_path.glob("chub-backup-*.zip"))) == 1
 
 
