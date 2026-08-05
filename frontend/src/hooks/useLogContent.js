@@ -1,6 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { logsAPI } from '../utils/api/logs.js';
 
+// Both the initial load and the poll refresh MUST pass this. They used to
+// differ — initial fetched the whole file, refresh defaulted to the last 5000 —
+// so the viewer showed everything and then silently collapsed on the first
+// poll. Real module logs run 20k-80k lines, so that was very visible.
+const LOG_TAIL_LINES = 5000;
+
 /**
  * useLogContent - Fetch log file content
  *
@@ -52,11 +58,8 @@ export function useLogContent(selectedModule, selectedLogFile) {
         abortRef.current = controller;
         inFlightRef.current = true;
 
-        // Initial load fetches the full file so the viewer shows everything,
-        // including the top of long runs. Polling refresh below stays tailed
-        // to keep recurring fetches cheap.
         logsAPI
-            .fetchLogContent(selectedModule, selectedLogFile, controller.signal, 0)
+            .fetchLogContent(selectedModule, selectedLogFile, controller.signal, LOG_TAIL_LINES)
             .then(content => {
                 if (!controller.signal.aborted) setLogText(content);
             })
@@ -97,7 +100,8 @@ export function useLogContent(selectedModule, selectedLogFile) {
             const content = await logsAPI.fetchLogContent(
                 selectedModule,
                 selectedLogFile,
-                controller.signal
+                controller.signal,
+                LOG_TAIL_LINES
             );
             if (!controller.signal.aborted) setLogText(content);
         } catch (err) {
