@@ -241,10 +241,62 @@ def test_get_in_use_hashes_is_union_only(tmp_path):
                 if v:
                     baseline.add(v.rsplit("/", 1)[-1])
         except sqlite3.OperationalError:
-            pass
+            # Stub schema defines only user_thumb_url; the rest are absent by
+            # design and contribute nothing to the baseline.
+            continue
     c.close()
 
     assert baseline < get_in_use_hashes(str(db))
+
+
+def test_get_in_use_hashes_fails_closed_on_read_error(tmp_path, monkeypatch):
+    """A lock/IO error on an EXISTING column must not degrade into 'column
+    absent'. Returning just the metadata_items half is non-empty, so
+    poster_cleanarr's 0-in-use guard waves it through and deletes the tag
+    artwork that was never read."""
+    import backend.util.plex_metadata as pm
+
+    db = tmp_path / "locked.db"
+    conn = _make_tags_db(db)
+    conn.execute(
+        "INSERT INTO tags (tag, tag_type, user_thumb_url) "
+        "VALUES ('Marvel', 2, 'upload://posters/coll_thumb')"
+    )
+    conn.commit()
+    conn.close()
+
+    real_connect = pm.sqlite3.connect
+
+    class _FlakyCursor:
+        def __init__(self, inner):
+            self._inner = inner
+
+        def execute(self, sql, *args):
+            # sqlite_master probe says 'FROM sqlite_master', so only the real
+            # tags read trips this.
+            if "FROM tags" in sql:
+                raise sqlite3.OperationalError("database is locked")
+            return self._inner.execute(sql, *args)
+
+        def __getattr__(self, name):
+            return getattr(self._inner, name)
+
+    class _FlakyConn:
+        def __init__(self, inner):
+            self._inner = inner
+
+        def cursor(self):
+            return _FlakyCursor(self._inner.cursor())
+
+        def __getattr__(self, name):
+            return getattr(self._inner, name)
+
+    monkeypatch.setattr(
+        pm.sqlite3, "connect", lambda *a, **k: _FlakyConn(real_connect(*a, **k))
+    )
+
+    result = get_in_use_hashes(str(db))
+    assert result == set(), f"must fail closed, got partial set: {result}"
 
 
 # --- library scoping: in-use set is GLOBAL, opt-out only labels candidates ---

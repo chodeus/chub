@@ -58,18 +58,9 @@ IN_USE_IMAGE_COLUMNS = (
     "user_square_art_url",
 )
 
-# `tags` columns holding user-set artwork for collections, people and genres.
-# Modern Plex stores collections as metadata_items (metadata_type 18), already
-# covered above; `tags` is where legacy collections (tag_type 2) and tag artwork
-# live, so a custom collection/actor image referenced ONLY from here would
-# otherwise scan as bloat and be deleted.
-#
-# Deliberately NOT protected (measured against a live 250k-tag library):
-#   taggings.thumb_url          — 0 upload://, all metadata:// under Contents/,
-#                                 which the bundle walk never scans anyway.
-#   metadata_item_views.thumb_url — watch-history snapshots of what the artwork
-#                                 WAS; protecting them would pin superseded
-#                                 posters forever and defeat the cleaner.
+# `tags` artwork: legacy collections (tag_type 2), people and genres.
+# Excludes taggings.thumb_url (never scanned — lives under Contents/) and
+# metadata_item_views.thumb_url (history snapshots; would pin dead posters).
 TAG_IN_USE_IMAGE_COLUMNS = (
     "user_thumb_url",
     "user_art_url",
@@ -102,6 +93,12 @@ def copy_plex_db(plex_path: str, dest: str) -> Optional[str]:
         return dest
     except Exception:
         return None
+
+
+def _is_missing_schema_error(exc: sqlite3.OperationalError) -> bool:
+    """True only for 'no such column/table' — a schema gap, not a read failure."""
+    msg = str(exc).lower()
+    return msg.startswith("no such column") or msg.startswith("no such table")
 
 
 def get_in_use_hashes(db_path: str, logger: Any = None) -> Set[str]:
@@ -145,10 +142,15 @@ def get_in_use_hashes(db_path: str, logger: Any = None) -> Set[str]:
                             if fname:
                                 in_use.add(fname)
                     except sqlite3.OperationalError as e:
-                        # Older Plex schemas may lack a column (e.g. the newer
-                        # clear-logo/square-art ones) — skip it, don't abort.
+                        # Only a schema gap is safe to skip (older Plex lacks the
+                        # clear-logo/square-art columns). A lock or I/O error must
+                        # NOT degrade to "column absent" — that yields a partial
+                        # in_use set and gets live artwork deleted, so let it reach
+                        # the outer handler, which fails closed.
+                        if not _is_missing_schema_error(e):
+                            raise
                         if logger:
-                            logger.warning(f"Failed to query {table}.{col}: {e}")
+                            logger.warning(f"Skipping absent {table}.{col}: {e}")
                         continue
 
             _collect("metadata_items", IN_USE_IMAGE_COLUMNS)
@@ -164,11 +166,12 @@ def get_in_use_hashes(db_path: str, logger: Any = None) -> Set[str]:
         finally:
             conn.close()
     except Exception as e:
-        # Scanner is best-effort: a corrupt/missing DB returns an empty
-        # in-use set rather than crashing the API. Caller decides what to
-        # do with zero results.
+        # Fail CLOSED: discard whatever was collected. A partial set is worse
+        # than none — it is non-empty, so poster_cleanarr's "0 in-use = failed
+        # read" guard waves it through and deletes the artwork we never read.
         if logger:
             logger.error(f"Failed to query Plex database: {e}")
+        return set()
     return in_use
 
 
@@ -670,13 +673,15 @@ def scan_bundles(plex_path: str, *, force: bool = False) -> Dict[str, Any]:
             "scanned_at": time.time(),
         },
     }
-    # A failed Plex DB copy leaves in_use empty, so every poster on disk looks like
-    # deletable bloat with a blank title. When that happens WITH posters present,
-    # return an unavailable result and DON'T cache it: a transient DB blip must not
-    # be negative-cached (the per-variant delete has no in-use guard, so a poisoned
-    # cache could delete active artwork). An empty tree can't misclassify anything,
-    # so it still caches normally.
-    if db_path is None and bundles:
+    # A failed Plex DB read leaves in_use empty, so every poster on disk looks like
+    # deletable bloat with a blank title. Return unavailable and DON'T cache it: a
+    # transient blip must not be negative-cached (the per-variant delete has no
+    # in-use guard, so a poisoned cache could delete active artwork). An empty tree
+    # can't misclassify anything, so it still caches normally.
+    # An empty in_use with bundles present means the same thing as a failed copy:
+    # get_in_use_hashes fails closed, and a real library always references SOME
+    # artwork. Treat both as unavailable rather than "everything is bloat".
+    if bundles and (db_path is None or not in_use):
         return {
             "bundles": [],
             "libraries": [],
