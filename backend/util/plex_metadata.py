@@ -15,9 +15,11 @@ Mounts assumed (see Unraid container volume mapping):
             Contents/                ← Plex-managed, ignored
 
 A poster file is "in use" if its filename (the bytes between the last /
-and EOF) appears as the suffix of any `metadata_items.user_thumb_url`
-in the Plex DB (values look like `upload://posters/<hash>` or
-`metadata://posters/<hash>`). Anything else in Uploads/posters/ is bloat.
+and EOF) appears as the suffix of any artwork URL in the Plex DB — on
+`metadata_items` (IN_USE_IMAGE_COLUMNS) or on `tags`
+(TAG_IN_USE_IMAGE_COLUMNS, collection/people/genre art). Values look like
+`upload://posters/<hash>` or `metadata://posters/<hash>`. Anything else in
+Uploads/posters/ is bloat.
 
 Public surface:
     get_plex_metadata_dir(plex_path) -> str
@@ -56,6 +58,24 @@ IN_USE_IMAGE_COLUMNS = (
     "user_square_art_url",
 )
 
+# `tags` columns holding user-set artwork for collections, people and genres.
+# Modern Plex stores collections as metadata_items (metadata_type 18), already
+# covered above; `tags` is where legacy collections (tag_type 2) and tag artwork
+# live, so a custom collection/actor image referenced ONLY from here would
+# otherwise scan as bloat and be deleted.
+#
+# Deliberately NOT protected (measured against a live 250k-tag library):
+#   taggings.thumb_url          — 0 upload://, all metadata:// under Contents/,
+#                                 which the bundle walk never scans anyway.
+#   metadata_item_views.thumb_url — watch-history snapshots of what the artwork
+#                                 WAS; protecting them would pin superseded
+#                                 posters forever and defeat the cleaner.
+TAG_IN_USE_IMAGE_COLUMNS = (
+    "user_thumb_url",
+    "user_art_url",
+    "user_music_url",
+)
+
 _CACHE_TTL_SEC = 300  # 5 minutes
 _cache_lock = threading.Lock()
 _cache: Dict[str, Dict[str, Any]] = {}
@@ -87,9 +107,13 @@ def copy_plex_db(plex_path: str, dest: str) -> Optional[str]:
 def get_in_use_hashes(db_path: str, logger: Any = None) -> Set[str]:
     """
     Extract the filenames currently referenced by any of IN_USE_IMAGE_COLUMNS on
-    metadata_items — the images Plex is actively using. This is the single
+    metadata_items, plus TAG_IN_USE_IMAGE_COLUMNS on tags (collection, people
+    and genre artwork) — the images Plex is actively using. This is the single
     canonical "in-use" scan; both the API bloat report and poster_cleanarr use
     it, so the set of protected columns can't drift between them.
+
+    Union-only by construction: adding a source can only ever protect more
+    files, never mark more as bloat.
 
     `logger` is optional: when provided, per-column / DB errors are logged
     (poster_cleanarr wants this); otherwise failures are swallowed (the API
@@ -100,25 +124,43 @@ def get_in_use_hashes(db_path: str, logger: Any = None) -> Set[str]:
         conn = sqlite3.connect(db_path)
         try:
             cur = conn.cursor()
-            for col in IN_USE_IMAGE_COLUMNS:
-                try:
-                    cur.execute(
-                        f"SELECT {col} FROM metadata_items "
-                        f"WHERE {col} LIKE 'upload://%' OR {col} LIKE 'metadata://%'"
-                    )
-                    for (value,) in cur.fetchall():
-                        if not value:
-                            continue
-                        parsed = urlparse(value)
-                        fname = parsed.path.rsplit("/", 1)[-1] if parsed.path else ""
-                        if fname:
-                            in_use.add(fname)
-                except sqlite3.OperationalError as e:
-                    # Older Plex schemas may lack a column (e.g. the newer
-                    # clear-logo/square-art ones) — skip it, don't abort.
-                    if logger:
-                        logger.warning(f"Failed to query {col}: {e}")
-                    continue
+
+            def _collect(table: str, columns: tuple) -> None:
+                for col in columns:
+                    try:
+                        # fetchall() must stay inside this try: a read that
+                        # fails after execute() succeeds would otherwise escape
+                        # to the outer handler and truncate the protected set.
+                        cur.execute(
+                            f"SELECT {col} FROM {table} "
+                            f"WHERE {col} LIKE 'upload://%' OR {col} LIKE 'metadata://%'"
+                        )
+                        for (value,) in cur.fetchall():
+                            if not value:
+                                continue
+                            parsed = urlparse(value)
+                            fname = (
+                                parsed.path.rsplit("/", 1)[-1] if parsed.path else ""
+                            )
+                            if fname:
+                                in_use.add(fname)
+                    except sqlite3.OperationalError as e:
+                        # Older Plex schemas may lack a column (e.g. the newer
+                        # clear-logo/square-art ones) — skip it, don't abort.
+                        if logger:
+                            logger.warning(f"Failed to query {table}.{col}: {e}")
+                        continue
+
+            _collect("metadata_items", IN_USE_IMAGE_COLUMNS)
+
+            # Collection / people / genre artwork. Probe first so the common
+            # case of a schema without `tags` stays silent instead of logging a
+            # warning per column.
+            cur.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='tags'"
+            )
+            if cur.fetchone():
+                _collect("tags", TAG_IN_USE_IMAGE_COLUMNS)
         finally:
             conn.close()
     except Exception as e:

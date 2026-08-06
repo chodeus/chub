@@ -149,6 +149,104 @@ def test_get_in_use_hashes_includes_clear_logo_and_square_art(tmp_path):
     assert "sq1" in hashes
 
 
+# --- collection / people / genre artwork (the `tags` table) ---
+
+
+def _make_tags_db(path, tag_cols=("user_thumb_url", "user_art_url", "user_music_url")):
+    """metadata_items + a `tags` table carrying collection/people artwork."""
+    conn = sqlite3.connect(str(path))
+    conn.execute("CREATE TABLE metadata_items (id INTEGER PRIMARY KEY, user_thumb_url TEXT)")
+    conn.execute("INSERT INTO metadata_items (user_thumb_url) VALUES ('upload://posters/item1')")
+    conn.execute(
+        "CREATE TABLE tags (id INTEGER PRIMARY KEY, tag TEXT, tag_type INTEGER, "
+        + ", ".join(f"{c} TEXT" for c in tag_cols)
+        + ")"
+    )
+    return conn
+
+
+def test_get_in_use_hashes_protects_tag_artwork(tmp_path):
+    """Regression: custom collection/actor artwork is referenced only from the
+    `tags` table. Before this was protected the bloat scan classified it as
+    deletable and a remove run destroyed it."""
+    from backend.util.plex_metadata import TAG_IN_USE_IMAGE_COLUMNS
+
+    assert TAG_IN_USE_IMAGE_COLUMNS == (
+        "user_thumb_url",
+        "user_art_url",
+        "user_music_url",
+    )
+
+    db = tmp_path / "tags.db"
+    conn = _make_tags_db(db)
+    conn.execute(
+        "INSERT INTO tags (tag, tag_type, user_thumb_url, user_art_url, user_music_url) "
+        "VALUES ('Marvel', 2, 'upload://posters/coll_thumb', "
+        "'upload://art/coll_art', 'upload://themes/coll_theme')"
+    )
+    conn.commit()
+    conn.close()
+
+    hashes = get_in_use_hashes(str(db))
+    assert {"coll_thumb", "coll_art", "coll_theme"} <= hashes
+    # metadata_items coverage is unaffected
+    assert "item1" in hashes
+
+
+def test_get_in_use_hashes_survives_db_without_tags_table(tmp_path):
+    """Legacy/stub schemas have no `tags` table — the metadata_items half of the
+    scan must still return in full rather than aborting."""
+    db = tmp_path / "notags.db"
+    _make_plex_db(str(db))  # creates metadata_items only
+    hashes = get_in_use_hashes(str(db))
+    assert {"abc123", "zzz999", "banner1"} <= hashes
+
+
+def test_get_in_use_hashes_tolerates_partial_tags_schema(tmp_path):
+    """An older `tags` table missing user_music_url must not drop the columns
+    that DO exist — a per-column skip, not a per-table abort."""
+    db = tmp_path / "partial.db"
+    conn = _make_tags_db(db, tag_cols=("user_thumb_url",))
+    conn.execute(
+        "INSERT INTO tags (tag, tag_type, user_thumb_url) "
+        "VALUES ('Actor', 6, 'upload://posters/actor_thumb')"
+    )
+    conn.commit()
+    conn.close()
+
+    hashes = get_in_use_hashes(str(db))
+    assert "actor_thumb" in hashes
+    assert "item1" in hashes
+
+
+def test_get_in_use_hashes_is_union_only(tmp_path):
+    """Adding tag sources may only ever GROW the protected set. If this ever
+    shrinks, the bloat scanner starts deleting live artwork."""
+    db = tmp_path / "union.db"
+    conn = _make_tags_db(db)
+    conn.execute(
+        "INSERT INTO tags (tag, tag_type, user_thumb_url) "
+        "VALUES ('Genre', 5, 'upload://posters/genre_thumb')"
+    )
+    conn.commit()
+    conn.close()
+
+    from backend.util.plex_metadata import IN_USE_IMAGE_COLUMNS
+
+    baseline = set()
+    c = sqlite3.connect(str(db))
+    for col in IN_USE_IMAGE_COLUMNS:
+        try:
+            for (v,) in c.execute(f"SELECT {col} FROM metadata_items WHERE {col} LIKE 'upload://%'"):
+                if v:
+                    baseline.add(v.rsplit("/", 1)[-1])
+        except sqlite3.OperationalError:
+            pass
+    c.close()
+
+    assert baseline < get_in_use_hashes(str(db))
+
+
 # --- library scoping: in-use set is GLOBAL, opt-out only labels candidates ---
 
 
