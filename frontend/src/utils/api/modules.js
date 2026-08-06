@@ -62,7 +62,8 @@ export const modulesAPI = {
      * @returns {Promise<Object>} Execution status
      */
     getExecutionStatus: (moduleName, jobId) => {
-        return apiCore.get(`/modules/${moduleName}/status/${jobId}`);
+        // Live status — never serve from the GET cache.
+        return apiCore.get(`/modules/${moduleName}/status/${jobId}`, { useCache: false });
     },
 
     /**
