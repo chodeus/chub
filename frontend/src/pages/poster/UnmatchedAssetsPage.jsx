@@ -324,10 +324,8 @@ const externalIdTitle = item =>
         .filter(Boolean)
         .join('   ·   ') || undefined;
 
-/** Every media_cache row a display row addresses, show poster first then seasons
- *  ascending. A grouped series carries an explicit list (the backend aggregates
- *  the show row plus one per missing season); movies and collections are a
- *  single implicit target. Row actions must address each one, not just the row. */
+/** Every media_cache row a display row addresses (show poster first, then seasons).
+ *  Series carry an explicit list; movies/collections are one implicit target. */
 const rowTargets = item => {
     const list = item.targets?.length
         ? [...item.targets]
@@ -359,10 +357,8 @@ const UnmatchedList = ({ items, onRefresh, onPick, typeKey: typeKeyProp, onTypeC
         if (!targets.length) return;
         setBusyId(targets[0].id);
         try {
-            // A grouped series is N media_cache rows — ignoring only one shrinks
-            // the row's chips instead of clearing it. allSettled, not all: a
-            // partial success has already mutated the server, so the table must
-            // refresh even when one call fails.
+            // allSettled, not all — a partial success already mutated the
+            // server, so the table must refresh even when one call fails.
             const results = await Promise.allSettled(
                 targets.map(t =>
                     postersAPI.setMatchIgnored(t.id, {
@@ -1589,9 +1585,8 @@ const PosterPickerModal = ({ item, onClose, onApplied }) => {
     // Fall back rather than go target-less if the index outlives its list.
     const target = targets[targetIdx] || targets[0] || null;
     const targetId = target?.id ?? null;
-    // Tag the fetched list with the target it was loaded for, so switching
-    // target shows the loading state without a synchronous setState in the
-    // effect (react-hooks/set-state-in-effect) — as ArtworkPickerModal does.
+    // Tagged with the target it loaded for, so switching shows the loading state
+    // without a synchronous setState in the effect — as ArtworkPickerModal does.
     const [result, setResult] = useState({ targetId: undefined, list: null });
     const [busy, setBusy] = useState(null);
 
@@ -1659,10 +1654,8 @@ const PosterPickerModal = ({ item, onClose, onApplied }) => {
                                 key={t.id}
                                 type="button"
                                 onClick={() => {
-                                    // Same-tab click must be a no-op: clearing
-                                    // result without changing targetId would
-                                    // leave the effect unfired, hanging on
-                                    // "Searching…" forever.
+                                    // Same-tab click must no-op — clearing result
+                                    // without changing targetId hangs on "Searching…".
                                     if (i === targetIdx) return;
                                     setTargetIdx(i);
                                     setResult({ targetId: undefined, list: null });
@@ -1829,9 +1822,7 @@ const ArtworkPickerModal = ({ item, imageTypes, onClose, onApplied }) => {
                                 key={t}
                                 type="button"
                                 onClick={() => {
-                                    // See PosterPickerModal — a same-tab click
-                                    // must not clear result, or the effect
-                                    // never refires.
+                                    // Same-tab click must no-op — see PosterPickerModal.
                                     if (t === imageType) return;
                                     setImageType(t);
                                     setResult({ type: null, list: null });

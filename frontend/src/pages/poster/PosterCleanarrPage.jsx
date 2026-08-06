@@ -67,9 +67,8 @@ const MODE_META = {
 };
 
 // localStorage key for persisting scan/filter/tree state across navigations.
-// v3: tree identity moved from rating_key to bundle_path. A persisted v2
-// `selected` rehydrates with no bundlePath, which on mobile hides the left pane
-// while the "Back to list" control lives in the (never-rendered) detail pane.
+// v3: tree identity is bundle_path now — a persisted v2 `selected` has no
+// bundlePath and strands the mobile layout with no way back to the list.
 const STATE_KEY = 'chub_cleanarr_state_v3';
 const loadPersistedState = () => {
     try {
@@ -575,9 +574,8 @@ const PosterCleanarrPage = () => {
         () => new Set(persisted.expandedSeasons || [])
     );
 
-    // Selected node in the left tree. Identified by bundle_path, NOT rating_key:
-    // unanchored orphan bundles all carry rating_key null and would collapse
-    // onto one identity, cross-wiring the detail pane's delete actions.
+    // Selected node in the left tree. bundle_path, NOT rating_key — unanchored
+    // bundles are all rating_key null and would collapse onto one identity.
     //   { kind: 'show' | 'season' | 'episode', bundlePath, season?, episode? }
     const [selected, setSelected] = useState(persisted.selected || null);
 
@@ -1491,9 +1489,8 @@ const PosterCleanarrPage = () => {
                                                             const [keepPath] = [...selectedPaths];
                                                             setConfirmMakeActive({ keepPath });
                                                         }}
-                                                        // No rating_key = unanchored orphan bundle
-                                                        // with no Plex item to promote against;
-                                                        // mirrors the preview modal's gate.
+                                                        // No rating_key = no Plex item to promote
+                                                        // against; mirrors the preview modal gate.
                                                         disabled={
                                                             selectedPaths.size !== 1 ||
                                                             !detail.bundle.rating_key

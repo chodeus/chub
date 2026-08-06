@@ -146,9 +146,8 @@ class UnmatchedAssets(ChubModule):
                 continue
             entry = dict(row)
             if key == "series":
-                # instance_name is part of the key: media_cache rows are
-                # per-instance, so merging a 1080p and a 4K *arr into one row
-                # would fan Ignore across both while labelling it with one.
+                # instance_name keeps media_cache rows per-instance — without it
+                # Ignore fans across a 1080p/4K *arr split.
                 skey = (entry["title"], entry.get("year"), entry.get("instance_name"))
                 found = unmatched_series_index.get(skey)
                 season = entry.get("season_number")
