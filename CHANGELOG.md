@@ -9,29 +9,24 @@ All notable changes to CHUB are documented here. Format loosely follows [Keep a 
 
 * **backup:** configurable backup location ([342c116](https://github.com/chodeus/chub/commit/342c11638d5b064ecb45804a99b040f6c75de6d3))
 * **gdrive-presets:** add the 8 community artwork drives ([f66b013](https://github.com/chodeus/chub/commit/f66b0131d0276c975bcf14e8dc06f9df6c2cfb1a))
-* **gdrive-presets:** add the 8 community artwork drives ([e516277](https://github.com/chodeus/chub/commit/e51627734faf13a99e1226d5d7191845e88b0a5c))
 
 
 ### Bug Fixes
 
 * address review findings on the backup and Plex identity changes ([81e547d](https://github.com/chodeus/chub/commit/81e547decdf354a59e302c358ed76266c4831c97))
 * **deps:** pin brace-expansion 1.1.18, dropping the obsolete OSV exception ([692e4c5](https://github.com/chodeus/chub/commit/692e4c5dc08bd2eb6361aa362ab0c1e005a80a5e))
-* **deps:** pin brace-expansion 1.1.18, dropping the obsolete OSV exception ([8ed6ae3](https://github.com/chodeus/chub/commit/8ed6ae338fb0fbc69339fbabc5e6429c9869f331))
 * **deps:** update all non-major dependencies ([#433](https://github.com/chodeus/chub/issues/433)) ([da9e780](https://github.com/chodeus/chub/commit/da9e780e32ec714a6b91e900904cbab60066500f))
 * **deps:** update fast-uri to 3.1.5 (GHSA-7p8r-x3mc-p8w7) ([723b038](https://github.com/chodeus/chub/commit/723b038c3aef2f3d37675cc51e77159072987882))
 * **logs:** stop the viewer collapsing after the first poll ([fa9151c](https://github.com/chodeus/chub/commit/fa9151cb2c724f90900232bf122b017c7c89b449))
 * **maintenance:** unlink the backup entry itself, never a link target ([3a350ff](https://github.com/chodeus/chub/commit/3a350ff8126942336ae98cd3a78e76f74636080e))
 * **plex:** pin a stable Plex client identity ([85830f8](https://github.com/chodeus/chub/commit/85830f8d83383f2ea442112e6b6e6ba9b541f348))
 * **renamer:** don't type an IMDb-tagged year-less file as a collection ([e10d8ac](https://github.com/chodeus/chub/commit/e10d8ac98e4339cf7ecfd595b42443ca81458c96))
-* stable Plex identity, IMDb-tagged collection misclassification, configurable backup location, log viewer truncation ([aa98e04](https://github.com/chodeus/chub/commit/aa98e04ae0d02ff49230b5f11b8ec0a7f1c00f16))
 * **upgradinatorr:** scope Lidarr album grab history to the album ([283a517](https://github.com/chodeus/chub/commit/283a5174c2de9d2ffe572e125547f84a69bd80cc))
-* **upgradinatorr:** scope Lidarr album grab history to the album ([4a15b9c](https://github.com/chodeus/chub/commit/4a15b9cda97a1ac88d3cccd9bd4862c93ac427a2))
 
 
 ### Performance
 
 * **db:** drop unselective poster_cache indexes and run ANALYZE ([5b795db](https://github.com/chodeus/chub/commit/5b795db2b0bb2f88166c955be3d3efc7f92eae40))
-* **db:** drop unselective poster_cache indexes and run ANALYZE ([e9502d9](https://github.com/chodeus/chub/commit/e9502d9eb19562962dc708af2e14f8d4b299a2f5))
 
 
 ### Documentation
