@@ -15,9 +15,11 @@ Mounts assumed (see Unraid container volume mapping):
             Contents/                ← Plex-managed, ignored
 
 A poster file is "in use" if its filename (the bytes between the last /
-and EOF) appears as the suffix of any `metadata_items.user_thumb_url`
-in the Plex DB (values look like `upload://posters/<hash>` or
-`metadata://posters/<hash>`). Anything else in Uploads/posters/ is bloat.
+and EOF) appears as the suffix of any artwork URL in the Plex DB — on
+`metadata_items` (IN_USE_IMAGE_COLUMNS) or on `tags`
+(TAG_IN_USE_IMAGE_COLUMNS, collection/people/genre art). Values look like
+`upload://posters/<hash>` or `metadata://posters/<hash>`. Anything else in
+Uploads/posters/ is bloat.
 
 Public surface:
     get_plex_metadata_dir(plex_path) -> str
@@ -56,6 +58,15 @@ IN_USE_IMAGE_COLUMNS = (
     "user_square_art_url",
 )
 
+# `tags` artwork: legacy collections (tag_type 2), people and genres.
+# Excludes taggings.thumb_url (never scanned — lives under Contents/) and
+# metadata_item_views.thumb_url (history snapshots; would pin dead posters).
+TAG_IN_USE_IMAGE_COLUMNS = (
+    "user_thumb_url",
+    "user_art_url",
+    "user_music_url",
+)
+
 _CACHE_TTL_SEC = 300  # 5 minutes
 _cache_lock = threading.Lock()
 _cache: Dict[str, Dict[str, Any]] = {}
@@ -84,12 +95,22 @@ def copy_plex_db(plex_path: str, dest: str) -> Optional[str]:
         return None
 
 
+def _is_missing_schema_error(exc: sqlite3.OperationalError) -> bool:
+    """True only for 'no such column/table' — a schema gap, not a read failure."""
+    msg = str(exc).lower()
+    return msg.startswith("no such column") or msg.startswith("no such table")
+
+
 def get_in_use_hashes(db_path: str, logger: Any = None) -> Set[str]:
     """
     Extract the filenames currently referenced by any of IN_USE_IMAGE_COLUMNS on
-    metadata_items — the images Plex is actively using. This is the single
+    metadata_items, plus TAG_IN_USE_IMAGE_COLUMNS on tags (collection, people
+    and genre artwork) — the images Plex is actively using. This is the single
     canonical "in-use" scan; both the API bloat report and poster_cleanarr use
     it, so the set of protected columns can't drift between them.
+
+    Union-only by construction: adding a source can only ever protect more
+    files, never mark more as bloat.
 
     `logger` is optional: when provided, per-column / DB errors are logged
     (poster_cleanarr wants this); otherwise failures are swallowed (the API
@@ -100,33 +121,57 @@ def get_in_use_hashes(db_path: str, logger: Any = None) -> Set[str]:
         conn = sqlite3.connect(db_path)
         try:
             cur = conn.cursor()
-            for col in IN_USE_IMAGE_COLUMNS:
-                try:
-                    cur.execute(
-                        f"SELECT {col} FROM metadata_items "
-                        f"WHERE {col} LIKE 'upload://%' OR {col} LIKE 'metadata://%'"
-                    )
-                    for (value,) in cur.fetchall():
-                        if not value:
-                            continue
-                        parsed = urlparse(value)
-                        fname = parsed.path.rsplit("/", 1)[-1] if parsed.path else ""
-                        if fname:
-                            in_use.add(fname)
-                except sqlite3.OperationalError as e:
-                    # Older Plex schemas may lack a column (e.g. the newer
-                    # clear-logo/square-art ones) — skip it, don't abort.
-                    if logger:
-                        logger.warning(f"Failed to query {col}: {e}")
-                    continue
+
+            def _collect(table: str, columns: tuple) -> None:
+                for col in columns:
+                    try:
+                        # fetchall() must stay inside this try: a read that
+                        # fails after execute() succeeds would otherwise escape
+                        # to the outer handler and truncate the protected set.
+                        cur.execute(
+                            f"SELECT {col} FROM {table} "
+                            f"WHERE {col} LIKE 'upload://%' OR {col} LIKE 'metadata://%'"
+                        )
+                        for (value,) in cur.fetchall():
+                            if not value:
+                                continue
+                            parsed = urlparse(value)
+                            fname = (
+                                parsed.path.rsplit("/", 1)[-1] if parsed.path else ""
+                            )
+                            if fname:
+                                in_use.add(fname)
+                    except sqlite3.OperationalError as e:
+                        # Only a schema gap is safe to skip (older Plex lacks the
+                        # clear-logo/square-art columns). A lock or I/O error must
+                        # NOT degrade to "column absent" — that yields a partial
+                        # in_use set and gets live artwork deleted, so let it reach
+                        # the outer handler, which fails closed.
+                        if not _is_missing_schema_error(e):
+                            raise
+                        if logger:
+                            logger.warning(f"Skipping absent {table}.{col}: {e}")
+                        continue
+
+            _collect("metadata_items", IN_USE_IMAGE_COLUMNS)
+
+            # Collection / people / genre artwork. Probe first so the common
+            # case of a schema without `tags` stays silent instead of logging a
+            # warning per column.
+            cur.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='tags'"
+            )
+            if cur.fetchone():
+                _collect("tags", TAG_IN_USE_IMAGE_COLUMNS)
         finally:
             conn.close()
     except Exception as e:
-        # Scanner is best-effort: a corrupt/missing DB returns an empty
-        # in-use set rather than crashing the API. Caller decides what to
-        # do with zero results.
+        # Fail CLOSED: discard whatever was collected. A partial set is worse
+        # than none — it is non-empty, so poster_cleanarr's "0 in-use = failed
+        # read" guard waves it through and deletes the artwork we never read.
         if logger:
             logger.error(f"Failed to query Plex database: {e}")
+        return set()
     return in_use
 
 
@@ -628,13 +673,15 @@ def scan_bundles(plex_path: str, *, force: bool = False) -> Dict[str, Any]:
             "scanned_at": time.time(),
         },
     }
-    # A failed Plex DB copy leaves in_use empty, so every poster on disk looks like
-    # deletable bloat with a blank title. When that happens WITH posters present,
-    # return an unavailable result and DON'T cache it: a transient DB blip must not
-    # be negative-cached (the per-variant delete has no in-use guard, so a poisoned
-    # cache could delete active artwork). An empty tree can't misclassify anything,
-    # so it still caches normally.
-    if db_path is None and bundles:
+    # A failed Plex DB read leaves in_use empty, so every poster on disk looks like
+    # deletable bloat with a blank title. Return unavailable and DON'T cache it: a
+    # transient blip must not be negative-cached (the per-variant delete has no
+    # in-use guard, so a poisoned cache could delete active artwork). An empty tree
+    # can't misclassify anything, so it still caches normally.
+    # An empty in_use with bundles present means the same thing as a failed copy:
+    # get_in_use_hashes fails closed, and a real library always references SOME
+    # artwork. Treat both as unavailable rather than "everything is bloat".
+    if bundles and (db_path is None or not in_use):
         return {
             "bundles": [],
             "libraries": [],
