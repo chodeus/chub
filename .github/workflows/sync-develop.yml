@@ -4,9 +4,13 @@ name: Sync develop from main
 # (the public app + develop-only extensions) keeps receiving everything that lands
 # on main — releases, fixes, dependency bumps. The branch model's sync direction
 # is main -> develop and shared files are byte-identical on both, so the merge
-# should never conflict while the invariant holds. The PR is a review gate: you
-# merge it; nothing is pushed automatically. An already-open base:develop /
+# should never conflict while the invariant holds. An already-open base:develop /
 # head:main PR auto-tracks main's tip, so we only create one when none is open.
+#
+# The PR is a NOTIFICATION that develop has drifted, not a mergeable PR: develop
+# requires branches be up to date, which head:main can never be without pulling
+# develop's extension files into main. Sync with `git merge origin/main` on
+# develop and push; GitHub then marks this PR merged on its own.
 
 on:
   push:
@@ -51,4 +55,14 @@ jobs:
             --base develop \
             --head main \
             --title "chore: sync develop with main" \
-            --body "Automated back-merge of \`main\` into \`develop\`. Sync direction is main -> develop and shared files are byte-identical, so this should merge cleanly. Review and merge to bring main's changes (releases, fixes, dependency bumps) onto develop. Opened by the sync-develop workflow."
+            --body "\`develop\` has drifted behind \`main\` (releases, fixes, dependency bumps). **Do not merge this PR** — it reports the drift, it does not fix it.
+
+          \`develop\` requires branches be up to date, and \`head:main\` can never satisfy that without pulling develop's extension files into main, which the branch invariant forbids. Squash or rebase would also leave \`main\` unreachable from \`develop\`, so this workflow would just open another PR next push.
+
+          Sync locally instead:
+
+          \`\`\`
+          git checkout develop && git merge origin/main && git push
+          \`\`\`
+
+          Then verify \`git diff main develop\` is added extension files plus \`deploy/docker/Dockerfile\` only. GitHub marks this PR merged on its own once develop contains main's tip. Opened by the sync-develop workflow."
