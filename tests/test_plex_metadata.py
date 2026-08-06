@@ -254,8 +254,6 @@ def test_get_in_use_hashes_fails_closed_on_read_error(tmp_path, monkeypatch):
     absent'. Returning just the metadata_items half is non-empty, so
     poster_cleanarr's 0-in-use guard waves it through and deletes the tag
     artwork that was never read."""
-    import backend.util.plex_metadata as pm
-
     db = tmp_path / "locked.db"
     conn = _make_tags_db(db)
     conn.execute(
@@ -265,7 +263,9 @@ def test_get_in_use_hashes_fails_closed_on_read_error(tmp_path, monkeypatch):
     conn.commit()
     conn.close()
 
-    real_connect = pm.sqlite3.connect
+    # plex_metadata resolves sqlite3.connect at call time, so patching the
+    # module attribute is enough — no second import of the module under test.
+    real_connect = sqlite3.connect
 
     class _FlakyCursor:
         def __init__(self, inner):
@@ -292,7 +292,7 @@ def test_get_in_use_hashes_fails_closed_on_read_error(tmp_path, monkeypatch):
             return getattr(self._inner, name)
 
     monkeypatch.setattr(
-        pm.sqlite3, "connect", lambda *a, **k: _FlakyConn(real_connect(*a, **k))
+        sqlite3, "connect", lambda *a, **k: _FlakyConn(real_connect(*a, **k))
     )
 
     result = get_in_use_hashes(str(db))
