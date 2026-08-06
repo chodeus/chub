@@ -692,11 +692,13 @@ export const postersAPI = {
         return `/api/posters/plex-metadata/variant-thumbnail?${params.toString()}`;
     },
 
-    /** Poll a job's log file for incremental output. */
+    /** Poll a job's log file for incremental output. Must bypass the GET
+     *  cache: when the log isn't growing the poll URL never changes, and a
+     *  cached response masks the terminal status for the full TTL. */
     tailJobLog: (jobId, offset = 0, maxBytes = 65536) => {
         const qs = new URLSearchParams();
         qs.set('offset', offset);
         qs.set('max_bytes', maxBytes);
-        return apiCore.get(`/jobs/${jobId}/log-tail?${qs.toString()}`);
+        return apiCore.get(`/jobs/${jobId}/log-tail?${qs.toString()}`, { useCache: false });
     },
 };
