@@ -146,42 +146,34 @@ class UnmatchedAssets(ChubModule):
                 continue
             entry = dict(row)
             if key == "series":
-                skey = (entry["title"], entry.get("year"))
+                # instance_name is part of the key: media_cache rows are
+                # per-instance, so merging a 1080p and a 4K *arr into one row
+                # would fan Ignore across both while labelling it with one.
+                skey = (entry["title"], entry.get("year"), entry.get("instance_name"))
                 found = unmatched_series_index.get(skey)
-                if entry.get("season_number") is not None:
-                    if found:
-                        found.setdefault("missing_seasons", []).append(
-                            entry["season_number"]
-                        )
-                    else:
-                        new_entry = {
-                            "title": entry["title"],
-                            "year": entry.get("year"),
-                            "missing_seasons": [entry["season_number"]],
-                            "missing_main_poster": False,
-                            "tmdb_id": entry.get("tmdb_id"),
-                            "tvdb_id": entry.get("tvdb_id"),
-                            "imdb_id": entry.get("imdb_id"),
-                            "instance_name": entry.get("instance_name"),
-                        }
-                        unmatched["series"].append(new_entry)
-                        unmatched_series_index[skey] = new_entry
+                season = entry.get("season_number")
+                if found is None:
+                    found = {
+                        "title": entry["title"],
+                        "year": entry.get("year"),
+                        "missing_seasons": [],
+                        "missing_main_poster": False,
+                        "tmdb_id": entry.get("tmdb_id"),
+                        "tvdb_id": entry.get("tvdb_id"),
+                        "imdb_id": entry.get("imdb_id"),
+                        "instance_name": entry.get("instance_name"),
+                        "asset_type": entry.get("asset_type"),
+                        # One display row aggregates N media_cache rows; ignore
+                        # and match address each target individually.
+                        "targets": [],
+                    }
+                    unmatched["series"].append(found)
+                    unmatched_series_index[skey] = found
+                if season is not None:
+                    found["missing_seasons"].append(season)
                 else:
-                    if found:
-                        found["missing_main_poster"] = True
-                    else:
-                        new_entry = {
-                            "title": entry["title"],
-                            "year": entry.get("year"),
-                            "missing_seasons": [],
-                            "missing_main_poster": True,
-                            "tmdb_id": entry.get("tmdb_id"),
-                            "tvdb_id": entry.get("tvdb_id"),
-                            "imdb_id": entry.get("imdb_id"),
-                            "instance_name": entry.get("instance_name"),
-                        }
-                        unmatched["series"].append(new_entry)
-                        unmatched_series_index[skey] = new_entry
+                    found["missing_main_poster"] = True
+                found["targets"].append({"id": entry.get("id"), "season_number": season})
             else:
                 unmatched[key].append(entry)
 
@@ -194,7 +186,9 @@ class UnmatchedAssets(ChubModule):
                 continue
             entry = dict(row)
             if key == "series":
-                skey = (entry["title"], entry.get("year"))
+                # Must match the unmatched key above — calculate_stats divides
+                # one grouped count by the other.
+                skey = (entry["title"], entry.get("year"), entry.get("instance_name"))
                 found = all_series_index.get(skey)
                 if found:
                     if entry.get("season_number") is not None:

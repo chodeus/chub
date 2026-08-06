@@ -442,6 +442,38 @@ def test_scan_bundles_hides_unanchored_contents_clutter_keeps_upload_bloat(
     assert any("ghost_bloat" in v["filename"] for v in ghost[0]["variants"])
 
 
+def test_multiple_unanchored_bundles_stay_distinct(tmp_path, monkeypatch):
+    """Every unanchored bundle carries rating_key None and title "", so anything
+    keying them by those collapses them onto one identity — which cross-wires
+    the Cleanarr detail pane's deletes. bundle_path must stay unique per bundle."""
+    plex = tmp_path / "plex"
+    # A populated metadata_items is load-bearing here — the scan returns zero
+    # bundles against an empty one, which a real Plex DB never is.
+    _make_indexed_db(
+        plex / "Plug-in Support" / "Databases" / PLEX_DB_NAME,
+        rows=[(1, "The Matrix", 1999, 1, 1, "upload://posters/matrix_thumb")],
+        sections=[(1, "Films", 1)],
+    )
+    md = plex / "Metadata"
+    for name in ("ghost_a", "ghost_b"):
+        _touch(
+            md / "Movies" / name[-1] / f"{name}.bundle" / "Uploads" / "posters" / f"{name}_bloat"
+        )
+
+    monkeypatch.setenv("CONFIG_DIR", str(tmp_path / "config"))
+    invalidate_cache()
+    ghosts = [
+        b for b in scan_bundles(str(plex), force=True)["bundles"] if b["rating_key"] is None
+    ]
+
+    assert len(ghosts) == 2
+    assert len({b["bundle_path"] for b in ghosts}) == 2
+    # Each keeps only its OWN variant — the pairing the UI relies on.
+    for b in ghosts:
+        stem = b["bundle_path"].rsplit("/", 1)[-1].removesuffix(".bundle")
+        assert [v["filename"] for v in b["variants"]] == [f"{stem}_bloat"]
+
+
 def test_library_optout_decision_excludes_only_matching_library(tmp_path):
     """The poster_cleanarr deletion-side opt-out decision (using the real
     helpers) excludes a bloat file whose bundle is in an opted-out library,

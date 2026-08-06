@@ -67,7 +67,10 @@ const MODE_META = {
 };
 
 // localStorage key for persisting scan/filter/tree state across navigations.
-const STATE_KEY = 'chub_cleanarr_state_v2';
+// v3: tree identity moved from rating_key to bundle_path. A persisted v2
+// `selected` rehydrates with no bundlePath, which on mobile hides the left pane
+// while the "Back to list" control lives in the (never-rendered) detail pane.
+const STATE_KEY = 'chub_cleanarr_state_v3';
 const loadPersistedState = () => {
     try {
         const raw = localStorage.getItem(STATE_KEY);
@@ -572,8 +575,10 @@ const PosterCleanarrPage = () => {
         () => new Set(persisted.expandedSeasons || [])
     );
 
-    // Selected node in the left tree.
-    //   { kind: 'show' | 'season' | 'episode', ratingKey, season?, episode? }
+    // Selected node in the left tree. Identified by bundle_path, NOT rating_key:
+    // unanchored orphan bundles all carry rating_key null and would collapse
+    // onto one identity, cross-wiring the detail pane's delete actions.
+    //   { kind: 'show' | 'season' | 'episode', bundlePath, season?, episode? }
     const [selected, setSelected] = useState(persisted.selected || null);
 
     // Per-variant bulk selection (checkbox on bloat tiles).
@@ -685,7 +690,7 @@ const PosterCleanarrPage = () => {
     // Build all trees once per scan payload.
     const bundleTrees = useMemo(() => {
         const m = new Map();
-        for (const b of bundles) m.set(b.rating_key, buildBundleTree(b));
+        for (const b of bundles) m.set(b.bundle_path, buildBundleTree(b));
         return m;
     }, [bundles]);
 
@@ -693,15 +698,17 @@ const PosterCleanarrPage = () => {
     // title+year, then the folder's own parsed title+year. Folders that match
     // no bundle (no poster row exists, or the title isn't in Plex) are surfaced
     // separately so they aren't silently dropped.
-    const { staleByRk, unmatchedStale } = useMemo(() => {
+    const { staleByBundle, unmatchedStale } = useMemo(() => {
         const counts = new Map();
         const unmatched = [];
-        if (!staleItems.length) return { staleByRk: counts, unmatchedStale: unmatched };
+        if (!staleItems.length) return { staleByBundle: counts, unmatchedStale: unmatched };
         const byRk = new Map();
         const byTY = new Map();
         for (const b of bundles) {
-            byRk.set(String(b.rating_key), b);
-            byTY.set(titleYearKey(b.title, b.year), b);
+            // Unanchored bundles share rating_key null and title "" — indexing
+            // them would attribute stale folders to an arbitrary one of them.
+            if (b.rating_key != null) byRk.set(String(b.rating_key), b);
+            if (b.title) byTY.set(titleYearKey(b.title, b.year), b);
         }
         for (const s of staleItems) {
             let b = s.rating_key != null ? byRk.get(String(s.rating_key)) : null;
@@ -710,10 +717,10 @@ const PosterCleanarrPage = () => {
                 const { title, year } = parseFolderTitleYear(s.canonical || s.name);
                 b = byTY.get(titleYearKey(title, year));
             }
-            if (b) counts.set(b.rating_key, (counts.get(b.rating_key) || 0) + 1);
+            if (b) counts.set(b.bundle_path, (counts.get(b.bundle_path) || 0) + 1);
             else unmatched.push(s);
         }
-        return { staleByRk: counts, unmatchedStale: unmatched };
+        return { staleByBundle: counts, unmatchedStale: unmatched };
     }, [staleItems, bundles]);
 
     // Persist view/tree state (tab, expansion, selection). `hasScanned` is
@@ -779,9 +786,9 @@ const PosterCleanarrPage = () => {
     // ---- Derived: variants visible in the right pane ----
     const detail = useMemo(() => {
         if (!selected) return null;
-        const bundle = bundles.find(b => b.rating_key === selected.ratingKey);
+        const bundle = bundles.find(b => b.bundle_path === selected.bundlePath);
         if (!bundle) return null;
-        const tree = bundleTrees.get(bundle.rating_key);
+        const tree = bundleTrees.get(bundle.bundle_path);
         if (!tree) return null;
         if (selected.kind === 'show') {
             const variants = tree.show;
@@ -1026,7 +1033,7 @@ const PosterCleanarrPage = () => {
     const activeInDetail = detail ? detail.variants.filter(v => v.active).length : 0;
     // Stale duplicates are a property of the whole media item, not a single
     // node — surface the bundle's count on any node within it.
-    const staleInDetail = detail ? staleByRk.get(detail.bundle.rating_key) || 0 : 0;
+    const staleInDetail = detail ? staleByBundle.get(detail.bundle.bundle_path) || 0 : 0;
     const reclaimableBytes = detail
         ? detail.variants
               .filter(v => !v.active && (v.cls?.source || 'uploads') !== 'plex')
@@ -1038,7 +1045,7 @@ const PosterCleanarrPage = () => {
     const subtreeBloat =
         detail && selected?.kind === 'show'
             ? (() => {
-                  const tree = bundleTrees.get(detail.bundle.rating_key);
+                  const tree = bundleTrees.get(detail.bundle.bundle_path);
                   if (!tree) return 0;
                   return (tree.show || [])
                       .concat(
@@ -1290,7 +1297,7 @@ const PosterCleanarrPage = () => {
                                                 <BundleTreeRow
                                                     key={bundle.bundle_path}
                                                     bundle={bundle}
-                                                    tree={bundleTrees.get(bundle.rating_key)}
+                                                    tree={bundleTrees.get(bundle.bundle_path)}
                                                     selected={selected}
                                                     expandedShows={expandedShows}
                                                     expandedSeasons={expandedSeasons}
@@ -1298,7 +1305,7 @@ const PosterCleanarrPage = () => {
                                                     onToggleSeason={toggleSeason}
                                                     onSelect={selectNode}
                                                     staleCount={
-                                                        staleByRk.get(bundle.rating_key) || 0
+                                                        staleByBundle.get(bundle.bundle_path) || 0
                                                     }
                                                 />
                                             ))
@@ -1349,16 +1356,16 @@ const PosterCleanarrPage = () => {
                                                                     if (i === 0)
                                                                         selectNode({
                                                                             kind: 'show',
-                                                                            ratingKey:
+                                                                            bundlePath:
                                                                                 detail.bundle
-                                                                                    .rating_key,
+                                                                                    .bundle_path,
                                                                         });
                                                                     else if (i === 1)
                                                                         selectNode({
                                                                             kind: 'season',
-                                                                            ratingKey:
+                                                                            bundlePath:
                                                                                 detail.bundle
-                                                                                    .rating_key,
+                                                                                    .bundle_path,
                                                                             season: selected.season,
                                                                         });
                                                                 }}
@@ -1484,7 +1491,18 @@ const PosterCleanarrPage = () => {
                                                             const [keepPath] = [...selectedPaths];
                                                             setConfirmMakeActive({ keepPath });
                                                         }}
-                                                        disabled={selectedPaths.size !== 1}
+                                                        // No rating_key = unanchored orphan bundle
+                                                        // with no Plex item to promote against;
+                                                        // mirrors the preview modal's gate.
+                                                        disabled={
+                                                            selectedPaths.size !== 1 ||
+                                                            !detail.bundle.rating_key
+                                                        }
+                                                        title={
+                                                            detail.bundle.rating_key
+                                                                ? undefined
+                                                                : 'Not in Plex — this bundle has no item to promote against'
+                                                        }
                                                     >
                                                         Make active &amp; delete rest
                                                     </LoadingButton>
@@ -1778,7 +1796,7 @@ const BundleTreeRow = ({
     staleCount = 0,
 }) => {
     const isShow = bundle.metadata_type_label === 'show';
-    const showExpanded = expandedShows.has(bundle.rating_key);
+    const showExpanded = expandedShows.has(bundle.bundle_path);
     const bloatCount = (tree?.show || [])
         .concat(
             [...(tree?.seasons.values() || [])].flatMap(s =>
@@ -1787,19 +1805,19 @@ const BundleTreeRow = ({
         )
         .filter(v => !v.active && (v.cls?.source || 'uploads') !== 'plex').length;
 
-    const showSelected = selected?.kind === 'show' && selected.ratingKey === bundle.rating_key;
+    const showSelected = selected?.kind === 'show' && selected.bundlePath === bundle.bundle_path;
 
     return (
         <>
             <div
                 className="flex items-center gap-2 pr-2 py-2"
                 style={rowStyle(showSelected, 8)}
-                onClick={() => onSelect({ kind: 'show', ratingKey: bundle.rating_key })}
+                onClick={() => onSelect({ kind: 'show', bundlePath: bundle.bundle_path })}
             >
                 <Chevron
                     open={showExpanded}
                     visible={isShow}
-                    onClick={() => onToggleShow(bundle.rating_key)}
+                    onClick={() => onToggleShow(bundle.bundle_path)}
                 />
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 text-sm font-medium text-fg">
@@ -1830,11 +1848,11 @@ const BundleTreeRow = ({
                     {[...tree.seasons.values()]
                         .sort((a, b) => a.n - b.n)
                         .map(season => {
-                            const seasonKey = `${bundle.rating_key}:${season.n}`;
+                            const seasonKey = `${bundle.bundle_path}:${season.n}`;
                             const seasonExpanded = expandedSeasons.has(seasonKey);
                             const seasonSelected =
                                 selected?.kind === 'season' &&
-                                selected.ratingKey === bundle.rating_key &&
+                                selected.bundlePath === bundle.bundle_path &&
                                 selected.season === season.n;
                             const seasonBloat = season.posters
                                 .concat([...season.episodes.values()].flatMap(e => e.thumbs))
@@ -1849,7 +1867,7 @@ const BundleTreeRow = ({
                                         onClick={() =>
                                             onSelect({
                                                 kind: 'season',
-                                                ratingKey: bundle.rating_key,
+                                                bundlePath: bundle.bundle_path,
                                                 season: season.n,
                                             })
                                         }
@@ -1858,7 +1876,7 @@ const BundleTreeRow = ({
                                             open={seasonExpanded}
                                             visible={season.episodes.size > 0}
                                             onClick={() =>
-                                                onToggleSeason(bundle.rating_key, season.n)
+                                                onToggleSeason(bundle.bundle_path, season.n)
                                             }
                                         />
                                         <div
@@ -1891,7 +1909,7 @@ const BundleTreeRow = ({
                                             .map(episode => {
                                                 const epSelected =
                                                     selected?.kind === 'episode' &&
-                                                    selected.ratingKey === bundle.rating_key &&
+                                                    selected.bundlePath === bundle.bundle_path &&
                                                     selected.season === season.n &&
                                                     selected.episode === episode.n;
                                                 const epBloat = episode.thumbs.filter(
@@ -1907,7 +1925,7 @@ const BundleTreeRow = ({
                                                         onClick={() =>
                                                             onSelect({
                                                                 kind: 'episode',
-                                                                ratingKey: bundle.rating_key,
+                                                                bundlePath: bundle.bundle_path,
                                                                 season: season.n,
                                                                 episode: episode.n,
                                                             })
