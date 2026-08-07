@@ -103,7 +103,10 @@ describe('PosterSelfHealCoverageField', () => {
         );
         const { unmount } = render(<PosterSelfHealCoverageField />);
         await waitFor(() => expect(mockAPI.coverage).toHaveBeenCalled());
-        const passed = mockAPI.coverage.mock.calls[0][0];
+        // Last call, not first: correct today because restoreMocks clears state
+        // between tests, but this stays right if that config ever changes.
+        const calls = mockAPI.coverage.mock.calls;
+        const passed = calls[calls.length - 1][0];
         expect(passed.signal).toBeInstanceOf(AbortSignal);
         expect(passed.signal.aborted).toBe(false);
         unmount();
