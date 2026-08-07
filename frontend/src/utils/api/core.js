@@ -324,6 +324,12 @@ const apiCore = {
 
             // Network or other errors
             throw new APIError(`Network error: ${error.message}`, 0, null, fullUrl);
+        } finally {
+            // A completed request never aborts either signal, so the combined
+            // signal would keep listening to a (often reused) caller signal until
+            // the timeout eventually fired. Aborting here releases both listeners
+            // and clears the pending timer.
+            controller.abort();
         }
     },
 

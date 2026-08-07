@@ -91,6 +91,40 @@ describe('apiCore.combineSignals relay fallback (no AbortSignal.any)', () => {
         expect(remove).toHaveBeenCalledWith('abort', expect.any(Function));
     });
 
+    it('releases the listener after a SUCCESSFUL request, not just an aborted one', async () => {
+        // The gap in the first fix: on success neither signal ever aborts, so the
+        // detach never ran and the listener sat on the caller signal until the
+        // 30s timeout fired.
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(async () => jsonResponse())
+        );
+        const caller = new AbortController();
+        const remove = vi.spyOn(caller.signal, 'removeEventListener');
+
+        await apiCore.makeRequest('/ok', { signal: caller.signal });
+
+        expect(remove).toHaveBeenCalledWith('abort', expect.any(Function));
+        vi.unstubAllGlobals();
+    });
+
+    it('does not accumulate listeners across many SUCCESSFUL requests', async () => {
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(async () => jsonResponse())
+        );
+        const caller = new AbortController();
+        const add = vi.spyOn(caller.signal, 'addEventListener');
+        const remove = vi.spyOn(caller.signal, 'removeEventListener');
+
+        for (let i = 0; i < 4; i++) {
+            await apiCore.makeRequest(`/ok${i}`, { signal: caller.signal });
+        }
+        expect(add).toHaveBeenCalledTimes(4);
+        expect(remove).toHaveBeenCalledTimes(4);
+        vi.unstubAllGlobals();
+    });
+
     it('does not accumulate listeners on a caller signal reused across requests', () => {
         const caller = new AbortController();
         const add = vi.spyOn(caller.signal, 'addEventListener');
@@ -198,14 +232,19 @@ describe('apiCore.makeRequest signal forwarding', () => {
         });
     });
 
-    it('does not leak the caller signal into fetch options twice', async () => {
-        const fetchMock = vi.fn(async () => jsonResponse());
+    it('hands fetch a live combined signal and leaves other options intact', async () => {
+        // Sampled INSIDE the call: makeRequest aborts its timeout controller in a
+        // finally to release listeners, so the signal is aborted once it returns.
+        let seen;
+        const fetchMock = vi.fn(async (_url, opts) => {
+            seen = { signal: opts.signal, aborted: opts.signal.aborted, method: opts.method };
+            return jsonResponse();
+        });
         vi.stubGlobal('fetch', fetchMock);
         const caller = new AbortController();
         await apiCore.makeRequest('/x', { signal: caller.signal, method: 'GET' });
-        const opts = fetchMock.mock.calls[0][1];
-        expect(opts.signal).toBeInstanceOf(AbortSignal);
-        expect(opts.signal.aborted).toBe(false);
-        expect(opts.method).toBe('GET');
+        expect(seen.signal).toBeInstanceOf(AbortSignal);
+        expect(seen.aborted).toBe(false);
+        expect(seen.method).toBe('GET');
     });
 });
