@@ -80,6 +80,42 @@ class APIError extends Error {
     }
 }
 
+// The backend normalises every 422 to the bare message "Validation error" and
+// puts the per-field detail in `data`. Name the fields, or the user gets two
+// words and no idea which input was wrong.
+const MAX_NAMED_FIELDS = 3;
+
+const fieldPath = loc =>
+    (Array.isArray(loc) ? loc : [])
+        // Drop the request-section prefix FastAPI prepends ("body", "query", …).
+        .filter((part, i) => !(i === 0 && ['body', 'query', 'path', 'header'].includes(part)))
+        .join('.');
+
+/**
+ * Human-readable message for an error payload, naming the offending fields on a
+ * validation failure.
+ * @param {Object} payload - Parsed error response body
+ * @returns {string} Message, or '' when there is nothing better than the status
+ */
+export const describeError = payload => {
+    const base = payload?.message || '';
+    const details = payload?.data;
+    if (payload?.error_code !== 'VALIDATION_ERROR' || !Array.isArray(details)) return base;
+
+    const named = details
+        .map(d => {
+            const path = fieldPath(d?.loc);
+            const why = d?.msg || 'is invalid';
+            return path ? `${path}: ${why}` : why;
+        })
+        .filter(Boolean);
+    if (named.length === 0) return base;
+
+    const shown = named.slice(0, MAX_NAMED_FIELDS).join('; ');
+    const rest = named.length - MAX_NAMED_FIELDS;
+    return `${base || 'Validation error'} — ${shown}${rest > 0 ? ` (+${rest} more)` : ''}`;
+};
+
 /**
  * Core API client with caching, error handling, and request management
  */
@@ -292,7 +328,8 @@ const apiCore = {
             // Handle HTTP errors
             if (!response.ok) {
                 throw new APIError(
-                    responseData?.message || `HTTP ${response.status}: ${response.statusText}`,
+                    describeError(responseData) ||
+                        `HTTP ${response.status}: ${response.statusText}`,
                     response.status,
                     responseData,
                     fullUrl
