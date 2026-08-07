@@ -173,6 +173,31 @@ const apiCore = {
     },
 
     /**
+     * Combine the timeout signal with a caller's, so passing `signal` cancels a
+     * request instead of being silently dropped — and the timeout still applies.
+     * @param {AbortSignal} timeoutSignal - This request's timeout signal
+     * @param {AbortSignal} [callerSignal] - Optional caller signal
+     * @returns {AbortSignal} Signal aborting when either does
+     */
+    combineSignals(timeoutSignal, callerSignal) {
+        if (!callerSignal) return timeoutSignal;
+        if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.any === 'function') {
+            return AbortSignal.any([timeoutSignal, callerSignal]);
+        }
+        // Relay for engines without AbortSignal.any.
+        const relay = new AbortController();
+        const already = [callerSignal, timeoutSignal].find(s => s.aborted);
+        if (already) {
+            relay.abort(already.reason);
+            return relay.signal;
+        }
+        [callerSignal, timeoutSignal].forEach(s =>
+            s.addEventListener('abort', () => relay.abort(s.reason), { once: true })
+        );
+        return relay.signal;
+    },
+
+    /**
      * Make HTTP request with error handling
      * @param {string} url - Request URL
      * @param {Object} options - Fetch options
@@ -194,9 +219,15 @@ const apiCore = {
             // localStorage unavailable — skip
         }
 
-        // Destructure headers out of options so the spread doesn't overwrite them
-        // eslint-disable-next-line no-unused-vars
-        const { headers: optionHeaders, timeout: _timeout, ...restOptions } = options;
+        // Destructure headers/signal out of options so the spread can't overwrite
+        // the merged values set below.
+        const {
+            headers: optionHeaders,
+            // eslint-disable-next-line no-unused-vars
+            timeout: _timeout,
+            signal: callerSignal,
+            ...restOptions
+        } = options;
 
         const isFormData = typeof FormData !== 'undefined' && restOptions.body instanceof FormData;
         const headers = {
@@ -213,7 +244,7 @@ const apiCore = {
         const requestOptions = {
             ...restOptions,
             headers,
-            signal: controller.signal,
+            signal: this.combineSignals(controller.signal, callerSignal),
         };
 
         try {
@@ -270,6 +301,9 @@ const apiCore = {
             return responseData;
         } catch (error) {
             if (error.name === 'AbortError') {
+                // The caller cancelled deliberately — rethrow so it can recognise
+                // its own abort instead of handling a phantom timeout.
+                if (callerSignal?.aborted) throw error;
                 throw new APIError('Request timeout', 408, null, fullUrl);
             }
 
