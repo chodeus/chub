@@ -5796,7 +5796,7 @@ const SquareArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                         Saved as{' '}
                         <span className="text-fg-muted">
                             Title (Year) {'{ids}'}
-                            {seasonSuffix(seasonNum)} - SquareArt.jpg
+                            {seasonSuffix(seasonNum)} - squareart.jpg
                         </span>{' '}
                         and applied to Plex via Asset Renamerr (square art is Plex-direct only).
                     </p>
@@ -6067,7 +6067,7 @@ const BackgroundArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast 
                         Saved as{' '}
                         <span className="text-fg-muted">
                             Title (Year) {'{ids}'}
-                            {seasonSuffix(seasonNum)} - Background.jpg
+                            {seasonSuffix(seasonNum)} - background.jpg
                         </span>{' '}
                         and applied to Plex/Kometa via Asset Renamerr.
                     </p>
@@ -6500,7 +6500,7 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
         setBusy(true);
         try {
             const blob = await cl2kMakerAPI.logoAssetPreview(req);
-            downloadBlob(blob, `${item.title}${item.year ? ` (${item.year})` : ''} - Logo.png`);
+            downloadBlob(blob, `${item.title}${item.year ? ` (${item.year})` : ''} - logo.png`);
         } catch (err) {
             toast.error(err.message || 'Download failed');
         } finally {
@@ -6562,7 +6562,7 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                 <div className="w-full max-w-[480px] flex flex-col gap-2">
                     <p className="text-xs text-fg-subtle">
                         Filed as{' '}
-                        <span className="text-fg-muted">Title (Year) {'{ids}'} - Logo.png</span> and
+                        <span className="text-fg-muted">Title (Year) {'{ids}'} - logo.png</span> and
                         applied to Plex/Kometa via Asset Renamerr — separate from any square art.
                     </p>
                     <AssetWorkflowHint />

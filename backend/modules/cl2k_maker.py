@@ -556,12 +556,12 @@ def generate_square_art(
     save_local: bool = True,
     upload_gdrive: Optional[bool] = None,
 ) -> Dict[str, Any]:
-    """Render + file 1:1 square art (``- SquareArt.jpg``) for a media item.
+    """Render + file 1:1 square art (``- squareart.jpg``) for a media item.
 
     Plain cropped artwork (no logo/gradient), filed into poster_cache as
     ``squareart`` so asset_renamerr applies it to Plex (uploadSquareArt). Always
     overwrites — a deliberate manual action. ``season_number`` files the art for
-    one season of a show (``… - Season NN - SquareArt.jpg``; plexapi seasons
+    one season of a show (``… - Season NN - squareart.jpg``; plexapi seasons
     accept square art) instead of the show itself.
     """
     cfg = full_config.cl2k_maker
@@ -610,7 +610,7 @@ def generate_square_art(
         save_local=save_local,
         upload_gdrive=upload_gdrive,
         image_type="squareart",
-        asset_suffix=" - SquareArt",
+        asset_suffix=" - squareart",
         ext=".jpg",
     )
 
@@ -637,14 +637,14 @@ def generate_background_art(
     save_local: bool = True,
     upload_gdrive: Optional[bool] = None,
 ) -> Dict[str, Any]:
-    """Render + file 16:9 background art (``- Background.jpg``) for a media item.
+    """Render + file 16:9 background art (``- background.jpg``) for a media item.
 
     Plex background art per its recommended dimensions: ``resolution`` ``"1080p"``
     = 1920x1080, ``"4k"`` = 3840x2160. Plain framed artwork (no logo/gradient),
     filed into poster_cache as ``background`` so asset_renamerr applies it to
     Plex (uploadArt) / Kometa. Always overwrites — a deliberate manual action.
     ``season_number`` files the art for one season of a show
-    (``… - Season NN - Background.jpg``; Plex seasons take background art and
+    (``… - Season NN - background.jpg``; Plex seasons take background art and
     Kometa reads ``Season##_background``) instead of the show itself.
     """
     cfg = full_config.cl2k_maker
@@ -696,7 +696,7 @@ def generate_background_art(
         save_local=save_local,
         upload_gdrive=upload_gdrive,
         image_type="background",
-        asset_suffix=" - Background",
+        asset_suffix=" - background",
         ext=".jpg",
     )
 
@@ -723,7 +723,7 @@ def generate_logo_asset(
     save_local: bool = True,
     upload_gdrive: Optional[bool] = None,
 ) -> Dict[str, Any]:
-    """File a clear logo as its own ``- Logo.png`` asset (applied via uploadLogo).
+    """File a clear logo as its own ``- logo.png`` asset (applied via uploadLogo).
 
     ``whiten`` exports the CL2K-whitened logo; otherwise the original (colored)
     clear logo, trimmed. Filed separately from any square art or poster.
@@ -775,7 +775,7 @@ def generate_logo_asset(
         save_local=save_local,
         upload_gdrive=upload_gdrive,
         image_type="logo",
-        asset_suffix=" - Logo",
+        asset_suffix=" - logo",
         ext=".png",
     )
 
@@ -835,8 +835,8 @@ def _persist_poster(
     """Write a finished poster to every claiming save location + provenance.
 
     ``image_type`` / ``asset_suffix`` / ``ext`` let this same sink file the
-    additional-asset types the maker produces — ``squareart`` (``- SquareArt.jpg``)
-    and ``logo`` (``- Logo.png``) — into poster_cache so asset_renamerr applies
+    additional-asset types the maker produces — ``squareart`` (``- squareart.jpg``)
+    and ``logo`` (``- logo.png``) — into poster_cache so asset_renamerr applies
     them. Only true posters are written to the cl2k_generated provenance table (its
     exists_for() gate is poster-only, so an asset row must not appear there).
 

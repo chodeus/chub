@@ -152,20 +152,20 @@ export const cl2kMakerAPI = {
     /** Render square art (1:1) without saving. Returns a JPEG Blob. */
     squarePreview: (req, opts) => postBlob('/cl2k-maker/square-preview', req, opts),
 
-    /** Render + file square art (`- SquareArt.jpg`). */
+    /** Render + file square art (`- squareart.jpg`). */
     squareGenerate: req => apiCore.post('/cl2k-maker/square-generate', req),
 
     /** Render background art (16:9) without saving. Returns a JPEG Blob. */
     backgroundPreview: (req, opts) => postBlob('/cl2k-maker/background-preview', req, opts),
 
-    /** Render + file background art (`- Background.jpg`, 1080p or 4K). */
+    /** Render + file background art (`- background.jpg`, 1080p or 4K). */
     backgroundGenerate: req => apiCore.post('/cl2k-maker/background-generate', req),
 
     /** Processed logo asset (transparent PNG) without saving. Returns a PNG Blob.
      *  `req` = { logo_path | logo_b64, whiten }. */
     logoAssetPreview: (req, opts) => postBlob('/cl2k-maker/logo-asset-preview', req, opts),
 
-    /** File a clear logo as a `- Logo.png` asset (whiten toggles CL2K white). */
+    /** File a clear logo as a `- logo.png` asset (whiten toggles CL2K white). */
     logoAssetGenerate: req => apiCore.post('/cl2k-maker/logo-asset-generate', req),
 
     /** Extract a white title from a poster into a transparent logo PNG. Returns a

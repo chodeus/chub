@@ -556,7 +556,7 @@ def generate(
 
 # ─── Square art + logo asset makers ──────────────────────────────────────────
 # Two additional asset types the maker files separately from posters: square art
-# (1:1 cropped backdrop, `- SquareArt.jpg`) and a clear-logo asset (`- Logo.png`).
+# (1:1 cropped backdrop, `- squareart.jpg`) and a clear-logo asset (`- logo.png`).
 # Both flow into poster_cache so asset_renamerr applies them to Plex
 # (uploadSquareArt / uploadLogo).
 
@@ -800,7 +800,7 @@ def logo_asset_preview(
     )
 
 
-@router.post("/logo-asset-generate", summary="File a clear logo as a - Logo asset")
+@router.post("/logo-asset-generate", summary="File a clear logo as a - logo asset")
 def logo_asset_generate(
     req: LogoAssetRequest,
     db: ChubDB = Depends(get_database),
