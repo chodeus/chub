@@ -96,6 +96,11 @@ const A_SERIES = {
 const IGNORE_BTN = /^Ignore (this item|— choose what to hide)$/;
 const ignoreButtonsIn = () => screen.queryAllByRole('button', { name: IGNORE_BTN });
 
+/** Every setMatchIgnored call as [id, payload], id-ordered — asserting on whole
+ *  calls catches a wrong `ignored` value that an id-only check would miss. */
+const sortedIgnoreCalls = () =>
+    [...mockPostersAPI.setMatchIgnored.mock.calls].sort((a, b) => a[0] - b[0]);
+
 beforeEach(() => {
     unmatchedPayload = null;
     mockPostersAPI.setMatchIgnored.mockResolvedValue({});
@@ -209,10 +214,11 @@ describe('Unmatched tab — per-target ignore', () => {
             within(screen.getByRole('dialog')).getByRole('button', { name: /Everything/ })
         );
 
-        expect(mockPostersAPI.setMatchIgnored).toHaveBeenCalledTimes(3);
-        expect(
-            mockPostersAPI.setMatchIgnored.mock.calls.map(c => c[0]).sort((a, b) => a - b)
-        ).toEqual([20, 21, 22]);
+        expect(sortedIgnoreCalls()).toEqual([
+            [20, { kind: 'media', ignored: true }],
+            [21, { kind: 'media', ignored: true }],
+            [22, { kind: 'media', ignored: true }],
+        ]);
     });
 
     it('still refreshes when one call in the fan-out fails', async () => {
@@ -319,14 +325,13 @@ describe('Ignored tab — grouped rows', () => {
 
         await user.click(screen.getByRole('button', { name: 'Restore' }));
 
-        expect(mockPostersAPI.setMatchIgnored).toHaveBeenCalledTimes(3);
-        expect(
-            mockPostersAPI.setMatchIgnored.mock.calls.map(c => c[0]).sort((a, b) => a - b)
-        ).toEqual([20, 21, 22]);
-        expect(mockPostersAPI.setMatchIgnored).toHaveBeenCalledWith(21, {
-            kind: 'media',
-            ignored: false,
-        });
+        // Whole calls, not just the ids: asserting the payload for one target
+        // would let a wrong `ignored` value on the other two slip through.
+        expect(sortedIgnoreCalls()).toEqual([
+            [20, { kind: 'media', ignored: false }],
+            [21, { kind: 'media', ignored: false }],
+            [22, { kind: 'media', ignored: false }],
+        ]);
     });
 });
 
