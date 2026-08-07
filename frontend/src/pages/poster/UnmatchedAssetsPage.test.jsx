@@ -236,6 +236,61 @@ describe('Unmatched tab — per-target ignore', () => {
     });
 });
 
+describe('Ignored tab — grouped rows', () => {
+    /** What the backend now sends: one entry per show, carrying a target per
+     *  media_cache row it covers. */
+    const IGNORED_SERIES = {
+        id: 20,
+        title: 'Foundation',
+        year: 2021,
+        type: 'series',
+        asset_type: 'series',
+        instance_name: 'sonarr',
+        missing_main_poster: true,
+        missing_seasons: [1, 2],
+        targets: [
+            { id: 20, season_number: null },
+            { id: 21, season_number: 1 },
+            { id: 22, season_number: 2 },
+        ],
+    };
+
+    const openIgnoredTab = async user => {
+        await user.click(screen.getByRole('button', { name: /^Ignored/ }));
+    };
+
+    it('shows one row with a chip per ignored season', async () => {
+        const user = userEvent.setup();
+        unmatchedPayload = { ...payload({}), ignored: [IGNORED_SERIES] };
+        render(<UnmatchedAssetsPage />);
+        await openIgnoredTab(user);
+
+        expect(screen.getAllByText('Foundation')).toHaveLength(1);
+        // Without these the grouped row is indistinguishable from any other.
+        expect(screen.getByText('Poster')).toBeInTheDocument();
+        expect(screen.getByText('S01')).toBeInTheDocument();
+        expect(screen.getByText('S02')).toBeInTheDocument();
+    });
+
+    it('restores every row the group covers, not just the first', async () => {
+        const user = userEvent.setup();
+        unmatchedPayload = { ...payload({}), ignored: [IGNORED_SERIES] };
+        render(<UnmatchedAssetsPage />);
+        await openIgnoredTab(user);
+
+        await user.click(screen.getByRole('button', { name: 'Restore' }));
+
+        expect(mockPostersAPI.setMatchIgnored).toHaveBeenCalledTimes(3);
+        expect(
+            mockPostersAPI.setMatchIgnored.mock.calls.map(c => c[0]).sort((a, b) => a - b)
+        ).toEqual([20, 21, 22]);
+        expect(mockPostersAPI.setMatchIgnored).toHaveBeenCalledWith(21, {
+            kind: 'media',
+            ignored: false,
+        });
+    });
+});
+
 describe('Unmatched tab — poster picker targets', () => {
     it('fetches candidates for the selected season, not just the show row', async () => {
         const user = userEvent.setup();
