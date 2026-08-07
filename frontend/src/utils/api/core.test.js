@@ -2,7 +2,7 @@
  * apiCore signal handling — a caller-supplied AbortSignal must reach fetch and
  * be able to cancel, without losing the request timeout.
  */
-import { apiCore } from './core.js';
+import { apiCore, describeError } from './core.js';
 
 const jsonResponse = (data = { ok: true }) => ({
     ok: true,
@@ -246,5 +246,98 @@ describe('apiCore.makeRequest signal forwarding', () => {
         expect(seen.signal).toBeInstanceOf(AbortSignal);
         expect(seen.aborted).toBe(false);
         expect(seen.method).toBe('GET');
+    });
+});
+
+describe('describeError — validation failures name their fields', () => {
+    const validation = details => ({
+        success: false,
+        message: 'Validation error',
+        error_code: 'VALIDATION_ERROR',
+        data: details,
+    });
+
+    it('names the missing field instead of saying only "Validation error"', () => {
+        const msg = describeError(
+            validation([{ type: 'missing', loc: ['body', 'tmdb_id'], msg: 'Field required' }])
+        );
+        expect(msg).toContain('tmdb_id');
+        expect(msg).toContain('Field required');
+    });
+
+    it('strips the request-section prefix FastAPI prepends', () => {
+        const msg = describeError(
+            validation([{ loc: ['body', 'tmdb_id'], msg: 'Field required' }])
+        );
+        expect(msg).not.toContain('body.');
+        expect(msg).toContain('tmdb_id:');
+    });
+
+    it('keeps a nested path readable', () => {
+        const msg = describeError(
+            validation([{ loc: ['body', 'gdrive_uploads', 0, 'folder_id'], msg: 'Field required' }])
+        );
+        expect(msg).toContain('gdrive_uploads.0.folder_id');
+    });
+
+    it('caps the list and says how many were hidden', () => {
+        const many = ['a', 'b', 'c', 'd', 'e'].map(f => ({
+            loc: ['body', f],
+            msg: 'Field required',
+        }));
+        const msg = describeError(validation(many));
+        expect(msg).toContain('(+2 more)');
+        expect(msg).not.toContain('e:');
+    });
+
+    it('leaves non-validation errors exactly as they are', () => {
+        expect(
+            describeError({ message: 'Google Drive rename failed', error_code: 'DRIVE_RENAME' })
+        ).toBe('Google Drive rename failed');
+    });
+
+    it('falls back to the base message when data is not a list', () => {
+        expect(
+            describeError({
+                message: 'Validation error',
+                error_code: 'VALIDATION_ERROR',
+                data: 'nope',
+            })
+        ).toBe('Validation error');
+    });
+
+    it('returns empty for a payload with nothing useful', () => {
+        expect(describeError(undefined)).toBe('');
+        expect(describeError({})).toBe('');
+    });
+});
+
+describe('describeError — malformed validation details', () => {
+    const validation = details => ({
+        message: 'Validation error',
+        error_code: 'VALIDATION_ERROR',
+        data: details,
+    });
+
+    it('falls back to the base message for an empty detail record', () => {
+        expect(describeError(validation([{}]))).toBe('Validation error');
+    });
+
+    it('ignores entries with a non-string or empty msg', () => {
+        expect(describeError(validation([{ loc: ['body', 'x'], msg: '' }]))).toBe(
+            'Validation error'
+        );
+        expect(describeError(validation([{ loc: ['body', 'x'], msg: 42 }]))).toBe(
+            'Validation error'
+        );
+        expect(describeError(validation([null, undefined]))).toBe('Validation error');
+    });
+
+    it('still names the good entries when one is malformed', () => {
+        const msg = describeError(
+            validation([{}, { loc: ['body', 'tmdb_id'], msg: 'Field required' }])
+        );
+        expect(msg).toContain('tmdb_id: Field required');
+        expect(msg).not.toContain('is invalid');
     });
 });
