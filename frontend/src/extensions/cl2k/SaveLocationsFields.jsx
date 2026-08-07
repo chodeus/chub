@@ -413,7 +413,14 @@ const SplitSubfoldersButton = ({ folderId, disabled, onSplit }) => {
                 gdrive_folder_id: folderId,
             });
             const subfolders = res?.data?.subfolders || [];
-            if (subfolders.length === 0) throw new Error('No subfolders were returned');
+            // Refuse to rewrite the row on a partial answer: a missing type or a
+            // blank folder_id would save a destination that silently uploads
+            // nothing (_drive_targets skips a blank id).
+            const usable =
+                CL2K_ART_TYPES.filter(t => t.value !== 'poster').every(t =>
+                    subfolders.some(s => s.image_type === t.value && (s.folder_id || '').trim())
+                ) && subfolders.every(s => (s.folder_id || '').trim());
+            if (!usable) throw new Error('Drive returned an incomplete set of subfolders');
             onSplit(subfolders);
             toast.success(res?.message || 'Split into type subfolders');
         } catch (e) {
@@ -512,7 +519,9 @@ export const Cl2kGdriveUploadsField = ({ value, onChange, disabled = false }) =>
             const parent = entries[index] || {};
             const claimed = parent.types || [];
             const children = subfolders
-                .filter(s => claimed.length === 0 || claimed.includes(s.image_type))
+                // Only types the parent actually claimed. An unclaimed row splits
+                // into nothing and is left untouched by the empty-children return.
+                .filter(s => claimed.includes(s.image_type))
                 .map(s => ({
                     name: `${parent.name || 'Drive'} ${s.name}`.trim(),
                     folder_id: s.folder_id,

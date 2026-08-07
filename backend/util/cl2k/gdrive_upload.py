@@ -301,7 +301,15 @@ def ensure_type_subfolders(folder_id: str, sync_cfg: Any, logger) -> List[dict]:
             raise RuntimeError(
                 f"rclone lsjson failed: {_rclone_error_detail(result.stderr)}"
             )
-        return {d["Name"]: d["ID"] for d in json.loads(result.stdout or "[]")}
+        # Keep only usable ids: a blank/absent/non-string ID must NOT register the
+        # name, or the completeness check below passes and we hand back a routed
+        # row whose folder_id is empty — which _drive_targets skips silently, so
+        # that art type would just stop uploading with no error anywhere.
+        return {
+            d["Name"]: d["ID"]
+            for d in json.loads(result.stdout or "[]")
+            if isinstance(d.get("ID"), str) and d["ID"].strip()
+        }
 
     existing = _dir_ids()
     made = []

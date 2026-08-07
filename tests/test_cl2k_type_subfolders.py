@@ -140,6 +140,27 @@ def test_raises_when_drive_returns_no_id_for_a_subfolder(rclone):
         gdrive_upload.ensure_type_subfolders("PARENT", _Sync(), _Log())
 
 
+@pytest.mark.parametrize("bad_id", ["", "   ", None, 12345])
+def test_raises_when_drive_returns_a_subfolder_without_a_usable_id(rclone, bad_id):
+    """A present NAME with a blank/absent/non-string ID must fail loudly.
+
+    The earlier guard only checked the name was present, so a record like
+    {"Name": "logos", "ID": ""} sailed through and produced a routed row with an
+    empty folder_id — which _drive_targets skips silently, so that art type would
+    simply stop uploading with no error anywhere.
+    """
+    listing = json.dumps(
+        [
+            {"Name": "logos", "ID": bad_id},
+            {"Name": "backgrounds", "ID": "ID_backgrounds"},
+            {"Name": "squareart", "ID": "ID_squareart"},
+        ]
+    )
+    rclone["scripted"]["lsjson"] = [_Result(stdout=listing), _Result(stdout=listing)]
+    with pytest.raises(RuntimeError, match="logos"):
+        gdrive_upload.ensure_type_subfolders("PARENT", _Sync(), _Log())
+
+
 def test_rejects_an_unsafe_parent_id(rclone):
     with pytest.raises(ValueError):
         gdrive_upload.ensure_type_subfolders("--drive-config=/etc/passwd", _Sync(), _Log())
