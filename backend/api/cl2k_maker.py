@@ -606,10 +606,23 @@ def generate(
 # (uploadSquareArt / uploadLogo).
 
 
+def _require_any_id(req) -> Optional[JSONResponse]:
+    """Reject art with no id at all — the filename would carry nothing to match
+    on, so asset_renamerr could never bind it to a library item."""
+    if req.tmdb_id or req.tvdb_id or (req.imdb_id or "").strip():
+        return None
+    return error(
+        "Needs at least one of TMDB, TVDB or IMDB id — without one the filename "
+        "has nothing for CHUB or Kometa to match against.",
+        "NO_MEDIA_ID",
+    )
+
+
 class SquareArtRequest(BaseModel):
     kind: str
     title: str
-    tmdb_id: int
+    # Supplied art, so an id is only a filename tag. _require_any_id demands one.
+    tmdb_id: Optional[int] = None
     year: Optional[int] = None
     tvdb_id: Optional[int] = None
     imdb_id: Optional[str] = None
@@ -629,7 +642,8 @@ class SquareArtRequest(BaseModel):
 class LogoAssetRequest(BaseModel):
     kind: str
     title: str
-    tmdb_id: int
+    # Supplied art, so an id is only a filename tag. _require_any_id demands one.
+    tmdb_id: Optional[int] = None
     year: Optional[int] = None
     tvdb_id: Optional[int] = None
     imdb_id: Optional[str] = None
@@ -703,6 +717,8 @@ def square_generate(
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
+    if (bad := _require_any_id(req)) is not None:
+        return bad
     result = generate_square_art(
         db=db,
         full_config=load_config(),
@@ -733,7 +749,8 @@ def square_generate(
 class BackgroundArtRequest(BaseModel):
     kind: str
     title: str
-    tmdb_id: int
+    # Supplied art, so an id is only a filename tag. _require_any_id demands one.
+    tmdb_id: Optional[int] = None
     year: Optional[int] = None
     tvdb_id: Optional[int] = None
     imdb_id: Optional[str] = None
@@ -788,6 +805,8 @@ def background_generate(
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
+    if (bad := _require_any_id(req)) is not None:
+        return bad
     result = generate_background_art(
         db=db,
         full_config=load_config(),
@@ -851,6 +870,8 @@ def logo_asset_generate(
     db: ChubDB = Depends(get_database),
     logger: Any = Depends(get_cl2k_logger),
 ) -> JSONResponse:
+    if (bad := _require_any_id(req)) is not None:
+        return bad
     result = generate_logo_asset(
         db=db,
         full_config=load_config(),
