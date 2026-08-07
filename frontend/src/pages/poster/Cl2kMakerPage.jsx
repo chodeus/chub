@@ -119,7 +119,7 @@ const ART_SOURCES = [
 // square pickers, so those stay on ART_SOURCES.
 const BACKDROP_SOURCES = [...ART_SOURCES, { key: 'gdrive', label: 'GDrive', icon: 'cloud_sync' }];
 
-// The logo picker gets 'gdrive' too, browsing the sync cache for `- Logo` assets
+// The logo picker gets 'gdrive' too, browsing the sync cache for `- logo` assets
 // (image_type=logo) rather than finished posters. A gdrive_list folder that sits
 // outside every renamer source_dir — an "Extras"/assets drive — is indexed
 // search_only=1, so it is pickable here without becoming a poster-match
@@ -2289,7 +2289,7 @@ const RenderPanel = ({
     const [gdrivePosters, setGdrivePosters] = useState(null);
     const [gdriveLoading, setGdriveLoading] = useState(false);
     const [gdriveFor, setGdriveFor] = useState(null);
-    // Same idea for the logo picker, but browsing `- Logo` assets from the sync
+    // Same idea for the logo picker, but browsing `- logo` assets from the sync
     // cache (image_type=logo) rather than finished posters.
     const [gdriveLogos, setGdriveLogos] = useState(null);
     const [gdriveLogosLoading, setGdriveLogosLoading] = useState(false);
@@ -4907,7 +4907,7 @@ const LogoSelector = ({
     onFlipMask,
     source, // optional per-picker source ('tmdb'|'fanart'|'plex'|'upload'|'gdrive')
     onSource,
-    // 'gdrive' source: `- Logo` assets from the local sync cache. Picking one
+    // 'gdrive' source: `- logo` assets from the local sync cache. Picking one
     // imports its bytes as the custom logo (same route as Upload), so the render
     // path is identical to an uploaded PNG.
     // Default to null, not undefined: an unwired call site must land in the
@@ -5069,7 +5069,7 @@ const LogoSelector = ({
                             </div>
                         ) : gdriveLogos.length === 0 ? (
                             <div className="text-xs text-fg-subtle py-2">
-                                No <span className="font-mono">- Logo</span> assets match this
+                                No <span className="font-mono">- logo</span> assets match this
                                 title. They appear here once sync_gdrive has pulled the folder down.
                             </div>
                         ) : (
@@ -5796,7 +5796,7 @@ const SquareArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                         Saved as{' '}
                         <span className="text-fg-muted">
                             Title (Year) {'{ids}'}
-                            {seasonSuffix(seasonNum)} - SquareArt.jpg
+                            {seasonSuffix(seasonNum)} - squareart.jpg
                         </span>{' '}
                         and applied to Plex via Asset Renamerr (square art is Plex-direct only).
                     </p>
@@ -6067,7 +6067,7 @@ const BackgroundArtPanel = ({ item, artBySource, loadingArt, saveTargets, toast 
                         Saved as{' '}
                         <span className="text-fg-muted">
                             Title (Year) {'{ids}'}
-                            {seasonSuffix(seasonNum)} - Background.jpg
+                            {seasonSuffix(seasonNum)} - background.jpg
                         </span>{' '}
                         and applied to Plex/Kometa via Asset Renamerr.
                     </p>
@@ -6500,7 +6500,7 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
         setBusy(true);
         try {
             const blob = await cl2kMakerAPI.logoAssetPreview(req);
-            downloadBlob(blob, `${item.title}${item.year ? ` (${item.year})` : ''} - Logo.png`);
+            downloadBlob(blob, `${item.title}${item.year ? ` (${item.year})` : ''} - logo.png`);
         } catch (err) {
             toast.error(err.message || 'Download failed');
         } finally {
@@ -6562,7 +6562,7 @@ const LogoAssetPanel = ({ item, artBySource, loadingArt, saveTargets, toast }) =
                 <div className="w-full max-w-[480px] flex flex-col gap-2">
                     <p className="text-xs text-fg-subtle">
                         Filed as{' '}
-                        <span className="text-fg-muted">Title (Year) {'{ids}'} - Logo.png</span> and
+                        <span className="text-fg-muted">Title (Year) {'{ids}'} - logo.png</span> and
                         applied to Plex/Kometa via Asset Renamerr — separate from any square art.
                     </p>
                     <AssetWorkflowHint />

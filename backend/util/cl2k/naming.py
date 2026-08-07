@@ -71,8 +71,8 @@ def build_poster_filename(
     Formula 1) just pass the year through as the number → `` - Season 2026``.
 
     ``asset_suffix`` appends an additional-asset tag before the extension (e.g.
-    `` - SquareArt`` / `` - Logo``) so the file is parsed as that asset type by the
-    asset_renamerr naming regex, e.g. ``The Matrix (1999) {tmdb-603} - SquareArt.jpg``.
+    `` - squareart`` / `` - logo``) so the file is parsed as that asset type by the
+    asset_renamerr naming regex, e.g. ``The Matrix (1999) {tmdb-603} - squareart.jpg``.
     """
     title = _safe(title)
     tags = _id_tags(tmdb_id, tvdb_id, imdb_id)

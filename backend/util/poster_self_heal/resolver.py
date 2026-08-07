@@ -27,9 +27,9 @@ YEAR_TOLERANCE = 1
 # poster_cache image_type -> the asset-tag suffix build_poster_filename appends.
 _ASSET_SUFFIX = {
     "poster": "",
-    "logo": " - Logo",
-    "background": " - Background",
-    "squareart": " - SquareArt",
+    "logo": " - logo",
+    "background": " - background",
+    "squareart": " - squareart",
 }
 
 

@@ -302,7 +302,9 @@ def test_logo_asset_keeps_suffix():
         [media("show", "New Name", 2019, tmdb=410)],
         {410: {"verified": True, "title": "New Name", "year": 2019}},
     )
-    assert r["proposed_filename"] == "New Name (2019) {tmdb-410} - Logo.jpg"
+    # The tag is rebuilt from _ASSET_SUFFIX, so a legacy capitalised name also
+    # normalises to the lowercase community convention.
+    assert r["proposed_filename"] == "New Name (2019) {tmdb-410} - logo.jpg"
 
 
 # --- scope predicate: only the CL2K maker's own output_dir is healed ---
