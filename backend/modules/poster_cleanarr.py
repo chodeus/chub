@@ -1614,6 +1614,10 @@ def scan_kometa_assets(
             "canonical_present": d["canonical_present"],
             "size": d["size"],
             "folder": d["folder"],
+            "asset_dir": d["asset_dir"],
+            # d["id"] is a ("tvdb"|"tmdb", int) tuple — flatten to the same
+            # "<src>:<id>" form find_duplicates emits as `identity`.
+            "identity": f"{d['id'][0]}:{d['id'][1]}",
         }
         for d in stale_raw
     ]

@@ -133,6 +133,7 @@ async def list_modules(
                     "enabled": schedule_val is not None and schedule_val != "",
                     "schedule": schedule_val,
                     "running": status.get("running", False),
+                    "job_id": status.get("job_id"),
                     "last_run": run_state.get("last_run") if run_state else None,
                     "last_run_status": run_state.get("last_run_status")
                     if run_state
