@@ -23,6 +23,20 @@ export default {
             Component: PosterHealReviewPage,
         },
     ],
+    // Without this the page is reachable ONLY from a badge on the CL2K Maker page
+    // that renders when the open count is non-zero — so a run that reports work
+    // left for review can point at a page with no way to reach it.
+    navChildren: [
+        {
+            parentId: 'poster',
+            before: 'unmatched-assets',
+            item: {
+                id: 'poster-heal-review',
+                label: 'Poster Healer Review',
+                path: '/poster/heal-review',
+            },
+        },
+    ],
     // Anchored after a core module (always present) rather than cl2k_maker, so it
     // doesn't depend on another extension's splice having run first.
     settingsSchema: [{ after: 'border_replacerr', entry: POSTER_SELF_HEAL_SCHEMA }],
