@@ -274,7 +274,10 @@ const formatSeason = n => (n === 0 ? 'Specials' : `S${String(n).padStart(2, '0')
  *  chip per missing season (capped, with a "+N" overflow chip listing the rest). */
 const MissingPosterChips = ({ item }) => {
     const chips = [];
-    if (item._type === 'series') {
+    // _type is the client-side tag on unmatched rows; type/asset_type is what
+    // the review + ignored serializer sends.
+    const kind = item._type || item.type || item.asset_type;
+    if (kind === 'series' || kind === 'show') {
         if (item.missing_main_poster) chips.push({ key: 'poster', label: 'Poster' });
         const seasons = [...(item.missing_seasons || [])].sort((a, b) => a - b);
         seasons
@@ -834,6 +837,28 @@ const MatchReviewList = ({ rows, mode, onRefresh, onPick }) => {
         }
     };
 
+    /** Restore every media_cache row a grouped entry covers — an ignored series
+     *  is one display row over N of them, as on the Unmatched tab. */
+    const restore = async row => {
+        const targets = rowTargets(row);
+        if (!targets.length) return;
+        setBusyId(row.id);
+        try {
+            const results = await Promise.allSettled(
+                targets.map(t =>
+                    postersAPI.setMatchIgnored(t.id, { kind: kindOf(row), ignored: false })
+                )
+            );
+            const failed = results.filter(r => r.status === 'rejected').length;
+            if (!failed) toast.success('Restored');
+            else if (failed === results.length) toast.error('Action failed');
+            else toast.error(`Restored ${results.length - failed} of ${results.length}`);
+            onRefresh();
+        } finally {
+            setBusyId(null);
+        }
+    };
+
     if (rows.length === 0) {
         let emptyMsg;
         if (mode === 'review') {
@@ -903,7 +928,11 @@ const MatchReviewList = ({ rows, mode, onRefresh, onPick }) => {
                         <tbody className="divide-y divide-border">
                             {sorted.map((item, idx) => (
                                 <tr
-                                    key={`${item.id ?? idx}`}
+                                    key={
+                                        item.targets?.length
+                                            ? item.targets.map(t => t.id).join('.')
+                                            : `${item.id ?? idx}`
+                                    }
                                     className="bg-surface hover:bg-surface-alt align-top"
                                 >
                                     <td className="px-3 py-2 text-fg">
@@ -914,6 +943,15 @@ const MatchReviewList = ({ rows, mode, onRefresh, onPick }) => {
                                         >
                                             {item.title}
                                         </Link>
+                                        {item.targets?.length > 0 && (
+                                            // Any grouped series row, including a one-target one —
+                                            // a show with only S01 ignored must not read as the
+                                            // whole show. Only series get `targets`, so movies and
+                                            // collections skip the chips entirely.
+                                            <div className="mt-1">
+                                                <MissingPosterChips item={item} />
+                                            </div>
+                                        )}
                                     </td>
                                     <td className="px-3 py-2 text-fg-muted">
                                         {TYPE_LABELS[item.type] ||
@@ -1023,17 +1061,7 @@ const MatchReviewList = ({ rows, mode, onRefresh, onPick }) => {
                                                 disabled={busyId === item.id}
                                                 aria-label="Restore"
                                                 title="Restore — return to its normal list"
-                                                onClick={() =>
-                                                    act(
-                                                        () =>
-                                                            postersAPI.setMatchIgnored(item.id, {
-                                                                kind: kindOf(item),
-                                                                ignored: false,
-                                                            }),
-                                                        item,
-                                                        'Item restored'
-                                                    )
-                                                }
+                                                onClick={() => restore(item)}
                                             />
                                         )}
                                     </td>
