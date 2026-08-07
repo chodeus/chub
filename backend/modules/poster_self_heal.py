@@ -43,6 +43,18 @@ def _is_under(path: str, base_dir: str) -> bool:
     return p == base or p.startswith(base + os.sep)
 
 
+def local_dirs_for(cl2k) -> list:
+    """Local folders the heal is scoped to: every non-blank ``local_folders``
+    path, deduped in config order. ``types`` is deliberately NOT consulted — an
+    inert routing row is still scanned."""
+    out: list = []
+    for folder in getattr(cl2k, "local_folders", None) or []:
+        path = (getattr(folder, "path", "") or "").strip()
+        if path and path not in out:
+            out.append(path)
+    return out
+
+
 def drive_twins(cl2k) -> tuple:
     """``(drive_ids, twin_of)``; ``twin_of(image_type)`` resolves to the first
     ``gdrive_uploads`` entry claiming that type, else the poster Drive, else the
@@ -78,11 +90,7 @@ class PosterSelfHeal(ChubModule):
             return
 
         style = (getattr(cl2k, "style", "") or "CL2K").strip()
-        local_dirs: list = []
-        for folder in getattr(cl2k, "local_folders", None) or []:
-            p = (getattr(folder, "path", "") or "").strip()
-            if p and p not in local_dirs:
-                local_dirs.append(p)
+        local_dirs = local_dirs_for(cl2k)
         drive_ids, twin_of = drive_twins(cl2k)
         if not local_dirs and not drive_ids:
             self.logger.error(

@@ -27,6 +27,147 @@ const driftLabel = drift => {
         .join(' · ');
 };
 
+const TYPE_LABEL = {
+    poster: 'Poster',
+    logo: 'Logo',
+    background: 'Background',
+    squareart: 'Square Art',
+};
+
+const TypePills = ({ types, muted }) =>
+    types.length === 0 ? (
+        <span className="text-[11px] text-fg-dim italic">nothing routed here</span>
+    ) : (
+        <span className="flex items-center gap-[5px] flex-wrap">
+            {types.map(t => (
+                <span
+                    key={t}
+                    className={`inline-flex items-center h-[22px] px-2 rounded-full text-[11px] font-medium ${
+                        muted ? 'bg-surface text-fg-subtle' : 'bg-primary/15 text-primary'
+                    }`}
+                >
+                    {TYPE_LABEL[t] || t}
+                </span>
+            ))}
+        </span>
+    );
+
+const CoverageRow = ({ icon, name, value, types, muted }) => (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3 py-2 rounded-[9px] bg-surface-inset border border-border-light">
+        <span className="material-symbols-outlined text-[17px] text-fg-dim" aria-hidden="true">
+            {icon}
+        </span>
+        <span className="text-[12.5px] font-medium text-fg">{name || 'Unnamed'}</span>
+        <span className="font-mono text-[11.5px] text-fg-muted break-all">{value}</span>
+        <span className="ml-auto">
+            <TypePills types={types} muted={muted} />
+        </span>
+    </div>
+);
+
+/**
+ * What the next run will scan. Deliberately shows the HEAL's scope, which is
+ * wider than the maker's routing — a location claiming no types saves nothing
+ * but is still scanned, so it is listed rather than filtered out.
+ */
+const CoveragePanel = () => {
+    const [cov, setCov] = useState(null);
+    const [failed, setFailed] = useState(false);
+
+    useEffect(() => {
+        let active = true;
+        (async () => {
+            try {
+                const res = await posterSelfHealAPI.coverage();
+                if (active) setCov(res?.data || null);
+            } catch {
+                if (active) setFailed(true); // non-fatal: the review list still works
+            }
+        })();
+        return () => {
+            active = false;
+        };
+    }, []);
+
+    if (failed || !cov) return null;
+
+    const folders = cov.folders || [];
+    const drives = cov.drives || [];
+    const unrouted = cov.unrouted_types || [];
+
+    return (
+        <section className="flex flex-col gap-2.5 p-4 rounded-xl bg-surface border border-border">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <h2 className="font-display text-[13.5px] font-semibold text-fg m-0">
+                    Kept up to date
+                </h2>
+                <span className="inline-flex items-center h-[22px] px-2.5 rounded-md bg-surface-inset border border-border font-mono text-[11px] text-fg-muted">
+                    {folders.length} folders · {drives.length} Drives
+                </span>
+                <Link
+                    to="/settings/modules/cl2k_maker"
+                    className="ml-auto text-[12px] font-medium text-accent hover:underline"
+                >
+                    Edit in Module Settings →
+                </Link>
+            </div>
+
+            {!cov.available ? (
+                <p className="text-[12px] text-fg-subtle m-0">
+                    The CL2K Maker extension isn’t available, so nothing is being healed.
+                </p>
+            ) : folders.length === 0 && drives.length === 0 ? (
+                <p className="text-[12px] text-fg-subtle m-0">
+                    No save locations are configured — the healer has nothing to scan.
+                </p>
+            ) : (
+                <>
+                    <div className="flex flex-col gap-1.5">
+                        {folders.map(f => (
+                            <CoverageRow
+                                key={f.path}
+                                icon="folder"
+                                name={f.name}
+                                value={f.path}
+                                types={f.types || []}
+                                muted
+                            />
+                        ))}
+                        {drives.map(d => (
+                            <CoverageRow
+                                key={d.folder_id}
+                                icon="cloud"
+                                name={d.name}
+                                value={d.folder_id}
+                                types={d.heals_types || []}
+                            />
+                        ))}
+                    </div>
+                    <p className="text-[11.5px] text-fg-subtle m-0">
+                        Every location above is scanned. Folder tags show what the maker saves
+                        there; Drive tags show which types are renamed in that Drive.
+                    </p>
+                    {unrouted.length > 0 && (
+                        <p className="flex items-start gap-1.5 text-[11.5px] text-warning m-0">
+                            <span
+                                className="material-symbols-outlined text-[15px] leading-[1.3]"
+                                aria-hidden="true"
+                            >
+                                info
+                            </span>
+                            <span>
+                                No Drive receives {unrouted.map(t => TYPE_LABEL[t] || t).join(', ')}{' '}
+                                art — those files are healed locally only, so anyone syncing your
+                                Drive keeps the old names.
+                            </span>
+                        </p>
+                    )}
+                </>
+            )}
+        </section>
+    );
+};
+
 const ReviewRow = ({ review, busy, onApply, onDismiss }) => {
     const pending = review.status === 'pending' || review.drift_type === 'ambiguous';
     return (
@@ -138,6 +279,8 @@ export const PosterHealReviewPage = () => {
                 title="Poster Healer — Review"
                 description="Proposed id, title, and year fixes for your CL2K posters. Applying renames the file on your Google Drive and the local source copy."
             />
+
+            <CoveragePanel />
 
             <div className="flex items-center justify-between">
                 <span className="text-[13px] text-fg-subtle">
