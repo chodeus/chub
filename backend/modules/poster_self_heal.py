@@ -67,6 +67,11 @@ def is_already_healed(row) -> bool:
     proposed = row.get("proposed_filename") or ""
     if not proposed or not os.path.isabs(old):
         return False
+    # Must be a bare name: an absolute value would make os.path.join discard the
+    # original directory, and a '../' one would resolve outside it — either could
+    # match some unrelated file and delete the row as healed.
+    if os.path.basename(proposed) != proposed:
+        return False
     new = os.path.join(os.path.dirname(old), proposed)
     return not os.path.exists(old) and os.path.exists(new)
 
@@ -190,7 +195,7 @@ class PosterSelfHeal(ChubModule):
                     continue
                 # Outside every configured folder — e.g. another owner's synced
                 # posters, or a folder since removed.
-                if local_dirs and not any(_is_under(pf, d) for d in local_dirs):
+                if not any(_is_under(pf, d) for d in local_dirs):
                     reviews.delete(row["id"])
                     pruned += 1
                 # Already renamed: the row describes history, and its Apply would

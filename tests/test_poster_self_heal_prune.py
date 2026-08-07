@@ -56,3 +56,29 @@ def test_proposed_is_resolved_beside_the_original(tmp_path):
     # Same filenames under a different directory must not match.
     other = _row(tmp_path / "elsewhere" / "Show (2021) {tmdb-9}.jpg", new.name)
     assert is_already_healed(other) is False
+
+
+def test_not_healed_when_proposed_is_an_absolute_path(tmp_path):
+    """os.path.join would discard the original directory and match elsewhere."""
+    elsewhere = tmp_path / "elsewhere.jpg"
+    elsewhere.write_text("x")
+    row = _row(tmp_path / "gone.jpg", str(elsewhere))
+    assert is_already_healed(row) is False
+
+
+def test_not_healed_when_proposed_escapes_the_directory(tmp_path):
+    sub = tmp_path / "sub"
+    sub.mkdir()
+    outside = tmp_path / "outside.jpg"
+    outside.write_text("x")
+    row = _row(sub / "gone.jpg", "../outside.jpg")
+    assert is_already_healed(row) is False
+
+
+def test_not_healed_when_proposed_carries_any_directory_part(tmp_path):
+    nested = tmp_path / "logos"
+    nested.mkdir()
+    target = nested / "Movie.jpg"
+    target.write_text("x")
+    row = _row(tmp_path / "Movie.jpg", "logos/Movie.jpg")
+    assert is_already_healed(row) is False
