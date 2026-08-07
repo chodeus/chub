@@ -220,3 +220,34 @@ def test_drop_stale_row_ignores_a_blank_path(db):
     from backend.util.poster_self_heal.cache_reconcile import drop_stale_row
 
     assert drop_stale_row(db, "") == 0
+
+
+def test_dismissed_files_returns_only_dismissed(db):
+    reviews = poster_heal_review_for(db)
+    reviews.upsert(_rec("/p/keep.jpg"))
+    reviews.upsert(_rec("/p/no.jpg"))
+    reviews.set_status(
+        [r for r in reviews.list_open() if r["poster_file"] == "/p/no.jpg"][0]["id"],
+        "dismissed",
+    )
+    assert reviews.dismissed_files() == {"/p/no.jpg"}
+
+
+def test_should_auto_apply_refuses_a_dismissed_poster():
+    """'dismissed' is documented as terminal and sticky. The upsert CASE only
+    keeps it out of the review QUEUE — without this guard auto-apply still
+    renamed the file on disk and on Drive, the opposite of dismissing it."""
+    from backend.modules.poster_self_heal import should_auto_apply
+
+    prop = {"poster_file": "/p/no.jpg", "status": "proposed"}
+    assert should_auto_apply(prop, True, set()) is True
+    assert should_auto_apply(prop, True, {"/p/no.jpg"}) is False
+
+
+def test_should_auto_apply_respects_auto_and_status():
+    from backend.modules.poster_self_heal import should_auto_apply
+
+    prop = {"poster_file": "/p/x.jpg", "status": "proposed"}
+    assert should_auto_apply(prop, False, set()) is False  # auto-apply off
+    ambiguous = {"poster_file": "/p/x.jpg", "status": "pending"}
+    assert should_auto_apply(ambiguous, True, set()) is False  # needs a manual pick

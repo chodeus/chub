@@ -114,6 +114,22 @@ class PosterHealReview(DatabaseBase):
             (status, review_id),
         )
 
+    def dismissed_files(self) -> set:
+        """``poster_file`` values the user has explicitly dismissed.
+
+        Fetched once per run: "dismissed" is documented as terminal and sticky,
+        so auto-apply must not act on one. The CASE above already keeps it out of
+        the review queue — this keeps it out of the *filesystem* too.
+        """
+        rows = (
+            self.execute_query(
+                "SELECT poster_file FROM poster_heal_review WHERE status = 'dismissed'",
+                fetch_all=True,
+            )
+            or []
+        )
+        return {r["poster_file"] for r in rows if r.get("poster_file")}
+
     def mark_failed(self, poster_file: str, reason: str) -> None:
         """Force a row open as ``failed`` after an auto-apply raised.
 

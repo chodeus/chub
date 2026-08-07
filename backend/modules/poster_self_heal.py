@@ -56,6 +56,18 @@ def local_dirs_for(cl2k) -> list:
     return out
 
 
+def should_auto_apply(prop, auto: bool, dismissed_files) -> bool:
+    """Whether this run may rename ``prop`` without asking.
+
+    False for a dismissed poster_file: "dismissed" is documented as terminal and
+    sticky, and the upsert CASE only keeps it out of the review queue — without
+    this it would still be renamed on disk and on Drive.
+    """
+    if not auto or prop.get("status") != "proposed":
+        return False
+    return prop.get("poster_file") not in dismissed_files
+
+
 def drive_twins(cl2k) -> tuple:
     """``(drive_ids, twin_of)``; ``twin_of(image_type)`` resolves to the first
     ``gdrive_uploads`` entry claiming that type, else the poster Drive, else the
@@ -184,7 +196,13 @@ class PosterSelfHeal(ChubModule):
                 f"{len(drive_posters)} on Drive)"
                 f"{' [auto-apply ON]' if auto else ''}"
             )
-            proposed = pending = applied = failed = 0
+            proposed = pending = applied = failed = dismissed = 0
+            # "dismissed" is documented as terminal and sticky, so auto-apply must
+            # not act on one. The upsert CASE only keeps it out of the review
+            # queue; without this it would still be renamed on disk and on Drive,
+            # which is the opposite of what the user asked for. Read once — the
+            # loop can run to tens of thousands of posters.
+            dismissed_files = reviews.dismissed_files() if auto else set()
             for idx, (poster, heal_folder_id) in enumerate(posters, 1):
                 if self.is_cancelled():
                     self.logger.info("poster_self_heal cancelled.")
@@ -207,7 +225,13 @@ class PosterSelfHeal(ChubModule):
                     # Auto-apply confident proposals when enabled; ambiguous
                     # (pending) ones always wait for a manual pick.
                     apply_error = None
-                    if auto and prop["status"] == "proposed":
+                    skipped = auto and prop["poster_file"] in dismissed_files
+                    if skipped:
+                        dismissed += 1
+                        self.logger.debug(
+                            f"skipping dismissed {prop['current_filename']}"
+                        )
+                    elif should_auto_apply(prop, auto, dismissed_files):
                         try:
                             note = apply_proposal(prop, sync_cfg, self.logger)
                             prop["status"] = "applied"
@@ -224,8 +248,8 @@ class PosterSelfHeal(ChubModule):
                             )
                     # A failed apply is counted ONCE, as failed: its status is
                     # still "proposed" here, and counting it again below reported
-                    # two items as four.
-                    if apply_error is None:
+                    # two items as four. A dismissed skip isn't open either.
+                    if apply_error is None and not skipped:
                         if prop["status"] == "pending":
                             pending += 1
                         elif prop["status"] == "proposed":
@@ -248,7 +272,8 @@ class PosterSelfHeal(ChubModule):
 
             self.logger.info(
                 f"poster_self_heal done: {applied} auto-applied, {proposed} proposed, "
-                f"{pending} need a manual pick, {failed} failed; "
+                f"{pending} need a manual pick, {failed} failed"
+                f"{f', {dismissed} skipped (dismissed)' if dismissed else ''}; "
                 f"{reviews.open_count()} open for review total"
             )
 
