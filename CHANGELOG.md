@@ -2,6 +2,24 @@
 
 All notable changes to CHUB are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.45.0](https://github.com/chodeus/chub/compare/v2.44.0...v2.45.0) (2026-08-07)
+
+
+### Features
+
+* **unmatched:** group the Ignored tab by show, like Unmatched ([#463](https://github.com/chodeus/chub/issues/463)) ([d73d4fe](https://github.com/chodeus/chub/commit/d73d4feba254587ba14ebe82987d69aad361a81b))
+* **unmatched:** let a series row ignore one season instead of all of them ([#458](https://github.com/chodeus/chub/issues/458)) ([3e2a0a5](https://github.com/chodeus/chub/commit/3e2a0a528024ecaf629f4b33ece6c956936e8581))
+
+
+### Bug Fixes
+
+* **api:** let a caller's AbortSignal actually cancel a request ([#468](https://github.com/chodeus/chub/issues/468)) ([293eb57](https://github.com/chodeus/chub/commit/293eb572ae8eced4a8ca3e4a310c9d7afbe3655c))
+* **api:** name the offending fields on a validation error ([#474](https://github.com/chodeus/chub/issues/474)) ([24b7563](https://github.com/chodeus/chub/commit/24b7563d064c7dc9316676123d32f23b61bc9817))
+* **deps:** bump js-yaml to 4.3.1 for GHSA-5p4m-2wfm-xmqj ([#461](https://github.com/chodeus/chub/issues/461)) ([393b5c0](https://github.com/chodeus/chub/commit/393b5c00dc36e30df5d06e287cc2df1b74864e7b))
+* **poster-cleanarr:** bypass the GET cache on status polls ([#451](https://github.com/chodeus/chub/issues/451)) ([3594e3b](https://github.com/chodeus/chub/commit/3594e3bf58af8557dc1396f4026c8ffbc9542c7f))
+* **poster-cleanarr:** protect collection and people artwork from the bloat scan ([#454](https://github.com/chodeus/chub/issues/454)) ([3817802](https://github.com/chodeus/chub/commit/3817802c45e76b2318a04acf486f35ca708df86a))
+* **unmatched:** restore row actions on series, split grouped rows per instance ([#456](https://github.com/chodeus/chub/issues/456)) ([669533c](https://github.com/chodeus/chub/commit/669533c3ee444394856e407e24c0a119fcf40b67))
+
 ## [2.44.0](https://github.com/chodeus/chub/compare/v2.43.3...v2.44.0) (2026-08-05)
 
 
