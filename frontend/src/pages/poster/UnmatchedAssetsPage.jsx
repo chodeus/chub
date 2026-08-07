@@ -324,6 +324,17 @@ const externalIdTitle = item =>
         .filter(Boolean)
         .join('   ·   ') || undefined;
 
+/** Every media_cache row a display row addresses (show poster first, then seasons).
+ *  Series carry an explicit list; movies/collections are one implicit target. */
+const rowTargets = item => {
+    const list = item.targets?.length
+        ? [...item.targets]
+        : item.id != null
+          ? [{ id: item.id, season_number: item.season_number ?? null }]
+          : [];
+    return list.sort((a, b) => (a.season_number ?? -1) - (b.season_number ?? -1));
+};
+
 /** Unified, filterable + searchable table of every unmatched item. */
 const UnmatchedList = ({ items, onRefresh, onPick, typeKey: typeKeyProp, onTypeChange }) => {
     const toast = useToast();
@@ -342,16 +353,28 @@ const UnmatchedList = ({ items, onRefresh, onPick, typeKey: typeKeyProp, onTypeC
     };
 
     const handleIgnore = async item => {
-        setBusyId(item.id);
+        const targets = rowTargets(item);
+        if (!targets.length) return;
+        setBusyId(targets[0].id);
         try {
-            await postersAPI.setMatchIgnored(item.id, {
-                kind: item._type === 'collection' ? 'collection' : 'media',
-                ignored: true,
-            });
-            toast.success('Item ignored');
+            // allSettled, not all — a partial success already mutated the
+            // server, so the table must refresh even when one call fails.
+            const results = await Promise.allSettled(
+                targets.map(t =>
+                    postersAPI.setMatchIgnored(t.id, {
+                        kind: item._type === 'collection' ? 'collection' : 'media',
+                        ignored: true,
+                    })
+                )
+            );
+            const failed = results.filter(r => r.status === 'rejected').length;
+            if (!failed) toast.success('Item ignored');
+            else if (failed === results.length) toast.error('Failed to ignore item');
+            else
+                toast.error(
+                    `Ignored ${results.length - failed} of ${results.length} — rest failed`
+                );
             onRefresh?.();
-        } catch {
-            toast.error('Failed to ignore item');
         } finally {
             setBusyId(null);
         }
@@ -507,9 +530,16 @@ const UnmatchedList = ({ items, onRefresh, onPick, typeKey: typeKeyProp, onTypeC
                                 {visible.map((item, idx) => {
                                     const action = rowActionFor?.(item);
                                     const extIds = externalIdList(item);
+                                    const targets = rowTargets(item);
                                     return (
                                         <tr
-                                            key={`${item._type}-${item.tmdb_id || item.tvdb_id || item.title || idx}`}
+                                            // Row ids, not title/tmdb — the same title unmatched on
+                                            // two instances collides on those.
+                                            key={
+                                                targets.length
+                                                    ? `${item._type}-${targets.map(t => t.id).join('.')}`
+                                                    : `${item._type}-${item.title || idx}`
+                                            }
                                             className="border-b border-border-light last:border-0 hover:bg-row-hover transition-colors"
                                         >
                                             <td className="px-4 py-2.5">
@@ -596,24 +626,29 @@ const UnmatchedList = ({ items, onRefresh, onPick, typeKey: typeKeyProp, onTypeC
                                                             Request
                                                         </button>
                                                     )}
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => onPick?.(item)}
-                                                        className="inline-flex items-center h-8 px-3 rounded-[7px] bg-surface-inset border border-border text-fg-muted text-xs font-semibold hover:bg-row-hover hover:text-fg transition"
-                                                        title="Pick a poster to apply now"
-                                                    >
-                                                        Match
-                                                    </button>
-                                                    {item.id != null && (
-                                                        <IconButton
-                                                            icon="block"
-                                                            size="small"
-                                                            variant="ghost"
-                                                            disabled={busyId === item.id}
-                                                            aria-label="Ignore this item"
-                                                            title="Ignore — stop showing this item"
-                                                            onClick={() => handleIgnore(item)}
-                                                        />
+                                                    {/* Both act on row ids — neither may render
+                                                        without one. Gating only Ignore is what hid
+                                                        it on series while Match silently 422'd. */}
+                                                    {targets.length > 0 && (
+                                                        <>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => onPick?.(item)}
+                                                                className="inline-flex items-center h-8 px-3 rounded-[7px] bg-surface-inset border border-border text-fg-muted text-xs font-semibold hover:bg-row-hover hover:text-fg transition"
+                                                                title="Pick a poster to apply now"
+                                                            >
+                                                                Match
+                                                            </button>
+                                                            <IconButton
+                                                                icon="block"
+                                                                size="small"
+                                                                variant="ghost"
+                                                                disabled={busyId === targets[0].id}
+                                                                aria-label="Ignore this item"
+                                                                title="Ignore — stop showing this item"
+                                                                onClick={() => handleIgnore(item)}
+                                                            />
+                                                        </>
                                                     )}
                                                 </div>
                                             </td>
@@ -1545,24 +1580,39 @@ const PickerThumb = ({ cand, busy, onApply }) => {
 const PosterPickerModal = ({ item, onClose, onApplied }) => {
     const toast = useToast();
     const kind = item.asset_type === 'collection' ? 'collection' : 'media';
-    const [candidates, setCandidates] = useState(null);
+    const targets = useMemo(() => rowTargets(item), [item]);
+    const [targetIdx, setTargetIdx] = useState(0);
+    // Fall back rather than go target-less if the index outlives its list.
+    const target = targets[targetIdx] || targets[0] || null;
+    const targetId = target?.id ?? null;
+    // Tagged with the target it loaded for, so switching shows the loading state
+    // without a synchronous setState in the effect — as ArtworkPickerModal does.
+    const [result, setResult] = useState({ targetId: undefined, list: null });
     const [busy, setBusy] = useState(null);
 
     useEffect(() => {
+        if (targetId == null) return undefined;
         let alive = true;
         postersAPI
-            .fetchMatchCandidates(item.id, { kind })
-            .then(r => alive && setCandidates(r?.data?.candidates || []))
-            .catch(() => alive && setCandidates([]));
+            .fetchMatchCandidates(targetId, { kind })
+            .then(r => alive && setResult({ targetId, list: r?.data?.candidates || [] }))
+            // failed must stay distinct from an empty list — reporting a failed
+            // request as "nothing in your cache" blames the wrong thing.
+            .catch(() => alive && setResult({ targetId, list: [], failed: true }));
         return () => {
             alive = false;
         };
-    }, [item.id, kind]);
+    }, [targetId, kind]);
+
+    const loaded = result.targetId === targetId;
+    const candidates = targetId == null ? [] : loaded ? result.list : null;
+    const loadFailed = loaded && Boolean(result.failed);
 
     const apply = async posterId => {
+        if (targetId == null) return;
         setBusy(posterId);
         try {
-            const res = await postersAPI.applyMatch(item.id, posterId, { kind });
+            const res = await postersAPI.applyMatch(targetId, posterId, { kind });
             // Prefer the backend's precise outcome ("Poster applied to Plex" /
             // "Poster copied to assets directory (Kometa will apply)") so the
             // user sees which Apply Method path ran; fall back to a generic msg.
@@ -1585,7 +1635,7 @@ const PosterPickerModal = ({ item, onClose, onApplied }) => {
             <Modal.Header>
                 Choose a poster — {item.title}
                 {item.year ? ` (${item.year})` : ''}
-                {item.season_number != null ? ` · Season ${item.season_number}` : ''}
+                {target?.season_number != null ? ` · Season ${target.season_number}` : ''}
             </Modal.Header>
             <Modal.Body>
                 <p className="text-xs text-fg-subtle mb-3">
@@ -1595,8 +1645,41 @@ const PosterPickerModal = ({ item, onClose, onApplied }) => {
                     assets directory for Kometa to apply. The match is saved &amp; locked either
                     way.
                 </p>
+                {targets.length > 1 && (
+                    // Candidates are filtered to the row's exact season server-side,
+                    // so each missing season needs its own fetch to be matchable.
+                    <div className="flex flex-wrap items-center gap-1 mb-3">
+                        {targets.map((t, i) => (
+                            <button
+                                key={t.id}
+                                type="button"
+                                onClick={() => {
+                                    // Same-tab click must no-op — clearing result
+                                    // without changing targetId hangs on "Searching…".
+                                    if (i === targetIdx) return;
+                                    setTargetIdx(i);
+                                    setResult({ targetId: undefined, list: null });
+                                }}
+                                className={`h-8 px-3 rounded-[7px] text-[12.5px] font-semibold transition-colors ${
+                                    i === targetIdx
+                                        ? 'bg-primary text-on-color'
+                                        : 'bg-surface-inset text-fg-muted hover:text-fg'
+                                }`}
+                            >
+                                {t.season_number == null
+                                    ? 'Show poster'
+                                    : formatSeason(t.season_number)}
+                            </button>
+                        ))}
+                    </div>
+                )}
                 {candidates === null ? (
                     <p className="text-sm text-fg-muted">Searching for posters…</p>
+                ) : loadFailed ? (
+                    <p className="text-sm text-error">
+                        Couldn&apos;t load candidate posters — the request failed. Check the logs
+                        and try again.
+                    </p>
                 ) : candidates.length === 0 ? (
                     <p className="text-sm text-fg-muted">
                         No candidate posters found in your cache for this title. The asset may not
@@ -1694,13 +1777,15 @@ const ArtworkPickerModal = ({ item, imageTypes, onClose, onApplied }) => {
         postersAPI
             .fetchArtworkCandidates(item.id, imageType, { kind })
             .then(r => alive && setResult({ type: imageType, list: r?.data?.candidates || [] }))
-            .catch(() => alive && setResult({ type: imageType, list: [] }));
+            // failed must stay distinct from an empty list — see PosterPickerModal.
+            .catch(() => alive && setResult({ type: imageType, list: [], failed: true }));
         return () => {
             alive = false;
         };
     }, [item.id, imageType, kind]);
 
     const candidates = result.type === imageType ? result.list : null;
+    const loadFailed = result.type === imageType && Boolean(result.failed);
 
     const apply = async posterId => {
         setBusy(posterId);
@@ -1736,7 +1821,12 @@ const ArtworkPickerModal = ({ item, imageTypes, onClose, onApplied }) => {
                             <button
                                 key={t}
                                 type="button"
-                                onClick={() => setImageType(t)}
+                                onClick={() => {
+                                    // Same-tab click must no-op — see PosterPickerModal.
+                                    if (t === imageType) return;
+                                    setImageType(t);
+                                    setResult({ type: null, list: null });
+                                }}
                                 className={`px-3 py-1 text-sm rounded-lg border ${
                                     imageType === t
                                         ? 'border-brand-primary/50 bg-surface-alt text-fg'
@@ -1756,6 +1846,11 @@ const ArtworkPickerModal = ({ item, imageTypes, onClose, onApplied }) => {
                 </p>
                 {candidates === null ? (
                     <p className="text-sm text-fg-muted">Searching for artwork…</p>
+                ) : loadFailed ? (
+                    <p className="text-sm text-error">
+                        Couldn&apos;t load candidate {typeLabel} files — the request failed. Check
+                        the logs and try again.
+                    </p>
                 ) : candidates.length === 0 ? (
                     <p className="text-sm text-fg-muted">
                         No candidate {typeLabel} files found in your cache for this title.

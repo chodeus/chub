@@ -199,8 +199,8 @@ def test_group_assets_series_combines_seasons():
     m = make_module()
     # Two season-level entries for the same show
     m.unmatched_media = [
-        {"asset_type": "show", "title": "Show", "year": 2020, "season_number": 1},
-        {"asset_type": "series", "title": "Show", "year": 2020, "season_number": 2},
+        {"id": 11, "asset_type": "show", "title": "Show", "year": 2020, "season_number": 1},
+        {"id": 12, "asset_type": "series", "title": "Show", "year": 2020, "season_number": 2},
     ]
     unmatched, _, _ = m.group_assets()
     assert len(unmatched["series"]) == 1
@@ -211,10 +211,90 @@ def test_group_assets_series_combines_seasons():
 def test_group_assets_series_missing_main_poster():
     m = make_module()
     m.unmatched_media = [
-        {"asset_type": "series", "title": "Show", "year": 2020, "season_number": None}
+        {"id": 10, "asset_type": "series", "title": "Show", "year": 2020, "season_number": None}
     ]
     unmatched, _, _ = m.group_assets()
     assert unmatched["series"][0]["missing_main_poster"] is True
+
+
+def test_group_assets_keeps_row_ids_on_every_type():
+    """Ignore/match address media_cache rows by id. Movies and collections keep
+    theirs via dict(row); a grouped series must carry one target per row it
+    aggregates, or its row actions silently do nothing."""
+    m = make_module()
+    m.unmatched_media = [
+        {"id": 1, "asset_type": "movie", "title": "M1", "year": 2020},
+        {"id": 2, "asset_type": "series", "title": "Show", "year": 2020, "season_number": 1},
+        {"id": 3, "asset_type": "series", "title": "Show", "year": 2020, "season_number": None},
+        {"id": 4, "asset_type": "series", "title": "Show", "year": 2020, "season_number": 2},
+    ]
+    m.unmatched_collections = [{"id": 5, "title": "Some Collection"}]
+
+    unmatched, _, _ = m.group_assets()
+    assert unmatched["movies"][0]["id"] == 1
+    assert unmatched["collections"][0]["id"] == 5
+
+    series = unmatched["series"][0]
+    assert sorted(t["id"] for t in series["targets"]) == [2, 3, 4]
+    # The show's own row is the season-less target; the other two are seasons.
+    by_id = {t["id"]: t["season_number"] for t in series["targets"]}
+    assert by_id == {2: 1, 3: None, 4: 2}
+    assert series["missing_main_poster"] is True
+    assert sorted(series["missing_seasons"]) == [1, 2]
+
+
+def test_group_assets_series_split_by_instance():
+    """The same show unmatched on two *arr instances is two rows. Merging them
+    would fan Ignore across both while labelling the row with one instance."""
+    m = make_module()
+    m.unmatched_media = [
+        {
+            "id": 101,
+            "asset_type": "series",
+            "title": "Foundation",
+            "year": 2021,
+            "season_number": None,
+            "instance_name": "sonarr",
+        },
+        {
+            "id": 202,
+            "asset_type": "series",
+            "title": "Foundation",
+            "year": 2021,
+            "season_number": None,
+            "instance_name": "sonarr_4k",
+        },
+        {
+            "id": 203,
+            "asset_type": "series",
+            "title": "Foundation",
+            "year": 2021,
+            "season_number": 1,
+            "instance_name": "sonarr_4k",
+        },
+    ]
+    unmatched, _, _ = m.group_assets()
+    by_inst = {r["instance_name"]: r for r in unmatched["series"]}
+    assert set(by_inst) == {"sonarr", "sonarr_4k"}
+    assert [t["id"] for t in by_inst["sonarr"]["targets"]] == [101]
+    assert sorted(t["id"] for t in by_inst["sonarr_4k"]["targets"]) == [202, 203]
+
+
+def test_group_assets_series_targets_survive_row_order():
+    """unmatched_media has no ORDER BY, so the show row can arrive after its
+    seasons — every row must still land in targets."""
+    m = make_module()
+    rows = [
+        {"id": 7, "asset_type": "series", "title": "S", "year": 2021, "season_number": None},
+        {"id": 8, "asset_type": "series", "title": "S", "year": 2021, "season_number": 3},
+    ]
+    for ordered in (rows, list(reversed(rows))):
+        m.unmatched_media = ordered
+        unmatched, _, _ = m.group_assets()
+        series = unmatched["series"][0]
+        assert sorted(t["id"] for t in series["targets"]) == [7, 8]
+        assert series["missing_main_poster"] is True
+        assert series["missing_seasons"] == [3]
 
 
 # --- calculate_stats ---

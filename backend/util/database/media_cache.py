@@ -1376,6 +1376,7 @@ class MediaCache(DatabaseBase):
                 SELECT MIN(normalized_title) as normalized_title,
                        MIN(title) as title,
                        MIN(year) as year,
+                       GROUP_CONCAT(DISTINCT asset_type) as asset_types,
                        instance_name,
                        COUNT(*) as count,
                        GROUP_CONCAT(id) as ids,
@@ -1498,6 +1499,11 @@ class MediaCache(DatabaseBase):
                     "year": year,
                     "instance_name": instance,
                     "count": len(members),
+                    # A collision groups by title, so members can be a movie AND
+                    # a show — one type can't represent the group.
+                    "asset_types": ",".join(
+                        sorted({m.get("asset_type") or "" for m in members} - {""})
+                    ),
                     "ids": ",".join(str(m.get("id", "")) for m in members),
                     "instances": ",".join(m.get("instance_name", "") for m in members),
                     "folders": json.dumps([m.get("folder") or "" for m in members]),
