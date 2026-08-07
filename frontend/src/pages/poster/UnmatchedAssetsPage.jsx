@@ -335,6 +335,48 @@ const rowTargets = item => {
     return list.sort((a, b) => (a.season_number ?? -1) - (b.season_number ?? -1));
 };
 
+/** A target's display label — the show's own poster, or the season it covers. */
+const targetLabel = t => (t.season_number == null ? 'Show poster' : formatSeason(t.season_number));
+
+/** Pick which of a grouped row's targets to ignore. Only opened for rows with
+ *  more than one; a single-target row ignores straight from the button. */
+const IgnoreTargetsModal = ({ item, targets, busy, onClose, onIgnore }) => {
+    const choice = (key, label, list, primary) => (
+        <button
+            key={key}
+            type="button"
+            disabled={busy}
+            onClick={() => onIgnore(list)}
+            className={`flex items-center justify-between h-10 px-3 rounded-lg border text-sm text-left transition-colors disabled:opacity-50 ${
+                primary
+                    ? 'border-border bg-surface-inset text-fg font-semibold hover:bg-row-hover'
+                    : 'border-border text-fg-muted hover:text-fg hover:bg-row-hover'
+            }`}
+        >
+            <span>{label}</span>
+            <span className="material-symbols-outlined text-[18px]">block</span>
+        </button>
+    );
+    return (
+        <Modal isOpen onClose={onClose} size="small">
+            <Modal.Header>
+                Ignore — {item.title}
+                {item.year ? ` (${item.year})` : ''}
+            </Modal.Header>
+            <Modal.Body>
+                <p className="text-xs text-fg-subtle mb-3">
+                    Ignored items stop appearing in Unmatched and Needs Review. Restore any of them
+                    from the Ignored tab.
+                </p>
+                <div className="flex flex-col gap-1.5">
+                    {choice('all', `Everything (${targets.length})`, targets, true)}
+                    {targets.map(t => choice(t.id, targetLabel(t), [t], false))}
+                </div>
+            </Modal.Body>
+        </Modal>
+    );
+};
+
 /** Unified, filterable + searchable table of every unmatched item. */
 const UnmatchedList = ({ items, onRefresh, onPick, typeKey: typeKeyProp, onTypeChange }) => {
     const toast = useToast();
@@ -346,16 +388,17 @@ const UnmatchedList = ({ items, onRefresh, onPick, typeKey: typeKeyProp, onTypeC
     const [query, setQuery] = useState('');
     const [page, setPage] = useState(0);
     const [busyId, setBusyId] = useState(null);
+    // { item, targets } while the user picks which targets to ignore.
+    const [ignorePick, setIgnorePick] = useState(null);
     const [sort, setSort] = useState({ key: null, dir: 'asc' });
     const onSort = key => {
         setSort(s => nextSort(s, key));
         setPage(0);
     };
 
-    const handleIgnore = async item => {
-        const targets = rowTargets(item);
-        if (!targets.length) return;
-        setBusyId(targets[0].id);
+    const handleIgnore = async (item, targets) => {
+        if (!targets?.length) return;
+        setBusyId(rowTargets(item)[0]?.id ?? targets[0].id);
         try {
             // allSettled, not all — a partial success already mutated the
             // server, so the table must refresh even when one call fails.
@@ -368,7 +411,11 @@ const UnmatchedList = ({ items, onRefresh, onPick, typeKey: typeKeyProp, onTypeC
                 )
             );
             const failed = results.filter(r => r.status === 'rejected').length;
-            if (!failed) toast.success('Item ignored');
+            // Name the target when only one was ignored — "Item ignored" reads as
+            // the whole show when the user picked a single season.
+            const one =
+                targets.length === 1 && item._type === 'series' ? targetLabel(targets[0]) : null;
+            if (!failed) toast.success(one ? `Ignored ${one}` : 'Item ignored');
             else if (failed === results.length) toast.error('Failed to ignore item');
             else
                 toast.error(
@@ -377,6 +424,7 @@ const UnmatchedList = ({ items, onRefresh, onPick, typeKey: typeKeyProp, onTypeC
             onRefresh?.();
         } finally {
             setBusyId(null);
+            setIgnorePick(null);
         }
     };
 
@@ -644,9 +692,27 @@ const UnmatchedList = ({ items, onRefresh, onPick, typeKey: typeKeyProp, onTypeC
                                                                 size="small"
                                                                 variant="ghost"
                                                                 disabled={busyId === targets[0].id}
-                                                                aria-label="Ignore this item"
-                                                                title="Ignore — stop showing this item"
-                                                                onClick={() => handleIgnore(item)}
+                                                                aria-label={
+                                                                    targets.length > 1
+                                                                        ? 'Ignore — choose what to hide'
+                                                                        : 'Ignore this item'
+                                                                }
+                                                                title={
+                                                                    targets.length > 1
+                                                                        ? 'Ignore — pick the whole show or one season'
+                                                                        : 'Ignore — stop showing this item'
+                                                                }
+                                                                onClick={() =>
+                                                                    targets.length > 1
+                                                                        ? setIgnorePick({
+                                                                              item,
+                                                                              targets,
+                                                                          })
+                                                                        : handleIgnore(
+                                                                              item,
+                                                                              targets
+                                                                          )
+                                                                }
                                                             />
                                                         </>
                                                     )}
@@ -659,6 +725,15 @@ const UnmatchedList = ({ items, onRefresh, onPick, typeKey: typeKeyProp, onTypeC
                         </table>
                     </div>
                 </section>
+            )}
+            {ignorePick && (
+                <IgnoreTargetsModal
+                    item={ignorePick.item}
+                    targets={ignorePick.targets}
+                    busy={busyId != null}
+                    onClose={() => setIgnorePick(null)}
+                    onIgnore={list => handleIgnore(ignorePick.item, list)}
+                />
             )}
             {filtered.length > 0 && pageCount > 1 && (
                 <div className="flex items-center justify-center gap-3 text-sm text-fg-muted">
@@ -1666,9 +1741,7 @@ const PosterPickerModal = ({ item, onClose, onApplied }) => {
                                         : 'bg-surface-inset text-fg-muted hover:text-fg'
                                 }`}
                             >
-                                {t.season_number == null
-                                    ? 'Show poster'
-                                    : formatSeason(t.season_number)}
+                                {targetLabel(t)}
                             </button>
                         ))}
                     </div>
