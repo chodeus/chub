@@ -56,6 +56,26 @@ def local_dirs_for(cl2k) -> list:
     return out
 
 
+def is_already_healed(row) -> bool:
+    """True when an open row describes a rename that has already happened.
+
+    Requires the PROPOSED name to exist, not just the old one to be missing — on
+    an unmounted share every file looks gone and a missing-only check would prune
+    the whole queue.
+    """
+    old = row.get("poster_file") or ""
+    proposed = row.get("proposed_filename") or ""
+    if not proposed or not os.path.isabs(old):
+        return False
+    # Must be a bare name: an absolute value would make os.path.join discard the
+    # original directory, and a '../' one would resolve outside it — either could
+    # match some unrelated file and delete the row as healed.
+    if os.path.basename(proposed) != proposed:
+        return False
+    new = os.path.join(os.path.dirname(old), proposed)
+    return not os.path.exists(old) and os.path.exists(new)
+
+
 def should_auto_apply(prop, auto: bool, dismissed_files) -> bool:
     """True when this run may rename ``prop`` unattended. A dismissed
     poster_file never qualifies — dismissed is terminal."""
@@ -166,22 +186,30 @@ class PosterSelfHeal(ChubModule):
             media_index = index_media(db.media.get_all())
             reviews = poster_heal_review_for(db)
 
-            # Drop open proposals from an earlier, broader scan — absolute local
-            # paths outside every configured folder (e.g. other owners' synced
-            # posters, or a folder since removed). Live-Drive proposals carry a
-            # bare filename (not absolute), so they're kept.
-            pruned = 0
-            if local_dirs:
-                for row in reviews.list_open(limit=1_000_000):
-                    pf = row.get("poster_file") or ""
-                    if os.path.isabs(pf) and not any(
-                        _is_under(pf, d) for d in local_dirs
-                    ):
-                        reviews.delete(row["id"])
-                        pruned += 1
+            # Drop open proposals that can no longer be acted on. Live-Drive rows
+            # carry a bare filename, so only absolute (local) rows are candidates.
+            pruned = stale = 0
+            for row in reviews.list_open(limit=1_000_000):
+                pf = row.get("poster_file") or ""
+                if not os.path.isabs(pf):
+                    continue
+                # Outside every configured folder — e.g. another owner's synced
+                # posters, or a folder since removed.
+                if not any(_is_under(pf, d) for d in local_dirs):
+                    reviews.delete(row["id"])
+                    pruned += 1
+                # Already renamed: the row describes history, and its Apply would
+                # fail forever because the target it wants is already there.
+                elif is_already_healed(row):
+                    reviews.delete(row["id"])
+                    stale += 1
             if pruned:
                 self.logger.info(
                     f"poster_self_heal: pruned {pruned} out-of-scope proposal(s)"
+                )
+            if stale:
+                self.logger.info(
+                    f"poster_self_heal: pruned {stale} already-applied proposal(s)"
                 )
 
             total = len(posters)
