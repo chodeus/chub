@@ -44,16 +44,9 @@ def _is_under(path: str, base_dir: str) -> bool:
 
 
 def drive_twins(cl2k) -> tuple:
-    """``(drive_ids, twin_of)`` for the configured ``gdrive_uploads``.
-
-    ``twin_of(image_type)`` gives the Drive folder a locally-saved row of that
-    type should be renamed in. Art types route to their own folders, so a logo
-    must heal against the logo Drive — renaming it in the poster Drive raises
-    (the file isn't there) and the row then never heals at all. First claimer
-    wins, matching ``_drive_targets``' config-order preference; a type no Drive
-    claims falls back to the poster Drive, else the first Drive at all (the
-    pre-redesign behaviour of healing the linked folder even with uploads off).
-    """
+    """``(drive_ids, twin_of)``; ``twin_of(image_type)`` resolves to the first
+    ``gdrive_uploads`` entry claiming that type, else the poster Drive, else the
+    first Drive."""
     drive_ids: list = []
     by_type: dict = {}
     for drive in getattr(cl2k, "gdrive_uploads", None) or []:
