@@ -1,7 +1,13 @@
 // Poster Self-Heal — self-registration manifest (develop-only extension).
 // Discovered by src/extensions/index.js; see that file for the contract.
 import React from 'react';
+import { FieldRegistry } from '../../components/fields/FieldRegistry.jsx';
 import { POSTER_SELF_HEAL_SCHEMA, POSTER_SELF_HEAL_MODULE_ENTRY } from './settings_schema.js';
+import { PosterSelfHealCoverageField } from './CoverageField.jsx';
+
+// Registered at module scope — manifests are eagerly imported at app init, so
+// the type exists before ModuleSettingsPage first resolves it.
+FieldRegistry.register('poster_self_heal_coverage', PosterSelfHealCoverageField);
 
 const PosterHealReviewPage = React.lazy(
     () => import('../../pages/poster/PosterHealReviewPage.jsx')

@@ -4,7 +4,9 @@ import { apiCore } from './core.js';
 export const posterSelfHealAPI = {
     listReviews: () => apiCore.get('/poster-self-heal/reviews', { useCache: false }),
     count: () => apiCore.get('/poster-self-heal/count', { useCache: false }),
-    coverage: () => apiCore.get('/poster-self-heal/coverage', { useCache: false }),
+    // Forwards options (e.g. an AbortSignal) so a caller can cancel on unmount.
+    coverage: (options = {}) =>
+        apiCore.get('/poster-self-heal/coverage', { useCache: false, ...options }),
     apply: id => apiCore.post(`/poster-self-heal/reviews/${id}/apply`),
     dismiss: id => apiCore.post(`/poster-self-heal/reviews/${id}/dismiss`),
 };
