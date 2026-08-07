@@ -22,6 +22,7 @@ from backend.util.database import ChubDB
 from backend.util.database.poster_heal_review import poster_heal_review_for
 from backend.util.notification import NotificationManager
 from backend.util.poster_self_heal.apply import apply_proposal
+from backend.util.poster_self_heal.cache_reconcile import drop_stale_row
 from backend.util.poster_self_heal.resolver import (
     index_media,
     poster_from_filename,
@@ -205,6 +206,7 @@ class PosterSelfHeal(ChubModule):
                     )
                     # Auto-apply confident proposals when enabled; ambiguous
                     # (pending) ones always wait for a manual pick.
+                    apply_error = None
                     if auto and prop["status"] == "proposed":
                         try:
                             note = apply_proposal(prop, sync_cfg, self.logger)
@@ -214,16 +216,33 @@ class PosterSelfHeal(ChubModule):
                                 f"auto-applied {prop['proposed_filename']}{note}"
                             )
                         except Exception as exc:
+                            apply_error = str(exc)
                             failed += 1
                             self.logger.warning(
                                 f"auto-apply failed for {prop['current_filename']}: {exc}"
-                                " — left for manual review"
+                                " — reopened for manual review"
                             )
-                    if prop["status"] == "pending":
-                        pending += 1
-                    elif prop["status"] == "proposed":
-                        proposed += 1
+                    # A failed apply is counted ONCE, as failed: its status is
+                    # still "proposed" here, and counting it again below reported
+                    # two items as four.
+                    if apply_error is None:
+                        if prop["status"] == "pending":
+                            pending += 1
+                        elif prop["status"] == "proposed":
+                            proposed += 1
                     reviews.upsert(prop)
+                    if apply_error is not None:
+                        # upsert's CASE keeps a terminal status, so a row that was
+                        # already "applied" would stay invisible — force it open.
+                        reviews.mark_failed(prop["poster_file"], apply_error)
+                    elif prop["status"] == "applied":
+                        # The rename moved the file out from under the index that
+                        # produced this proposal. Drop the stale row or the next
+                        # run re-proposes a rename whose target now exists — which
+                        # fails forever, since the collision is our own doing.
+                        stale = prop.get("poster_file") or ""
+                        if os.path.isabs(stale):
+                            drop_stale_row(db, stale, self.logger)
                 if total:
                     self._report_progress(int(idx / total * 100))
 
@@ -233,7 +252,9 @@ class PosterSelfHeal(ChubModule):
                 f"{reviews.open_count()} open for review total"
             )
 
-            if applied or proposed or pending:
+            # Failures notify too — a run whose only outcome is failures is
+            # exactly the one worth telling the user about.
+            if applied or proposed or pending or failed:
                 output = {
                     "scanned": total,
                     "applied": applied,

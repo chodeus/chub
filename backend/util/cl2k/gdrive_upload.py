@@ -215,7 +215,7 @@ def move_file(
     logger.debug(f"renamed {old_name} -> {new_name} in drive {folder_id}")
 
 
-def list_files(folder_id: str, sync_cfg: Any, logger) -> List[str]:
+def list_files(folder_id: str, sync_cfg: Any, logger, strict: bool = False) -> List[str]:
     """List the file names (top level, files only) in the Drive folder
     ``folder_id`` via ``rclone lsf``.
 
@@ -226,10 +226,20 @@ def list_files(folder_id: str, sync_cfg: Any, logger) -> List[str]:
     Drive-listing problem must not abort a run that may still have local posters
     to heal. Names are returned relative to ``folder_id`` (the rclone root), the
     same form move_file expects.
+
+    ``strict=True`` RAISES instead of returning [] — required by any caller that
+    reads an empty listing as "the name is free". Returning [] on failure would
+    make a transient listing error look like "no collision" and let a destructive
+    rename proceed.
     """
     _reject_unsafe_id(folder_id, "gdrive_folder_id")
     auth = _upload_auth_args(sync_cfg)
     if not auth:
+        if strict:
+            raise RuntimeError(
+                "no usable Google Drive OAuth token configured — cannot list "
+                "the folder to check for a name collision"
+            )
         logger.warning(
             "poster_self_heal: no Google Drive OAuth token — skipping live Drive "
             "listing (set one under Sync GDrive)"
@@ -248,10 +258,10 @@ def list_files(folder_id: str, sync_cfg: Any, logger) -> List[str]:
     ]
     result = subprocess.run(cmd, check=False, capture_output=True, text=True)
     if result.returncode != 0:
-        logger.warning(
-            f"poster_self_heal: rclone lsf failed: "
-            f"{_rclone_error_detail(result.stderr)}"
-        )
+        detail = _rclone_error_detail(result.stderr)
+        if strict:
+            raise RuntimeError(f"rclone lsf failed: {detail}")
+        logger.warning(f"poster_self_heal: rclone lsf failed: {detail}")
         return []
     return [ln.strip() for ln in result.stdout.splitlines() if ln.strip()]
 

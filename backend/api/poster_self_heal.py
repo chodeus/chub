@@ -148,7 +148,9 @@ def apply_review(
     row = reviews.get(review_id)
     if not row:
         return error("Review not found", "NOT_FOUND", status_code=404)
-    if row.get("status") not in ("proposed",):
+    # "failed" is retryable on purpose — an auto-apply that raised is surfaced for
+    # exactly this, and the cause is often transient (Drive listing, token).
+    if row.get("status") not in ("proposed", "failed"):
         return error("Only an open proposal can be applied", "BAD_STATUS")
 
     current = row.get("current_filename") or ""

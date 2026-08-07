@@ -14,9 +14,14 @@ from typing import Any, Dict, List, Optional
 
 from .db_base import DatabaseBase
 
-# Statuses a row moves through. "proposed"/"pending" are open (shown for review);
-# "applied"/"dismissed" are terminal and sticky across re-scans.
-OPEN_STATUSES = ("proposed", "pending")
+# Statuses a row moves through. "proposed"/"pending"/"failed" are open (shown for
+# review); "applied"/"dismissed" are terminal and sticky across re-scans.
+#
+# "failed" is deliberately OPEN and deliberately NOT sticky: an auto-apply that
+# raised must be visible (the run tells the user it was left for review), but a
+# later run that succeeds or re-proposes cleanly has to be able to overwrite it —
+# a sticky "failed" would latch a transient rclone/token error forever.
+OPEN_STATUSES = ("proposed", "pending", "failed")
 
 
 def _now() -> str:
@@ -74,20 +79,24 @@ class PosterHealReview(DatabaseBase):
         )
 
     def list_open(self, limit: int = 500) -> List[Dict[str, Any]]:
+        # Placeholders built from OPEN_STATUSES so this and open_count can never
+        # disagree with the constant (or with each other) as statuses are added.
+        marks = ", ".join("?" for _ in OPEN_STATUSES)
         return (
             self.execute_query(
-                "SELECT * FROM poster_heal_review WHERE status IN ('proposed', 'pending') "
+                f"SELECT * FROM poster_heal_review WHERE status IN ({marks}) "
                 "ORDER BY confidence DESC, created_at DESC LIMIT ?",
-                (limit,),
+                (*OPEN_STATUSES, limit),
                 fetch_all=True,
             )
             or []
         )
 
     def open_count(self) -> int:
+        marks = ", ".join("?" for _ in OPEN_STATUSES)
         row = self.execute_query(
-            "SELECT COUNT(*) AS n FROM poster_heal_review "
-            "WHERE status IN ('proposed', 'pending')",
+            f"SELECT COUNT(*) AS n FROM poster_heal_review WHERE status IN ({marks})",
+            tuple(OPEN_STATUSES),
             fetch_one=True,
         )
         return int(row["n"]) if row else 0
@@ -103,6 +112,21 @@ class PosterHealReview(DatabaseBase):
         self.execute_query(
             "UPDATE poster_heal_review SET status = ? WHERE id = ?",
             (status, review_id),
+        )
+
+    def mark_failed(self, poster_file: str, reason: str) -> None:
+        """Force a row open as ``failed`` after an auto-apply raised.
+
+        Deliberately bypasses upsert's terminal-status CASE: a row already
+        ``applied`` whose re-apply now fails would otherwise keep that status and
+        never reach the review queue, so the run reports work "left for review"
+        that nothing can display. Scoped to a real failure, so a ``dismissed`` row
+        is only reopened when an apply was actually attempted and raised.
+        """
+        self.execute_query(
+            "UPDATE poster_heal_review SET status = 'failed', reason = ? "
+            "WHERE poster_file = ?",
+            (reason, poster_file),
         )
 
     def delete(self, review_id: int) -> None:
