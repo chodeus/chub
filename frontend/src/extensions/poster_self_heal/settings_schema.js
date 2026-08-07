@@ -18,6 +18,15 @@ export const POSTER_SELF_HEAL_SCHEMA = {
     ],
     fields: [
         {
+            // Read-only, live-computed — carries no config value of its own
+            // (never calls onChange, so the key never lands in formData).
+            key: 'assessed_locations',
+            label: 'Assessed locations',
+            type: 'poster_self_heal_coverage',
+            section: 'Assessed locations',
+            required: false,
+        },
+        {
             key: 'log_level',
             label: 'Log Level',
             type: 'dropdown',

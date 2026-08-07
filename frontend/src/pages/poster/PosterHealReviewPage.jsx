@@ -274,47 +274,56 @@ export const PosterHealReviewPage = () => {
     );
 
     return (
-        <div className="max-w-4xl mx-auto flex flex-col gap-4">
+        <div className="max-w-6xl mx-auto flex flex-col gap-4">
             <PageHeader
                 title="Poster Healer — Review"
                 description="Proposed id, title, and year fixes for your CL2K posters. Applying renames the file on your Google Drive and the local source copy."
             />
 
-            <CoveragePanel />
+            {/* Left: what the healer looks at. Right: what needs you. */}
+            <div className="flex flex-col lg:flex-row gap-4 items-start">
+                <aside className="w-full lg:w-[340px] lg:shrink-0">
+                    <CoveragePanel />
+                </aside>
 
-            <div className="flex items-center justify-between">
-                <span className="text-[13px] text-fg-subtle">
-                    {loading ? 'Loading…' : `${reviews.length} open`}
-                </span>
-                <Link
-                    to="/poster/cl2k-maker"
-                    className="text-[13px] font-medium text-accent hover:underline"
-                >
-                    ← Back to CL2K Maker
-                </Link>
+                <div className="flex-1 min-w-0 flex flex-col gap-3">
+                    <div className="flex items-center justify-between">
+                        <span className="text-[13px] text-fg-subtle">
+                            {loading ? 'Loading…' : `${reviews.length} needing action`}
+                        </span>
+                        <Link
+                            to="/poster/cl2k-maker"
+                            className="text-[13px] font-medium text-accent hover:underline"
+                        >
+                            ← Back to CL2K Maker
+                        </Link>
+                    </div>
+
+                    {!loading && reviews.length === 0 ? (
+                        <div className="text-center py-16 text-fg-subtle rounded-xl border border-dashed border-border">
+                            <span className="material-symbols-outlined text-4xl mb-2 block">
+                                task_alt
+                            </span>
+                            <p>Nothing to review — your CL2K posters are up to date.</p>
+                            <p className="text-[12px] mt-1">
+                                Run the Poster Healer (or wait for its schedule) to check again.
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="flex flex-col gap-2.5">
+                            {reviews.map(review => (
+                                <ReviewRow
+                                    key={review.id}
+                                    review={review}
+                                    busy={busyId === review.id}
+                                    onApply={handleApply}
+                                    onDismiss={handleDismiss}
+                                />
+                            ))}
+                        </div>
+                    )}
+                </div>
             </div>
-
-            {!loading && reviews.length === 0 ? (
-                <div className="text-center py-16 text-fg-subtle rounded-xl border border-dashed border-border">
-                    <span className="material-symbols-outlined text-4xl mb-2 block">task_alt</span>
-                    <p>Nothing to review — your CL2K posters are up to date.</p>
-                    <p className="text-[12px] mt-1">
-                        Run the Poster Healer (or wait for its schedule) to check again.
-                    </p>
-                </div>
-            ) : (
-                <div className="flex flex-col gap-2.5">
-                    {reviews.map(review => (
-                        <ReviewRow
-                            key={review.id}
-                            review={review}
-                            busy={busyId === review.id}
-                            onApply={handleApply}
-                            onDismiss={handleDismiss}
-                        />
-                    ))}
-                </div>
-            )}
         </div>
     );
 };
